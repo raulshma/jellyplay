@@ -42,6 +42,7 @@ class CoreDataWorkerFactory : WorkerFactory() {
             UserDataSyncWorker::class.simpleName -> UserDataSyncWorker(
                 context, workerParameters,
                 mediaRepository = koin().get(),
+                cacheInvalidator = koin().get(),
                 playbackStore = koin().get(),
                 serverIdentityStore = koin().get(),
             )
@@ -70,6 +71,7 @@ class CoreDataWorkerFactory : WorkerFactory() {
                 offlineRepository = koin().get(),
                 userDataSyncScheduler = koin().get(),
                 mediaRepository = koin().get(),
+                cacheInvalidator = koin().get(),
             )
             DownloadWorker::class.simpleName -> DownloadWorker(
                 context, workerParameters,

@@ -14,8 +14,13 @@ package com.raulshma.jellyplay.feature.player.video.engine
  * All magnitudes are normalized (1.0 == nominal loudness). Converting to a
  * native scale (Media3 0..1 float, mpv 0..100 double percent, libVLC 0..200
  * int percent) is the adapter's apply step.
+ *
+ * Public (not internal) because [ReloadablePlayerEngine]'s protected seam
+ * `nativeVolumeRestore` returns [NativeVolumeRestore] — a protected member
+ * cannot expose an internal type. Consumers stay the engine adapters and
+ * the policy test; this is not a stable API surface.
  */
-internal object PlaybackVolumePolicy {
+object PlaybackVolumePolicy {
 
     /**
      * Loudness ceiling in normalized units. libVLC's software amplification

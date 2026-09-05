@@ -130,15 +130,7 @@ class SyncPlayManager(
                     _events.tryEmit(event)
                 }
                 is SyncPlayEvent.GroupLeft -> {
-                    cachedGroup.set(null)
-                    _currentGroup.value = null
-                    isGroupActive.set(false)
-                    activeGroupIdRef.set(null)
-                    syncPlayReady.set(false)
-                    queuedEvent.set(null)
-                    syncPlayEnabledAtMs.set(0L)
-                    queueCore.clear()
-                    playbackCore.onGroupLeft()
+                    teardownTo(TeardownLevel.GROUP_LEFT_KEEP_LISTENING)
                     _events.tryEmit(event)
                 }
             }
@@ -286,21 +278,7 @@ class SyncPlayManager(
             Log.w(TAG, "leaveSyncPlayGroup API failed", e)
             Result.failure(e)
         }
-        cachedGroup.set(null)
-        _currentGroup.value = null
-        isGroupActive.set(false)
-        activeGroupIdRef.set(null)
-        syncPlayReady.set(false)
-        queuedEvent.set(null)
-        syncPlayEnabledAtMs.set(0L)
-        lastReconnectAtMs.set(0L)
-        eventJob?.cancel()
-        pingReportJob?.cancel()
-        reconnectWatchJob?.cancel()
-        queueCore.clear()
-        playbackCore.onGroupLeft()
-        timeSyncManager.stop()
-        webSocketClient.disconnect()
+        teardownTo(TeardownLevel.FULL)
         return apiResult
     }
 
@@ -370,22 +348,57 @@ class SyncPlayManager(
         return positionTicks + elapsedMs * 10_000
     }
 
-    fun reset() {
+    /**
+     * How much teardown a departure from a SyncPlay group performs. The three
+     * former teardown copies ([leaveGroup], [reset], the GroupLeft handler)
+     * differed only in these terms, so they share [teardownTo].
+     */
+    private enum class TeardownLevel {
+        /**
+         * Full teardown: session state cleared, listener / ping / reconnect
+         * jobs cancelled, [TimeSyncManager] stopped, shared WebSocket
+         * disconnected. Used by [leaveGroup] and [reset], where the user (or
+         * the app lifecycle) has decided SyncPlay is over.
+         */
+        FULL,
+
+        /**
+         * Server-initiated GroupLeft: clears the session state but
+         * deliberately keeps the listener / ping / reconnect jobs running and
+         * the WebSocket connected. The socket is app-lifetime shared
+         * infrastructure, and the user may immediately rejoin (or the server
+         * re-add us) — cancelling [eventJob] would drop the GroupUpdate /
+         * GroupJoined messages that make that rejoin observable, and
+         * disconnecting would kill unrelated WebSocket consumers (admin
+         * dashboards, remote control).
+         */
+        GROUP_LEFT_KEEP_LISTENING,
+    }
+
+    private fun teardownTo(level: TeardownLevel) {
         cachedGroup.set(null)
         _currentGroup.value = null
         isGroupActive.set(false)
         activeGroupIdRef.set(null)
         syncPlayReady.set(false)
-        syncPlayEnabledAtMs.set(0L)
-        lastReconnectAtMs.set(0L)
         queuedEvent.set(null)
-        eventJob?.cancel()
-        pingReportJob?.cancel()
-        reconnectWatchJob?.cancel()
+        syncPlayEnabledAtMs.set(0L)
+        if (level == TeardownLevel.FULL) {
+            lastReconnectAtMs.set(0L)
+            eventJob?.cancel()
+            pingReportJob?.cancel()
+            reconnectWatchJob?.cancel()
+        }
         queueCore.clear()
         playbackCore.onGroupLeft()
-        timeSyncManager.stop()
-        webSocketClient.disconnect()
+        if (level == TeardownLevel.FULL) {
+            timeSyncManager.stop()
+            webSocketClient.disconnect()
+        }
+    }
+
+    fun reset() {
+        teardownTo(TeardownLevel.FULL)
     }
 
     companion object {

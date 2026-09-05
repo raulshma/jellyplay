@@ -27,6 +27,9 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.Playlist
 import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
 import com.raulshma.jellyplay.core.data.playback.AudioQueueOutcome
+import com.raulshma.jellyplay.core.data.playback.InstantMixError
+import com.raulshma.jellyplay.core.data.playback.InstantMixOutcome
+import com.raulshma.jellyplay.core.data.playback.InstantMixStateHolder
 import com.raulshma.jellyplay.core.model.seerr.buildPosterUrl
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.NetworkStatus
@@ -46,6 +49,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -840,8 +844,40 @@ class DetailViewModel internal constructor(
 
     // ── Instant mix ────────────────────────────────────────────────────
     // One facade call: the mix fetch, queue build, and dispatcher hop all live
-    // in [AudioQueueFacade]; the VM keeps only the audio-type gate, the
-    // navigation-drift guard, and the outcome → [DetailMessage] mapping.
+    // in [AudioQueueFacade]; the shared [InstantMixStateHolder] owns the
+    // outcome choreography. The VM keeps only the audio-type gate and folds
+    // holder errors into this screen's [DetailMessage] snackbar channel —
+    // clearing after each emit so a repeated identical failure re-fires
+    // (StateFlow equality would otherwise swallow it).
+
+    private val instantMixHolder = InstantMixStateHolder(
+        scope = scope,
+        startMix = { seedItemId, fallbackName ->
+            audioQueueFacade.startInstantMix(
+                seedItemId,
+                albumFallback = fallbackName,
+                guard = { currentItemId == seedItemId },
+            ).toInstantMixOutcome()
+        },
+    )
+
+    init {
+        launch {
+            instantMixHolder.state
+                .map { it.error }
+                .distinctUntilChanged()
+                .collect { mixError ->
+                    when (mixError) {
+                        InstantMixError.EmptyMix ->
+                            _messages.tryEmit(DetailMessage.Text(strings.get(Res.string.detail_instant_mix_empty)))
+                        is InstantMixError.Failed ->
+                            _messages.tryEmit(DetailMessage.Text(strings.get(Res.string.detail_instant_mix_failed)))
+                        null -> Unit
+                    }
+                    if (mixError != null) instantMixHolder.clearError()
+                }
+        }
+    }
 
     /**
      * Starts a Jellyfin instant mix for the current audio item. Fetches the
@@ -856,23 +892,7 @@ class DetailViewModel internal constructor(
         val detail = _uiState.value.detail ?: return
         val item = detail.item
         if (!item.mediaType.isAudioType) return
-        val itemId = item.id
-        launch {
-            when (
-                val outcome = audioQueueFacade.startInstantMix(
-                    itemId,
-                    albumFallback = item.album ?: item.name,
-                    guard = { currentItemId == itemId },
-                )
-            ) {
-                is AudioQueueOutcome.Started -> Unit
-                AudioQueueOutcome.Empty ->
-                    _messages.tryEmit(DetailMessage.Text(strings.get(Res.string.detail_instant_mix_empty)))
-                AudioQueueOutcome.Suppressed -> Unit
-                is AudioQueueOutcome.Failed ->
-                    _messages.tryEmit(DetailMessage.Text(strings.get(Res.string.detail_instant_mix_failed)))
-            }
-        }
+        instantMixHolder.start(item.id, item.album ?: item.name)
     }
 
     /**
@@ -1360,6 +1380,14 @@ class DetailViewModel internal constructor(
         super.onCleared()
         themeMusicPlayer.stop()
     }
+}
+
+/** Normalizes the jvmShared facade outcome to the holder's pure outcome shape. */
+private fun AudioQueueOutcome.toInstantMixOutcome(): InstantMixOutcome = when (this) {
+    is AudioQueueOutcome.Started -> InstantMixOutcome.Started(queue.firstOrNull()?.id)
+    AudioQueueOutcome.Empty -> InstantMixOutcome.EmptyMix
+    AudioQueueOutcome.Suppressed -> InstantMixOutcome.Suppressed
+    is AudioQueueOutcome.Failed -> InstantMixOutcome.Failed(cause)
 }
 
 /**

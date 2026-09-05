@@ -99,8 +99,12 @@ fun AlbumDetailScreen(
         viewModel.loadAlbum(albumId)
     }
 
-    LaunchedEffect(viewModel.mixFirstTrackId) {
-        viewModel.mixFirstTrackId?.let {
+    // One collected mix snapshot drives both the isStartingMix progress gate
+    // and the first-track navigation one-shot (InstantMixStateHolder fold).
+    val mixState by viewModel.mixState.collectAsStateWithLifecycle()
+
+    LaunchedEffect(mixState.firstTrackId) {
+        mixState.firstTrackId?.let {
             viewModel.consumeMixEvent()
             onTrackClick(it)
         }
@@ -149,7 +153,7 @@ fun AlbumDetailScreen(
                     },
                     onAddToQueue = { track -> viewModel.addToQueue(track) },
                     onInstantMix = { viewModel.startInstantMix(albumId) },
-                    isStartingMix = viewModel.isStartingMix,
+                    isStartingMix = mixState.isStarting,
                     onDownloadTrack = { track -> viewModel.downloadTrack(track) },
                     onDownloadAlbum = { viewModel.downloadAlbum() },
                     onDeleteAlbum = { viewModel.deleteAlbumDownloads() },

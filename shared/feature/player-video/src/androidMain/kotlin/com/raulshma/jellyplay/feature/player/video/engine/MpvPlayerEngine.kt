@@ -13,7 +13,6 @@ import `is`.xyz.mpv.MPV
 import `is`.xyz.mpv.MPVNode
 import com.raulshma.jellyplay.core.data.playback.DialogueBoostHelper
 import com.raulshma.jellyplay.core.data.playback.EqualizerHelper
-import com.raulshma.jellyplay.core.data.playback.MediaStreamVolume
 import com.raulshma.jellyplay.core.data.playback.NightModeHelper
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.ChannelMixMode
@@ -688,17 +687,10 @@ class MpvPlayerEngine(
                 try { it.destroy() } catch (e: Exception) { Log.w(TAG, "destroy", e) }
             }
         }
-        _playbackState.value = EnginePlaybackState.IDLE
-        _isPlaying.value = false
-        _availableTracks.value = emptyList()
-        _bufferedPositionMs.value = 0L
-        _videoStats.value = EngineVideoStats()
-        _currentCues.value = emptyList()
-        _liveSubtitleCue.value = null
-        cachedPositionMs = 0L
-        cachedDurationMs = 0L
-        cachedBufferedPositionMs = 0L
-        cachedSubStartSec = -1.0
+        // Published-flow resets live in BasePlayerEngine (C5); mpv's residue
+        // (live-subtitle mirror + cached position/duration/buffer reads) goes
+        // through the hook that reset fires.
+        resetPublishedEngineState()
         serverDurationMs = 0L
         // Recreate the scope so a re-used engine stays usable without waiting
         // for the next load(). A cancelled scope silently swallows new
@@ -712,6 +704,19 @@ class MpvPlayerEngine(
         if (releaseThread.isAlive) {
             runCatching { releaseThread.quitSafely() }
         }
+    }
+
+    /**
+     * The mpv residue cleared alongside the base published-state reset (C5):
+     * the live-subtitle-text mirror (the one engine that publishes it) and
+     * the cached native position/duration/buffer reads the ticker seeds from.
+     */
+    override fun onResetItemScopedState() {
+        _liveSubtitleCue.value = null
+        cachedPositionMs = 0L
+        cachedDurationMs = 0L
+        cachedBufferedPositionMs = 0L
+        cachedSubStartSec = -1.0
     }
 
     override fun play() {
@@ -973,60 +978,36 @@ class MpvPlayerEngine(
             ((mpvView?.mpv?.getPropertyDouble("volume") ?: 100.0) / 100.0).toFloat().coerceIn(0f, 1f)
         } catch (_: Exception) { 1f }
 
-    override fun setVolume(value: Float) {
-        try {
-            val plan = PlaybackVolumePolicy.planLevel(value, PlaybackVolumePolicy.MAX_BOOST_NOMINAL)
-            rememberUnmuteVolumeIfAudible(plan.normalized)
-            mpvView?.mpv?.setPropertyDouble("volume", plan.normalized * 100.0)
-            MediaStreamVolume.setNormalized(context, plan.systemStream)
-        } catch (_: Exception) {}
+    // ── Volume / mute seams (C4) ────────────────────────────────────────────
+    // The four command bodies are final templates in ReloadablePlayerEngine;
+    // mpv contributes the percent-scaled property write/read, its real mute
+    // flag, and the LEAVE_UNCHANGED vocabulary (the flag silences; the native
+    // volume stays untouched on both transitions — the system-stream sync is
+    // the mute's other surface and runs even without a handle, matching the
+    // former body). Dispatch keeps the former swallow-all containment.
+
+    override fun dispatchVolumeCommand(command: () -> Unit) {
+        try { command() } catch (_: Exception) {}
     }
 
-    override fun increaseVolume(delta: Float) {
-        try {
-            val m = mpvView?.mpv ?: return
-            val current = m.getPropertyDouble("volume") ?: 100.0
-            val plan = PlaybackVolumePolicy.planLevel(
-                (current / 100.0).toFloat() + delta,
-                PlaybackVolumePolicy.MAX_BOOST_NOMINAL,
-            )
-            m.setPropertyDouble("volume", plan.normalized * 100.0)
-            rememberUnmuteVolumeIfAudible(plan.normalized)
-            MediaStreamVolume.setNormalized(context, plan.systemStream)
-        } catch (_: Exception) {}
+    override fun readNativeVolume(): Float? = try {
+        val m = mpvView?.mpv ?: return null
+        // A missing property read defaults to full loudness — only a missing
+        // handle or a thrown read aborts the delta templates.
+        ((m.getPropertyDouble("volume") ?: 100.0) / 100.0).toFloat()
+    } catch (_: Exception) { null }
+
+    override fun applyNativeVolume(normalized: Float) {
+        // Throws through to dispatchVolumeCommand's catch on a failed write —
+        // the former bodies skipped the system-stream sync in that case too.
+        mpvView?.mpv?.setPropertyDouble("volume", normalized * 100.0)
     }
 
-    override fun decreaseVolume(delta: Float) {
-        try {
-            val m = mpvView?.mpv ?: return
-            val current = m.getPropertyDouble("volume") ?: 100.0
-            val plan = PlaybackVolumePolicy.planLevel(
-                (current / 100.0).toFloat() - delta,
-                PlaybackVolumePolicy.MAX_BOOST_NOMINAL,
-            )
-            m.setPropertyDouble("volume", plan.normalized * 100.0)
-            rememberUnmuteVolumeIfAudible(plan.normalized)
-            MediaStreamVolume.setNormalized(context, plan.systemStream)
-        } catch (_: Exception) {}
-    }
+    override fun nativeVolumeRestore(muted: Boolean): PlaybackVolumePolicy.NativeVolumeRestore =
+        PlaybackVolumePolicy.NativeVolumeRestore.LEAVE_UNCHANGED
 
-    override fun setMuted(muted: Boolean) {
+    override fun applyNativeMuteFlag(muted: Boolean) {
         try { mpvView?.mpv?.setPropertyBoolean("mute", muted) } catch (_: Exception) {}
-        try {
-            if (muted) {
-                val plan = PlaybackVolumePolicy.planMute(PlaybackVolumePolicy.NativeVolumeRestore.LEAVE_UNCHANGED)
-                if (plan.snapshotSystemVolume) snapshotSystemVolumeForMute()
-                // plan.nativeVolume is null for mpv — the mute flag above owns
-                // silencing the native handle.
-                MediaStreamVolume.setNormalized(context, plan.systemStream)
-            } else {
-                val plan = PlaybackVolumePolicy.planUnmute(
-                    lastUnmuteVolume,
-                    PlaybackVolumePolicy.NativeVolumeRestore.LEAVE_UNCHANGED,
-                )
-                MediaStreamVolume.setNormalized(context, plan.systemStream)
-            }
-        } catch (_: Exception) {}
     }
 
     override fun createSurfaceView(context: Context): View {

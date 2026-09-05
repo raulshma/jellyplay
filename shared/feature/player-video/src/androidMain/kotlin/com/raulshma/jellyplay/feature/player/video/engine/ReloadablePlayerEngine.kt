@@ -70,11 +70,20 @@ abstract class ReloadablePlayerEngine(
         }
     }
 
-    // ── Volume / mute — shared memory + system-stream sync ──────────────────
-    // The clamp / remember / mute-unmute decisions live in the pure
-    // commonMain PlaybackVolumePolicy; these members are only the shared
-    // storage and the system-stream snapshot the adapters apply around the
-    // policy's plans.
+    // ── Volume / mute — templates over the policy ───────────────────────────
+    // The four MediaEngine volume/mute commands are FINAL templates over the
+    // adapter seams below; the clamp / remember / mute-unmute decisions live
+    // in the pure commonMain PlaybackVolumePolicy. The remember call is
+    // unified BEFORE the native write (the former Exo/Vlc order) — this fixes
+    // mpv's drift, where the delta bodies wrote the native handle first and
+    // remembered second. What genuinely diverges per engine stays a seam:
+    //  - the native write mechanism (player.volume / setPropertyDouble /
+    //    int-percent) — [applyNativeVolume],
+    //  - the native current-level read (the delta base) — [readNativeVolume],
+    //  - the boost ceiling — [volumeBoostCeiling] (libVLC amplifies to 2.0),
+    //  - the mute-restore vocabulary — [nativeVolumeRestore],
+    //  - the native mute FLAG (mpv only) — [applyNativeMuteFlag],
+    //  - dispatch containment/threading — [dispatchVolumeCommand].
 
     @Volatile
     protected var lastUnmuteVolume: Float = 1f
@@ -86,6 +95,103 @@ abstract class ReloadablePlayerEngine(
     protected fun snapshotSystemVolumeForMute() {
         val sys = MediaStreamVolume.getNormalized(appContext)
         if (sys > 0f) lastUnmuteVolume = sys
+    }
+
+    /** Normalized boost ceiling for [PlaybackVolumePolicy.planLevel]. */
+    protected open val volumeBoostCeiling: Float
+        get() = PlaybackVolumePolicy.MAX_BOOST_NOMINAL
+
+    /**
+     * Writes [normalized] (0..[volumeBoostCeiling]) to the native volume
+     * handle. Implementations own their null-tolerance exactly where the
+     * former per-engine bodies had it (mpv/libVLC setVolume null-tolerate the
+     * write and keep the system-stream sync; ExoPlayer aborts the whole call
+     * via [dispatchVolumeCommand]).
+     */
+    protected abstract fun applyNativeVolume(normalized: Float)
+
+    /**
+     * The native handle's current normalized level — the delta base for
+     * [increaseVolume] / [decreaseVolume]. Null when the handle is absent:
+     * the delta templates abort exactly where the former bodies'
+     * `?: return` early-exits did.
+     */
+    protected abstract fun readNativeVolume(): Float?
+
+    /**
+     * Which level the native handle should carry across a mute/unmute
+     * transition ([muted] = the requested state): mpv owns a real mute flag
+     * and leaves its volume alone on both; Media3 unmutes its handle to full
+     * and lets the system stream carry the remembered level; libVLC mutes by
+     * zeroing and restores the remembered level.
+     */
+    protected abstract fun nativeVolumeRestore(muted: Boolean): PlaybackVolumePolicy.NativeVolumeRestore
+
+    /**
+     * Native mute-flag write — mpv's real silencing mechanism; the default
+     * no-op covers engines whose silencing is the volume plan itself.
+     */
+    protected open fun applyNativeMuteFlag(muted: Boolean) {}
+
+    /**
+     * Whether the mute/unmute template may run at all. libVLC overrides to
+     * abort without a handle (its former `mediaPlayer ?: return` guard — no
+     * snapshot, no system-stream write); the default runs unconditionally,
+     * which is mpv's contract (its system-stream sync IS the mute's surface
+     * when the native handle is gone) and ExoPlayer's (its abort lives in
+     * [dispatchVolumeCommand]).
+     */
+    protected open fun muteTemplateEnabled(): Boolean = true
+
+    /**
+     * Dispatch shell around every template run. ExoPlayer routes through its
+     * player thread AND aborts when no player is attached (its former bodies
+     * early-returned); mpv/libVLC wrap the run in their former swallow-all
+     * try/catch.
+     */
+    protected open fun dispatchVolumeCommand(command: () -> Unit) {
+        command()
+    }
+
+    final override fun setVolume(value: Float) = dispatchVolumeCommand {
+        val plan = PlaybackVolumePolicy.planLevel(value, volumeBoostCeiling)
+        rememberUnmuteVolumeIfAudible(plan.normalized)
+        applyNativeVolume(plan.normalized)
+        MediaStreamVolume.setNormalized(appContext, plan.systemStream)
+    }
+
+    final override fun increaseVolume(delta: Float) = dispatchVolumeCommand {
+        val current = readNativeVolume() ?: return@dispatchVolumeCommand
+        val plan = PlaybackVolumePolicy.planLevel(current + delta, volumeBoostCeiling)
+        rememberUnmuteVolumeIfAudible(plan.normalized)
+        applyNativeVolume(plan.normalized)
+        MediaStreamVolume.setNormalized(appContext, plan.systemStream)
+    }
+
+    final override fun decreaseVolume(delta: Float) = dispatchVolumeCommand {
+        val current = readNativeVolume() ?: return@dispatchVolumeCommand
+        val plan = PlaybackVolumePolicy.planLevel(current - delta, volumeBoostCeiling)
+        rememberUnmuteVolumeIfAudible(plan.normalized)
+        applyNativeVolume(plan.normalized)
+        MediaStreamVolume.setNormalized(appContext, plan.systemStream)
+    }
+
+    final override fun setMuted(muted: Boolean) = dispatchVolumeCommand {
+        applyNativeMuteFlag(muted)
+        if (!muteTemplateEnabled()) return@dispatchVolumeCommand
+        if (muted) {
+            val plan = PlaybackVolumePolicy.planMute(nativeVolumeRestore(muted = true))
+            if (plan.snapshotSystemVolume) snapshotSystemVolumeForMute()
+            plan.nativeVolume?.let { applyNativeVolume(it) }
+            MediaStreamVolume.setNormalized(appContext, plan.systemStream)
+        } else {
+            val plan = PlaybackVolumePolicy.planUnmute(
+                lastUnmuteVolume,
+                nativeVolumeRestore(muted = false),
+            )
+            plan.nativeVolume?.let { applyNativeVolume(it) }
+            MediaStreamVolume.setNormalized(appContext, plan.systemStream)
+        }
     }
 
     // ── positionFlow shell ──────────────────────────────────────────────────

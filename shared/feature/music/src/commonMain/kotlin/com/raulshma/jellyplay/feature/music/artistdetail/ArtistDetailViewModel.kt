@@ -2,6 +2,9 @@ package com.raulshma.jellyplay.feature.music.artistdetail
 
 import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
 import com.raulshma.jellyplay.core.data.playback.AudioQueueOutcome
+import com.raulshma.jellyplay.core.data.playback.InstantMixOutcome
+import com.raulshma.jellyplay.core.data.playback.InstantMixState
+import com.raulshma.jellyplay.core.data.playback.InstantMixStateHolder
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -10,6 +13,9 @@ import com.raulshma.jellyplay.feature.music.MixErrorMessage
 import com.raulshma.jellyplay.feature.music.toMixErrorMessage
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 
 class ArtistDetailViewModel(
     private val mediaRepository: MediaRepository,
@@ -32,11 +38,30 @@ class ArtistDetailViewModel(
     private val _error = composeState<MixErrorMessage?>(null)
     val error: MixErrorMessage? get() = _error.value
 
-    private val _isStartingMix = composeState(false)
-    val isStartingMix: Boolean get() = _isStartingMix.value
+    // Instant-mix choreography (isStarting flag + first-track one-shot +
+    // outcome → error mapping) lives in the shared holder; the VM only adapts
+    // the facade call (no album fallback — see the note in startInstantMix)
+    // and folds holder errors into the screen's one `error` field.
+    private val instantMix = InstantMixStateHolder(
+        scope = scope,
+        startMix = { seedItemId, _ ->
+            audioQueueFacade.startInstantMix(seedItemId).toInstantMixOutcome()
+        },
+    )
 
-    private val _mixFirstTrackId = composeState<String?>(null)
-    val mixFirstTrackId: String? get() = _mixFirstTrackId.value
+    val mixState: StateFlow<InstantMixState> = instantMix.state
+
+    val isStartingMix: Boolean get() = instantMix.state.value.isStarting
+    val mixFirstTrackId: String? get() = instantMix.state.value.firstTrackId
+
+    init {
+        launch {
+            instantMix.state
+                .map { it.error }
+                .distinctUntilChanged()
+                .collect { mixError -> _error.value = mixError.toMixErrorMessage() }
+        }
+    }
 
     fun loadArtist(artistId: String, force: Boolean = false) {
         launch {
@@ -70,22 +95,20 @@ class ArtistDetailViewModel(
         imageUrlProvider.getBackdropUrl(itemId)
 
     fun startInstantMix(artistId: String) {
-        launch {
-            _isStartingMix.value = true
-            _error.value = null
-            // No album fallback: the former `track.album` fallback was a no-op
-            // (the mapper keeps the track's own album whenever it is set).
-            val outcome = audioQueueFacade.startInstantMix(artistId)
-            if (outcome is AudioQueueOutcome.Started) {
-                _mixFirstTrackId.value = outcome.queue.first().id
-            } else {
-                outcome.toMixErrorMessage()?.let { _error.value = it }
-            }
-            _isStartingMix.value = false
-        }
+        // No album fallback: the former `track.album` fallback was a no-op
+        // (the mapper keeps the track's own album whenever it is set).
+        instantMix.start(artistId, fallbackName = null)
     }
 
     fun consumeMixEvent() {
-        _mixFirstTrackId.value = null
+        instantMix.consumeStartedEvent()
     }
+}
+
+/** Normalizes the jvmShared facade outcome to the holder's pure outcome shape. */
+private fun AudioQueueOutcome.toInstantMixOutcome(): InstantMixOutcome = when (this) {
+    is AudioQueueOutcome.Started -> InstantMixOutcome.Started(queue.firstOrNull()?.id)
+    AudioQueueOutcome.Empty -> InstantMixOutcome.EmptyMix
+    AudioQueueOutcome.Suppressed -> InstantMixOutcome.Suppressed
+    is AudioQueueOutcome.Failed -> InstantMixOutcome.Failed(cause)
 }

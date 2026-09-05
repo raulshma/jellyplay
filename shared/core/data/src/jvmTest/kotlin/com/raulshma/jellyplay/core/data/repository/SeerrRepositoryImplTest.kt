@@ -80,7 +80,37 @@ class SeerrRepositoryImplTest {
         val result = repository.testConnection()
 
         assertTrue(result.isFailure)
-        assertTrue(result.exceptionOrNull()?.message?.contains("required") == true)
+        assertTrue(result.exceptionOrNull()?.message?.contains("not configured") == true)
+    }
+
+    @Test
+    fun `unconfigured seerr yields the one canonical failure across session-bound members`() = runTest {
+        every { seerrPreferencesStore.preferences } returns MutableStateFlow(
+            SeerrPreferences(enabled = true, serverUrl = "")
+        )
+        every { secureCredentialsStore.getApiKey() } returns ""
+        repository = SeerrRepositoryImpl(seerrApiClient, tmdbApiClient, seerrPreferencesStore, secureCredentialsStore, homeSession, sessionCacheRegistry, repoScope)
+
+        // A sample across the folded ladder: plain members, a cache-through
+        // getter, a mutation, and the poll-driven members.
+        val results = listOf(
+            repository.testConnection(),
+            repository.search("query"),
+            repository.getMovieDetails(1),
+            repository.getTrending(1),
+            repository.approveRequest(7),
+            repository.getRequestCount(),
+            repository.getCurrentUser(),
+        )
+
+        results.forEach { result ->
+            assertTrue(result.isFailure)
+            val error = result.exceptionOrNull()
+            assertTrue(error is IllegalStateException, "expected IllegalStateException, got $error")
+            assertEquals("Seerr not configured", error.message)
+        }
+        // An unconfigured getter must not reach the network at all.
+        coVerify(exactly = 0) { seerrApiClient.getMovieDetails(any(), any(), any()) }
     }
 
     @Test

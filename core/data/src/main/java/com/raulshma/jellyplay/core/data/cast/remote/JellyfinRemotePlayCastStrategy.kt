@@ -3,7 +3,10 @@ package com.raulshma.jellyplay.core.data.cast.remote
 import android.content.Context
 import androidx.compose.runtime.Stable
 import android.util.Log
+import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
 import com.raulshma.jellyplay.core.data.cast.CastDevice
+import com.raulshma.jellyplay.core.data.cast.CastMediaOptions
 import com.raulshma.jellyplay.core.data.cast.CastStrategy
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
@@ -295,7 +298,7 @@ class JellyfinRemotePlayCastStrategy(
         _nowPlayingItemId.value = nowPlaying?.id.orEmpty()
     }
 
-    fun play() {
+    override fun play() {
         val sessionId = connectedSessionId ?: return
         scope.launch {
             adminApiClient.sendPlaystateCommand(sessionId, "Unpause")
@@ -303,7 +306,7 @@ class JellyfinRemotePlayCastStrategy(
         }
     }
 
-    fun pause() {
+    override fun pause() {
         val sessionId = connectedSessionId ?: return
         scope.launch {
             adminApiClient.sendPlaystateCommand(sessionId, "Pause")
@@ -311,7 +314,7 @@ class JellyfinRemotePlayCastStrategy(
         }
     }
 
-    fun seekTo(positionMs: Long) {
+    override fun seekTo(positionMs: Long) {
         val sessionId = connectedSessionId ?: return
         scope.launch {
             val ticks = positionMs * 10000L
@@ -320,7 +323,7 @@ class JellyfinRemotePlayCastStrategy(
         }
     }
 
-    fun setRendererVolume(volume: Float) {
+    override fun setRendererVolume(volume: Float) {
         val sessionId = connectedSessionId ?: return
         scope.launch {
             val volumePercent = (volume * 100f).coerceIn(0f, 100f).toInt().toString()
@@ -395,5 +398,28 @@ class JellyfinRemotePlayCastStrategy(
             )
             _isPlaying.value = true
         }
+    }
+
+    /**
+     * CastStrategy transport entry: extracts the Jellyfin item id and the
+     * track/source selections from the standard cast arguments and forwards
+     * them to the remote session. Always reports the load as issued — the
+     * remote session call is fire-and-forget here, matching the old
+     * CastManager.loadJellyfinMedia behaviour.
+     */
+    override fun loadMedia(
+        mediaItem: MediaItem,
+        startPositionMs: Long,
+        listener: Player.Listener,
+        options: CastMediaOptions,
+    ): Boolean {
+        loadMedia(
+            itemId = mediaItem.mediaId,
+            startPositionMs = startPositionMs,
+            mediaSourceId = options.mediaSourceId,
+            audioStreamIndex = options.audioStreamIndex,
+            subtitleStreamIndex = options.subtitleStreamIndex,
+        )
+        return true
     }
 }

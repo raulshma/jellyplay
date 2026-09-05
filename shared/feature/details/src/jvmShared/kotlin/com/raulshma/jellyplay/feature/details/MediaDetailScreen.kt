@@ -445,41 +445,35 @@ fun MediaDetailScreen(
                         onRetry = { viewModel.loadItem(itemId) },
                         onRefresh = { viewModel.forceRefresh() },
                         onPlayClick = { playItemId: String, sourceId: String?, start: Long ->
-                            // For a LOCAL origin the server stream index is meaningless; pass
-                            // the chosen local-manifest subtitle index instead so the player's
-                            // offline-id wiring (TrackSelectionPolicy.resolveByOfflineSubtitleId)
-                            // resolves the right side-loaded subtitle. The remote audio index is
-                            // still threaded because the local audio inventory is not selectable
-                            // here.
-                            val isLocalOrigin = uiState.origin?.isLocal == true
-                            val subtitleIndex = if (isLocalOrigin) {
-                                viewModel.selectedLocalSubtitleIndex
-                            } else {
-                                viewModel.selectedSubtitleIndex
-                            }
+                            // Stream selection (local-origin subtitle index when offline)
+                            // is the shared [DetailPlayPolicies.resolvePlayStreamSelection]
+                            // fold; this lambda only dispatches.
                             onPlayClick(
                                 playItemId,
                                 sourceId,
                                 start,
-                                subtitleIndex,
+                                DetailPlayPolicies.resolvePlayStreamSelection(
+                                    uiState.origin,
+                                    viewModel.selectedLocalSubtitleIndex,
+                                    viewModel.selectedSubtitleIndex,
+                                ),
                                 viewModel.selectedAudioIndex,
                             )
                         },
                         onPlayChapter = { start ->
                             // Resume the current item at a chapter position. Reuses the
                             // same play path + stream selection as the primary play button
-                            // (local-origin subtitle index when offline).
-                            val isLocalOrigin = uiState.origin?.isLocal == true
-                            val subtitleIndex = if (isLocalOrigin) {
-                                viewModel.selectedLocalSubtitleIndex
-                            } else {
-                                viewModel.selectedSubtitleIndex
-                            }
+                            // via the shared [DetailPlayPolicies.resolvePlayStreamSelection]
+                            // fold; this lambda only dispatches.
                             onPlayClick(
                                 itemId,
                                 null,
                                 start,
-                                subtitleIndex,
+                                DetailPlayPolicies.resolvePlayStreamSelection(
+                                    uiState.origin,
+                                    viewModel.selectedLocalSubtitleIndex,
+                                    viewModel.selectedSubtitleIndex,
+                                ),
                                 viewModel.selectedAudioIndex,
                             )
                         },
@@ -506,7 +500,7 @@ fun MediaDetailScreen(
                             // A series mark recurses into every episode and clears every
                             // resume position; confirm first. Single movies/episodes flip
                             // immediately (trivially reversible via the same button).
-                            if (currentItem?.mediaType == MediaType.SERIES) {
+                            if (DetailPlayPolicies.requiresMarkPlayedConfirmation(currentItem?.mediaType)) {
                                 markSeriesToWatched = true
                                 markSeriesConfirm.request { viewModel.markPlayed() }
                             } else {
@@ -514,7 +508,7 @@ fun MediaDetailScreen(
                             }
                         },
                         onMarkUnplayed = {
-                            if (currentItem?.mediaType == MediaType.SERIES) {
+                            if (DetailPlayPolicies.requiresMarkPlayedConfirmation(currentItem?.mediaType)) {
                                 markSeriesToWatched = false
                                 markSeriesConfirm.request { viewModel.markUnplayed() }
                             } else {
@@ -522,12 +516,17 @@ fun MediaDetailScreen(
                             }
                         },
                         onMarkSeasonPlayed = { seasonId ->
-                            markSeasonToWatched = true
-                            markSeasonConfirm.request { viewModel.markSeasonPlayed(seasonId) }
+                            // A season mark is always series-scoped — unconditional gate.
+                            if (DetailPlayPolicies.requiresMarkPlayedConfirmation(currentItem?.mediaType, isSeasonAction = true)) {
+                                markSeasonToWatched = true
+                                markSeasonConfirm.request { viewModel.markSeasonPlayed(seasonId) }
+                            }
                         },
                         onMarkSeasonUnplayed = { seasonId ->
-                            markSeasonToWatched = false
-                            markSeasonConfirm.request { viewModel.markSeasonUnplayed(seasonId) }
+                            if (DetailPlayPolicies.requiresMarkPlayedConfirmation(currentItem?.mediaType, isSeasonAction = true)) {
+                                markSeasonToWatched = false
+                                markSeasonConfirm.request { viewModel.markSeasonUnplayed(seasonId) }
+                            }
                         },
                         onSubtitleSelect = { idx: Int? -> viewModel.selectSubtitle(idx) },
                         onAudioSelect = { idx: Int? -> viewModel.selectAudio(idx) },

@@ -114,22 +114,38 @@ class DownloadsViewModel(
         }
     }
 
-    fun cancelDownload(item: DownloadItem) {
+    /**
+     * The single dispatch for every [DownloadBulkAction]. Target selection is
+     * the pure [DownloadActions] fold (scope ∩ live list ∩ admission table);
+     * a no-target call is a guarded no-op, exactly like the per-action funs it
+     * replaced. DELETE additionally clears the selection (bulk scope only) and
+     * emits the one-shot Deleted message at every scope — the former
+     * deleteSelected/deleteDownload side effects.
+     */
+    fun applyBulkAction(action: DownloadBulkAction, scope: DownloadActionScope) {
+        val state = _uiState.value
+        val targets = DownloadActions.targets(action, state.downloads, state.selectedIds, scope)
+        if (targets.isEmpty()) return
         launch {
-            downloadRepository.cancelDownload(item.id)
-        }
-    }
-
-    fun pauseDownload(item: DownloadItem) {
-        launch {
-            downloadRepository.pauseDownload(item.id)
-        }
-    }
-
-    fun resumeDownload(item: DownloadItem) {
-        launch {
-            downloadRepository.resumeDownload(item.id)
-            downloadRepository.enqueueDownload(item.id)
+            bulkMap(targets) { item ->
+                when (action) {
+                    DownloadBulkAction.PAUSE -> downloadRepository.pauseDownload(item.id)
+                    DownloadBulkAction.RESUME -> {
+                        downloadRepository.resumeDownload(item.id)
+                        downloadRepository.enqueueDownload(item.id)
+                    }
+                    DownloadBulkAction.CANCEL -> downloadRepository.cancelDownload(item.id)
+                    DownloadBulkAction.RETRY_FAILED -> {
+                        downloadRepository.retryDownload(item.id)
+                        downloadRepository.enqueueDownload(item.id)
+                    }
+                    DownloadBulkAction.DELETE -> downloadRepository.deleteDownload(item.id)
+                }
+            }
+            if (action == DownloadBulkAction.DELETE) {
+                if (scope == DownloadActionScope.Selected) clearSelection()
+                messageChannel.trySend(DownloadsUserMessage.Deleted)
+            }
         }
     }
 
@@ -137,13 +153,6 @@ class DownloadsViewModel(
         launch {
             downloadRepository.deleteDownload(item.id)
             messageChannel.trySend(DownloadsUserMessage.Deleted)
-        }
-    }
-
-    fun retryDownload(item: DownloadItem) {
-        launch {
-            downloadRepository.retryDownload(item.id)
-            downloadRepository.enqueueDownload(item.id)
         }
     }
 
@@ -181,90 +190,9 @@ class DownloadsViewModel(
     }
 
     // ── Bulk actions ─────────────────────────────────────────────────────
-
-    /** Bulk-delete every selected download. Frees disk for completed items. */
-    fun deleteSelected() {
-        val targets = _uiState.value.downloads.filter { it.id in _uiState.value.selectedIds }
-        if (targets.isEmpty()) return
-        launch {
-            bulkMap(targets) { downloadRepository.deleteDownload(it.id) }
-            clearSelection()
-            messageChannel.trySend(DownloadsUserMessage.Deleted)
-        }
-    }
-
-    /** Pause every selected download that is currently downloading. */
-    fun pauseSelected() {
-        val targets = _uiState.value.downloads
-            .filter { it.id in _uiState.value.selectedIds && it.status == DownloadStatus.DOWNLOADING }
-        if (targets.isEmpty()) return
-        launch {
-            bulkMap(targets) { downloadRepository.pauseDownload(it.id) }
-        }
-    }
-
-    /** Resume every selected download that is currently paused. */
-    fun resumeSelected() {
-        val targets = _uiState.value.downloads
-            .filter { it.id in _uiState.value.selectedIds && it.status == DownloadStatus.PAUSED }
-        if (targets.isEmpty()) return
-        launch {
-            bulkMap(targets) {
-                downloadRepository.resumeDownload(it.id)
-                downloadRepository.enqueueDownload(it.id)
-            }
-        }
-    }
-
-    /** Cancel every selected active/queued/paused download. */
-    fun cancelSelected() {
-        val targets = _uiState.value.downloads.filter { item ->
-            item.id in _uiState.value.selectedIds && item.status in setOf(
-                DownloadStatus.PENDING,
-                DownloadStatus.QUEUED,
-                DownloadStatus.DOWNLOADING,
-                DownloadStatus.PAUSED,
-            )
-        }
-        if (targets.isEmpty()) return
-        launch {
-            bulkMap(targets) { downloadRepository.cancelDownload(it.id) }
-        }
-    }
-
-    // ── Global actions ──────────────────────────────────────────────────
-
-    /**
-     * Pause every download that is currently downloading. Mirrors [pauseSelected]
-     * but over the full list, so the user can halt all active transfers without
-     * entering selection mode.
-     */
-    fun pauseAll() {
-        val targets = _uiState.value.downloads
-            .filter { it.status == DownloadStatus.DOWNLOADING }
-        if (targets.isEmpty()) return
-        launch {
-            bulkMap(targets) { downloadRepository.pauseDownload(it.id) }
-        }
-    }
-
-    /**
-     * Re-queue every download in a Failed state. Mirrors the per-item
-     * [retryDownload] flow (reset + enqueue) applied to all Failed items, so a
-     * transient batch failure (e.g. a dropped network) can be recovered in one
-     * action without entering selection mode.
-     */
-    fun retryAllFailed() {
-        val targets = _uiState.value.downloads
-            .filter { it.status == DownloadStatus.FAILED }
-        if (targets.isEmpty()) return
-        launch {
-            bulkMap(targets) {
-                downloadRepository.retryDownload(it.id)
-                downloadRepository.enqueueDownload(it.id)
-            }
-        }
-    }
+    // The former pauseSelected/resumeSelected/cancelSelected/deleteSelected
+    // and global pauseAll/retryAllFailed funs folded into [applyBulkAction]
+    // above; [DownloadActions] owns the shared admission table.
 
     /**
      * Runs [action] for every target concurrently instead of serially — each

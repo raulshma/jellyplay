@@ -149,26 +149,10 @@ class ArrRepositoryImpl(
             _queue.value = emptyList()
             return@withContext Result.success(Unit)
         }
-        val combined = coroutineScope {
-            val radarrJobs = summary.radarrServers.map { srv ->
-                async {
-                    resolveSemaphore.withPermit {
-                        radarrApiClient.getQueue(srv.baseUrl, srv.apiKey)
-                            .getOrElse { emptyList() }
-                            .map { it.tagged(srv.id, ArrServiceKind.RADARR) }
-                    }
-                }
-            }
-            val sonarrJobs = summary.sonarrServers.map { srv ->
-                async {
-                    resolveSemaphore.withPermit {
-                        sonarrApiClient.getQueue(srv.baseUrl, srv.apiKey)
-                            .getOrElse { emptyList() }
-                            .map { it.tagged(srv.id, ArrServiceKind.SONARR) }
-                    }
-                }
-            }
-            (radarrJobs + sonarrJobs).awaitAll().flatten()
+        val combined = fanOut(summary.radarrServers + summary.sonarrServers) { srv ->
+            clientFor(srv).getQueue()
+                .getOrElse { emptyList() }
+                .map { it.tagged(srv.id, srv.kind) }
         }
         _queue.value = combined
         Result.success(Unit)
@@ -187,24 +171,8 @@ class ArrRepositoryImpl(
             // params to the Radarr/Sonarr `/api/v3/calendar` endpoints).
             val startStr = from.toString()
             val endStr = to.toString()
-            val combined = coroutineScope {
-                val radarrJobs = summary.radarrServers.map { srv ->
-                    async {
-                        resolveSemaphore.withPermit {
-                            radarrApiClient.getCalendar(srv.baseUrl, srv.apiKey, startStr, endStr)
-                                .getOrElse { emptyList() }
-                        }
-                    }
-                }
-                val sonarrJobs = summary.sonarrServers.map { srv ->
-                    async {
-                        resolveSemaphore.withPermit {
-                            sonarrApiClient.getCalendar(srv.baseUrl, srv.apiKey, startStr, endStr)
-                                .getOrElse { emptyList() }
-                        }
-                    }
-                }
-                (radarrJobs + sonarrJobs).awaitAll().flatten()
+            val combined = fanOut(summary.radarrServers + summary.sonarrServers) { srv ->
+                clientFor(srv).getCalendar(startStr, endStr).getOrElse { emptyList() }
             }
             _calendar.value = CalendarCache(key, combined)
             Result.success(Unit)
@@ -236,26 +204,10 @@ class ArrRepositoryImpl(
             _blocklist.value = emptyList()
             return@withContext Result.success(Unit)
         }
-        val combined = coroutineScope {
-            val radarrJobs = summary.radarrServers.map { srv ->
-                async {
-                    resolveSemaphore.withPermit {
-                        radarrApiClient.getBlocklist(srv.baseUrl, srv.apiKey)
-                            .getOrElse { emptyList() }
-                            .map { it.tagged(srv.id, ArrServiceKind.RADARR) }
-                    }
-                }
-            }
-            val sonarrJobs = summary.sonarrServers.map { srv ->
-                async {
-                    resolveSemaphore.withPermit {
-                        sonarrApiClient.getBlocklist(srv.baseUrl, srv.apiKey)
-                            .getOrElse { emptyList() }
-                            .map { it.tagged(srv.id, ArrServiceKind.SONARR) }
-                    }
-                }
-            }
-            (radarrJobs + sonarrJobs).awaitAll().flatten()
+        val combined = fanOut(summary.radarrServers + summary.sonarrServers) { srv ->
+            clientFor(srv).getBlocklist()
+                .getOrElse { emptyList() }
+                .map { it.tagged(srv.id, srv.kind) }
         }
         _blocklist.value = combined
         Result.success(Unit)
@@ -263,11 +215,7 @@ class ArrRepositoryImpl(
 
     override suspend fun testServer(server: ArrServerConfig): Result<Unit> =
         withContext(cacheScope.coroutineContext) {
-            if (server.kind == ArrServiceKind.RADARR) {
-                radarrApiClient.testConnection(server.baseUrl, server.apiKey)
-            } else {
-                sonarrApiClient.testConnection(server.baseUrl, server.apiKey)
-            }
+            clientFor(server).testConnection()
         }
 
     // ── Management actions ─────────────────────────────────────────────────
@@ -275,11 +223,7 @@ class ArrRepositoryImpl(
     override suspend fun deleteQueueItem(item: ArrQueueItem, options: ArrQueueDeleteOptions): Result<Unit> =
         withContext(cacheScope.coroutineContext) {
             val server = findServer(item.serverId, item.serverKind) ?: return@withContext noServer()
-            val result = if (item.serverKind == ArrServiceKind.RADARR) {
-                radarrApiClient.deleteQueueItem(server.baseUrl, server.apiKey, item.queueId, options)
-            } else {
-                sonarrApiClient.deleteQueueItem(server.baseUrl, server.apiKey, item.queueId, options)
-            }
+            val result = clientFor(server).deleteQueueItem(item.queueId, options)
             if (result.isSuccess) refreshQueue()
             result
         }
@@ -298,11 +242,7 @@ class ArrRepositoryImpl(
                     async {
                         if (server == null) return@async Result.failure<Unit>(noServerException())
                         val ids = group.map { it.queueId }
-                        if (kind == ArrServiceKind.RADARR) {
-                            radarrApiClient.deleteQueueItems(server.baseUrl, server.apiKey, ids, options)
-                        } else {
-                            sonarrApiClient.deleteQueueItems(server.baseUrl, server.apiKey, ids, options)
-                        }
+                        clientFor(server).deleteQueueItems(ids, options)
                     }
                 }.awaitAll()
             }
@@ -319,11 +259,7 @@ class ArrRepositoryImpl(
     override suspend fun grabQueueItem(item: ArrQueueItem): Result<Unit> =
         withContext(cacheScope.coroutineContext) {
             val server = findServer(item.serverId, item.serverKind) ?: return@withContext noServer()
-            if (item.serverKind == ArrServiceKind.RADARR) {
-                radarrApiClient.grabQueueItem(server.baseUrl, server.apiKey, item.queueId)
-            } else {
-                sonarrApiClient.grabQueueItem(server.baseUrl, server.apiKey, item.queueId)
-            }
+            clientFor(server).grabQueueItem(item.queueId)
         }
 
     override suspend fun importQueueItem(item: ArrQueueItem): Result<Unit> =
@@ -336,21 +272,13 @@ class ArrRepositoryImpl(
                 ?: return@withContext Result.failure(
                     ApiException.fromHttp(404, "Download id missing — cannot trigger manual import.")
                 )
-            if (item.serverKind == ArrServiceKind.RADARR) {
-                radarrApiClient.importQueueItem(server.baseUrl, server.apiKey, downloadId)
-            } else {
-                sonarrApiClient.importQueueItem(server.baseUrl, server.apiKey, downloadId)
-            }
+            clientFor(server).importQueueItem(downloadId)
         }
 
     override suspend fun deleteBlocklistItem(item: ArrBlocklistItem): Result<Unit> =
         withContext(cacheScope.coroutineContext) {
             val server = findServer(item.serverId, item.serverKind) ?: return@withContext noServer()
-            val result = if (item.serverKind == ArrServiceKind.RADARR) {
-                radarrApiClient.deleteBlocklistItem(server.baseUrl, server.apiKey, item.id)
-            } else {
-                sonarrApiClient.deleteBlocklistItem(server.baseUrl, server.apiKey, item.id)
-            }
+            val result = clientFor(server).deleteBlocklistItem(item.id)
             if (result.isSuccess) refreshBlocklist()
             result
         }
@@ -367,6 +295,7 @@ class ArrRepositoryImpl(
                 val servers = if (kind == ArrServiceKind.RADARR) summary.radarrServers else summary.sonarrServers
                 servers.map { srv ->
                     async {
+                        val client = clientFor(srv)
                         if (kind == ArrServiceKind.RADARR) {
                             // Radarr's SearchMovie keys off the internal movie id, not the tmdbId.
                             // Resolve tmdbId → Radarr movie id first; if the movie isn't tracked
@@ -375,20 +304,16 @@ class ArrRepositoryImpl(
                             val movieId = radarrApiClient.findMovieIdByTmdb(srv.baseUrl, srv.apiKey, tmdbId)
                                 .getOrNull()
                             if (movieId != null) {
-                                radarrApiClient.postCommand(
-                                    srv.baseUrl, srv.apiKey, command, movieIds = listOf(movieId),
-                                )
+                                client.postCommand(command, movieIds = listOf(movieId))
                             } else {
-                                radarrApiClient.postCommand(
-                                    srv.baseUrl, srv.apiKey, ArrCommandName.MISSING_SEARCH,
-                                )
+                                client.postCommand(ArrCommandName.MISSING_SEARCH)
                             }
                         } else {
                             // Sonarr identifies by internal seriesId, not tmdbId; passing tmdbId
                             // as seriesId is wrong. Fall back to a global MissingEpisodesSearch
                             // which the user can trigger; a tmdb→seriesId lookup would need the
                             // /series lookup endpoint (future enhancement).
-                            sonarrApiClient.postCommand(srv.baseUrl, srv.apiKey, ArrCommandName.MISSING_EPISODES)
+                            client.postCommand(ArrCommandName.MISSING_EPISODES)
                         }.getOrNull()
                     }
                 }.awaitAll().filterNotNull()
@@ -828,6 +753,34 @@ class ArrRepositoryImpl(
     }
 
     // ── Routing helpers ────────────────────────────────────────────────────
+
+    /**
+     * The dispatch seam's entry point: routes one server to the shared
+     * [ArrServiceClient] over its own client, replacing the per-call-site
+     * `if (kind == RADARR) radarr... else sonarr...` ladder.
+     */
+    private fun clientFor(server: ArrServerConfig): ArrServiceClient =
+        if (server.kind == ArrServiceKind.RADARR) {
+            RadarrServiceClient(radarrApiClient, server)
+        } else {
+            SonarrServiceClient(sonarrApiClient, server)
+        }
+
+    /**
+     * One queue/calendar/blocklist-style fan-out: every server is fetched
+     * concurrently under [resolveSemaphore] (bounded), a per-server failure
+     * degrades to an empty contribution, and the survivors are concatenated
+     * in encounter order — the merge order the hand-copied twins
+     * (radarr jobs + sonarr jobs) had.
+     */
+    private suspend fun <T> fanOut(
+        servers: List<ArrServerConfig>,
+        fetch: suspend (ArrServerConfig) -> List<T>,
+    ): List<T> = coroutineScope {
+        servers.map { srv ->
+            async { resolveSemaphore.withPermit { fetch(srv) } }
+        }.awaitAll().flatten()
+    }
 
     private suspend fun findServer(serverId: String, kind: ArrServiceKind): ArrServerConfig? {
         val summary = resolveServers().getOrDefault(ArrServiceSummary())

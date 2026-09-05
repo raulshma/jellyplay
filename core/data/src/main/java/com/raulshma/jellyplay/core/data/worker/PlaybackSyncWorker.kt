@@ -10,7 +10,8 @@ import com.raulshma.jellyplay.core.data.repository.PlayedStateSync
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEntry
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEventType
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxRepository
-import com.raulshma.jellyplay.core.data.repository.MediaRepositoryImpl
+import com.raulshma.jellyplay.core.data.repository.MediaCacheInvalidator
+import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.model.isFinishedOffline
 import kotlinx.coroutines.async
@@ -57,9 +58,14 @@ class PlaybackSyncWorker(
      * changes server state must not leave in-memory caches serving the
      * pre-drain view to an open detail screen (#153 home/detail coherence).
      */
-    // Concrete type (not the interface): the module-internal wholesale
-    // invalidateCaches is deliberately off the interface (plan 08).
-    private val mediaRepository: MediaRepositoryImpl,
+    private val mediaRepository: MediaRepository,
+    /**
+     * The post-drain wholesale cache drop. Deliberately off the public
+     * [MediaRepository] interface (plan 08) — it arrives through the narrow
+     * [MediaCacheInvalidator] port, Koin-bound to the same
+     * MediaRepositoryImpl single as [mediaRepository].
+     */
+    private val cacheInvalidator: MediaCacheInvalidator,
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
@@ -139,7 +145,7 @@ class PlaybackSyncWorker(
             // pre-drain view in the meantime (the "home shows it, detail
             // doesn't" report). The worker below is still enqueued for its
             // own warm-refetch behavior.
-            runCatching { mediaRepository.invalidateCaches() }
+            runCatching { cacheInvalidator.invalidateCaches() }
             // Synthetic user-data push: open detail sessions and the home
             // refresher listen on the same flow as WS pushes and refresh —
             // the drain's markPlayedItem calls may never arrive as a

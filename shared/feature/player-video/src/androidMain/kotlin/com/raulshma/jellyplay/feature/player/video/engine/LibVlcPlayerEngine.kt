@@ -7,7 +7,6 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.view.View
-import com.raulshma.jellyplay.core.data.playback.MediaStreamVolume
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.DecoderMode
@@ -340,11 +339,14 @@ class LibVlcPlayerEngine(
         releaseInternal(releaseVlc = true)
         hasRenderer = false
         pendingRendererItem = null
-        _playbackState.value = EnginePlaybackState.IDLE
-        _isPlaying.value = false
-        _availableTracks.value = emptyList()
-        _bufferedPositionMs.value = 0L
-        _videoStats.value = EngineVideoStats()
+        // Published-flow resets live in BasePlayerEngine (C5). Its cue reset
+        // is a same-value write here — libVLC never publishes cues — so the
+        // observable reset set is unchanged.
+        resetPublishedEngineState()
+    }
+
+    /** The libVLC residue cleared alongside the base published-state reset (C5): the cached duration. */
+    override fun onResetItemScopedState() {
         cachedDurationMs = 0L
     }
 
@@ -564,56 +566,35 @@ class LibVlcPlayerEngine(
             (mediaPlayer?.volume ?: 100).coerceIn(0, 200) / 100f
         } catch (_: Exception) { 1f }
 
-    override fun setVolume(value: Float) {
-        try {
-            val plan = PlaybackVolumePolicy.planLevel(value, PlaybackVolumePolicy.MAX_BOOST_VLC)
-            rememberUnmuteVolumeIfAudible(plan.normalized)
-            mediaPlayer?.volume = plan.normalized.toVlcVolumePercent()
-            MediaStreamVolume.setNormalized(context, plan.systemStream)
-        } catch (_: Exception) {}
+    // ── Volume / mute seams (C4) ────────────────────────────────────────────
+    // The four command bodies are final templates in ReloadablePlayerEngine;
+    // libVLC contributes the int-percent write/read (with amplification
+    // headroom to 200), the zero-on-mute / remembered-level-on-unmute
+    // vocabulary (VLC mutes by zeroing its volume, so unmute must write the
+    // remembered level back — not full loudness), the delta/mute no-handle
+    // aborts, and the swallow-all dispatch containment. setVolume keeps the
+    // former null-tolerant write (system-stream sync still runs pre-load).
+
+    override fun dispatchVolumeCommand(command: () -> Unit) {
+        try { command() } catch (_: Exception) {}
     }
 
-    override fun increaseVolume(delta: Float) {
-        try {
-            val mp = mediaPlayer ?: return
-            val plan = PlaybackVolumePolicy.planLevel(mp.volume / 100f + delta, PlaybackVolumePolicy.MAX_BOOST_VLC)
-            rememberUnmuteVolumeIfAudible(plan.normalized)
-            mp.volume = plan.normalized.toVlcVolumePercent()
-            MediaStreamVolume.setNormalized(context, plan.systemStream)
-        } catch (_: Exception) {}
+    override val volumeBoostCeiling: Float
+        get() = PlaybackVolumePolicy.MAX_BOOST_VLC
+
+    override fun readNativeVolume(): Float? = try {
+        mediaPlayer?.let { it.volume.coerceIn(0, 200) / 100f }
+    } catch (_: Exception) { null }
+
+    override fun applyNativeVolume(normalized: Float) {
+        mediaPlayer?.volume = normalized.toVlcVolumePercent()
     }
 
-    override fun decreaseVolume(delta: Float) {
-        try {
-            val mp = mediaPlayer ?: return
-            val plan = PlaybackVolumePolicy.planLevel(mp.volume / 100f - delta, PlaybackVolumePolicy.MAX_BOOST_VLC)
-            rememberUnmuteVolumeIfAudible(plan.normalized)
-            mp.volume = plan.normalized.toVlcVolumePercent()
-            MediaStreamVolume.setNormalized(context, plan.systemStream)
-        } catch (_: Exception) {}
-    }
+    override fun nativeVolumeRestore(muted: Boolean): PlaybackVolumePolicy.NativeVolumeRestore =
+        if (muted) PlaybackVolumePolicy.NativeVolumeRestore.ZERO
+        else PlaybackVolumePolicy.NativeVolumeRestore.REMEMBERED_LEVEL
 
-    override fun setMuted(muted: Boolean) {
-        try {
-            val mp = mediaPlayer ?: return
-            if (muted) {
-                val plan = PlaybackVolumePolicy.planMute(PlaybackVolumePolicy.NativeVolumeRestore.ZERO)
-                if (plan.snapshotSystemVolume) snapshotSystemVolumeForMute()
-                plan.nativeVolume?.let { mp.volume = it.toVlcVolumePercent() }
-                MediaStreamVolume.setNormalized(context, plan.systemStream)
-            } else {
-                val plan = PlaybackVolumePolicy.planUnmute(
-                    lastUnmuteVolume,
-                    PlaybackVolumePolicy.NativeVolumeRestore.REMEMBERED_LEVEL,
-                )
-                // VLC mutes by zeroing its volume, so unmute must write the
-                // remembered level back (it previously snapped to full
-                // loudness, losing the pre-mute level).
-                plan.nativeVolume?.let { mp.volume = it.toVlcVolumePercent() }
-                MediaStreamVolume.setNormalized(context, plan.systemStream)
-            }
-        } catch (_: Exception) {}
-    }
+    override fun muteTemplateEnabled(): Boolean = mediaPlayer != null
 
     /** libVLC's software volume is an int percent with amplification headroom to 200. */
     private fun Float.toVlcVolumePercent(): Int = (this * 100).toInt().coerceIn(0, 200)

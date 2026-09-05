@@ -41,6 +41,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -93,8 +94,12 @@ fun ArtistDetailScreen(
         viewModel.loadArtist(artistId)
     }
 
-    LaunchedEffect(viewModel.mixFirstTrackId) {
-        viewModel.mixFirstTrackId?.let {
+    // One collected mix snapshot drives both the isStartingMix progress gate
+    // and the first-track navigation one-shot (InstantMixStateHolder fold).
+    val mixState by viewModel.mixState.collectAsStateWithLifecycle()
+
+    LaunchedEffect(mixState.firstTrackId) {
+        mixState.firstTrackId?.let {
             viewModel.consumeMixEvent()
             onTrackClick(it)
         }
@@ -126,7 +131,7 @@ fun ArtistDetailScreen(
                     getBackdropUrl = { viewModel.getBackdropUrl(it) },
                     onAlbumClick = onAlbumClick,
                     onInstantMix = { viewModel.startInstantMix(artistId) },
-                    isStartingMix = viewModel.isStartingMix,
+                    isStartingMix = mixState.isStarting,
                     onTrackClick = onTrackClick,
                     onBack = onBack,
                 )

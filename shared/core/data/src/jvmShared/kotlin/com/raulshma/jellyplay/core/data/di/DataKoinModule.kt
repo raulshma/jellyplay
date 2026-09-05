@@ -42,6 +42,7 @@ import com.raulshma.jellyplay.core.data.repository.LyricsRepository
 import com.raulshma.jellyplay.core.data.repository.LyricsRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryAccess
+import com.raulshma.jellyplay.core.data.repository.MediaCacheInvalidator
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryCacheInvalidation
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.MetadataEditorRepository
@@ -427,6 +428,10 @@ val dataJvmModule: Module = module {
     // Plan 08's module-internal cache-maintenance view (the former DataModule
     // bindMediaRepositoryCacheInvalidation @Binds): same single, narrow seam.
     single<MediaRepositoryCacheInvalidation> { get<MediaRepositoryImpl>() }
+    // Worker port of the wholesale cache drop (same single, narrow seam — the
+    // MediaRepositoryCacheInvalidation pattern): keeps the background sync
+    // workers in legacy :core:data off the concrete MediaRepositoryImpl type.
+    single<MediaCacheInvalidator> { get<MediaRepositoryImpl>() }
     // Family-repository views (same single, narrow seam — same pattern as the
     // MediaRepositoryCacheInvalidation binding above): MediaRepositoryImpl
     // implements each family directly, and single-family consumers now inject

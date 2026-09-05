@@ -105,20 +105,61 @@ class CastManager(
 
     val castPlayerForSession: Player? get() = castPlayer
 
+    /**
+     * Single transport dispatch point. DLNA and Jellyfin own their transport;
+     * every other active strategy (Google Cast, the libvlc fallback, ad-hoc
+     * registrations) rides the manager-owned CastPlayer via
+     * [localCastPlayerTransport] — exactly what the old when-chain else-arms
+     * did.
+     */
+    private val activeTransport: CastStrategy
+        get() = when (activeStrategyName) {
+            STRATEGY_DLNA -> dlnaCastStrategy
+            STRATEGY_JELLYFIN -> jellyfinRemotePlayCastStrategy
+            else -> localCastPlayerTransport
+        }
+
+    /**
+     * Adapter driving the manager-owned CastPlayer through the [CastStrategy]
+     * transport surface, so transport dispatch has one path. Discovery /
+     * session members delegate to [googleCastStrategy] and are never routed
+     * through this adapter — the strategies map stays authoritative for those.
+     */
+    private val localCastPlayerTransport: CastStrategy = object : CastStrategy by googleCastStrategy {
+        override fun play() { castPlayer?.play() }
+        override fun pause() { castPlayer?.pause() }
+        override fun seekTo(positionMs: Long) { castPlayer?.seekTo(positionMs) }
+        override fun setRendererVolume(volume: Float) {
+            val player = castPlayer ?: return
+            player.volume = volume.coerceIn(0f, 1f)
+            _castVolume.value = player.volume
+        }
+        override fun loadMedia(
+            mediaItem: MediaItem,
+            startPositionMs: Long,
+            listener: Player.Listener,
+            options: CastMediaOptions,
+        ): Boolean {
+            ensureGoogleSessionListener()
+            externalListener?.let { castPlayer?.removeListener(it) }
+            externalListener = listener
+            val player = ensureCastPlayer() ?: return false
+            player.addListener(listener)
+            // Apply the user's track / quality selections to the stream URL so the
+            // receiving Chromecast requests the right variants from the server.
+            // Subtitle sidecars configured on the MediaItem
+            // are preserved as text tracks by CastPlayer.
+            player.setMediaItem(mediaItem.withCastOptions(options), startPositionMs)
+            player.prepare()
+            player.play()
+            return true
+        }
+    }
+
     fun isActive(): Boolean = castPlayer != null && isConnected
 
     fun setVolume(volume: Float) {
-        if (activeStrategyName == STRATEGY_DLNA) {
-            dlnaCastStrategy.setRendererVolume(volume)
-            return
-        }
-        if (activeStrategyName == STRATEGY_JELLYFIN) {
-            jellyfinRemotePlayCastStrategy.setRendererVolume(volume)
-            return
-        }
-        val player = castPlayer ?: return
-        player.volume = volume.coerceIn(0f, 1f)
-        _castVolume.value = player.volume
+        activeTransport.setRendererVolume(volume)
     }
 
     @Volatile
@@ -395,27 +436,15 @@ class CastManager(
     }
 
     fun play() {
-        when (activeStrategyName) {
-            STRATEGY_DLNA -> dlnaCastStrategy.play()
-            STRATEGY_JELLYFIN -> jellyfinRemotePlayCastStrategy.play()
-            else -> castPlayer?.play()
-        }
+        activeTransport.play()
     }
 
     fun pause() {
-        when (activeStrategyName) {
-            STRATEGY_DLNA -> dlnaCastStrategy.pause()
-            STRATEGY_JELLYFIN -> jellyfinRemotePlayCastStrategy.pause()
-            else -> castPlayer?.pause()
-        }
+        activeTransport.pause()
     }
 
     fun seekTo(positionMs: Long) {
-        when (activeStrategyName) {
-            STRATEGY_DLNA -> dlnaCastStrategy.seekTo(positionMs)
-            STRATEGY_JELLYFIN -> jellyfinRemotePlayCastStrategy.seekTo(positionMs)
-            else -> castPlayer?.seekTo(positionMs)
-        }
+        activeTransport.seekTo(positionMs)
     }
 
     private fun ensureGoogleSessionListener() {
@@ -455,67 +484,18 @@ class CastManager(
         listener: Player.Listener,
         options: CastMediaOptions = CastMediaOptions(),
     ) {
-        if (activeStrategyName == STRATEGY_DLNA) {
-            loadDlnaMedia(mediaItem, startPositionMs, options)
-            return
+        val transport = activeTransport
+        val loaded = transport.loadMedia(mediaItem, startPositionMs, listener, options)
+        // Renderer-protocol transports have no Player to fan events out to, so
+        // the manager's external listener is dropped instead of handed over.
+        if (loaded && transport !== localCastPlayerTransport) {
+            externalListener?.let { castPlayer?.removeListener(it) }
+            externalListener = null
         }
-        if (activeStrategyName == STRATEGY_JELLYFIN) {
-            loadJellyfinMedia(mediaItem, startPositionMs, options)
-            return
+        if (loaded) {
+            coroutineScope.launch { updateCastState() }
+            toggleTicker()
         }
-        ensureGoogleSessionListener()
-        externalListener?.let { castPlayer?.removeListener(it) }
-        externalListener = listener
-        val player = ensureCastPlayer() ?: return
-        player.addListener(listener)
-        // Apply the user's track / quality selections to the stream URL so the
-        // receiving Chromecast requests the right variants from the server.
-        // Subtitle sidecars configured on the MediaItem
-        // are preserved as text tracks by CastPlayer.
-        player.setMediaItem(mediaItem.withCastOptions(options), startPositionMs)
-        player.prepare()
-        player.play()
-        coroutineScope.launch { updateCastState() }
-        toggleTicker()
-    }
-
-    private fun loadDlnaMedia(
-        mediaItem: MediaItem,
-        startPositionMs: Long,
-        options: CastMediaOptions,
-    ) {
-        val url = mediaItem.localConfiguration?.uri?.toString() ?: return
-        val title = mediaItem.mediaMetadata.title?.toString() ?: ""
-        // Track / quality selections are folded into the URL as Jellyfin query
-        // params — DLNA exposes no separate track-control channel.
-        dlnaCastStrategy.loadMedia(
-            url = url.withCastQueryParams(options),
-            title = title,
-            positionMs = startPositionMs,
-        )
-        externalListener?.let { castPlayer?.removeListener(it) }
-        externalListener = null
-        coroutineScope.launch { updateCastState() }
-        toggleTicker()
-    }
-
-    private fun loadJellyfinMedia(
-        mediaItem: MediaItem,
-        startPositionMs: Long,
-        options: CastMediaOptions,
-    ) {
-        val itemId = mediaItem.mediaId
-        jellyfinRemotePlayCastStrategy.loadMedia(
-            itemId = itemId,
-            startPositionMs = startPositionMs,
-            mediaSourceId = options.mediaSourceId,
-            audioStreamIndex = options.audioStreamIndex,
-            subtitleStreamIndex = options.subtitleStreamIndex,
-        )
-        externalListener?.let { castPlayer?.removeListener(it) }
-        externalListener = null
-        coroutineScope.launch { updateCastState() }
-        toggleTicker()
     }
 
     fun ensurePlayerReady() {
@@ -557,9 +537,14 @@ class CastManager(
         }
     }
 
-    private fun teardownSharedState() {
-        released = true
-        backgroundCasting.set(false)
+    /**
+     * Cancels the manager-owned background jobs (ticker, strategy observer,
+     * device merge, preferred-renderer watcher). Shared by the full teardown
+     * ([teardownSharedState]) and [softRelease]. [resetCastState] deliberately
+     * cancels only the ticker: it runs on session edges where discovery and
+     * the observers must keep running.
+     */
+    private fun cancelJobs() {
         tickerJob?.cancel()
         tickerJob = null
         strategyObserverJob?.cancel()
@@ -568,6 +553,12 @@ class CastManager(
         deviceMergeJob = null
         preferredRendererJob?.cancel()
         preferredRendererJob = null
+    }
+
+    private fun teardownSharedState() {
+        released = true
+        backgroundCasting.set(false)
+        cancelJobs()
         castPlayer?.removeListener(castPlayerListener)
         externalListener?.let { castPlayer?.removeListener(it) }
         castPlayer?.release()
@@ -600,14 +591,7 @@ class CastManager(
     }
 
     fun softRelease() {
-        tickerJob?.cancel()
-        tickerJob = null
-        strategyObserverJob?.cancel()
-        strategyObserverJob = null
-        deviceMergeJob?.cancel()
-        deviceMergeJob = null
-        preferredRendererJob?.cancel()
-        preferredRendererJob = null
+        cancelJobs()
         strategies.values.forEach { it.stopDiscovery() }
     }
 

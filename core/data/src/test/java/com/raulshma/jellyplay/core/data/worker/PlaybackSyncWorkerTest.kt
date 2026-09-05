@@ -13,7 +13,8 @@ import com.raulshma.jellyplay.core.data.repository.PlayedStateSync
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEntry
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEventType
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxRepository
-import com.raulshma.jellyplay.core.data.repository.MediaRepositoryImpl
+import com.raulshma.jellyplay.core.data.repository.MediaCacheInvalidator
+import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.model.PlayMethod
 import io.mockk.coEvery
@@ -55,7 +56,8 @@ class PlaybackSyncWorkerTest {
     private val playedStateSync: PlayedStateSync = mockk(relaxed = true)
     private val offlineRepository: OfflineRepository = mockk(relaxed = true)
     private val userDataSyncScheduler: UserDataSyncScheduler = mockk(relaxed = true)
-    private val mediaRepository: MediaRepositoryImpl = mockk(relaxed = true)
+    private val mediaRepository: MediaRepository = mockk(relaxed = true)
+    private val cacheInvalidator: MediaCacheInvalidator = mockk(relaxed = true)
 
     @Before
     fun setup() {
@@ -101,6 +103,7 @@ class PlaybackSyncWorkerTest {
                     offlineRepository,
                     userDataSyncScheduler,
                     mediaRepository,
+                    cacheInvalidator,
                 )
             })
             .setRunAttemptCount(runAttemptCount)
@@ -397,7 +400,7 @@ class PlaybackSyncWorkerTest {
         // Post-drain coherence (#153): server state moved, so the in-memory
         // caches must drop synchronously and the synthetic user-data push must
         // reach home/detail listeners without waiting for the WS echo.
-        coVerify(exactly = 1) { mediaRepository.invalidateCaches() }
+        coVerify(exactly = 1) { cacheInvalidator.invalidateCaches() }
         verify(exactly = 1) { mediaRepository.notifyUserDataChanged(listOf("item-1")) }
         coVerify(exactly = 1) { userDataSyncScheduler.enqueueNow() }
     }
@@ -411,7 +414,7 @@ class PlaybackSyncWorkerTest {
 
         buildWorker(runAttemptCount = 10).doWork()
 
-        coVerify(exactly = 0) { mediaRepository.invalidateCaches() }
+        coVerify(exactly = 0) { cacheInvalidator.invalidateCaches() }
         verify(exactly = 0) { mediaRepository.notifyUserDataChanged(any()) }
     }
 

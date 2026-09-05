@@ -250,9 +250,6 @@ class VideoPlayerViewModel(
     private val _uiState = stateFlow(VideoPlayerUiState())
     val uiState: StateFlow<VideoPlayerUiState> = _uiState.flow
 
-    /** In-flight subtitle-preview cue load; cancelled on track change / sheet close. */
-    private var subtitlePreviewLoadJob: Job? = null
-
     // --- High-frequency playback streams ---------------------------------------
     // currentPosition / bufferedPosition / videoStats (and duration) update at
     // up to 4 Hz while controls are visible. Previously they were folded into
@@ -488,6 +485,33 @@ class VideoPlayerViewModel(
         // new position immediately; uiState is no longer the source of truth.
         _currentPositionMs.value = positionMs
         playerSessionManager.engine?.seekTo(positionMs)
+    }
+
+    /**
+     * The single discrete skip-step owner: the screen's skip buttons /
+     * keyboard / D-pad commits and the PiP transport's SKIP actions all
+     * reduce to this funnel (C3). The clamp math stays in
+     * [stepSeekTargetMs] — floor at 0 on the back path, cap at the engine's
+     * duration on the forward path (skipped for live streams with no
+     * resolved duration). The seek is issued through the same routing the
+     * screen's `doSeekTo` used — SyncPlay group seek while in a session,
+     * cast seek while casting, local engine otherwise — so PiP steps and
+     * on-screen steps can never diverge. Gesture / hold-speed paths do NOT
+     * go through here. [direction] < 0 steps back, anything else forward.
+     */
+    fun seekByStep(direction: Int) {
+        val engine = playerSessionManager.engine
+        val target = stepSeekTargetMs(
+            direction = direction,
+            currentPositionMs = engine?.currentPositionMs ?: 0L,
+            stepMs = _uiState.value.gestures.seekDurationMs,
+            durationMs = engine?.durationMs ?: 0L,
+        )
+        when {
+            _uiState.value.isInSyncPlaySession -> syncPlay.seekTo(target)
+            cast.isConnectedFlow.value -> cast.castSeekTo(target)
+            else -> seekTo(target)
+        }
     }
 
     /**
@@ -1079,6 +1103,25 @@ class VideoPlayerViewModel(
     )
 
     /**
+     * Owns the AV-sync sheet's cue preview (external track load + embedded cue
+     * accumulation + the sheet-visibility gate) — the cluster that used to live
+     * as the flat `subtitlePreviewCues` / `subtitlePreviewSource` /
+     * `previewSheetVisible` uiState fields. The engineFlow collector below
+     * feeds it the engine's cue list; [selectSubtitleTrack] pokes it eagerly.
+     */
+    internal val subtitlePreview = SubtitlePreviewController(
+        scope = scope,
+        loadCues = { source, headers -> subtitlePreviewRepository.loadCues(source, headers) },
+        clearCuesCache = { subtitlePreviewRepository.clearCache() },
+        getExternalSubtitles = { playerSessionManager.currentExternalSubtitles },
+        getPlaybackHeaders = { playerSessionManager.currentPlaybackHeaders },
+        getSelectedSubtitleTrack = {
+            trackSelectionHelper.state.value.subtitleTracks.firstOrNull { it.isSelected && it.index >= 0 }
+        },
+        getEngineCues = { playerSessionManager.engine?.currentCues?.value?.takeIf { it.isNotEmpty() } },
+    )
+
+    /**
      * Owns the uniform engine-effect setters (night mode, audio delay,
      * decoder, passthrough, normalization, channel mix, bass, virtualizer,
      * reverb) and the [com.raulshma.jellyplay.feature.player.video.state.AudioEffectsState]
@@ -1106,6 +1149,10 @@ class VideoPlayerViewModel(
 
     val trackState: StateFlow<com.raulshma.jellyplay.feature.player.video.state.TrackState>
         get() = trackSelectionHelper.state
+
+    /** Cue-preview slice (AV-sync sheet) — re-exposed from [SubtitlePreviewController]. */
+    val subtitlePreviewState: StateFlow<SubtitlePreviewState>
+        get() = subtitlePreview.state
 
     init {
         castManager.acquireConsumer()
@@ -1406,32 +1453,12 @@ class VideoPlayerViewModel(
                         // for the sync preview. Only wins when no external text
                         // source is active — external gives the full track in
                         // both offset directions; engine accumulation covers the
-                        // played range only.
+                        // played range only. The external-precedence check and
+                        // the sheet-visibility gate (no state churn while the
+                        // sheet is closed) live in the controller.
                         launch {
-                            // ExoPlayer fires onCues several times a second
-                            // and each emission previously copied the wide
-                            // UI state even when the preview wasn't visible.
-                            // StateFlow already conflates to the latest
-                            // value, so the remaining churn is gated out by
-                            // previewSheetVisible: nothing else renders
-                            // subtitlePreviewCues, so copying UI state on
-                            // every tick while the sheet is closed is pure
-                            // overhead. EXTERNAL source is populated on-demand
-                            // by loadActiveSubtitleCues and is exempt.
                             engine.currentCues.collect { engineCues ->
-                                val s = _uiState.value
-                                if (s.subtitlePreviewSource != SubtitlePreviewSource.EXTERNAL &&
-                                    s.previewSheetVisible
-                                ) {
-                                    val cues = engineCues.takeIf { it.isNotEmpty() }
-                                    if (s.subtitlePreviewCues == cues && cues != null) return@collect
-                                    _uiState.update {
-                                        it.copy(
-                                            subtitlePreviewCues = cues,
-                                            subtitlePreviewSource = if (cues != null) SubtitlePreviewSource.EMBEDDED else SubtitlePreviewSource.NONE,
-                                        )
-                                    }
-                                }
+                                subtitlePreview.onEngineCues(engineCues)
                             }
                         }
                         launch { engine.playbackState.collect { state ->
@@ -1521,14 +1548,11 @@ class VideoPlayerViewModel(
             when (action) {
                 PipAction.PLAY -> engine.play()
                 PipAction.PAUSE -> engine.pause()
-                PipAction.SKIP_FORWARD -> {
-                    val skip = _uiState.value.gestures.seekDurationMs
-                    seekTo((engine.currentPositionMs + skip).coerceAtLeast(0L))
-                }
-                PipAction.SKIP_BACKWARD -> {
-                    val skip = _uiState.value.gestures.seekDurationMs
-                    seekTo((engine.currentPositionMs - skip).coerceAtLeast(0L))
-                }
+                // Skip steps route through the shared funnel (C3): same clamp
+                // math and same SyncPlay/cast/local routing as the screen's
+                // skip buttons, previously computed inline with only a 0-floor.
+                PipAction.SKIP_FORWARD -> seekByStep(+1)
+                PipAction.SKIP_BACKWARD -> seekByStep(-1)
                 PipAction.NEXT -> playNextEpisode()
             }
         }
@@ -1690,7 +1714,7 @@ class VideoPlayerViewModel(
         // G10: the active subtitle track changed — refresh the cue preview
         // eagerly so the AV-sync sheet (if open) shows the newly selected
         // track's cues without a reopen.
-        loadActiveSubtitleCues()
+        subtitlePreview.onTrackSelectionChanged()
     }
 
     /**
@@ -1917,81 +1941,27 @@ class VideoPlayerViewModel(
 
     /**
      * G10: loads the parsed cue list for the active external subtitle track so
-     * the AV-sync sheet's cue-preview can render prev/active/next lines. Resolves
-     * the active track by intersecting the selected subtitle [TrackOption] with
-     * the session's [external subtitles][PlayerSessionManager.currentExternalSubtitles]:
-     * exact id match first (ExoPlayer side-loaded tracks carry the source id),
-     * label match as fallback. Clears the preview (null) when the active track
-     * has no parseable external source (embedded/image subs during DIRECT_PLAY).
-     * Cancels any in-flight load so a stale result can't overwrite a newer one.
+     * the AV-sync sheet's cue-preview can render prev/active/next lines. Thin
+     * delegate — the load, the exact-id-then-label source resolution and the
+     * stale-load cancellation live in [SubtitlePreviewController].
      */
     fun loadActiveSubtitleCues() {
-        subtitlePreviewLoadJob?.cancel()
-        subtitlePreviewLoadJob = launch {
-            val externalSubs = playerSessionManager.currentExternalSubtitles ?: emptyList()
-            if (externalSubs.isEmpty()) {
-                // No external source: let the engine-accumulated cues (embedded
-                // subs) take over by clearing the external-source precedence.
-                _uiState.update { it.copy(subtitlePreviewCues = null, subtitlePreviewSource = SubtitlePreviewSource.NONE) }
-                return@launch
-            }
-            val selected = trackSelectionHelper.state.value.subtitleTracks.firstOrNull { it.isSelected && it.index >= 0 }
-            val source = resolveActivePreviewSource(externalSubs, selected)
-            if (source == null) {
-                // The selected track is embedded/image or unknown — never guess a
-                // different external track, that would preview the wrong subtitle.
-                _uiState.update { it.copy(subtitlePreviewCues = null, subtitlePreviewSource = SubtitlePreviewSource.NONE) }
-                return@launch
-            }
-            // Auth headers for server-served HTTP subtitle URLs are assembled at
-            // load time into the PlaybackRequest; surface them for the fetch.
-            val headers = playerSessionManager.currentPlaybackHeaders ?: emptyMap()
-            val cues = subtitlePreviewRepository.loadCues(source, headers)
-            _uiState.update {
-                it.copy(
-                    subtitlePreviewCues = cues,
-                    subtitlePreviewSource = if (cues != null) SubtitlePreviewSource.EXTERNAL else SubtitlePreviewSource.NONE,
-                )
-            }
-        }
-    }
-
-    private fun resolveActivePreviewSource(
-        externalSubs: List<SubtitleSource>,
-        selected: TrackOption?,
-    ): SubtitleSource? {
-        if (selected == null) return null
-        val byId = selected.id?.let { id -> externalSubs.firstOrNull { it.id == id } }
-        if (byId != null) return byId
-        return externalSubs.firstOrNull { it.label == selected.label }
+        subtitlePreview.onTrackSelectionChanged()
     }
 
     /**
-     * Toggles [VideoPlayerUiState.previewSheetVisible]. Called by the screen as
-     * the AV-sync sheet opens/dismisses. On open, immediately re-syncs the
-     * embedded cue preview from the engine's current cue list so the preview
-     * isn't blank until the next onCues tick (the embedded cue pump is gated on
-     * this flag, so without re-syncing the first render after open is stale).
+     * Toggles the AV-sync sheet flag (the controller's
+     * [SubtitlePreviewState.sheetVisible]). Called by the screen as the sheet
+     * opens/dismisses; on open the controller re-syncs the embedded cue
+     * preview so the first render isn't stale.
      */
     fun setPreviewSheetVisible(visible: Boolean) {
-        _uiState.update { it.copy(previewSheetVisible = visible) }
-        if (visible && _uiState.value.subtitlePreviewSource != SubtitlePreviewSource.EXTERNAL) {
-            val engineCues = playerSessionManager.engine?.currentCues?.value?.takeIf { it.isNotEmpty() }
-            _uiState.update {
-                it.copy(
-                    subtitlePreviewCues = engineCues,
-                    subtitlePreviewSource = if (engineCues != null) SubtitlePreviewSource.EMBEDDED else SubtitlePreviewSource.NONE,
-                )
-            }
-        }
+        subtitlePreview.setSheetVisible(visible)
     }
 
     /** Clears the cue preview (e.g. when the active subtitle track changes). */
     fun clearActiveSubtitleCues() {
-        subtitlePreviewLoadJob?.cancel()
-        subtitlePreviewLoadJob = null
-        subtitlePreviewRepository.clearCache()
-        _uiState.update { it.copy(subtitlePreviewCues = null, subtitlePreviewSource = SubtitlePreviewSource.NONE) }
+        subtitlePreview.clearCues()
     }
 
     /**
@@ -2634,6 +2604,7 @@ class VideoPlayerViewModel(
         trackSelectionHelper.resetForItem()
         subtitles.resetForItem()
         abRepeat.resetForItem()
+        subtitlePreview.resetForItem()
         mediaDetail = null
         autoplayController.setEnabled(false)
         equalizerEnabled = false

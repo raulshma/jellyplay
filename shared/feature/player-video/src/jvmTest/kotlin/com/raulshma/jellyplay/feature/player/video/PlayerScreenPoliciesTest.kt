@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.SegmentBehavior
 import com.raulshma.jellyplay.feature.player.video.engine.AspectRatio
+import com.raulshma.jellyplay.feature.player.video.engine.FakeMediaEngine
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -67,6 +68,67 @@ class StepSeekTargetTest {
         assertEquals(
             35_000L,
             seekForwardTargetMs(currentPositionMs = 30_000L, stepMs = 5_000L, durationMs = -1L),
+        )
+    }
+
+    // ── Funnel (C3) ──────────────────────────────────────────────────────────
+    // stepSeekTargetMs is the reduction VideoPlayerViewModel.seekByStep makes
+    // over the engine's live reads; the FakeMediaEngine drives those reads the
+    // same way the funnel does (advanceTo / durationValue).
+
+    @Test
+    fun funnel_negativeDirection_stepsBackAndFloorsAtZero() {
+        val engine = FakeMediaEngine()
+        engine.advanceTo(50_000L)
+        assertEquals(
+            40_000L,
+            stepSeekTargetMs(
+                direction = -1,
+                currentPositionMs = engine.currentPositionMs,
+                stepMs = 10_000L,
+                durationMs = engine.durationMs,
+            ),
+        )
+        engine.advanceTo(3_000L)
+        assertEquals(
+            0L,
+            stepSeekTargetMs(
+                direction = -1,
+                currentPositionMs = engine.currentPositionMs,
+                stepMs = 10_000L,
+                durationMs = engine.durationMs,
+            ),
+        )
+    }
+
+    @Test
+    fun funnel_forwardDirection_capsAtEngineDuration() {
+        val engine = FakeMediaEngine()
+        engine.advanceTo(55_000L)
+        engine.durationValue = 60_000L
+        assertEquals(
+            60_000L,
+            stepSeekTargetMs(
+                direction = +1,
+                currentPositionMs = engine.currentPositionMs,
+                stepMs = 10_000L,
+                durationMs = engine.durationMs,
+            ),
+        )
+    }
+
+    @Test
+    fun funnel_forwardWithoutResolvedDuration_neverPinsToZero() {
+        val engine = FakeMediaEngine()
+        engine.advanceTo(30_000L)
+        assertEquals(
+            40_000L,
+            stepSeekTargetMs(
+                direction = +1,
+                currentPositionMs = engine.currentPositionMs,
+                stepMs = 10_000L,
+                durationMs = engine.durationMs,
+            ),
         )
     }
 }

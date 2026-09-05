@@ -4,12 +4,22 @@ import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.network.websocket.JellyfinWebSocketClient
+import com.raulshma.jellyplay.core.network.websocket.WebSocketEvent
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeout
+import org.json.JSONObject
+import java.util.concurrent.ConcurrentLinkedQueue
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
@@ -107,5 +117,47 @@ class SyncPlayManagerTest {
         val result = manager.createGroup("Test Group")
 
         assertTrue(result.isSuccess)
+    }
+
+    @Test
+    fun `reset performs the full teardown`() {
+        manager.reset()
+
+        assertNull(manager.currentGroup)
+        assertNull(manager.activeGroupId)
+        assertFalse(manager.isInSyncPlaySession)
+        verify { queueCore.clear() }
+        verify { playbackCore.onGroupLeft() }
+        verify { timeSyncManager.stop() }
+        verify { webSocketClient.disconnect() }
+    }
+
+    @Test
+    fun `GroupLeft clears session state but keeps the listener and websocket alive`() = runBlocking {
+        val wsEvents = MutableSharedFlow<WebSocketEvent>(extraBufferCapacity = 8)
+        every { webSocketClient.events } returns wsEvents
+        every { eventHandler.parse("GroupLeft", any()) } returns SyncPlayEvent.GroupLeft
+        val groupLeftEvent = WebSocketEvent(type = "GroupLeft", data = JSONObject(), rawText = "{}")
+        val received = ConcurrentLinkedQueue<SyncPlayEvent>()
+        val collector = launch(start = CoroutineStart.UNDISPATCHED) {
+            manager.events.collect { received.add(it) }
+        }
+
+        manager.startListening()
+        withTimeout(5_000L) { wsEvents.subscriptionCount.first { it > 0 } }
+        wsEvents.emit(groupLeftEvent)
+        withTimeout(5_000L) { while (received.isEmpty()) delay(10) }
+
+        assertNull(manager.currentGroup)
+        assertFalse(manager.isInSyncPlaySession)
+        verify(exactly = 0) { timeSyncManager.stop() }
+        verify(exactly = 0) { webSocketClient.disconnect() }
+
+        // The event listener survives the GroupLeft teardown — a second event
+        // is still delivered, pinning the "keep listening for rejoin" level.
+        wsEvents.emit(groupLeftEvent)
+        withTimeout(5_000L) { while (received.size < 2) delay(10) }
+
+        collector.cancel()
     }
 }

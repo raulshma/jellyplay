@@ -119,7 +119,8 @@ class MediaRepositoryImpl(
     SyncPlayRepository,
     NewsletterRepository,
     PlaylistRepository,
-    MediaRepositoryCacheInvalidation {
+    MediaRepositoryCacheInvalidation,
+    MediaCacheInvalidator {
 
     private val detailCache = TtlCache<MediaDetail>(
         maxSize = DETAIL_CACHE_MAX_ENTRIES,
@@ -934,14 +935,14 @@ class MediaRepositoryImpl(
 
     /**
      * Wholesale in-memory cache drop (plan 08: demoted off the public
-     * [MediaRepository] interface, kept on the impl). The only production
-     * caller is the background user-data sync worker (legacy module — public,
-     * not internal, since the move made the two separate Gradle modules) —
-     * the `SessionCacheRegistry` identity path reacts via its own cache
-     * registration + action instead (see the init block). Reads that need
-     * freshness use the per-query force parameters instead.
+     * [MediaRepository] interface, kept on the impl — the
+     * [MediaCacheInvalidator] port is its cross-module seam for the legacy
+     * sync workers). The only production caller is the background user-data
+     * sync worker — the `SessionCacheRegistry` identity path reacts via its
+     * own cache registration + action instead (see the init block). Reads
+     * that need freshness use the per-query force parameters instead.
      */
-    suspend fun invalidateCaches() {
+    override suspend fun invalidateCaches() {
         invalidateDetailCache()
         homeSectionsCache.clear()
         // Also clear the secondary caches — they hold user-scoped data (library folders,

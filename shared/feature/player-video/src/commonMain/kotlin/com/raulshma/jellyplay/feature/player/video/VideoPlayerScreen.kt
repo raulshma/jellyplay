@@ -139,7 +139,6 @@ import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.feature.player.video.components.DecoderPickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.EpisodePickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.HdrBadge
-import com.raulshma.jellyplay.feature.player.video.engine.TrackBadge
 import com.raulshma.jellyplay.feature.player.video.engine.ZoomSafeSubtitleStrategy
 import com.raulshma.jellyplay.feature.player.video.components.IntroSkipOverlay
 import com.raulshma.jellyplay.feature.player.video.components.SegmentSkipOverlay
@@ -698,18 +697,16 @@ fun VideoPlayerScreen(
             else viewModel.seekTo(ms)
         }
     }
-    val doSeekBack: () -> Unit = remember(engine, uiState.gestures.seekDurationMs, doSeekTo, isCastConnected) {
-        {
-            val pos = viewModel.playerEngineRef?.currentPositionMs ?: 0L
-            doSeekTo(seekBackTargetMs(pos, uiState.gestures.seekDurationMs))
-        }
+    // Skip steps route through the VM's single funnel (C3): the clamp math
+    // lives in PlayerScreenPolicies.stepSeekTargetMs and the SyncPlay/cast/
+    // local routing in VideoPlayerViewModel.seekByStep — this screen and the
+    // PiP transport's SKIP actions can no longer diverge. The funnel reads
+    // the live gesture step, so no step-duration remember keys are needed.
+    val doSeekBack: () -> Unit = remember {
+        { viewModel.seekByStep(-1) }
     }
-    val doSeekForward: () -> Unit = remember(engine, uiState.gestures.seekDurationMs, doSeekTo, isCastConnected) {
-        {
-            val pos = viewModel.playerEngineRef?.currentPositionMs ?: 0L
-            val dur = viewModel.playerEngineRef?.durationMs ?: 0L
-            doSeekTo(seekForwardTargetMs(pos, uiState.gestures.seekDurationMs, dur))
-        }
+    val doSeekForward: () -> Unit = remember {
+        { viewModel.seekByStep(+1) }
     }
     val doTogglePlayPause: () -> Unit = remember(isPlaying, doPlay, doPause) {
         { if (isPlaying) doPause() else doPlay() }
@@ -2180,12 +2177,9 @@ private fun PlayerSheetRouter(
                             label = stringResource(Res.string.player_video_remember_audio_language),
                             checked = trackState.hasSeriesAudioPref,
                             onToggle = { remember ->
-                                val lang = if (remember) {
-                                    trackState.audioTracks.firstOrNull { it.isSelected && it.index >= 0 }?.language
-                                } else {
-                                    null
-                                }
-                                viewModel.setSeriesAudioLanguagePreference(lang)
+                                viewModel.setSeriesAudioLanguagePreference(
+                                    seriesAudioPreferenceIntent(trackState.audioTracks, remember),
+                                )
                             },
                         )
                     }
@@ -2218,10 +2212,9 @@ private fun PlayerSheetRouter(
                         // episode restores the right same-language track; with the
                         // "Off" row selected it saves a "subtitles off" intent so
                         // every episode loads with subs off. Toggling off forgets
-                        // whichever intent was saved.
-                        val selectedOff = trackState.subtitleTracks
-                            .firstOrNull { it.isSelected && it.index < 0 } != null
-                        val label = if (selectedOff || trackState.hasSeriesSubtitleOffPref) {
+                        // whichever intent was saved. The intent derivation lives
+                        // in [seriesSubtitlePreferenceIntent].
+                        val label = if (seriesSubtitlePrefersOffLabel(trackState.subtitleTracks, trackState.hasSeriesSubtitleOffPref)) {
                             stringResource(Res.string.player_video_remember_subtitles_off)
                         } else {
                             stringResource(Res.string.player_video_remember_subtitle_language)
@@ -2230,17 +2223,17 @@ private fun PlayerSheetRouter(
                             label = label,
                             checked = trackState.hasSeriesSubtitlePref,
                             onToggle = { remember ->
-                                val sel = trackState.subtitleTracks.firstOrNull { it.isSelected }
-                                if (sel != null && sel.index < 0) {
-                                    viewModel.setSeriesSubtitleDisabled(remember)
-                                } else if (remember) {
-                                    viewModel.setSeriesSubtitlePreference(
-                                        language = sel?.language,
-                                        forced = sel?.badges?.contains(TrackBadge.FORCED)?.takeIf { it },
-                                        hearingImpaired = sel?.badges?.contains(TrackBadge.SDH)?.takeIf { it },
-                                    )
-                                } else {
-                                    viewModel.setSeriesSubtitlePreference(language = null)
+                                when (val intent = seriesSubtitlePreferenceIntent(trackState.subtitleTracks, remember)) {
+                                    is SeriesSubtitlePrefIntent.Off ->
+                                        viewModel.setSeriesSubtitleDisabled(intent.disabled)
+                                    is SeriesSubtitlePrefIntent.Track ->
+                                        viewModel.setSeriesSubtitlePreference(
+                                            language = intent.language,
+                                            forced = intent.forced,
+                                            hearingImpaired = intent.hearingImpaired,
+                                        )
+                                    SeriesSubtitlePrefIntent.Forget ->
+                                        viewModel.setSeriesSubtitlePreference(language = null)
                                 }
                             },
                         )

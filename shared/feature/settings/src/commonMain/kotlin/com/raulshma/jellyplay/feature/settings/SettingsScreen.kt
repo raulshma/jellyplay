@@ -1,12 +1,16 @@
 package com.raulshma.jellyplay.feature.settings
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -52,6 +56,8 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.graphicsLayer
+import com.raulshma.jellyplay.core.ui.animation.pressScaleValue
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKey
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKeyEvent
 import androidx.compose.ui.text.font.FontWeight
@@ -111,6 +117,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
+import com.raulshma.jellyplay.core.ui.feedback.rememberConfirmHaptic
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
@@ -1263,8 +1270,6 @@ fun SettingsScreen(
                                     currentUser = viewModel.currentUser,
                                     serverAddress = currentServerAddress,
                                     isAdmin = viewModel.currentUser?.isAdmin == true,
-                                    showAdvanced = preferences.showAdvancedSettings,
-                                    onToggleAdvanced = { viewModel.setShowAdvancedSettings(!preferences.showAdvancedSettings) },
                                     onNewsletterClick = onNewsletterClick,
                                     onUserManagementClick = { onNavigate(Route.UserManagement(null)) },
                                     onServerManagementClick = { onNavigate(Route.ServerManagement(null)) },
@@ -1272,7 +1277,14 @@ fun SettingsScreen(
                             }
                         }
 
-                        settingsSection("active_devices", 1) {
+                        settingsSection("power_user_mode", 1) {
+                            PowerUserModeCard(
+                                checked = preferences.showAdvancedSettings,
+                                onCheckedChange = { viewModel.setShowAdvancedSettings(it) },
+                            )
+                        }
+
+                        settingsSection("active_devices", 2) {
                             if (viewModel.currentUser?.isAdmin == true && viewModel.activeSessions.isNotEmpty()) {
                                 ActiveDevicesRow(
                                     sessions = viewModel.activeSessions,
@@ -1282,7 +1294,7 @@ fun SettingsScreen(
                             }
                         }
 
-                        settingsSection("account", 2) {
+                        settingsSection("account", 3) {
                             SettingsGroup(
                                 icon = Tabler.Outline.User,
                                 title = stringResource(Res.string.settings_account),
@@ -1331,7 +1343,7 @@ fun SettingsScreen(
                             }
                         }
 
-                        settingsSection("activity", 3) {
+                        settingsSection("activity", 4) {
                             val pendingCount = viewModel.pendingRequestCount.collectAsStateWithLifecycle().value
                             SettingsGroup(
                                 icon = Tabler.Outline.Activity,
@@ -1396,7 +1408,7 @@ fun SettingsScreen(
                             }
                         }
 
-                        settingsSection("system", 4) {
+                        settingsSection("system", 5) {
                             val activeSessionCount = viewModel.activeSessions.size
                             SettingsGroup(
                                 icon = Tabler.Outline.Adjustments,
@@ -1445,7 +1457,7 @@ fun SettingsScreen(
                             }
                         }
 
-                        settingsSection("item_appearance", 4) {
+                        settingsSection("item_appearance", 6) {
                             SettingListItem(
                                 icon = Tabler.Outline.Palette,
                                 title = stringResource(Res.string.settings_appearance),
@@ -1455,7 +1467,7 @@ fun SettingsScreen(
                             )
                         }
 
-                        settingsSection("item_playback", 5) {
+                        settingsSection("item_playback", 7) {
                             SettingListItem(
                                 icon = Tabler.Outline.PlayerPlay,
                                 title = stringResource(Res.string.settings_playback),
@@ -1465,7 +1477,7 @@ fun SettingsScreen(
                             )
                         }
 
-                        settingsSection("item_audio", 6) {
+                        settingsSection("item_audio", 8) {
                             SettingListItem(
                                 icon = Tabler.Outline.Music,
                                 title = stringResource(Res.string.settings_audio_player),
@@ -1475,7 +1487,7 @@ fun SettingsScreen(
                             )
                         }
 
-                        settingsSection("item_language", 7) {
+                        settingsSection("item_language", 9) {
                             SettingListItem(
                                 icon = Tabler.Outline.Language,
                                 title = stringResource(Res.string.settings_language_subtitles),
@@ -1485,7 +1497,7 @@ fun SettingsScreen(
                             )
                         }
 
-                        settingsSection("item_notifications", 8) {
+                        settingsSection("item_notifications", 10) {
                             val notifPrefs = preferences.notificationPreferences
                             SettingListItem(
                                 icon = Tabler.Outline.Bell,
@@ -1496,7 +1508,7 @@ fun SettingsScreen(
                             )
                         }
 
-                        settingsSection("item_storage", 9) {
+                        settingsSection("item_storage", 11) {
                             SettingListItem(
                                 icon = Tabler.Outline.Database,
                                 title = stringResource(Res.string.settings_downloads_storage),
@@ -1505,7 +1517,8 @@ fun SettingsScreen(
                                 onClick = { openSetting("storage") { Route.StorageSettings(it) } },
                             )
                         }
-                                        settingsSection("item_security", 10) {
+
+                        settingsSection("item_security", 12) {
                             SettingListItem(
                                 icon = Tabler.Outline.Lock,
                                 title = stringResource(Res.string.settings_security),
@@ -1520,7 +1533,7 @@ fun SettingsScreen(
                             )
                         }
 
-                        settingsSection("item_privacy_data", 11) {
+                        settingsSection("item_privacy_data", 13) {
                             SettingListItem(
                                 icon = Tabler.Outline.ShieldLock,
                                 title = stringResource(Res.string.settings_privacy_data),
@@ -1530,7 +1543,7 @@ fun SettingsScreen(
                             )
                         }
 
-                        settingsSection("item_backup", 12) {
+                        settingsSection("item_backup", 14) {
                             SettingListItem(
                                 icon = Tabler.Outline.DatabaseExport,
                                 title = stringResource(Res.string.settings_backup_restore),
@@ -1541,7 +1554,7 @@ fun SettingsScreen(
                         }
 
                         if (isTv) {
-                            settingsSection("group_screensaver", 13) {
+                            settingsSection("group_screensaver", 15) {
                                 SettingsGroup(
                                     icon = Tabler.Outline.Moon,
                                     title = stringResource(Res.string.settings_screensaver),
@@ -1651,7 +1664,7 @@ fun SettingsScreen(
                             }
                         }
 
-                        settingsSection("item_experimental", phoneStep = 13, tvStep = 14) {
+                        settingsSection("item_experimental", phoneStep = 15, tvStep = 16) {
                             SettingListItem(
                                 icon = Tabler.Outline.Flask,
                                 title = stringResource(Res.string.settings_experimental),
@@ -1661,7 +1674,7 @@ fun SettingsScreen(
                             )
                         }
 
-                        settingsSection("item_integrations", phoneStep = 14, tvStep = 15) {
+                        settingsSection("item_integrations", phoneStep = 16, tvStep = 17) {
                             SettingListItem(
                                 icon = Tabler.Outline.PlugConnected,
                                 title = stringResource(Res.string.settings_integrations),
@@ -1671,7 +1684,7 @@ fun SettingsScreen(
                             )
                         }
 
-                        settingsSection("item_about", phoneStep = 15, tvStep = 16) {
+                        settingsSection("item_about", phoneStep = 17, tvStep = 18) {
                             SettingListItem(
                                 icon = Tabler.Outline.InfoCircle,
                                 title = stringResource(Res.string.settings_about),
@@ -1736,8 +1749,6 @@ private fun SettingsProfileBanner(
     currentUser: UserInfo?,
     serverAddress: String?,
     isAdmin: Boolean,
-    showAdvanced: Boolean,
-    onToggleAdvanced: () -> Unit,
     onNewsletterClick: () -> Unit,
     onUserManagementClick: () -> Unit,
     onServerManagementClick: () -> Unit,
@@ -1767,7 +1778,6 @@ private fun SettingsProfileBanner(
             .background(settingsGroupContainerColor())
             .lightModeHairlineBorder(ShapeCache.smooth24)
             .padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         // Profile Info Row
         Row(
@@ -1870,17 +1880,117 @@ private fun SettingsProfileBanner(
                 )
             }
         }
+    }
+}
 
-        // Power User Mode Toggle (Using canonical SettingToggleItem)
-        SettingToggleItem(
-            icon = Tabler.Outline.AdjustmentsHorizontal,
-            title = stringResource(Res.string.settings_power_user_mode),
-            subtitle = stringResource(Res.string.settings_power_user_mode_desc),
-            checked = showAdvanced,
-            index = 0,
-            count = 1,
-            onCheckedChange = { onToggleAdvanced() },
-        )
+/**
+ * Compact hero-styled toggle card for Power User Mode. Visually contiguous with the profile
+ * banner above it and the [SettingsGroup] cards below — same smooth24 container,
+ * [settingsGroupContainerColor] fill, hairline border and light-mode shadow — but a single
+ * compact row: the group-header icon tile (tints primary while enabled) and a shrunken switch
+ * instead of a full-height ListItem, so the toggle reads as part of the hero cluster rather
+ * than a detached list row.
+ */
+@Composable
+private fun PowerUserModeCard(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val isLight = LocalIsLightTheme.current
+    val tvFocusState = rememberTvFocusState(focusedScale = 1.02f)
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val pressScale by animateFloatAsState(
+        targetValue = pressScaleValue(isPressed, 0.98f),
+        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
+        label = "powerUserPressScale",
+    )
+    val confirmHaptic = rememberConfirmHaptic()
+
+    val iconTint by animateColorAsState(
+        targetValue = if (checked) MaterialTheme.colorScheme.primary
+        else MaterialTheme.colorScheme.onSurfaceVariant,
+        animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
+        label = "powerUserIconTint",
+    )
+    val iconTileColor by animateColorAsState(
+        targetValue = if (checked) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f),
+        animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
+        label = "powerUserIconTile",
+    )
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .then(if (isLight) Modifier.shadow(2.dp, ShapeCache.smooth24) else Modifier)
+            .graphicsLayer {
+                scaleX = pressScale
+                scaleY = pressScale
+            }
+            .clip(ShapeCache.smooth24)
+            .background(settingsGroupContainerColor())
+            .lightModeHairlineBorder(ShapeCache.smooth24)
+            .then(tvFocusState.focusModifier)
+            .tvFocusIndicator(tvFocusState, ShapeCache.smooth24)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+            ) {
+                confirmHaptic()
+                onCheckedChange(!checked)
+            }
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(ShapeCache.smooth12)
+                .background(iconTileColor),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Tabler.Outline.AdjustmentsHorizontal,
+                contentDescription = null,
+                tint = iconTint,
+                modifier = Modifier.size(20.dp),
+            )
+        }
+
+        Spacer(Modifier.width(12.dp))
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = stringResource(Res.string.settings_power_user_mode),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = stringResource(Res.string.settings_power_user_mode_desc),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+
+        Spacer(Modifier.width(8.dp))
+
+        // The row itself is the tap target; the switch is a display-only affordance shrunk
+        // below M3's 48dp minimum so the card stays one compact row tall.
+        CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 0.dp) {
+            Switch(
+                checked = checked,
+                onCheckedChange = null,
+                modifier = Modifier.scale(0.8f),
+            )
+        }
     }
 }
 

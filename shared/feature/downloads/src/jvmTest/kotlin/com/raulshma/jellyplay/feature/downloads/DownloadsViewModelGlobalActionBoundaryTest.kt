@@ -31,16 +31,16 @@ import kotlin.test.assertTrue
  * by [DownloadsViewModelTest] / [DownloadsViewModelResyncAndFormatTest] (both
  * only exercise the positive paths of the global actions):
  *
- * 1. [DownloadsViewModel.pauseAll] with NO downloading items and
- *    [DownloadsViewModel.retryAllFailed] with NO failed items are guarded
+ * 1. [DownloadsViewModel.applyBulkAction] with PAUSE/All when NO downloading
+ *    items exist and RETRY_FAILED/All when NO failed items exist are guarded
  *    no-ops — no repository call fires at all.
  * 2. [DownloadsViewModel.moveToFront] / [DownloadsViewModel.lowerPriority]
  *    against an EMPTY list fall back to the 0 baseline (`maxOfOrNull`/`minOfOrNull`
  *    → null → 0), i.e. +1 / −1 respectively.
  * 3. [DownloadsViewModel.checkAllForUpdates] forwards an EMPTY downloaded-id
  *    batch (the sync manager, not the VM, decides what an empty batch means).
- * 4. `deleteSelected` on a selection whose ids no longer match the current
- *    list (list changed under the selection) is a no-op — the target filter
+ * 4. DELETE/Selected on a selection whose ids no longer match the current
+ *    list (list changed under the selection) is a no-op — the target fold
  *    intersects selection with the LIVE list.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -102,7 +102,7 @@ class DownloadsViewModelGlobalActionBoundaryTest {
         )
         advanceUntilIdle()
 
-        viewModel.pauseAll()
+        viewModel.applyBulkAction(DownloadBulkAction.PAUSE, DownloadActionScope.All)
         advanceUntilIdle()
 
         coVerify(exactly = 0) { downloadRepository.pauseDownload(any()) }
@@ -113,7 +113,7 @@ class DownloadsViewModelGlobalActionBoundaryTest {
         downloadsFlow.value = listOf(item("ok", status = DownloadStatus.COMPLETED))
         advanceUntilIdle()
 
-        viewModel.retryAllFailed()
+        viewModel.applyBulkAction(DownloadBulkAction.RETRY_FAILED, DownloadActionScope.All)
         advanceUntilIdle()
 
         coVerify(exactly = 0) { downloadRepository.retryDownload(any()) }
@@ -162,7 +162,7 @@ class DownloadsViewModelGlobalActionBoundaryTest {
         advanceUntilIdle()
         viewModel.toggleSelection(item("vanished"))
 
-        viewModel.deleteSelected()
+        viewModel.applyBulkAction(DownloadBulkAction.DELETE, DownloadActionScope.Selected)
         advanceUntilIdle()
 
         coVerify(exactly = 0) { downloadRepository.deleteDownload(any()) }

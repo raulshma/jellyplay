@@ -100,18 +100,16 @@ data class SegmentOverlayState(
  *
  * *Everything else still flat* is leaf state with no slice to join:
  * [chapters] (feeds both the media display and [toSegmentInput], so it cannot
- * live in the media slice alone), the subtitle-sync preview trio
- * [subtitlePreviewCues] / [subtitlePreviewSource] / [previewSheetVisible]
- * (sheet-scoped, gate-controlled state; the wider subtitle workflow lives in
- * `SubtitleManager`'s own state), [isScreenLocked] and [audioOnly] (transient
+ * live in the media slice alone), [isScreenLocked] and [audioOnly] (transient
  * lock / surface-gate flags) and [isConnectionMetered] (network environment
  * signal surfaced to explain quality caps).
  *
- * The sleep-timer, track-selection, subtitle-workflow, audio-effects and
- * SyncPlay group-display concerns are not here at all: they are owned by their
- * controllers (`SleepTimerController.state`, `TrackSelectionHelper.state`,
- * `SubtitleManager.state`, `VideoEffectsController.state`, `SyncPlayBridge.state`)
- * and exposed as `StateFlow`s on the ViewModel.
+ * The sleep-timer, track-selection, subtitle-workflow, subtitle-preview,
+ * audio-effects and SyncPlay group-display concerns are not here at all: they
+ * are owned by their controllers (`SleepTimerController.state`,
+ * `TrackSelectionHelper.state`, `SubtitleManager.state`,
+ * `SubtitlePreviewController.state`, `VideoEffectsController.state`,
+ * `SyncPlayBridge.state`) and exposed as `StateFlow`s on the ViewModel.
  *
  * ## Reading / writing
  *
@@ -169,27 +167,6 @@ data class VideoPlayerUiState(
     val segmentState: SegmentState = SegmentState(),
     val isInSyncPlaySession: Boolean = false,
     val engineCapabilities: EngineCapabilities = EngineCapabilities(),
-    /**
-     * Parsed cue list for the active subtitle track, for the G10 subtitle-sync
-     * preview. Sourced from either an external text track (full track, all
-     * engines, bidirectional) or, as a fallback for embedded subs, the engine's
-     * live `currentCues` accumulation (played range only). Null when neither
-     * source has cues (image subs, unsupported engines).
-     */
-    val subtitlePreviewCues: List<com.raulshma.jellyplay.feature.player.video.subtitle.TimedCue>? = null,
-    /**
-     * Which source populated [subtitlePreviewCues], so the preview UI can show
-     * the right hint (external = full track; embedded = played range only).
-     */
-    val subtitlePreviewSource: SubtitlePreviewSource = SubtitlePreviewSource.NONE,
-    /**
-     * Whether the AV-sync sheet (the only consumer of [subtitlePreviewCues]) is
-     * open. The ViewModel uses this to gate pushing embedded-subtitle cues into
-     * `subtitlePreviewCues` — there's no point copying the wide UI state on
-     * every onCues tick when the preview isn't visible. Toggled by the screen
-     * as the sheet opens/dismisses; `loadActiveSubtitleCues` re-syncs on open.
-     */
-    val previewSheetVisible: Boolean = false,
     val playerError: String? = null,
     /**
      * Structured retryability verdict paired with [playerError], propagated

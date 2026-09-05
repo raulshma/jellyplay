@@ -109,19 +109,25 @@ class DownloadsViewModelTest {
         assertFalse(failingViewModel.uiState.value.isLoading)
     }
 
-    // ── per-item orchestration ────────────────────────────────────────────
+    // ── per-item orchestration (applyBulkAction at Item scope) ────────────
 
     @Test
-    fun cancelDownload_calls_repository_with_item_id() = runTest(mainDispatcher) {
-        viewModel.cancelDownload(item("d9", status = DownloadStatus.DOWNLOADING))
+    fun applyBulkAction_cancel_item_calls_repository_with_item_id() = runTest(mainDispatcher) {
+        pushItems(listOf(item("d9", status = DownloadStatus.DOWNLOADING)))
+        advanceUntilIdle()
+
+        viewModel.applyBulkAction(DownloadBulkAction.CANCEL, DownloadActionScope.Item("d9"))
         advanceUntilIdle()
 
         coVerify(exactly = 1) { downloadRepository.cancelDownload("d9") }
     }
 
     @Test
-    fun pauseDownload_calls_pause_only() = runTest(mainDispatcher) {
-        viewModel.pauseDownload(item("d9", status = DownloadStatus.DOWNLOADING))
+    fun applyBulkAction_pause_item_calls_pause_only() = runTest(mainDispatcher) {
+        pushItems(listOf(item("d9", status = DownloadStatus.DOWNLOADING)))
+        advanceUntilIdle()
+
+        viewModel.applyBulkAction(DownloadBulkAction.PAUSE, DownloadActionScope.Item("d9"))
         advanceUntilIdle()
 
         coVerify(exactly = 1) { downloadRepository.pauseDownload("d9") }
@@ -129,8 +135,11 @@ class DownloadsViewModelTest {
     }
 
     @Test
-    fun resumeDownload_resets_and_reenqueues() = runTest(mainDispatcher) {
-        viewModel.resumeDownload(item("d9", status = DownloadStatus.PAUSED))
+    fun applyBulkAction_resume_item_resets_and_reenqueues() = runTest(mainDispatcher) {
+        pushItems(listOf(item("d9", status = DownloadStatus.PAUSED)))
+        advanceUntilIdle()
+
+        viewModel.applyBulkAction(DownloadBulkAction.RESUME, DownloadActionScope.Item("d9"))
         advanceUntilIdle()
 
         coVerify(exactly = 1) { downloadRepository.resumeDownload("d9") }
@@ -139,8 +148,11 @@ class DownloadsViewModelTest {
     }
 
     @Test
-    fun retryDownload_resets_and_reenqueues() = runTest(mainDispatcher) {
-        viewModel.retryDownload(item("d9", status = DownloadStatus.FAILED))
+    fun applyBulkAction_retry_item_resets_and_reenqueues() = runTest(mainDispatcher) {
+        pushItems(listOf(item("d9", status = DownloadStatus.FAILED)))
+        advanceUntilIdle()
+
+        viewModel.applyBulkAction(DownloadBulkAction.RETRY_FAILED, DownloadActionScope.Item("d9"))
         advanceUntilIdle()
 
         coVerify(exactly = 1) { downloadRepository.retryDownload("d9") }
@@ -200,7 +212,7 @@ class DownloadsViewModelTest {
     // ── Bulk actions (status-filtered targets) ────────────────────────────
 
     @Test
-    fun deleteSelected_deletes_each_target_clears_selection_and_emits_Deleted() = runTest(mainDispatcher) {
+    fun applyBulkAction_delete_selected_deletes_each_target_clears_selection_and_emits_Deleted() = runTest(mainDispatcher) {
         pushItems(
             listOf(
                 item("a", status = DownloadStatus.COMPLETED),
@@ -210,7 +222,7 @@ class DownloadsViewModelTest {
         advanceUntilIdle()
         viewModel.selectAll()
 
-        viewModel.deleteSelected()
+        viewModel.applyBulkAction(DownloadBulkAction.DELETE, DownloadActionScope.Selected)
         advanceUntilIdle()
 
         coVerify(exactly = 1) { downloadRepository.deleteDownload("a") }
@@ -220,8 +232,8 @@ class DownloadsViewModelTest {
     }
 
     @Test
-    fun deleteSelected_with_no_targets_skips_repository_and_message() = runTest(mainDispatcher) {
-        viewModel.deleteSelected()
+    fun applyBulkAction_delete_selected_with_no_targets_skips_repository_and_message() = runTest(mainDispatcher) {
+        viewModel.applyBulkAction(DownloadBulkAction.DELETE, DownloadActionScope.Selected)
         advanceUntilIdle()
 
         coVerify(exactly = 0) { downloadRepository.deleteDownload(any()) }
@@ -230,7 +242,7 @@ class DownloadsViewModelTest {
     }
 
     @Test
-    fun pauseSelected_pauses_only_selected_downloading_items() = runTest(mainDispatcher) {
+    fun applyBulkAction_pause_selected_pauses_only_selected_downloading_items() = runTest(mainDispatcher) {
         pushItems(
             listOf(
                 item("dl", status = DownloadStatus.DOWNLOADING),
@@ -241,7 +253,7 @@ class DownloadsViewModelTest {
         advanceUntilIdle()
         viewModel.selectAll()
 
-        viewModel.pauseSelected()
+        viewModel.applyBulkAction(DownloadBulkAction.PAUSE, DownloadActionScope.Selected)
         advanceUntilIdle()
 
         coVerify(exactly = 1) { downloadRepository.pauseDownload("dl") }
@@ -250,7 +262,7 @@ class DownloadsViewModelTest {
     }
 
     @Test
-    fun resumeSelected_resumes_and_reenqueues_only_selected_paused_items() = runTest(mainDispatcher) {
+    fun applyBulkAction_resume_selected_resumes_and_reenqueues_only_selected_paused_items() = runTest(mainDispatcher) {
         pushItems(
             listOf(
                 item("pa", status = DownloadStatus.PAUSED),
@@ -260,7 +272,7 @@ class DownloadsViewModelTest {
         advanceUntilIdle()
         viewModel.selectAll()
 
-        viewModel.resumeSelected()
+        viewModel.applyBulkAction(DownloadBulkAction.RESUME, DownloadActionScope.Selected)
         advanceUntilIdle()
 
         coVerify(exactly = 1) { downloadRepository.resumeDownload("pa") }
@@ -270,7 +282,7 @@ class DownloadsViewModelTest {
     }
 
     @Test
-    fun cancelSelected_cancels_active_but_not_completed_or_cancelled_items() = runTest(mainDispatcher) {
+    fun applyBulkAction_cancel_selected_cancels_active_but_not_completed_or_cancelled_items() = runTest(mainDispatcher) {
         pushItems(
             listOf(
                 item("pen", status = DownloadStatus.PENDING),
@@ -284,7 +296,7 @@ class DownloadsViewModelTest {
         advanceUntilIdle()
         viewModel.selectAll()
 
-        viewModel.cancelSelected()
+        viewModel.applyBulkAction(DownloadBulkAction.CANCEL, DownloadActionScope.Selected)
         advanceUntilIdle()
 
         coVerify(exactly = 1) { downloadRepository.cancelDownload("pen") }
@@ -295,10 +307,10 @@ class DownloadsViewModelTest {
         coVerify(exactly = 0) { downloadRepository.cancelDownload("cxl") }
     }
 
-    // ── Global actions ────────────────────────────────────────────────────
+    // ── Global actions (applyBulkAction at All scope) ─────────────────────
 
     @Test
-    fun pauseAll_pauses_every_downloading_item_without_selection() = runTest(mainDispatcher) {
+    fun applyBulkAction_pause_all_pauses_every_downloading_item_without_selection() = runTest(mainDispatcher) {
         pushItems(
             listOf(
                 item("dl1", status = DownloadStatus.DOWNLOADING),
@@ -308,7 +320,7 @@ class DownloadsViewModelTest {
         )
         advanceUntilIdle()
 
-        viewModel.pauseAll()
+        viewModel.applyBulkAction(DownloadBulkAction.PAUSE, DownloadActionScope.All)
         advanceUntilIdle()
 
         coVerify(exactly = 1) { downloadRepository.pauseDownload("dl1") }
@@ -317,7 +329,7 @@ class DownloadsViewModelTest {
     }
 
     @Test
-    fun retryAllFailed_retries_and_reenqueues_every_failed_item() = runTest(mainDispatcher) {
+    fun applyBulkAction_retry_failed_retries_and_reenqueues_every_failed_item() = runTest(mainDispatcher) {
         pushItems(
             listOf(
                 item("f1", status = DownloadStatus.FAILED),
@@ -327,7 +339,7 @@ class DownloadsViewModelTest {
         )
         advanceUntilIdle()
 
-        viewModel.retryAllFailed()
+        viewModel.applyBulkAction(DownloadBulkAction.RETRY_FAILED, DownloadActionScope.All)
         advanceUntilIdle()
 
         coVerify(exactly = 1) { downloadRepository.retryDownload("f1") }

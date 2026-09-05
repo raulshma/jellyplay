@@ -70,14 +70,16 @@ class AdminStatisticsRepositoryImplTest {
         database.close()
     }
 
-    private fun TestScope.buildRepository(): AdminStatisticsRepositoryImpl = AdminStatisticsRepositoryImpl(
+    private fun TestScope.buildRepository(
+        timeSource: TimeSource = FakeTimeSource(),
+    ): AdminStatisticsRepositoryImpl = AdminStatisticsRepositoryImpl(
         apiClient = apiClient,
         auditLogDao = database.auditLogDao(),
         scanStateDao = database.scanStateDao(),
         json = json,
         scope = backgroundScope,
         labels = DesktopAdminStatisticsLabels,
-        timeSource = FakeTimeSource(),
+        timeSource = timeSource,
     )
 
     private val user = UserInfo(id = "u1", name = "Admin", serverAddress = "http://server", accessToken = "t", isAdmin = true)
@@ -199,7 +201,9 @@ class AdminStatisticsRepositoryImplTest {
     @Test
     fun `stale scan bakes desktop label formatting into the persisted result row`() = runTest {
         val repository = buildRepository()
-        val today = LocalDate.now()
+        // The "added N days ago" ladder reads the injected clock, not the wall
+        // clock — the fixtures below key off the fake's pinned date.
+        val today = PINNED_TODAY
         val config = MediaCleanupConfig(
             daysThreshold = 90,
             includeNeverPlayed = true,
@@ -286,6 +290,60 @@ class AdminStatisticsRepositoryImplTest {
         assertEquals("1 plays · 95%", stubs[1].detail)
     }
 
+    // ── Fake-clock window boundaries (no-plugin fallback path) ──────────
+
+    @Test
+    fun `user detail statistics pin 30-day windows and the month comparison to the injected clock`() = runTest {
+        val repository = buildRepository()
+        // Plugin status never refreshed → UNKNOWN → the fallback path: the
+        // watch-time windows and the trend chart both derive from the pinned
+        // "today" (Jan 1 2026), never the wall clock.
+        coEvery { apiClient.getUserById("u1") } returns
+            Result.success(JellyfinUser(id = "u1", name = "Admin"))
+        coEvery { apiClient.getUserPlayedItemCount("u1", any()) } returns Result.success(0)
+        coEvery { apiClient.getUserUnplayedItemCount("u1", any()) } returns Result.success(0)
+        // Top-items page (PlayCount sort): empty.
+        coEvery {
+            apiClient.getItemsWithUserData(userId = "u1", isPlayed = true, sortBy = "PlayCount", sortOrder = "Descending", startIndex = 0, limit = 20)
+        } returns Result.success(Pair(0, emptyList()))
+        // Watch-time breakdown (DatePlayed sort, limit 500) and the fallback
+        // chart source (same sort, limit 300) share the fixture:
+        //  - played Dec 2 (30 days back): the LAST day inside the 30-day window,
+        //    but OUTSIDE the chart's Dec 3 – Jan 1 window;
+        //  - played Dec 1 (31 days back): first day inside the previous-30 window.
+        val dec2 = com.raulshma.jellyplay.core.model.MediaItem(
+            id = "a", name = "In Window", mediaType = com.raulshma.jellyplay.core.model.MediaType.MOVIE,
+            runTimeTicks = 3600L * 10_000_000L, playCount = 1, lastPlayedDate = "2025-12-02T10:00:00.000Z",
+        )
+        val dec1 = com.raulshma.jellyplay.core.model.MediaItem(
+            id = "b", name = "Previous Window", mediaType = com.raulshma.jellyplay.core.model.MediaType.MOVIE,
+            runTimeTicks = 1800L * 10_000_000L, playCount = 1, lastPlayedDate = "2025-12-01T10:00:00.000Z",
+        )
+        coEvery {
+            apiClient.getItemsWithUserData(userId = "u1", isPlayed = true, sortBy = "DatePlayed", sortOrder = "Descending", startIndex = 0, limit = 500)
+        } returns Result.success(Pair(2, listOf(dec2, dec1)))
+        coEvery {
+            apiClient.getItemsWithUserData(userId = "u1", isPlayed = true, sortBy = "DatePlayed", sortOrder = "Descending", startIndex = 0, limit = 300)
+        } returns Result.success(Pair(2, listOf(dec2, dec1)))
+
+        val page = repository.getUserDetailStatistics("u1", page = 0, pageSize = 20).getOrThrow()
+
+        // Dec 2 counts into the last-30 window; Dec 1 does not.
+        assertEquals(3600L, page.monthlyWatchTimeSec)
+        assertEquals(0L, page.weeklyWatchTimeSec)
+        // No plugin activity → the computed total (both items) is the fallback.
+        assertEquals(5400L, page.statistics.totalWatchTimeSec)
+        // current = 3600s = 60 min; previous = 1800s = 30 min → +100%.
+        assertEquals(60L, page.monthlyComparison.currentMonthMinutes)
+        assertEquals(30L, page.monthlyComparison.previousMonthMinutes)
+        assertEquals(100f, page.monthlyComparison.percentageChange)
+        // Dec 2 misses the 30-point chart window → no active trend day, so the
+        // average divides by the coerced single day: 3600s / 1 day = 60 min.
+        assertEquals(60, page.averageDailyMinutes)
+        assertEquals(30, page.trendData.size)
+        assertTrue(page.trendData.all { it.value == 0L })
+    }
+
     // ── Audit-log round-trip ────────────────────────────────────────────
 
     @Test
@@ -353,11 +411,20 @@ class AdminStatisticsRepositoryImplTest {
      * (same shape as the fake in LyricsRepositoryImplTest): the fixtures stamp
      * audit rows with `System.currentTimeMillis()` deltas (100 vs 10 days
      * ago), so the 90-day prune cutoff must compare against a now in the same
-     * epoch-millis regime.
+     * epoch-millis regime. [todayDate] pins the date the date-window math
+     * (label ladder, 30-day watch windows, fallback chart, streaks) sees.
      */
-    private class FakeTimeSource(var nowMs: Long = System.currentTimeMillis()) : TimeSource {
+    private class FakeTimeSource(
+        var nowMs: Long = System.currentTimeMillis(),
+        val todayDate: LocalDate = PINNED_TODAY,
+    ) : TimeSource {
         override fun nowEpochMillis(): Long = nowMs
         override fun nowElapsedRealtimeMillis(): Long = nowMs
-        override fun today(zone: ZoneId): LocalDate = LocalDate.of(2026, 1, 1)
+        override fun today(zone: ZoneId): LocalDate = todayDate
+    }
+
+    companion object {
+        /** The date [FakeTimeSource] pins `today` to; date fixtures key off it. */
+        private val PINNED_TODAY = LocalDate.of(2026, 1, 1)
     }
 }

@@ -38,6 +38,23 @@ internal fun seekForwardTargetMs(currentPositionMs: Long, stepMs: Long, duration
     }
 
 /**
+ * Direction-folded step target behind the ViewModel's `seekByStep` funnel —
+ * the single owner of the discrete skip-step path shared by the screen's
+ * skip buttons / keyboard / D-pad commits and the PiP transport's SKIP
+ * actions. [direction] < 0 steps back ([seekBackTargetMs]); anything else
+ * steps forward ([seekForwardTargetMs]). The gesture/hold paths do NOT go
+ * through here.
+ */
+internal fun stepSeekTargetMs(
+    direction: Int,
+    currentPositionMs: Long,
+    stepMs: Long,
+    durationMs: Long,
+): Long =
+    if (direction < 0) seekBackTargetMs(currentPositionMs, stepMs)
+    else seekForwardTargetMs(currentPositionMs, stepMs, durationMs)
+
+/**
  * What the player's entry orientation lock MEANS, as data: TV and cast paths
  * lock immediately, the per-preference path applies only after the screen's
  * `delay(400)` race guard (the timing shell stays in the LaunchedEffect).

@@ -20,8 +20,10 @@ import com.raulshma.jellyplay.core.model.ResolvedPlayback
 import com.raulshma.jellyplay.core.model.TtlCache
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.data.log.Log
+import com.raulshma.jellyplay.core.data.concurrency.SingleFlightFetcher
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import java.util.concurrent.atomic.AtomicLong
 
 class PlaybackRepositoryImpl(
     private val apiClient: JellyfinApiClient,
@@ -41,6 +43,16 @@ class PlaybackRepositoryImpl(
         maxSize = MAX_CACHE_ENTRIES,
         ttlMs = SEGMENTS_CACHE_TTL_MS,
     )
+
+    // Single-flight dedup for the segments read (the MediaRepositoryImpl
+    // detail-cache pattern): a player surface that opens the same item from
+    // two entry points near-simultaneously previously fired two full
+    // getMediaSegments + intro/credit fallback waves, because TtlCache's
+    // get-check-put is not atomic. The epoch is shared with
+    // [invalidateSegmentsCache] so a per-item invalidation mid-flight also
+    // vetoes the racing fetch's write-back.
+    private val segmentsEpoch = AtomicLong(0L)
+    private val segmentsFetcher = SingleFlightFetcher(segmentsCache, segmentsEpoch)
 
     init {
         sessionCacheRegistry.registerCaches("playback", segmentsCache)
@@ -323,76 +335,75 @@ class PlaybackRepositoryImpl(
     override suspend fun fetchActiveTranscodeReasons(itemId: String): List<String> =
         apiClient.fetchActiveTranscodeReasons(itemId).getOrDefault(emptyList())
 
-    override suspend fun getMediaSegments(itemId: String): Result<List<MediaSegment>> {
-        val identity = homeSession.cacheIdentity()
-        val cached = segmentsCache.get(identity, itemId)
-        if (cached != null) {
-            return Result.success(cached)
-        }
+    override suspend fun getMediaSegments(itemId: String): Result<List<MediaSegment>> =
+        segmentsFetcher.getOrFetch({ homeSession.cacheIdentity() }, itemId) {
+            val segmentsResult = apiClient.getMediaSegments(itemId)
+            val segments = segmentsResult.getOrDefault(emptyList())
+            if (segments.isNotEmpty()) {
+                return@getOrFetch Result.success(segments)
+            }
 
-        val segmentsResult = apiClient.getMediaSegments(itemId)
-        val segments = segmentsResult.getOrDefault(emptyList())
-        if (segments.isNotEmpty()) {
-            segmentsCache.put(identity, itemId, segments)
-            return Result.success(segments)
-        }
+            // Distinguish "API succeeded and returned no segments" (cache the
+            // fallback so repeated player opens don't re-hit the legacy endpoints)
+            // from "API failed" (do not cache — a transient network error must not
+            // be masked as "no segments" for the cache TTL, or the next call would
+            // skip the retry and serve an empty list for 5 minutes).
+            val cacheFallback = segmentsResult.isSuccess
 
-        // Distinguish "API succeeded and returned no segments" (cache the
-        // fallback so repeated player opens don't re-hit the legacy endpoints)
-        // from "API failed" (do not cache — a transient network error must not
-        // be masked as "no segments" for the cache TTL, or the next call would
-        // skip the retry and serve an empty list for 5 minutes).
-        val cacheFallback = segmentsResult.isSuccess
+            coroutineScope {
+                val introDeferred = async { apiClient.getIntroTimestamps(itemId).getOrNull() }
+                val creditDeferred = async { apiClient.getCreditTimestamps(itemId).getOrNull() }
+                val introResult = introDeferred.await()
+                val creditResult = creditDeferred.await()
 
-        return coroutineScope {
-            val introDeferred = async { apiClient.getIntroTimestamps(itemId).getOrNull() }
-            val creditDeferred = async { apiClient.getCreditTimestamps(itemId).getOrNull() }
-            val introResult = introDeferred.await()
-            val creditResult = creditDeferred.await()
-
-            val fallbackSegments = mutableListOf<MediaSegment>()
-            introResult?.let { ts ->
-                if (ts.hasIntro) {
-                    fallbackSegments.add(
-                        MediaSegment(
-                            id = "legacy-intro-${ts.itemId}",
-                            itemId = ts.itemId,
-                            type = MediaSegmentType.INTRO,
-                            startTicks = ts.introStartTicks,
-                            endTicks = ts.introEndTicks,
+                val fallbackSegments = mutableListOf<MediaSegment>()
+                introResult?.let { ts ->
+                    if (ts.hasIntro) {
+                        fallbackSegments.add(
+                            MediaSegment(
+                                id = "legacy-intro-${ts.itemId}",
+                                itemId = ts.itemId,
+                                type = MediaSegmentType.INTRO,
+                                startTicks = ts.introStartTicks,
+                                endTicks = ts.introEndTicks,
+                            )
                         )
-                    )
+                    }
                 }
-            }
-            creditResult?.let { ts ->
-                if (ts.hasCredits) {
-                    fallbackSegments.add(
-                        MediaSegment(
-                            id = "legacy-outro-${ts.itemId}",
-                            itemId = ts.itemId,
-                            type = MediaSegmentType.OUTRO,
-                            startTicks = ts.creditStartTicks,
-                            endTicks = ts.creditEndTicks,
+                creditResult?.let { ts ->
+                    if (ts.hasCredits) {
+                        fallbackSegments.add(
+                            MediaSegment(
+                                id = "legacy-outro-${ts.itemId}",
+                                itemId = ts.itemId,
+                                type = MediaSegmentType.OUTRO,
+                                startTicks = ts.creditStartTicks,
+                                endTicks = ts.creditEndTicks,
+                            )
                         )
-                    )
+                    }
                 }
+                // Only cache on a successful (empty) segments call. When the
+                // segments API itself failed, leave the cache untouched so the
+                // next call retries the API instead of serving a stale
+                // "empty": the fetcher stores a successful result only when
+                // the epoch it captured at flight start is still current, so
+                // bumping the epoch here vetoes this flight's write-back
+                // without touching the cache.
+                if (!cacheFallback) {
+                    segmentsEpoch.incrementAndGet()
+                }
+                Result.success(fallbackSegments)
             }
-            // Only cache on a successful (empty) segments call. When the
-            // segments API itself failed, leave the cache untouched so the
-            // next call retries the API instead of serving a stale "empty".
-            if (cacheFallback) {
-                segmentsCache.put(identity, itemId, fallbackSegments)
-            }
-            Result.success(fallbackSegments)
         }
-    }
 
     override fun invalidateSegmentsCache(itemId: String) {
         // Snapshot read: this is a best-effort single-item eviction from a
         // non-suspend context; identity switches clear the cache wholesale
         // via SessionCacheRegistry regardless of which identity an entry was
-        // keyed under.
-        segmentsCache.remove(homeSession.cacheIdentitySnapshot(), itemId)
+        // keyed under. invalidate() also bumps the epoch, so an in-flight
+        // segments fetch cannot re-pin the evicted entry.
+        segmentsFetcher.invalidate(homeSession.cacheIdentitySnapshot(), itemId)
     }
 
     override suspend fun getRemoteSubtitles(itemId: String): Result<List<RemoteSubtitleInfo>> =

@@ -57,7 +57,6 @@ import com.raulshma.jellyplay.core.data.playback.EqualizerHelper
 import com.raulshma.jellyplay.core.data.playback.HighPassFilterAudioProcessor
 import com.raulshma.jellyplay.core.data.playback.isSessionKeyedUrl
 import com.raulshma.jellyplay.core.data.playback.LoudnessEnhancerHelper
-import com.raulshma.jellyplay.core.data.playback.MediaStreamVolume
 import com.raulshma.jellyplay.core.data.playback.NightModeHelper
 import com.raulshma.jellyplay.core.data.playback.ReplayGainAudioProcessor
 import com.raulshma.jellyplay.core.data.playback.ReverbHelper
@@ -680,8 +679,10 @@ class ExoPlayerEngine(
         // over stale activeTrackIsAss=true from a prior ASS track.
         activeTrackIsAss = false
         // Mirror the per-item state resets of release()+rebuild for the fields
-        // the fresh path re-establishes.
-        resetItemScopedState()
+        // the fresh path re-establishes. The item-scoped granularity (no
+        // transport-leaf flip) — release() adds those via
+        // [resetPublishedEngineState].
+        resetItemScopedPublishedState()
 
         trackSelector?.let { applyRequestTrackSelection(it, request, exoCfg) }
 
@@ -693,22 +694,18 @@ class ExoPlayerEngine(
     }
 
     /**
-     * The per-item state both [release] and [reusePlayerForRequest] must
-     * clear: stale cues from the previous item would linger into the new
-     * one's loading window, and the previous episode's buffered position,
-     * decoder counters, and "Stats for Nerds" snapshot would surface briefly
-     * on the new item.
+     * The ExoPlayer residue cleared alongside the base resets (C5): stale
+     * cues from the previous item would linger into the new one's loading
+     * window, and the previous episode's buffered position, decoder counters,
+     * and "Stats for Nerds" snapshot would surface briefly on the new item.
+     * The flow resets themselves live in [BasePlayerEngine].
      */
-    private fun resetItemScopedState() {
-        _currentCues.value = emptyList()
-        _availableTracks.value = emptyList()
+    override fun onResetItemScopedState() {
         lastSelectedTextTrackId = null
         subtitleTrackAutoDisabled = false
         resetStatsGuard()
         videoDecoderCounters = null
         wasPlayingBeforeActivityPause = false
-        _bufferedPositionMs.value = 0L
-        _videoStats.value = EngineVideoStats()
     }
 
     /**
@@ -983,9 +980,7 @@ class ExoPlayerEngine(
         releaseAudioEffects()
         cachedVolume = 1f
         lastUnmuteVolume = 1f
-        _playbackState.value = EnginePlaybackState.IDLE
-        _isPlaying.value = false
-        resetItemScopedState()
+        resetPublishedEngineState()
 
         // Drop the libass overlay + handler so the next load() rebuilds them
         // fresh. The AssSubtitleView is a child of the (now-cleared) subtitle
@@ -1030,46 +1025,26 @@ class ExoPlayerEngine(
 
     override val volume: Float get() = cachedVolume
 
-    override fun setVolume(value: Float) = runOnPlayerThread {
-        val p = player ?: return@runOnPlayerThread
-        val plan = PlaybackVolumePolicy.planLevel(value, PlaybackVolumePolicy.MAX_BOOST_NOMINAL)
-        rememberUnmuteVolumeIfAudible(plan.normalized)
-        p.volume = plan.normalized
-        MediaStreamVolume.setNormalized(context, plan.systemStream)
+    // ── Volume / mute seams (C4) ────────────────────────────────────────────
+    // The four command bodies are final templates in ReloadablePlayerEngine;
+    // ExoPlayer contributes only the native write/read, the Media3 mute
+    // vocabulary (zero the handle on mute, restore it to full on unmute — the
+    // system stream carries the remembered level), and the player-thread
+    // dispatch with its former `player ?: return` abort.
+
+    override fun dispatchVolumeCommand(command: () -> Unit) = runOnPlayerThread {
+        if (player != null) command()
     }
 
-    override fun increaseVolume(delta: Float) = runOnPlayerThread {
-        val p = player ?: return@runOnPlayerThread
-        val plan = PlaybackVolumePolicy.planLevel(p.volume + delta, PlaybackVolumePolicy.MAX_BOOST_NOMINAL)
-        rememberUnmuteVolumeIfAudible(plan.normalized)
-        p.volume = plan.normalized
-        MediaStreamVolume.setNormalized(context, plan.systemStream)
+    override fun readNativeVolume(): Float? = player?.volume
+
+    override fun applyNativeVolume(normalized: Float) {
+        player?.volume = normalized
     }
 
-    override fun decreaseVolume(delta: Float) = runOnPlayerThread {
-        val p = player ?: return@runOnPlayerThread
-        val plan = PlaybackVolumePolicy.planLevel(p.volume - delta, PlaybackVolumePolicy.MAX_BOOST_NOMINAL)
-        rememberUnmuteVolumeIfAudible(plan.normalized)
-        p.volume = plan.normalized
-        MediaStreamVolume.setNormalized(context, plan.systemStream)
-    }
-
-    override fun setMuted(muted: Boolean) = runOnPlayerThread {
-        val p = player ?: return@runOnPlayerThread
-        if (muted) {
-            val plan = PlaybackVolumePolicy.planMute(PlaybackVolumePolicy.NativeVolumeRestore.ZERO)
-            if (plan.snapshotSystemVolume) snapshotSystemVolumeForMute()
-            plan.nativeVolume?.let { p.volume = it }
-            MediaStreamVolume.setNormalized(context, plan.systemStream)
-        } else {
-            val plan = PlaybackVolumePolicy.planUnmute(
-                lastUnmuteVolume,
-                PlaybackVolumePolicy.NativeVolumeRestore.FULL,
-            )
-            plan.nativeVolume?.let { p.volume = it }
-            MediaStreamVolume.setNormalized(context, plan.systemStream)
-        }
-    }
+    override fun nativeVolumeRestore(muted: Boolean): PlaybackVolumePolicy.NativeVolumeRestore =
+        if (muted) PlaybackVolumePolicy.NativeVolumeRestore.ZERO
+        else PlaybackVolumePolicy.NativeVolumeRestore.FULL
 
     override fun snapshotIsPlaying(): Boolean = player?.isPlaying ?: super.snapshotIsPlaying()
 
