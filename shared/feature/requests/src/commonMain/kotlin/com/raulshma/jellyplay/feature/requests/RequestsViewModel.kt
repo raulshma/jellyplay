@@ -121,7 +121,7 @@ class RequestsViewModel(
                 if (count.pending == 0 && _state.value.filter == SeerrRequestFilter.PENDING) {
                     // Reset path: nothing pending → land on ALL (same write
                     // algebra as the setters; page is still at 1 pre-first-load).
-                    _state.value = _state.value.withFilters { it.withFilter(SeerrRequestFilter.ALL) }
+                    _state.value = _state.value.withFilterState { it.withFilter(SeerrRequestFilter.ALL) }
                 }
             }
             loadRequests(refresh = true)
@@ -304,7 +304,7 @@ class RequestsViewModel(
         refresh: Boolean = true,
         transform: (RequestsFilterState) -> RequestsFilterState,
     ) {
-        _state.value = _state.value.withFilters(transform)
+        _state.value = _state.value.withFilterState(transform)
         if (refresh) loadRequests(refresh = true)
     }
 

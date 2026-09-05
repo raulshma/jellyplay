@@ -379,8 +379,8 @@ private fun DesktopNavScaffold(
             isRefreshingAdmin = true
             scope.launch {
                 try {
-                    authRepository.refreshCurrentUser()
-                    adminRefreshGate.onRefreshCompleted()
+                    val result = authRepository.refreshCurrentUser()
+                    if (result.isSuccess) adminRefreshGate.onRefreshCompleted()
                 } finally {
                     isRefreshingAdmin = false
                 }

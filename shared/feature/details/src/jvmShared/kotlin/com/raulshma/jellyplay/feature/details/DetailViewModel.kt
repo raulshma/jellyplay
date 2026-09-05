@@ -26,10 +26,9 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.Playlist
 import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
-import com.raulshma.jellyplay.core.data.playback.AudioQueueOutcome
 import com.raulshma.jellyplay.core.data.playback.InstantMixError
-import com.raulshma.jellyplay.core.data.playback.InstantMixOutcome
 import com.raulshma.jellyplay.core.data.playback.InstantMixStateHolder
+import com.raulshma.jellyplay.core.data.playback.toInstantMixOutcome
 import com.raulshma.jellyplay.core.model.seerr.buildPosterUrl
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.NetworkStatus
@@ -1380,14 +1379,6 @@ class DetailViewModel internal constructor(
         super.onCleared()
         themeMusicPlayer.stop()
     }
-}
-
-/** Normalizes the jvmShared facade outcome to the holder's pure outcome shape. */
-private fun AudioQueueOutcome.toInstantMixOutcome(): InstantMixOutcome = when (this) {
-    is AudioQueueOutcome.Started -> InstantMixOutcome.Started(queue.firstOrNull()?.id)
-    AudioQueueOutcome.Empty -> InstantMixOutcome.EmptyMix
-    AudioQueueOutcome.Suppressed -> InstantMixOutcome.Suppressed
-    is AudioQueueOutcome.Failed -> InstantMixOutcome.Failed(cause)
 }
 
 /**

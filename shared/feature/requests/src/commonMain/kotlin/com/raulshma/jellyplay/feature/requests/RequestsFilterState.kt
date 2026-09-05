@@ -12,7 +12,7 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrRequestSort
  * This is also the filter WRITE ALGEBRA (the [com.raulshma.jellyplay.core.model.LibraryFilters]
  * precedent): the `withX` transforms below are the single policy behind every
  * setter — each returns the new filter state, and the caller pairs it with
- * the page-1 reset via [withFilters]. The VM's setters used to hand-roll
+ * the page-1 reset via [withFilterState]. The VM's setters used to hand-roll
  * `copy(field, currentPage = 1)` six times over.
  */
 @Immutable
@@ -54,7 +54,7 @@ data class RequestsFilterState(
  * carries (the read side is [RequestsUiState.filters]). Lives beside the
  * value type so the read/write pair can be unit-tested without the VM.
  */
-internal fun RequestsUiState.withFilters(
+internal fun RequestsUiState.withFilterState(
     transform: (RequestsFilterState) -> RequestsFilterState,
 ): RequestsUiState {
     val next = transform(filters)

@@ -801,7 +801,9 @@ read the same fold — fixing library's drift where years/tags/minRating/sort
 silently under-reported the active set. Pinned by `LibraryFiltersAlgebraTest`
 (core/model commonTest). `RequestsFilterState` (shared/feature/requests) is
 the same shape for the admin request queue (`withFilter`/`withSort`/
-`withSearch`/`cleared`, page-1 reset carried by `withFilters`), and
+`withSearchQuery`/`cleared` plus the `withSortDirectionToggled`/
+`withMediaType`/`withMyRequestsOnlyToggled` variants, page-1 reset carried by
+the `RequestsUiState.withFilterState` fold), and
 `RequestsViewModel`'s five mutation commands are one-line delegates onto a
 single `runRequestAction` core (the `runBulk` shape; `runBulk`'s own
 per-item failure semantics stay separate). Pinned by `RequestsFilterStateTest`.

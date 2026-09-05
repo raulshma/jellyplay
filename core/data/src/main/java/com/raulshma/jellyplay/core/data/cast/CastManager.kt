@@ -126,6 +126,8 @@ class CastManager(
      * through this adapter — the strategies map stays authoritative for those.
      */
     private val localCastPlayerTransport: CastStrategy = object : CastStrategy by googleCastStrategy {
+        override val ownsExternalListener: Boolean = true
+
         override fun play() { castPlayer?.play() }
         override fun pause() { castPlayer?.pause() }
         override fun seekTo(positionMs: Long) { castPlayer?.seekTo(positionMs) }
@@ -486,9 +488,7 @@ class CastManager(
     ) {
         val transport = activeTransport
         val loaded = transport.loadMedia(mediaItem, startPositionMs, listener, options)
-        // Renderer-protocol transports have no Player to fan events out to, so
-        // the manager's external listener is dropped instead of handed over.
-        if (loaded && transport !== localCastPlayerTransport) {
+        if (loaded && !transport.ownsExternalListener) {
             externalListener?.let { castPlayer?.removeListener(it) }
             externalListener = null
         }

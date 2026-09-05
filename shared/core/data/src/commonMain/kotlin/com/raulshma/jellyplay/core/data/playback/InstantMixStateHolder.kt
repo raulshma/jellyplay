@@ -30,7 +30,12 @@ sealed interface InstantMixOutcome {
 /** Consumer-renderable mix failure, already message-shaped. */
 sealed interface InstantMixError {
     data object EmptyMix : InstantMixError
-    data class Failed(val message: String) : InstantMixError
+
+    /**
+     * [message] mirrors the underlying cause's message and is null when the
+     * cause carried none — consumers own the fallback text.
+     */
+    data class Failed(val message: String?) : InstantMixError
 }
 
 /** The holder's single observable snapshot; individual flows stay private. */
@@ -51,7 +56,8 @@ data class InstantMixState(
  * [startMix] is the mix-starting dependency as a constructor seam (the
  * AudioQueueFacade call each ViewModel already made), so commonMain stays
  * pure; error TEXT stays consumer-side — callers map [InstantMixError] to
- * their localized message type. [clearError] lets message-based consumers
+ * their localized message type (a null [InstantMixError.Failed.message]
+ * means the cause carried none). [clearError] lets message-based consumers
  * re-arm after surfacing an error (StateFlow equality would otherwise swallow
  * a repeated identical failure).
  */
@@ -66,9 +72,8 @@ class InstantMixStateHolder(
      * Starts a mix seeded off [seedItemId]: raises the isStarting flag,
      * clears any prior error, runs the [startMix] seam, then folds the
      * outcome — Started sets the first-track one-shot, EmptyMix/Failed land
-     * on [InstantMixState.error], Suppressed stays silent. A no-target call
-     * never happens: the flag is always lowered, even on throw-free failure
-     * outcomes.
+     * on [InstantMixState.error], Suppressed stays silent. The flag is
+     * always lowered once the seam returns, including on failure outcomes.
      */
     fun start(seedItemId: String, fallbackName: String?) {
         scope.launch {
@@ -84,7 +89,7 @@ class InstantMixStateHolder(
                     _state.update {
                         it.copy(
                             isStarting = false,
-                            error = InstantMixError.Failed(outcome.cause.message ?: FAILED_MESSAGE_FALLBACK),
+                            error = InstantMixError.Failed(outcome.cause.message),
                         )
                     }
             }
@@ -99,9 +104,5 @@ class InstantMixStateHolder(
     /** Clears the surfaced error so an identical repeat failure re-fires. */
     fun clearError() {
         _state.update { it.copy(error = null) }
-    }
-
-    private companion object {
-        const val FAILED_MESSAGE_FALLBACK = "Failed to start Instant Mix"
     }
 }

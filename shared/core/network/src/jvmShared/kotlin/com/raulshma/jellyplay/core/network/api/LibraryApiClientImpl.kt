@@ -59,15 +59,18 @@ private val DETAIL_ITEM_FIELDS = DETAIL_PROJECTION_FIELDS.map { name ->
 
 /** The jellyfin-web useSearchSuggestions shape, resolved against the SDK enums. */
 private val SEARCH_SUGGESTIONS_SORT = SEARCH_SUGGESTIONS_SORT_BY.map { token ->
-    ItemSortBy.entries.first { it.serialName == token }
+    ItemSortBy.entries.firstOrNull { it.serialName == token }
+        ?: error("ItemSortBy has no serial name '$token' — SDK drift vs the search-suggestions projection")
 }
 
 private val SEARCH_SUGGESTIONS_KINDS = SEARCH_SUGGESTIONS_ITEM_TYPES.map { token ->
-    BaseItemKind.entries.first { it.serialName == token }
+    BaseItemKind.entries.firstOrNull { it.serialName == token }
+        ?: error("BaseItemKind has no serial name '$token' — SDK drift vs the search-suggestions projection")
 }
 
 private val SEARCH_SUGGESTIONS_PROJECTION = SEARCH_SUGGESTIONS_FIELDS.map { token ->
-    ItemFields.entries.first { it.serialName == token }
+    ItemFields.entries.firstOrNull { it.serialName == token }
+        ?: error("ItemFields has no serial name '$token' — SDK drift vs the search-suggestions projection")
 }
 
 @Singleton

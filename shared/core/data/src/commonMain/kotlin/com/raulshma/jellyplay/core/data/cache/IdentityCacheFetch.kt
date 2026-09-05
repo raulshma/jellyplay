@@ -23,10 +23,15 @@ import com.raulshma.jellyplay.core.model.TtlCache
  * production that is `HomeSession.cacheIdentity()` (the suspend source-flow
  * read, so a fetch that starts right after a switch keys under the NEW
  * identity, not the lagging mirror). The supplier is read exactly once at
- * entry — before the force-evict and the cache read — matching the
- * hand-copied sequence this module replaced. Single-flight reads with the
- * same doctrine (plus a cancellation ladder) remain `SingleFlightFetcher`'s
- * job; this module is the plain, non-flight sibling.
+ * entry — before the force-evict and the cache read. For the nine
+ * `MediaRepositoryImpl` sites that is the hand-copied sequence verbatim; the
+ * `SeerrRepositoryImpl` twin re-read its identity at put time, so the write
+ * now keys under the entry identity — neutralized in practice because
+ * identity transitions clear the caches wholesale (see
+ * `SessionIdentityProvider`), and it is the intended semantics: a write can
+ * never land under a different identity than its own read. Single-flight
+ * reads with the same doctrine (plus a cancellation ladder) remain
+ * `SingleFlightFetcher`'s job; this module is the plain, non-flight sibling.
  *
  * Exactly three shapes exist across the migrated sites, and that is all this
  * module supports — no combination knobs, no fourth variant:
@@ -56,8 +61,9 @@ import com.raulshma.jellyplay.core.model.TtlCache
  * refetches — the exact semantics of the `SeerrRepositoryImpl` twin this
  * module replaced.
  *
- * All functions are behaviour-preserving ports: same identity source per
- * site, same eviction order, same write guards. `onFetched` on [getOrFetch]
+ * All functions are behaviour-preserving ports per site (same eviction
+ * order, same write guards), with the one identity-timing nuance recorded
+ * above. `onFetched` on [getOrFetch]
  * is the one write-path hook that exists (the home-sections SWR persist): it
  * runs after the cache put on the FETCH path only — never on a cache hit, so
  * a hit cannot slide the persisted snapshot's timestamp forward.

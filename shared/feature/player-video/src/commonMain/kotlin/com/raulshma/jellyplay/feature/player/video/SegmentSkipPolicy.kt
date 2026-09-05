@@ -71,7 +71,7 @@ internal fun segmentEndSeekTarget(endTicks: Long?): SegmentSkipTarget =
  * travelling params — the fields all derive from the same segment state and
  * arrive from the same read.
  */
-internal class SegmentSnapshot(
+internal data class SegmentSnapshot(
     val activeType: MediaSegmentType?,
     val activeEndTicks: Long?,
     val introEndTicks: Long?,

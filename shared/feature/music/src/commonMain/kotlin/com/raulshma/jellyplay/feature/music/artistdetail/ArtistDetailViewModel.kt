@@ -1,8 +1,7 @@
 package com.raulshma.jellyplay.feature.music.artistdetail
 
 import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
-import com.raulshma.jellyplay.core.data.playback.AudioQueueOutcome
-import com.raulshma.jellyplay.core.data.playback.InstantMixOutcome
+import com.raulshma.jellyplay.core.data.playback.toInstantMixOutcome
 import com.raulshma.jellyplay.core.data.playback.InstantMixState
 import com.raulshma.jellyplay.core.data.playback.InstantMixStateHolder
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
@@ -103,12 +102,4 @@ class ArtistDetailViewModel(
     fun consumeMixEvent() {
         instantMix.consumeStartedEvent()
     }
-}
-
-/** Normalizes the jvmShared facade outcome to the holder's pure outcome shape. */
-private fun AudioQueueOutcome.toInstantMixOutcome(): InstantMixOutcome = when (this) {
-    is AudioQueueOutcome.Started -> InstantMixOutcome.Started(queue.firstOrNull()?.id)
-    AudioQueueOutcome.Empty -> InstantMixOutcome.EmptyMix
-    AudioQueueOutcome.Suppressed -> InstantMixOutcome.Suppressed
-    is AudioQueueOutcome.Failed -> InstantMixOutcome.Failed(cause)
 }

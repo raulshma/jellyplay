@@ -245,8 +245,8 @@ class MainViewModel(
         launch {
             _isRefreshingAdmin.set(true)
             try {
-                authRepository.refreshCurrentUser()
-                adminRefreshGate.onRefreshCompleted()
+                val result = authRepository.refreshCurrentUser()
+                if (result.isSuccess) adminRefreshGate.onRefreshCompleted()
             } finally {
                 _isRefreshingAdmin.set(false)
             }

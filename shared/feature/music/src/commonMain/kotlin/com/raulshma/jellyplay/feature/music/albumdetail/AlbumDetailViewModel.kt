@@ -2,8 +2,7 @@ package com.raulshma.jellyplay.feature.music.albumdetail
 
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
-import com.raulshma.jellyplay.core.data.playback.AudioQueueOutcome
-import com.raulshma.jellyplay.core.data.playback.InstantMixOutcome
+import com.raulshma.jellyplay.core.data.playback.toInstantMixOutcome
 import com.raulshma.jellyplay.core.data.playback.InstantMixState
 import com.raulshma.jellyplay.core.data.playback.InstantMixStateHolder
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
@@ -202,12 +201,4 @@ class AlbumDetailViewModel(
             }
         }
     }
-}
-
-/** Normalizes the jvmShared facade outcome to the holder's pure outcome shape. */
-private fun AudioQueueOutcome.toInstantMixOutcome(): InstantMixOutcome = when (this) {
-    is AudioQueueOutcome.Started -> InstantMixOutcome.Started(queue.firstOrNull()?.id)
-    AudioQueueOutcome.Empty -> InstantMixOutcome.EmptyMix
-    AudioQueueOutcome.Suppressed -> InstantMixOutcome.Suppressed
-    is AudioQueueOutcome.Failed -> InstantMixOutcome.Failed(cause)
 }

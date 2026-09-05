@@ -204,13 +204,7 @@ class SeerrRepositoryImpl(
                     MediaType.MOVIE -> seerrApiClient.getMovieRecommendations(url, credentials, tmdbId)
                     MediaType.SERIES -> seerrApiClient.getTvRecommendations(url, credentials, tmdbId)
                     else -> Result.failure(Exception("Unsupported media type for recommendations"))
-                }).map { response ->
-                    response.copy(
-                        results = response.results.map { item ->
-                            if (item.mediaType.isBlank()) item.copy(mediaType = typeStr) else item
-                        }
-                    )
-                }
+                }).map { response -> backfillMediaType(response, typeStr) }
             }
         }
 
@@ -222,13 +216,7 @@ class SeerrRepositoryImpl(
                     MediaType.MOVIE -> seerrApiClient.getMovieSimilar(url, credentials, tmdbId)
                     MediaType.SERIES -> seerrApiClient.getTvSimilar(url, credentials, tmdbId)
                     else -> Result.failure(Exception("Unsupported media type for similar items"))
-                }).map { response ->
-                    response.copy(
-                        results = response.results.map { item ->
-                            if (item.mediaType.isBlank()) item.copy(mediaType = typeStr) else item
-                        }
-                    )
-                }
+                }).map { response -> backfillMediaType(response, typeStr) }
             }
         }
 
@@ -316,24 +304,14 @@ class SeerrRepositoryImpl(
 
     override suspend fun getDiscoverMovies(page: Int, primaryReleaseDateGte: String?): Result<SeerrSearchResponse> =
         withSeerrSession { url, credentials ->
-            seerrApiClient.getDiscoverMovies(url, credentials, page, primaryReleaseDateGte).map { response ->
-                response.copy(
-                    results = response.results.map { item ->
-                        if (item.mediaType.isBlank()) item.copy(mediaType = "movie") else item
-                    }
-                )
-            }
+            seerrApiClient.getDiscoverMovies(url, credentials, page, primaryReleaseDateGte)
+                .map { response -> backfillMediaType(response, "movie") }
         }
 
     override suspend fun getDiscoverTv(page: Int, firstAirDateGte: String?): Result<SeerrSearchResponse> =
         withSeerrSession { url, credentials ->
-            seerrApiClient.getDiscoverTv(url, credentials, page, firstAirDateGte).map { response ->
-                response.copy(
-                    results = response.results.map { item ->
-                        if (item.mediaType.isBlank()) item.copy(mediaType = "tv") else item
-                    }
-                )
-            }
+            seerrApiClient.getDiscoverTv(url, credentials, page, firstAirDateGte)
+                .map { response -> backfillMediaType(response, "tv") }
         }
 
     override suspend fun getRequests(
@@ -465,4 +443,16 @@ class SeerrRepositoryImpl(
         pollingJob?.cancel()
         pollingJob = null
     }
+
+    /**
+     * Discover/recommendations/similar rows come back from Seerr without a
+     * mediaType; stamp the endpoint's own type onto the blank ones so callers
+     * can route by it.
+     */
+    private fun backfillMediaType(response: SeerrSearchResponse, mediaType: String): SeerrSearchResponse =
+        response.copy(
+            results = response.results.map { item ->
+                if (item.mediaType.isBlank()) item.copy(mediaType = mediaType) else item
+            },
+        )
 }

@@ -8,7 +8,7 @@ import kotlin.test.Test
 /**
  * Pins the [RequestsFilterState] write algebra — the pure transforms behind
  * every [RequestsViewModel] filter setter (and the page-1 reset they all
- * carry via [withFilters]). The setters used to hand-roll `copy(field,
+ * carry via [withFilterState]). The setters used to hand-roll `copy(field,
  * currentPage = 1)` six times over.
  */
 class RequestsFilterStateTest {
@@ -70,15 +70,47 @@ class RequestsFilterStateTest {
     }
 
     @Test
-    fun withFilters_maps_the_axes_and_resets_pagination() {
+    fun withFilterState_maps_the_axes_and_resets_pagination() {
         val uiState = RequestsUiState(currentPage = 4)
 
-        val next = uiState.withFilters { it.withSort(SeerrRequestSort.ADDED).withMediaType(null) }
+        val next = uiState.withFilterState { it.withSort(SeerrRequestSort.ADDED).withMediaType(null) }
 
         assertEquals(1, next.currentPage)
         assertEquals(SeerrRequestSort.ADDED, next.sort)
         assertEquals(null, next.mediaType)
         // Untouched axes survive the write.
         assertEquals(SeerrRequestFilter.PENDING, next.filter)
+    }
+
+    @Test
+    fun withFilterState_folds_every_filter_axis() {
+        // Every axis non-default, transform to defaults: if the fold dropped
+        // an axis from its copy, that axis would keep its non-default value
+        // and this would fail. Guards the hand-copied field list in the fold
+        // against silently lagging a new RequestsFilterState field.
+        val uiState = RequestsUiState(
+            currentPage = 4,
+            filter = SeerrRequestFilter.APPROVED,
+            mediaType = "movie",
+            sort = SeerrRequestSort.MODIFIED,
+            sortDirection = "asc",
+            showMyRequestsOnly = true,
+            searchQuery = "alien",
+        )
+
+        val next = uiState.withFilterState { it.cleared() }
+
+        assertEquals(
+            RequestsFilterState(),
+            RequestsFilterState(
+                filter = next.filter,
+                mediaType = next.mediaType,
+                sort = next.sort,
+                sortDirection = next.sortDirection,
+                showMyRequestsOnly = next.showMyRequestsOnly,
+                searchQuery = next.searchQuery,
+            ),
+        )
+        assertEquals(1, next.currentPage)
     }
 }

@@ -37,6 +37,14 @@ interface CastStrategy {
     fun setRendererVolume(volume: Float) {}
 
     /**
+     * Whether [loadMedia] hands [listener] over to a Player that fans events
+     * back out (the manager-owned CastPlayer adapter does). Renderer-protocol
+     * transports have no Player, so the manager drops its stale external
+     * listener instead of handing one over.
+     */
+    val ownsExternalListener: Boolean get() = false
+
+    /**
      * Starts playback of [mediaItem] on the connected renderer. [listener] is
      * only consumed by transports that surface Player events (the local
      * CastPlayer); renderer-protocol strategies ignore it.

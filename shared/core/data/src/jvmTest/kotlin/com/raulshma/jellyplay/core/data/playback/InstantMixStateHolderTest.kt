@@ -71,7 +71,7 @@ class InstantMixStateHolderTest {
     }
 
     @Test
-    fun start_failure_withoutCauseMessage_usesFallbackLiteral() = runTest {
+    fun start_failure_withoutCauseMessage_carriesNull() = runTest {
         val holder = InstantMixStateHolder(this) { _, _ ->
             InstantMixOutcome.Failed(RuntimeException(null as String?))
         }
@@ -79,7 +79,7 @@ class InstantMixStateHolderTest {
         holder.start("ar1", null)
         advanceUntilIdle()
 
-        assertEquals(InstantMixError.Failed("Failed to start Instant Mix"), holder.state.value.error)
+        assertEquals(InstantMixError.Failed(null), holder.state.value.error)
     }
 
     @Test
