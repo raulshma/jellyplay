@@ -21,12 +21,17 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
-import org.junit.Before
-import org.junit.Test
+import kotlin.test.BeforeTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
+/**
+ * Ported verbatim from the legacy :core:data suite (same package) so the
+ * coverage of the shared [PlaybackRepositoryImpl] survives the legacy shim's
+ * deletion — this suite is its sole behavioral coverage.
+ */
 class PlaybackRepositoryImplTest {
 
     private val apiClient: JellyfinApiClient = mockk(relaxed = true)
@@ -35,7 +40,7 @@ class PlaybackRepositoryImplTest {
 
     private lateinit var repository: PlaybackRepositoryImpl
 
-    @Before
+    @BeforeTest
     fun setup() {
         // Default to online; offline-specific tests override via every { offlineModeManager.isOffline }.
         every { offlineModeManager.isOffline } returns false
@@ -257,7 +262,7 @@ class PlaybackRepositoryImplTest {
         stubServer()
         every { apiClient.getStreamUrl("item-1", "source-1", 0L, liveStreamId = null) } returns "https://test/stream"
         coEvery {
-            apiClient.fetchPlaybackInfo(any(), any(), any(), any(), any(), any(), any(), any())
+            apiClient.fetchPlaybackInfo(any(), any(), any(), any(), any(), any(), any(), any(), any())
         } returns Result.success(
             PlaybackInfoResult(
                 playSessionId = "session-xyz",
@@ -293,7 +298,7 @@ class PlaybackRepositoryImplTest {
     fun `resolvePlayback falls back to transcode URL when only transcoding is supported`() = runTest {
         stubServer()
         coEvery {
-            apiClient.fetchPlaybackInfo(any(), any(), any(), any(), any(), any(), any(), any())
+            apiClient.fetchPlaybackInfo(any(), any(), any(), any(), any(), any(), any(), any(), any())
         } returns Result.success(
             PlaybackInfoResult(
                 playSessionId = "session-t",
@@ -331,7 +336,7 @@ class PlaybackRepositoryImplTest {
     fun `resolvePlayback returns null when server offers no playable method`() = runTest {
         stubServer()
         coEvery {
-            apiClient.fetchPlaybackInfo(any(), any(), any(), any(), any(), any(), any(), any())
+            apiClient.fetchPlaybackInfo(any(), any(), any(), any(), any(), any(), any(), any(), any())
         } returns Result.success(
             PlaybackInfoResult(
                 playSessionId = null,
@@ -358,14 +363,14 @@ class PlaybackRepositoryImplTest {
             playerType = PlayerType.EXO_PLAYER,
         )
 
-        assertEquals(null, resolved)
+        assertNull(resolved)
     }
 
     @Test
     fun `resolvePlayback returns null when PlaybackInfo fetch fails`() = runTest {
         stubServer()
         coEvery {
-            apiClient.fetchPlaybackInfo(any(), any(), any(), any(), any(), any(), any(), any())
+            apiClient.fetchPlaybackInfo(any(), any(), any(), any(), any(), any(), any(), any(), any())
         } returns Result.failure(RuntimeException("network down"))
 
         val resolved = repository.resolvePlayback(
@@ -379,7 +384,7 @@ class PlaybackRepositoryImplTest {
             playerType = PlayerType.EXO_PLAYER,
         )
 
-        assertEquals(null, resolved)
+        assertNull(resolved)
     }
 
     // ── Offline outbox ────────────────────────────────────────────────
@@ -723,4 +728,3 @@ class PlaybackRepositoryImplTest {
         coVerify(exactly = 0) { outbox.enqueueStart(any(), any(), any(), any()) }
     }
 }
-

@@ -474,10 +474,10 @@ class SeerrDetailViewModelTest {
         assertNull(viewModel.uiState.value.movieDetails?.mediaInfo)
     }
 
-    // ── clearRequestResult ─────────────────────────────────────────────
+    // ── dismissRequestDialog ─────────────────────────────────────────────
 
     @Test
-    fun `clearRequestResult nulls the result`() = runTest(mainDispatcher) {
+    fun `dismissRequestDialog nulls the result and closes the dialog`() = runTest(mainDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         backgroundScope.launch { viewModel.seerrSnapshot.collect { /* warm */ } }
         coEvery { seerrRepository.getMovieDetails(123) } returns Result.success(
@@ -496,47 +496,51 @@ class SeerrDetailViewModelTest {
         advanceUntilIdle()
         assertNotNull(viewModel.seerrSnapshot.value.requestResult)
 
-        viewModel.clearRequestResult()
+        viewModel.dismissRequestDialog()
         advanceUntilIdle()
 
         assertNull(viewModel.seerrSnapshot.value.requestResult)
+        assertNull(viewModel.seerrSnapshot.value.dialogItem)
     }
 
-    // ── loadServiceDetails (delegates to holder) ───────────────────────
+    // ── openRequestDialog (delegates to holder, cascade included) ───────────────────────
 
     @Test
-    fun `loadServiceDetails folds sonarr servers into exposed state`() = runTest(mainDispatcher) {
+    fun `openRequestDialog for tv folds sonarr servers and opens the dialog`() = runTest(mainDispatcher) {
         backgroundScope.launch { viewModel.seerrSnapshot.collect { /* warm */ } }
         val sonarr = com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail(id = 1, name = "Sonarr")
         coEvery { seerrRequestDelegate.fetchServiceDetails("tv") } returns com.raulshma.jellyplay.core.data.seerr.SeerrServiceDetailsResult(
             sonarrServers = listOf(sonarr),
         )
+        coEvery { seerrRequestDelegate.fetchTvDetails(any()) } returns null
 
-        viewModel.loadServiceDetails("tv")
+        viewModel.openRequestDialog(SeerrSearchItem(id = 5, mediaType = "tv"))
         advanceUntilIdle()
 
         assertEquals(listOf(sonarr), viewModel.seerrSnapshot.value.sonarrServers)
         assertFalse(viewModel.seerrSnapshot.value.isLoadingServices)
+        assertNotNull(viewModel.seerrSnapshot.value.dialogItem)
     }
 
     @Test
-    fun `loadServiceDetails folds radarr servers into exposed state`() = runTest(mainDispatcher) {
+    fun `openRequestDialog for movie folds radarr servers and opens the dialog`() = runTest(mainDispatcher) {
         backgroundScope.launch { viewModel.seerrSnapshot.collect { /* warm */ } }
         val radarr = com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail(id = 2, name = "Radarr")
         coEvery { seerrRequestDelegate.fetchServiceDetails("movie") } returns com.raulshma.jellyplay.core.data.seerr.SeerrServiceDetailsResult(
             radarrServers = listOf(radarr),
         )
 
-        viewModel.loadServiceDetails("movie")
+        viewModel.openRequestDialog(SeerrSearchItem(id = 6, mediaType = "movie"))
         advanceUntilIdle()
 
         assertEquals(listOf(radarr), viewModel.seerrSnapshot.value.radarrServers)
+        assertNotNull(viewModel.seerrSnapshot.value.dialogItem)
     }
 
-    // ── loadTvSeasons (delegates to holder) ────────────────────────────
+    // ── openRequestDialog tv seasons (cascade) ────────────────────────────
 
     @Test
-    fun `loadTvSeasons populates tvSeasons filtering specials`() = runTest(mainDispatcher) {
+    fun `openRequestDialog for tv populates tvSeasons filtering specials`() = runTest(mainDispatcher) {
         backgroundScope.launch { viewModel.seerrSnapshot.collect { /* warm */ } }
         coEvery { seerrRequestDelegate.fetchTvDetails(123) } returns com.raulshma.jellyplay.core.model.seerr.SeerrTvDetails(
             seasons = listOf(
@@ -545,7 +549,7 @@ class SeerrDetailViewModelTest {
             ),
         )
 
-        viewModel.loadTvSeasons(123)
+        viewModel.openRequestDialog(SeerrSearchItem(id = 123, mediaType = "tv"))
         advanceUntilIdle()
 
         assertEquals(listOf(1), viewModel.seerrSnapshot.value.tvSeasons.map { it.seasonNumber })

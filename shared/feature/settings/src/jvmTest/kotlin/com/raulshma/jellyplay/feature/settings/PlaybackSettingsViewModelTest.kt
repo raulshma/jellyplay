@@ -43,12 +43,12 @@ import kotlin.test.assertSame
  * Pins the Playback settings preference-mirror wiring: the screen's state is
  * the [PreferenceProjections.playbackPreferences] slice (LibraryLayout
  * jvmTest pattern — mockk stores, real [MutableStateFlow] stubs, inlined
- * Main-dispatcher rule), named editor setters route to [PreferencesEditor],
- * and lambda-routed setters persist through the owning store inside
- * `editor.edit { }`. Because a relaxed editor mock records but never runs the
- * edit block, each routed test captures the block and replays it against a
- * stub [PreferencesEditScope] to verify the store call — the toggle/coerce
- * POLICY stays in the store (pinned there), here we pin only the routing.
+ * Main-dispatcher rule), and every setter persists through the owning store
+ * inside the VM's `edit { }` command. Because a relaxed editor mock records
+ * but never runs the edit block, each routed test captures the block and
+ * replays it against a stub [PreferencesEditScope] to verify the store call —
+ * the toggle/coerce POLICY stays in the store (pinned there), here we pin
+ * only the routing.
  *
  * Later top-up round: also pins the cross-slice routing — engine configs land
  * on the engine store, `setAudioDelayMs` on the AUDIO store, sync-play/casting
@@ -126,13 +126,14 @@ class PlaybackSettingsViewModelTest {
     }
 
     @Test
-    fun `gesture toggle delegates to the editor named setter`() = runTest {
+    fun `gesture toggle persists through the videoPlayer store`() = runTest {
         val viewModel = viewModel()
 
-        viewModel.setVideoGesturesEnabled(false)
+        viewModel.edit { it.videoPlayer.setVideoGesturesEnabled(false) }
         advanceUntilIdle()
+        replayAllEdits()
 
-        verify(exactly = 1) { editor.setVideoGesturesEnabled(false) }
+        coVerify(exactly = 1) { videoPlayerStore.setVideoGesturesEnabled(false) }
     }
 
     @Test
@@ -140,7 +141,7 @@ class PlaybackSettingsViewModelTest {
         val viewModel = viewModel()
         val edit = captureEdit()
 
-        viewModel.setTrickplayEnabled(true)
+        viewModel.edit { it.videoPlayer.setTrickplayEnabled(true) }
         advanceUntilIdle()
         edit.captured.invoke(editScope)
 
@@ -182,9 +183,9 @@ class PlaybackSettingsViewModelTest {
     fun `engine-config setters persist through the engine store`() = runTest {
         val viewModel = viewModel()
 
-        viewModel.setMpvConfig(MpvEngineConfig())
-        viewModel.setLibVlcConfig(LibVlcEngineConfig())
-        viewModel.setExoPlayerConfig(ExoPlayerEngineConfig())
+        viewModel.edit { it.engine.setMpvConfig(MpvEngineConfig()) }
+        viewModel.edit { it.engine.setLibVlcConfig(LibVlcEngineConfig()) }
+        viewModel.edit { it.engine.setExoPlayerConfig(ExoPlayerEngineConfig()) }
         advanceUntilIdle()
         replayAllEdits()
 
@@ -197,7 +198,7 @@ class PlaybackSettingsViewModelTest {
     fun `audio-delay persists through the AUDIO store, not videoPlayer`() = runTest {
         val viewModel = viewModel()
 
-        viewModel.setAudioDelayMs(250L)
+        viewModel.edit { it.audio.setAudioDelay(250L) }
         advanceUntilIdle()
         replayAllEdits()
 
@@ -208,10 +209,10 @@ class PlaybackSettingsViewModelTest {
     fun `sync-play and casting setters persist through the syncPlayCast store`() = runTest {
         val viewModel = viewModel()
 
-        viewModel.setSyncPlayToleranceMs(5_000L)
-        viewModel.setBackgroundCastingEnabled(true)
-        viewModel.setPreferredRenderer(null)
-        viewModel.setDefaultCastingStrategy(CastingStrategy.PREFER_DLNA)
+        viewModel.edit { it.syncPlayCast.setSyncPlayToleranceMs(5_000L) }
+        viewModel.edit { it.syncPlayCast.setBackgroundCastingEnabled(true) }
+        viewModel.edit { it.syncPlayCast.setPreferredRenderer(null) }
+        viewModel.edit { it.syncPlayCast.setDefaultCastingStrategy(CastingStrategy.PREFER_DLNA) }
         advanceUntilIdle()
         replayAllEdits()
 
@@ -225,7 +226,7 @@ class PlaybackSettingsViewModelTest {
     fun `segment behavior persists through the videoPlayer store`() = runTest {
         val viewModel = viewModel()
 
-        viewModel.setSegmentBehavior(MediaSegmentType.INTRO, SegmentBehavior.AUTO_SKIP)
+        viewModel.edit { it.videoPlayer.setSegmentBehavior(MediaSegmentType.INTRO, SegmentBehavior.AUTO_SKIP) }
         advanceUntilIdle()
         replayAllEdits()
 

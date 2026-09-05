@@ -43,7 +43,7 @@ class NowPlayingWidgetUpdater (
     // Read/written from both the metadata and position collectors, which run
     // as separate coroutines on the Dispatchers.Default pool — volatile so a
     // position-tick thread always sees the metadata push that just landed.
-    // Compared via [sameRenderAs], never structural equals (see below).
+    // Compared via [sameRenderAs], never structural equals (WidgetPushSnapshot.kt).
     @Volatile private var lastPushedRender: WidgetPushSnapshot? = null
 
     fun start() {
@@ -150,18 +150,12 @@ class NowPlayingWidgetUpdater (
     private fun pushPositionUpdate() {
         // Position-only path: sends a partial RemoteViews (position label +
         // progress bar) instead of re-parceling the artwork bitmap and
-        // re-wiring click intents at 1 Hz.
+        // re-wiring click intents at 1 Hz. [shouldPushPartialPosition] holds
+        // the partial-vs-full race guard: defer to the metadata collector's
+        // full push whenever the partial couldn't re-render what moved, and
+        // suppress redundant pushes by render equality.
         val snapshot = readPushSnapshot()
-        val last = lastPushedRender
-        // The partial RemoteViews cannot re-render title/subtitle/artwork/
-        // empty-state — if any of those moved, defer to the metadata
-        // collector's full push instead of ticking the progress bar under
-        // stale metadata (the ticker can win the race while that collector
-        // is still loading the new artwork).
-        if (last?.sameNonPositionRenderAs(snapshot) != true) return
-        // Otherwise guarded by render equality so no redundant partial push
-        // crosses the binder.
-        if (last.sameRenderAs(snapshot)) return
+        if (!shouldPushPartialPosition(lastPushedRender, snapshot)) return
         lastPushedRender = snapshot
 
         NowPlayingWidget.updateAllWidgetsPosition(
@@ -206,42 +200,6 @@ class NowPlayingWidgetUpdater (
             isEmptyState = snapshot.isEmptyState,
         )
     }
-
-    /**
-     * Equality key for the last pushed widget render — see [pushPositionUpdate].
-     * Position and duration are bucketed to whole seconds because the partial
-     * push ticks at 1 Hz anyway.
-     */
-    private fun WidgetPushSnapshot.sameRenderAs(other: WidgetPushSnapshot): Boolean =
-        title == other.title &&
-            subtitle == other.subtitle &&
-            isPlaying == other.isPlaying &&
-            positionMs / 1_000L == other.positionMs / 1_000L &&
-            durationMs / 1_000L == other.durationMs / 1_000L &&
-            artUrl == other.artUrl &&
-            isEmptyState == other.isEmptyState
-
-    /**
-     * Equality on everything the position-only partial push cannot render.
-     * [isPlaying] stays out of it: the partial push renders it into the
-     * position label ("Paused ·"), and the transport icon correction rides
-     * the metadata collector's full push.
-     */
-    private fun WidgetPushSnapshot.sameNonPositionRenderAs(other: WidgetPushSnapshot): Boolean =
-        title == other.title &&
-            subtitle == other.subtitle &&
-            artUrl == other.artUrl &&
-            isEmptyState == other.isEmptyState
-
-    private data class WidgetPushSnapshot(
-        val title: String,
-        val subtitle: String?,
-        val isPlaying: Boolean,
-        val positionMs: Long,
-        val durationMs: Long,
-        val artUrl: String?,
-        val isEmptyState: Boolean,
-    )
 
     private data class MetadataSnapshot(
         val itemId: String?,

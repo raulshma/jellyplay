@@ -538,7 +538,7 @@ class SearchViewModelTest {
     }
 
     @Test
-    fun `clearRequestResult nulls the exposed result`() = runTest(mainDispatcher) {
+    fun `dismissSeerrRequestDialog nulls the exposed result and closes the dialog`() = runTest(mainDispatcher) {
         coEvery {
             seerrRequestDelegate.requestMedia(
                 mediaType = any(), tmdbId = any(), seasons = any(),
@@ -550,43 +550,47 @@ class SearchViewModelTest {
         advanceUntilIdle()
         assertNotNull(viewModel.seerrSnapshot.value.requestResult)
 
-        viewModel.clearRequestResult()
+        viewModel.dismissSeerrRequestDialog()
         advanceUntilIdle()
 
         assertNull(viewModel.seerrSnapshot.value.requestResult)
+        assertNull(viewModel.seerrSnapshot.value.dialogItem)
     }
 
     @Test
-    fun `loadSeerrServiceDetails folds sonarr servers for tv`() = runTest(mainDispatcher) {
+    fun `openSeerrRequestDialog for tv folds sonarr servers and opens the dialog`() = runTest(mainDispatcher) {
         val sonarr = SeerrSonarrServiceDetail(id = 1, name = "Sonarr")
         coEvery { seerrRequestDelegate.fetchServiceDetails("tv") } returns SeerrServiceDetailsResult(
             sonarrServers = listOf(sonarr),
         )
         backgroundScope.launch { viewModel.seerrSnapshot.collect { } }
 
-        viewModel.loadSeerrServiceDetails("tv")
+        coEvery { seerrRequestDelegate.fetchTvDetails(any()) } returns null
+        viewModel.openSeerrRequestDialog(SeerrSearchItem(id = 5, mediaType = "tv"))
         advanceUntilIdle()
 
         assertEquals(listOf(sonarr), viewModel.seerrSnapshot.value.sonarrServers)
         assertFalse(viewModel.seerrSnapshot.value.isLoadingServices)
+        assertNotNull(viewModel.seerrSnapshot.value.dialogItem)
     }
 
     @Test
-    fun `loadSeerrServiceDetails folds radarr servers for movie`() = runTest(mainDispatcher) {
+    fun `openSeerrRequestDialog for movie folds radarr servers and opens the dialog`() = runTest(mainDispatcher) {
         val radarr = SeerrRadarrServiceDetail(id = 2, name = "Radarr")
         coEvery { seerrRequestDelegate.fetchServiceDetails("movie") } returns SeerrServiceDetailsResult(
             radarrServers = listOf(radarr),
         )
         backgroundScope.launch { viewModel.seerrSnapshot.collect { } }
 
-        viewModel.loadSeerrServiceDetails("movie")
+        viewModel.openSeerrRequestDialog(SeerrSearchItem(id = 6, mediaType = "movie"))
         advanceUntilIdle()
 
         assertEquals(listOf(radarr), viewModel.seerrSnapshot.value.radarrServers)
+        assertNotNull(viewModel.seerrSnapshot.value.dialogItem)
     }
 
     @Test
-    fun `loadTvSeasons populates tvSeasons from delegate`() = runTest(mainDispatcher) {
+    fun `openSeerrRequestDialog for tv populates tvSeasons from delegate`() = runTest(mainDispatcher) {
         val tvDetails = SeerrTvDetails(
             id = 123,
             seasons = listOf(SeerrSeason(seasonNumber = 1, name = "Season 1")),
@@ -594,15 +598,16 @@ class SearchViewModelTest {
         coEvery { seerrRequestDelegate.fetchTvDetails(123) } returns tvDetails
         backgroundScope.launch { viewModel.seerrSnapshot.collect { } }
 
-        viewModel.loadTvSeasons(123)
+        viewModel.openSeerrRequestDialog(SeerrSearchItem(id = 123, mediaType = "tv"))
         advanceUntilIdle()
 
         assertEquals(listOf(SeerrSeason(seasonNumber = 1, name = "Season 1")), viewModel.seerrSnapshot.value.tvSeasons)
+        assertNotNull(viewModel.seerrSnapshot.value.dialogItem)
         assertEquals(false, viewModel.seerrSnapshot.value.tvIsAnime)
     }
 
     @Test
-    fun `loadTvSeasons flags anime shows via tmdb keyword`() = runTest(mainDispatcher) {
+    fun `openSeerrRequestDialog for tv flags anime shows via tmdb keyword`() = runTest(mainDispatcher) {
         val tvDetails = SeerrTvDetails(
             id = 123,
             seasons = listOf(SeerrSeason(seasonNumber = 1, name = "Season 1")),
@@ -611,7 +616,7 @@ class SearchViewModelTest {
         coEvery { seerrRequestDelegate.fetchTvDetails(123) } returns tvDetails
         backgroundScope.launch { viewModel.seerrSnapshot.collect { } }
 
-        viewModel.loadTvSeasons(123)
+        viewModel.openSeerrRequestDialog(SeerrSearchItem(id = 123, mediaType = "tv"))
         advanceUntilIdle()
 
         assertEquals(true, viewModel.seerrSnapshot.value.tvIsAnime)

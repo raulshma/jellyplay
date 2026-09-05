@@ -18,12 +18,14 @@ import com.raulshma.jellyplay.core.model.OfflinePersonInfo
 import com.raulshma.jellyplay.core.model.OfflineSubtitleEntry
 import com.raulshma.jellyplay.core.model.OfflineSubtitleManifest
 import com.raulshma.jellyplay.core.model.StreamType
+import com.raulshma.jellyplay.core.model.StudioInfo
 import com.raulshma.jellyplay.core.network.api.ApiException
 import io.mockk.clearMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
@@ -31,25 +33,29 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
-import org.junit.Test
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 /**
  * Source-policy + reactivity tests for [UnifiedMediaDetailProviderImpl], driven
  * through the [MediaDetailProvider] seam with fake/mock dependencies. Pins the
  * remote/local/offline source-policy matrix.
+ *
+ * Ported verbatim from the legacy :core:data suite (same package) so the
+ * coverage of the shared provider survives the legacy shim's deletion — this
+ * suite is its sole behavioral coverage.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class UnifiedMediaDetailProviderImplTest {
 
-    private val mediaRepository: com.raulshma.jellyplay.core.data.repository.MediaRepository = mockk(relaxed = true)
-    private val cacheInvalidation: com.raulshma.jellyplay.core.data.repository.MediaRepositoryCacheInvalidation =
-        mockk(relaxed = true)
-    private val offlineRepository: com.raulshma.jellyplay.core.data.repository.OfflineRepository = mockk(relaxed = true)
-    private val downloadRepository: com.raulshma.jellyplay.core.data.repository.DownloadRepository = mockk(relaxed = true)
+    private val mediaRepository: MediaRepository = mockk(relaxed = true)
+    private val cacheInvalidation: MediaRepositoryCacheInvalidation = mockk(relaxed = true)
+    private val offlineRepository: OfflineRepository = mockk(relaxed = true)
+    private val downloadRepository: DownloadRepository = mockk(relaxed = true)
     private val episodeCatalogue: EpisodeCatalogue = mockk(relaxed = true)
     private val playbackSourceResolver: PlaybackSourceResolver = mockk(relaxed = true)
     private val offlineModeManager: OfflineModeManager = mockk()
@@ -587,7 +593,7 @@ class UnifiedMediaDetailProviderImplTest {
 
         assertTrue(returned.isEmpty())
         val after = states.filterIsInstance<DetailLoadState.Loaded>().last()
-        assertTrue("season2 must be marked as fetched", after.snapshot.fetchedSeasonIds.contains("season2"))
+        assertTrue(after.snapshot.fetchedSeasonIds.contains("season2"), "season2 must be marked as fetched")
         assertEquals(emptyList<MediaItem>(), after.snapshot.episodesBySeason["season2"])
         job.cancel()
     }
@@ -827,7 +833,7 @@ class UnifiedMediaDetailProviderImplTest {
     fun `remote detail with studios advertises studio navigation`() = runTest {
         wireStubs("m1", mode = OfflineMode.ONLINE)
         val withStudios = movieDetail().copy(
-            studios = listOf(com.raulshma.jellyplay.core.model.StudioInfo(name = "Studio A", id = "st-1")),
+            studios = listOf(StudioInfo(name = "Studio A", id = "st-1")),
         )
         coEvery { mediaRepository.getMediaDetail("m1", any()) } returns Result.success(withStudios)
 

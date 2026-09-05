@@ -658,7 +658,6 @@ class DetailViewModel internal constructor(
                 // Smart-play is recomputed below; cleared first so a stale target
                 // from the previous item never survives a resolution change.
                 smartPlayTarget = null,
-                contentGeneration = snapshot.contentGeneration,
                 loadState = DetailUiLoadState.Loaded,
             )
         }

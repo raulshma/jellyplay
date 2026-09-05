@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.onboarding
 
 import androidx.compose.runtime.Immutable
+import com.raulshma.jellyplay.core.datastore.PreferencesEditScope
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
 import com.raulshma.jellyplay.core.datastore.SeerrSecureCredentialsStore
@@ -51,34 +52,13 @@ class OnboardingViewModel(
         editor.edit { appRuntimeState.setOnboardingCompleted(true) }
     }
 
-    fun setThemeMode(mode: com.raulshma.jellyplay.core.model.ThemeMode) = editor.setThemeMode(mode)
-    fun setDynamicTheming(enabled: Boolean) = editor.setDynamicTheming(enabled)
-    fun setOledMode(enabled: Boolean) = editor.setOledMode(enabled)
-    fun setContrastLevel(level: com.raulshma.jellyplay.core.model.ContrastLevel) = editor.setContrastLevel(level)
-    fun setAccentColorSwatch(swatch: String) = editor.setAccentColorSwatch(swatch)
-    fun setColorStyle(style: com.raulshma.jellyplay.core.model.ColorStyle) = editor.setColorStyle(style)
-    fun setPerformanceMode(enabled: Boolean) = editor.setPerformanceMode(enabled)
-    fun setHomeHeroEnabled(enabled: Boolean) = editor.setHomeHeroEnabled(enabled)
-    fun setHomeMode(mode: com.raulshma.jellyplay.core.model.HomeMode) = editor.setHomeMode(mode)
-    fun setEnabledHomeSectionTypes(types: Set<com.raulshma.jellyplay.core.model.HomeSectionType>) = editor.setEnabledHomeSectionTypes(types)
-    fun setNavBarShowLabels(show: Boolean) = editor.setNavBarShowLabels(show)
-    fun setPreferredPlayer(playerType: com.raulshma.jellyplay.core.model.PlayerType) = editor.setPreferredPlayer(playerType)
-    fun setStreamingQuality(quality: com.raulshma.jellyplay.core.model.StreamingQuality) = editor.setStreamingQuality(quality)
-    fun setVideoSeekDurationMs(ms: Long) = editor.setVideoSeekDurationMs(ms)
-    fun setVideoGesturesEnabled(enabled: Boolean) = editor.setVideoGesturesEnabled(enabled)
-    fun setVideoDefaultOrientation(mode: com.raulshma.jellyplay.core.model.OrientationMode) = editor.setVideoDefaultOrientation(mode)
-    fun setVideoAutoplayNext(enabled: Boolean) = editor.setVideoAutoplayNext(enabled)
-    fun setAudioDefaultSpeed(speed: Float) = editor.setAudioDefaultSpeed(speed)
-    fun setGaplessEnabled(enabled: Boolean) = editor.setGaplessEnabled(enabled)
-    fun setCrossfadeDurationMs(ms: Long) = editor.setCrossfadeDurationMs(ms)
-    fun setAudioNormalizationEnabled(enabled: Boolean) = editor.setAudioNormalizationEnabled(enabled)
-    fun setAudioAutoplayNext(enabled: Boolean) = editor.setAudioAutoplayNext(enabled)
-    fun setSubtitleStyle(style: com.raulshma.jellyplay.core.model.SubtitleStyle) = editor.setSubtitleStyle(style)
-    fun setPreferredSubtitleLanguage(language: String?) = editor.setPreferredSubtitleLanguage(language)
-    fun setPinLockEnabled(enabled: Boolean) = editor.setPinLockEnabled(enabled)
-    fun setPinHash(hash: String?) = editor.setPinHash(hash)
-    fun setBiometricLockEnabled(enabled: Boolean) = editor.setBiometricLockEnabled(enabled)
-    fun setAutoLockTimerMs(ms: Long) = editor.setAutoLockTimerMs(ms)
+    /**
+     * Single write command for the wizard's preference steps:
+     * `edit { it.appearance.setThemeMode(mode) }`. Fire-and-forget on the same
+     * application scope [PreferencesEditor.edit] uses.
+     */
+    fun edit(transform: suspend (PreferencesEditScope) -> Unit) = editor.edit { transform(this) }
+
     fun hashPin(pin: String): String = editor.hashPin(pin)
 
     fun setSeerrServerUrl(url: String) {

@@ -21,15 +21,28 @@ import kotlinx.coroutines.CancellationException
  * group is conditionally hidden (so a hidden advanced group doesn't shift the
  * target by one).
  */
+/**
+ * Pure resolver behind [rememberHighlightScrollIndex]: the group index whose
+ * settings ids contain [highlightSettingId], offset through
+ * [adjustForAdvanced]; `-1` when the id is null or matches no group.
+ */
+internal fun resolveHighlightScrollIndex(
+    highlightSettingId: String?,
+    groupSettingIds: List<Set<String>>,
+    adjustForAdvanced: (groupIndex: Int) -> Int = { it },
+): Int {
+    if (highlightSettingId == null) return -1
+    val raw = groupSettingIds.indexOfFirst { highlightSettingId in it }
+    return if (raw < 0) -1 else adjustForAdvanced(raw)
+}
+
 @Composable
 fun rememberHighlightScrollIndex(
     highlightSettingId: String?,
     groupSettingIds: List<Set<String>>,
     adjustForAdvanced: (groupIndex: Int) -> Int = { it },
 ): Int = remember(highlightSettingId, groupSettingIds, adjustForAdvanced) {
-    if (highlightSettingId == null) return@remember -1
-    val raw = groupSettingIds.indexOfFirst { highlightSettingId in it }
-    if (raw < 0) -1 else adjustForAdvanced(raw)
+    resolveHighlightScrollIndex(highlightSettingId, groupSettingIds, adjustForAdvanced)
 }
 
 /**

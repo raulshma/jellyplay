@@ -15,7 +15,7 @@ import kotlin.test.assertTrue
  *  - [DetailUiState] defaults to an unloaded, capability-less state: no
  *    detail, [DetailUiLoadState.Loaded] (matching the former all-false
  *    default), all-false [DetailUiState.DefaultCapabilities], empty content
- *    collections, generation 0, canManageSeries false.
+ *    collections.
  *  - [DetailUiState.SmartPlayTarget.isNextUpOrResume] is true for an explicit
  *    RESUME/NEXT_UP label OR a started-but-unplayed episode, and false for a
  *    plain play target, a replay, and any played episode — the predicate that
@@ -70,8 +70,6 @@ class DetailUiStateTest {
         assertEquals(0, state.relatedItems.size)
         assertEquals(0, state.specialFeatures.size)
         assertEquals(0, state.localRelatedItems.size)
-        assertEquals(0L, state.contentGeneration)
-        assertFalse(state.canManageSeries)
         assertFalse(state.sonarrServersResolved)
         assertFalse(state.hasIntroSegment)
         assertFalse(state.hasCreditSegment)

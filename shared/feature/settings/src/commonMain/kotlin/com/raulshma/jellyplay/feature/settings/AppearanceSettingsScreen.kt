@@ -488,7 +488,7 @@ fun AppearanceSettingsScreen(
                                                 items = ThemeMode.entries,
                                                 label = { themeLabels[it] ?: it.name },
                                                 isSelected = { it == preferences.themeMode },
-                                                onSelect = { viewModel.setThemeMode(it) },
+                                                onSelect = { viewModel.edit { scope -> scope.appearance.setThemeMode(it) } },
                                             )
                                         }
                                     },
@@ -509,7 +509,7 @@ fun AppearanceSettingsScreen(
                                             items = ThemeVariant.entries,
                                             label = { it.displayName },
                                             isSelected = { it == ThemeVariant.fromId(preferences.themeVariant) },
-                                            onSelect = { viewModel.setThemeVariant(it.name.lowercase()) },
+                                            onSelect = { viewModel.edit { scope -> scope.appearance.setThemeVariant(it.name.lowercase()) } },
                                         )
                                     },
                                 )
@@ -522,7 +522,7 @@ fun AppearanceSettingsScreen(
                                     isDark = effectiveDarkForSwatches,
                                     selectedAccent = accentIdFor(styleVariant, preferences) ?: "",
                                     onAccentSelected = { accent ->
-                                        viewModel.setVariantAccent(preferences.themeVariant, accent)
+                                        viewModel.edit { it.appearance.setVariantAccent(preferences.themeVariant, accent) }
                                     },
                                 )
                             }
@@ -530,14 +530,14 @@ fun AppearanceSettingsScreen(
                                 ConsumeSettingsItemIndex()
                                 com.raulshma.jellyplay.core.ui.components.AccentColorPicker(
                                     selectedSwatch = preferences.accentColorSwatch,
-                                    onSwatchSelected = { viewModel.setAccentColorSwatch(it) },
+                                    onSwatchSelected = { viewModel.edit { scope -> scope.appearance.setAccentColorSwatch(it) } },
                                 )
                             }
                             "color_style" -> {
                                 ConsumeSettingsItemIndex()
                                 com.raulshma.jellyplay.core.ui.components.ColorStylePicker(
                                     selectedStyle = preferences.colorStyle,
-                                    onStyleSelected = { viewModel.setColorStyle(it) },
+                                    onStyleSelected = { viewModel.edit { scope -> scope.appearance.setColorStyle(it) } },
                                 )
                             }
                             "dynamic_theming" -> {
@@ -547,7 +547,7 @@ fun AppearanceSettingsScreen(
                                     subtitle = stringResource(Res.string.settings_dynamic_theming_subtitle),
                                     checked = preferences.dynamicTheming,
                                     highlighted = highlightSettingId == "dynamic_theming",
-                                    onCheckedChange = { viewModel.setDynamicTheming(it) },
+                                    onCheckedChange = { viewModel.edit { scope -> scope.appearance.setDynamicTheming(it) } },
                                 )
                             }
                             "oled_mode" -> {
@@ -557,7 +557,7 @@ fun AppearanceSettingsScreen(
                                     subtitle = stringResource(Res.string.settings_oled_mode_subtitle),
                                     checked = preferences.oledMode,
                                     highlighted = highlightSettingId == "oled_mode",
-                                    onCheckedChange = { viewModel.setOledMode(it) },
+                                    onCheckedChange = { viewModel.edit { scope -> scope.appearance.setOledMode(it) } },
                                 )
                             }
                             "contrast" -> {
@@ -577,7 +577,7 @@ fun AppearanceSettingsScreen(
                                             ContrastLevel.MEDIUM -> ContrastLevel.HIGH
                                             ContrastLevel.HIGH -> ContrastLevel.DEFAULT
                                         }
-                                        viewModel.setContrastLevel(next)
+                                        viewModel.edit { it.appearance.setContrastLevel(next) }
                                     },
                                 )
                             }
@@ -594,7 +594,7 @@ fun AppearanceSettingsScreen(
                                     trailingText = preferences.libraryViewMode.name,
                                     highlighted = highlightSettingId == "library_view_mode",
                                     onClick = {
-                                        viewModel.setLibraryViewMode(preferences.libraryViewMode.next)
+                                        viewModel.edit { it.library.setLibraryViewMode(preferences.libraryViewMode.next) }
                                     },
                                 )
                             }
@@ -607,7 +607,7 @@ fun AppearanceSettingsScreen(
                                     highlighted = highlightSettingId == "home_mode",
                                     onClick = {
                                         val next = if (preferences.homeMode == HomeMode.VIDEO) HomeMode.MUSIC else HomeMode.VIDEO
-                                        viewModel.setHomeMode(next)
+                                        viewModel.edit { it.homeDiscovery.setHomeMode(next) }
                                     },
                                 )
                             }
@@ -618,7 +618,7 @@ fun AppearanceSettingsScreen(
                                     subtitle = if (preferences.homeHeroEnabled) stringResource(Res.string.settings_show_hero_on) else stringResource(Res.string.settings_show_hero_off),
                                     checked = preferences.homeHeroEnabled,
                                     highlighted = highlightSettingId == "hero_section",
-                                    onCheckedChange = { viewModel.setHomeHeroEnabled(it) },
+                                    onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setHomeHeroEnabled(it) } },
                                 )
                             }
                             "home_backdrop" -> {
@@ -628,7 +628,7 @@ fun AppearanceSettingsScreen(
                                     subtitle = if (preferences.homeBackdropEnabled) stringResource(Res.string.settings_home_backdrop_on) else stringResource(Res.string.settings_home_backdrop_off),
                                     checked = preferences.homeBackdropEnabled,
                                     highlighted = highlightSettingId == "home_backdrop",
-                                    onCheckedChange = { viewModel.setHomeBackdropEnabled(it) },
+                                    onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setHomeBackdropEnabled(it) } },
                                 )
                             }
                             "clock_home" -> {
@@ -638,7 +638,7 @@ fun AppearanceSettingsScreen(
                                     subtitle = if (preferences.showClockOnHome) stringResource(Res.string.settings_show_clock_on) else stringResource(Res.string.settings_show_clock_off),
                                     checked = preferences.showClockOnHome,
                                     highlighted = highlightSettingId == "clock_home",
-                                    onCheckedChange = { viewModel.setShowClockOnHome(it) },
+                                    onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setShowClockOnHome(it) } },
                                 )
                             }
                             "hide_top_header" -> {
@@ -648,7 +648,7 @@ fun AppearanceSettingsScreen(
                                     subtitle = if (preferences.hideTopHeaderOnScroll) stringResource(Res.string.settings_hide_top_header_on_scroll_on) else stringResource(Res.string.settings_hide_top_header_on_scroll_off),
                                     checked = preferences.hideTopHeaderOnScroll,
                                     highlighted = highlightSettingId == "hide_top_header",
-                                    onCheckedChange = { viewModel.setHideTopHeaderOnScroll(it) },
+                                    onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setHideTopHeaderOnScroll(it) } },
                                 )
                             }
                             "settings_in_home_search" -> {
@@ -658,7 +658,7 @@ fun AppearanceSettingsScreen(
                                     subtitle = if (preferences.showSettingsInHomeSearch) stringResource(Res.string.settings_show_settings_in_home_search_on) else stringResource(Res.string.settings_show_settings_in_home_search_off),
                                     checked = preferences.showSettingsInHomeSearch,
                                     highlighted = highlightSettingId == "settings_in_home_search",
-                                    onCheckedChange = { viewModel.setShowSettingsInHomeSearch(it) },
+                                    onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setShowSettingsInHomeSearch(it) } },
                                 )
                             }
                             "continue_watching_click" -> {
@@ -675,7 +675,7 @@ fun AppearanceSettingsScreen(
                                             items = com.raulshma.jellyplay.core.model.ContinueWatchingClickBehavior.entries,
                                             label = { it.displayName },
                                             isSelected = { it == preferences.continueWatchingClickBehavior },
-                                            onSelect = { viewModel.setContinueWatchingClickBehavior(it) },
+                                            onSelect = { viewModel.edit { scope -> scope.homeDiscovery.setContinueWatchingClickBehavior(it) } },
                                         )
                                     },
                                 )
@@ -686,7 +686,7 @@ fun AppearanceSettingsScreen(
                                     title = stringResource(Res.string.settings_unhide_continue_watching),
                                     subtitle = stringResource(Res.string.settings_unhide_continue_watching_subtitle, preferences.hiddenCwItemIds.size),
                                     highlighted = highlightSettingId == "unhide_cw",
-                                    onClick = { viewModel.unhideAllCwItems() },
+                                    onClick = { viewModel.edit { it.homeDiscovery.unhideAllCwItems() } },
                                 )
                             }
                             "merge_continue_next_up" -> {
@@ -696,7 +696,7 @@ fun AppearanceSettingsScreen(
                                     subtitle = if (preferences.mergeContinueWatchingAndNextUp) stringResource(Res.string.settings_merge_continue_next_up_on) else stringResource(Res.string.settings_merge_continue_next_up_off),
                                     checked = preferences.mergeContinueWatchingAndNextUp,
                                     highlighted = highlightSettingId == "merge_continue_next_up",
-                                    onCheckedChange = { viewModel.setMergeContinueWatchingAndNextUp(it) },
+                                    onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setMergeContinueWatchingAndNextUp(it) } },
                                 )
                             }
                             "next_up_max_days" -> {
@@ -723,7 +723,7 @@ fun AppearanceSettingsScreen(
                                             items = listOf(0, 7, 14, 30, 60, 90),
                                             label = { dayLabels[it] ?: xDaysFormat.format(it) },
                                             isSelected = { it == preferences.nextUpMaxDays },
-                                            onSelect = { viewModel.setNextUpMaxDays(it) },
+                                            onSelect = { viewModel.edit { scope -> scope.homeDiscovery.setNextUpMaxDays(it) } },
                                         )
                                     },
                                 )
@@ -735,7 +735,7 @@ fun AppearanceSettingsScreen(
                                     subtitle = if (preferences.nextUpRewatching) stringResource(Res.string.settings_rewatching_next_up_on) else stringResource(Res.string.settings_rewatching_next_up_off),
                                     checked = preferences.nextUpRewatching,
                                     highlighted = highlightSettingId == "next_up_rewatching",
-                                    onCheckedChange = { viewModel.setNextUpRewatching(it) },
+                                    onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setNextUpRewatching(it) } },
                                 )
                             }
                             "theme_music" -> {
@@ -745,7 +745,7 @@ fun AppearanceSettingsScreen(
                                     subtitle = if (preferences.backdropThemeMusicEnabled) stringResource(Res.string.settings_backdrop_theme_music_on) else stringResource(Res.string.settings_backdrop_theme_music_off),
                                     checked = preferences.backdropThemeMusicEnabled,
                                     highlighted = highlightSettingId == "theme_music",
-                                    onCheckedChange = { viewModel.setBackdropThemeMusicEnabled(it) },
+                                    onCheckedChange = { viewModel.edit { scope -> scope.appearance.setBackdropThemeMusicEnabled(it) } },
                                 )
                             }
                             "nav_labels" -> {
@@ -755,7 +755,7 @@ fun AppearanceSettingsScreen(
                                     subtitle = if (preferences.navBarShowLabels) stringResource(Res.string.settings_nav_labels_on) else stringResource(Res.string.settings_nav_labels_off),
                                     checked = preferences.navBarShowLabels,
                                     highlighted = highlightSettingId == "nav_labels",
-                                    onCheckedChange = { viewModel.setNavBarShowLabels(it) },
+                                    onCheckedChange = { viewModel.edit { scope -> scope.navigation.setNavBarShowLabels(it) } },
                                 )
                             }
                             "date_format" -> {
@@ -772,7 +772,7 @@ fun AppearanceSettingsScreen(
                                             items = DateFormatPreference.entries,
                                             label = { it.displayName },
                                             isSelected = { it == preferences.dateFormatPreference },
-                                            onSelect = { viewModel.setDateFormatPreference(it) },
+                                            onSelect = { viewModel.edit { scope -> scope.appearance.setDateFormatPreference(it) } },
                                         )
                                     },
                                 )
@@ -791,7 +791,7 @@ fun AppearanceSettingsScreen(
                                             items = AppFontScale.entries,
                                             label = { it.displayName },
                                             isSelected = { it == preferences.appFontScale },
-                                            onSelect = { viewModel.setAppFontScale(it) },
+                                            onSelect = { viewModel.edit { scope -> scope.appearance.setAppFontScale(it) } },
                                         )
                                     },
                                 )
@@ -810,7 +810,7 @@ fun AppearanceSettingsScreen(
                                             items = (0..23).toList(),
                                             label = { "$it:00" },
                                             isSelected = { it == preferences.scheduledThemeStartHour },
-                                            onSelect = { viewModel.setScheduledThemeStartHour(it) },
+                                            onSelect = { viewModel.edit { scope -> scope.appearance.setScheduledThemeStartHour(it) } },
                                         )
                                     },
                                 )
@@ -829,7 +829,7 @@ fun AppearanceSettingsScreen(
                                             items = (0..23).toList(),
                                             label = { "$it:00" },
                                             isSelected = { it == preferences.scheduledThemeEndHour },
-                                            onSelect = { viewModel.setScheduledThemeEndHour(it) },
+                                            onSelect = { viewModel.edit { scope -> scope.appearance.setScheduledThemeEndHour(it) } },
                                         )
                                     },
                                 )
@@ -848,7 +848,7 @@ fun AppearanceSettingsScreen(
                                             items = com.raulshma.jellyplay.core.model.ColorBlindMode.entries,
                                             label = { it.displayName },
                                             isSelected = { it == preferences.colorBlindMode },
-                                            onSelect = { viewModel.setColorBlindMode(it) },
+                                            onSelect = { viewModel.edit { scope -> scope.appearance.setColorBlindMode(it) } },
                                         )
                                     },
                                 )
@@ -867,7 +867,7 @@ fun AppearanceSettingsScreen(
                                             items = com.raulshma.jellyplay.core.model.HandMode.entries,
                                             label = { it.displayName },
                                             isSelected = { it == preferences.handMode },
-                                            onSelect = { viewModel.setHandMode(it) },
+                                            onSelect = { viewModel.edit { scope -> scope.appearance.setHandMode(it) } },
                                         )
                                     },
                                 )
@@ -916,7 +916,7 @@ fun AppearanceSettingsScreen(
                         checked = preferences.showUnwatchedBadge,
                         highlighted = highlightSettingId == "show_unwatched_badge",
                         index = cardIdx++, count = cardTotal,
-                        onCheckedChange = { viewModel.setShowUnwatchedBadge(it) },
+                        onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setShowUnwatchedBadge(it) } },
                     )
 
                     SettingToggleItem(
@@ -926,7 +926,7 @@ fun AppearanceSettingsScreen(
                         checked = preferences.showWatchedCheckmark,
                         highlighted = highlightSettingId == "show_watched_checkmark",
                         index = cardIdx++, count = cardTotal,
-                        onCheckedChange = { viewModel.setShowWatchedCheckmark(it) },
+                        onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setShowWatchedCheckmark(it) } },
                     )
 
                     SettingToggleItem(
@@ -936,7 +936,7 @@ fun AppearanceSettingsScreen(
                         checked = preferences.hideWatchedItems,
                         highlighted = highlightSettingId == "hide_watched_items",
                         index = cardIdx++, count = cardTotal,
-                        onCheckedChange = { viewModel.setHideWatchedItems(it) },
+                        onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setHideWatchedItems(it) } },
                     )
 
                     SettingToggleItem(
@@ -946,7 +946,7 @@ fun AppearanceSettingsScreen(
                         checked = preferences.hideEpisodeThumbnails,
                         highlighted = highlightSettingId == "hide_episode_thumbnails",
                         index = cardIdx++, count = cardTotal,
-                        onCheckedChange = { viewModel.setHideEpisodeThumbnails(it) },
+                        onCheckedChange = { viewModel.edit { scope -> scope.library.setHideEpisodeThumbnails(it) } },
                     )
 
                     SettingToggleItem(
@@ -956,7 +956,7 @@ fun AppearanceSettingsScreen(
                         checked = preferences.compactEpisodeList,
                         highlighted = highlightSettingId == "compact_episode_list",
                         index = cardIdx++, count = cardTotal,
-                        onCheckedChange = { viewModel.setCompactEpisodeList(it) },
+                        onCheckedChange = { viewModel.edit { scope -> scope.library.setCompactEpisodeList(it) } },
                     )
 
                     SettingToggleItem(
@@ -966,7 +966,7 @@ fun AppearanceSettingsScreen(
                         checked = preferences.confirmLibraryReset,
                         highlighted = highlightSettingId == "confirm_library_reset",
                         index = cardIdx++, count = cardTotal,
-                        onCheckedChange = { viewModel.setConfirmLibraryReset(it) },
+                        onCheckedChange = { viewModel.edit { scope -> scope.library.setConfirmLibraryReset(it) } },
                     )
 
                     SettingToggleItem(
@@ -976,7 +976,7 @@ fun AppearanceSettingsScreen(
                         checked = preferences.skipSpecials,
                         highlighted = highlightSettingId == "skip_specials",
                         index = cardIdx++, count = cardTotal,
-                        onCheckedChange = { viewModel.setSkipSpecials(it) },
+                        onCheckedChange = { viewModel.edit { scope -> scope.library.setSkipSpecials(it) } },
                     )
 
                     SettingToggleItem(
@@ -986,7 +986,7 @@ fun AppearanceSettingsScreen(
                         checked = preferences.hapticsEnabled,
                         highlighted = highlightSettingId == "haptics_enabled",
                         index = cardIdx++, count = cardTotal,
-                        onCheckedChange = { viewModel.setHapticsEnabled(it) },
+                        onCheckedChange = { viewModel.edit { scope -> scope.appearance.setHapticsEnabled(it) } },
                     )
 
                     SettingToggleItem(
@@ -996,7 +996,7 @@ fun AppearanceSettingsScreen(
                         checked = preferences.showShareMediaOption,
                         highlighted = highlightSettingId == "show_share_media",
                         index = cardIdx++, count = cardTotal,
-                        onCheckedChange = { viewModel.setShowShareMediaOption(it) },
+                        onCheckedChange = { viewModel.edit { scope -> scope.experimental.setShowShareMediaOption(it) } },
                     )
 
                     SettingToggleItem(
@@ -1006,7 +1006,7 @@ fun AppearanceSettingsScreen(
                         checked = preferences.hideSearchHistory,
                         highlighted = highlightSettingId == "hide_search_history",
                         index = cardIdx++, count = cardTotal,
-                        onCheckedChange = { viewModel.setHideSearchHistory(it) },
+                        onCheckedChange = { viewModel.edit { scope -> scope.experimental.setHideSearchHistory(it) } },
                     )
 
                     SettingToggleItem(
@@ -1016,7 +1016,7 @@ fun AppearanceSettingsScreen(
                         checked = preferences.showExternalRatings,
                         highlighted = highlightSettingId == "show_external_ratings",
                         index = cardIdx++, count = cardTotal,
-                        onCheckedChange = { viewModel.setShowExternalRatings(it) },
+                        onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setShowExternalRatings(it) } },
                     )
                 }
             }
@@ -1064,7 +1064,7 @@ fun AppearanceSettingsScreen(
 
                     val homeSections = rememberReorderableOrderedList(
                         storedOrder = preferences.homeSectionOrder,
-                        onPersist = viewModel::setHomeSectionOrder,
+                        onPersist = { order -> viewModel.edit { it.homeDiscovery.setHomeSectionOrder(order) } },
                     )
 
                     homeSections.items.forEachIndexed { index, sectionType ->
@@ -1078,7 +1078,7 @@ fun AppearanceSettingsScreen(
                             count = homeSections.items.size,
                             modifier = Modifier.onSizeChanged { homeSections.recordHeight(sectionType, it.height) },
                             onCheckedChange = { checked ->
-                                viewModel.setSectionVisible(sectionType, checked)
+                                viewModel.edit { it.homeDiscovery.setSectionVisible(sectionType, checked) }
                             },
                             onDrag = { delta -> homeSections.onDrag(sectionType, delta) },
                             onDragStart = { homeSections.onDragStart(sectionType) },
@@ -1111,7 +1111,7 @@ fun AppearanceSettingsScreen(
                         checked = preferences.performanceMode,
                         highlighted = highlightSettingId == "performance_mode",
                         index = 0, count = perfTotal,
-                        onCheckedChange = { viewModel.setPerformanceMode(it) },
+                        onCheckedChange = { viewModel.edit { scope -> scope.appearance.setPerformanceMode(it) } },
                     )
                     SettingToggleItem(
                         icon = Tabler.Outline.Activity,
@@ -1120,7 +1120,7 @@ fun AppearanceSettingsScreen(
                         checked = preferences.reduceMotionEnabled,
                         highlighted = highlightSettingId == "reduce_motion",
                         index = 1, count = perfTotal,
-                        onCheckedChange = { viewModel.setReduceMotionEnabled(it) },
+                        onCheckedChange = { viewModel.edit { scope -> scope.appearance.setReduceMotionEnabled(it) } },
                     )
                 }
             }
@@ -1147,7 +1147,7 @@ fun AppearanceSettingsScreen(
                         checked = preferences.blueLightFilterEnabled,
                         highlighted = highlightSettingId == "blue_light_filter",
                         index = 0, count = eyeCareTotal,
-                        onCheckedChange = { viewModel.setBlueLightFilterEnabled(it) },
+                        onCheckedChange = { viewModel.edit { scope -> scope.appearance.setBlueLightFilterEnabled(it) } },
                     )
                     SettingListItem(
                         icon = Tabler.Outline.Adjustments,
@@ -1178,7 +1178,7 @@ fun AppearanceSettingsScreen(
                 ) {
                     val newsletterSections = rememberReorderableOrderedList(
                         storedOrder = preferences.newsletterSectionOrder,
-                        onPersist = viewModel::setNewsletterSectionOrder,
+                        onPersist = { order -> viewModel.edit { it.notification.setNewsletterSectionOrder(order) } },
                     )
 
                     SettingsItemList(total = newsletterSections.items.size + 2) {
@@ -1189,7 +1189,7 @@ fun AppearanceSettingsScreen(
                         subtitle = stringResource(Res.string.settings_enable_newsletter_subtitle),
                         checked = preferences.newsletterEnabled,
                                     highlighted = highlightSettingId == "newsletter_enabled",
-                                    onCheckedChange = { viewModel.setNewsletterEnabled(it) }
+                                    onCheckedChange = { viewModel.edit { scope -> scope.notification.setNewsletterEnabled(it) } }
                     )
 
                     val daysOfWeek = listOf(
@@ -1212,7 +1212,7 @@ fun AppearanceSettingsScreen(
                         onClick = {
                             val currentIdx = daysOfWeek.indexOfFirst { it.first == preferences.newsletterDayOfWeek }
                             val nextIdx = (currentIdx + 1) % daysOfWeek.size
-                            viewModel.setNewsletterDayOfWeek(daysOfWeek[nextIdx].first)
+                            viewModel.edit { it.notification.setNewsletterDayOfWeek(daysOfWeek[nextIdx].first) }
                         }
                     )
 
@@ -1231,7 +1231,7 @@ fun AppearanceSettingsScreen(
                                 onCheckedChange = { checked ->
                                     val current = preferences.enabledNewsletterSections.toMutableSet()
                                     if (checked) current.add(sectionType) else current.remove(sectionType)
-                                    viewModel.setEnabledNewsletterSections(current)
+                                    viewModel.edit { it.notification.setEnabledNewsletterSections(current) }
                                 },
                                 onDrag = { delta -> newsletterSections.onDrag(sectionType, delta) },
                                 onDragStart = { newsletterSections.onDragStart(sectionType) },
@@ -1267,7 +1267,7 @@ fun AppearanceSettingsScreen(
             rangeEndLabel = "100%",
             onDismiss = { showBlueLightStrengthSheet = false },
             onConfirm = {
-                viewModel.setBlueLightFilterStrength(it)
+                viewModel.edit { scope -> scope.appearance.setBlueLightFilterStrength(it) }
                 showBlueLightStrengthSheet = false
             },
         )

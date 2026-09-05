@@ -119,7 +119,7 @@ fun NavigationCustomizationGroup(
                 if (preferences.hideBottomNavOnScroll) Res.string.settings_nav_hide_on_scroll_on else Res.string.settings_nav_hide_on_scroll_off,
             ),
             checked = preferences.hideBottomNavOnScroll,
-            onCheckedChange = { viewModel.setHideBottomNavOnScroll(it) },
+            onCheckedChange = { viewModel.edit { scope -> scope.navigation.setHideBottomNavOnScroll(it) } },
         )
 
         // ── Reorderable item list ──
@@ -130,7 +130,7 @@ fun NavigationCustomizationGroup(
         val navOrder = rememberReorderableOrderedList(
             storedOrder = preferences.navItemOrder,
             knownOrder = navItems.map { it.key },
-            onPersist = viewModel::setNavItemOrder,
+            onPersist = { order -> viewModel.edit { it.navigation.setNavItemOrder(order) } },
         )
 
         Spacer(Modifier.height(8.dp))
@@ -149,7 +149,7 @@ fun NavigationCustomizationGroup(
                 onCheckedChange = { checked ->
                     val current = preferences.hiddenNavItems.toMutableSet()
                     if (checked) current.remove(key) else current.add(key)
-                    viewModel.setHiddenNavItems(current)
+                    viewModel.edit { it.navigation.setHiddenNavItems(current) }
                 },
                 onDrag = { delta -> navOrder.onDrag(key, delta) },
                 onDragStart = { navOrder.onDragStart(key) },

@@ -349,9 +349,7 @@ fun VideoPlayerScreen(
         mimeTypes = arrayOf("*/*"),
     ) { uriString: String? ->
         if (uriString != null) {
-            val name = pickedDocumentDisplayName(uriString)?.lowercase().orEmpty()
-            val isFont = name.endsWith(".ttf") || name.endsWith(".otf")
-            if (isFont) {
+            if (isSupportedUserFontFile(pickedDocumentDisplayName(uriString))) {
                 viewModel.installUserFont(uriString)
             } else {
                 scope.launch {
@@ -588,21 +586,16 @@ fun VideoPlayerScreen(
     val syncPlayIgnoreWait by viewModel.syncPlay.ignoreWait.collectAsStateWithLifecycle()
 
     LaunchedEffect(isCastConnected, uiState.uiPrefs.defaultOrientation) {
-        if (isTv) {
-            windowOps.lockOrientation(PlayerOrientationLock.TV_LANDSCAPE)
-        } else if (isCastConnected) {
-            windowOps.lockOrientation(PlayerOrientationLock.USER)
-        } else {
-            delay(400)
-            windowOps.lockOrientation(
-                when (uiState.uiPrefs.defaultOrientation) {
-                    OrientationMode.SENSOR_LANDSCAPE -> PlayerOrientationLock.SENSOR_LANDSCAPE
-                    OrientationMode.SENSOR_PORTRAIT -> PlayerOrientationLock.SENSOR_PORTRAIT
-                    OrientationMode.SENSOR -> PlayerOrientationLock.SENSOR
-                    OrientationMode.LOCKED_LANDSCAPE -> PlayerOrientationLock.LOCKED_LANDSCAPE
-                    OrientationMode.LOCKED_PORTRAIT -> PlayerOrientationLock.LOCKED_PORTRAIT
-                }
-            )
+        when (val decision = orientationLockDecision(
+            isTv = isTv,
+            isCastConnected = isCastConnected,
+            preference = uiState.uiPrefs.defaultOrientation,
+        )) {
+            is OrientationLockDecision.Immediate -> windowOps.lockOrientation(decision.lock)
+            is OrientationLockDecision.SettleFirst -> {
+                delay(400)
+                windowOps.lockOrientation(decision.lock)
+            }
         }
     }
 
@@ -621,14 +614,9 @@ fun VideoPlayerScreen(
     val isNextEpisodeLoading by viewModel.isNextEpisodeLoading.collectAsStateWithLifecycle()
 
     LaunchedEffect(aspectRatio, detectedAspectRatio, engine) {
-        val effectiveRatio = if (aspectRatio == AspectRatio.AUTO) {
-            detectedAspectRatio ?: AspectRatio.FIT
-        } else {
-            aspectRatio
-        }
         // The engine maps the enum to its native mode (media3 resize mode / mpv
         // panscan / VLC aspectRatio) — no media3 constant crosses the seam here.
-        engine?.setAspectRatio(effectiveRatio)
+        engine?.setAspectRatio(effectiveAspectRatio(aspectRatio, detectedAspectRatio))
     }
 
     val playMethod = uiState.media.playMethod
@@ -641,11 +629,13 @@ fun VideoPlayerScreen(
 
     val isNextEpisodeVisible = nextEpisode != null && shouldShowUpNext
     val isCinemaIntroVisible = cinemaIntroState != null && !isInPipMode
-    val isSkipSegmentVisible = activeSegment != null &&
-            activeSegmentBehavior == com.raulshma.jellyplay.core.model.SegmentBehavior.SHOW_BUTTON &&
-            !isInPipMode &&
-            !isCinemaIntroVisible &&
-            !(activeSegment.type == com.raulshma.jellyplay.core.model.MediaSegmentType.OUTRO && shouldShowUpNext)
+    val isSkipSegmentVisible = isSkipSegmentButtonVisible(
+        activeSegment = activeSegment,
+        segmentBehavior = activeSegmentBehavior,
+        isInPipMode = isInPipMode,
+        isCinemaIntroVisible = isCinemaIntroVisible,
+        shouldShowUpNext = shouldShowUpNext,
+    )
 
     LaunchedEffect(showControls, isTv, isNextEpisodeVisible, isSkipSegmentVisible, isCinemaIntroVisible) {
         if (isTv && !showControls) {
@@ -711,23 +701,14 @@ fun VideoPlayerScreen(
     val doSeekBack: () -> Unit = remember(engine, uiState.gestures.seekDurationMs, doSeekTo, isCastConnected) {
         {
             val pos = viewModel.playerEngineRef?.currentPositionMs ?: 0L
-            val target = (pos - uiState.gestures.seekDurationMs).coerceAtLeast(0)
-            doSeekTo(target)
+            doSeekTo(seekBackTargetMs(pos, uiState.gestures.seekDurationMs))
         }
     }
     val doSeekForward: () -> Unit = remember(engine, uiState.gestures.seekDurationMs, doSeekTo, isCastConnected) {
         {
             val pos = viewModel.playerEngineRef?.currentPositionMs ?: 0L
             val dur = viewModel.playerEngineRef?.durationMs ?: 0L
-            // For live streams dur is 0 until resolved, which previously pinned every
-            // forward seek to 0. Skip the upper clamp when there is no known duration;
-            // the engine clamps on its own at seek time. Mirrors the gesture path.
-            val target = if (dur <= 0L) {
-                (pos + uiState.gestures.seekDurationMs).coerceAtLeast(0L)
-            } else {
-                (pos + uiState.gestures.seekDurationMs).coerceAtMost(dur)
-            }
-            doSeekTo(target)
+            doSeekTo(seekForwardTargetMs(pos, uiState.gestures.seekDurationMs, dur))
         }
     }
     val doTogglePlayPause: () -> Unit = remember(isPlaying, doPlay, doPause) {
@@ -1933,12 +1914,17 @@ fun VideoPlayerScreen(
     }
 
     LaunchedEffect(showControls, controlsHasFocus, isSeeking, currentSheet, isOverflowMenuOpen, userInteractionCount) {
-        if (showControls && !isSeeking && currentSheet == PlayerSheet.None && !isOverflowMenuOpen) {
-            if (!isTv && controlsHasFocus) {
-                return@LaunchedEffect
-            }
-            val timeout = if (isTv) uiState.uiPrefs.controlsTimeoutMs * 2 else uiState.uiPrefs.controlsTimeoutMs
-            delay(timeout)
+        if (
+            shouldScheduleControlsAutoHide(
+                showControls = showControls,
+                isSeeking = isSeeking,
+                isSheetOpen = currentSheet != PlayerSheet.None,
+                isOverflowMenuOpen = isOverflowMenuOpen,
+                isTv = isTv,
+                controlsHasFocus = controlsHasFocus,
+            )
+        ) {
+            delay(controlsAutoHideTimeoutMs(uiState.uiPrefs.controlsTimeoutMs, isTv))
             showControls = false
         }
     }

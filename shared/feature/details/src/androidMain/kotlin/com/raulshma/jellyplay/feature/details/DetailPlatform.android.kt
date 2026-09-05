@@ -8,6 +8,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import com.raulshma.jellyplay.core.model.deeplink.DeepLinkGrammar
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.withContext
@@ -27,7 +28,7 @@ internal actual fun rememberShareMediaAction(itemId: String, chooserTitle: Strin
         {
             val shareIntent = Intent(Intent.ACTION_SEND).apply {
                 type = "text/plain"
-                putExtra(Intent.EXTRA_TEXT, "jellyplay://media/$itemId")
+                putExtra(Intent.EXTRA_TEXT, DeepLinkGrammar.mediaLink(itemId))
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             context.startActivity(Intent.createChooser(shareIntent, chooserTitle))

@@ -339,9 +339,8 @@ fun MediaDetailScreen(
             val activeDownload by downloadFlow.collectAsStateWithLifecycle(initialValue = null)
 
             // Seerr integration state (the holder's single snapshot, folded
-            // into uiState as-is)
+            // into uiState as-is — its dialogItem gates the request dialog)
             val seerrRequest = uiState.seerrRequest
-            var seerrRequestItem by remember { mutableStateOf<SeerrSearchItem?>(null) }
 
             // Seerr card loading state for prefetch animation
             val seerrLoadingState = rememberSeerrCardLoadingState()
@@ -551,7 +550,9 @@ fun MediaDetailScreen(
                             viewModel.setCompactEpisodeList(enabled)
                         },
                         onBack = onBack,
-                        onSeerrRequest = { item: SeerrSearchItem -> seerrRequestItem = item },
+                        onSeerrRequest = { item: SeerrSearchItem ->
+                            viewModel.seerrRequests.openRequestDialog(item)
+                        },
                         onNavigate = onNavigate,
                         onEditClick = { onEditClick(itemId) },
                         onPlayAlbumTrack = { index: Int -> viewModel.playAlbum(index) },
@@ -616,26 +617,17 @@ fun MediaDetailScreen(
                     )
                 }
 
-                // Seerr request dialog
-                seerrRequestItem?.let { item ->
-                    // Fetch service details and TV seasons on-demand when dialog opens
-                    LaunchedEffect(item.id) {
-                        viewModel.seerrRequests.loadServiceDetails(item.mediaType)
-                        if (item.mediaType.equals("tv", ignoreCase = true)) {
-                            viewModel.seerrRequests.loadTvSeasons(item.id)
-                        }
-                    }
-
+                // Seerr request dialog — the holder owns the open cascade and
+                // the dismiss ordering; the screen only gates the render on
+                // the snapshot's dialogItem.
+                seerrRequest.dialogItem?.let { item ->
                     SeerrRequestDialog(
                         item = item,
                         snapshot = seerrRequest,
                         onConfirm = { serverId, profileId, rootFolder, tags, seasons ->
                             viewModel.seerrRequests.requestMedia(item, seasons, serverId, profileId, rootFolder, tags)
                         },
-                        onDismiss = {
-                            seerrRequestItem = null
-                            viewModel.seerrRequests.clearRequestResult()
-                        },
+                        onDismiss = { viewModel.seerrRequests.dismissRequestDialog() },
                     )
                 }
             } // CompositionLocalProvider

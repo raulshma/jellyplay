@@ -150,13 +150,13 @@ fun OnboardingScreen(
                                 accentColorSwatch = preferences.theme.accentColorSwatch,
                                 colorStyle = preferences.theme.colorStyle,
                                 homeHeroEnabled = preferences.homeHeroEnabled,
-                                onThemeModeChange = viewModel::setThemeMode,
-                                onDynamicThemingChange = viewModel::setDynamicTheming,
-                                onOledModeChange = viewModel::setOledMode,
-                                onContrastLevelChange = viewModel::setContrastLevel,
-                                onAccentColorSwatchChange = viewModel::setAccentColorSwatch,
-                                onColorStyleChange = viewModel::setColorStyle,
-                                onHomeHeroEnabledChange = viewModel::setHomeHeroEnabled,
+                                onThemeModeChange = { mode -> viewModel.edit { it.appearance.setThemeMode(mode) } },
+                                onDynamicThemingChange = { enabled -> viewModel.edit { it.appearance.setDynamicTheming(enabled) } },
+                                onOledModeChange = { enabled -> viewModel.edit { it.appearance.setOledMode(enabled) } },
+                                onContrastLevelChange = { level -> viewModel.edit { it.appearance.setContrastLevel(level) } },
+                                onAccentColorSwatchChange = { swatch -> viewModel.edit { it.appearance.setAccentColorSwatch(swatch) } },
+                                onColorStyleChange = { style -> viewModel.edit { it.appearance.setColorStyle(style) } },
+                                onHomeHeroEnabledChange = { enabled -> viewModel.edit { it.homeDiscovery.setHomeHeroEnabled(enabled) } },
                                 modifier = Modifier.imePadding().verticalScroll(rememberScrollState()),
                             )
                         }
@@ -164,7 +164,7 @@ fun OnboardingScreen(
                         OnboardingStep.PERFORMANCE -> {
                             PerformanceStep(
                                 performanceMode = preferences.performanceMode,
-                                onPerformanceModeChange = viewModel::setPerformanceMode,
+                                onPerformanceModeChange = { enabled -> viewModel.edit { it.appearance.setPerformanceMode(enabled) } },
                                 modifier = Modifier.imePadding().verticalScroll(rememberScrollState()),
                             )
                         }
@@ -174,9 +174,9 @@ fun OnboardingScreen(
                                 homeMode = preferences.homeMode,
                                 navBarShowLabels = preferences.navBarShowLabels,
                                 enabledHomeSectionTypes = preferences.enabledHomeSectionTypes,
-                                onHomeModeChange = viewModel::setHomeMode,
-                                onNavBarShowLabelsChange = viewModel::setNavBarShowLabels,
-                                onEnabledHomeSectionTypesChange = viewModel::setEnabledHomeSectionTypes,
+                                onHomeModeChange = { mode -> viewModel.edit { it.homeDiscovery.setHomeMode(mode) } },
+                                onNavBarShowLabelsChange = { show -> viewModel.edit { it.navigation.setNavBarShowLabels(show) } },
+                                onEnabledHomeSectionTypesChange = { types -> viewModel.edit { it.homeDiscovery.setEnabledHomeSectionTypes(types) } },
                                 modifier = Modifier.imePadding().verticalScroll(rememberScrollState()),
                             )
                         }
@@ -189,12 +189,12 @@ fun OnboardingScreen(
                                 gesturesEnabled = preferences.videoGesturesEnabled,
                                 defaultOrientation = preferences.videoDefaultOrientation,
                                 autoplayNext = preferences.videoAutoplayNext,
-                                onPreferredPlayerChange = viewModel::setPreferredPlayer,
-                                onStreamingQualityChange = viewModel::setStreamingQuality,
-                                onSeekDurationChange = viewModel::setVideoSeekDurationMs,
-                                onGesturesEnabledChange = viewModel::setVideoGesturesEnabled,
-                                onDefaultOrientationChange = viewModel::setVideoDefaultOrientation,
-                                onAutoplayNextChange = viewModel::setVideoAutoplayNext,
+                                onPreferredPlayerChange = { playerType -> viewModel.edit { it.playback.setPreferredPlayer(playerType) } },
+                                onStreamingQualityChange = { quality -> viewModel.edit { it.playback.setStreamingQuality(quality) } },
+                                onSeekDurationChange = { ms -> viewModel.edit { it.videoPlayer.setVideoSeekDurationMs(ms) } },
+                                onGesturesEnabledChange = { enabled -> viewModel.edit { it.videoPlayer.setVideoGesturesEnabled(enabled) } },
+                                onDefaultOrientationChange = { mode -> viewModel.edit { it.videoPlayer.setVideoDefaultOrientation(mode) } },
+                                onAutoplayNextChange = { enabled -> viewModel.edit { it.videoPlayer.setVideoAutoplayNext(enabled) } },
                                 modifier = Modifier.imePadding().verticalScroll(rememberScrollState()),
                             )
                         }
@@ -206,11 +206,11 @@ fun OnboardingScreen(
                                 crossfadeDurationMs = preferences.audioCrossfadeDurationMs,
                                 normalizationEnabled = preferences.audioNormalizationEnabled,
                                 autoplayNext = preferences.audioAutoplayNext,
-                                onDefaultSpeedChange = viewModel::setAudioDefaultSpeed,
-                                onGaplessEnabledChange = viewModel::setGaplessEnabled,
-                                onCrossfadeDurationChange = viewModel::setCrossfadeDurationMs,
-                                onNormalizationEnabledChange = viewModel::setAudioNormalizationEnabled,
-                                onAutoplayNextChange = viewModel::setAudioAutoplayNext,
+                                onDefaultSpeedChange = { speed -> viewModel.edit { it.audio.setAudioDefaultSpeed(speed) } },
+                                onGaplessEnabledChange = { enabled -> viewModel.edit { it.audio.setAudioGaplessEnabled(enabled) } },
+                                onCrossfadeDurationChange = { ms -> viewModel.edit { it.audio.setAudioCrossfadeDurationMs(ms) } },
+                                onNormalizationEnabledChange = { enabled -> viewModel.edit { it.audio.setAudioNormalizationEnabled(enabled) } },
+                                onAutoplayNextChange = { enabled -> viewModel.edit { it.audio.setAudioAutoplayNext(enabled) } },
                                 modifier = Modifier.imePadding().verticalScroll(rememberScrollState()),
                             )
                         }
@@ -218,7 +218,7 @@ fun OnboardingScreen(
                         OnboardingStep.SUBTITLES -> {
                             SubtitlesStep(
                                 subtitleStyle = preferences.subtitleStyle,
-                                onSubtitleStyleChange = viewModel::setSubtitleStyle,
+                                onSubtitleStyleChange = { style -> viewModel.edit { it.subtitle.setSubtitleStyle(style) } },
                                 modifier = Modifier.imePadding().verticalScroll(rememberScrollState()),
                             )
                         }
@@ -229,11 +229,11 @@ fun OnboardingScreen(
                                 pinLockEnabled = preferences.pinLockEnabled,
                                 biometricLockEnabled = preferences.biometricLockEnabled,
                                 autoLockTimerMs = preferences.autoLockTimerMs,
-                                onPinLockEnabledChange = viewModel::setPinLockEnabled,
-                                onPinHashSet = viewModel::setPinHash,
+                                onPinLockEnabledChange = { enabled -> viewModel.edit { it.security.setPinLockEnabled(enabled) } },
+                                onPinHashSet = { hash -> viewModel.edit { it.security.setPinHash(hash) } },
                                 biometricAvailable = biometricAvailable,
-                                onBiometricLockEnabledChange = viewModel::setBiometricLockEnabled,
-                                onAutoLockTimerMsChange = viewModel::setAutoLockTimerMs,
+                                onBiometricLockEnabledChange = { enabled -> viewModel.edit { it.security.setBiometricLockEnabled(enabled) } },
+                                onAutoLockTimerMsChange = { ms -> viewModel.edit { it.security.setAutoLockTimerMs(ms) } },
                                 hashPin = viewModel::hashPin,
                                 modifier = Modifier.imePadding().verticalScroll(rememberScrollState()),
                             )

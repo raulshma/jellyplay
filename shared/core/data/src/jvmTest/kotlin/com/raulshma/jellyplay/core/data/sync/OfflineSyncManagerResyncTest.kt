@@ -13,8 +13,6 @@ import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
-import com.raulshma.jellyplay.core.model.MediaSegment
-import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.MediaSource
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.MediaType
@@ -22,6 +20,7 @@ import com.raulshma.jellyplay.core.model.ResyncCategory
 import com.raulshma.jellyplay.core.model.ResyncOptions
 import com.raulshma.jellyplay.core.model.ResyncStep
 import com.raulshma.jellyplay.core.model.StreamType
+import com.raulshma.jellyplay.core.model.SyncStatus
 import com.raulshma.jellyplay.core.model.TrickplayInfo
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -32,24 +31,31 @@ import io.mockk.slot
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
-import org.junit.After
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertTrue
-import org.junit.Before
-import org.junit.Test
 import java.io.File
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 
 /**
  * Covers the sidecar-artifact resync axes (subtitles, trickplay, segments) end
  * to end through the real [OfflineSyncManager] + [OfflineSyncComparator], using
- * a recording writer fake and mockk collaborators. The comparator's own
- * signature rules are exercised separately in [OfflineSyncComparatorTest]; here
- * we assert the manager wires options -> writer calls -> baseline persistence.
+ * a recording writer fake and relaxed mockk collaborators. The comparator's own
+ * signature rules are exercised separately in [OfflineSyncComparatorTest]; the
+ * decision/persistence orchestration lives in [OfflineSyncManagerTest]. Here we
+ * assert the manager wires options -> writer calls -> baseline persistence.
+ *
+ * Ported verbatim from the legacy :core:data Robolectric-free suite (same
+ * package) so the coverage survives the legacy shim's deletion. Kept as a
+ * sibling file rather than merged: this suite is built around a recording
+ * [OfflineDownloadWriter] fake + relaxed DAO mocks, while the existing suite
+ * is strict-mockk throughout — the fixtures don't mix cleanly.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
-class OfflineSyncManagerTest {
+class OfflineSyncManagerResyncTest {
 
     private val mediaRepository: MediaRepository = mockk(relaxed = true)
     private val downloadRepository: DownloadRepository = mockk()
@@ -65,7 +71,7 @@ class OfflineSyncManagerTest {
 
     private val itemId = "item-1"
 
-    @Before
+    @BeforeTest
     fun setUp() = runTest {
         tempDir = createTempDir()
         val downloadFile = File(tempDir, "video.mkv")
@@ -108,7 +114,7 @@ class OfflineSyncManagerTest {
         override fun today(zone: java.time.ZoneId): java.time.LocalDate = java.time.LocalDate.now(zone)
     }
 
-    @After
+    @AfterTest
     fun tearDown() {
         tempDir.deleteRecursively()
     }
@@ -278,7 +284,7 @@ class OfflineSyncManagerTest {
 
         coVerify(exactly = 0) { mediaRepository.getMediaDetail(any(), any()) }
         // Returns the persisted state unchanged.
-        assertEquals(com.raulshma.jellyplay.core.model.SyncStatus.CURRENT, result.state.status)
+        assertEquals(SyncStatus.CURRENT, result.state.status)
     }
 
     @Test
@@ -311,7 +317,7 @@ class OfflineSyncManagerTest {
 
         val result = manager.checkForUpdates(itemId)
 
-        assertTrue("the pending flag must keep flagging subtitles as changed", result.state.subtitlesChanged)
+        assertTrue(result.state.subtitlesChanged, "the pending flag must keep flagging subtitles as changed")
         val slot = slot<SyncBaselineEntity>()
         coVerify { syncBaselineDao.upsert(capture(slot)) }
         assertEquals(1, slot.captured.syncSubtitlesPending)

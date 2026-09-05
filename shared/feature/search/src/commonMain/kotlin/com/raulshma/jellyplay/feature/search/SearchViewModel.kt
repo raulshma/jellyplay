@@ -424,12 +424,16 @@ class SearchViewModel(
         tags: List<Int>? = null,
     ) = seerrRequestState.requestMedia(item, seasons, serverId, profileId, rootFolder, tags)
 
-    fun clearRequestResult() = seerrRequestState.clearRequestResult()
+    /**
+     * Opens the Seerr request dialog for [item]: the item plus the open
+     * cascade (service details, TV seasons for tv) are owned by the holder —
+     * the screen's dialog renders from the snapshot's `dialogItem`.
+     */
+    fun openSeerrRequestDialog(item: SeerrSearchItem) = seerrRequestState.openRequestDialog(item)
+
+    /** Closes the dialog and clears the last request result (holder-owned ordering). */
+    fun dismissSeerrRequestDialog() = seerrRequestState.dismissRequestDialog()
 
     fun prefetchSeerrDetails(tmdbId: Int, mediaType: String, onDone: () -> Unit) =
         seerrRequestState.prefetchDetails(tmdbId, mediaType, onDone)
-
-    fun loadSeerrServiceDetails(mediaType: String) = seerrRequestState.loadServiceDetails(mediaType)
-
-    fun loadTvSeasons(tmdbId: Int) = seerrRequestState.loadTvSeasons(tmdbId)
 }

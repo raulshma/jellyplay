@@ -12,7 +12,8 @@ import kotlinx.coroutines.flow.conflate
  *
  * This layer hoists the behaviour that was previously re-derived per adapter:
  *  - snapshot / restore of `position + playbackSpeed + isPlaying` across a rebuild
- *  - 0–1 volume clamp, `0.05f` unmute floor, and `MediaStreamVolume` sync
+ *  - remembered unmute level + `MediaStreamVolume` sync (the clamp / mute
+ *    decisions themselves live in commonMain's [PlaybackVolumePolicy])
  *  - the `callbackFlow + EnginePositionTicker` shell for `positionFlow`
  *  - the `EngineVideoStats` change-guard
  *
@@ -69,12 +70,14 @@ abstract class ReloadablePlayerEngine(
         }
     }
 
-    // ── Volume / mute — shared clamp + system-stream sync ───────────────────
+    // ── Volume / mute — shared memory + system-stream sync ──────────────────
+    // The clamp / remember / mute-unmute decisions live in the pure
+    // commonMain PlaybackVolumePolicy; these members are only the shared
+    // storage and the system-stream snapshot the adapters apply around the
+    // policy's plans.
 
     @Volatile
     protected var lastUnmuteVolume: Float = 1f
-
-    protected fun clamp01(v: Float): Float = v.coerceIn(0f, 1f)
 
     protected fun rememberUnmuteVolumeIfAudible(volume01: Float) {
         if (volume01 > 0f) lastUnmuteVolume = volume01
@@ -84,8 +87,6 @@ abstract class ReloadablePlayerEngine(
         val sys = MediaStreamVolume.getNormalized(appContext)
         if (sys > 0f) lastUnmuteVolume = sys
     }
-
-    protected fun unmuteTarget(): Float = lastUnmuteVolume.coerceIn(0.05f, 1f)
 
     // ── positionFlow shell ──────────────────────────────────────────────────
 

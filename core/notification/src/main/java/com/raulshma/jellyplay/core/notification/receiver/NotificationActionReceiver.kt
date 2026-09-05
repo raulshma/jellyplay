@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import com.raulshma.jellyplay.core.data.repository.SeenMediaRecord
 import com.raulshma.jellyplay.core.data.repository.SeenMediaRepository
+import com.raulshma.jellyplay.core.model.deeplink.DeepLinkGrammar
 import com.raulshma.jellyplay.core.notification.di.koin
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -25,7 +26,7 @@ class NotificationActionReceiver : BroadcastReceiver() {
         when (intent.action) {
             ACTION_OPEN_DETAIL -> {
                 val itemId = intent.getStringExtra(EXTRA_ITEM_ID) ?: return
-                val deepLink = Intent(Intent.ACTION_VIEW, android.net.Uri.parse("jellyplay://media/$itemId")).apply {
+                val deepLink = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(DeepLinkGrammar.mediaLink(itemId))).apply {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
                     setPackage(context.packageName)
                 }

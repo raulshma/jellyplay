@@ -37,7 +37,6 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
-import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -145,34 +144,34 @@ class AppearanceSettingsViewModelTest {
         // All seven are NAMED editor conveniences (editor.setX), not edit
         // blocks — so the capture-replay harness sees nothing; the routing
         // contract is the editor call itself.
-        viewModel.setThemeMode(ThemeMode.DARK)
-        viewModel.setDynamicTheming(true)
-        viewModel.setOledMode(true)
-        viewModel.setContrastLevel(ContrastLevel.HIGH)
-        viewModel.setPerformanceMode(false)
-        viewModel.setColorStyle(ColorStyle.VIBRANT)
-        viewModel.setAccentColorSwatch("#FF5733")
+        viewModel.edit { it.appearance.setThemeMode(ThemeMode.DARK) }
+        viewModel.edit { it.appearance.setDynamicTheming(true) }
+        viewModel.edit { it.appearance.setOledMode(true) }
+        viewModel.edit { it.appearance.setContrastLevel(ContrastLevel.HIGH) }
+        viewModel.edit { it.appearance.setPerformanceMode(false) }
+        viewModel.edit { it.appearance.setColorStyle(ColorStyle.VIBRANT) }
+        viewModel.edit { it.appearance.setAccentColorSwatch("#FF5733") }
         replayEdits()
 
-        verify(exactly = 1) { editor.setThemeMode(ThemeMode.DARK) }
-        verify(exactly = 1) { editor.setDynamicTheming(true) }
-        verify(exactly = 1) { editor.setOledMode(true) }
-        verify(exactly = 1) { editor.setContrastLevel(ContrastLevel.HIGH) }
-        verify(exactly = 1) { editor.setPerformanceMode(false) }
-        verify(exactly = 1) { editor.setColorStyle(ColorStyle.VIBRANT) }
-        verify(exactly = 1) { editor.setAccentColorSwatch("#FF5733") }
+        coVerify(exactly = 1) { appearanceStore.setThemeMode(ThemeMode.DARK) }
+        coVerify(exactly = 1) { appearanceStore.setDynamicTheming(true) }
+        coVerify(exactly = 1) { appearanceStore.setOledMode(true) }
+        coVerify(exactly = 1) { appearanceStore.setContrastLevel(ContrastLevel.HIGH) }
+        coVerify(exactly = 1) { appearanceStore.setPerformanceMode(false) }
+        coVerify(exactly = 1) { appearanceStore.setColorStyle(ColorStyle.VIBRANT) }
+        coVerify(exactly = 1) { appearanceStore.setAccentColorSwatch("#FF5733") }
     }
 
     @Test
     fun `variant, blue-light and motion setters persist through the appearance store`() = runTest {
         val viewModel = viewModel()
 
-        viewModel.setThemeVariant("midnight")
-        viewModel.setVariantAccent("midnight", "#00C853")
-        viewModel.setBlueLightFilterEnabled(true)
-        viewModel.setBlueLightFilterStrength(0.4f)
-        viewModel.setReduceMotionEnabled(true)
-        viewModel.setBackdropThemeMusicEnabled(true)
+        viewModel.edit { it.appearance.setThemeVariant("midnight") }
+        viewModel.edit { it.appearance.setVariantAccent("midnight", "#00C853") }
+        viewModel.edit { it.appearance.setBlueLightFilterEnabled(true) }
+        viewModel.edit { it.appearance.setBlueLightFilterStrength(0.4f) }
+        viewModel.edit { it.appearance.setReduceMotionEnabled(true) }
+        viewModel.edit { it.appearance.setBackdropThemeMusicEnabled(true) }
         replayEdits()
 
         coVerify(exactly = 1) { appearanceStore.setThemeVariant("midnight") }
@@ -187,23 +186,22 @@ class AppearanceSettingsViewModelTest {
     fun `locale-format and comfort setters persist through the appearance store`() = runTest {
         val viewModel = viewModel()
 
-        // All named editor conveniences — verified on the editor itself.
-        viewModel.setColorBlindMode(ColorBlindMode.DEUTERANOPIA)
-        viewModel.setScheduledThemeStartHour(21)
-        viewModel.setScheduledThemeEndHour(7)
-        viewModel.setHandMode(HandMode.LEFT)
-        viewModel.setAppFontScale(AppFontScale.LARGE)
-        viewModel.setDateFormatPreference(DateFormatPreference.ISO)
-        viewModel.setHapticsEnabled(false)
+        viewModel.edit { it.appearance.setColorBlindMode(ColorBlindMode.DEUTERANOPIA) }
+        viewModel.edit { it.appearance.setScheduledThemeStartHour(21) }
+        viewModel.edit { it.appearance.setScheduledThemeEndHour(7) }
+        viewModel.edit { it.appearance.setHandMode(HandMode.LEFT) }
+        viewModel.edit { it.appearance.setAppFontScale(AppFontScale.LARGE) }
+        viewModel.edit { it.appearance.setDateFormatPreference(DateFormatPreference.ISO) }
+        viewModel.edit { it.appearance.setHapticsEnabled(false) }
         replayEdits()
 
-        verify(exactly = 1) { editor.setColorBlindMode(ColorBlindMode.DEUTERANOPIA) }
-        verify(exactly = 1) { editor.setScheduledThemeStartHour(21) }
-        verify(exactly = 1) { editor.setScheduledThemeEndHour(7) }
-        verify(exactly = 1) { editor.setHandMode(HandMode.LEFT) }
-        verify(exactly = 1) { editor.setAppFontScale(AppFontScale.LARGE) }
-        verify(exactly = 1) { editor.setDateFormatPreference(DateFormatPreference.ISO) }
-        verify(exactly = 1) { editor.setHapticsEnabled(false) }
+        coVerify(exactly = 1) { appearanceStore.setColorBlindMode(ColorBlindMode.DEUTERANOPIA) }
+        coVerify(exactly = 1) { appearanceStore.setScheduledThemeStartHour(21) }
+        coVerify(exactly = 1) { appearanceStore.setScheduledThemeEndHour(7) }
+        coVerify(exactly = 1) { appearanceStore.setHandMode(HandMode.LEFT) }
+        coVerify(exactly = 1) { appearanceStore.setAppFontScale(AppFontScale.LARGE) }
+        coVerify(exactly = 1) { appearanceStore.setDateFormatPreference(DateFormatPreference.ISO) }
+        coVerify(exactly = 1) { appearanceStore.setHapticsEnabled(false) }
     }
 
     // -------------------------------------------------- home discovery store
@@ -212,22 +210,19 @@ class AppearanceSettingsViewModelTest {
     fun `home visibility and mode setters persist through the homeDiscovery store`() = runTest {
         val viewModel = viewModel()
 
-        // Mixed routing: setSectionVisible/setShowUnwatchedBadge/... are edit
-        // blocks (replay lands them on the homeDiscovery slice), while
-        // setHomeMode and setHomeHeroEnabled are named editor conveniences.
-        viewModel.setSectionVisible(HomeSectionType.NEXT_UP, false)
-        viewModel.setHomeMode(HomeMode.MUSIC)
-        viewModel.setHomeHeroEnabled(true)
-        viewModel.setShowUnwatchedBadge(true)
-        viewModel.setShowWatchedCheckmark(false)
-        viewModel.setHideWatchedItems(true)
-        viewModel.setShowExternalRatings(true)
-        viewModel.setShowClockOnHome(false)
-        viewModel.setHideTopHeaderOnScroll(true)
+        viewModel.edit { it.homeDiscovery.setSectionVisible(HomeSectionType.NEXT_UP, false) }
+        viewModel.edit { it.homeDiscovery.setHomeMode(HomeMode.MUSIC) }
+        viewModel.edit { it.homeDiscovery.setHomeHeroEnabled(true) }
+        viewModel.edit { it.homeDiscovery.setShowUnwatchedBadge(true) }
+        viewModel.edit { it.homeDiscovery.setShowWatchedCheckmark(false) }
+        viewModel.edit { it.homeDiscovery.setHideWatchedItems(true) }
+        viewModel.edit { it.homeDiscovery.setShowExternalRatings(true) }
+        viewModel.edit { it.homeDiscovery.setShowClockOnHome(false) }
+        viewModel.edit { it.homeDiscovery.setHideTopHeaderOnScroll(true) }
         replayEdits()
 
-        verify(exactly = 1) { editor.setHomeMode(HomeMode.MUSIC) }
-        verify(exactly = 1) { editor.setHomeHeroEnabled(true) }
+        coVerify(exactly = 1) { homeDiscoveryStore.setHomeMode(HomeMode.MUSIC) }
+        coVerify(exactly = 1) { homeDiscoveryStore.setHomeHeroEnabled(true) }
         coVerify(exactly = 1) { homeDiscoveryStore.setSectionVisible(HomeSectionType.NEXT_UP, false) }
         coVerify(exactly = 1) { homeDiscoveryStore.setShowUnwatchedBadge(true) }
         coVerify(exactly = 1) { homeDiscoveryStore.setShowWatchedCheckmark(false) }
@@ -241,12 +236,12 @@ class AppearanceSettingsViewModelTest {
     fun `continue-watching and next-up behavior persists through the homeDiscovery store`() = runTest {
         val viewModel = viewModel()
 
-        viewModel.setHomeSectionOrder(listOf(HomeSectionType.PINNED, HomeSectionType.NEXT_UP))
-        viewModel.setContinueWatchingClickBehavior(ContinueWatchingClickBehavior.PLAY)
-        viewModel.setMergeContinueWatchingAndNextUp(true)
-        viewModel.unhideAllCwItems()
-        viewModel.setNextUpMaxDays(14)
-        viewModel.setNextUpRewatching(true)
+        viewModel.edit { it.homeDiscovery.setHomeSectionOrder(listOf(HomeSectionType.PINNED, HomeSectionType.NEXT_UP)) }
+        viewModel.edit { it.homeDiscovery.setContinueWatchingClickBehavior(ContinueWatchingClickBehavior.PLAY) }
+        viewModel.edit { it.homeDiscovery.setMergeContinueWatchingAndNextUp(true) }
+        viewModel.edit { it.homeDiscovery.unhideAllCwItems() }
+        viewModel.edit { it.homeDiscovery.setNextUpMaxDays(14) }
+        viewModel.edit { it.homeDiscovery.setNextUpRewatching(true) }
         replayEdits()
 
         coVerify(exactly = 1) {
@@ -267,11 +262,11 @@ class AppearanceSettingsViewModelTest {
     fun `library browsing toggles persist through the library store`() = runTest {
         val viewModel = viewModel()
 
-        viewModel.setHideEpisodeThumbnails(true)
-        viewModel.setSkipSpecials(true)
-        viewModel.setCompactEpisodeList(true)
-        viewModel.setConfirmLibraryReset(false)
-        viewModel.setLibraryViewMode(LibraryViewMode.MASONRY)
+        viewModel.edit { it.library.setHideEpisodeThumbnails(true) }
+        viewModel.edit { it.library.setSkipSpecials(true) }
+        viewModel.edit { it.library.setCompactEpisodeList(true) }
+        viewModel.edit { it.library.setConfirmLibraryReset(false) }
+        viewModel.edit { it.library.setLibraryViewMode(LibraryViewMode.MASONRY) }
         replayEdits()
 
         coVerify(exactly = 1) { libraryStore.setHideEpisodeThumbnails(true) }
@@ -287,8 +282,8 @@ class AppearanceSettingsViewModelTest {
     fun `share and search-history toggles persist through the experimental store`() = runTest {
         val viewModel = viewModel()
 
-        viewModel.setHideSearchHistory(true)
-        viewModel.setShowShareMediaOption(true)
+        viewModel.edit { it.experimental.setHideSearchHistory(true) }
+        viewModel.edit { it.experimental.setShowShareMediaOption(true) }
         replayEdits()
 
         coVerify(exactly = 1) { experimentalStore.setHideSearchHistory(true) }
@@ -301,10 +296,10 @@ class AppearanceSettingsViewModelTest {
     fun `newsletter setters persist through the notification store`() = runTest {
         val viewModel = viewModel()
 
-        viewModel.setEnabledNewsletterSections(setOf(NewsletterSectionType.NEXT_UP))
-        viewModel.setNewsletterSectionOrder(listOf(NewsletterSectionType.CURATED_PICKS))
-        viewModel.setNewsletterEnabled(true)
-        viewModel.setNewsletterDayOfWeek(5)
+        viewModel.edit { it.notification.setEnabledNewsletterSections(setOf(NewsletterSectionType.NEXT_UP)) }
+        viewModel.edit { it.notification.setNewsletterSectionOrder(listOf(NewsletterSectionType.CURATED_PICKS)) }
+        viewModel.edit { it.notification.setNewsletterEnabled(true) }
+        viewModel.edit { it.notification.setNewsletterDayOfWeek(5) }
         replayEdits()
 
         coVerify(exactly = 1) {
@@ -323,11 +318,11 @@ class AppearanceSettingsViewModelTest {
     fun `screensaver setters persist through the screensaver store`() = runTest {
         val viewModel = viewModel()
 
-        viewModel.setDreamShowTitle(true)
-        viewModel.setDreamImageCategories(setOf(DreamImageCategory.MOVIES, DreamImageCategory.SERIES))
-        viewModel.setDreamSlideshowIntervalMs(30_000L)
-        viewModel.setDreamKenBurnsEnabled(false)
-        viewModel.setDreamTransitionStyle(DreamTransitionStyle.SLIDE)
+        viewModel.edit { it.screensaver.setDreamShowTitle(true) }
+        viewModel.edit { it.screensaver.setDreamImageCategories(setOf(DreamImageCategory.MOVIES, DreamImageCategory.SERIES)) }
+        viewModel.edit { it.screensaver.setDreamSlideshowIntervalMs(30_000L) }
+        viewModel.edit { it.screensaver.setDreamKenBurnsEnabled(false) }
+        viewModel.edit { it.screensaver.setDreamTransitionStyle(DreamTransitionStyle.SLIDE) }
         replayEdits()
 
         coVerify(exactly = 1) { screensaverStore.setDreamShowTitle(true) }
@@ -345,9 +340,9 @@ class AppearanceSettingsViewModelTest {
     fun `navigation-bar setters persist through the navigation store`() = runTest {
         val viewModel = viewModel()
 
-        viewModel.setHideBottomNavOnScroll(true)
-        viewModel.setHiddenNavItems(setOf("LiveTv"))
-        viewModel.setNavItemOrder(listOf("Search", "Home"))
+        viewModel.edit { it.navigation.setHideBottomNavOnScroll(true) }
+        viewModel.edit { it.navigation.setHiddenNavItems(setOf("LiveTv")) }
+        viewModel.edit { it.navigation.setNavItemOrder(listOf("Search", "Home")) }
         replayEdits()
 
         coVerify(exactly = 1) { navigationStore.setHideBottomNavOnScroll(true) }
@@ -358,17 +353,15 @@ class AppearanceSettingsViewModelTest {
     // ------------------------------------------------------ reset + advanced
 
     @Test
-    fun `home-search and nav-label rows use the editor's named setters`() = runTest {
+    fun `home-search and nav-label rows persist through their owning stores`() = runTest {
         val viewModel = viewModel()
 
-        viewModel.setShowSettingsInHomeSearch(true)
-        viewModel.setNavBarShowLabels(false)
-        advanceUntilIdle()
+        viewModel.edit { it.homeDiscovery.setShowSettingsInHomeSearch(true) }
+        viewModel.edit { it.navigation.setNavBarShowLabels(false) }
+        replayEdits()
 
-        // Shared rows pinned to the named setters so onboarding and settings
-        // cannot drift onto different write paths.
-        verify(exactly = 1) { editor.setShowSettingsInHomeSearch(true) }
-        verify(exactly = 1) { editor.setNavBarShowLabels(false) }
+        coVerify(exactly = 1) { homeDiscoveryStore.setShowSettingsInHomeSearch(true) }
+        coVerify(exactly = 1) { navigationStore.setNavBarShowLabels(false) }
     }
 
     @Test

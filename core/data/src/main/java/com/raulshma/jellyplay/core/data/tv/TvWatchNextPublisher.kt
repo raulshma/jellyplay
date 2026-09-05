@@ -13,6 +13,7 @@ import com.raulshma.jellyplay.core.model.HomeSectionQuery
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.deeplink.DeepLinkGrammar
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -190,7 +191,7 @@ class TvWatchNextPublisher(
         val artworkUri = playbackRepository.getBackdropUrl(item.id, BACKDROP_WIDTH).toUri()
         setPosterArtUri(artworkUri)
 
-        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("jellyplay://media/${item.id}"))
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(DeepLinkGrammar.mediaLink(item.id)))
             .setPackage(context.packageName)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         setIntent(intent)

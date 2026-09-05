@@ -72,21 +72,6 @@ data class RequestsUiState(
         )
 }
 
-/**
- * The six request-filter fields that travel together from
- * [RequestsUiState] into [RequestsFilterBar]. Kept as a value so the bar's
- * signature is one parameter (plus the callbacks) rather than six loose ones.
- */
-@Immutable
-data class RequestsFilterState(
-    val filter: SeerrRequestFilter = SeerrRequestFilter.PENDING,
-    val mediaType: String? = null,
-    val sort: SeerrRequestSort = SeerrRequestSort.ADDED,
-    val sortDirection: String = "desc",
-    val showMyRequestsOnly: Boolean = false,
-    val searchQuery: String = "",
-)
-
 @OptIn(FlowPreview::class)
 class RequestsViewModel(
     private val seerrRepository: SeerrRepository,
@@ -134,7 +119,9 @@ class RequestsViewModel(
         launch {
             seerrRepository.getRequestCount().onSuccess { count ->
                 if (count.pending == 0 && _state.value.filter == SeerrRequestFilter.PENDING) {
-                    _state.value = _state.value.copy(filter = SeerrRequestFilter.ALL)
+                    // Reset path: nothing pending → land on ALL (same write
+                    // algebra as the setters; page is still at 1 pre-first-load).
+                    _state.value = _state.value.withFilters { it.withFilter(SeerrRequestFilter.ALL) }
                 }
             }
             loadRequests(refresh = true)
@@ -307,46 +294,40 @@ class RequestsViewModel(
         }
     }
 
-    fun setFilter(filter: SeerrRequestFilter) {
-        _state.value = _state.value.copy(filter = filter, currentPage = 1)
-        loadRequests(refresh = true)
+    /**
+     * Single write path for the filter axes: applies [transform] through the
+     * [RequestsFilterState] algebra (which carries the page-1 reset) and —
+     * unless [refresh] is suppressed — reloads immediately. [setSearchQuery]
+     * passes refresh=false; its reload rides the 400 ms debounce in [init].
+     */
+    private fun updateFilters(
+        refresh: Boolean = true,
+        transform: (RequestsFilterState) -> RequestsFilterState,
+    ) {
+        _state.value = _state.value.withFilters(transform)
+        if (refresh) loadRequests(refresh = true)
     }
 
-    fun setSort(sort: SeerrRequestSort) {
-        _state.value = _state.value.copy(sort = sort, currentPage = 1)
-        loadRequests(refresh = true)
-    }
+    fun setFilter(filter: SeerrRequestFilter) = updateFilters { it.withFilter(filter) }
 
-    fun toggleSortDirection() {
-        val newDir = if (_state.value.sortDirection == "desc") "asc" else "desc"
-        _state.value = _state.value.copy(sortDirection = newDir, currentPage = 1)
-        loadRequests(refresh = true)
-    }
+    fun setSort(sort: SeerrRequestSort) = updateFilters { it.withSort(sort) }
 
-    fun setMediaType(mediaType: String?) {
-        _state.value = _state.value.copy(mediaType = mediaType, currentPage = 1)
-        loadRequests(refresh = true)
-    }
+    fun toggleSortDirection() = updateFilters { it.withSortDirectionToggled() }
 
-    fun toggleMyRequestsOnly() {
-        val newValue = !_state.value.showMyRequestsOnly
-        _state.value = _state.value.copy(showMyRequestsOnly = newValue, currentPage = 1)
-        loadRequests(refresh = true)
-    }
+    fun setMediaType(mediaType: String?) = updateFilters { it.withMediaType(mediaType) }
+
+    fun toggleMyRequestsOnly() = updateFilters { it.withMyRequestsOnlyToggled() }
 
     /**
-     * Updates the free-text [searchQuery]. The actual request is fired on a
+     * Updates the free-text [query]. The actual request is fired on a
      * 400ms debounce (collected in [init]) so each keystroke doesn't hit the
      * Seerr API. Clears back to page 1.
      */
-    fun setSearchQuery(query: String) {
-        _state.value = _state.value.copy(searchQuery = query, currentPage = 1)
-    }
+    fun setSearchQuery(query: String) = updateFilters(refresh = false) { it.withSearchQuery(query) }
 
     fun clearSearch() {
         if (_state.value.searchQuery.isBlank()) return
-        _state.value = _state.value.copy(searchQuery = "", currentPage = 1)
-        loadRequests(refresh = true)
+        updateFilters { it.withSearchQuery("") }
     }
 
     // ── Bulk selection ──────────────────────────────────────────────────────
@@ -411,55 +392,33 @@ class RequestsViewModel(
         }
     }
 
-    fun approveRequest(requestId: Int) {
+    /**
+     * Shared body for the five single-request actions (the one-request
+     * generalization of [runBulk]'s shape): flips [RequestsUiState.actionInProgress],
+     * runs [action], refreshes the list on success and surfaces the failure
+     * message on [RequestsUiState.actionError]; the busy flag drops after
+     * either outcome. The success payload (e.g. the approved request) is
+     * deliberately ignored.
+     */
+    private fun runRequestAction(action: suspend () -> Result<*>) {
         launch {
             _state.value = _state.value.copy(actionInProgress = true, actionError = null)
-            seerrRepository.approveRequest(requestId)
+            action()
                 .onSuccess { loadRequests(refresh = true) }
                 .onFailure { _state.value = _state.value.copy(actionError = it.message) }
             _state.value = _state.value.copy(actionInProgress = false)
         }
     }
 
-    fun declineRequest(requestId: Int) {
-        launch {
-            _state.value = _state.value.copy(actionInProgress = true, actionError = null)
-            seerrRepository.declineRequest(requestId)
-                .onSuccess { loadRequests(refresh = true) }
-                .onFailure { _state.value = _state.value.copy(actionError = it.message) }
-            _state.value = _state.value.copy(actionInProgress = false)
-        }
-    }
+    fun approveRequest(requestId: Int) = runRequestAction { seerrRepository.approveRequest(requestId) }
 
-    fun retryRequest(requestId: Int) {
-        launch {
-            _state.value = _state.value.copy(actionInProgress = true, actionError = null)
-            seerrRepository.retryRequest(requestId)
-                .onSuccess { loadRequests(refresh = true) }
-                .onFailure { _state.value = _state.value.copy(actionError = it.message) }
-            _state.value = _state.value.copy(actionInProgress = false)
-        }
-    }
+    fun declineRequest(requestId: Int) = runRequestAction { seerrRepository.declineRequest(requestId) }
 
-    fun deleteRequest(requestId: Int) {
-        launch {
-            _state.value = _state.value.copy(actionInProgress = true, actionError = null)
-            seerrRepository.deleteRequest(requestId)
-                .onSuccess { loadRequests(refresh = true) }
-                .onFailure { _state.value = _state.value.copy(actionError = it.message) }
-            _state.value = _state.value.copy(actionInProgress = false)
-        }
-    }
+    fun retryRequest(requestId: Int) = runRequestAction { seerrRepository.retryRequest(requestId) }
 
-    fun removeFromService(mediaId: Int, is4k: Boolean) {
-        launch {
-            _state.value = _state.value.copy(actionInProgress = true, actionError = null)
-            seerrRepository.deleteMedia(mediaId, is4k)
-                .onSuccess { loadRequests(refresh = true) }
-                .onFailure { _state.value = _state.value.copy(actionError = it.message) }
-            _state.value = _state.value.copy(actionInProgress = false)
-        }
-    }
+    fun deleteRequest(requestId: Int) = runRequestAction { seerrRepository.deleteRequest(requestId) }
+
+    fun removeFromService(mediaId: Int, is4k: Boolean) = runRequestAction { seerrRepository.deleteMedia(mediaId, is4k) }
 
     fun clearActionError() {
         _state.value = _state.value.copy(actionError = null)

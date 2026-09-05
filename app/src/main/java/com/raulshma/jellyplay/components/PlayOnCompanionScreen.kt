@@ -88,7 +88,7 @@ import com.raulshma.jellyplay.core.ui.tv.components.DpadSlider
  * shared [com.raulshma.jellyplay.core.data.cast.CastManager] the video player
  * reads. Reusing CompanionDashboard directly is unsafe: it is hard-coupled to
  * VideoPlayerViewModel / CastManager types and Play On is walled off from
- * CastManager by design (see PlayOnController).
+ * CastManager by design.
  *
  * The ViewModel is the activity-scoped singleton the mini bar already holds
  * (both sites resolve through the same LocalViewModelStoreOwner + Koin store

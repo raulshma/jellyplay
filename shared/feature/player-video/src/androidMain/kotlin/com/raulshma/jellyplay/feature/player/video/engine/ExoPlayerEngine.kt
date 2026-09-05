@@ -1032,38 +1032,42 @@ class ExoPlayerEngine(
 
     override fun setVolume(value: Float) = runOnPlayerThread {
         val p = player ?: return@runOnPlayerThread
-        val clamped = clamp01(value)
-        rememberUnmuteVolumeIfAudible(clamped)
-        p.volume = clamped
-        MediaStreamVolume.setNormalized(context, clamped)
+        val plan = PlaybackVolumePolicy.planLevel(value, PlaybackVolumePolicy.MAX_BOOST_NOMINAL)
+        rememberUnmuteVolumeIfAudible(plan.normalized)
+        p.volume = plan.normalized
+        MediaStreamVolume.setNormalized(context, plan.systemStream)
     }
 
     override fun increaseVolume(delta: Float) = runOnPlayerThread {
         val p = player ?: return@runOnPlayerThread
-        val next = (p.volume + delta).coerceAtMost(1f)
-        rememberUnmuteVolumeIfAudible(next)
-        p.volume = next
-        MediaStreamVolume.setNormalized(context, next)
+        val plan = PlaybackVolumePolicy.planLevel(p.volume + delta, PlaybackVolumePolicy.MAX_BOOST_NOMINAL)
+        rememberUnmuteVolumeIfAudible(plan.normalized)
+        p.volume = plan.normalized
+        MediaStreamVolume.setNormalized(context, plan.systemStream)
     }
 
     override fun decreaseVolume(delta: Float) = runOnPlayerThread {
         val p = player ?: return@runOnPlayerThread
-        val next = (p.volume - delta).coerceAtLeast(0f)
-        rememberUnmuteVolumeIfAudible(next)
-        p.volume = next
-        MediaStreamVolume.setNormalized(context, next)
+        val plan = PlaybackVolumePolicy.planLevel(p.volume - delta, PlaybackVolumePolicy.MAX_BOOST_NOMINAL)
+        rememberUnmuteVolumeIfAudible(plan.normalized)
+        p.volume = plan.normalized
+        MediaStreamVolume.setNormalized(context, plan.systemStream)
     }
 
     override fun setMuted(muted: Boolean) = runOnPlayerThread {
         val p = player ?: return@runOnPlayerThread
         if (muted) {
-            snapshotSystemVolumeForMute()
-            p.volume = 0f
-            MediaStreamVolume.setNormalized(context, 0f)
+            val plan = PlaybackVolumePolicy.planMute(PlaybackVolumePolicy.NativeVolumeRestore.ZERO)
+            if (plan.snapshotSystemVolume) snapshotSystemVolumeForMute()
+            plan.nativeVolume?.let { p.volume = it }
+            MediaStreamVolume.setNormalized(context, plan.systemStream)
         } else {
-            val target = unmuteTarget()
-            p.volume = 1f
-            MediaStreamVolume.setNormalized(context, target)
+            val plan = PlaybackVolumePolicy.planUnmute(
+                lastUnmuteVolume,
+                PlaybackVolumePolicy.NativeVolumeRestore.FULL,
+            )
+            plan.nativeVolume?.let { p.volume = it }
+            MediaStreamVolume.setNormalized(context, plan.systemStream)
         }
     }
 
@@ -1446,37 +1450,28 @@ class ExoPlayerEngine(
     }
 
     override fun setAspectRatio(ratio: AspectRatio) {
-        // Map the engine-neutral enum to the media3 resize mode here, inside the
-        // only adapter that uses media3's AspectRatioFrameLayout, so no media3
-        // constant crosses the engine seam.
-        val resizeMode = when (ratio) {
-            AspectRatio.FIT, AspectRatio.AUTO -> AspectRatioFrameLayout.RESIZE_MODE_FIT
-            AspectRatio.FILL -> AspectRatioFrameLayout.RESIZE_MODE_FILL
-            AspectRatio.CROP -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
-            AspectRatio.RATIO_16_9, AspectRatio.RATIO_4_3, AspectRatio.RATIO_21_9 ->
-                AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH
+        val plan = AspectRatioMapping.exoPlan(ratio)
+        // Map the policy's neutral selector to the media3 constants here, inside
+        // the only adapter that uses media3's AspectRatioFrameLayout, so no
+        // media3 constant crosses the engine seam.
+        val resizeMode = when (plan.resizeMode) {
+            AspectRatioMapping.ResizeMode.FIT -> AspectRatioFrameLayout.RESIZE_MODE_FIT
+            AspectRatioMapping.ResizeMode.FILL -> AspectRatioFrameLayout.RESIZE_MODE_FILL
+            AspectRatioMapping.ResizeMode.ZOOM -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+            AspectRatioMapping.ResizeMode.FIXED_WIDTH -> AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH
         }
         playerView?.setResizeMode(resizeMode)
-        val aspectValue = ratio.ratio
-        if (aspectValue != null && aspectValue > 0f) {
-            (playerView as? AspectRatioFrameLayout)?.setAspectRatio(aspectValue)
-        } else {
-            (playerView as? AspectRatioFrameLayout)?.setAspectRatio(0f)
-        }
+        (playerView as? AspectRatioFrameLayout)?.setAspectRatio(plan.aspectValue)
     }
 
     override val currentPositionMs: Long get() = player?.currentPosition ?: 0L
     override val durationMs: Long
         get() {
             // Prefer the ExoPlayer-resolved duration when available; fall back
-            // to the server-reported runTimeTicks, which for HLS/transcoded
-            // streams is the only accurate total-runtime source (ExoPlayer's
-            // `duration` is `C.TIME_UNSET` until/ unless the manifest advertises
-            // a finite VOD duration — Jellyfin transcode manifests often do
-            // not, leaving the seek bar and end-detection without a duration).
-            // Mirrors [MpvPlayerEngine.durationMs].
+            // to the server-reported runTimeTicks (see resolveDurationMs).
+            // Mirrors [MpvPlayerEngine.durationMs] via the shared ladder.
             val engine = player?.duration ?: C.TIME_UNSET
-            return if (engine != C.TIME_UNSET && engine > 0L) engine else serverDurationMs
+            return resolveDurationMs(engine, serverDurationMs)
         }
     override val playbackSpeed: Float get() = player?.playbackParameters?.speed ?: 1f
     override val audioSessionId: Int get() = player?.audioSessionId ?: C.AUDIO_SESSION_ID_UNSET

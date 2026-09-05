@@ -234,7 +234,7 @@ fun AudioSettingsScreen(
                     values = speeds,
                     current = preferences.audioDefaultSpeed,
                     label = { if (it == 1.0f) "1x" else "${it}x" },
-                    onSelect = viewModel::setAudioDefaultSpeed,
+                    onSelect = { speed -> viewModel.edit { it.audio.setAudioDefaultSpeed(speed) } },
                 )
             },
                     )
@@ -244,7 +244,7 @@ fun AudioSettingsScreen(
                         subtitle = if (preferences.audioAutoplayNext) stringResource(Res.string.settings_audio_auto_play_on) else stringResource(Res.string.settings_audio_auto_play_off),
                         checked = preferences.audioAutoplayNext,
                         highlighted = highlightSettingId == "audio_autoplay_next",
-                        onCheckedChange = { viewModel.setAudioAutoplayNext(it) },
+                        onCheckedChange = { viewModel.edit { scope -> scope.audio.setAudioAutoplayNext(it) } },
                     )
                     SettingToggleItem(
                         icon = Tabler.Outline.Eye,
@@ -252,7 +252,7 @@ fun AudioSettingsScreen(
                         subtitle = if (preferences.audioVisualizerEnabled) stringResource(Res.string.settings_audio_visualizer_on) else stringResource(Res.string.settings_audio_visualizer_off),
                         checked = preferences.audioVisualizerEnabled,
                         highlighted = highlightSettingId == "audio_visualizer",
-                        onCheckedChange = { viewModel.setAudioVisualizerEnabled(it) },
+                        onCheckedChange = { viewModel.edit { scope -> scope.audio.setAudioVisualizerEnabled(it) } },
                     )
                     val sleepTimerOffLabel = stringResource(Res.string.settings_off)
                     val sleepTimer15Min = stringResource(Res.string.settings_sleep_timer_15_min)
@@ -282,7 +282,7 @@ fun AudioSettingsScreen(
                                 items = options,
                                 label = { sleepTimerLabels[options.indexOf(it)] },
                                 isSelected = { it == preferences.sleepTimerDurationMs },
-                                onSelect = { viewModel.setSleepTimerDurationMs(it) },
+                                onSelect = { viewModel.edit { scope -> scope.audio.setSleepTimerDurationMs(it) } },
                             )
                         },
                     )
@@ -292,7 +292,7 @@ fun AudioSettingsScreen(
                         subtitle = if (preferences.preferAudioDescription) stringResource(Res.string.settings_audio_description_on) else stringResource(Res.string.settings_audio_description_off),
                         checked = preferences.preferAudioDescription,
                         highlighted = highlightSettingId == "audio_description",
-                        onCheckedChange = { viewModel.setPreferAudioDescription(it) },
+                        onCheckedChange = { viewModel.edit { scope -> scope.subtitle.setPreferAudioDescription(it) } },
                     )
                     if (showAdvanced) {
                         val nightModeVolumeTitle = stringResource(Res.string.settings_night_mode_volume)
@@ -311,7 +311,7 @@ fun AudioSettingsScreen(
                                     valueLabel = { "${(it * 100).toInt()}%" },
                                     rangeStartLabel = "10%",
                                     rangeEndLabel = "80%",
-                                    onConfirm = { viewModel.setAudioNightModeVolume(it) },
+                                    onConfirm = { viewModel.edit { scope -> scope.audio.setAudioNightModeVolume(it) } },
                                 )
                             },
                         )
@@ -331,7 +331,7 @@ fun AudioSettingsScreen(
                                     valueLabel = { "${it.toInt()}" },
                                     rangeStartLabel = "0",
                                     rangeEndLabel = "3000",
-                                    onConfirm = { viewModel.setAudioNightModeGain(it.toInt()) },
+                                    onConfirm = { viewModel.edit { scope -> scope.audio.setAudioNightModeGain(it.toInt()) } },
                                 )
                             },
                         )
@@ -349,7 +349,7 @@ fun AudioSettingsScreen(
                                     values = thresholds,
                                     current = preferences.audioSkipPreviousThresholdMs,
                                     label = { "${it / 1000}s" },
-                                    onSelect = viewModel::setAudioSkipPreviousThresholdMs,
+                                    onSelect = { ms -> viewModel.edit { it.audio.setAudioSkipPreviousThresholdMs(ms) } },
                                 )
                             },
                         )
@@ -359,7 +359,7 @@ fun AudioSettingsScreen(
                             subtitle = if (preferences.audioGaplessEnabled) stringResource(Res.string.settings_gapless_on) else stringResource(Res.string.settings_gapless_off),
                             checked = preferences.audioGaplessEnabled,
                             highlighted = highlightSettingId == "gapless_playback",
-                            onCheckedChange = { viewModel.setGaplessEnabled(it) },
+                            onCheckedChange = { viewModel.edit { scope -> scope.audio.setAudioGaplessEnabled(it) } },
                         )
                         val crossfadeOffLabel = stringResource(Res.string.settings_off)
                         val crossfadeDurationTitle = stringResource(Res.string.settings_crossfade_duration)
@@ -376,7 +376,7 @@ fun AudioSettingsScreen(
                                     values = durations,
                                     current = preferences.audioCrossfadeDurationMs,
                                     label = { if (it == 0L) crossfadeOffLabel else "${it / 1000}s" },
-                                    onSelect = viewModel::setCrossfadeDurationMs,
+                                    onSelect = { ms -> viewModel.edit { it.audio.setAudioCrossfadeDurationMs(ms) } },
                                 )
                             },
                         )
@@ -394,7 +394,7 @@ fun AudioSettingsScreen(
                                     label = { it.displayName },
                                     subtitle = { "Min: ${it.minBufferMs / 1000}s · Max: ${it.maxBufferMs / 1000}s" },
                                     isSelected = { it == preferences.audioPreloadBufferSize },
-                                    onSelect = { viewModel.setAudioPreloadBufferSize(it) },
+                                    onSelect = { viewModel.edit { scope -> scope.audio.setAudioPreloadBufferSize(it) } },
                                 )
                             },
                         )
@@ -422,7 +422,7 @@ fun AudioSettingsScreen(
                                     values = modes,
                                     current = preferences.audioNormalizationMode,
                                     label = { it.displayName },
-                                    onSelect = viewModel::setAudioNormalizationMode,
+                                    onSelect = { mode -> viewModel.edit { it.audio.setAudioNormalizationMode(mode) } },
                                 )
                             },
                         )
@@ -445,7 +445,7 @@ fun AudioSettingsScreen(
                                         valueLabel = { "${if (it >= 0) "+" else ""}${String.format("%.1f", it)} dB" },
                                         rangeStartLabel = "-15 dB",
                                         rangeEndLabel = "+15 dB",
-                                        onConfirm = { viewModel.setReplayGainPreAmpDb(it) },
+                                        onConfirm = { viewModel.edit { scope -> scope.audio.setReplayGainPreAmpDb(it) } },
                                     )
                                 },
                             )
@@ -456,7 +456,7 @@ fun AudioSettingsScreen(
                             subtitle = if (preferences.equalizerEnabled) stringResource(Res.string.settings_equalizer_on) else stringResource(Res.string.settings_equalizer_off),
                             checked = preferences.equalizerEnabled,
                             highlighted = highlightSettingId == "equalizer",
-                            onCheckedChange = { viewModel.setEqualizerEnabled(it) },
+                            onCheckedChange = { viewModel.edit { scope -> scope.audioEffects.setEqualizerEnabled(it) } },
                             onClick = { showEqualizerEditor = true },
                         )
                         if (preferences.equalizerEnabled) {
@@ -474,7 +474,7 @@ fun AudioSettingsScreen(
                                         items = presets,
                                         label = { it.displayName },
                                         isSelected = { it == preferences.equalizerPreset },
-                                        onSelect = { viewModel.setEqualizerPreset(it) },
+                                        onSelect = { viewModel.edit { scope -> scope.audioEffects.setEqualizerPreset(it) } },
                                     )
                                 },
                             )
@@ -483,7 +483,7 @@ fun AudioSettingsScreen(
                                 title = stringResource(Res.string.settings_dialogue_boost),
                                 subtitle = if (preferences.dialogueBoostEnabled) preferences.dialogueBoostStrength.displayName else stringResource(Res.string.settings_off),
                                 checked = preferences.dialogueBoostEnabled,
-                                onCheckedChange = { viewModel.setDialogueBoostEnabled(it) },
+                                onCheckedChange = { viewModel.edit { scope -> scope.audioEffects.setDialogueBoostEnabled(it) } },
                             )
                         }
                         if (preferences.dialogueBoostEnabled) {
@@ -500,7 +500,7 @@ fun AudioSettingsScreen(
                                         values = strengths,
                                         current = preferences.dialogueBoostStrength,
                                         label = { it.displayName },
-                                        onSelect = viewModel::setDialogueBoostStrength,
+                                        onSelect = { strength -> viewModel.edit { it.audioEffects.setDialogueBoostStrength(strength) } },
                                     )
                                 },
                             )
@@ -511,7 +511,7 @@ fun AudioSettingsScreen(
                             subtitle = if (preferences.nightModeEnabled) preferences.nightModeStrength.displayName else stringResource(Res.string.settings_off),
                             checked = preferences.nightModeEnabled,
                             highlighted = highlightSettingId == "night_mode",
-                            onCheckedChange = { viewModel.setNightModeEnabled(it) },
+                            onCheckedChange = { viewModel.edit { scope -> scope.audioEffects.setNightModeEnabled(it) } },
                         )
                         if (preferences.nightModeEnabled) {
                                 val nightModeStrengthTitle = stringResource(Res.string.settings_night_mode_strength)
@@ -528,7 +528,7 @@ fun AudioSettingsScreen(
                                         values = strengths,
                                         current = preferences.nightModeStrength,
                                         label = { it.displayName },
-                                        onSelect = viewModel::setNightModeStrength,
+                                        onSelect = { strength -> viewModel.edit { it.audioEffects.setNightModeStrength(strength) } },
                                     )
                                 },
                             )
@@ -539,7 +539,7 @@ fun AudioSettingsScreen(
                             subtitle = if (preferences.bassBoostEnabled) preferences.bassBoostStrength.displayName else stringResource(Res.string.settings_off),
                             checked = preferences.bassBoostEnabled,
                             highlighted = highlightSettingId == "bass_boost",
-                            onCheckedChange = { viewModel.setBassBoostEnabled(it) },
+                            onCheckedChange = { viewModel.edit { scope -> scope.audioEffects.setBassBoostEnabled(it) } },
                         )
                         if (preferences.bassBoostEnabled) {
                                 val bassBoostStrengthTitle = stringResource(Res.string.settings_bass_boost_strength)
@@ -556,7 +556,7 @@ fun AudioSettingsScreen(
                                         values = strengths,
                                         current = preferences.bassBoostStrength,
                                         label = { it.displayName },
-                                        onSelect = viewModel::setBassBoostStrength,
+                                        onSelect = { strength -> viewModel.edit { it.audioEffects.setBassBoostStrength(strength) } },
                                     )
                                 },
                             )
@@ -568,7 +568,7 @@ fun AudioSettingsScreen(
                             subtitle = if (preferences.virtualizerEnabled) "${preferences.virtualizerStrength / 10}%$virtualizerStrengthSuffix" else stringResource(Res.string.settings_off),
                             checked = preferences.virtualizerEnabled,
                             highlighted = highlightSettingId == "virtualizer",
-                            onCheckedChange = { viewModel.setVirtualizerEnabled(it) },
+                            onCheckedChange = { viewModel.edit { scope -> scope.audioEffects.setVirtualizerEnabled(it) } },
                         )
                         if (preferences.virtualizerEnabled) {
                                 val virtualizerStrengthTitle = stringResource(Res.string.settings_virtualizer_strength)
@@ -585,7 +585,7 @@ fun AudioSettingsScreen(
                                         items = stepsList,
                                         label = { "${it / 10}%" },
                                         isSelected = { it == preferences.virtualizerStrength },
-                                        onSelect = { viewModel.setVirtualizerStrength(it) },
+                                        onSelect = { viewModel.edit { scope -> scope.audioEffects.setVirtualizerStrength(it) } },
                                     )
                                 },
                             )
@@ -597,7 +597,7 @@ fun AudioSettingsScreen(
                             subtitle = if (preferences.volumeBoostEnabled) "+${"%.1f".format(preferences.volumeBoostGain / 100.0)} $volumeBoostGainSuffix" else stringResource(Res.string.settings_off),
                             checked = preferences.volumeBoostEnabled,
                             highlighted = highlightSettingId == "volume_boost",
-                            onCheckedChange = { viewModel.setVolumeBoostEnabled(it) },
+                            onCheckedChange = { viewModel.edit { scope -> scope.audioEffects.setVolumeBoostEnabled(it) } },
                         )
                         if (preferences.volumeBoostEnabled) {
                             val volumeBoostGainTitle = stringResource(Res.string.settings_volume_boost_gain)
@@ -616,7 +616,7 @@ fun AudioSettingsScreen(
                                         valueLabel = { "+${it.toInt() / 100} dB" },
                                         rangeStartLabel = "0 dB",
                                         rangeEndLabel = "+30 dB",
-                                        onConfirm = { viewModel.setVolumeBoostGain(it.toInt()) },
+                                        onConfirm = { viewModel.edit { scope -> scope.audioEffects.setVolumeBoostGain(it.toInt()) } },
                                     )
                                 },
                             )
@@ -634,7 +634,7 @@ fun AudioSettingsScreen(
                                     items = ReverbPreset.entries,
                                     label = { it.displayName },
                                     isSelected = { it == preferences.reverbPreset },
-                                    onSelect = { viewModel.setReverbPreset(it) },
+                                    onSelect = { viewModel.edit { scope -> scope.audioEffects.setReverbPreset(it) } },
                                 )
                             },
                         )
@@ -644,7 +644,7 @@ fun AudioSettingsScreen(
                             subtitle = if (preferences.autoEqByGenre) stringResource(Res.string.settings_auto_eq_genre_on) else stringResource(Res.string.settings_off),
                             checked = preferences.autoEqByGenre,
                             highlighted = highlightSettingId == "auto_eq_by_genre",
-                            onCheckedChange = { viewModel.setAutoEqByGenre(it) },
+                            onCheckedChange = { viewModel.edit { scope -> scope.audioEffects.setAutoEqByGenre(it) } },
                         )
                         SettingToggleItem(
                             icon = Tabler.Outline.Speakerphone,
@@ -652,7 +652,7 @@ fun AudioSettingsScreen(
                             subtitle = if (preferences.channelMixEnabled) stringResource(Res.string.settings_channel_mixing_on) else stringResource(Res.string.settings_channel_mixing_off),
                             checked = preferences.channelMixEnabled,
                             highlighted = highlightSettingId == "channel_mixing",
-                            onCheckedChange = { viewModel.setChannelMixEnabled(it) },
+                            onCheckedChange = { viewModel.edit { scope -> scope.audio.setChannelMixEnabled(it) } },
                         )
                         if (preferences.channelMixEnabled) {
                                 val channelMixModeTitle = stringResource(Res.string.settings_channel_mix_mode)
@@ -669,7 +669,7 @@ fun AudioSettingsScreen(
                                         items = modes,
                                         label = { it.displayName },
                                         isSelected = { it == preferences.channelMixMode },
-                                        onSelect = { viewModel.setChannelMixMode(it) },
+                                        onSelect = { viewModel.edit { scope -> scope.audio.setChannelMixMode(it) } },
                                     )
                                 },
                             )
@@ -693,7 +693,7 @@ fun AudioSettingsScreen(
                                     valueLabel = { if (it == 0f) balanceCenter else if (it < 0f) "${(it * -100).toInt()}% $balanceLeft" else "${(it * 100).toInt()}% $balanceRight" },
                                     rangeStartLabel = balanceLeft,
                                     rangeEndLabel = balanceRight,
-                                    onConfirm = { viewModel.setLrBalance(it) },
+                                    onConfirm = { viewModel.edit { scope -> scope.audioEffects.setLrBalance(it) } },
                                 )
                             },
                         )
@@ -714,7 +714,7 @@ fun AudioSettingsScreen(
                                     valueLabel = { if (it == 0f) normalPitch else "${if (it > 0) "+" else ""}${it.toInt()} semitones" },
                                     rangeStartLabel = "-12 semitones",
                                     rangeEndLabel = "+12 semitones",
-                                    onConfirm = { viewModel.setPitchSemitones(it) },
+                                    onConfirm = { viewModel.edit { scope -> scope.audioEffects.setPitchSemitones(it) } },
                                 )
                             },
                         )
@@ -749,7 +749,7 @@ fun AudioSettingsScreen(
                         else stringResource(Res.string.settings_audio_caching_off),
                         checked = preferences.audioCachingEnabled,
                         highlighted = highlightSettingId == "audio_caching_enabled",
-                        onCheckedChange = { viewModel.setAudioCachingEnabled(it) },
+                        onCheckedChange = { viewModel.edit { scope -> scope.audioCache.setAudioCachingEnabled(it) } },
                     )
                     if (preferences.audioCachingEnabled) {
                         val cacheSizeTitle = stringResource(Res.string.settings_audio_cache_size)
@@ -766,7 +766,7 @@ fun AudioSettingsScreen(
                                     values = sizes,
                                     current = preferences.audioCacheSizeMb,
                                     label = { "$it MB" },
-                                    onSelect = viewModel::setAudioCacheSizeMb,
+                                    onSelect = { sizeMb -> viewModel.edit { it.audioCache.setAudioCacheSizeMb(sizeMb) } },
                                 )
                             },
                         )
@@ -785,7 +785,7 @@ fun AudioSettingsScreen(
                                     values = lookahead,
                                     current = preferences.audioPrefetchLookahead,
                                     label = { if (it == 0) lookaheadOffLabel else "$it" },
-                                    onSelect = viewModel::setAudioPrefetchLookahead,
+                                    onSelect = { lookahead -> viewModel.edit { it.audioCache.setAudioPrefetchLookahead(lookahead) } },
                                 )
                             },
                         )
@@ -804,7 +804,7 @@ fun AudioSettingsScreen(
                                     values = backfill,
                                     current = preferences.audioPrefetchBackfill,
                                     label = { if (it == 0) backfillOffLabel else "$it" },
-                                    onSelect = viewModel::setAudioPrefetchBackfill,
+                                    onSelect = { backfill -> viewModel.edit { it.audioCache.setAudioPrefetchBackfill(backfill) } },
                                 )
                             },
                         )
@@ -822,7 +822,7 @@ fun AudioSettingsScreen(
                                     items = policies,
                                     label = { it.displayName },
                                     isSelected = { it == preferences.audioCacheNetworkPolicy },
-                                    onSelect = { viewModel.setAudioCacheNetworkPolicy(it) },
+                                    onSelect = { viewModel.edit { scope -> scope.audioCache.setAudioCacheNetworkPolicy(it) } },
                                 )
                             },
                         )
@@ -845,7 +845,7 @@ fun AudioSettingsScreen(
         visible = showEqualizerEditor,
         bandLevels = preferences.equalizerSettings.bandLevels,
         onApply = {
-            viewModel.setEqualizerSettings(it)
+            viewModel.edit { scope -> scope.audioEffects.setEqualizerSettings(it) }
             showEqualizerEditor = false
         },
         onDismiss = { showEqualizerEditor = false },

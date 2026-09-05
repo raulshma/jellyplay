@@ -309,7 +309,7 @@ class StorageSettingsViewModelTest {
         val vm = viewModel()
         advanceUntilIdle()
 
-        vm.setDownloadStorageLocation("EXTERNAL")
+        vm.edit { it.downloads.setDownloadStorageLocation("EXTERNAL") }
         advanceUntilIdle()
 
         coVerify(exactly = 1) { downloadsStore.setDownloadStorageLocation("EXTERNAL") }
@@ -320,7 +320,7 @@ class StorageSettingsViewModelTest {
         val vm = viewModel()
         advanceUntilIdle()
 
-        vm.setMaxCacheSize(512)
+        vm.edit { it.networkOffline.setMaxCacheSize(512) }
         advanceUntilIdle()
 
         coVerify(exactly = 1) { networkOfflineStore.setMaxCacheSize(512) }

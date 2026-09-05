@@ -975,10 +975,10 @@ class MpvPlayerEngine(
 
     override fun setVolume(value: Float) {
         try {
-            val clamped = clamp01(value)
-            rememberUnmuteVolumeIfAudible(clamped)
-            mpvView?.mpv?.setPropertyDouble("volume", (clamped * 100.0).coerceIn(0.0, 200.0))
-            MediaStreamVolume.setNormalized(context, clamped)
+            val plan = PlaybackVolumePolicy.planLevel(value, PlaybackVolumePolicy.MAX_BOOST_NOMINAL)
+            rememberUnmuteVolumeIfAudible(plan.normalized)
+            mpvView?.mpv?.setPropertyDouble("volume", plan.normalized * 100.0)
+            MediaStreamVolume.setNormalized(context, plan.systemStream)
         } catch (_: Exception) {}
     }
 
@@ -986,11 +986,13 @@ class MpvPlayerEngine(
         try {
             val m = mpvView?.mpv ?: return
             val current = m.getPropertyDouble("volume") ?: 100.0
-            val next = (current + delta * 100.0).coerceIn(0.0, 200.0)
-            m.setPropertyDouble("volume", next)
-            val next01 = (next / 100.0).toFloat().coerceIn(0f, 1f)
-            rememberUnmuteVolumeIfAudible(next01)
-            MediaStreamVolume.setNormalized(context, next01)
+            val plan = PlaybackVolumePolicy.planLevel(
+                (current / 100.0).toFloat() + delta,
+                PlaybackVolumePolicy.MAX_BOOST_NOMINAL,
+            )
+            m.setPropertyDouble("volume", plan.normalized * 100.0)
+            rememberUnmuteVolumeIfAudible(plan.normalized)
+            MediaStreamVolume.setNormalized(context, plan.systemStream)
         } catch (_: Exception) {}
     }
 
@@ -998,11 +1000,13 @@ class MpvPlayerEngine(
         try {
             val m = mpvView?.mpv ?: return
             val current = m.getPropertyDouble("volume") ?: 100.0
-            val next = (current - delta * 100.0).coerceAtLeast(0.0)
-            m.setPropertyDouble("volume", next)
-            val next01 = (next / 100.0).toFloat().coerceIn(0f, 1f)
-            rememberUnmuteVolumeIfAudible(next01)
-            MediaStreamVolume.setNormalized(context, next01)
+            val plan = PlaybackVolumePolicy.planLevel(
+                (current / 100.0).toFloat() - delta,
+                PlaybackVolumePolicy.MAX_BOOST_NOMINAL,
+            )
+            m.setPropertyDouble("volume", plan.normalized * 100.0)
+            rememberUnmuteVolumeIfAudible(plan.normalized)
+            MediaStreamVolume.setNormalized(context, plan.systemStream)
         } catch (_: Exception) {}
     }
 
@@ -1010,10 +1014,17 @@ class MpvPlayerEngine(
         try { mpvView?.mpv?.setPropertyBoolean("mute", muted) } catch (_: Exception) {}
         try {
             if (muted) {
-                snapshotSystemVolumeForMute()
-                MediaStreamVolume.setNormalized(context, 0f)
+                val plan = PlaybackVolumePolicy.planMute(PlaybackVolumePolicy.NativeVolumeRestore.LEAVE_UNCHANGED)
+                if (plan.snapshotSystemVolume) snapshotSystemVolumeForMute()
+                // plan.nativeVolume is null for mpv — the mute flag above owns
+                // silencing the native handle.
+                MediaStreamVolume.setNormalized(context, plan.systemStream)
             } else {
-                MediaStreamVolume.setNormalized(context, unmuteTarget())
+                val plan = PlaybackVolumePolicy.planUnmute(
+                    lastUnmuteVolume,
+                    PlaybackVolumePolicy.NativeVolumeRestore.LEAVE_UNCHANGED,
+                )
+                MediaStreamVolume.setNormalized(context, plan.systemStream)
             }
         } catch (_: Exception) {}
     }
@@ -1090,24 +1101,13 @@ class MpvPlayerEngine(
     }
 
     override fun setAspectRatio(ratio: AspectRatio) {
-        val numeric = ratio.ratio
-        val aspectValue = when {
-            numeric != null && numeric > 0f -> {
-                val w = (numeric * 100).toInt()
-                val h = 100
-                val gcd = gcd(w, h)
-                "${w / gcd}:${h / gcd}"
-            }
-            else -> "-1"
-        }
+        val plan = AspectRatioMapping.mpvPlan(ratio)
         val m = mpvView?.mpv ?: return
-        try { m.setPropertyString("video-aspect-override", aspectValue) } catch (_: Exception) {}
-
-        val isZoom = ratio == AspectRatio.CROP
+        try { m.setPropertyString("video-aspect-override", plan.aspectOverride) } catch (_: Exception) {}
         try {
-            m.setPropertyDouble("panscan", if (isZoom) 1.0 else 0.0)
-            m.setPropertyString("sub-use-margins", if (isZoom) "yes" else "no")
-            m.setPropertyString("sub-ass-force-margins", if (isZoom) "yes" else "no")
+            m.setPropertyDouble("panscan", plan.panscan)
+            m.setPropertyString("sub-use-margins", plan.subUseMargins)
+            m.setPropertyString("sub-ass-force-margins", plan.subAssForceMargins)
         } catch (_: Exception) {}
     }
 
@@ -1152,12 +1152,8 @@ class MpvPlayerEngine(
     override val durationMs: Long
         get() {
             // Prefer the mpv demuxer's duration when available; fall back to
-            // the server-reported runTimeTicks, which for HLS/transcoded
-            // streams is the only accurate total-runtime source (mpv's
-            // `duration` property is frequently 0 or only partially resolved
-            // for a transcoded manifest).
-            val engine = cachedDurationMs
-            return if (engine > 0L) engine else serverDurationMs
+            // the server-reported runTimeTicks (see resolveDurationMs).
+            return resolveDurationMs(cachedDurationMs, serverDurationMs)
         }
 
     override val playbackSpeed: Float
@@ -1853,17 +1849,6 @@ class MpvPlayerEngine(
             .replace(REDACT_API_KEY, "\$1***")
             .replace(REDACT_API_KEY_ENCODED, "\$1***")
             .replace(REDACT_EMBY_TOKEN, "\$1***")
-
-    private fun gcd(a: Int, b: Int): Int {
-        var x = a
-        var y = b
-        while (y != 0) {
-            val temp = y
-            y = x % y
-            x = temp
-        }
-        return x
-    }
 
     private fun MPV.safeSetOption(name: String, value: String) {
         try {

@@ -566,31 +566,30 @@ class LibVlcPlayerEngine(
 
     override fun setVolume(value: Float) {
         try {
-            val clamped = value.coerceIn(0f, 2f)
-            val v = (clamped * 100).toInt().coerceIn(0, 200)
-            if (v > 0) lastUnmuteVolume = v / 100f
-            mediaPlayer?.volume = v
-            MediaStreamVolume.setNormalized(context, clamped.coerceIn(0f, 1f))
+            val plan = PlaybackVolumePolicy.planLevel(value, PlaybackVolumePolicy.MAX_BOOST_VLC)
+            rememberUnmuteVolumeIfAudible(plan.normalized)
+            mediaPlayer?.volume = plan.normalized.toVlcVolumePercent()
+            MediaStreamVolume.setNormalized(context, plan.systemStream)
         } catch (_: Exception) {}
     }
 
     override fun increaseVolume(delta: Float) {
         try {
             val mp = mediaPlayer ?: return
-            val next = (mp.volume + (delta * 100).toInt()).coerceIn(0, 200)
-            if (next > 0) lastUnmuteVolume = next / 100f
-            mp.volume = next
-            MediaStreamVolume.setNormalized(context, (next / 100f).coerceIn(0f, 1f))
+            val plan = PlaybackVolumePolicy.planLevel(mp.volume / 100f + delta, PlaybackVolumePolicy.MAX_BOOST_VLC)
+            rememberUnmuteVolumeIfAudible(plan.normalized)
+            mp.volume = plan.normalized.toVlcVolumePercent()
+            MediaStreamVolume.setNormalized(context, plan.systemStream)
         } catch (_: Exception) {}
     }
 
     override fun decreaseVolume(delta: Float) {
         try {
             val mp = mediaPlayer ?: return
-            val next = (mp.volume - (delta * 100).toInt()).coerceIn(0, 200)
-            if (next > 0) lastUnmuteVolume = next / 100f
-            mp.volume = next
-            MediaStreamVolume.setNormalized(context, (next / 100f).coerceIn(0f, 1f))
+            val plan = PlaybackVolumePolicy.planLevel(mp.volume / 100f - delta, PlaybackVolumePolicy.MAX_BOOST_VLC)
+            rememberUnmuteVolumeIfAudible(plan.normalized)
+            mp.volume = plan.normalized.toVlcVolumePercent()
+            MediaStreamVolume.setNormalized(context, plan.systemStream)
         } catch (_: Exception) {}
     }
 
@@ -598,16 +597,26 @@ class LibVlcPlayerEngine(
         try {
             val mp = mediaPlayer ?: return
             if (muted) {
-                snapshotSystemVolumeForMute()
-                mp.volume = 0
-                MediaStreamVolume.setNormalized(context, 0f)
+                val plan = PlaybackVolumePolicy.planMute(PlaybackVolumePolicy.NativeVolumeRestore.ZERO)
+                if (plan.snapshotSystemVolume) snapshotSystemVolumeForMute()
+                plan.nativeVolume?.let { mp.volume = it.toVlcVolumePercent() }
+                MediaStreamVolume.setNormalized(context, plan.systemStream)
             } else {
-                val restored = unmuteTarget()
-                mp.volume = 100
-                MediaStreamVolume.setNormalized(context, restored)
+                val plan = PlaybackVolumePolicy.planUnmute(
+                    lastUnmuteVolume,
+                    PlaybackVolumePolicy.NativeVolumeRestore.REMEMBERED_LEVEL,
+                )
+                // VLC mutes by zeroing its volume, so unmute must write the
+                // remembered level back (it previously snapped to full
+                // loudness, losing the pre-mute level).
+                plan.nativeVolume?.let { mp.volume = it.toVlcVolumePercent() }
+                MediaStreamVolume.setNormalized(context, plan.systemStream)
             }
         } catch (_: Exception) {}
     }
+
+    /** libVLC's software volume is an int percent with amplification headroom to 200. */
+    private fun Float.toVlcVolumePercent(): Int = (this * 100).toInt().coerceIn(0, 200)
 
     override fun createSurfaceView(context: Context): View {
         val layout = VLCVideoLayout(context)
@@ -862,17 +871,9 @@ class LibVlcPlayerEngine(
     override fun setAspectRatio(ratio: AspectRatio) {
         try {
             val mp = mediaPlayer ?: return
-            val aspectValue = ratio.ratio
-            when {
-                aspectValue != null && aspectValue > 0f -> {
-                    mp.aspectRatio = aspectValue.toString()
-                }
-                else -> {
-                    // FIT / FILL / CROP / AUTO — let libVLC keep the native frame.
-                    mp.aspectRatio = null
-                    mp.scale = 0f
-                }
-            }
+            val plan = AspectRatioMapping.vlcPlan(ratio)
+            mp.aspectRatio = plan.aspectRatioOverride
+            if (plan.resetScale) mp.scale = 0f
         } catch (_: Exception) {}
     }
 

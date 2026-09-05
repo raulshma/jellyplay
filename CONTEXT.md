@@ -66,6 +66,19 @@ repo root.
   implementation — the bounded paused-wait (`POSITION_PAUSED_RECHECK_MS = 2_500L`),
   play↔pause edge detection and `delay(pollingIntervalMs)` live in exactly one
   place.
+- **`PlaybackVolumePolicy` / `AspectRatioMapping` / `EngineDurationFallback`**
+  (player-video commonMain `engine/`, the `MpvStyleMapping` shape) are the
+  adapters' pure decision halves: volume/mute plans (clamp, remember-unmute,
+  `MediaStreamVolume` sync, the `0.05f` floor) with per-engine max boost as
+  declared data (`MAX_BOOST_NOMINAL = 1.0f`, `MAX_BOOST_VLC = 2.0f` — VLC
+  amplification is a declared divergence, not copy variance), per-engine aspect
+  plans (Exo resize-mode selector, mpv panscan + subtitle margins, VLC
+  aspect-string override — CROP is a *declared* native-frame reset on VLC:
+  libVLC 3.x exposes no engine-drivable zoom), and the duration→server
+  fallback ladder. Adapters only apply the returned plans. The VLC unmute
+  restores the remembered level (it previously computed the target and jumped
+  to 100). `PlaybackVolumePolicyTest` / `AspectRatioMappingTest` /
+  `EngineDurationFallbackTest` pin all three engines at once.
 - **`PlayerLifecycleManager`** (`shared/core/data/src/jvmShared/kotlin/com/raulshma/jellyplay/core/data/playback/PlayerLifecycleManager.kt`)
   is the Activity↔engine lifecycle bridge: the host Activity calls
   `onActivityPause()` / `onActivityResume()`, which delegate straight to the
@@ -135,6 +148,17 @@ pair and `PlaybackProgressReporter`'s raw handle, both in
 controllers must stay free of `VideoPlayerUiState` code references (the
 ratchet test strips comments before counting, so KDoc prose is exempt —
 `EpisodeNavigator`'s doc mentions the type).
+
+**`PlayerScreenPolicies`** (beside `VideoPlayerScreen`) is the player screen's
+Compose-free decision half, the `homeQuickActionEffect` precedent: the seek
+STEP targets (`seekBackTargetMs`/`seekForwardTargetMs` — direction-asymmetric
+clamp, deliberately a different policy from `GestureSeekMath`'s capped gesture
+deltas; the KDoc cross-references why they stay separate), the orientation-lock
+fold (`Immediate`/`SettleFirst`; the 400 ms race stays in the effect shell),
+the aspect AUTO ladder, the skip-button visibility precedence, the controls
+auto-hide predicate + TV double timeout, and the user-font `.ttf`/`.otf` gate.
+Six former inline composable pockets; the effects are one-line callers. Pinned
+by `PlayerScreenPoliciesTest`.
 
 **`ItemPlaybackPreferenceWriter`**
 (`shared/feature/player-video/src/commonMain/kotlin/.../ItemPlaybackPreferenceWriter.kt`)
@@ -319,6 +343,17 @@ media, so a tmdbId match would never fire and the button would stay on
 "Request"), synthesize a minimal `SeerrMediaInfo(tmdbId = item.id)` when absent,
 set `status = SeerrMediaStatus.PENDING`, and leave non-matching details
 untouched. Pure and unit-tested; no feature-code imports.
+
+The request-dialog open/close choreography is the holder's too:
+`SeerrRequestSnapshot.dialogItem` plus two commands — `openRequestDialog(item)`
+sets the item and fires the cascade itself (`loadServiceDetails`, and
+`loadTvSeasons` only when mediaType equals "tv" ignoring case), and
+`dismissRequestDialog()` clears the item THEN the result, in that order. The
+three former per-screen `LaunchedEffect` cascades (media-detail, Seerr detail,
+search) render `snapshot.dialogItem` and decide nothing; pinned in
+`SeerrRequestStateHolderTest`. Nuance: the dialog's item is frozen at open
+time — Seerr-detail used to recompute it from the optimistic PENDING flip;
+the in-dialog state change now travels through the result field.
 
 Four ViewModels construct a per-VM instance (deliberately not a shared Koin
 single — each passes its own `scope` to `SeerrRequestDelegate`): `DetailViewModel`
@@ -689,7 +724,12 @@ only the state-class defaults.
 and public surface unchanged), and both screens' badge/BackHandler guards
 read the same fold — fixing library's drift where years/tags/minRating/sort
 silently under-reported the active set. Pinned by `LibraryFiltersAlgebraTest`
-(core/model commonTest).
+(core/model commonTest). `RequestsFilterState` (shared/feature/requests) is
+the same shape for the admin request queue (`withFilter`/`withSort`/
+`withSearch`/`cleared`, page-1 reset carried by `withFilters`), and
+`RequestsViewModel`'s five mutation commands are one-line delegates onto a
+single `runRequestAction` core (the `runBulk` shape; `runBulk`'s own
+per-item failure semantics stay separate). Pinned by `RequestsFilterStateTest`.
 
 ## Live TV recording & music collections
 
@@ -802,6 +842,17 @@ manual call to it from `AuthApiClientImpl.disconnect()` are gone —
 disconnect publishes one atomic null session and nothing needs a
 hand-rolled cross-module clear.
 
+The **`jellyplay://` grammar** is `DeepLinkGrammar`
+(`shared/core/model/src/commonMain/kotlin/.../deeplink/DeepLinkGrammar.kt`):
+the scheme + web-host constants, the link builders (media / newsletter / seerr
+/ search / settings / downloads / library, plus the GitHub-pages web mirror),
+and the `parseCustom`/`parseWeb` → `DeepLinkTarget` fold — pure, no Android
+types, round-trip pinned by `DeepLinkGrammarTest`. `DeepLinkHandler` (`:app`)
+keeps only the Intent/Uri glue; the four non-app emitters
+(`TvWatchNextPublisher`, `NotificationDispatcher`,
+`NotificationActionReceiver`, details' share text) call the builders directly —
+the scheme/path vocabulary survives nowhere as a raw literal.
+
 `MediaSearchEngine` intentionally still keys search history on
 `ServerIdentityStore.activeUserId` (the persisted session), not on
 HomeSession: history reads run on cold start before `restoreSession()` has
@@ -850,6 +901,17 @@ and `LyricsRepositoryImplTest` (the lyrics chain + eviction throttle on a
 fake clock) — ported from the legacy `core/data` suite the KMP move had
 stranded non-compiling on the wrong side of the seam (no CI lane compiled
 it, which is how the breakage stayed invisible; the legacy files are gone).
+The 2026-09-05 dark-lane rescue added the other three sole-coverage suites
+to this lane: `PlaybackRepositoryImplTest` (39), 
+`UnifiedMediaDetailProviderImplTest` (36) and
+`OfflineSyncManagerResyncTest` (20 — the `resyncItem` choreography:
+sidecar options, signature rollback, pending-flag retry legs; complementary
+to the TTL/baseline `OfflineSyncManagerTest`, kept as a sibling file because
+the fixtures conflict). All 95 passed unmodified on their first visible run.
+The remaining ~68 legacy test files still run in NO lane — they cover
+platform-only playback/cast/worker code and are the deliberate Phase-X husk;
+do not port them, and treat a legacy-only assertion as dead when its class
+moves to `androidMain`.
 
 The data layer's clock reads go through the injected **`TimeSource`**
 (jvmShared `util/TimeSource.kt`, the Koin-single `SystemTimeSource`): every
@@ -939,7 +1001,9 @@ decisions as pure functions: `routeForNavigationTarget(target)` (exhaustive
 silent `Route.Home` fall-through) and `popPlayerRoutes(backStacks)` (the
 Jellyfin-web "Stop" semantics: contiguous player entries popped off the top
 of every back stack). Pinned by `AdminRefreshGateTest` (shell jvmTest) and
-`RemoteNavigationRoutingTest` (app unit test).
+`RemoteNavigationRoutingTest` (app unit test); `ShellSectionRegistryTest`
+pins the ledger mechanics — the sentinel contentKey identity for
+unregistered routes, replace-on-re-attach, and a non-null fallback entry.
 
 ## Settings search
 
@@ -1043,6 +1107,23 @@ pair nine settings ViewModels hand-copied verbatim; each VM keeps its
 public members and delegates (the settings-root `SettingsViewModel` receives
 the store via its constructor + Koin def).
 
+The settings screens hold the datastore seam directly: each per-screen
+settings ViewModel (Appearance/Playback/Audio/Storage) exposes one
+`edit(transform: suspend (PreferencesEditScope) -> Unit)` command — the
+`NotificationSettingsViewModel` shape — instead of a per-field forwarding
+stratum (201 one-line renames deleted across the four VMs + Onboarding).
+Each VM keeps only the members that decide something: the gate pair, the
+category resets, the side-effect-carrying commands (`setAndroidTvWatchNextEnabled`
+with its `watchNextRefresher` poke, `setAutoDownloadNewEpisodes` with its sync
+poke, `clearAudioCache`, the storage FS walks). The screens read state through
+the unchanged composeState projections and issue `viewModel.edit { … }` — the
+`HomeStores` construction-seam precedent. `SettingsScreen`'s scaffold is
+single-homed too: `settingsSection(key, phoneStep, tvStep)` owns the entrance
++ TV/phone step arithmetic, `openSetting(id, route)` is the one
+highlight-then-navigate dispatch (the row path now rides the same
+choreography as `onResultClick`), and `dismissSearchAndRefocus()` is the
+close triple — composable-identical output.
+
 ## Theme variants
 
 **`ThemeVariant`** (`shared/core/designsystem/src/commonMain/kotlin/com/raulshma/jellyplay/core/designsystem/theme/ThemeVariant.kt`)
@@ -1131,11 +1212,25 @@ Recorded with evidence so future reviews don't re-suggest them.
 Designed but deliberately not landed — recorded so future work neither
 re-derives the designs nor lands them casually.
 
-- **Audio playback snapshots**: `AudioPlaybackManager`'s 54 flow members
-  fold into now-playing / queue / effects / connection snapshots
-  per the `SeerrRequestStateHolder` pattern. Deferred because ten consumer
+- **Audio playback snapshots**: `AudioPlaybackManager`'s flow members (47
+  today, 112 public members total, 14 consumer files) fold into
+  now-playing / queue / effects / connection snapshots
+  per the `SeerrRequestStateHolder` pattern. Deferred because the consumer
   files across app/widgets/tile rewrite onto it at once and nothing pins
   current behaviour — do it when audio/cast churn resumes, tests first.
+  Churn HAS resumed (20 commits since 2026-07); the first tests-first slice
+  is landed: `WidgetPushSnapshot` + `sameRenderAs` /
+  `sameNonPositionRenderAs` / `shouldPushPartialPosition` are pure in
+  `app`'s widget package, pinned by `WidgetPushSnapshotTest`, so the
+  partial-vs-full RemoteViews push race guard survives the fold. Still
+  blocking the fold: the manager itself is testable through no interface
+  (21 ctor deps, internal Main scope, hard-wired `createPlayer()`), its
+  now-playing update sequence is written 3× (`play`,
+  `onTrackTransitioned`, `onCrossfadeTransition`), the mini-player wiring
+  is pasted 3× in `JellyPlayApp`, and the effects toggle path applies
+  twice (VM immediate apply + the `AudioPreferencesReducer` diff). A
+  `NowPlayingTracker` extraction plus a test seam for the manager is the
+  dedicated session's first move (2026-09-05 architecture review, card 4).
 - **Settings category-merge module** (`SettingsCategoryMerge`): one
   `merge(category, incoming, current)` interface in core/datastore with
   legacy v0/v1 and factory-reset as adapters, folding

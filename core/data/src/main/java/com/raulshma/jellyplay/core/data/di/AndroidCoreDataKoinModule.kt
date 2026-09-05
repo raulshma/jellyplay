@@ -6,7 +6,6 @@ import com.raulshma.jellyplay.core.data.cast.CastManager
 import com.raulshma.jellyplay.core.data.cast.GoogleCastStrategy
 import com.raulshma.jellyplay.core.data.cast.dlna.DlnaCastStrategy
 import com.raulshma.jellyplay.core.data.cast.remote.JellyfinRemotePlayCastStrategy
-import com.raulshma.jellyplay.core.data.cast.remote.PlayOnController
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.download.DownloadIntakeImpl
 import com.raulshma.jellyplay.core.data.playback.AudioEffectsManager
@@ -60,10 +59,7 @@ import org.koin.dsl.module
  * (DownloadIntake, AudioQueueManager, TvWatchNextScheduler,
  * UserDataSyncScheduler, PlaybackSyncScheduler, StreamingSubtitleStore) plus
  * the AudioEffectsManager/AudioQueueFacade aliases the app interop layer used
- * to supply. [PlayOnController] keeps its Koin def even though nothing
- * resolves it today (the fling path routes through
- * JellyfinRemotePlayCastStrategy directly) so the type stays constructable
- * the moment a consumer returns.
+ * to supply.
  *
  * A transitional Hilt bridge module briefly fed the still-Hilt :app
  * injectors from these singles; it died with the app Hilt extinction
@@ -197,7 +193,6 @@ fun androidCoreDataModule(context: Context): Module = module {
             imageUrlProvider = get(),
         )
     }
-    single { PlayOnController(strategy = get()) }
     single {
         CastManager(
             context = context,

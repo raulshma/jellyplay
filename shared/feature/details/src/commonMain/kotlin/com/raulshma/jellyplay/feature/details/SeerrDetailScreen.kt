@@ -225,7 +225,6 @@ fun SeerrDetailScreen(
         colorStyle = preferences.theme.colorStyle,
         accentColorSwatch = preferences.theme.accentColorSwatch,
     ) {
-        var showRequestDialog by remember { mutableStateOf(false) }
         val seerrLoadingState = rememberSeerrCardLoadingState()
         val prefetchCallback: com.raulshma.jellyplay.core.ui.components.SeerrPrefetchCallback =
             remember(seerrLoadingState, viewModel) {
@@ -262,7 +261,33 @@ fun SeerrDetailScreen(
                         ratings = ratings,
                         recommendations = seerrRecommendations,
                         similar = seerrSimilar,
-                        onRequestClick = { showRequestDialog = true },
+                        onRequestClick = {
+                            // The dialog item is built from whichever detail is
+                            // loaded (movies and shows carry different fields);
+                            // the holder owns the rest of the open cascade.
+                            val item = movieDetail?.let {
+                                SeerrSearchItem(
+                                    id = it.id,
+                                    mediaType = "movie",
+                                    title = it.title,
+                                    overview = it.overview,
+                                    posterPath = it.posterPath,
+                                    releaseDate = it.releaseDate,
+                                    mediaInfo = it.mediaInfo
+                                )
+                            } ?: tvDetail?.let {
+                                SeerrSearchItem(
+                                    id = it.id,
+                                    mediaType = "tv",
+                                    name = it.name,
+                                    overview = it.overview,
+                                    posterPath = it.posterPath,
+                                    firstAirDate = it.firstAirDate,
+                                    mediaInfo = it.mediaInfo
+                                )
+                            }
+                            item?.let { viewModel.openRequestDialog(it) }
+                        },
                         onNavigate = onNavigate,
                         jellyfinItemId = jellyfinItemId,
                         onBack = onBack,
@@ -286,55 +311,18 @@ fun SeerrDetailScreen(
                 }
             }
 
-            if (showRequestDialog) {
-                val item = remember(movieDetail, tvDetail) {
-                    movieDetail?.let {
-                        SeerrSearchItem(
-                            id = it.id,
-                            mediaType = "movie",
-                            title = it.title,
-                            overview = it.overview,
-                            posterPath = it.posterPath,
-                            releaseDate = it.releaseDate,
-                            mediaInfo = it.mediaInfo
-                        )
-                    } ?: tvDetail?.let {
-                        SeerrSearchItem(
-                            id = it.id,
-                            mediaType = "tv",
-                            name = it.name,
-                            overview = it.overview,
-                            posterPath = it.posterPath,
-                            firstAirDate = it.firstAirDate,
-                            mediaInfo = it.mediaInfo
-                        )
-                    }
-                }
-
-                item?.let {
-                    // Fetch service details and TV seasons on-demand when the
-                    // dialog opens — the snapshot's seasons/anime fields are
-                    // populated by loadTvSeasons (same pattern as the search
-                    // and media-detail request dialogs).
-                    LaunchedEffect(Unit) {
-                        viewModel.loadServiceDetails(it.mediaType)
-                        if (it.mediaType.equals("tv", ignoreCase = true)) {
-                            viewModel.loadTvSeasons(it.id)
-                        }
-                    }
-
-                    SeerrRequestDialog(
-                        item = it,
-                        snapshot = seerrSnapshot,
-                        onConfirm = { serverId, profileId, rootFolder, tags, seasons ->
-                            viewModel.requestMedia(it, seasons, serverId, profileId, rootFolder, tags)
-                        },
-                        onDismiss = {
-                            showRequestDialog = false
-                            viewModel.clearRequestResult()
-                        }
-                    )
-                }
+            // Seerr request dialog — rendered from the holder snapshot's
+            // dialogItem; the open/dismiss choreography is the holder's
+            // (same pattern as the search and media-detail request dialogs).
+            seerrSnapshot.dialogItem?.let { item ->
+                SeerrRequestDialog(
+                    item = item,
+                    snapshot = seerrSnapshot,
+                    onConfirm = { serverId, profileId, rootFolder, tags, seasons ->
+                        viewModel.requestMedia(item, seasons, serverId, profileId, rootFolder, tags)
+                    },
+                    onDismiss = { viewModel.dismissRequestDialog() }
+                )
             }
 
             activeTrailerKey?.let { key ->

@@ -67,9 +67,6 @@ data class DetailUiState(
     // The currently-selected local subtitle stream index (null = none/disabled).
     // Independent from [selectedSubtitleIndex], which is the REMOTE stream index.
     val selectedLocalSubtitleIndex: Int? = null,
-    // Monotonic per-item content generation of the last fully-applied snapshot.
-    // Used by the screen only for diagnostics; the VM gates side effects off it.
-    val contentGeneration: Long = 0L,
     // Series content
     val seasons: List<MediaItem> = emptyList(),
     val episodes: Map<String, List<MediaItem>> = emptyMap(),
@@ -116,13 +113,9 @@ data class DetailUiState(
     // single snapshot, folded in as-is so a new holder field never re-adds a
     // mirror here.
     val seerrRequest: SeerrRequestSnapshot = SeerrRequestSnapshot(),
-    // "Manage Series" (DIRECT_ARR_INTEGRATION). Shown for a series with a tvdb
-    // id when the experimental flag is on; server resolution is deferred to the
-    // ManageSeriesScreen itself (cheap gate here — no network on the detail screen).
-    val canManageSeries: Boolean = false,
-    // Resolved once per series load (in loadItem) so the canManageSeries combine
-    // stays a pure derivation over snapshot state instead of issuing network I/O
-    // on every identity tick.
+    // Resolved once per series load (in loadItem) so the DetailViewModel's
+    // canManageSeries combine stays a pure derivation over snapshot state
+    // instead of issuing network I/O on every identity tick.
     val sonarrServersResolved: Boolean = false,
 ) {
     @Immutable

@@ -14,7 +14,6 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
-import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -33,10 +32,10 @@ import kotlin.test.assertSame
 /**
  * Pins the Audio settings preference-mirror wiring (LibraryLayout jvmTest
  * pattern): the screen's state is the [PreferenceProjections.audioPreferences]
- * slice, named editor setters route to [PreferencesEditor], lambda-routed
- * setters persist through the owning store inside `editor.edit { }` (captured
- * and replayed against a stub scope, since a relaxed editor mock never runs
- * the block), and the clear-cache action reaches the [AudioCacheClearer] seam.
+ * slice, every setter persists through the owning store inside the VM's
+ * `edit { }` command (captured and replayed against a stub scope, since a
+ * relaxed editor mock never runs the block), and the clear-cache action
+ * reaches the [AudioCacheClearer] seam.
  *
  * Later top-up round: also pins the cross-slice routing the store-owner
  * contract depends on — `setPreferAudioDescription` must land on the SUBTITLE
@@ -112,13 +111,14 @@ class AudioSettingsViewModelTest {
     }
 
     @Test
-    fun `gapless toggle delegates to the editor named setter`() = runTest {
+    fun `gapless toggle persists through the audio store`() = runTest {
         val viewModel = viewModel()
 
-        viewModel.setGaplessEnabled(true)
+        viewModel.edit { it.audio.setAudioGaplessEnabled(true) }
         advanceUntilIdle()
+        replayAllEdits()
 
-        verify(exactly = 1) { editor.setGaplessEnabled(true) }
+        coVerify(exactly = 1) { audioStore.setAudioGaplessEnabled(true) }
     }
 
     @Test
@@ -126,7 +126,7 @@ class AudioSettingsViewModelTest {
         val viewModel = viewModel()
         val edit = captureEdit()
 
-        viewModel.setEqualizerEnabled(true)
+        viewModel.edit { it.audioEffects.setEqualizerEnabled(true) }
         advanceUntilIdle()
         edit.captured.invoke(editScope)
 
@@ -138,7 +138,7 @@ class AudioSettingsViewModelTest {
         val viewModel = viewModel()
         val edit = captureEdit()
 
-        viewModel.setAudioCachingEnabled(false)
+        viewModel.edit { it.audioCache.setAudioCachingEnabled(false) }
         advanceUntilIdle()
         edit.captured.invoke(editScope)
 
@@ -164,7 +164,7 @@ class AudioSettingsViewModelTest {
     fun `prefer-audio-description persists through the SUBTITLE store, not audio`() = runTest {
         val viewModel = viewModel()
 
-        viewModel.setPreferAudioDescription(true)
+        viewModel.edit { it.subtitle.setPreferAudioDescription(true) }
         advanceUntilIdle()
         replayAllEdits()
 
@@ -178,9 +178,9 @@ class AudioSettingsViewModelTest {
     fun `night-mode and skip-threshold setters persist through the audio store`() = runTest {
         val viewModel = viewModel()
 
-        viewModel.setAudioNightModeVolume(0.6f)
-        viewModel.setAudioNightModeGain(12)
-        viewModel.setAudioSkipPreviousThresholdMs(3_500L)
+        viewModel.edit { it.audio.setAudioNightModeVolume(0.6f) }
+        viewModel.edit { it.audio.setAudioNightModeGain(12) }
+        viewModel.edit { it.audio.setAudioSkipPreviousThresholdMs(3_500L) }
         advanceUntilIdle()
         replayAllEdits()
 
@@ -193,8 +193,8 @@ class AudioSettingsViewModelTest {
     fun `volume boost persists through the audioEffects store`() = runTest {
         val viewModel = viewModel()
 
-        viewModel.setVolumeBoostEnabled(true)
-        viewModel.setVolumeBoostGain(8)
+        viewModel.edit { it.audioEffects.setVolumeBoostEnabled(true) }
+        viewModel.edit { it.audioEffects.setVolumeBoostGain(8) }
         advanceUntilIdle()
         replayAllEdits()
 

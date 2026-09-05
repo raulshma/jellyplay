@@ -176,7 +176,6 @@ fun SearchScreen(
             consumeQuery()
         }
     }
-    var requestItem by remember { mutableStateOf<com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem?>(null) }
     val seerrSnapshot by viewModel.seerrSnapshot.collectAsStateWithLifecycle()
     val seerrLoadingState = rememberSeerrCardLoadingState()
 
@@ -625,7 +624,10 @@ fun SearchScreen(
                             // Keyed on the whole item, not just id: a refreshed
                             // list can return a new object for the same id,
                             // and the request dialog must show that object.
-                            val onRequestClick = remember(seerrItem) { { requestItem = seerrItem } }
+                            // The open cascade itself is the holder's.
+                            val onRequestClick = remember(seerrItem) {
+                                { viewModel.openSeerrRequestDialog(seerrItem) }
+                            }
                             SeerrMediaCard(
                                 item = seerrItem,
                                 imageUrl = seerrItem.posterUrl,
@@ -1048,26 +1050,16 @@ fun SearchScreen(
         onConfirmRemove = { viewModel.removeItemDownload(it) },
     )
 
-    // Seerr request dialog
-    requestItem?.let { item ->
-        // Fetch service details and TV seasons on-demand when dialog opens
-        LaunchedEffect(item.id) {
-            viewModel.loadSeerrServiceDetails(item.mediaType)
-            if (item.mediaType.equals("tv", ignoreCase = true)) {
-                viewModel.loadTvSeasons(item.id)
-            }
-        }
-
+    // Seerr request dialog — rendered from the holder snapshot's dialogItem;
+    // the open/dismiss choreography is the holder's.
+    seerrSnapshot.dialogItem?.let { item ->
         SeerrRequestDialog(
             item = item,
             snapshot = seerrSnapshot,
             onConfirm = { serverId, profileId, rootFolder, tags, seasons ->
                 viewModel.requestSeerrMedia(item, seasons, serverId, profileId, rootFolder, tags)
             },
-            onDismiss = {
-                requestItem = null
-                viewModel.clearRequestResult()
-            },
+            onDismiss = { viewModel.dismissSeerrRequestDialog() },
         )
     }
 
