@@ -10,6 +10,7 @@ import android.widget.RemoteViewsService
 import com.raulshma.jellyplay.R
 import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
 import com.raulshma.jellyplay.core.model.LibraryWidgetItem
+import com.raulshma.jellyplay.core.model.deeplink.DeepLinkGrammar
 import org.koin.mp.KoinPlatform
 import kotlinx.coroutines.runBlocking
 
@@ -116,7 +117,7 @@ class LibraryRecommendationsWidgetService : RemoteViewsService() {
 
             val fillIn = Intent().apply {
                 action = Intent.ACTION_VIEW
-                data = android.net.Uri.parse(WidgetDeepLinks.buildMediaDeepLink(item.itemId))
+                data = android.net.Uri.parse(DeepLinkGrammar.mediaLink(item.itemId))
                 putExtra(EXTRA_ITEM_ID, item.itemId)
             }
             view.setOnClickFillInIntent(R.id.lr_item_root, fillIn)

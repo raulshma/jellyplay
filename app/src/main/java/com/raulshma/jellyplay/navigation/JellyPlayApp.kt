@@ -1017,33 +1017,15 @@ private fun TvContent(
                     // (MiniPlayer applies tvFocusIndicator); this is the host
                     // wiring gap for TV navigation.
                     if (showMiniPlayer) {
-                        val isAudioPlaying by audioPlaybackManager.isPlaying.collectAsStateWithLifecycle()
-                        val audioArtist by audioPlaybackManager.artist.collectAsStateWithLifecycle()
-                        val audioArtworkUrl by audioPlaybackManager.albumArtUrl.collectAsStateWithLifecycle()
-                        Box(
+                        AppMiniPlayerHost(
+                            audioPlaybackManager = audioPlaybackManager,
+                            title = audioTitle,
+                            onNowPlayingClick = onNowPlayingClick,
+                            onDismissMiniPlayer = onDismissMiniPlayer,
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
                                 .padding(bottom = 8.dp),
-                        ) {
-                            MiniPlayer(
-                                isVisible = true,
-                                title = audioTitle,
-                                artist = audioArtist,
-                                artworkUri = audioArtworkUrl,
-                                isPlaying = isAudioPlaying,
-                                onClick = onNowPlayingClick,
-                                onClose = {
-                                    audioPlaybackManager.stopAndRelease()
-                                    onDismissMiniPlayer()
-                                },
-                                onPlayPause = {
-                                    audioPlaybackManager.togglePlayPause()
-                                },
-                                onSkipNext = {
-                                    audioPlaybackManager.skipToNext()
-                                },
-                            )
-                        }
+                        )
                     }                }
             }
         }
@@ -1215,37 +1197,23 @@ private fun PhoneContent(
                     )
                 }
                 if (showMiniPlayer) {
-                    val isAudioPlaying by audioPlaybackManager.isPlaying.collectAsStateWithLifecycle()
                     val audioTitle by audioPlaybackManager.title.collectAsStateWithLifecycle()
-                    val audioArtist by audioPlaybackManager.artist.collectAsStateWithLifecycle()
-                    val audioArtworkUrl by audioPlaybackManager.albumArtUrl.collectAsStateWithLifecycle()
                     if (isExpanded) {
-                        Box(
+                        AppMiniPlayerHost(
+                            audioPlaybackManager = audioPlaybackManager,
+                            title = audioTitle,
+                            onNowPlayingClick = onNowPlayingClick,
+                            onDismissMiniPlayer = onDismissMiniPlayer,
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
                                 .padding(bottom = systemNavBarBottom + 2.dp)
-                        ) {
-                            MiniPlayer(
-                                isVisible = true,
-                                title = audioTitle,
-                                artist = audioArtist,
-                                artworkUri = audioArtworkUrl,
-                                isPlaying = isAudioPlaying,
-                                onClick = onNowPlayingClick,
-                                onClose = {
-                                    audioPlaybackManager.stopAndRelease()
-                                    onDismissMiniPlayer()
-                                },
-                                onPlayPause = {
-                                    audioPlaybackManager.togglePlayPause()
-                                },
-                                onSkipNext = {
-                                    audioPlaybackManager.skipToNext()
-                                },
-                            )
-                        }
+                        )
                     } else {
-                        Box(
+                        AppMiniPlayerHost(
+                            audioPlaybackManager = audioPlaybackManager,
+                            title = audioTitle,
+                            onNowPlayingClick = onNowPlayingClick,
+                            onDismissMiniPlayer = onDismissMiniPlayer,
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
                                 .padding(bottom = systemNavBarBottom + 60.dp)
@@ -1254,26 +1222,7 @@ private fun PhoneContent(
                                     val yOffset = (-bottomNavOffsetHeightPx.floatValue).coerceAtMost(maxOffset)
                                     IntOffset(x = 0, y = yOffset.roundToInt())
                                 }
-                        ) {
-                            MiniPlayer(
-                                isVisible = true,
-                                title = audioTitle,
-                                artist = audioArtist,
-                                artworkUri = audioArtworkUrl,
-                                isPlaying = isAudioPlaying,
-                                onClick = onNowPlayingClick,
-                                onClose = {
-                                    audioPlaybackManager.stopAndRelease()
-                                    onDismissMiniPlayer()
-                                },
-                                onPlayPause = {
-                                    audioPlaybackManager.togglePlayPause()
-                                },
-                                onSkipNext = {
-                                    audioPlaybackManager.skipToNext()
-                                },
-                            )
-                        }
+                        )
                     }
                 }                // Play On persistent transport bar — visible while a Jellyfin
                 // remote session is active and the full-screen companion is not
@@ -1393,6 +1342,48 @@ private fun PhoneContent(
             }
         }
     }
+
+/**
+ * Single audio mini-player host for every form-factor shell (TV overlay,
+ * phone NavigationRail, phone compact floating-nav). Owns the playback-flow
+ * collects and the [MiniPlayer] transport wiring that all three shells used
+ * to paste verbatim; [title] stays a parameter because [TvContent] hoists its
+ * own title collect to feed the drawer's Now Playing row. Per-shell placement —
+ * alignment, bottom padding and the compact shell's scroll-coupled offset —
+ * arrives via [modifier]; the `showMiniPlayer` gate stays at the call sites.
+ */
+@Composable
+private fun AppMiniPlayerHost(
+    audioPlaybackManager: AudioPlaybackManager,
+    title: String,
+    onNowPlayingClick: () -> Unit,
+    onDismissMiniPlayer: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val isAudioPlaying by audioPlaybackManager.isPlaying.collectAsStateWithLifecycle()
+    val audioArtist by audioPlaybackManager.artist.collectAsStateWithLifecycle()
+    val audioArtworkUrl by audioPlaybackManager.albumArtUrl.collectAsStateWithLifecycle()
+    Box(modifier = modifier) {
+        MiniPlayer(
+            isVisible = true,
+            title = title,
+            artist = audioArtist,
+            artworkUri = audioArtworkUrl,
+            isPlaying = isAudioPlaying,
+            onClick = onNowPlayingClick,
+            onClose = {
+                audioPlaybackManager.stopAndRelease()
+                onDismissMiniPlayer()
+            },
+            onPlayPause = {
+                audioPlaybackManager.togglePlayPause()
+            },
+            onSkipNext = {
+                audioPlaybackManager.skipToNext()
+            },
+        )
+    }
+}
 
 /**
  * Full-screen layout (player / onboarding / ambient / photo viewer): bare [Box] with

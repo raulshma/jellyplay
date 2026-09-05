@@ -153,30 +153,6 @@ class ChapterSeekTickConversionTest {
     }
 }
 
-class SkipIntroCreditsTest {
-
-    @Test
-    fun skipIntro_seeksToEndOfIntro() {
-        val introEndTicks = 300_000_000L
-        val targetMs = introEndTicks / 10_000
-        assertEquals(30_000L, targetMs)
-    }
-
-    @Test
-    fun skipCredits_seeksToEndOfCredits() {
-        val creditEndTicks = 3_600_000_000L
-        val targetMs = creditEndTicks / 10_000
-        assertEquals(360_000L, targetMs)
-    }
-
-    @Test
-    fun skipIntro_zeroEndTicks() {
-        val introEndTicks = 0L
-        val targetMs = introEndTicks / 10_000
-        assertEquals(0L, targetMs)
-    }
-}
-
 class PlayerEngineSeekContractTest {
 
     @Test

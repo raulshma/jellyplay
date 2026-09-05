@@ -279,11 +279,13 @@ fun AppearanceSettingsScreen(
         val performanceGroup = listOf("performance_mode", "reduce_motion")
         val eyeCareGroup = listOf("blue_light_filter", "blue_light_strength")
         val newsletterGroup = listOf("newsletter_enabled", "newsletter_delivery_day")
+        val navBarGroup = listOf("nav_bar_customization", "nav_hide_on_scroll")
         // Index 0 = Theme, 1 = Navigation customization, 2 = Library & Cards, 3 = Home Screen Layout.
         // Performance/Eye Care/Newsletter only exist when advanced is on
         // and occupy indices 4/5/6 respectively.
         when (highlightSettingId) {
             in themeGroup -> 0
+            in navBarGroup -> 1
             in libraryGroup -> 2
             in homeLayoutGroup -> 3
             in performanceGroup -> if (showAdvanced) 4 else -1

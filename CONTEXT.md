@@ -158,7 +158,18 @@ fold (`Immediate`/`SettleFirst`; the 400 ms race stays in the effect shell),
 the aspect AUTO ladder, the skip-button visibility precedence, the controls
 auto-hide predicate + TV double timeout, and the user-font `.ttf`/`.otf` gate.
 Six former inline composable pockets; the effects are one-line callers. Pinned
-by `PlayerScreenPoliciesTest`.
+by `PlayerScreenPoliciesTest`. The segment-skip ladder is the newest sibling:
+`SegmentSkipPolicy` (beside it) folds `skipIntro`/`skipCredits`/`skipSegment`'s
+shared precedence — cinema-intro escape (INTRO kind only) → the outro's
+near-end + can-skip-to-next next-episode branch (CREDITS kind only) →
+active-segment-of-the-pressed-kind → that kind's end-ticks fallback — into one
+pure `segmentSkipTarget(...)` returning a sealed `SegmentSkipTarget`
+(`SeekToPosition` in ms / `SkipToNextEpisode` / `AdvanceCinemaIntro` / `None`);
+the VM's three funs are a snapshot → policy → one-line effect dispatch, and
+`segmentEndSeekTarget` is the shared ticks guard + truncating ticks→ms fold.
+Pinned by `SegmentSkipPolicyTest`, which replaced `PlaybackLogicTest`'s
+`SkipIntroCreditsTest` placebo (its assertions only re-derived
+`introEndTicks / 10_000` integer division and never executed a skip).
 
 **`ItemPlaybackPreferenceWriter`**
 (`shared/feature/player-video/src/commonMain/kotlin/.../ItemPlaybackPreferenceWriter.kt`)
@@ -850,7 +861,11 @@ and the `parseCustom`/`parseWeb` → `DeepLinkTarget` fold — pure, no Android
 types, round-trip pinned by `DeepLinkGrammarTest`. `DeepLinkHandler` (`:app`)
 keeps only the Intent/Uri glue; the four non-app emitters
 (`TvWatchNextPublisher`, `NotificationDispatcher`,
-`NotificationActionReceiver`, details' share text) call the builders directly —
+`NotificationActionReceiver`, details' share text) call the builders directly,
+as do the widget emitters (`ContinueWatchingWidgetService` → `mediaLink`,
+`ContinueWatchingWidget` → `continueWatchingLink`, the Library/Seerr
+recommendation services → `mediaLink`/`seerrLink`; the shallow
+`WidgetDeepLinks` re-encapsulation and its test are deleted) —
 the scheme/path vocabulary survives nowhere as a raw literal.
 
 `MediaSearchEngine` intentionally still keys search history on
@@ -1218,19 +1233,35 @@ re-derives the designs nor lands them casually.
   per the `SeerrRequestStateHolder` pattern. Deferred because the consumer
   files across app/widgets/tile rewrite onto it at once and nothing pins
   current behaviour — do it when audio/cast churn resumes, tests first.
-  Churn HAS resumed (20 commits since 2026-07); the first tests-first slice
-  is landed: `WidgetPushSnapshot` + `sameRenderAs` /
-  `sameNonPositionRenderAs` / `shouldPushPartialPosition` are pure in
-  `app`'s widget package, pinned by `WidgetPushSnapshotTest`, so the
-  partial-vs-full RemoteViews push race guard survives the fold. Still
-  blocking the fold: the manager itself is testable through no interface
-  (21 ctor deps, internal Main scope, hard-wired `createPlayer()`), its
-  now-playing update sequence is written 3× (`play`,
-  `onTrackTransitioned`, `onCrossfadeTransition`), the mini-player wiring
-  is pasted 3× in `JellyPlayApp`, and the effects toggle path applies
-  twice (VM immediate apply + the `AudioPreferencesReducer` diff). A
-  `NowPlayingTracker` extraction plus a test seam for the manager is the
-  dedicated session's first move (2026-09-05 architecture review, card 4).
+  The 2026-09-05 session landed four of the five recorded blockers.
+  `WidgetPushSnapshot` + `sameRenderAs` / `sameNonPositionRenderAs` /
+  `shouldPushPartialPosition` are pure in `app`'s widget package, pinned by
+  `WidgetPushSnapshotTest`, so the partial-vs-full RemoteViews push race
+  guard survives the fold. **`NowPlayingTracker`**
+  (`shared/core/data` commonMain, beside `AudioPreferencesReducer`) is the
+  sole writer of the six now-playing metadata flows: the sequence the
+  manager had written 4× (`play`'s detail path, `play`'s local-file
+  fallback, `onTrackTransitioned`, `onCrossfadeTransition`) is now three
+  publish shapes — `publishDetail` / `publishQueueItem` / `publishLocalFile`
+  — plus `clear()` on stop, each recording its deliberate divergence (queue
+  transitions leave `artistId` untouched because `AudioQueueItem` carries
+  no artist id; the local fallback also leaves `albumArtUrl`; `clear()`
+  never resets `artistId`), pinned by `NowPlayingTrackerTest`. The manager
+  re-exposes the tracker's flows by reference (same instances), so all 14
+  consumers and the widget are unchanged. The manager's test seam is two
+  defaulted ctor params (`playbackScope`, `playerFactory`) — production DI
+  untouched. The mini-player wiring's 3× paste in `JellyPlayApp` is one
+  `AppMiniPlayerHost` (collects the flows once, takes `title` as a
+  parameter because TV's hoisted collect also feeds the drawer's Now
+  Playing row; per-site modifier/offset slots). `NowPlayingWidgetPolicy`
+  (the responsive layout ladder + position/seek/progress math + metadata
+  fallbacks, pure, pinned by `NowPlayingWidgetPolicyTest`) completes the
+  widget package's tests-first base. Still blocking the fold: the effects
+  toggle path applies twice (VM immediate apply + the
+  `AudioPreferencesReducer` diff — the reducer tracks only the last store
+  slices, not processor state; fixing means a processor-state read-through
+  or dropping the immediate apply, a behaviour-timing change deserving a
+  listen-pass) and the fold itself (the consumer rewrites onto snapshots).
 - **Settings category-merge module** (`SettingsCategoryMerge`): one
   `merge(category, incoming, current)` interface in core/datastore with
   legacy v0/v1 and factory-reset as adapters, folding

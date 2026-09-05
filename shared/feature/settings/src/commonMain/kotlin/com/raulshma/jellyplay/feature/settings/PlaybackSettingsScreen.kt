@@ -420,10 +420,15 @@ fun PlaybackSettingsScreen(
         val syncPlay = listOf("syncplay_join_behavior", "syncplay_tolerance", "syncplay_auto_accept_invites")
         val casting = listOf("casting_strategy", "background_casting", "preferred_renderer")
         val dvr = listOf("dvr_pre_padding", "dvr_post_padding", "dvr_recording_quality")
+        val mediaSegments = listOf(
+            "media_segment_intro", "media_segment_outro", "media_segment_preview",
+            "media_segment_recap", "media_segment_commercial", "media_segment_unknown",
+        )
         when (highlightSettingId) {
             in playerGroup -> 0
             in advancedVideo -> if (showAdvanced) 1 else -1
             in engineConfig -> if (showAdvanced) 2 else 1
+            in mediaSegments -> if (showAdvanced) 3 else 2
             in syncPlay -> if (showAdvanced) 4 else 3
             in casting -> if (showAdvanced) 5 else 4
             in dvr -> if (showAdvanced) 6 else 5

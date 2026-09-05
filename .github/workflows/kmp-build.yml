@@ -275,7 +275,11 @@ jobs:
       - name: App unit tests (phone + tv debug)
         # F5: run in CI, not just as local wave gates (wave-21 baseline:
         # 94 phone / 98 tv tests).
-        run: ./gradlew :app:testPhoneDebugUnitTest :app:testTvDebugUnitTest --stacktrace
+        # :core:notification:testDebugUnitTest closes the dark lane that let
+        # its 8 Robolectric suites (67 tests) gate nothing — the exact
+        # no-CI-lane failure mode that stranded the legacy core/data suites
+        # (CONTEXT.md); notification is living code, not the Phase-X husk.
+        run: ./gradlew :app:testPhoneDebugUnitTest :app:testTvDebugUnitTest :core:notification:testDebugUnitTest --stacktrace
 
       - name: Compose-resources APK guard (wave-21 P0 regression guard, F1)
         # dependsOn assemblePhoneDebug — the guard opens the built APKs.

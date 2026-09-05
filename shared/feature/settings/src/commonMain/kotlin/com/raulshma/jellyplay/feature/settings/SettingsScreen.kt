@@ -27,6 +27,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -54,6 +55,7 @@ import androidx.compose.ui.focus.focusRequester
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKey
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKeyEvent
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
@@ -68,11 +70,18 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.material3.DockedSearchBar
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.SearchBarDefaults
 import androidx.compose.material3.TextButton
 import androidx.compose.ui.focus.onFocusEvent
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
+import coil3.compose.AsyncImage
+import androidx.compose.ui.layout.ContentScale
+import com.raulshma.jellyplay.core.network.library.buildUserImageUrl
+import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.ui.components.TopBarStyle
 import com.raulshma.jellyplay.core.ui.components.SettingListItem
 import com.raulshma.jellyplay.core.ui.components.SettingToggleItem
@@ -90,6 +99,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.groupedItemContainerColor
 import com.raulshma.jellyplay.core.designsystem.theme.hairlineBorderColor
 import com.raulshma.jellyplay.core.designsystem.theme.lightModeHairlineBorder
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsLightTheme
+import com.raulshma.jellyplay.core.designsystem.theme.settingsGroupContainerColor
 import com.raulshma.jellyplay.core.model.SettingsScreenPreferences
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.ContrastLevel
@@ -180,6 +190,15 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_pin_
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_playback
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_playback_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_power_user_mode
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_power_user_mode_desc
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_no_matches_hint
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_clear_query
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_filter_all
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_browse_categories
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_quick_actions
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_server_settings
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_switch_user_action
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_whats_new
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_privacy_data
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_privacy_data_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_recents_title
@@ -297,12 +316,34 @@ private fun SearchResultsColumn(
     )
 }
 
+private fun highlightText(
+    text: String,
+    query: String,
+    highlightColor: Color,
+): androidx.compose.ui.text.AnnotatedString {
+    val trimmed = query.trim()
+    if (trimmed.isEmpty()) return androidx.compose.ui.text.AnnotatedString(text)
+    val index = text.indexOf(trimmed, ignoreCase = true)
+    if (index < 0) return androidx.compose.ui.text.AnnotatedString(text)
+    return buildAnnotatedString {
+        append(text.substring(0, index))
+        withStyle(
+            SpanStyle(
+                color = highlightColor,
+                fontWeight = FontWeight.Bold,
+            )
+        ) {
+            append(text.substring(index, index + trimmed.length))
+        }
+        append(text.substring(index + trimmed.length))
+    }
+}
+
 /**
  * A single resolved settings-search result row, shared by the live search results
  * and the recent-settings list so both render identically (leading icon, title,
  * subtitle, category/advanced pills, chevron, expressive list shape, TV focus) and
- * share one tap handler. Extracted from the inline result row so the two lists can
- * not drift in appearance or click behavior.
+ * share one tap handler.
  */
 @Composable
 private fun SettingsSearchResultRow(
@@ -310,6 +351,7 @@ private fun SettingsSearchResultRow(
     index: Int,
     count: Int,
     advancedBadgeLabel: String,
+    query: String = "",
     onClick: () -> Unit,
 ) {
     val shape = com.raulshma.jellyplay.core.designsystem.theme.expressiveListShape(index, count, innerRadius = 0.dp)
@@ -317,7 +359,7 @@ private fun SettingsSearchResultRow(
     ListItem(
         headlineContent = {
             Text(
-                text = item.title,
+                text = highlightText(item.title, query, MaterialTheme.colorScheme.primary),
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Medium,
                 color = MaterialTheme.colorScheme.onSurface,
@@ -325,7 +367,7 @@ private fun SettingsSearchResultRow(
         },
         supportingContent = {
             Text(
-                text = item.subtitle,
+                text = highlightText(item.subtitle, query, MaterialTheme.colorScheme.primary),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -400,6 +442,125 @@ private fun SettingsSearchResultRow(
     )
 }
 
+@Composable
+private fun SettingsCategoryChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val focusState = rememberTvFocusState(focusedScale = 1.05f)
+    Surface(
+        onClick = onClick,
+        shape = CircleShape,
+        color = if (selected) MaterialTheme.colorScheme.primaryContainer else groupedItemContainerColor(darkAlpha = 0.4f),
+        border = BorderStroke(
+            width = 1.dp,
+            color = if (selected) MaterialTheme.colorScheme.primary else hairlineBorderColor(),
+        ),
+        modifier = modifier
+            .then(focusState.focusModifier)
+            .tvFocusIndicator(focusState, CircleShape),
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+            color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+        )
+    }
+}
+
+private data class QuickCategory(
+    val title: String,
+    val icon: ImageVector,
+    val route: Route,
+)
+
+@Composable
+private fun SettingsQuickCategoriesGrid(
+    onNavigate: (Route) -> Unit,
+    onDismissSearch: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val categories = listOf(
+        QuickCategory(stringResource(Res.string.settings_appearance), Tabler.Outline.Palette, Route.AppearanceSettings()),
+        QuickCategory(stringResource(Res.string.settings_playback), Tabler.Outline.PlayerPlay, Route.PlaybackSettings()),
+        QuickCategory(stringResource(Res.string.settings_audio_player), Tabler.Outline.Headphones, Route.AudioSettings()),
+        QuickCategory(stringResource(Res.string.settings_language_subtitles), Tabler.Outline.Subtitles, Route.LanguageSettings()),
+        QuickCategory(stringResource(Res.string.settings_downloads_storage), Tabler.Outline.Download, Route.StorageSettings()),
+        QuickCategory(stringResource(Res.string.settings_security), Tabler.Outline.ShieldLock, Route.SecuritySettings()),
+        QuickCategory(stringResource(Res.string.settings_server_management), Tabler.Outline.Server, Route.ServerManagement(null)),
+        QuickCategory(stringResource(Res.string.settings_browse_favorites), Tabler.Outline.Heart, Route.Favorites),
+    )
+
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        categories.chunked(2).forEach { rowPair ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                rowPair.forEach { cat ->
+                    val catFocusState = rememberTvFocusState(focusedScale = 1.02f)
+                    Surface(
+                        onClick = {
+                            onDismissSearch()
+                            onNavigate(cat.route)
+                        },
+                        shape = ShapeCache.smooth16,
+                        color = groupedItemContainerColor(darkAlpha = 0.45f),
+                        border = BorderStroke(1.dp, hairlineBorderColor().copy(alpha = 0.6f)),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(56.dp)
+                            .then(catFocusState.focusModifier)
+                            .tvFocusIndicator(catFocusState, ShapeCache.smooth16)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clip(ShapeCache.smooth10)
+                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(
+                                    imageVector = cat.icon,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(17.dp),
+                                )
+                            }
+                            Spacer(Modifier.width(10.dp))
+                            Text(
+                                text = cat.title,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                    }
+                }
+                if (rowPair.size == 1) {
+                    Spacer(Modifier.weight(1f))
+                }
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun SettingsScreen(
@@ -466,6 +627,7 @@ fun SettingsScreen(
     var searchQuery by remember { mutableStateOf("") }
     var isSearchActive by remember { mutableStateOf(false) }
     var isSearchFocused by remember { mutableStateOf(false) }
+    var selectedCategory by remember { mutableStateOf<String?>(null) }
     var showSignOutConfirm by remember { mutableStateOf(false) }
     var signOutFromServer by remember { mutableStateOf(false) }
     var activeDialog by remember { mutableStateOf<PickerState<*>?>(null) }
@@ -475,6 +637,7 @@ fun SettingsScreen(
     fun dismissSearchAndRefocus() {
         isSearchActive = false
         searchQuery = ""
+        selectedCategory = null
         listFocusRequester.tryRequestFocus()
     }
 
@@ -515,6 +678,18 @@ fun SettingsScreen(
             .collect { value = it }
     }
 
+    val availableCategories = remember(filteredItems) {
+        filteredItems.map { it.category }.distinct()
+    }
+
+    val displayItems = remember(filteredItems, selectedCategory) {
+        if (selectedCategory != null) {
+            filteredItems.filter { it.category == selectedCategory }
+        } else {
+            filteredItems
+        }
+    }
+
     // The last-used setting ids (most-recent first), resolved back to renderable
     // items against the catalog. Stale ids — a recorded setting whose catalog
     // entry no longer exists — drop out via mapNotNull and naturally age out as
@@ -531,8 +706,7 @@ fun SettingsScreen(
     }
 
     JellyPlayBackHandler(enabled = isSearchActive) {
-        isSearchActive = false
-        searchQuery = ""
+        dismissSearchAndRefocus()
     }
 
     com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold(
@@ -602,6 +776,7 @@ fun SettingsScreen(
             // settings list doesn't briefly reveal during the transition.
             isSearchActive = false
             searchQuery = ""
+            selectedCategory = null
         }
 
         // Admin session polling is tied to screen visibility so it only runs
@@ -627,169 +802,339 @@ fun SettingsScreen(
                     .fillMaxSize()
                     .statusBarsPadding()
             ) {
-                // Floating Toolbar / Search Bar Section (MD3 expressive DockedSearchBar)
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(
-                            start = adaptiveInfo.contentPadding(LocalTvMode.current),
-                            end = adaptiveInfo.contentPadding(LocalTvMode.current),
-                            top = 16.dp,
-                            bottom = 8.dp
-                        )
-                ) {
-                    if (isTv && !isSearchActive) {
-                        SettingsTvCollapsedSearchRow(
-                            onSearchClicked = {
-                                isSearchActive = true
-                                coroutineScope.launch {
-                                    kotlinx.coroutines.delay(100)
-                                    searchFocusRequester.tryRequestFocus()
-                                }
-                            },
-                            searchBoxFocusRequester = searchFocusRequester
-                        )
-                    } else {
-                        DockedSearchBar(
-                            inputField = {
-                            SearchBarDefaults.InputField(
-                                query = searchQuery,
-                                onQueryChange = { searchQuery = it },
-                                onSearch = { },
-                                expanded = isSearchActive,
-                                onExpandedChange = { expanded ->
-                                    if (!isTv) {
-                                        isSearchActive = expanded
+                // Search Bar / Navigation Header
+                if (!isSearchActive) {
+                    if (isTv) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(
+                                    start = adaptiveInfo.contentPadding(LocalTvMode.current),
+                                    end = adaptiveInfo.contentPadding(LocalTvMode.current),
+                                    top = 16.dp,
+                                    bottom = 8.dp
+                                )
+                        ) {
+                            SettingsTvCollapsedSearchRow(
+                                onSearchClicked = {
+                                    isSearchActive = true
+                                    coroutineScope.launch {
+                                        kotlinx.coroutines.delay(100)
+                                        searchFocusRequester.tryRequestFocus()
                                     }
                                 },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .focusRequester(searchFocusRequester)
-                                    .onFocusEvent { isSearchFocused = it.isFocused }
-
-                                    .onDpadKeyEvent(
-                                        onSelect = { e ->
-                                            if (!isSearchActive && e.isKeyUp) {
-                                                isSearchActive = true
-                                                true
-                                            } else false
-                                        },
-                                        onLeft = {
-                                            leadingFocusRequester.tryRequestFocus()
-                                            true
-                                        },
-                                        onRight = {
-                                            trailingFocusRequester.tryRequestFocus()
-                                            true
-                                        },
-                                        onBack = { e ->
-                                            if (e.isKeyUp) {
-                                                dismissSearchAndRefocus()
-                                            }
-                                            true
-                                        },
-                                    ),
-                                placeholder = {
-                                    Text(
-                                        stringResource(Res.string.settings_search_placeholder),
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                },
-                                leadingIcon = {
-                                    SettingsIconButton(
-                                        onClick = {
-                                            if (isSearchActive) {
-                                                isSearchActive = false
-                                                searchQuery = ""
-                                            } else {
-                                                onBack()
-                                            }
-                                        },
-                                        icon = if (isSearchActive) Tabler.Outline.ArrowLeft else Tabler.Outline.Search,
-                                        contentDescription = searchBackCd,
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                                        iconSize = 20.dp,
-                                        modifier = Modifier
-                                            .focusRequester(leadingFocusRequester)
-                                            .onDpadKey(
-                                                onRight = {
-                                                    searchFocusRequester.tryRequestFocus()
-                                                    true
-                                                },
-                                            )
-                                    )
-                                },
-                                trailingIcon = {
-                                    if (searchQuery.isNotBlank() || isSearchActive) {
-                                        SettingsIconButton(
-                                            onClick = { searchQuery = "" },
-                                            icon = Tabler.Outline.X,
-                                            contentDescription = clearSearchCd,
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                                            iconSize = 18.dp,
-                                            modifier = Modifier
-                                                .focusRequester(trailingFocusRequester)
-                                                .onDpadKey(
-                                                    onLeft = {
-                                                        searchFocusRequester.tryRequestFocus()
-                                                        true
-                                                    },
-                                                )
-                                        )
-                                    }
-                                },
+                                searchBoxFocusRequester = searchFocusRequester
                             )
-                        },
-                        expanded = isSearchActive,
-                        onExpandedChange = { expanded ->
-                            if (!isTv) {
-                                isSearchActive = expanded
+                        }
+                    } else {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(
+                                    start = adaptiveInfo.contentPadding(LocalTvMode.current),
+                                    end = adaptiveInfo.contentPadding(LocalTvMode.current),
+                                    top = 16.dp,
+                                    bottom = 8.dp
+                                ),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            SettingsIconButton(
+                                onClick = onBack,
+                                icon = Tabler.Outline.ArrowLeft,
+                                contentDescription = searchBackCd,
+                                modifier = Modifier.size(44.dp),
+                            )
+                            Surface(
+                                onClick = {
+                                    isSearchActive = true
+                                    coroutineScope.launch {
+                                        kotlinx.coroutines.delay(100)
+                                        searchFocusRequester.tryRequestFocus()
+                                    }
+                                },
+                                shape = CircleShape,
+                                color = groupedItemContainerColor(darkAlpha = 0.4f),
+                                border = BorderStroke(1.dp, hairlineBorderColor()),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(46.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(horizontal = 16.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Tabler.Outline.Search,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Text(
+                                        text = stringResource(Res.string.settings_search_placeholder),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
                             }
-                        },
+                        }
+                    }
+                } else {
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .then(
-                                if (isSearchFocused && isTv) {
-                                    Modifier.shadow(
-                                        elevation = TvFocusDefaults.GlowElevation,
-                                        shape = ShapeCache.smooth16,
-                                        clip = false,
-                                        ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = TvFocusDefaults.GlowAmbientAlpha),
-                                        spotColor = MaterialTheme.colorScheme.primary.copy(alpha = TvFocusDefaults.GlowSpotAlpha),
-                                    )
-                                } else {
-                                    Modifier
-                                }
-                            )
-                            .border(
-                                width = if (isSearchFocused && isTv) TvFocusDefaults.BorderWidth else 1.dp,
-                                color = if (isSearchFocused && isTv) MaterialTheme.colorScheme.primary else hairlineBorderColor(),
-                                shape = ShapeCache.smooth16
+                            .padding(
+                                start = adaptiveInfo.contentPadding(LocalTvMode.current),
+                                end = adaptiveInfo.contentPadding(LocalTvMode.current),
+                                top = 16.dp,
+                                bottom = 8.dp
                             ),
-                        shape = ShapeCache.smooth16,
-                        colors = SearchBarDefaults.colors(
-                            containerColor = groupedItemContainerColor(darkAlpha = 0.4f),
-                        ),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        SettingsIconButton(
+                            onClick = { dismissSearchAndRefocus() },
+                            icon = Tabler.Outline.ArrowLeft,
+                            contentDescription = searchBackCd,
+                            iconSize = 20.dp,
+                            modifier = Modifier
+                                .focusRequester(leadingFocusRequester)
+                                .onDpadKey(
+                                    onRight = {
+                                        searchFocusRequester.tryRequestFocus()
+                                        true
+                                    }
+                                )
+                        )
+
+                        Surface(
+                            shape = ShapeCache.smooth16,
+                            color = groupedItemContainerColor(darkAlpha = 0.4f),
+                            border = BorderStroke(
+                                width = if (isSearchFocused && isTv) TvFocusDefaults.BorderWidth else 1.dp,
+                                color = if (isSearchFocused && isTv) MaterialTheme.colorScheme.primary else hairlineBorderColor()
+                            ),
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(48.dp)
+                                .then(
+                                    if (isSearchFocused && isTv) {
+                                        Modifier.shadow(
+                                            elevation = TvFocusDefaults.GlowElevation,
+                                            shape = ShapeCache.smooth16,
+                                            clip = false,
+                                            ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = TvFocusDefaults.GlowAmbientAlpha),
+                                            spotColor = MaterialTheme.colorScheme.primary.copy(alpha = TvFocusDefaults.GlowSpotAlpha),
+                                        )
+                                    } else Modifier
+                                )
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(horizontal = 14.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Tabler.Outline.Search,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                    modifier = Modifier.size(18.dp)
+                                )
+
+                                Box(
+                                    modifier = Modifier.weight(1f),
+                                    contentAlignment = Alignment.CenterStart
+                                ) {
+                                    if (searchQuery.isEmpty()) {
+                                        Text(
+                                            text = stringResource(Res.string.settings_search_placeholder),
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                        )
+                                    }
+                                    BasicTextField(
+                                        value = searchQuery,
+                                        onValueChange = { searchQuery = it },
+                                        singleLine = true,
+                                        textStyle = MaterialTheme.typography.bodyMedium.copy(
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        ),
+                                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .focusRequester(searchFocusRequester)
+                                            .onFocusEvent { isSearchFocused = it.isFocused }
+                                            .onDpadKeyEvent(
+                                                onLeft = {
+                                                    leadingFocusRequester.tryRequestFocus()
+                                                    true
+                                                },
+                                                onRight = {
+                                                    if (searchQuery.isNotEmpty()) {
+                                                        trailingFocusRequester.tryRequestFocus()
+                                                        true
+                                                    } else false
+                                                },
+                                                onBack = { e ->
+                                                    if (e.isKeyUp) {
+                                                        dismissSearchAndRefocus()
+                                                    }
+                                                    true
+                                                }
+                                            )
+                                    )
+                                }
+
+                                if (searchQuery.isNotEmpty()) {
+                                    SettingsIconButton(
+                                        onClick = { searchQuery = "" },
+                                        icon = Tabler.Outline.X,
+                                        contentDescription = clearSearchCd,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                        iconSize = 18.dp,
+                                        modifier = Modifier
+                                            .focusRequester(trailingFocusRequester)
+                                            .onDpadKey(
+                                                onLeft = {
+                                                    searchFocusRequester.tryRequestFocus()
+                                                    true
+                                                }
+                                            )
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (isSearchActive) {
+                    if (availableCategories.isNotEmpty()) {
+                        LazyRow(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 8.dp),
+                            contentPadding = PaddingValues(horizontal = adaptiveInfo.contentPadding(LocalTvMode.current)),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            item(key = "cat_all") {
+                                SettingsCategoryChip(
+                                    label = stringResource(Res.string.settings_filter_all),
+                                    selected = selectedCategory == null,
+                                    onClick = { selectedCategory = null },
+                                )
+                            }
+                            items(availableCategories, key = { it }) { cat ->
+                                SettingsCategoryChip(
+                                    label = cat,
+                                    selected = selectedCategory == cat,
+                                    onClick = {
+                                        selectedCategory = if (selectedCategory == cat) null else cat
+                                    },
+                                )
+                            }
+                        }
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
                     ) {
                         when {
-                            filteredItems.isNotEmpty() -> {
+                            searchQuery.isNotBlank() && displayItems.isNotEmpty() -> {
                                 SearchResultsColumn(
                                     onBack = { dismissSearchAndRefocus() }
                                 ) {
-                                    itemsIndexed(filteredItems, key = { _, item -> item.id }) { index, item ->
+                                    itemsIndexed(displayItems, key = { _, item -> item.id }) { index, item ->
                                         SettingsSearchResultRow(
                                             item = item,
+                                            query = searchQuery,
                                             index = index,
-                                            count = filteredItems.size,
+                                            count = displayItems.size,
                                             advancedBadgeLabel = advLabel,
                                             onClick = { onResultClick(item) },
                                         )
                                     }
                                 }
                             }
-                            // Empty query: surface the last-used settings instead of a dead-end
-                            // "no matches" message. Same row rendering and click behavior as live
-                            // results, plus a header row with a Clear affordance.
+                            searchQuery.isNotBlank() && displayItems.isEmpty() -> {
+                                LazyColumn(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(horizontal = adaptiveInfo.contentPadding(LocalTvMode.current)),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                                    contentPadding = PaddingValues(vertical = 24.dp)
+                                ) {
+                                    item(key = "no_matches_banner") {
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(24.dp)
+                                        ) {
+                                            Surface(
+                                                shape = CircleShape,
+                                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                                modifier = Modifier.size(56.dp)
+                                            ) {
+                                                Box(contentAlignment = Alignment.Center) {
+                                                    Icon(
+                                                        imageVector = Tabler.Outline.Search,
+                                                        contentDescription = null,
+                                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        modifier = Modifier.size(28.dp)
+                                                    )
+                                                }
+                                            }
+                                            Spacer(Modifier.height(16.dp))
+                                            Text(
+                                                text = stringResource(Res.string.settings_no_matches),
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                            Spacer(Modifier.height(6.dp))
+                                            Text(
+                                                text = stringResource(Res.string.settings_no_matches_hint),
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                textAlign = TextAlign.Center
+                                            )
+                                            if (selectedCategory != null) {
+                                                Spacer(Modifier.height(12.dp))
+                                                TextButton(onClick = { selectedCategory = null }) {
+                                                    Text(stringResource(Res.string.settings_filter_all))
+                                                }
+                                            }
+                                        }
+                                    }
+                                    item(key = "categories_header") {
+                                        Text(
+                                            text = stringResource(Res.string.settings_browse_categories),
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 4.dp, vertical = 4.dp)
+                                        )
+                                    }
+                                    item(key = "categories_grid") {
+                                        SettingsQuickCategoriesGrid(
+                                            onNavigate = onNavigate,
+                                            onDismissSearch = { dismissSearchAndRefocus() }
+                                        )
+                                    }
+                                }
+                            }
                             searchQuery.isBlank() && recentItems.isNotEmpty() -> {
                                 SearchResultsColumn(
                                     onBack = { dismissSearchAndRefocus() }
@@ -816,35 +1161,77 @@ fun SettingsScreen(
                                     itemsIndexed(recentItems, key = { _, item -> item.id }) { index, item ->
                                         SettingsSearchResultRow(
                                             item = item,
+                                            query = "",
                                             index = index,
                                             count = recentItems.size,
                                             advancedBadgeLabel = advLabel,
                                             onClick = { onResultClick(item) },
                                         )
                                     }
+                                    item(key = "browse_cats_header") {
+                                        Text(
+                                            text = stringResource(Res.string.settings_browse_categories),
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(start = 4.dp, end = 4.dp, top = 16.dp, bottom = 8.dp)
+                                        )
+                                    }
+                                    item(key = "browse_cats_grid") {
+                                        SettingsQuickCategoriesGrid(
+                                            onNavigate = onNavigate,
+                                            onDismissSearch = { dismissSearchAndRefocus() }
+                                        )
+                                    }
                                 }
                             }
                             else -> {
-                                Box(
+                                LazyColumn(
                                     modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(32.dp),
-                                    contentAlignment = Alignment.Center
+                                        .fillMaxSize()
+                                        .padding(horizontal = adaptiveInfo.contentPadding(LocalTvMode.current)),
+                                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                                    contentPadding = PaddingValues(vertical = 16.dp)
                                 ) {
-                                    Text(
-                                        text = stringResource(
-                                            if (searchQuery.isBlank()) Res.string.settings_search_hint
-                                            else Res.string.settings_no_matches
-                                        ),
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
+                                    item(key = "browse_header") {
+                                        Text(
+                                            text = stringResource(Res.string.settings_browse_categories),
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 4.dp, vertical = 4.dp)
+                                        )
+                                    }
+                                    item(key = "browse_grid") {
+                                        SettingsQuickCategoriesGrid(
+                                            onNavigate = onNavigate,
+                                            onDismissSearch = { dismissSearchAndRefocus() }
+                                        )
+                                    }
+                                    item(key = "hint") {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(16.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                text = stringResource(Res.string.settings_search_hint),
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                                textAlign = TextAlign.Center
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
                     }
-                    }
-                }
+                } else {
 
                 CompositionLocalProvider(LocalAnimateSettingsEntrance provides animateEntrance) {
                     LazyColumn(
@@ -873,6 +1260,7 @@ fun SettingsScreen(
                             if (userName.isNotBlank()) {
                                 SettingsProfileBanner(
                                     userName = userName,
+                                    currentUser = viewModel.currentUser,
                                     serverAddress = currentServerAddress,
                                     isAdmin = viewModel.currentUser?.isAdmin == true,
                                     showAdvanced = preferences.showAdvancedSettings,
@@ -1294,6 +1682,7 @@ fun SettingsScreen(
                         }
                     }
                 }
+                }
             }
         }
 
@@ -1344,6 +1733,7 @@ private fun buildExperimentalSummary(preferences: SettingsScreenPreferences): St
 @Composable
 private fun SettingsProfileBanner(
     userName: String,
+    currentUser: UserInfo?,
     serverAddress: String?,
     isAdmin: Boolean,
     showAdvanced: Boolean,
@@ -1353,153 +1743,144 @@ private fun SettingsProfileBanner(
     onServerManagementClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
-        shape = ShapeCache.smooth24,
-        color = if (LocalIsLightTheme.current) MaterialTheme.colorScheme.surfaceContainerLowest else MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.85f),
-        tonalElevation = 3.dp,
-        shadowElevation = 4.dp,
-        border = BorderStroke(
-            width = 1.dp,
-            color = hairlineBorderColor()
-        ),
-        modifier = modifier.fillMaxWidth()
+    val avatarUrl = remember(serverAddress, currentUser) {
+        if (!serverAddress.isNullOrBlank() && currentUser != null) {
+            val url = buildUserImageUrl(
+                baseUrl = serverAddress,
+                userId = currentUser.id,
+                imageType = "Primary",
+                maxWidth = 160,
+                tag = currentUser.primaryImageTag,
+            )
+            url.ifBlank { null }
+        } else null
+    }
+
+    val isLight = LocalIsLightTheme.current
+    val isTv = LocalTvMode.current
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .then(if (isLight) Modifier.shadow(2.dp, ShapeCache.smooth24) else Modifier)
+            .clip(ShapeCache.smooth24)
+            .background(settingsGroupContainerColor())
+            .lightModeHairlineBorder(ShapeCache.smooth24)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+        // Profile Info Row
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
+            // Avatar (Clean circle without flashy border)
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+                contentAlignment = Alignment.Center,
             ) {
-                Box(
+                if (avatarUrl != null) {
+                    AsyncImage(
+                        model = avatarUrl,
+                        contentDescription = userName,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                } else {
+                    Text(
+                        text = if (userName.isNotBlank()) userName.take(1).uppercase() else "U",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
+
+            Spacer(Modifier.width(12.dp))
+
+            // Name, Role & Server Status
+            Column(modifier = Modifier.weight(1f)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Text(
+                        text = userName,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    RoleBadge(
+                        isAdmin = isAdmin,
+                        horizontalPadding = 6.dp,
+                        verticalPadding = 1.dp,
+                    )
+                }
+
+                Spacer(Modifier.height(3.dp))
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                     modifier = Modifier
-                        .size(46.dp)
                         .clip(CircleShape)
-                        .background(
-                            Brush.linearGradient(
-                                colors = listOf(
-                                    MaterialTheme.colorScheme.primary,
-                                    MaterialTheme.colorScheme.tertiary
-                                )
-                            )
+                        .then(
+                            if (!isTv) Modifier.clickable(onClick = onServerManagementClick)
+                            else Modifier,
                         )
-                        .padding(2.dp)
+                        .padding(vertical = 1.dp),
                 ) {
                     Box(
                         modifier = Modifier
-                            .fillMaxSize()
+                            .size(6.dp)
                             .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primaryContainer),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            text = if (userName.isNotBlank()) userName.take(1).uppercase() else "U",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        )
-                    }
-                }
-
-                Spacer(Modifier.width(12.dp))
-
-                Column(modifier = Modifier.weight(1f)) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Text(
-                            text = userName,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        RoleBadge(
-                            isAdmin = isAdmin,
-                            horizontalPadding = 7.dp,
-                            verticalPadding = 1.dp,
-                        )
-                    }
-
-                    Spacer(Modifier.height(2.dp))
-
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(5.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(7.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFF4CAF50))
-                        )
-                        Text(
-                            text = serverAddress?.takeIf { it.isNotBlank() } ?: stringResource(Res.string.settings_connected_server),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                }
-
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(2.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    SettingsIconButton(
-                        onClick = onUserManagementClick,
-                        icon = Tabler.Outline.Users,
-                        contentDescription = stringResource(Res.string.settings_switch_user),
+                            .background(Color(0xFF4CAF50)),
                     )
-                    SettingsIconButton(
-                        onClick = onNewsletterClick,
-                        icon = Tabler.Outline.Mail,
-                        contentDescription = stringResource(Res.string.settings_newsletter_cd),
+                    Text(
+                        text = serverAddress?.takeIf { it.isNotBlank() } ?: stringResource(Res.string.settings_connected_server),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
             }
 
-            ExpressiveChipContainer(
-                onClick = onToggleAdvanced,
-                containerColor = if (showAdvanced) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.75f) else MaterialTheme.colorScheme.surfaceContainer,
-                forceActive = showAdvanced,
-                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
-                modifier = Modifier.fillMaxWidth()
+            // Trailing Action Icons
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(
-                    imageVector = Tabler.Outline.AdjustmentsHorizontal,
-                    contentDescription = null,
-                    tint = if (showAdvanced) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(16.dp)
+                SettingsIconButton(
+                    onClick = onUserManagementClick,
+                    icon = Tabler.Outline.Users,
+                    contentDescription = stringResource(Res.string.settings_switch_user),
+                    iconSize = 19.dp,
                 )
-                Text(
-                    text = stringResource(Res.string.settings_power_user_mode),
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = if (showAdvanced) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.weight(1f),
+                SettingsIconButton(
+                    onClick = onNewsletterClick,
+                    icon = Tabler.Outline.Sparkles,
+                    contentDescription = stringResource(Res.string.settings_newsletter_cd),
+                    iconSize = 19.dp,
                 )
-                CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 0.dp) {
-                    Switch(
-                        checked = showAdvanced,
-                        onCheckedChange = { onToggleAdvanced() },
-                        modifier = Modifier.scale(0.75f),
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
-                            checkedTrackColor = MaterialTheme.colorScheme.primary,
-                            uncheckedThumbColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                            uncheckedTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                        )
-                    )
-                }
             }
         }
+
+        // Power User Mode Toggle (Using canonical SettingToggleItem)
+        SettingToggleItem(
+            icon = Tabler.Outline.AdjustmentsHorizontal,
+            title = stringResource(Res.string.settings_power_user_mode),
+            subtitle = stringResource(Res.string.settings_power_user_mode_desc),
+            checked = showAdvanced,
+            index = 0,
+            count = 1,
+            onCheckedChange = { onToggleAdvanced() },
+        )
     }
 }
 
@@ -1515,20 +1896,28 @@ private fun RoleBadge(
     horizontalPadding: androidx.compose.ui.unit.Dp = 8.dp,
     verticalPadding: androidx.compose.ui.unit.Dp = 2.dp,
 ) {
-    val container = if (isAdmin) MaterialTheme.colorScheme.tertiaryContainer
-    else MaterialTheme.colorScheme.secondaryContainer
+    val container = if (isAdmin) MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f)
+    else MaterialTheme.colorScheme.surfaceContainerHighest
     val onContainer = if (isAdmin) MaterialTheme.colorScheme.onTertiaryContainer
-    else MaterialTheme.colorScheme.onSecondaryContainer
-    Box(
+    else MaterialTheme.colorScheme.onSurfaceVariant
+    Row(
         modifier = modifier
             .clip(CircleShape)
             .background(container)
-            .padding(horizontal = horizontalPadding, vertical = verticalPadding)
+            .padding(horizontal = horizontalPadding, vertical = verticalPadding),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
+        Icon(
+            imageVector = if (isAdmin) Tabler.Outline.Shield else Tabler.Outline.User,
+            contentDescription = null,
+            tint = onContainer,
+            modifier = Modifier.size(11.dp),
+        )
         Text(
             text = stringResource(if (isAdmin) Res.string.settings_admin_badge else Res.string.settings_member_badge),
             style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Bold,
+            fontWeight = FontWeight.Medium,
             color = onContainer,
         )
     }

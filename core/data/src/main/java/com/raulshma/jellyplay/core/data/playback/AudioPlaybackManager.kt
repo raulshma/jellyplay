@@ -81,8 +81,20 @@ class AudioPlaybackManager(
     private val jellyfinRemotePlayCastStrategy: com.raulshma.jellyplay.core.data.cast.remote.JellyfinRemotePlayCastStrategy,
     private val audioStreamCache: AudioStreamCache,
     private val audioPrefetchEngine: AudioPrefetchEngine,
+    /**
+     * Test seam: scope every manager coroutine is launched into. Production
+     * callers omit it and get `SupervisorJob() + Dispatchers.Main.immediate`.
+     */
+    playbackScope: CoroutineScope? = null,
+    /**
+     * Test seam: factory consulted by [getOrCreatePlayer] before the real
+     * [createPlayer] path, so tests can supply a fake ExoPlayer. Production
+     * callers omit it and the media3 player is built as before.
+     */
+    playerFactory: (() -> ExoPlayer)? = null,
 ) : AudioEffectsManager, AudioQueueManager {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val scope = playbackScope ?: CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val testPlayerFactory = playerFactory
 
     private val queuePreWarmPermits = Semaphore(8)
 
@@ -226,20 +238,22 @@ class AudioPlaybackManager(
     var remoteSessionActive: Boolean = false
         internal set
 
-    private val _title = MutableStateFlow("")
-    val title: StateFlow<String> = _title.asStateFlow()
+    /**
+     * Sole writer of the now-playing metadata below; the manager re-exposes
+     * its flows by reference so consumers are unchanged. See
+     * [NowPlayingTracker] for the per-publish field coverage contract.
+     */
+    private val nowPlayingTracker = NowPlayingTracker()
 
-    private val _artist = MutableStateFlow("")
-    val artist: StateFlow<String> = _artist.asStateFlow()
+    val title: StateFlow<String> get() = nowPlayingTracker.title
 
-    private val _artistId = MutableStateFlow<String?>(null)
-    val artistId: StateFlow<String?> = _artistId.asStateFlow()
+    val artist: StateFlow<String> get() = nowPlayingTracker.artist
 
-    private val _album = MutableStateFlow("")
-    val album: StateFlow<String> = _album.asStateFlow()
+    val artistId: StateFlow<String?> get() = nowPlayingTracker.artistId
 
-    private val _albumArtUrl = MutableStateFlow("")
-    val albumArtUrl: StateFlow<String> = _albumArtUrl.asStateFlow()
+    val album: StateFlow<String> get() = nowPlayingTracker.album
+
+    val albumArtUrl: StateFlow<String> get() = nowPlayingTracker.albumArtUrl
 
     private val _isPlaying = MutableStateFlow(false)
     val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
@@ -268,8 +282,7 @@ class AudioPlaybackManager(
     private val _currentIndex = MutableStateFlow(-1)
     override val currentIndex: StateFlow<Int> = _currentIndex.asStateFlow()
 
-    private val _currentPlayingItemId = MutableStateFlow<String?>(null)
-    override val currentPlayingItemId: StateFlow<String?> = _currentPlayingItemId.asStateFlow()
+    override val currentPlayingItemId: StateFlow<String?> get() = nowPlayingTracker.currentPlayingItemId
 
     val lyrics: StateFlow<List<LyricsLine>> get() = lyricsManager.lyrics
     val currentLyricIndex: StateFlow<Int> get() = lyricsManager.currentLyricIndex
@@ -424,7 +437,7 @@ class AudioPlaybackManager(
     }
 
     private fun getOrCreatePlayer(): ExoPlayer {
-        return exoPlayer ?: createPlayer()
+        return exoPlayer ?: testPlayerFactory?.invoke() ?: createPlayer()
     }
 
     private fun createPlayer(): ExoPlayer {
@@ -610,23 +623,25 @@ class AudioPlaybackManager(
             if (detail != null) {
                 _playbackError.value = null
                 // Capture whether this is the cold-start restored current item
-                // BEFORE overwriting _currentPlayingItemId below. On a fresh
+                // BEFORE overwriting currentPlayingItemId below. On a fresh
                 // launch restorePersistedQueue() loads the queue + position but
-                // leaves _currentPlayingItemId null and currentItemId null, so
+                // leaves currentPlayingItemId null and currentItemId null, so
                 // the only signal is that the tapped item is the restored
                 // queue's current index AND nothing is loaded yet.
-                val coldStart = currentItemId == null && _currentPlayingItemId.value == null
+                val coldStart = currentItemId == null && currentPlayingItemId.value == null
                 val restoredCurrentId = _queue.value.getOrNull(_currentIndex.value)?.id
                 val isRestoredCurrentItem = coldStart && restoredCurrentId == itemId
                 val restoredPosMs = _currentPosition.value
-                _currentPlayingItemId.value = itemId
-                _title.value = detail.item.name
-                _artist.value = detail.item.albumArtist
-                    ?: detail.item.artistItems.firstOrNull()?.name
-                    ?: ""
-                _artistId.value = detail.item.artistItems.firstOrNull()?.id
-                _album.value = detail.item.album ?: ""
-                _albumArtUrl.value = playbackRepository.getImageUrl(itemId, maxWidth = 600)
+                nowPlayingTracker.publishDetail(
+                    itemId = itemId,
+                    title = detail.item.name,
+                    artist = detail.item.albumArtist
+                        ?: detail.item.artistItems.firstOrNull()?.name
+                        ?: "",
+                    artistId = detail.item.artistItems.firstOrNull()?.id,
+                    album = detail.item.album ?: "",
+                    albumArtUrl = playbackRepository.getImageUrl(itemId, maxWidth = 600),
+                )
 
                 val source = detail.mediaSources.firstOrNull()
                 val resumeTicks = detail.item.playbackPositionTicks ?: 0L
@@ -648,10 +663,10 @@ class AudioPlaybackManager(
                 if (!isInQueue) {
                     val queueItem = AudioQueueItem(
                         id = itemId,
-                        name = _title.value,
-                        artist = _artist.value,
-                        album = _album.value,
-                        imageUrl = _albumArtUrl.value,
+                        name = title.value,
+                        artist = artist.value,
+                        album = album.value,
+                        imageUrl = albumArtUrl.value,
                         mediaSourceId = source?.id,
                         durationMs = detail.item.runTimeTicks?.let { it / 10_000 } ?: 0L,
                         normalizationGain = detail.item.normalizationGain,
@@ -729,10 +744,12 @@ class AudioPlaybackManager(
                 // failed — preserving the historical queue-only fallback.
                 val local = playbackSourceResolver.resolveLocalSource(itemId)
                 if (local != null) {
-                    _currentPlayingItemId.value = itemId
-                    _title.value = local.title
-                    _artist.value = local.offlineItem?.seriesName ?: ""
-                    _album.value = ""
+                    nowPlayingTracker.publishLocalFile(
+                        itemId = itemId,
+                        title = local.title,
+                        artist = local.offlineItem?.seriesName ?: "",
+                        album = "",
+                    )
 
                     val q = _queue.value
                     val currentIdx = _currentIndex.value
@@ -741,8 +758,8 @@ class AudioPlaybackManager(
                     if (!isInQueue) {
                         val queueItem = AudioQueueItem(
                             id = itemId,
-                            name = _title.value,
-                            artist = _artist.value,
+                            name = title.value,
+                            artist = artist.value,
                             album = "",
                             imageUrl = null,
                             mediaSourceId = local.download.mediaSourceId,
@@ -756,8 +773,8 @@ class AudioPlaybackManager(
                         .setUri(local.uri)
                         .setMediaMetadata(
                             MediaMetadata.Builder()
-                                .setTitle(_title.value)
-                                .setArtist(_artist.value)
+                                .setTitle(title.value)
+                                .setArtist(artist.value)
                                 .build()
                         )
                         .build()
@@ -1078,7 +1095,7 @@ class AudioPlaybackManager(
                 }
             }
         } else {
-            val currentItemId = _currentPlayingItemId.value
+            val currentItemId = currentPlayingItemId.value
             val original = unshuffledQueue
             if (original.isNotEmpty()) {
                 _queue.value = original
@@ -1366,11 +1383,7 @@ class AudioPlaybackManager(
             _currentIndex.value = targetIndex
             val nextItem = queueItems[targetIndex]
             currentItemId = nextItem.id
-            _currentPlayingItemId.value = nextItem.id
-            _title.value = nextItem.name
-            _artist.value = nextItem.artist
-            _album.value = nextItem.album ?: ""
-            _albumArtUrl.value = nextItem.imageUrl ?: ""
+            nowPlayingTracker.publishQueueItem(nextItem)
 
             effectsProcessor.applyReplayGain(nextItem.normalizationGain, _shuffleMode.value)
 
@@ -1430,11 +1443,7 @@ class AudioPlaybackManager(
 
         _currentIndex.value = nextIndex
         currentItemId = nextItem.id
-        _currentPlayingItemId.value = nextItem.id
-        _title.value = nextItem.name
-        _artist.value = nextItem.artist
-        _album.value = nextItem.album ?: ""
-        _albumArtUrl.value = nextItem.imageUrl ?: ""
+        nowPlayingTracker.publishQueueItem(nextItem)
 
         mediaSession?.release()
         // Rebuild via the shared audio-session builder (AudioLibraryBrowser is
@@ -1625,12 +1634,8 @@ class AudioPlaybackManager(
         effectsProcessor.releaseAll()
 
         currentItemId = null
-        _currentPlayingItemId.value = null
+        nowPlayingTracker.clear()
         _isPlaying.value = false
-        _title.value = ""
-        _artist.value = ""
-        _album.value = ""
-        _albumArtUrl.value = ""
         _currentPosition.value = 0L
         _duration.value = 0L
         lyricsManager.reset()

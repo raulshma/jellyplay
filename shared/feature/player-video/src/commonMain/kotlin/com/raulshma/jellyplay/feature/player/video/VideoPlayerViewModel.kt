@@ -2231,20 +2231,7 @@ class VideoPlayerViewModel(
     }
 
     fun skipIntro() {
-        val state = positionAwareState()
-        if (state.cinemaIntroState != null) {
-            playbackSession.advanceCinemaIntro()
-            return
-        }
-        val seg = state.activeSegment
-        if (seg != null && seg.type == com.raulshma.jellyplay.core.model.MediaSegmentType.INTRO) {
-            skipSegment(seg)
-            return
-        }
-        val endTicks = state.introSegmentEndTicks
-        if (endTicks != null && endTicks > 0) {
-            seekTo(endTicks / 10_000)
-        }
+        dispatchSegmentSkip(SegmentSkipKind.INTRO)
     }
 
     /**
@@ -2295,28 +2282,44 @@ class VideoPlayerViewModel(
     }
 
     fun skipCredits() {
-        val state = positionAwareState()
-
-        if (state.isOutroNearEnd && autoplayController.canSkipToNext(state.episodes.nextEpisode)) {
-            playNextEpisode()
-            return
-        }
-
-        val seg = state.activeSegment
-        if (seg != null && seg.type == com.raulshma.jellyplay.core.model.MediaSegmentType.OUTRO) {
-            skipSegment(seg)
-            return
-        }
-        val endTicks = state.creditSegmentEndTicks
-        if (endTicks != null && endTicks > 0) {
-            seekTo(endTicks / 10_000)
-        }
+        dispatchSegmentSkip(SegmentSkipKind.CREDITS)
     }
 
     fun skipSegment(segment: com.raulshma.jellyplay.core.model.MediaSegment) {
-        val endTicks = _uiState.value.segmentEndTicks(segment)
-        if (endTicks != null && endTicks > 0) {
-            seekTo(endTicks / 10_000)
+        executeSegmentSkip(segmentEndSeekTarget(_uiState.value.segmentEndTicks(segment)))
+    }
+
+    /**
+     * Shared dispatch for the skip buttons: snapshot the position-aware state,
+     * reduce it to a [SegmentSkipTarget] via the pure policy in
+     * SegmentSkipPolicy.kt, then execute the one-line effect. The active
+     * segment's end ticks resolve against the current uiState here (the old
+     * `skipSegment` read), keeping the API-match lookup effect-side; the
+     * policy sees only plain values.
+     */
+    private fun dispatchSegmentSkip(kind: SegmentSkipKind) {
+        val state = positionAwareState()
+        val seg = state.activeSegment
+        executeSegmentSkip(
+            segmentSkipTarget(
+                kind = kind,
+                cinemaIntroActive = state.cinemaIntroState != null,
+                isOutroNearEnd = state.isOutroNearEnd,
+                canSkipToNext = autoplayController.canSkipToNext(state.episodes.nextEpisode),
+                activeSegmentType = seg?.type,
+                activeSegmentEndTicks = seg?.let { _uiState.value.segmentEndTicks(it) },
+                introEndTicks = state.introSegmentEndTicks,
+                creditEndTicks = state.creditSegmentEndTicks,
+            ),
+        )
+    }
+
+    private fun executeSegmentSkip(target: SegmentSkipTarget) {
+        when (target) {
+            is SegmentSkipTarget.SeekToPosition -> seekTo(target.positionMs)
+            SegmentSkipTarget.SkipToNextEpisode -> playNextEpisode()
+            SegmentSkipTarget.AdvanceCinemaIntro -> playbackSession.advanceCinemaIntro()
+            SegmentSkipTarget.None -> Unit
         }
     }
 

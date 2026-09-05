@@ -11,7 +11,7 @@ import android.os.Bundle
 import android.widget.RemoteViews
 import com.raulshma.jellyplay.MainActivity
 import com.raulshma.jellyplay.R
-import com.raulshma.jellyplay.deeplink.DeepLinkHandler
+import com.raulshma.jellyplay.core.model.deeplink.DeepLinkGrammar
 import org.koin.mp.KoinPlatform
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -127,9 +127,7 @@ class ContinueWatchingWidget : AppWidgetProvider() {
             }
 
             // Header click opens the continue-watching newsletter list.
-            val headerUri = Uri.parse(
-                "${DeepLinkHandler.SCHEME_CUSTOM}://newsletter/CONTINUE_WATCHING",
-            )
+            val headerUri = Uri.parse(DeepLinkGrammar.continueWatchingLink())
             val headerIntent = Intent(context, MainActivity::class.java).apply {
                 action = Intent.ACTION_VIEW
                 data = headerUri

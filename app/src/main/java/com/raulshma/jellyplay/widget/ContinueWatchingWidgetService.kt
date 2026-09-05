@@ -11,7 +11,7 @@ import android.widget.RemoteViewsService
 import com.raulshma.jellyplay.R
 import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
 import com.raulshma.jellyplay.core.model.MediaItem
-import com.raulshma.jellyplay.deeplink.DeepLinkHandler
+import com.raulshma.jellyplay.core.model.deeplink.DeepLinkGrammar
 import org.koin.mp.KoinPlatform
 import kotlinx.coroutines.runBlocking
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
@@ -148,7 +148,7 @@ class ContinueWatchingWidgetService : RemoteViewsService() {
                 }
             }
 
-            val deepLinkUri = Uri.parse("${DeepLinkHandler.SCHEME_CUSTOM}://media/${item.id}")
+            val deepLinkUri = Uri.parse(DeepLinkGrammar.mediaLink(item.id))
             val fillIn = Intent().apply {
                 action = Intent.ACTION_VIEW
                 data = deepLinkUri

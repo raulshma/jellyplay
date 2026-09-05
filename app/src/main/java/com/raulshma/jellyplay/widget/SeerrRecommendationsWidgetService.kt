@@ -10,6 +10,7 @@ import android.widget.RemoteViewsService
 import com.raulshma.jellyplay.R
 import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
 import com.raulshma.jellyplay.core.model.SeerrWidgetItem
+import com.raulshma.jellyplay.core.model.deeplink.DeepLinkGrammar
 import org.koin.mp.KoinPlatform
 import kotlinx.coroutines.runBlocking
 
@@ -117,7 +118,7 @@ class SeerrRecommendationsWidgetService : RemoteViewsService() {
             val fillIn = Intent().apply {
                 action = Intent.ACTION_VIEW
                 data = android.net.Uri.parse(
-                    WidgetDeepLinks.buildSeerrDeepLink(item.tmdbId, item.mediaType),
+                    DeepLinkGrammar.seerrLink(item.tmdbId, item.mediaType),
                 )
                 putExtra(EXTRA_TMDB_ID, item.tmdbId)
                 putExtra(EXTRA_MEDIA_TYPE, item.mediaType)
