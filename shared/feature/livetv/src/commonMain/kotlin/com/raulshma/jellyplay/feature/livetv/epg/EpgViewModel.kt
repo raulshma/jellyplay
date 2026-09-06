@@ -112,8 +112,10 @@ class EpgViewModel(
      * Recompute the cached grid snapshot from the current source data. The
      * CPU-heavy groupBy + per-channel filter + sort runs on [gridDispatcher];
      * reading the inputs and publishing the snapshot happen inside
-     * [rebuildGridMutex], so overlapping rebuilds publish in invocation order
-     * and the last one out always reflects the newest sources.
+     * [rebuildGridMutex]. The lock is not fair — acquisition order need not
+     * match invocation order — but each pass reads the source state at the
+     * moment it holds the lock, so the last pass out always reads (and
+     * publishes) the newest sources.
      */
     private suspend fun rebuildGrid() = rebuildGridMutex.withLock {
         val channels = _channels.value

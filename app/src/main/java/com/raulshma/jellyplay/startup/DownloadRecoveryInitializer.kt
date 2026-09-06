@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.database.dao.DownloadDao
 import com.raulshma.jellyplay.core.data.repository.DownloadEnqueuer
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import java.io.File
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 
@@ -40,7 +41,17 @@ class DownloadRecoveryInitializer (
         // no worker until the next cold start. The coroutineScope still
         // joins it: recover() returns only once all three passes are done.
         coroutineScope {
-            val cleanup = launch { cleanupStuckDownloads() }
+            // Each pass swallows its own Exceptions, but an escaping Error
+            // from this launched child would cancel the concurrently-running
+            // reconcile through coroutineScope and skip
+            // recoverPendingDownloads() entirely — the sequential predecessor
+            // never let cleanup's fate gate the other passes. The handler
+            // contains even that case.
+            val cleanup = launch(CoroutineExceptionHandler { _, e ->
+                Log.w(TAG, "Cleanup pass failed", e)
+            }) {
+                cleanupStuckDownloads()
+            }
             // Must run first: reconciliation resets truncated/missing completed
             // downloads to PENDING so recoverPendingDownloads() re-enqueues them
             // (KEEP policy) on the same pass, self-healing the offline library.

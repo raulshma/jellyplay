@@ -425,14 +425,17 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
             // publication guarantees every later `.value.deviceId` read in
             // AndroidNetworkModule resolves the fast path.
             runCatchingRethrowingCancellation {
-                serverIdentityStore.ensureDeviceId()
                 // Bounded wait: a wedged DataStore (corruption, upstream
                 // error stranding the Eagerly-started identity flow on its
-                // all-null placeholder) would suspend a bare first{}
-                // forever and gate the font/stream prewarms below. On
-                // timeout they proceed anyway; the network module readers
-                // keep their own runBlocking ensureDeviceId() fallback.
+                // all-null placeholder) would suspend both ensureDeviceId()
+                // — itself a DataStore edit — and a bare first{} forever,
+                // gating the font/stream prewarms below, so both run inside
+                // the timeout. On timeout they proceed anyway; the network
+                // module readers keep their own runBlocking ensureDeviceId()
+                // fallback, and DataStore's atomic temp-file write makes a
+                // timeout mid-persist safe to abandon.
                 withTimeoutOrNull(DEVICE_ID_PREWARM_TIMEOUT_MS) {
+                    serverIdentityStore.ensureDeviceId()
                     serverIdentityStore.identity.first { !it.deviceId.isNullOrEmpty() }
                 }
             }

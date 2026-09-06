@@ -321,7 +321,7 @@ class AuthRepositoryImpl constructor(
             // STA-1: the probes are sequential network calls, so the wait is
             // bounded — on timeout the gate below releases on the primary
             // address and selection re-runs off the gate in the deferred pass.
-            val addressSelected = runRestoreNetworkStage {
+            val addressSelected = tryRestoreNetworkStage {
                 runCatchingRethrowingCancellation { apiClient.selectReachableAddress() }
             }
 
@@ -355,7 +355,7 @@ class AuthRepositoryImpl constructor(
                 // the same way. On timeout the restored session stands exactly
                 // as a successful (or non-401-failed) validation leaves it, so
                 // the first-frame gate releases with the session kept.
-                val validationCompleted = runRestoreNetworkStage {
+                val validationCompleted = tryRestoreNetworkStage {
                     validateRestoredSession()
                 }
                 if (!addressSelected || !validationCompleted) {
@@ -368,7 +368,13 @@ class AuthRepositoryImpl constructor(
                     // later instead of holding the splash hostage to it.
                     externalScope.launch {
                         if (!addressSelected) {
-                            runCatchingRethrowingCancellation { apiClient.selectReachableAddress() }
+                            // Bounded like the gated pass above: an
+                            // unreachable server's probes must not suspend
+                            // forever on the app-lifetime scope — that would
+                            // starve the deferred 401 validation below.
+                            withTimeoutOrNull(RESTORE_NETWORK_STAGE_TIMEOUT_MS) {
+                                runCatchingRethrowingCancellation { apiClient.selectReachableAddress() }
+                            }
                         }
                         if (!validationCompleted) {
                             // Unguarded, a DataStore failure inside
@@ -392,10 +398,11 @@ class AuthRepositoryImpl constructor(
 
     /**
      * STA-1: runs one restore-time network stage bounded by
-     * [RESTORE_NETWORK_STAGE_TIMEOUT_MS]. Returns false on timeout, leaving
-     * the caller to re-run the stage in the deferred pass.
+     * [RESTORE_NETWORK_STAGE_TIMEOUT_MS]. Returns whether the stage completed
+     * within the bound — false on timeout (the stage is abandoned mid-flight),
+     * leaving the caller to re-run it in the deferred pass.
      */
-    private suspend fun runRestoreNetworkStage(stage: suspend () -> Unit): Boolean =
+    private suspend fun tryRestoreNetworkStage(stage: suspend () -> Unit): Boolean =
         withTimeoutOrNull(RESTORE_NETWORK_STAGE_TIMEOUT_MS) {
             stage()
             true
