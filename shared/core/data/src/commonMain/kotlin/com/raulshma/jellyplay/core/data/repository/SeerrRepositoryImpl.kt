@@ -128,9 +128,18 @@ class SeerrRepositoryImpl(
             seerrApiClient.testConnection(url, credentials)
         }
 
-    override suspend fun loginJellyfin(username: String, password: String): Result<SeerrStatusResponse> {
-        val url = serverUrl() ?: return Result.failure(Exception("Server URL is required"))
-        seerrApiClient.loginJellyfin(url, username, password)
+    /**
+     * Shared login flow for the cookie-creating members: [login] exchanges
+     * form credentials for a session cookie, which is stored before the
+     * follow-up [testConnection][seerrApiClient.testConnection] check. A full
+     * session guard would reject the pre-login state, so only the URL half is
+     * resolved here — with the one canonical not-configured failure.
+     */
+    private suspend fun loginWithCookie(
+        login: suspend (url: String) -> Result<String>,
+    ): Result<SeerrStatusResponse> {
+        val url = serverUrl() ?: return Result.failure(IllegalStateException(NOT_CONFIGURED_MESSAGE))
+        login(url)
             .onSuccess { cookie ->
                 secureCredentialsStore.setSessionCookie(cookie)
                 cachedCredentials = SeerrCredentials.SessionCookie(cookie)
@@ -140,20 +149,14 @@ class SeerrRepositoryImpl(
         return seerrApiClient.testConnection(url, SeerrCredentials.SessionCookie(secureCredentialsStore.getSessionCookie()))
     }
 
-    override suspend fun loginLocal(email: String, password: String): Result<SeerrStatusResponse> {
-        val url = serverUrl() ?: return Result.failure(Exception("Server URL is required"))
-        seerrApiClient.loginLocal(url, email, password)
-            .onSuccess { cookie ->
-                secureCredentialsStore.setSessionCookie(cookie)
-                cachedCredentials = SeerrCredentials.SessionCookie(cookie)
-                lastCredsHash = 0
-            }
-            .onFailure { return Result.failure(it) }
-        return seerrApiClient.testConnection(url, SeerrCredentials.SessionCookie(secureCredentialsStore.getSessionCookie()))
-    }
+    override suspend fun loginJellyfin(username: String, password: String): Result<SeerrStatusResponse> =
+        loginWithCookie { url -> seerrApiClient.loginJellyfin(url, username, password) }
+
+    override suspend fun loginLocal(email: String, password: String): Result<SeerrStatusResponse> =
+        loginWithCookie { url -> seerrApiClient.loginLocal(url, email, password) }
 
     override suspend fun testApiKeyConnection(): Result<SeerrStatusResponse> {
-        val url = serverUrl() ?: return Result.failure(Exception("Server URL is required"))
+        val url = serverUrl() ?: return Result.failure(IllegalStateException(NOT_CONFIGURED_MESSAGE))
         val apiKey = secureCredentialsStore.getApiKey()
         if (apiKey.isBlank()) return Result.failure(Exception("API key is required"))
         return seerrApiClient.testConnection(url, SeerrCredentials.ApiKey(apiKey))
@@ -196,29 +199,46 @@ class SeerrRepositoryImpl(
             }
         }
 
-    override suspend fun getRecommendations(tmdbId: Int, mediaType: MediaType): Result<SeerrSearchResponse> =
-        detailCache.getOrFetchTyped({ sessionIdentity.cacheIdentity() }, "recommendations_${tmdbId}_${mediaType.name}") {
+    /**
+     * The shared body of [getRecommendations] and [getSimilar]: one cached,
+     * session-guarded call whose only per-site parts are the cache-key prefix
+     * and the movie/TV client calls. Non-movie/TV media types fail without
+     * touching the network.
+     */
+    private suspend fun cachedBackfilledList(
+        keyPrefix: String,
+        tmdbId: Int,
+        mediaType: MediaType,
+        unsupportedMessage: String,
+        movieCall: suspend (url: String, credentials: SeerrCredentials) -> Result<SeerrSearchResponse>,
+        tvCall: suspend (url: String, credentials: SeerrCredentials) -> Result<SeerrSearchResponse>,
+    ): Result<SeerrSearchResponse> =
+        detailCache.getOrFetchTyped({ sessionIdentity.cacheIdentity() }, "${keyPrefix}_${tmdbId}_${mediaType.name}") {
             withSeerrSession { url, credentials ->
                 val typeStr = if (mediaType == MediaType.MOVIE) "movie" else "tv"
                 (when (mediaType) {
-                    MediaType.MOVIE -> seerrApiClient.getMovieRecommendations(url, credentials, tmdbId)
-                    MediaType.SERIES -> seerrApiClient.getTvRecommendations(url, credentials, tmdbId)
-                    else -> Result.failure(Exception("Unsupported media type for recommendations"))
+                    MediaType.MOVIE -> movieCall(url, credentials)
+                    MediaType.SERIES -> tvCall(url, credentials)
+                    else -> Result.failure(Exception(unsupportedMessage))
                 }).map { response -> backfillMediaType(response, typeStr) }
             }
         }
 
+    override suspend fun getRecommendations(tmdbId: Int, mediaType: MediaType): Result<SeerrSearchResponse> =
+        cachedBackfilledList(
+            "recommendations", tmdbId, mediaType,
+            unsupportedMessage = "Unsupported media type for recommendations",
+            movieCall = { url, credentials -> seerrApiClient.getMovieRecommendations(url, credentials, tmdbId) },
+            tvCall = { url, credentials -> seerrApiClient.getTvRecommendations(url, credentials, tmdbId) },
+        )
+
     override suspend fun getSimilar(tmdbId: Int, mediaType: MediaType): Result<SeerrSearchResponse> =
-        detailCache.getOrFetchTyped({ sessionIdentity.cacheIdentity() }, "similar_${tmdbId}_${mediaType.name}") {
-            withSeerrSession { url, credentials ->
-                val typeStr = if (mediaType == MediaType.MOVIE) "movie" else "tv"
-                (when (mediaType) {
-                    MediaType.MOVIE -> seerrApiClient.getMovieSimilar(url, credentials, tmdbId)
-                    MediaType.SERIES -> seerrApiClient.getTvSimilar(url, credentials, tmdbId)
-                    else -> Result.failure(Exception("Unsupported media type for similar items"))
-                }).map { response -> backfillMediaType(response, typeStr) }
-            }
-        }
+        cachedBackfilledList(
+            "similar", tmdbId, mediaType,
+            unsupportedMessage = "Unsupported media type for similar items",
+            movieCall = { url, credentials -> seerrApiClient.getMovieSimilar(url, credentials, tmdbId) },
+            tvCall = { url, credentials -> seerrApiClient.getTvSimilar(url, credentials, tmdbId) },
+        )
 
     override suspend fun getTmdbVideos(tmdbId: Int, mediaType: MediaType): Result<List<SeerrRelatedVideo>> =
         tmdbApiClient.getVideos(tmdbId, mediaType)

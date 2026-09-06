@@ -85,6 +85,23 @@ class SingleFlightFetcher<T : Any>(
         key: String,
         flightKey: String = key,
         fetch: suspend (epochAtStart: Long) -> Result<T>,
+    ): Result<T> =
+        getOrFetchStorable(identity, key, flightKey) { epochAtStart -> fetch(epochAtStart) to true }
+
+    /**
+     * [getOrFetch] with a per-flight store decision: [fetch] additionally
+     * returns whether its result may be written back to the cache. This is
+     * the exact, same-flight-only form of "serve the fallback to this caller
+     * without letting it masquerade as a fresh read for the TTL" (a segments
+     * fetch whose segments API failed must not cache its legacy fallback) —
+     * unlike an epoch bump, `store = false` vetoes this flight's write and no
+     * concurrent flight's. The epoch guard still applies on top of the flag.
+     */
+    suspend fun getOrFetchStorable(
+        identity: suspend () -> CacheIdentity,
+        key: String,
+        flightKey: String = key,
+        fetch: suspend (epochAtStart: Long) -> Pair<Result<T>, Boolean>,
     ): Result<T> {
         val startIdentity = identity()
         cache.get(startIdentity, key)?.let { return Result.success(it) }
@@ -100,11 +117,11 @@ class SingleFlightFetcher<T : Any>(
                     // the caller's dispatcher (not a fixed background scope).
                     async {
                         try {
-                            fetch(epochAtStart).also { result ->
-                                if (epoch.get() == epochAtStart) {
-                                    result.getOrNull()?.let { cache.put(startIdentity, key, it) }
-                                }
+                            val (result, store) = fetch(epochAtStart)
+                            if (store && epoch.get() == epochAtStart) {
+                                result.getOrNull()?.let { cache.put(startIdentity, key, it) }
                             }
+                            result
                         } finally {
                             // Clear the in-flight marker. Guarded so a
                             // concurrent awaiter that already grabbed the
@@ -126,11 +143,11 @@ class SingleFlightFetcher<T : Any>(
                 if (job?.isCancelled == true) throw ce
                 val retryIdentity = identity()
                 val epochAtRetry = epoch.get()
-                fetch(epochAtRetry).also { result ->
-                    if (epoch.get() == epochAtRetry) {
-                        result.getOrNull()?.let { cache.put(retryIdentity, key, it) }
-                    }
+                val (result, store) = fetch(epochAtRetry)
+                if (store && epoch.get() == epochAtRetry) {
+                    result.getOrNull()?.let { cache.put(retryIdentity, key, it) }
                 }
+                result
             }
         }
     }

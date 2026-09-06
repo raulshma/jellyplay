@@ -251,6 +251,75 @@ class SingleFlightFetcherTest {
         assertEquals(3, fetches)
     }
 
+    // ── per-flight store decision ───────────────────────────────────────
+
+    @Test
+    fun `store=false success is returned to the caller but never cached`() = runTest {
+        var fetches = 0
+        val fetcher = SingleFlightFetcher(cache, epoch)
+
+        val first = fetcher.getOrFetchStorable({ identity }, "k") {
+            fetches++
+            Result.success("fallback") to false
+        }
+        assertEquals("fallback", first.getOrNull(), "the unstoreable result still reaches its caller")
+
+        val second = fetcher.getOrFetchStorable({ identity }, "k") {
+            fetches++
+            Result.success("fresh") to true
+        }
+        assertEquals("fresh", second.getOrNull(), "a store=false flight must not be served from the cache")
+        assertEquals(2, fetches)
+    }
+
+    @Test
+    fun `store=true caches exactly like getOrFetch`() = runTest {
+        var fetches = 0
+        val fetcher = SingleFlightFetcher(cache, epoch)
+
+        fetcher.getOrFetchStorable({ identity }, "k") {
+            fetches++
+            Result.success("v") to true
+        }
+        val second = fetcher.getOrFetchStorable({ identity }, "k") { fetches++; Result.success("v2") to true }
+
+        assertEquals("v", second.getOrNull())
+        assertEquals(1, fetches)
+    }
+
+    @Test
+    fun `store=false on the cancellation-retry path does not cache either`() = runTest {
+        val fetchStarted = CompletableDeferred<Unit>()
+        val releaseFetch = CompletableDeferred<Unit>()
+        val fetcher = SingleFlightFetcher(cache, epoch)
+
+        val awaiterResult = coroutineScope {
+            val originator = async {
+                fetcher.getOrFetchStorable({ identity }, "k") {
+                    fetchStarted.complete(Unit)
+                    releaseFetch.await()
+                    Result.success("v") to true
+                }
+            }
+            val awaiter = async {
+                fetcher.getOrFetchStorable({ identity }, "k") {
+                    fetchStarted.complete(Unit)
+                    releaseFetch.await()
+                    Result.success("unstoreable") to false
+                }
+            }
+
+            fetchStarted.await()
+            originator.cancel()
+            releaseFetch.complete(Unit)
+
+            awaiter.await()
+        }
+
+        assertEquals("unstoreable", awaiterResult.getOrNull())
+        assertNull(cache.get(identity, "k"), "the retry's store=false decision must veto its write-back")
+    }
+
     // ── identity isolation ─────────────────────────────────────────────
 
     @Test

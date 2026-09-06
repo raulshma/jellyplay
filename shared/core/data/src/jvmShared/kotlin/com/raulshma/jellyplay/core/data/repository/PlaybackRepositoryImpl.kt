@@ -336,11 +336,11 @@ class PlaybackRepositoryImpl(
         apiClient.fetchActiveTranscodeReasons(itemId).getOrDefault(emptyList())
 
     override suspend fun getMediaSegments(itemId: String): Result<List<MediaSegment>> =
-        segmentsFetcher.getOrFetch({ homeSession.cacheIdentity() }, itemId) {
+        segmentsFetcher.getOrFetchStorable({ homeSession.cacheIdentity() }, itemId) {
             val segmentsResult = apiClient.getMediaSegments(itemId)
             val segments = segmentsResult.getOrDefault(emptyList())
             if (segments.isNotEmpty()) {
-                return@getOrFetch Result.success(segments)
+                return@getOrFetchStorable Result.success(segments) to true
             }
 
             // Distinguish "API succeeded and returned no segments" (cache the
@@ -383,17 +383,12 @@ class PlaybackRepositoryImpl(
                         )
                     }
                 }
-                // Only cache on a successful (empty) segments call. When the
-                // segments API itself failed, leave the cache untouched so the
-                // next call retries the API instead of serving a stale
-                // "empty": the fetcher stores a successful result only when
-                // the epoch it captured at flight start is still current, so
-                // bumping the epoch here vetoes this flight's write-back
-                // without touching the cache.
-                if (!cacheFallback) {
-                    segmentsEpoch.incrementAndGet()
-                }
-                Result.success(fallbackSegments)
+                // Only cache on a successful (empty) segments call: the store
+                // flag vetoes exactly this flight's write-back when the
+                // segments API itself failed, leaving the cache untouched so
+                // the next call retries the API instead of serving a stale
+                // "empty" — and no concurrent item's flight is affected.
+                Result.success(fallbackSegments) to cacheFallback
             }
         }
 

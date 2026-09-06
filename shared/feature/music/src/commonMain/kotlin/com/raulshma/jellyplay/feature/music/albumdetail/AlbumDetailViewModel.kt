@@ -20,7 +20,6 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -67,10 +66,7 @@ class AlbumDetailViewModel(
 
     init {
         launch {
-            instantMix.state
-                .map { it.error }
-                .distinctUntilChanged()
-                .collect { mixError -> _error.value = mixError.toMixErrorMessage() }
+            instantMix.errorFlow.collect { mixError -> _error.value = mixError.toMixErrorMessage() }
         }
     }
 
