@@ -48,7 +48,7 @@ private const val SAVED_KEY_PLAY_SESSION_ID = "video_player.saved_play_session_i
 private const val SAVED_KEY_POSITION_PERSISTED_AT = "video_player.saved_position_persisted_at"
 
 /** Minimum wall-clock interval (ms) between throttled process-death persists. */
-private const val POSITION_PERSIST_MIN_INTERVAL_MS = 5_000L
+private const val POSITION_PERSIST_MIN_WALL_CLOCK_INTERVAL_MS = 5_000L
 
 /**
  * Quiet-period for coalescing the *offline-mirror* DB write during rapid
@@ -375,7 +375,7 @@ internal class PlaybackSession(
      * Wall clock of the last process-death persist; the throttle key for
      * [persistPlaybackPosition]. A wall-clock gate (not a position delta)
      * keeps the write cadence fixed at
-     * [POSITION_PERSIST_MIN_INTERVAL_MS] regardless of playback speed —
+     * [POSITION_PERSIST_MIN_WALL_CLOCK_INTERVAL_MS] regardless of playback speed —
      * a position delta made 2× speed halve the interval between writes.
      */
     internal var lastPersistedAtMs: Long = 0L
@@ -965,7 +965,7 @@ internal class PlaybackSession(
 
     /**
      * Persists the current playback position so it survives process death.
-     * Throttled to at most one write per [POSITION_PERSIST_MIN_INTERVAL_MS]
+     * Throttled to at most one write per [POSITION_PERSIST_MIN_WALL_CLOCK_INTERVAL_MS]
      * of WALL CLOCK unless [force] (e.g. an explicit seek) — keying on
      * wall clock rather than a position delta keeps the write cadence fixed
      * regardless of playback speed (a delta gate wrote every 2.5 s at 2×);
@@ -976,7 +976,7 @@ internal class PlaybackSession(
      */
     fun persistPlaybackPosition(positionMs: Long, force: Boolean) {
         val now = System.currentTimeMillis()
-        if (!force && now - lastPersistedAtMs < POSITION_PERSIST_MIN_INTERVAL_MS) return
+        if (!force && now - lastPersistedAtMs < POSITION_PERSIST_MIN_WALL_CLOCK_INTERVAL_MS) return
         val itemId = playerSessionManager.sessionState.value.currentItemId ?: return
         lastPersistedPositionMs = positionMs
         lastPersistedAtMs = now
@@ -1003,7 +1003,7 @@ internal class PlaybackSession(
      * The position-store snapshot is already written synchronously by
      * [seekPersisted], and the throttled position tick
      * (`persistPlaybackPosition(force=false)`) re-writes the mirror every
-     * [POSITION_PERSIST_MIN_INTERVAL_MS], so a dropped coalesced write is
+     * [POSITION_PERSIST_MIN_WALL_CLOCK_INTERVAL_MS], so a dropped coalesced write is
      * recovered within seconds.
      *
      * Keeps launching on the ViewModel-supplied [scope] (NOT [releaseScope]):

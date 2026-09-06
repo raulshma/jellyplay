@@ -287,7 +287,7 @@ class AuthRepositoryImplTest {
 
     @Test
     fun `restoreSession releases the gate on a slow validation and still tears down on the deferred 401`() = runTest {
-        // STA-1 (docs/perf/codebase-audit-2026-09.md): the restore-time token
+        // STA-1 (2026-09 perf audit): the restore-time token
         // check is bounded on the first-frame gate; a server slower than the
         // bound releases the gate with the DB-restored session kept (the same
         // outcome a non-401 validation failure already produces), and the

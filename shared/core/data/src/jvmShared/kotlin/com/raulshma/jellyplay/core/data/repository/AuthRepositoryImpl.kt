@@ -13,10 +13,10 @@ import com.raulshma.jellyplay.core.model.QuickConnectState
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.network.websocket.JellyfinWebSocketClient
 import com.raulshma.jellyplay.core.data.repository.withTransaction
 import com.raulshma.jellyplay.core.data.util.TimeSource
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -57,7 +57,7 @@ class AuthRepositoryImpl constructor(
         private val folderIdsCache = LruCache<String, List<String>>(16)
 
         /**
-         * Audit STA-1 (docs/perf/codebase-audit-2026-09.md): the network half
+         * Audit STA-1 (2026-09 perf audit): the network half
          * of session restore must not gate the first real frame on a live
          * round trip. Address selection probes sequentially (5 s callTimeout
          * per address) and the restore-time token check is an authenticated
@@ -393,21 +393,6 @@ class AuthRepositoryImpl constructor(
             stage()
             true
         } ?: false
-
-    /**
-     * [runCatching] variant for code that runs inside (or alongside) a
-     * cancellable coroutine: a [CancellationException] must pass through.
-     * Plain `runCatching` inside a [kotlinx.coroutines.withTimeoutOrNull]
-     * stage swallows the timeout's cancellation, so the stage reports
-     * success and the deferred re-run in [restoreSession] is skipped.
-     */
-    private suspend fun <T> runCatchingRethrowingCancellation(block: suspend () -> T): Result<T> = try {
-        Result.success(block())
-    } catch (e: CancellationException) {
-        throw e
-    } catch (e: Throwable) {
-        Result.failure(e)
-    }
 
     /**
      * Restore-time guard on top of [storedTokenRejected]: a token the server

@@ -24,6 +24,7 @@ import com.raulshma.jellyplay.core.database.di.databaseDaosModule
 import com.raulshma.jellyplay.core.model.ImageCache
 import com.raulshma.jellyplay.core.network.di.androidNetworkModule
 import com.raulshma.jellyplay.core.network.di.networkJvmModule
+import com.raulshma.jellyplay.core.network.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.notification.di.NotificationWorkerFactory
 import com.raulshma.jellyplay.core.notification.di.androidNotificationModule
 import com.raulshma.jellyplay.core.ui.di.androidCoreUiModule
@@ -81,7 +82,6 @@ import androidx.work.DelegatingWorkerFactory
 import com.raulshma.jellyplay.widget.AppWidgetWorkerFactory
 import okhttp3.OkHttpClient
 import okio.Path.Companion.toPath
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -549,19 +549,4 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
     }
 
     override fun newImageLoader(context: Context): ImageLoader = imageLoader
-
-    /**
-     * [runCatching] variant for the suspend prewarms above: a
-     * [CancellationException] must pass through so cancelling the launching
-     * coroutine isn't swallowed as a failed prewarm. Plain inline
-     * `runCatching` around suspend calls catches it like any other
-     * [Throwable].
-     */
-    private suspend fun <T> runCatchingRethrowingCancellation(block: suspend () -> T): Result<T> = try {
-        Result.success(block())
-    } catch (e: CancellationException) {
-        throw e
-    } catch (e: Throwable) {
-        Result.failure(e)
-    }
 }
