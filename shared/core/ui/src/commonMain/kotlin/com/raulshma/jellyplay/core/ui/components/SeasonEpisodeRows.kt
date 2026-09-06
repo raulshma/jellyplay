@@ -14,6 +14,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxColors
+import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -35,6 +38,7 @@ import com.composables.icons.tabler.outline.ChevronDown
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.defaultContentSizeSpec
 import com.raulshma.jellyplay.core.designsystem.theme.defaultSpatialSpring
+import com.raulshma.jellyplay.core.designsystem.theme.expressiveListShape
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.ui.generated.resources.Res
 import com.raulshma.jellyplay.core.ui.generated.resources.detail_cd_collapse
@@ -66,6 +70,69 @@ fun RowScope.SeasonEpisodeMetaLabels(episode: MediaItem, nameColor: Color) {
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+    }
+}
+
+/**
+ * Episode row chassis shared by the season lists in
+ * [DeleteDownloadedEpisodesSheet] and [SeriesDownloadSheet]: horizontal inset,
+ * expressive-list shape, selected-background color animation, checkbox, and
+ * [SeasonEpisodeMetaLabels]. The caller passes the selected-container color,
+ * name color, and checkbox colors so each sheet keeps its own
+ * selected/downloaded tinting while the row shape itself can't drift between
+ * the two. [enabled] gates both the row click and the checkbox (locked
+ * downloaded rows pass false); [trailingContent] slots per-sheet extras after
+ * the labels (e.g. the "Downloaded" status tag).
+ */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+fun SeasonEpisodeRow(
+    episode: MediaItem,
+    index: Int,
+    count: Int,
+    selected: Boolean,
+    selectedContainerColor: Color,
+    nameColor: Color,
+    checkboxColors: CheckboxColors,
+    onToggle: () -> Unit,
+    enabled: Boolean = true,
+    trailingContent: (@Composable RowScope.() -> Unit)? = null,
+) {
+    // The horizontal inset replaces the padding a Column around the episode
+    // list used to apply; the LazyColumn's 4 dp item spacing supplies the rest.
+    Column(modifier = Modifier.padding(start = 12.dp, end = 4.dp)) {
+        val shape = expressiveListShape(
+            index = index,
+            count = count,
+            outerRadius = 14.dp,
+            innerRadius = 8.dp,
+        )
+
+        val episodeBgColor by animateColorAsState(
+            targetValue = if (selected) selectedContainerColor else Color.Transparent,
+            animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
+            label = "epBg",
+        )
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(shape)
+                .background(episodeBgColor)
+                .clickable(enabled = enabled, onClick = onToggle)
+                .padding(horizontal = 8.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Checkbox(
+                checked = selected,
+                onCheckedChange = null,
+                enabled = enabled,
+                colors = checkboxColors,
+            )
+            Spacer(Modifier.width(8.dp))
+            SeasonEpisodeMetaLabels(episode = episode, nameColor = nameColor)
+            trailingContent?.invoke(this)
         }
     }
 }

@@ -236,6 +236,18 @@ abstract class PrecompressWasmDistTask : DefaultTask() {
                     "run :apps:web:wasmJsBrowserDistribution first"
             )
         }
+        // Orphaned sidecars from a previous run (source dropped or renamed by
+        // an incremental rebuild) must not ship in the release zip.
+        var removed = 0
+        dir.walkTopDown()
+            .filter { it.isFile && it.name.endsWith(".gz") }
+            .forEach { sidecar ->
+                val source = sidecar.resolveSibling(sidecar.name.removeSuffix(".gz"))
+                if (!source.isFile) {
+                    sidecar.delete()
+                    removed++
+                }
+            }
         var written = 0
         dir.walkTopDown()
             .filter { it.isFile && !it.name.endsWith(".gz") && it.extension in setOf("wasm", "js", "css") }
@@ -254,7 +266,10 @@ abstract class PrecompressWasmDistTask : DefaultTask() {
                     "distribution layout changed?"
             )
         }
-        logger.lifecycle("precompressWasmDist: wrote $written .gz sidecar(s) under $dir")
+        logger.lifecycle(
+            "precompressWasmDist: wrote $written .gz sidecar(s) under $dir" +
+                (if (removed > 0) ", removed $removed orphaned sidecar(s)" else "")
+        )
     }
 }
 

@@ -13,9 +13,7 @@ import com.raulshma.jellyplay.core.ui.generated.resources.detail_season_default
 import com.raulshma.jellyplay.core.ui.generated.resources.detail_select_all
 import com.raulshma.jellyplay.core.ui.generated.resources.detail_select_episodes_to_remove
 
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -25,12 +23,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
@@ -53,7 +49,6 @@ import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Trash
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
-import com.raulshma.jellyplay.core.designsystem.theme.expressiveListShape
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.formatBytes
 
@@ -245,57 +240,19 @@ fun DeleteDownloadedEpisodesSheet(
                         key = { _, episode -> "season-${season.id}-ep-${episode.id}" },
                         contentType = { _, _ -> "episode" },
                     ) { idx, episode ->
-                        // The horizontal inset replaces the padding the Column
-                        // around the episode list used to apply; the
-                        // LazyColumn's 4 dp item spacing supplies the rest.
-                        Column(
-                            modifier = Modifier
-                                .padding(start = 12.dp, end = 4.dp),
-                        ) {
-                            val isEpisodeSelected = episode.id in selectedInSeason
-                            val shape = expressiveListShape(
-                                index = idx,
-                                count = seasonEpisodes.size,
-                                outerRadius = 14.dp,
-                                innerRadius = 8.dp,
-                            )
-
-                            val episodeBgColor by animateColorAsState(
-                                targetValue = if (isEpisodeSelected) {
-                                    MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)
-                                } else {
-                                    androidx.compose.ui.graphics.Color.Transparent
-                                },
-                                animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
-                                label = "epBg",
-                            )
-
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(shape)
-                                    .background(episodeBgColor)
-                                    .clickable {
-                                        selection.toggleEpisode(season.id, episode.id)
-                                    }
-                                    .padding(horizontal = 8.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Checkbox(
-                                    checked = isEpisodeSelected,
-                                    onCheckedChange = null,
-                                    colors = CheckboxDefaults.colors(
-                                        checkedColor = MaterialTheme.colorScheme.error,
-                                        uncheckedColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    ),
-                                )
-                                Spacer(Modifier.width(8.dp))
-                                SeasonEpisodeMetaLabels(
-                                    episode = episode,
-                                    nameColor = MaterialTheme.colorScheme.onSurface,
-                                )
-                            }
-                        }
+                        SeasonEpisodeRow(
+                            episode = episode,
+                            index = idx,
+                            count = seasonEpisodes.size,
+                            selected = episode.id in selectedInSeason,
+                            selectedContainerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
+                            nameColor = MaterialTheme.colorScheme.onSurface,
+                            checkboxColors = CheckboxDefaults.colors(
+                                checkedColor = MaterialTheme.colorScheme.error,
+                                uncheckedColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            ),
+                            onToggle = { selection.toggleEpisode(season.id, episode.id) },
+                        )
                     }
 
                     seasonDividerItem(season.id)

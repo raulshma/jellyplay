@@ -49,17 +49,19 @@ android {
             isEnable = true
             reset()
             include("arm64-v8a")
-            // BIN-11: debug builds default to arm64-only — the device fleet is
+            // BIN-11: builds default to arm64-only — the device fleet is
             // physical phones, and every developer/CI invocation used to pay
             // for three dex+package passes. The emulator ABIs (x86_64 for
             // modern images; x86 for the 32-bit-only Android TV system images,
-            // API 30 and older) are opt-in via a comma-separated property:
-            //   ./gradlew assemblePhoneDebug -PdebugAbis=x86_64,x86
-            // Empty/unset/blank entries parse to "arm64 only"; no CI lane
-            // passes the property (codeql's assembleDebug is compile-analysis
-            // only, kmp-build's androidTest/verify lanes never install on an
-            // emulator, and the device e2e pass installs the arm64 split).
-            providers.gradleProperty("debugAbis")
+            // API 30 and older) are opt-in via a comma-separated property.
+            // Named extraAbis because splits.abi is variant-agnostic: it
+            // widens every variant, debug and release alike (no CI lane
+            // passes it — codeql's assembleDebug is compile-analysis only,
+            // kmp-build's androidTest/verify lanes never install on an
+            // emulator, and the device e2e pass installs the arm64 split):
+            //   ./gradlew assemblePhoneDebug -PextraAbis=x86_64,x86
+            // Empty/unset/blank entries parse to "arm64 only".
+            providers.gradleProperty("extraAbis")
                 .map { raw ->
                     raw.split(',').map(String::trim).filter { it.isNotBlank() }.distinct()
                 }

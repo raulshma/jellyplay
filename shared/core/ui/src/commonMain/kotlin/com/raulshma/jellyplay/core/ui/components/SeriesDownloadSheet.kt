@@ -1,8 +1,6 @@
 package com.raulshma.jellyplay.core.ui.components
 
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -14,12 +12,10 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
@@ -36,7 +32,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -44,7 +39,6 @@ import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Download
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
-import com.raulshma.jellyplay.core.designsystem.theme.expressiveListShape
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.ui.generated.resources.Res
 import com.raulshma.jellyplay.core.ui.generated.resources.detail_cancel
@@ -254,64 +248,31 @@ fun SeriesDownloadSheet(
                             key = { _, episode -> "season-${season.id}-ep-${episode.id}" },
                             contentType = { _, _ -> "episode" },
                         ) { idx, episode ->
-                            // The horizontal inset replaces the padding the Column
-                            // around the episode list used to apply; the
-                            // LazyColumn's 4 dp item spacing supplies the rest.
-                            Column(
-                                modifier = Modifier
-                                    .padding(start = 12.dp, end = 4.dp),
-                            ) {
-                                val isDownloaded = episode.id in downloadedEpisodeIds
-                                val isEpisodeSelected = isDownloaded || episode.id in selectedInSeason
-                                val shape = expressiveListShape(
-                                    index = idx,
-                                    count = seasonEpisodes.size,
-                                    outerRadius = 14.dp,
-                                    innerRadius = 8.dp,
-                                )
-
-                                val episodeBgColor by animateColorAsState(
-                                    targetValue = when {
-                                        isDownloaded -> MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.4f)
-                                        isEpisodeSelected -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
-                                        else -> Color.Transparent
-                                    },
-                                    animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
-                                    label = "epBg",
-                                )
-
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(shape)
-                                        .background(episodeBgColor)
-                                        .clickable(enabled = !isDownloaded) {
-                                            selection.toggleEpisode(season.id, episode.id)
-                                        }
-                                        .padding(horizontal = 8.dp, vertical = 6.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    Checkbox(
-                                        checked = isEpisodeSelected,
-                                        onCheckedChange = null,
-                                        enabled = !isDownloaded,
-                                        colors = if (isDownloaded) {
-                                            CheckboxDefaults.colors(
-                                                checkedColor = MaterialTheme.colorScheme.tertiary,
-                                            )
-                                        } else {
-                                            CheckboxDefaults.colors()
-                                        },
+                            val isDownloaded = episode.id in downloadedEpisodeIds
+                            val isEpisodeSelected = isDownloaded || episode.id in selectedInSeason
+                            SeasonEpisodeRow(
+                                episode = episode,
+                                index = idx,
+                                count = seasonEpisodes.size,
+                                selected = isEpisodeSelected,
+                                selectedContainerColor = if (isDownloaded) {
+                                    MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.4f)
+                                } else {
+                                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                                },
+                                nameColor = if (isDownloaded) MaterialTheme.colorScheme.onSurfaceVariant
+                                else MaterialTheme.colorScheme.onSurface,
+                                checkboxColors = if (isDownloaded) {
+                                    CheckboxDefaults.colors(
+                                        checkedColor = MaterialTheme.colorScheme.tertiary,
                                     )
-                                    Spacer(Modifier.width(8.dp))
-                                    SeasonEpisodeMetaLabels(
-                                        episode = episode,
-                                        nameColor = if (isDownloaded)
-                                            MaterialTheme.colorScheme.onSurfaceVariant
-                                        else
-                                            MaterialTheme.colorScheme.onSurface,
-                                    )
-                                    if (isDownloaded) {
+                                } else {
+                                    CheckboxDefaults.colors()
+                                },
+                                onToggle = { selection.toggleEpisode(season.id, episode.id) },
+                                enabled = !isDownloaded,
+                                trailingContent = if (isDownloaded) {
+                                    {
                                         Text(
                                             text = stringResource(Res.string.detail_downloaded_status),
                                             style = MaterialTheme.typography.labelSmall,
@@ -319,8 +280,10 @@ fun SeriesDownloadSheet(
                                             fontWeight = FontWeight.Medium,
                                         )
                                     }
-                                }
-                            }
+                                } else {
+                                    null
+                                },
+                            )
                         }
                     }
 
