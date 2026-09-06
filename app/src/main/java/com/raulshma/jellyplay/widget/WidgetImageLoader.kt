@@ -152,14 +152,17 @@ object WidgetImageLoader {
         // withTimeoutOrNull returns null on timeout — treat that as "resolve
         // whatever landed". Because the async loads write into posterMemoryCache
         // as they complete, a timeout still leaves any finished entries cached
-        // for the next bind; here we just report the ones that resolved in time.
+        // for the next bind; here we just report the ones that resolved in time
+        // (reading them back out of the cache — the timed-out block itself is
+        // cancelled before awaitAll can return), so one slow server never
+        // blanks every cell for the whole bind.
         return withTimeoutOrNull(WIDGET_PRELOAD_DEADLINE_MS) {
             coroutineScope {
                 capped.map { url -> async { url to loadPoster(context, url, cornerRadiusDp) } }
                     .awaitAll()
                     .toMap()
             }
-        } ?: emptyMap()
+        } ?: capped.associateWith { url -> posterMemoryCache.get(url) }
     }
 
     /**

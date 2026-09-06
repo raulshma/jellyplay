@@ -126,7 +126,7 @@ class AuthRepositoryImpl constructor(
         }
     }
 
-    override suspend fun switchServer(serverId: String): Result<Unit> = runCatching {
+    override suspend fun switchServer(serverId: String): Result<Unit> = runCatchingRethrowingCancellation {
         val serverEntity = serverDao.getServerById(serverId) ?: return Result.success(Unit)
         val server = serverEntity.toServerInfo()
         apiClient.disconnect()
@@ -297,7 +297,7 @@ class AuthRepositoryImpl constructor(
     override suspend fun authorizeQuickConnect(code: String): Result<Boolean> =
         apiClient.authorizeQuickConnect(code)
 
-    override suspend fun restoreSession(): Result<Unit> = runCatching {
+    override suspend fun restoreSession(): Result<Unit> = runCatchingRethrowingCancellation {
         val serverId: String? = serverIdentityStore.activeServerId.first()
         val userId: String? = serverIdentityStore.activeUserId.first()
         if (serverId != null && userId != null) {
@@ -307,7 +307,7 @@ class AuthRepositoryImpl constructor(
                 // release builds and can be used for cross-session correlation.
                 Log.w("AuthRepository", "restoreSession: server not found in DB")
                 serverIdentityStore.setActiveSession("", "")
-                return@runCatching
+                return@runCatchingRethrowingCancellation
             }
             val server = serverEntity.toServerInfo()
             apiClient.setServer(server)
@@ -329,7 +329,7 @@ class AuthRepositoryImpl constructor(
             if (userEntity == null) {
                 Log.w("AuthRepository", "restoreSession: user not found in DB")
                 serverIdentityStore.setActiveUser("")
-                return@runCatching
+                return@runCatchingRethrowingCancellation
             }
             val token = tokenCipher.decrypt(userEntity.accessToken)
             if (token != null) {
@@ -379,8 +379,13 @@ class AuthRepositoryImpl constructor(
                         if (!validationCompleted) {
                             // Unguarded, a DataStore failure inside
                             // clearSession() surfaces as an unhandled
-                            // exception on the app-lifetime scope; bound it
-                            // like the gated pass above.
+                            // exception on the app-lifetime scope. Unlike the
+                            // gated pass this stage is not timeout-bounded:
+                            // nothing suspends on its completion (the shell
+                            // has long since left the splash), and this pass
+                            // is the last chance for a definitive 401 verdict
+                            // — abandoning it on a slow server would lose
+                            // that teardown until the next cold start.
                             runCatchingRethrowingCancellation { validateRestoredSession() }
                                 .onFailure { e ->
                                     Log.w("AuthRepository", "Deferred session validation failed", e)
@@ -524,7 +529,7 @@ class AuthRepositoryImpl constructor(
         serverIdentityStore.clearSession()
     }
 
-    override suspend fun switchUser(userId: String): Result<Unit> = runCatching {
+    override suspend fun switchUser(userId: String): Result<Unit> = runCatchingRethrowingCancellation {
         val userEntity = userDao.getUserById(userId) ?: return Result.success(Unit)
         val server = serverDao.getServerById(userEntity.serverId) ?: return Result.success(Unit)
         apiClient.disconnect()

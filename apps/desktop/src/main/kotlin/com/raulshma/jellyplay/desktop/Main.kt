@@ -51,6 +51,7 @@ import com.raulshma.jellyplay.core.ui.components.rememberPreferenceDarkTheme
 import com.raulshma.jellyplay.core.network.di.desktopNetworkModule
 import com.raulshma.jellyplay.core.network.di.NetworkQualifiers
 import com.raulshma.jellyplay.core.network.di.networkJvmModule
+import com.raulshma.jellyplay.core.network.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.desktop.player.desktopPlayerModule
 import com.raulshma.jellyplay.feature.search.di.searchModule
 import com.raulshma.jellyplay.feature.library.di.desktopPhotoExportModule
@@ -447,7 +448,10 @@ fun main() {
     // runBlocking branch unreachable in practice, exactly like the Android
     // Application.onCreate prewarm.
     appScope.launch {
-        runCatching {
+        // Same cancellation-safe wrapper as the Android twin's prewarms: plain
+        // runCatching would swallow CancellationException and report a
+        // cancelled app scope's shutdown as a mere failed prewarm.
+        runCatchingRethrowingCancellation {
             koinApp.koin.get<com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore>()
                 .ensureDeviceId()
         }
