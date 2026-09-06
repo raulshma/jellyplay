@@ -18,10 +18,7 @@ internal object WidgetPersistHelper {
     ) {
         val previous = store.libraryWidgetItems.first()
         val previousVersion = store.libraryWidgetVersion.first()
-        // CONC-6: fire-and-forget prewarm of the snapshot's posters (the
-        // factory binds against these exact URLs), so the next bind resolves
-        // from memory instead of the bounded blocking fetch.
-        WidgetImageLoader.prewarmPosters(context, items.mapNotNull { it.posterUrl })
+        prewarmSnapshotPosters(context, items.map { it.posterUrl })
         val now = System.currentTimeMillis()
         val version = if (versionBumpOnly) previousVersion + 1L else now
         if (!versionBumpOnly && sameContentById(previous, items) { it.itemId }) {
@@ -40,9 +37,7 @@ internal object WidgetPersistHelper {
     ) {
         val previous = store.seerrWidgetItems.first()
         val previousVersion = store.seerrWidgetVersion.first()
-        // CONC-6: same prewarm as the library path above — each factory binds
-        // against the exact URLs prewarmed here, so the two paths cannot drift.
-        WidgetImageLoader.prewarmPosters(context, items.mapNotNull { it.posterUrl })
+        prewarmSnapshotPosters(context, items.map { it.posterUrl })
         val now = System.currentTimeMillis()
         val version = if (versionBumpOnly) previousVersion + 1L else now
         if (!versionBumpOnly && sameContentById(previous, items) { it.tmdbId }) {
@@ -51,6 +46,16 @@ internal object WidgetPersistHelper {
         }
         store.setSeerrWidgetItems(items, version, now)
         notifySeerrWidgets(context)
+    }
+
+    /**
+     * CONC-6: fire-and-forget prewarm of a snapshot's posters — each factory
+     * binds against the exact URLs prewarmed here, so the next bind resolves
+     * from memory instead of the bounded blocking fetch, and the two persist
+     * paths cannot drift.
+     */
+    private fun prewarmSnapshotPosters(context: Context, posterUrls: List<String?>) {
+        WidgetImageLoader.prewarmPosters(context, posterUrls.filterNotNull())
     }
 
     private fun <T> sameContentById(

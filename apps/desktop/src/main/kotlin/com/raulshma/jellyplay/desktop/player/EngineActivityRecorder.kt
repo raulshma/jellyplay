@@ -28,7 +28,7 @@ import java.util.concurrent.CopyOnWriteArrayList
  * Per-engine observers are CANCELLED on engine release (CONC-1, 2026-09 audit
  * — they used to run for the process lifetime, so N released engines kept N×3
  * coroutines waking 2×/s against dead JNA handles): the desktop factory wires
- * every engine it owns into [recordReleased], which cancels the three observer
+ * every engine it owns into [onEngineReleased], which cancels the three observer
  * jobs while KEEPING the record itself (accumulated evidence is the point —
  * only the live observation stops). Engines without a desktop release hook
  * (the shared no-op EXTERNAL engine) keep the old always-observe behavior;
@@ -41,7 +41,7 @@ class EngineActivityRecorder {
 
     /**
      * Live per-engine observers, engine instance → its record. An entry exists
-     * between [recordCreated] and [recordReleased] (the engine's release());
+     * between [recordCreated] and [onEngineReleased] (the engine's release());
      * the RECORD itself always stays in [records] for snapshot history, so
      * cancelling observation never destroys evidence. Keyed by engine
      * identity — engines do not override equals, so the map's equals-based
@@ -113,7 +113,7 @@ class EngineActivityRecorder {
      * by removal semantics; a call for an engine that was never recorded (or
      * already released) is a no-op.
      */
-    fun recordReleased(engine: MediaEngine) {
+    fun onEngineReleased(engine: MediaEngine) {
         observers.remove(engine)?.cancelObservers()
     }
 

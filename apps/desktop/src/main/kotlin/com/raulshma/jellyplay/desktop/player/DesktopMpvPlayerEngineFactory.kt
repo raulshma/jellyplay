@@ -123,7 +123,7 @@ class DesktopMpvPlayerEngineFactory(
         // the hook (the shared no-op has none — see class KDoc).
         val rec = recorder
         if (rec != null && engine is MpvDesktopEngine) {
-            engine.onReleased = { rec.recordReleased(engine) }
+            engine.onReleased = { rec.onEngineReleased(engine) }
         }
         return engine
     }
