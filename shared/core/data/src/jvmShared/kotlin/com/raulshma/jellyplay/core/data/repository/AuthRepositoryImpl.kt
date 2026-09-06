@@ -371,7 +371,14 @@ class AuthRepositoryImpl constructor(
                             runCatchingRethrowingCancellation { apiClient.selectReachableAddress() }
                         }
                         if (!validationCompleted) {
-                            validateRestoredSession()
+                            // Unguarded, a DataStore failure inside
+                            // clearSession() surfaces as an unhandled
+                            // exception on the app-lifetime scope; bound it
+                            // like the gated pass above.
+                            runCatchingRethrowingCancellation { validateRestoredSession() }
+                                .onFailure { e ->
+                                    Log.w("AuthRepository", "Deferred session validation failed", e)
+                                }
                         }
                     }
                 }
