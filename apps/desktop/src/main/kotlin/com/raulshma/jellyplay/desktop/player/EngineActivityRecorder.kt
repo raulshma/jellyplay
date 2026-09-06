@@ -31,8 +31,10 @@ import java.util.concurrent.CopyOnWriteArrayList
  * every engine it owns into [onEngineReleased], which cancels the three observer
  * jobs while KEEPING the record itself (accumulated evidence is the point —
  * only the live observation stops). Engines without a desktop release hook
- * (the shared no-op EXTERNAL engine) keep the old always-observe behavior;
- * their reads are pure state (no JNA) and the sample caps still bound memory.
+ * (the shared no-op EXTERNAL engine) are never released, so their observers
+ * stop only when a later playback re-records the same instance — the
+ * displaced record's jobs are cancelled then ([recordCreated]); their reads
+ * are pure state (no JNA) and the sample caps still bound memory.
  */
 class EngineActivityRecorder {
 
@@ -102,7 +104,12 @@ class EngineActivityRecorder {
                 }
             },
         )
-        observers[engine] = record
+        // put-and-cancel, not a plain put: every EXTERNAL playback re-records
+        // the SAME shared no-op engine, so the displaced record's three
+        // observer jobs would otherwise be orphaned mid-flight (unreachable,
+        // uncancellable). Its evidence stays in [records]; only the live
+        // observation hands over to the fresh record.
+        observers.put(engine, record)?.cancelObservers()
     }
 
     /**

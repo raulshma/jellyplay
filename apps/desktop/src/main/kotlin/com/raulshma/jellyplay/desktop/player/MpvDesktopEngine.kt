@@ -570,7 +570,9 @@ open class MpvDesktopEngine(
         // First thing after the CAS: stop external observers (the recorder's
         // sampler — see onReleased) BEFORE teardown, so their last reads saw
         // a live engine and no sample lands against a destroyed handle.
-        onReleased?.invoke()
+        // Guarded: the CAS has already won, so a throwing callback here would
+        // abort teardown with released==true and leak the mpv handle forever.
+        runCatching { onReleased?.invoke() }
         running = false
         val context = ctx ?: return
         repeat(RELEASE_JOIN_ATTEMPTS) {

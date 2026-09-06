@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.livetv.epg
 
 import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
+import com.raulshma.jellyplay.core.model.EpgGuide
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
@@ -136,21 +137,31 @@ class EpgViewModel(
         loadGuide()
     }
 
+    /**
+     * Fetches the guide for the standard window (GUIDE_LOOKBACK_HOURS back,
+     * GUIDE_WINDOW_HOURS span) and, on success, publishes channels, programs,
+     * the window bounds and the rebuilt grid. Shared by the user-triggered
+     * [loadGuide] and the auto-refresh loop; callers own loading/error UX.
+     */
+    private suspend fun fetchGuideIntoState(): Result<EpgGuide> {
+        val now = Instant.now()
+        val start = now.minus(GUIDE_LOOKBACK_HOURS, ChronoUnit.HOURS)
+        val end = now.plus(GUIDE_WINDOW_HOURS - GUIDE_LOOKBACK_HOURS, ChronoUnit.HOURS)
+        return mediaRepository.getLiveTvGuide(startDateUtc = start.toString(), endDateUtc = end.toString(), limit = 100)
+            .onSuccess { guide ->
+                _channels.value = guide.channels
+                _programs.value = guide.programs
+                _windowStart.value = start
+                _windowEnd.value = end
+                rebuildGrid()
+            }
+    }
+
     fun loadGuide() {
         launch {
             _isLoading.value = true
             _error.value = null
-            val now = Instant.now()
-            val start = now.minus(GUIDE_LOOKBACK_HOURS, ChronoUnit.HOURS)
-            val end = now.plus(GUIDE_WINDOW_HOURS - GUIDE_LOOKBACK_HOURS, ChronoUnit.HOURS)
-            mediaRepository.getLiveTvGuide(startDateUtc = start.toString(), endDateUtc = end.toString(), limit = 100)
-                .onSuccess { guide ->
-                    _channels.value = guide.channels
-                    _programs.value = guide.programs
-                    _windowStart.value = start
-                    _windowEnd.value = end
-                    rebuildGrid()
-                }
+            fetchGuideIntoState()
                 .onFailure { _error.value = it.message }
             _isLoading.value = false
         }
@@ -180,17 +191,7 @@ class EpgViewModel(
         autoRefreshJob = launch {
             while (true) {
                 delay(REFRESH_INTERVAL_MS)
-                val now = Instant.now()
-                val start = now.minus(GUIDE_LOOKBACK_HOURS, ChronoUnit.HOURS)
-                val end = now.plus(GUIDE_WINDOW_HOURS - GUIDE_LOOKBACK_HOURS, ChronoUnit.HOURS)
-                mediaRepository.getLiveTvGuide(startDateUtc = start.toString(), endDateUtc = end.toString(), limit = 100)
-                    .onSuccess { guide ->
-                        _channels.value = guide.channels
-                        _programs.value = guide.programs
-                        _windowStart.value = start
-                        _windowEnd.value = end
-                        rebuildGrid()
-                    }
+                fetchGuideIntoState()
             }
         }
     }
