@@ -70,16 +70,16 @@ class ContinueWatchingWidgetService : RemoteViewsService() {
             items = store.continueWatchingSnapshot().take(maxCount)
             // Pre-fetch posters concurrently so each `getViewAt` is a map lookup.
             // A slow URL is bounded by `WidgetImageLoader`'s internal timeout.
-            val urlById = items.associate { item ->
+            val entries = items.map { item ->
                 WidgetImageLoader.continueWatchingPosterEntry(item, playbackRepository)
             }
-            posterCache = if (urlById.isEmpty()) {
+            posterCache = if (entries.isEmpty()) {
                 emptyMap()
             } else {
                 runBlocking {
-                    WidgetImageLoader.preloadPosters(context, urlById.values)
+                    WidgetImageLoader.preloadPosters(context, entries.map { it.url })
                 }.let { urlToBitmap ->
-                    urlById.mapValues { (_, url) -> urlToBitmap[url] }
+                    entries.associate { it.imageId to urlToBitmap[it.url] }
                 }
             }
             widgetDims = refreshWidgetDimensions(context, appWidgetId, 220)

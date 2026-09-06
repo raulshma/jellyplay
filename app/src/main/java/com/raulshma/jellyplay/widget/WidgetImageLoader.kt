@@ -27,6 +27,16 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
 /**
+ * (image id, url) entry the Continue-Watching paths share: [imageId] is the
+ * series id when the row is an episode and keys the factory's poster cache,
+ * [url] is the resolved image URL at the widget's cell width.
+ */
+data class ContinueWatchingPosterEntry(
+    val imageId: String,
+    val url: String,
+)
+
+/**
  * Centralised Coil → Bitmap pipeline used by every widget factory.
  *
  * The pipeline is intentionally small:
@@ -175,16 +185,17 @@ object WidgetImageLoader {
      * onDataSetChanged preload and the broadcaster's snapshot prewarm must
      * derive the SAME (image id, url) per row — image id is the series when
      * the row is an episode, maxWidth pins the widget's single-column cell
-     * size. Returns the pair so the factory's posterCache key and the
+     * size. Returns the entry so the factory's posterCache key and the
      * prewarmed url share one definition and can't drift; getViewAt's
-     * `item.seriesId ?: item.id` lookup key stays in sync with `.first`.
+     * `item.seriesId ?: item.id` lookup key stays in sync with
+     * [ContinueWatchingPosterEntry.imageId].
      */
     fun continueWatchingPosterEntry(
         item: MediaItem,
         playbackRepository: PlaybackRepository,
-    ): Pair<String, String> {
+    ): ContinueWatchingPosterEntry {
         val imageId = item.seriesId ?: item.id
-        return imageId to playbackRepository.getImageUrl(imageId, maxWidth = 300)
+        return ContinueWatchingPosterEntry(imageId, playbackRepository.getImageUrl(imageId, maxWidth = 300))
     }
 
     private fun applyRoundedCorners(context: Context, bitmap: Bitmap, cornerRadiusDp: Float = 10f): Bitmap {

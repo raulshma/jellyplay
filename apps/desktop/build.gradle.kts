@@ -678,17 +678,11 @@ compose.desktop {
     application {
         mainClass = "com.raulshma.jellyplay.desktop.MainKt"
 
-        // BIN-4 (2026-09 perf audit) — deliberately NOT applied yet. The
-        // audit ranks this measure-first ("the baseline harness exists for
-        // exactly this"): the packaged launchers run on JVM defaults (max
-        // heap = 25% of physical RAM, G1), and the suggested
-        // `jvmArgs += listOf("-Xms256m", "-Xmx2g")` pins a ceiling BELOW
-        // that default on machines with >8 GB — a potential player OOM
-        // regression if applied unvalidated. When A/B-ing via
-        // tools/perf/desktop-baseline.sh (jellyplay.perf.* marks), add the
-        // jvmArgs here; the compose plugin feeds them to jpackage as
-        // per-argument --java-options in the launcher config (and to the
-        // dev `run` task the same way).
+        // BIN-4 (2026-09 perf audit) — deliberately NOT applied: the
+        // suggested -Xms256m/-Xmx2g pins a heap ceiling BELOW the JVM default
+        // (25% of physical RAM) on >8 GB machines, a player OOM regression
+        // risk. Only add jvmArgs here after A/B-ing via
+        // tools/perf/desktop-baseline.sh.
 
         buildTypes.release.proguard {
             // Ship unsigned minimal packaging for V1; hardening is §Phase X.

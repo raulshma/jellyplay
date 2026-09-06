@@ -320,9 +320,8 @@ class AuthRepositoryImpl constructor(
             // STA-1: the probes are sequential network calls, so the wait is
             // bounded — on timeout the gate below releases on the primary
             // address and selection re-runs off the gate in the deferred pass.
-            val addressSelected = withTimeoutOrNull(RESTORE_NETWORK_STAGE_TIMEOUT_MS) {
+            val addressSelected = runRestoreNetworkStage {
                 runCatching { apiClient.selectReachableAddress() }
-                true
             }
 
             val userEntity = userDao.getUserById(userId)
@@ -355,11 +354,10 @@ class AuthRepositoryImpl constructor(
                 // the same way. On timeout the restored session stands exactly
                 // as a successful (or non-401-failed) validation leaves it, so
                 // the first-frame gate releases with the session kept.
-                val validationCompleted = withTimeoutOrNull(RESTORE_NETWORK_STAGE_TIMEOUT_MS) {
+                val validationCompleted = runRestoreNetworkStage {
                     validateRestoredSession()
-                    true
                 }
-                if (addressSelected == null || validationCompleted == null) {
+                if (!addressSelected || !validationCompleted) {
                     // Deferred validation pass (STA-1) on the application
                     // scope — never cancelled for this singleton. A definitive
                     // 401 here funnels through validateRestoredSession's
@@ -368,10 +366,10 @@ class AuthRepositoryImpl constructor(
                     // so a late rejection swaps shell → login a few frames
                     // later instead of holding the splash hostage to it.
                     externalScope.launch {
-                        if (addressSelected == null) {
+                        if (!addressSelected) {
                             runCatching { apiClient.selectReachableAddress() }
                         }
-                        if (validationCompleted == null) {
+                        if (!validationCompleted) {
                             validateRestoredSession()
                         }
                     }
@@ -383,6 +381,17 @@ class AuthRepositoryImpl constructor(
     }.onFailure { e ->
         Log.e("AuthRepository", "restoreSession failed", e)
     }
+
+    /**
+     * STA-1: runs one restore-time network stage bounded by
+     * [RESTORE_NETWORK_STAGE_TIMEOUT_MS]. Returns false on timeout, leaving
+     * the caller to re-run the stage in the deferred pass.
+     */
+    private suspend fun runRestoreNetworkStage(stage: suspend () -> Unit): Boolean =
+        withTimeoutOrNull(RESTORE_NETWORK_STAGE_TIMEOUT_MS) {
+            stage()
+            true
+        } == true
 
     /**
      * Restore-time guard on top of [storedTokenRejected]: a token the server

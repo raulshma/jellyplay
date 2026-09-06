@@ -451,6 +451,9 @@ class MediaRepositoryImpl(
             // fetchedAt SWR staleness ceiling for every other path.
             val now = timeSource.nowEpochMillis()
             val existing = homeSectionCacheDao.get(identity.serverId, identity.userId, cacheKey)
+            // Computed once here: the cheap-path check and both
+            // rememberHomeSnapshotDedup exits below all need the same value.
+            val fingerprint = homeSnapshotFingerprint(result)
             // Cheap-path dedup (DATA-1): inside the window, a fingerprint
             // match against the last payload this process persisted/verified
             // for this exact (server, user, cacheKey, row) skips the full
@@ -470,7 +473,7 @@ class MediaRepositoryImpl(
                     last.userId == identity.userId &&
                     last.cacheKey == cacheKey &&
                     last.rowFetchedAt == existing.fetchedAt &&
-                    last.fingerprint == homeSnapshotFingerprint(result)
+                    last.fingerprint == fingerprint
                 ) {
                     return
                 }
@@ -487,7 +490,7 @@ class MediaRepositoryImpl(
                 // Byte-identical inside the window: remember the fingerprint
                 // (against this row's fetchedAt) so the next in-window
                 // refresh can take the cheap path above.
-                rememberHomeSnapshotDedup(identity, cacheKey, existing.fetchedAt, result)
+                rememberHomeSnapshotDedup(identity, cacheKey, existing.fetchedAt, fingerprint)
                 return
             }
             homeSectionCacheDao.upsert(
@@ -507,27 +510,28 @@ class MediaRepositoryImpl(
                     fetchedAt = now,
                 ),
             )
-            rememberHomeSnapshotDedup(identity, cacheKey, now, result)
+            rememberHomeSnapshotDedup(identity, cacheKey, now, fingerprint)
         }
     }
 
     /**
      * Records [lastHomeSnapshotDedup] for the row fetchedAt the fingerprint
      * was computed against — both persist paths (skipped rewrite and fresh
-     * upsert) funnel through here.
+     * upsert) funnel through here. Takes the fingerprint the caller already
+     * computed rather than recomputing it.
      */
     private fun rememberHomeSnapshotDedup(
         identity: SessionIdentity,
         cacheKey: String,
         rowFetchedAt: Long,
-        result: HomeSectionsResult,
+        fingerprint: Int,
     ) {
         lastHomeSnapshotDedup = HomeSnapshotDedupState(
             serverId = identity.serverId,
             userId = identity.userId,
             cacheKey = cacheKey,
             rowFetchedAt = rowFetchedAt,
-            fingerprint = homeSnapshotFingerprint(result),
+            fingerprint = fingerprint,
         )
     }
 

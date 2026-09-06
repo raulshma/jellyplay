@@ -134,8 +134,14 @@ jobs:
         run: |
           profile_dir="app/src/phoneRelease/generated/baselineProfiles"
           shopt -s nullglob
-          profs=("$profile_dir"/*.prof "$profile_dir"/baseline-prof.txt "$profile_dir"/startup-prof.txt)
-          if [ ! -d "$profile_dir" ] || [ ${#profs[@]} -eq 0 ]; then
+          # nullglob drops unmatched globs, but the literal baseline-prof.txt /
+          # startup-prof.txt entries stay in the array even when absent — test
+          # each candidate for existence so a saved-but-empty profile dir fails.
+          profs=()
+          for f in "$profile_dir"/*.prof "$profile_dir"/baseline-prof.txt "$profile_dir"/startup-prof.txt; do
+            [ -f "$f" ] && profs+=("$f")
+          done
+          if [ ${#profs[@]} -eq 0 ]; then
             echo "::error::No baseline profile files were written to $profile_dir"
             ls -laR app/src/phoneRelease 2>/dev/null || true
             exit 1

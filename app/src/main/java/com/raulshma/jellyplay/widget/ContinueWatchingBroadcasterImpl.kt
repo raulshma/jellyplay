@@ -47,7 +47,7 @@ class ContinueWatchingBroadcasterImpl(
         runCatching {
             val urls = widgetDataStore.continueWatchingSnapshot().mapNotNull { item ->
                 WidgetImageLoader.continueWatchingPosterEntry(item, playbackRepository)
-                    .second
+                    .url
                     .takeIf { it.isNotBlank() }
             }
             WidgetImageLoader.prewarmPosters(context, urls)
