@@ -1177,7 +1177,7 @@ declares its items in a `*SearchItems.kt` file co-located with the screen
 hosts the MPV/VLC/ExoPlayer engine, SyncPlay, casting and Live TV & DVR
 groups). Every item is a
 `SettingsSearchItem(id, titleRes, subtitleRes, categoryRes, keywords, route,
-icon, isAdvanced)` (the `*Res` fields are Compose `StringResource`s —
+icon, isAdvanced, platforms)` (the `*Res` fields are Compose `StringResource`s —
 locale resolves lazily at render/match time); `SettingsSearchCatalog`
 aggregates the per-screen lists in one curated flat order (257 items — the
 matcher's stable sort uses that order as the tiebreaker, so keep additions
@@ -1223,6 +1223,65 @@ the 257 catalog rows × 3 resource slots (title/subtitle/category
 `StringResource` accessors) = 771 reads over 528 distinct resources — the
 dedup happens at the generated-accessor level, so the prewarmer warms the
 528 distinct entries and the count is pinned by the catalog test.
+
+## Settings platform visibility
+
+**`SettingsCapabilities`**
+(`shared/feature/settings/src/commonMain/.../SettingsCapabilities.kt`) is the
+one visibility surface for platform-gated settings: `settingsCapabilities`
+is an expect val with an androidMain and a jvmMain actual, and each flag
+answers "can this binary's settings surface offer this row?" — hidden means
+structurally absent, never rendered-then-disabled. The ownership rule is the
+module's KDoc: capabilities own VISIBILITY; the behavior seams
+(`BiometricGate`, `LogCollector`, `PlatformIntents`, `SettingsMessenger`)
+own BEHAVIOR (a seam may be refactored to expose its truth for pinning —
+never re-behaviored). Flags with a queryable desktop seam
+(`supportsSystemNotificationSettings`, `supportsLogSharing`,
+`supportsBiometric`) are pinned beside that seam's actual in
+`DesktopPlatformActualsTest` — one review home for the platform's truth;
+the rest pin the platform fact directly (e.g. `DesktopAppLocaleSetter`'s
+no-op has its own test). (`supportsBiometric` is the one with
+device-level nuance: Android offers the row for the platform's biometric
+APIs, and a device without hardware still nulls the runtime gate — the
+screen requires the gate before rendering or counting the row.) Two axes,
+never mixed: platform
+(ANDROID/DESKTOP/WEB —
+compile-time, via `currentPlatform` in core/model) is what capabilities
+express; TV vs phone is the runtime `LocalTvMode` composition local and
+stays in core/ui.
+
+Engine availability is declared data, not spread: `platformEngineSupport`
+(`shared/core/model/.../PlatformEngineSupport.kt`, beside the `PlayerType`
+enum) declares which engines a binary ships and the fallback default. Its
+actuals MUST mirror which engines the platform's `PlayerEngineFactory`
+builds as real, selectable engines — not every `when` branch (desktop
+rides Exo/VLC on mpv as a stand-in and no-ops EXTERNAL, but only MPV is
+offered). The compiler-forced exhaustive `when` is the source of truth;
+the desktop actual is pinned in `DesktopPlatformActualsTest`, and the
+Android actual is `PlayerType.entries.toList()`, which auto-syncs with any
+entry the `when` is forced to decide. Consumers:
+`PlaybackStore.readPreferredPlayer` clamps at its single read choke point
+(`normalizePreferredPlayer` — non-destructive, so a cross-platform backup
+restore degrades to the platform default instead of reaching an
+unregistered factory), the playback settings engine picker filters on it,
+and the search catalog tags engine items accordingly.
+
+Search never offers what the surface cannot render:
+`SettingsSearchItem.platforms` (defaults to all; the package-level
+`ANDROID_ONLY_PLATFORMS` tag lives in feature/settings) is applied at the
+`SettingsSearchCatalog.resolved()`/`recentItems()` funnels and the
+`SettingsSearchProvider.resolved()` funnel (feature/home's header search
+consumes the provider, so it inherits the same filter) through the pure
+`filterFor` — `items` itself stays the unfiltered catalog for the integrity
+counts. The platform ratchet is `SettingsSearchCatalogPlatformFilterTest`
+(desktop-filtered catalog drops every Android-only id; the whole
+notifications and Exo/VLC engine-config lists are asserted absent) plus
+`SettingsSearchFlowTest`'s funnel pin (the pipeline matches against
+`resolved()`, never raw `items`).
+Known residue, deliberate: the hand-typed scroll-group id lists
+(`PlaybackSettingsScreen.kt`) and the TV / advanced / admin search
+dimensions are not yet derived from the catalog declaration; TV-only items
+stay tagged ANDROID (they are a runtime-axis problem).
 
 **Drag-to-reorder.** `ReorderState<T>`
 (`shared/feature/settings/src/commonMain/kotlin/.../ReorderState.kt`) is

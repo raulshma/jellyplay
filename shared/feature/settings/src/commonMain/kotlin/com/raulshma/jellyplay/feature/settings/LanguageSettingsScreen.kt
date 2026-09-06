@@ -237,30 +237,38 @@ fun LanguageSettingsScreen(
                     val langDefaultFallback = stringResource(Res.string.settings_lang_default)
                     val subtitleLangTitle = stringResource(Res.string.settings_subtitle_language)
                     val displayLanguageTitle = stringResource(Res.string.settings_display_language)
-                    SettingListItem(
-                        icon = Tabler.Outline.Language,
-                        title = stringResource(Res.string.settings_display_language),
-                        subtitle = stringResource(Res.string.settings_display_language_subtitle),
-                        trailingText = appLangLabel,
-                        highlighted = highlightSettingId == "app_language",
-                        index = 0, count = 3,
-                        onClick = {
-                            activePicker = PickerState.List(
-                                title = displayLanguageTitle,
-                                items = appLanguages.map { it.first },
-                                label = { code -> appLanguageNameByCode[code] ?: code ?: appLangFallback },
-                                isSelected = { it == preferences.appLanguage },
-                                onSelect = { viewModel.setAppLanguage(it) },
-                            )
-                        },
-                    )
+                    // The per-app display-language override only applies where the
+                    // AppLocaleSetter seam is real (desktop's is a no-op), so the
+                    // row vanishes there and the remaining rows re-index.
+                    val showAppLocaleRow = settingsCapabilities.supportsAppLocaleOverride
+                    val langRowCount = if (showAppLocaleRow) 3 else 2
+                    var langIndex = 0
+                    if (showAppLocaleRow) {
+                        SettingListItem(
+                            icon = Tabler.Outline.Language,
+                            title = stringResource(Res.string.settings_display_language),
+                            subtitle = stringResource(Res.string.settings_display_language_subtitle),
+                            trailingText = appLangLabel,
+                            highlighted = highlightSettingId == "app_language",
+                            index = langIndex++, count = langRowCount,
+                            onClick = {
+                                activePicker = PickerState.List(
+                                    title = displayLanguageTitle,
+                                    items = appLanguages.map { it.first },
+                                    label = { code -> appLanguageNameByCode[code] ?: code ?: appLangFallback },
+                                    isSelected = { it == preferences.appLanguage },
+                                    onSelect = { viewModel.setAppLanguage(it) },
+                                )
+                            },
+                        )
+                    }
                     SettingListItem(
                         icon = Tabler.Outline.Language,
                         title = audioLangTitle,
                         subtitle = stringResource(Res.string.settings_audio_language_subtitle),
                         trailingText = preferences.preferredAudioLanguage ?: stringResource(Res.string.settings_lang_default),
                         highlighted = highlightSettingId == "audio_language",
-                        index = 1, count = 3,
+                        index = langIndex++, count = langRowCount,
                         onClick = {
                             activePicker = PickerState.List(
                                 title = audioLangTitle,
@@ -277,7 +285,7 @@ fun LanguageSettingsScreen(
                         subtitle = stringResource(Res.string.settings_subtitle_language_subtitle),
                         trailingText = preferences.preferredSubtitleLanguage ?: stringResource(Res.string.settings_lang_default),
                         highlighted = highlightSettingId == "subtitle_language",
-                        index = 2, count = 3,
+                        index = langIndex++, count = langRowCount,
                         onClick = {
                             activePicker = PickerState.List(
                                 title = subtitleLangTitle,

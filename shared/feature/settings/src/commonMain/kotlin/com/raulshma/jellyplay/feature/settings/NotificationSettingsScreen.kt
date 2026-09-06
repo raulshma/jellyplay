@@ -116,7 +116,9 @@ fun NotificationSettingsScreen(
     val showAdvanced by viewModel.showAdvancedSettings.collectAsStateWithLifecycle()
     val libraryFolders by viewModel.libraryFolders.collectAsStateWithLifecycle()
     val platformIntents = rememberPlatformIntents()
-    val canOpenSystemNotificationSettings = platformIntents.canOpenSystemNotificationSettings()
+    // Capability flag (pinned == the intents seam's query in
+    // DesktopPlatformActualsTest); the intents object stays for the open call.
+    val canOpenSystemNotificationSettings = settingsCapabilities.supportsSystemNotificationSettings
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
     var activeDialog by remember { mutableStateOf<NotificationSettingsDialog>(NotificationSettingsDialog.None) }

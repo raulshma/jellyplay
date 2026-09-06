@@ -729,3 +729,13 @@ the [`LICENSE`](LICENSE) file for details.
 
 By contributing to JellyPlay, you agree that your contributions will be
 licensed under the same GPL-3.0 license.
+
+## Star History
+
+<a href="https://star-history.com/#raulshma/jellyplay&Date">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=raulshma/jellyplay&type=Date&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=raulshma/jellyplay&type=Date" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=raulshma/jellyplay&type=Date" />
+ </picture>
+</a>

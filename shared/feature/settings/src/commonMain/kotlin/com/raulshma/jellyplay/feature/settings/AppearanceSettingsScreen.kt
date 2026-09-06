@@ -381,7 +381,7 @@ fun AppearanceSettingsScreen(
                     modifier = Modifier.padding(vertical = 8.dp),
                     initiallyExpanded = true,
                 ) {
-                    val isAndroid12 = supportsDynamicColor
+                    val isAndroid12 = settingsCapabilities.supportsDynamicColor
                     val isDarkActive = when (preferences.themeMode) {
                         ThemeMode.DARK -> true
                         ThemeMode.LIGHT -> false

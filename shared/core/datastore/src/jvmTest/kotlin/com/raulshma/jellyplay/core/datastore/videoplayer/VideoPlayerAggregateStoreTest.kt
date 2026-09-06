@@ -5,8 +5,9 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import com.raulshma.jellyplay.core.datastore.PreferenceSliceGraph
 import com.raulshma.jellyplay.core.datastore.TestDataStoreProvider
+import com.raulshma.jellyplay.core.datastore.alternateShippedEngineOrProbe
+import com.raulshma.jellyplay.core.datastore.clampedPreferredPlayer
 import com.raulshma.jellyplay.core.datastore.createPreferenceSliceGraph
-import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.PreloadBufferSize
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -111,12 +112,12 @@ class VideoPlayerAggregateStoreTest {
     @Test
     fun `a playback preferred-player write reaches the aggregate`() = runTest {
         val before = aggregateStore.aggregate.first().playback.preferredPlayer
-        graph.playbackStore.setPreferredPlayer(
-            if (before == PlayerType.MPV) PlayerType.EXO_PLAYER else PlayerType.MPV,
+        val target = alternateShippedEngineOrProbe(before)
+        graph.playbackStore.setPreferredPlayer(target)
+        assertEquals(
+            clampedPreferredPlayer(target),
+            aggregateStore.aggregate.first().playback.preferredPlayer,
         )
-
-        val after = aggregateStore.aggregate.first().playback.preferredPlayer
-        assertNotEquals(before, after)
     }
 
     @Test
@@ -151,9 +152,14 @@ class VideoPlayerAggregateStoreTest {
         graph.subtitleLanguageStore.setSubtitlesForcedOnly(!initial.subtitle.subtitlesForcedOnly)
         assertNotEquals(initial.subtitle.subtitlesForcedOnly, aggregateStore.aggregate.first().subtitle.subtitlesForcedOnly)
 
-        graph.playbackStore.setPreferredPlayer(
-            if (initial.playback.preferredPlayer == PlayerType.MPV) PlayerType.EXO_PLAYER else PlayerType.MPV,
+        // Preferred-player write: on a multi-engine platform a different
+        // engine lands; on a single-engine platform an unshipped write
+        // clamps to the shipped default.
+        val preferredTarget = alternateShippedEngineOrProbe(initial.playback.preferredPlayer)
+        graph.playbackStore.setPreferredPlayer(preferredTarget)
+        assertEquals(
+            clampedPreferredPlayer(preferredTarget),
+            aggregateStore.aggregate.first().playback.preferredPlayer,
         )
-        assertNotEquals(initial.playback.preferredPlayer, aggregateStore.aggregate.first().playback.preferredPlayer)
     }
 }

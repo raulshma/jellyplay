@@ -45,6 +45,7 @@ import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.VlcAudioOutput
 import com.raulshma.jellyplay.core.model.SyncPlayJoinBehavior
 import com.raulshma.jellyplay.core.model.CastingStrategy
+import com.raulshma.jellyplay.core.model.platformEngineSupport
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
@@ -496,7 +497,16 @@ fun PlaybackSettingsScreen(
                     modifier = Modifier.padding(vertical = 8.dp),
                     initiallyExpanded = true,
                 ) {
-                    SettingsItemList(total = if (showAdvanced) 30 else 11) {
+                    // Rows that only exist where the platform can back them
+                    // are hidden on desktop, so the expressiveListShape total
+                    // shrinks with them: orientation contributes one row
+                    // (orientation lock), touch gestures three (double-tap
+                    // seek duration, gestures toggle, gesture-indicator side).
+                    val orientationRowCount = if (settingsCapabilities.supportsScreenOrientation) 1 else 0
+                    val touchGestureRowCount = if (settingsCapabilities.supportsTouchGestures) 3 else 0
+                    SettingsItemList(
+                        total = (if (showAdvanced) 30 else 11) - orientationRowCount - touchGestureRowCount,
+                    ) {
                     val preferredPlayerTitle = stringResource(Res.string.settings_preferred_player)
                     SettingListItem(
                         icon = Tabler.Outline.PlayerPlay,
@@ -507,7 +517,7 @@ fun PlaybackSettingsScreen(
                         onClick = {
                             activePicker = PickerState.List(
                                 title = preferredPlayerTitle,
-                                items = PlayerType.entries,
+                                items = platformEngineSupport.engines,
                                 label = { it.displayName },
                                 subtitle = { it.description },
                                 isSelected = { it == preferences.preferredPlayer },
@@ -515,68 +525,74 @@ fun PlaybackSettingsScreen(
                             )
                         },
                     )
-                    val doubleTapSeekTitle = stringResource(Res.string.settings_double_tap_seek_duration)
-                    SettingListItem(
-                        icon = Tabler.Outline.PlayerTrackNext,
-                        title = stringResource(Res.string.settings_seek_duration),
-                        subtitle = stringResource(Res.string.settings_seek_duration_subtitle),
-                        trailingText = "${preferences.videoSeekDurationMs / 1000}s",
-                        highlighted = highlightSettingId == "seek_duration",
-                        onClick = {
-                            val durations = listOf(5_000L, 10_000L, 15_000L, 20_000L, 30_000L, 60_000L)
-                            activePicker = pickerChip(
-                                title = doubleTapSeekTitle,
-                                values = durations,
-                                current = preferences.videoSeekDurationMs,
-                                label = { "${it / 1000}s" },
-                                onSelect = { ms -> viewModel.edit { it.videoPlayer.setVideoSeekDurationMs(ms) } },
-                            )
-                        },
-                    )
-                    val orientationTitle = stringResource(Res.string.settings_orientation)
-                    SettingListItem(
-                        icon = Tabler.Outline.DeviceMobileRotated,
-                        title = stringResource(Res.string.settings_orientation),
-                        subtitle = stringResource(Res.string.settings_orientation_subtitle),
-                        trailingText = preferences.videoDefaultOrientation.displayName,
-                        highlighted = highlightSettingId == "orientation",
-                        onClick = {
-                            activePicker = PickerState.List(
-                                title = orientationTitle,
-                                items = OrientationMode.entries,
-                                label = { it.displayName },
-                                subtitle = { it.constant },
-                                isSelected = { it == preferences.videoDefaultOrientation },
-                                onSelect = { viewModel.edit { scope -> scope.videoPlayer.setVideoDefaultOrientation(it) } },
-                            )
-                        },
-                    )
-                    SettingToggleItem(
-                        icon = Tabler.Outline.HandMove,
-                        title = stringResource(Res.string.settings_gestures),
-                        subtitle = if (preferences.videoGesturesEnabled) stringResource(Res.string.settings_gestures_on) else stringResource(Res.string.settings_gestures_off),
-                        checked = preferences.videoGesturesEnabled,
-                        highlighted = highlightSettingId == "gestures",
-                        onCheckedChange = { viewModel.edit { scope -> scope.videoPlayer.setVideoGesturesEnabled(it) } },
-                    )
-                    val gestureIndicatorTitle = stringResource(Res.string.settings_gesture_indicator_side)
-                    SettingListItem(
-                        icon = Tabler.Outline.ArrowsHorizontal,
-                        title = gestureIndicatorTitle,
-                        subtitle = if (preferences.videoGestureIndicatorSide == GestureIndicatorSide.OPPOSITE)
-                            stringResource(Res.string.settings_gesture_indicator_opposite) else stringResource(Res.string.settings_gesture_indicator_same),
-                        trailingText = preferences.videoGestureIndicatorSide.displayName,
-                        highlighted = highlightSettingId == "gesture_indicator_side",
-                        onClick = {
-                            activePicker = PickerState.List(
-                                title = gestureIndicatorTitle,
-                                items = GestureIndicatorSide.entries,
-                                label = { it.displayName },
-                                isSelected = { it == preferences.videoGestureIndicatorSide },
-                                onSelect = { viewModel.edit { scope -> scope.videoPlayer.setVideoGestureIndicatorSide(it) } },
-                            )
-                        },
-                    )
+                    if (settingsCapabilities.supportsTouchGestures) {
+                        val doubleTapSeekTitle = stringResource(Res.string.settings_double_tap_seek_duration)
+                        SettingListItem(
+                            icon = Tabler.Outline.PlayerTrackNext,
+                            title = stringResource(Res.string.settings_seek_duration),
+                            subtitle = stringResource(Res.string.settings_seek_duration_subtitle),
+                            trailingText = "${preferences.videoSeekDurationMs / 1000}s",
+                            highlighted = highlightSettingId == "seek_duration",
+                            onClick = {
+                                val durations = listOf(5_000L, 10_000L, 15_000L, 20_000L, 30_000L, 60_000L)
+                                activePicker = pickerChip(
+                                    title = doubleTapSeekTitle,
+                                    values = durations,
+                                    current = preferences.videoSeekDurationMs,
+                                    label = { "${it / 1000}s" },
+                                    onSelect = { ms -> viewModel.edit { it.videoPlayer.setVideoSeekDurationMs(ms) } },
+                                )
+                            },
+                        )
+                    }
+                    if (settingsCapabilities.supportsScreenOrientation) {
+                        val orientationTitle = stringResource(Res.string.settings_orientation)
+                        SettingListItem(
+                            icon = Tabler.Outline.DeviceMobileRotated,
+                            title = stringResource(Res.string.settings_orientation),
+                            subtitle = stringResource(Res.string.settings_orientation_subtitle),
+                            trailingText = preferences.videoDefaultOrientation.displayName,
+                            highlighted = highlightSettingId == "orientation",
+                            onClick = {
+                                activePicker = PickerState.List(
+                                    title = orientationTitle,
+                                    items = OrientationMode.entries,
+                                    label = { it.displayName },
+                                    subtitle = { it.constant },
+                                    isSelected = { it == preferences.videoDefaultOrientation },
+                                    onSelect = { viewModel.edit { scope -> scope.videoPlayer.setVideoDefaultOrientation(it) } },
+                                )
+                            },
+                        )
+                    }
+                    if (settingsCapabilities.supportsTouchGestures) {
+                        SettingToggleItem(
+                            icon = Tabler.Outline.HandMove,
+                            title = stringResource(Res.string.settings_gestures),
+                            subtitle = if (preferences.videoGesturesEnabled) stringResource(Res.string.settings_gestures_on) else stringResource(Res.string.settings_gestures_off),
+                            checked = preferences.videoGesturesEnabled,
+                            highlighted = highlightSettingId == "gestures",
+                            onCheckedChange = { viewModel.edit { scope -> scope.videoPlayer.setVideoGesturesEnabled(it) } },
+                        )
+                        val gestureIndicatorTitle = stringResource(Res.string.settings_gesture_indicator_side)
+                        SettingListItem(
+                            icon = Tabler.Outline.ArrowsHorizontal,
+                            title = gestureIndicatorTitle,
+                            subtitle = if (preferences.videoGestureIndicatorSide == GestureIndicatorSide.OPPOSITE)
+                                stringResource(Res.string.settings_gesture_indicator_opposite) else stringResource(Res.string.settings_gesture_indicator_same),
+                            trailingText = preferences.videoGestureIndicatorSide.displayName,
+                            highlighted = highlightSettingId == "gesture_indicator_side",
+                            onClick = {
+                                activePicker = PickerState.List(
+                                    title = gestureIndicatorTitle,
+                                    items = GestureIndicatorSide.entries,
+                                    label = { it.displayName },
+                                    isSelected = { it == preferences.videoGestureIndicatorSide },
+                                    onSelect = { viewModel.edit { scope -> scope.videoPlayer.setVideoGestureIndicatorSide(it) } },
+                                )
+                            },
+                        )
+                    }
                     val defaultSpeedTitle = stringResource(Res.string.settings_default_speed)
                     SettingListItem(
                         icon = Tabler.Outline.Gauge,

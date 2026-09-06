@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeState
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.legacy.UserPreferences
+import com.raulshma.jellyplay.core.model.platformEngineSupport
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -64,7 +65,7 @@ class SettingsBackupMigrationTest {
         // Wipe and re-import — values must return.
         dataStore.edit { it.clear() }
         drainInitialSlices()
-        assertEquals(PlayerType.EXO_PLAYER, store.preferredPlayerSnapshot())
+        assertEquals(platformEngineSupport.default, store.preferredPlayerSnapshot())
 
         store.restoreV2(backup, restoreSecuritySensitive = true)
         drainAfterWrite()
@@ -245,7 +246,7 @@ class SettingsBackupMigrationTest {
         store.restoreV2(backup, restoreSecuritySensitive = true)
         drainAfterWrite()
         // No exception == pass; playback stays at its default.
-        assertEquals(PlayerType.EXO_PLAYER, store.preferredPlayerSnapshot())
+        assertEquals(platformEngineSupport.default, store.preferredPlayerSnapshot())
     }
 
     @Test

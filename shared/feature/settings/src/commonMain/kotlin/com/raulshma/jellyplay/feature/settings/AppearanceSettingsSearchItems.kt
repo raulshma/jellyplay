@@ -237,7 +237,8 @@ internal val AppearanceSettingsSearchItems = listOf(
         categoryRes = CoreUiRes.string.ss_cat_appearance,
         keywords = listOf("dynamic", "artwork", "colors", "theme", "wallpaper"),
         route = Route.AppearanceSettings(),
-        icon = Tabler.Outline.Video
+        icon = Tabler.Outline.Video,
+        platforms = ANDROID_ONLY_PLATFORMS,
     ),
     SettingsSearchItem(
         id = "oled_mode",

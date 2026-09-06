@@ -42,10 +42,11 @@ fun settingsSearchResults(
             if (query.isBlank()) {
                 emptyList()
             } else {
-                // Resolve the catalog's StringResources to the current locale
-                // once per query, then fuzzy-match against the translated text
-                // so a user typing in their own language still finds settings.
-                val resolved = provider.items.resolve()
+                // Resolve through the provider's platform-filtered funnel
+                // (Android-only rows never surface as hits here), then
+                // fuzzy-match against the translated text so a user typing
+                // in their own language still finds settings.
+                val resolved = provider.resolved()
                 SettingsSearchMatcher.search(query, resolved)
             }
         }

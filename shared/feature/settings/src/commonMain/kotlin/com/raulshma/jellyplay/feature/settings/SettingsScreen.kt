@@ -1497,15 +1497,20 @@ fun SettingsScreen(
                             )
                         }
 
-                        settingsSection("item_notifications", 10) {
-                            val notifPrefs = preferences.notificationPreferences
-                            SettingListItem(
-                                icon = Tabler.Outline.Bell,
-                                title = stringResource(Res.string.settings_notifications),
-                                subtitle = if (notifPrefs.enabled) stringResource(Res.string.settings_notifications_checking, notifPrefs.checkFrequency.displayName.lowercase()) else stringResource(Res.string.settings_disabled),
-                                index = 0, count = 1,
-                                onClick = { openSetting("notifications") { Route.NotificationSettings(it) } },
-                            )
+                        // No desktop notification backend exists (the
+                        // NotificationSync seam no-ops there) — entry + screen
+                        // stay Android-only.
+                        if (settingsCapabilities.supportsNotifications) {
+                            settingsSection("item_notifications", 10) {
+                                val notifPrefs = preferences.notificationPreferences
+                                SettingListItem(
+                                    icon = Tabler.Outline.Bell,
+                                    title = stringResource(Res.string.settings_notifications),
+                                    subtitle = if (notifPrefs.enabled) stringResource(Res.string.settings_notifications_checking, notifPrefs.checkFrequency.displayName.lowercase()) else stringResource(Res.string.settings_disabled),
+                                    index = 0, count = 1,
+                                    onClick = { openSetting("notifications") { Route.NotificationSettings(it) } },
+                                )
+                            }
                         }
 
                         settingsSection("item_storage", 11) {

@@ -46,7 +46,10 @@ import org.koin.dsl.module
  * [DesktopAutoDownloadScheduler] (desktopDataModule): a poke restarts the
  * idempotent 6 h loop with one immediate check, so a freshly toggled
  * auto-download preference is honoured right away. WatchNext / audio-cache /
- * notification-sync have no desktop surface and bind no-ops.
+ * notification-sync have no desktop backend and bind no-ops — the no-ops are
+ * the BEHAVIOR half only; the rows themselves are hidden through
+ * `SettingsCapabilities` (see its ownership rule), so no desktop user sees a
+ * control whose poke lands nowhere.
  *
  * @param dataDir the appdata root (`<appdata>/data`, DesktopPaths.dataDirNio)
  *   the downloads subtree hangs under.

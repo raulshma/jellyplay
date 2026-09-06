@@ -1,5 +1,9 @@
 package com.raulshma.jellyplay.core.ui.settingssearch
 
+import com.raulshma.jellyplay.core.ui.generated.resources.Res
+import com.raulshma.jellyplay.core.ui.generated.resources.core_loading
+import com.raulshma.jellyplay.core.ui.generated.resources.core_search
+import com.raulshma.jellyplay.core.ui.generated.resources.ss_cat_playback
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -54,6 +58,42 @@ class SettingsSearchFlowTest {
             }
     }
 
+    /**
+     * Provider whose items getter always throws — non-blank queries must match
+     * against the [SettingsSearchProvider.resolved] funnel (platform-filtered),
+     * never against raw [SettingsSearchProvider.items].
+     */
+    private class FunnelOnlyProvider : SettingsSearchProvider {
+        override val items: List<SettingsSearchItem>
+            get() = throw IllegalStateException("search must consume resolved(), not items")
+
+        override suspend fun resolved(): List<ResolvedSettingsItem> =
+            listOf(
+                ResolvedSettingsItem(
+                    item = SettingsSearchItem(
+                        id = "player_engine",
+                        titleRes = Res.string.core_search,
+                        subtitleRes = Res.string.core_loading,
+                        categoryRes = Res.string.ss_cat_playback,
+                        keywords = emptyList(),
+                        route = com.raulshma.jellyplay.core.ui.navigation.Route.Settings,
+                        icon = testIcon,
+                    ),
+                    title = "Player engine",
+                    subtitle = "",
+                    category = "Playback",
+                ),
+            )
+
+        private val testIcon get() = androidx.compose.ui.graphics.vector.ImageVector.Builder(
+            name = "test",
+            defaultWidth = androidx.compose.ui.unit.Dp.Unspecified,
+            defaultHeight = androidx.compose.ui.unit.Dp.Unspecified,
+            viewportWidth = 1f,
+            viewportHeight = 1f,
+        ).build()
+    }
+
     private fun realTimeTest(block: suspend CoroutineScope.() -> Unit) = runBlocking {
         withContext(Dispatchers.Default) { withTimeout(10_000) { block() } }
     }
@@ -63,6 +103,15 @@ class SettingsSearchFlowTest {
         val first = settingsSearchResults(MutableStateFlow(""), ExplodingProvider()).first()
 
         assertTrue(first.isEmpty())
+    }
+
+    @Test
+    fun nonBlankQuery_matchesAgainstTheResolvedFunnel() = realTimeTest {
+        // If the pipeline ever reverts to provider.items.resolve(), the items
+        // getter throws here — the funnel is the contract.
+        val results = settingsSearchResults(flowOf("engine"), FunnelOnlyProvider()).first()
+
+        assertTrue(results.any { it.id == "player_engine" })
     }
 
     @Test

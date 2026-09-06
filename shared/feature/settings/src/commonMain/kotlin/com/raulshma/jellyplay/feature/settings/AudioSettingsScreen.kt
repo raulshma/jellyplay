@@ -731,109 +731,113 @@ fun AudioSettingsScreen(
                     )
                 }
             }
-            item {
-                SettingsGroup(
-                    icon = Tabler.Outline.Database,
-                    title = stringResource(Res.string.settings_audio_caching_title),
-                    summary = { stringResource(Res.string.settings_audio_caching_summary) },
-                    modifier = Modifier.padding(vertical = 8.dp),
-                    initiallyExpanded = false,
-                ) {
-                    var cacheIdx = 0
-                    val cacheTotal = 6
-                    SettingToggleItem(
+            // No desktop audio cache exists (the AudioCacheClearer seam no-ops
+            // there) — the whole group stays off the surface.
+            if (settingsCapabilities.supportsAudioCache) {
+                item {
+                    SettingsGroup(
                         icon = Tabler.Outline.Database,
-                        title = stringResource(Res.string.settings_audio_caching_enable),
-                        subtitle = if (preferences.audioCachingEnabled)
-                            stringResource(Res.string.settings_audio_caching_on)
-                        else stringResource(Res.string.settings_audio_caching_off),
-                        checked = preferences.audioCachingEnabled,
-                        highlighted = highlightSettingId == "audio_caching_enabled",
-                        onCheckedChange = { viewModel.edit { scope -> scope.audioCache.setAudioCachingEnabled(it) } },
-                    )
-                    if (preferences.audioCachingEnabled) {
-                        val cacheSizeTitle = stringResource(Res.string.settings_audio_cache_size)
-                        SettingListItem(
-                            icon = Tabler.Outline.DeviceFloppy,
-                            title = cacheSizeTitle,
-                            subtitle = stringResource(Res.string.settings_audio_cache_size_subtitle),
-                            trailingText = "${preferences.audioCacheSizeMb} MB",
-                            highlighted = highlightSettingId == "audio_cache_size",
-                            onClick = {
-                                val sizes = listOf(128, 256, 512, 1024, 2048, 4096)
-                                activePicker = pickerChip(
-                                    title = cacheSizeTitle,
-                                    values = sizes,
-                                    current = preferences.audioCacheSizeMb,
-                                    label = { "$it MB" },
-                                    onSelect = { sizeMb -> viewModel.edit { it.audioCache.setAudioCacheSizeMb(sizeMb) } },
-                                )
-                            },
+                        title = stringResource(Res.string.settings_audio_caching_title),
+                        summary = { stringResource(Res.string.settings_audio_caching_summary) },
+                        modifier = Modifier.padding(vertical = 8.dp),
+                        initiallyExpanded = false,
+                    ) {
+                        var cacheIdx = 0
+                        val cacheTotal = 6
+                        SettingToggleItem(
+                            icon = Tabler.Outline.Database,
+                            title = stringResource(Res.string.settings_audio_caching_enable),
+                            subtitle = if (preferences.audioCachingEnabled)
+                                stringResource(Res.string.settings_audio_caching_on)
+                            else stringResource(Res.string.settings_audio_caching_off),
+                            checked = preferences.audioCachingEnabled,
+                            highlighted = highlightSettingId == "audio_caching_enabled",
+                            onCheckedChange = { viewModel.edit { scope -> scope.audioCache.setAudioCachingEnabled(it) } },
                         )
-                        val lookaheadTitle = stringResource(Res.string.settings_audio_prefetch_lookahead)
-                        val lookaheadOffLabel = stringResource(Res.string.settings_off)
-                        SettingListItem(
-                            icon = Tabler.Outline.ListNumbers,
-                            title = lookaheadTitle,
-                            subtitle = stringResource(Res.string.settings_audio_prefetch_lookahead_subtitle),
-                            trailingText = "${preferences.audioPrefetchLookahead}",
-                            highlighted = highlightSettingId == "audio_prefetch_lookahead",
-                            onClick = {
-                                val lookahead = listOf(0, 1, 2, 3, 5, 8)
-                                activePicker = pickerChip(
-                                    title = lookaheadTitle,
-                                    values = lookahead,
-                                    current = preferences.audioPrefetchLookahead,
-                                    label = { if (it == 0) lookaheadOffLabel else "$it" },
-                                    onSelect = { lookahead -> viewModel.edit { it.audioCache.setAudioPrefetchLookahead(lookahead) } },
-                                )
-                            },
-                        )
-                        val backfillTitle = stringResource(Res.string.settings_audio_prefetch_backfill)
-                        val backfillOffLabel = stringResource(Res.string.settings_off)
-                        SettingListItem(
-                            icon = Tabler.Outline.History,
-                            title = backfillTitle,
-                            subtitle = stringResource(Res.string.settings_audio_prefetch_backfill_subtitle),
-                            trailingText = "${preferences.audioPrefetchBackfill}",
-                            highlighted = highlightSettingId == "audio_prefetch_backfill",
-                            onClick = {
-                                val backfill = listOf(0, 1, 2, 5, 10, 20)
-                                activePicker = pickerChip(
-                                    title = backfillTitle,
-                                    values = backfill,
-                                    current = preferences.audioPrefetchBackfill,
-                                    label = { if (it == 0) backfillOffLabel else "$it" },
-                                    onSelect = { backfill -> viewModel.edit { it.audioCache.setAudioPrefetchBackfill(backfill) } },
-                                )
-                            },
-                        )
-                        val policyTitle = stringResource(Res.string.settings_audio_cache_network_policy)
-                        SettingListItem(
-                            icon = Tabler.Outline.Wifi,
-                            title = policyTitle,
-                            subtitle = preferences.audioCacheNetworkPolicy.displayName,
-                            trailingText = preferences.audioCacheNetworkPolicy.displayName,
-                            highlighted = highlightSettingId == "audio_cache_network_policy",
-                            onClick = {
-                                val policies = AudioCacheNetworkPolicy.entries
-                                activePicker = PickerState.List(
-                                    title = policyTitle,
-                                    items = policies,
-                                    label = { it.displayName },
-                                    isSelected = { it == preferences.audioCacheNetworkPolicy },
-                                    onSelect = { viewModel.edit { scope -> scope.audioCache.setAudioCacheNetworkPolicy(it) } },
-                                )
-                            },
-                        )
-                        SettingListItem(
-                            icon = Tabler.Outline.Trash,
-                            title = stringResource(Res.string.settings_audio_cache_clear),
-                            subtitle = stringResource(Res.string.settings_audio_cache_clear_subtitle),
-                            trailingText = "",
-                            highlighted = highlightSettingId == "audio_cache_clear",
-                            onClick = { viewModel.clearAudioCache() },
-                        )
+                        if (preferences.audioCachingEnabled) {
+                            val cacheSizeTitle = stringResource(Res.string.settings_audio_cache_size)
+                            SettingListItem(
+                                icon = Tabler.Outline.DeviceFloppy,
+                                title = cacheSizeTitle,
+                                subtitle = stringResource(Res.string.settings_audio_cache_size_subtitle),
+                                trailingText = "${preferences.audioCacheSizeMb} MB",
+                                highlighted = highlightSettingId == "audio_cache_size",
+                                onClick = {
+                                    val sizes = listOf(128, 256, 512, 1024, 2048, 4096)
+                                    activePicker = pickerChip(
+                                        title = cacheSizeTitle,
+                                        values = sizes,
+                                        current = preferences.audioCacheSizeMb,
+                                        label = { "$it MB" },
+                                        onSelect = { sizeMb -> viewModel.edit { it.audioCache.setAudioCacheSizeMb(sizeMb) } },
+                                    )
+                                },
+                            )
+                            val lookaheadTitle = stringResource(Res.string.settings_audio_prefetch_lookahead)
+                            val lookaheadOffLabel = stringResource(Res.string.settings_off)
+                            SettingListItem(
+                                icon = Tabler.Outline.ListNumbers,
+                                title = lookaheadTitle,
+                                subtitle = stringResource(Res.string.settings_audio_prefetch_lookahead_subtitle),
+                                trailingText = "${preferences.audioPrefetchLookahead}",
+                                highlighted = highlightSettingId == "audio_prefetch_lookahead",
+                                onClick = {
+                                    val lookahead = listOf(0, 1, 2, 3, 5, 8)
+                                    activePicker = pickerChip(
+                                        title = lookaheadTitle,
+                                        values = lookahead,
+                                        current = preferences.audioPrefetchLookahead,
+                                        label = { if (it == 0) lookaheadOffLabel else "$it" },
+                                        onSelect = { lookahead -> viewModel.edit { it.audioCache.setAudioPrefetchLookahead(lookahead) } },
+                                    )
+                                },
+                            )
+                            val backfillTitle = stringResource(Res.string.settings_audio_prefetch_backfill)
+                            val backfillOffLabel = stringResource(Res.string.settings_off)
+                            SettingListItem(
+                                icon = Tabler.Outline.History,
+                                title = backfillTitle,
+                                subtitle = stringResource(Res.string.settings_audio_prefetch_backfill_subtitle),
+                                trailingText = "${preferences.audioPrefetchBackfill}",
+                                highlighted = highlightSettingId == "audio_prefetch_backfill",
+                                onClick = {
+                                    val backfill = listOf(0, 1, 2, 5, 10, 20)
+                                    activePicker = pickerChip(
+                                        title = backfillTitle,
+                                        values = backfill,
+                                        current = preferences.audioPrefetchBackfill,
+                                        label = { if (it == 0) backfillOffLabel else "$it" },
+                                        onSelect = { backfill -> viewModel.edit { it.audioCache.setAudioPrefetchBackfill(backfill) } },
+                                    )
+                                },
+                            )
+                            val policyTitle = stringResource(Res.string.settings_audio_cache_network_policy)
+                            SettingListItem(
+                                icon = Tabler.Outline.Wifi,
+                                title = policyTitle,
+                                subtitle = preferences.audioCacheNetworkPolicy.displayName,
+                                trailingText = preferences.audioCacheNetworkPolicy.displayName,
+                                highlighted = highlightSettingId == "audio_cache_network_policy",
+                                onClick = {
+                                    val policies = AudioCacheNetworkPolicy.entries
+                                    activePicker = PickerState.List(
+                                        title = policyTitle,
+                                        items = policies,
+                                        label = { it.displayName },
+                                        isSelected = { it == preferences.audioCacheNetworkPolicy },
+                                        onSelect = { viewModel.edit { scope -> scope.audioCache.setAudioCacheNetworkPolicy(it) } },
+                                    )
+                                },
+                            )
+                            SettingListItem(
+                                icon = Tabler.Outline.Trash,
+                                title = stringResource(Res.string.settings_audio_cache_clear),
+                                subtitle = stringResource(Res.string.settings_audio_cache_clear_subtitle),
+                                trailingText = "",
+                                highlighted = highlightSettingId == "audio_cache_clear",
+                                onClick = { viewModel.clearAudioCache() },
+                            )
+                        }
                     }
                 }
             }

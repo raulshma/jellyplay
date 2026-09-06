@@ -256,20 +256,24 @@ fun AboutScreen(
                 title = stringResource(Res.string.settings_diagnostics),
                 initiallyExpanded = true,
             ) {
-                SettingListItem(
-                    icon = if (viewModel.isCollectingLogs) Tabler.Outline.Refresh else Tabler.Outline.Download,
-                    title = if (viewModel.isCollectingLogs) stringResource(Res.string.settings_collecting_logs) else stringResource(Res.string.settings_send_app_logs),
-                    subtitle = "",
-                    onClick = {
-                        if (!viewModel.isCollectingLogs) {
-                            viewModel.sendAppLogs { uri ->
-                                if (uri != null) {
-                                    platformIntents.shareLogFile(logsSubject, sendLogsChooserTitle, uri)
+                // Desktop's LogCollector seam returns null — no log bundle to
+                // share, so the row stays off the surface there.
+                if (settingsCapabilities.supportsLogSharing) {
+                    SettingListItem(
+                        icon = if (viewModel.isCollectingLogs) Tabler.Outline.Refresh else Tabler.Outline.Download,
+                        title = if (viewModel.isCollectingLogs) stringResource(Res.string.settings_collecting_logs) else stringResource(Res.string.settings_send_app_logs),
+                        subtitle = "",
+                        onClick = {
+                            if (!viewModel.isCollectingLogs) {
+                                viewModel.sendAppLogs { uri ->
+                                    if (uri != null) {
+                                        platformIntents.shareLogFile(logsSubject, sendLogsChooserTitle, uri)
+                                    }
                                 }
                             }
-                        }
-                    },
-                )
+                        },
+                    )
+                }
                 SettingToggleItem(
                     icon = Tabler.Outline.Refresh,
                     title = stringResource(Res.string.settings_check_updates_automatically),

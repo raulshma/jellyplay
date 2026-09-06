@@ -276,7 +276,8 @@ internal val AudioSettingsSearchItems = listOf(
         categoryRes = CoreUiRes.string.ss_cat_audio_player,
         keywords = listOf("audio", "cache", "caching", "prefetch", "buffer", "plexamp", "music"),
         route = Route.AudioSettings(),
-        icon = Tabler.Outline.Database
+        icon = Tabler.Outline.Database,
+        platforms = ANDROID_ONLY_PLATFORMS,
     ),
     SettingsSearchItem(
         id = "audio_cache_size",
@@ -285,7 +286,8 @@ internal val AudioSettingsSearchItems = listOf(
         categoryRes = CoreUiRes.string.ss_cat_audio_player,
         keywords = listOf("audio", "cache", "size", "disk", "storage"),
         route = Route.AudioSettings(),
-        icon = Tabler.Outline.DeviceFloppy
+        icon = Tabler.Outline.DeviceFloppy,
+        platforms = ANDROID_ONLY_PLATFORMS,
     ),
     SettingsSearchItem(
         id = "audio_prefetch_lookahead",
@@ -295,7 +297,8 @@ internal val AudioSettingsSearchItems = listOf(
         keywords = listOf("audio", "prefetch", "lookahead", "buffering", "music", "queue"),
         route = Route.AudioSettings(),
         icon = Tabler.Outline.Music,
-        isAdvanced = true
+        isAdvanced = true,
+        platforms = ANDROID_ONLY_PLATFORMS,
     ),
     SettingsSearchItem(
         id = "audio_prefetch_backfill",
@@ -305,7 +308,8 @@ internal val AudioSettingsSearchItems = listOf(
         keywords = listOf("audio", "prefetch", "backfill", "buffering", "music", "previous"),
         route = Route.AudioSettings(),
         icon = Tabler.Outline.Music,
-        isAdvanced = true
+        isAdvanced = true,
+        platforms = ANDROID_ONLY_PLATFORMS,
     ),
     SettingsSearchItem(
         id = "audio_cache_clear",
@@ -315,7 +319,8 @@ internal val AudioSettingsSearchItems = listOf(
         keywords = listOf("audio", "cache", "clear", "music", "storage", "wipe"),
         route = Route.AudioSettings(),
         icon = Tabler.Outline.Trash,
-        isAdvanced = true
+        isAdvanced = true,
+        platforms = ANDROID_ONLY_PLATFORMS,
     ),
     SettingsSearchItem(
         id = "audio_cache_network_policy",
@@ -324,7 +329,8 @@ internal val AudioSettingsSearchItems = listOf(
         categoryRes = CoreUiRes.string.ss_cat_audio_player,
         keywords = listOf("audio", "cache", "network", "wifi", "cellular", "metered"),
         route = Route.AudioSettings(),
-        icon = Tabler.Outline.Wifi
+        icon = Tabler.Outline.Wifi,
+        platforms = ANDROID_ONLY_PLATFORMS,
     ),
     SettingsSearchItem(
         id = "replaygain_preamp",

@@ -136,7 +136,12 @@ fun SecuritySettingsScreen(
     val scope = androidx.compose.runtime.rememberCoroutineScope()
 
 val biometricGate = rememberBiometricGate()
-    val canShowBiometric = biometricGate != null
+    // Visibility rides the capability surface; the gate object stays for the
+    // authenticate call. Desktop pins flag ⟺ null gate in
+    // DesktopPlatformActualsTest; on Android a device without biometric
+    // hardware still nulls the gate, so the row and its count both require
+    // the gate before believing the flag.
+    val canShowBiometric = settingsCapabilities.supportsBiometric && biometricGate != null
     val backgroundColorState = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState()
 
     val pinMustBe4Digits = stringResource(Res.string.settings_pin_must_be_4_digits)

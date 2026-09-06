@@ -26,7 +26,7 @@ class SettingsMainThreadCatalogResolveGuardTest {
 
     /** Sanctioned file -> exact number of `.resolve()` occurrences (see KDoc). */
     private val sanctionedCounts = mapOf(
-        "SettingsSearchCatalog.kt" to 2,        // resolved() + recentItems() default seams
+        "SettingsSearchCatalog.kt" to 1,        // the shared defaultResolve val both seams delegate through
         "SettingsSearchCatalogPrewarmer.kt" to 1, // the default warm pass
     )
 

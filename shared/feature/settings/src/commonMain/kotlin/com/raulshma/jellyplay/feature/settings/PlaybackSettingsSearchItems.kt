@@ -196,7 +196,8 @@ internal val PlaybackSettingsSearchItems = listOf(
         categoryRes = CoreUiRes.string.ss_cat_playback,
         keywords = listOf("seek", "duration", "skip", "double tap", "seconds"),
         route = Route.PlaybackSettings(),
-        icon = Tabler.Outline.PlayerTrackNext
+        icon = Tabler.Outline.PlayerTrackNext,
+        platforms = ANDROID_ONLY_PLATFORMS,
     ),
     SettingsSearchItem(
         id = "orientation",
@@ -205,7 +206,8 @@ internal val PlaybackSettingsSearchItems = listOf(
         categoryRes = CoreUiRes.string.ss_cat_playback,
         keywords = listOf("orientation", "rotation", "landscape", "portrait", "sensor"),
         route = Route.PlaybackSettings(),
-        icon = Tabler.Outline.DeviceMobileRotated
+        icon = Tabler.Outline.DeviceMobileRotated,
+        platforms = ANDROID_ONLY_PLATFORMS,
     ),
     SettingsSearchItem(
         id = "gestures",
@@ -214,7 +216,8 @@ internal val PlaybackSettingsSearchItems = listOf(
         categoryRes = CoreUiRes.string.ss_cat_playback,
         keywords = listOf("gestures", "swipe", "brightness", "volume", "seeking"),
         route = Route.PlaybackSettings(),
-        icon = Tabler.Outline.HandMove
+        icon = Tabler.Outline.HandMove,
+        platforms = ANDROID_ONLY_PLATFORMS,
     ),
     SettingsSearchItem(
         id = "gesture_indicator_side",
@@ -223,7 +226,8 @@ internal val PlaybackSettingsSearchItems = listOf(
         categoryRes = CoreUiRes.string.ss_cat_playback,
         keywords = listOf("indicator", "brightness", "volume", "bar", "side", "gesture", "opposite"),
         route = Route.PlaybackSettings(),
-        icon = Tabler.Outline.ArrowsHorizontal
+        icon = Tabler.Outline.ArrowsHorizontal,
+        platforms = ANDROID_ONLY_PLATFORMS,
     ),
     SettingsSearchItem(
         id = "default_speed",
@@ -528,7 +532,8 @@ internal val PlaybackSettingsSearchItems = listOf(
         keywords = listOf("android tv", "watch next", "home", "tv", "continue"),
         route = Route.PlaybackSettings(),
         icon = Tabler.Outline.DeviceTv,
-        isAdvanced = true
+        isAdvanced = true,
+        platforms = ANDROID_ONLY_PLATFORMS,
     ),
     SettingsSearchItem(
         id = "tv_zoom_mode",
@@ -538,7 +543,8 @@ internal val PlaybackSettingsSearchItems = listOf(
         keywords = listOf("tv", "zoom", "crop", "fill", "screen"),
         route = Route.PlaybackSettings(),
         icon = Tabler.Outline.Crop,
-        isAdvanced = true
+        isAdvanced = true,
+        platforms = ANDROID_ONLY_PLATFORMS,
     ),
     SettingsSearchItem(
         id = "default_brightness_level",
@@ -796,7 +802,7 @@ internal val VlcEngineSearchItems = listOf(
         icon = Tabler.Outline.Trash,
         isAdvanced = true
     ),
-)
+).androidOnly()
 
 /**
  * Settings-search items for the "ExoPlayer Engine Config" group of the old core/ui
@@ -874,7 +880,7 @@ internal val ExoPlayerEngineSearchItems = listOf(
         icon = Tabler.Outline.Code,
         isAdvanced = true
     ),
-)
+).androidOnly()
 
 /**
  * Settings-search items for the "SyncPlay" group of the old core/ui

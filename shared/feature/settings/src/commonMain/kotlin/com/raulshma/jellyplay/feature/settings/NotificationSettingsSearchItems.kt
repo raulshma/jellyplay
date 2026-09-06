@@ -153,4 +153,4 @@ internal val NotificationSettingsSearchItems = listOf(
         icon = Tabler.Outline.Folders,
         isAdvanced = true
     ),
-)
+).androidOnly()

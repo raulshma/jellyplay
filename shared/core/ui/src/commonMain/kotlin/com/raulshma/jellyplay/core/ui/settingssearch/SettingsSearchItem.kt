@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.ui.settingssearch
 
 import androidx.compose.ui.graphics.vector.ImageVector
+import com.raulshma.jellyplay.core.model.PlatformKind
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.getString
@@ -13,8 +14,24 @@ data class SettingsSearchItem(
     val keywords: List<String>,
     val route: Route,
     val icon: ImageVector,
-    val isAdvanced: Boolean = false
+    val isAdvanced: Boolean = false,
+    /**
+     * The platforms whose settings surface offers this item's row. Defaults
+     * to all; narrow it when the row is platform-gated so the item never
+     * surfaces as a stale search hit on a platform where the row cannot
+     * exist. TV-only rows stay tagged for ANDROID — form factor is the
+     * runtime `LocalTvMode` axis, not a platform.
+     */
+    val platforms: Set<PlatformKind> = PlatformKind.entries.toSet(),
 )
+
+/**
+ * Drop items the given platform does not offer. Pure so both platforms of the
+ * catalog are testable from a single JVM; the catalog applies it once at
+ * aggregation with [com.raulshma.jellyplay.core.model.currentPlatform].
+ */
+fun List<SettingsSearchItem>.filterFor(platform: PlatformKind): List<SettingsSearchItem> =
+    filter { platform in it.platforms }
 
 /**
  * Plain-[String] projection of a [SettingsSearchItem] used for fuzzy matching and rendering.

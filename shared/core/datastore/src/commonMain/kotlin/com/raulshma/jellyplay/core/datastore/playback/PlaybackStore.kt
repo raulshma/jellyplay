@@ -15,6 +15,7 @@ import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.RefreshRateMode
 import com.raulshma.jellyplay.core.model.StreamingQuality
+import com.raulshma.jellyplay.core.model.platformEngineSupport
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.Serializable
@@ -113,11 +114,8 @@ class PlaybackStore constructor(
         androidTvWatchNextEnabled = PreferenceCodec.readBool(prefs, Keys.ANDROID_TV_WATCH_NEXT_ENABLED, "android_tv_watch_next_enabled", true),
     )
 
-    private fun readPreferredPlayer(prefs: Preferences): PlayerType = try {
-        PlayerType.fromStoredName(prefs[Keys.PREFERRED_PLAYER] ?: PlayerType.EXO_PLAYER.name)
-    } catch (_: Exception) {
-        PlayerType.EXO_PLAYER
-    }
+    private fun readPreferredPlayer(prefs: Preferences): PlayerType =
+        normalizePreferredPlayer(prefs[Keys.PREFERRED_PLAYER])
 
     private fun readStreamingQuality(prefs: Preferences): StreamingQuality = try {
         StreamingQuality.valueOf(prefs[Keys.STREAMING_QUALITY] ?: StreamingQuality.AUTO.name)
@@ -404,3 +402,23 @@ data class PlaybackSlice(
     val userDataSyncEnabled: Boolean = true,
     val androidTvWatchNextEnabled: Boolean = true,
 )
+
+/**
+ * Parse + clamp a stored `preferred_player` value against the engines the
+ * running binary actually ships ([platformEngineSupport]). The single choke
+ * point every preferred-engine read flows through — [PlaybackStore.read],
+ * and therefore every projection fold, `PlayerSessionManager` engine
+ * selection, and backup import — so a choice restored from another
+ * platform's backup (ExoPlayer onto desktop, mpv onto a build without it)
+ * degrades to the platform default instead of reaching an unregistered
+ * factory. Non-destructive by design: the raw value stays on disk, so the
+ * same backup keeps both platforms valid.
+ */
+internal fun normalizePreferredPlayer(raw: String?): PlayerType {
+    val parsed = try {
+        PlayerType.fromStoredName(raw ?: PlayerType.EXO_PLAYER.name)
+    } catch (_: Exception) {
+        PlayerType.EXO_PLAYER
+    }
+    return if (platformEngineSupport.isAvailable(parsed)) parsed else platformEngineSupport.default
+}

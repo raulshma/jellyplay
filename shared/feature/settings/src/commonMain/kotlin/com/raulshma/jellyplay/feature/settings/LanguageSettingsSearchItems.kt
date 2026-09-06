@@ -51,7 +51,8 @@ internal val LanguageSettingsSearchItems = listOf(
         categoryRes = CoreUiRes.string.ss_cat_language_subtitles,
         keywords = listOf("language", "display", "interface", "locale", "ui language", "app language"),
         route = Route.LanguageSettings(),
-        icon = Tabler.Outline.Language
+        icon = Tabler.Outline.Language,
+        platforms = ANDROID_ONLY_PLATFORMS,
     ),
     SettingsSearchItem(
         id = "audio_language",

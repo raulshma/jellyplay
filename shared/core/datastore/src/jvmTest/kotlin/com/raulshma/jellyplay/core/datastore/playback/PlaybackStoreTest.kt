@@ -14,6 +14,7 @@ import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.RefreshRateMode
 import com.raulshma.jellyplay.core.model.StreamingQuality
+import com.raulshma.jellyplay.core.model.platformEngineSupport
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -53,7 +54,9 @@ class PlaybackStoreTest {
     @Test
     fun `defaults when empty`() = runTest {
         val slice = store.playback.first()
-        assertEquals(PlayerType.EXO_PLAYER, slice.preferredPlayer)
+        // The raw stored default is EXO_PLAYER; the read clamps it to whatever
+        // engine this binary actually ships (desktop → MPV).
+        assertEquals(platformEngineSupport.default, slice.preferredPlayer)
         assertEquals(StreamingQuality.AUTO, slice.streamingQuality)
         // Empty store migrates the legacy `force_direct_play` default (true)
         // to FORCE_DIRECT_PLAY — the historical "always static stream" behaviour.
