@@ -46,6 +46,7 @@ import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
 import com.raulshma.jellyplay.core.model.NewsletterData
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.network.realtime.UserDataRealtimeChannel
+import com.raulshma.jellyplay.core.network.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.cache.getOrFetch
 import com.raulshma.jellyplay.core.data.cache.getOrFetchGuarded
 import com.raulshma.jellyplay.core.data.concurrency.SingleFlightFetcher
@@ -442,7 +443,10 @@ class MediaRepositoryImpl(
 
     private suspend fun persistHomeSectionsSnapshot(cacheKey: String, result: HomeSectionsResult) {
         val identity = homeSession.currentIdentity() ?: return
-        runCatching {
+        // Fire-and-forget persist on the home refresh path: a cancelled
+        // collector must still cancel, not park cancellation in a discarded
+        // Result — the block suspends on Room reads/writes and the encode.
+        runCatchingRethrowingCancellation {
             // Foreground refreshes arrive ~once/minute with usually-identical
             // content; when the prior row is younger than the refresh cadence
             // and the payload is byte-identical, the rewrite would advance

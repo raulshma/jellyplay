@@ -16,17 +16,17 @@ internal object WidgetPersistHelper {
         items: List<LibraryWidgetItem>,
         versionBumpOnly: Boolean,
     ) {
-        val previous = store.libraryWidgetItems.first()
-        val previousVersion = store.libraryWidgetVersion.first()
-        WidgetImageLoader.prewarmPosters(context, items.map { it.posterUrl })
-        val now = System.currentTimeMillis()
-        val version = if (versionBumpOnly) previousVersion + 1L else now
-        if (!versionBumpOnly && sameContentById(previous, items) { it.itemId }) {
-            store.setLibraryWidgetItems(items, previousVersion, now)
-            return
-        }
-        store.setLibraryWidgetItems(items, version, now)
-        notifyLibraryWidgets(context)
+        persistItems(
+            context = context,
+            items = items,
+            posterUrls = items.map { it.posterUrl },
+            versionBumpOnly = versionBumpOnly,
+            previous = store.libraryWidgetItems.first(),
+            previousVersion = store.libraryWidgetVersion.first(),
+            idExtractor = { it.itemId },
+            write = { version, now -> store.setLibraryWidgetItems(items, version, now) },
+            notify = { notifyLibraryWidgets(context) },
+        )
     }
 
     suspend fun persistSeerrItems(
@@ -35,17 +35,46 @@ internal object WidgetPersistHelper {
         items: List<SeerrWidgetItem>,
         versionBumpOnly: Boolean,
     ) {
-        val previous = store.seerrWidgetItems.first()
-        val previousVersion = store.seerrWidgetVersion.first()
-        WidgetImageLoader.prewarmPosters(context, items.map { it.posterUrl })
+        persistItems(
+            context = context,
+            items = items,
+            posterUrls = items.map { it.posterUrl },
+            versionBumpOnly = versionBumpOnly,
+            previous = store.seerrWidgetItems.first(),
+            previousVersion = store.seerrWidgetVersion.first(),
+            idExtractor = { it.tmdbId },
+            write = { version, now -> store.setSeerrWidgetItems(items, version, now) },
+            notify = { notifySeerrWidgets(context) },
+        )
+    }
+
+    /**
+     * The persist choreography both widget flavours share: prewarm the poster
+     * cache, then either re-write with the previous version when the content
+     * is unchanged (`versionBumpOnly` always re-stamps a new version) or stamp
+     * a fresh version and update the widgets. The previous rows/version are
+     * read by the caller so each store's accessors stay out of this core.
+     */
+    private suspend fun <T> persistItems(
+        context: Context,
+        items: List<T>,
+        posterUrls: List<String?>,
+        versionBumpOnly: Boolean,
+        previous: List<T>,
+        previousVersion: Long,
+        idExtractor: (T) -> Any,
+        write: suspend (version: Long, now: Long) -> Unit,
+        notify: () -> Unit,
+    ) {
+        WidgetImageLoader.prewarmPosters(context, posterUrls)
         val now = System.currentTimeMillis()
         val version = if (versionBumpOnly) previousVersion + 1L else now
-        if (!versionBumpOnly && sameContentById(previous, items) { it.tmdbId }) {
-            store.setSeerrWidgetItems(items, previousVersion, now)
+        if (!versionBumpOnly && sameContentById(previous, items, idExtractor)) {
+            write(previousVersion, now)
             return
         }
-        store.setSeerrWidgetItems(items, version, now)
-        notifySeerrWidgets(context)
+        write(version, now)
+        notify()
     }
 
     private fun <T> sameContentById(

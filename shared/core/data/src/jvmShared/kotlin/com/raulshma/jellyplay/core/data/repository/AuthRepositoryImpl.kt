@@ -134,8 +134,10 @@ class AuthRepositoryImpl constructor(
         // Prefer the primary when reachable, else fail over to an alternate so
         // a server tapped while away from its LAN address still connects.
         // Defensive: a probe crash must not fail the switch — the primary
-        // address still works as before.
-        runCatching { apiClient.selectReachableAddress() }
+        // address still works as before. A cancelled caller must still cancel:
+        // the probe is a suspend network call, so the wrapper rethrows
+        // cancellation instead of parking it in a discarded Result.
+        runCatchingRethrowingCancellation { apiClient.selectReachableAddress() }
 
         val userEntity = userDao.getMostRecentUserForServer(serverId)
             ?: serverEntity.userId?.let { userDao.getUserById(it) }
@@ -162,7 +164,7 @@ class AuthRepositoryImpl constructor(
         }
     }
 
-    override suspend fun addServerAddress(serverId: String, address: String): Result<Unit> = runCatching {
+    override suspend fun addServerAddress(serverId: String, address: String): Result<Unit> = runCatchingRethrowingCancellation {
         val normalizedAddress = address.trim().trimEnd('/').let {
             if (it.startsWith("http://") || it.startsWith("https://")) it
             else "https://$it"
@@ -190,7 +192,7 @@ class AuthRepositoryImpl constructor(
         )
     }
 
-    override suspend fun removeServerAddress(serverId: String, address: String): Result<Unit> = runCatching {
+    override suspend fun removeServerAddress(serverId: String, address: String): Result<Unit> = runCatchingRethrowingCancellation {
         val serverEntity = serverDao.getServerById(serverId)
             ?: return Result.failure(Exception("Server not found"))
         val currentAlternates = serverEntity.alternateAddresses?.let {
@@ -204,7 +206,7 @@ class AuthRepositoryImpl constructor(
         )
     }
 
-    override suspend fun switchServerAddress(serverId: String, address: String): Result<Unit> = runCatching {
+    override suspend fun switchServerAddress(serverId: String, address: String): Result<Unit> = runCatchingRethrowingCancellation {
         val serverEntity = serverDao.getServerById(serverId)
             ?: return Result.failure(Exception("Server not found"))
         val normalizedAddress = address.trim().trimEnd('/')
@@ -535,8 +537,9 @@ class AuthRepositoryImpl constructor(
         apiClient.disconnect()
         apiClient.setServer(server.toServerInfo())
         // Re-run endpoint selection so the user's first request does not race
-        // a dead primary address.
-        runCatching { apiClient.selectReachableAddress() }
+        // a dead primary address. Same probe-crash/cancellation split as
+        // switchServer above.
+        runCatchingRethrowingCancellation { apiClient.selectReachableAddress() }
         apiClient.setUser(userEntity.toUserInfo(server.address))
         // Same revoked-token guard as switchServer: a stored token the server
         // 401s must not establish a session — the login screen needs to ask
