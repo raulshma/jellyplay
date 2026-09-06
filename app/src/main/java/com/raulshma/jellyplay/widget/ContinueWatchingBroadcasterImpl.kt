@@ -5,7 +5,6 @@ import android.content.Intent
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.widget.ContinueWatchingBroadcaster
 import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
-import org.koin.mp.KoinPlatform
 
 /**
  * Sends an explicit-component broadcast to [ContinueWatchingWidget] so it
@@ -18,8 +17,10 @@ import org.koin.mp.KoinPlatform
  *
  * Action string + receiver class name are owned here, not by the home ViewModel.
  */
-class ContinueWatchingBroadcasterImpl (
+class ContinueWatchingBroadcasterImpl(
     private val context: Context,
+    private val widgetDataStore: WidgetDataStore,
+    private val playbackRepository: PlaybackRepository,
 ) : ContinueWatchingBroadcaster {
 
     override fun refreshContinueWatching() {
@@ -44,10 +45,7 @@ class ContinueWatchingBroadcasterImpl (
      */
     private fun prewarmContinueWatchingPosters() {
         runCatching {
-            val koin = KoinPlatform.getKoin() ?: return
-            val store: WidgetDataStore = koin.get()
-            val playbackRepository: PlaybackRepository = koin.get()
-            val urls = store.continueWatchingSnapshot().mapNotNull { item ->
+            val urls = widgetDataStore.continueWatchingSnapshot().mapNotNull { item ->
                 WidgetImageLoader.continueWatchingPosterEntry(item, playbackRepository)
                     .second
                     .takeIf { it.isNotBlank() }

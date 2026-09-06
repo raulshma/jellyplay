@@ -39,8 +39,8 @@ class AdminApiClientImplTest {
     fun setup() {
         client = RecordingApiClient()
         engine = JellyfinApiEngine(
-            jellyfinLazy = Lazy { mockk<Jellyfin>(relaxed = true) },
-            okHttpClientLazy = Lazy { OkHttpClient() },
+            jellyfinLazy = LazyProvider { mockk<Jellyfin>(relaxed = true) },
+            okHttpClientLazy = LazyProvider { OkHttpClient() },
             deviceProfileProvider = DeviceProfileProvider(DesktopDeviceCodecCapabilities()),
             addressRouter = com.raulshma.jellyplay.core.network.failover.ServerAddressRouter(),
         )

@@ -11,6 +11,7 @@ import com.raulshma.jellyplay.core.data.paging.MediaPagingSource
 import com.raulshma.jellyplay.core.data.paging.SearchPagingSource
 import com.raulshma.jellyplay.core.data.session.HomeSession
 import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
+import com.raulshma.jellyplay.core.data.session.SessionIdentity
 import com.raulshma.jellyplay.core.model.CollectionSummary
 import com.raulshma.jellyplay.core.model.DvrSeriesTimer
 import com.raulshma.jellyplay.core.model.DvrTimer
@@ -486,13 +487,7 @@ class MediaRepositoryImpl(
                 // Byte-identical inside the window: remember the fingerprint
                 // (against this row's fetchedAt) so the next in-window
                 // refresh can take the cheap path above.
-                lastHomeSnapshotDedup = HomeSnapshotDedupState(
-                    serverId = identity.serverId,
-                    userId = identity.userId,
-                    cacheKey = cacheKey,
-                    rowFetchedAt = existing.fetchedAt,
-                    fingerprint = homeSnapshotFingerprint(result),
-                )
+                rememberHomeSnapshotDedup(identity, cacheKey, existing.fetchedAt, result)
                 return
             }
             homeSectionCacheDao.upsert(
@@ -512,14 +507,28 @@ class MediaRepositoryImpl(
                     fetchedAt = now,
                 ),
             )
-            lastHomeSnapshotDedup = HomeSnapshotDedupState(
-                serverId = identity.serverId,
-                userId = identity.userId,
-                cacheKey = cacheKey,
-                rowFetchedAt = now,
-                fingerprint = homeSnapshotFingerprint(result),
-            )
+            rememberHomeSnapshotDedup(identity, cacheKey, now, result)
         }
+    }
+
+    /**
+     * Records [lastHomeSnapshotDedup] for the row fetchedAt the fingerprint
+     * was computed against — both persist paths (skipped rewrite and fresh
+     * upsert) funnel through here.
+     */
+    private fun rememberHomeSnapshotDedup(
+        identity: SessionIdentity,
+        cacheKey: String,
+        rowFetchedAt: Long,
+        result: HomeSectionsResult,
+    ) {
+        lastHomeSnapshotDedup = HomeSnapshotDedupState(
+            serverId = identity.serverId,
+            userId = identity.userId,
+            cacheKey = cacheKey,
+            rowFetchedAt = rowFetchedAt,
+            fingerprint = homeSnapshotFingerprint(result),
+        )
     }
 
     override suspend fun getLibraryFolders(force: Boolean): Result<List<LibraryFolder>> =

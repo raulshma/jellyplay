@@ -12,7 +12,7 @@ import com.raulshma.jellyplay.core.network.api.AuthApiClient
 import com.raulshma.jellyplay.core.network.api.AuthApiClientImpl
 import com.raulshma.jellyplay.core.network.api.DeviceProfileProvider
 import com.raulshma.jellyplay.core.network.api.JellyfinApiEngine
-import com.raulshma.jellyplay.core.network.api.Lazy
+import com.raulshma.jellyplay.core.network.api.LazyProvider
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.network.api.LibraryApiClientImpl
 import com.raulshma.jellyplay.core.network.api.LiveTvApiClient
@@ -193,17 +193,17 @@ val networkJvmModule: Module = module {
 }
 
 /**
- * Adapts a Koin resolution to [Lazy] for [JellyfinApiEngine]'s ctor
+ * Adapts a Koin resolution to [LazyProvider] for [JellyfinApiEngine]'s ctor
  * params, preserving the memoizing single-evaluation semantics the old
  * Hilt-era `dagger.Lazy` seam had: `lazy(...)` defaults to SYNCHRONIZED
  * (double-checked locking), so the value is computed at most once no matter
  * how many threads race the first `.get()`. (Audit BIN-8: the dagger
  * artifact this wrapper used to return was replaced by the local
- * `api.Lazy` fun interface — same shape, no dead dependency.)
+ * `api.LazyProvider` fun interface — same shape, no dead dependency.)
  */
-internal fun <T> memoizingLazy(provider: () -> T): Lazy<T> {
+internal fun <T> memoizingLazy(provider: () -> T): LazyProvider<T> {
     val memoized = lazy(provider)
-    return Lazy { memoized.value }
+    return LazyProvider { memoized.value }
 }
 
 // Hoisted so the pattern compiles once at class load rather than on each

@@ -56,13 +56,6 @@
         android:usesCleartextTraffic="true"
         tools:targetApi="37">
 
-        <!-- BIN-9 (audit): StartupBenchmark measures the release build with
-             CompilationMode.None; on API 29+ macrobenchmark/systrace visibility
-             of a non-debuggable app requires this element, otherwise release
-             timings silently degrade. Harmless on debug builds (debuggable
-             implies profileability). -->
-        <profileable android:shell="true" />
-
         <activity
             android:name=".MainActivity"
             android:exported="true"

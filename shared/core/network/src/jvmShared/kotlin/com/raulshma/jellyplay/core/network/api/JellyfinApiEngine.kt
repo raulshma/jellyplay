@@ -31,7 +31,7 @@ import javax.inject.Singleton
 
 @Singleton
 class JellyfinApiEngine @Inject constructor(
-    // Lazy ctor params (the local seam in Lazy.kt, audit BIN-8 — this used
+    // LazyProvider ctor params (the local seam in LazyProvider.kt, audit BIN-8 — this used
     // to be dagger.Lazy, back when a Hilt graph constructed this class)
     // defer construction of both the Jellyfin SDK instance and the shared
     // OkHttpClient off the synchronous Koin graph: MainViewModel's
@@ -42,8 +42,8 @@ class JellyfinApiEngine @Inject constructor(
     // repository code well after ServerIdentityStore.identity (Eagerly-
     // started) has populated, so the ensureDeviceId() runBlocking fallbacks
     // in the platform network modules never fire on the main thread.
-    private val jellyfinLazy: Lazy<Jellyfin>,
-    private val okHttpClientLazy: Lazy<OkHttpClient>,
+    private val jellyfinLazy: LazyProvider<Jellyfin>,
+    private val okHttpClientLazy: LazyProvider<OkHttpClient>,
     private val deviceProfileProvider: DeviceProfileProvider,
     private val addressRouter: ServerAddressRouter,
 ) {

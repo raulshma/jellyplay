@@ -48,8 +48,8 @@ class AuthApiClientImplTest {
         val okHttpClient = OkHttpClient()
         addressRouter = ServerAddressRouter()
         engine = JellyfinApiEngine(
-            jellyfinLazy = Lazy { jellyfin },
-            okHttpClientLazy = Lazy { okHttpClient },
+            jellyfinLazy = LazyProvider { jellyfin },
+            okHttpClientLazy = LazyProvider { okHttpClient },
             deviceProfileProvider = DeviceProfileProvider(DesktopDeviceCodecCapabilities()),
             addressRouter = addressRouter,
         )
@@ -159,8 +159,8 @@ class AuthApiClientImplTest {
         coEvery { unauthenticatedApi.userApi.authenticateUserByName(any()) } throws
             java.io.IOException("auth round-trip failed")
         val localEngine = JellyfinApiEngine(
-            jellyfinLazy = Lazy { jellyfin },
-            okHttpClientLazy = Lazy { OkHttpClient() },
+            jellyfinLazy = LazyProvider { jellyfin },
+            okHttpClientLazy = LazyProvider { OkHttpClient() },
             deviceProfileProvider = DeviceProfileProvider(DesktopDeviceCodecCapabilities()),
             addressRouter = ServerAddressRouter(),
         )
@@ -210,8 +210,8 @@ class AuthApiClientImplTest {
             serverName = "New Server",
         )
         val probeEngine = JellyfinApiEngine(
-            jellyfinLazy = Lazy { mockk<Jellyfin>(relaxed = true) },
-            okHttpClientLazy = Lazy { OkHttpClient() },
+            jellyfinLazy = LazyProvider { mockk<Jellyfin>(relaxed = true) },
+            okHttpClientLazy = LazyProvider { OkHttpClient() },
             deviceProfileProvider = DeviceProfileProvider(DesktopDeviceCodecCapabilities()),
             addressRouter = probeRouter,
         )
@@ -250,8 +250,8 @@ class AuthApiClientImplTest {
         )
         val client = AuthApiClientImpl(
             engine = JellyfinApiEngine(
-                jellyfinLazy = Lazy { mockk<Jellyfin>(relaxed = true) },
-                okHttpClientLazy = Lazy { OkHttpClient() },
+                jellyfinLazy = LazyProvider { mockk<Jellyfin>(relaxed = true) },
+                okHttpClientLazy = LazyProvider { OkHttpClient() },
                 deviceProfileProvider = DeviceProfileProvider(DesktopDeviceCodecCapabilities()),
                 addressRouter = probeRouter,
             ),
@@ -281,8 +281,8 @@ class AuthApiClientImplTest {
         )
         val client = AuthApiClientImpl(
             engine = JellyfinApiEngine(
-                jellyfinLazy = Lazy { mockk<Jellyfin>(relaxed = true) },
-                okHttpClientLazy = Lazy { OkHttpClient() },
+                jellyfinLazy = LazyProvider { mockk<Jellyfin>(relaxed = true) },
+                okHttpClientLazy = LazyProvider { OkHttpClient() },
                 deviceProfileProvider = DeviceProfileProvider(DesktopDeviceCodecCapabilities()),
                 addressRouter = probeRouter,
             ),

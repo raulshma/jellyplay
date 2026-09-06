@@ -48,9 +48,10 @@ import kotlin.test.assertTrue
  * [runCurrent] / [advanceTimeBy] — never `advanceUntilIdle`, which would spin
  * forever on the rescheduling loops. The now-tick loop itself is not asserted:
  * it stamps the REAL clock (`Instant.now()`), not the virtual scheduler's.
- * rebuildGrid hops to Dispatchers.Default (a real thread under jvmTest), so
- * tests [settleDefaultHop] after any action that rebuilds the grid before
- * asserting on gridData/isLoading.
+ * rebuildGrid hops to the VM's injected gridDispatcher, which these tests bind
+ * to a [StandardTestDispatcher] on the same scheduler the tests pump — the
+ * hop is a queued task, so a bare [runCurrent] drains it deterministically
+ * (no real-thread settling) after any action that rebuilds the grid.
  * Because `Dispatchers.setMain` installs a `TestDispatcher`, `runTest` ADOPTS
  * its scheduler (verified: `testScheduler === mainDispatcher.scheduler`), so
  * the VM's loops ride the same scheduler the tests pump — and every test runs
@@ -86,7 +87,10 @@ class EpgViewModelTest {
 
     /** Runs the init loadGuide; any auto-refresh loop a test starts parks on its delay. */
     private fun TestScope.createViewModel(): EpgViewModel {
-        val vm = EpgViewModel(mediaRepository)
+        val vm = EpgViewModel(
+            mediaRepository,
+            gridDispatcher = StandardTestDispatcher(testScheduler),
+        )
         createdViewModels += vm
         testScheduler.runCurrent()
         return vm
@@ -102,21 +106,6 @@ class EpgViewModelTest {
      */
     private fun EpgViewModel.stopLoops() {
         viewModelScope.cancel()
-    }
-
-    /**
-     * Gives a pending grid rebuild's `withContext(Dispatchers.Default)` hop
-     * (a real thread under jvmTest) a few beats to land back on the test
-     * scheduler — the resumption is queued only after the hop finishes, so a
-     * bare [runCurrent] can drain the queue before it. Never advances virtual
-     * time (`advanceUntilIdle` would spin forever on the rescheduling loops);
-     * same idea as OfflineLibraryViewModelTest's settle().
-     */
-    private fun TestScope.settleDefaultHop() {
-        repeat(5) {
-            Thread.sleep(20)
-            testScheduler.runCurrent()
-        }
     }
 
     /**
@@ -186,7 +175,8 @@ class EpgViewModelTest {
             Result.success(EpgGuide(channels = listOf(channel), programs = listOf(airing)))
 
         val vm = createViewModel()
-        settleDefaultHop()
+        // Drain the init fetch AND its queued grid-rebuild hop deterministically.
+        testScheduler.runCurrent()
 
         assertEquals(listOf(channel), vm.channels)
         assertEquals(listOf(airing), vm.programs)
@@ -306,10 +296,10 @@ class EpgViewModelTest {
         mainDispatcher.scheduler.runCurrent()
         coVerify(exactly = 2) { mediaRepository.getLiveTvGuide(any(), any(), any(), any()) }
 
-        // And it keeps going on schedule. The hop settle lets the second loop
-        // iteration finish — its rebuildGrid suspends on Dispatchers.Default —
-        // before the next delay is scheduled.
-        settleDefaultHop()
+        // And it keeps going on schedule. The runCurrent lets the second loop
+        // iteration finish — its rebuildGrid hop is queued on the shared
+        // scheduler — before the next delay is scheduled.
+        mainDispatcher.scheduler.runCurrent()
         mainDispatcher.scheduler.advanceTimeBy(5 * 60 * 1000L)
         mainDispatcher.scheduler.runCurrent()
         coVerify(exactly = 3) { mediaRepository.getLiveTvGuide(any(), any(), any(), any()) }
@@ -326,7 +316,7 @@ class EpgViewModelTest {
 
         mainDispatcher.scheduler.advanceTimeBy(5 * 60 * 1000L)
         mainDispatcher.scheduler.runCurrent()
-        settleDefaultHop()
+        mainDispatcher.scheduler.runCurrent()
 
         assertEquals(listOf(channel), vm.channels)
         assertEquals(listOf("chan-9"), vm.gridData.rows.map { it.channel.id })

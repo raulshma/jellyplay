@@ -33,8 +33,8 @@ import kotlin.test.assertNull
 class JellyfinApiEngineSessionTest {
 
     private fun newEngine() = JellyfinApiEngine(
-        Lazy { mockk<Jellyfin>(relaxed = true) },
-        Lazy { OkHttpClient() },
+        LazyProvider { mockk<Jellyfin>(relaxed = true) },
+        LazyProvider { OkHttpClient() },
         DeviceProfileProvider(DesktopDeviceCodecCapabilities()),
         ServerAddressRouter(),
     )

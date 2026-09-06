@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.feature.livetv.components.RecordActions
 import com.raulshma.jellyplay.feature.livetv.components.RecordDialogState
 import com.raulshma.jellyplay.feature.livetv.components.RecordOutcome
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -27,6 +28,8 @@ private const val GUIDE_WINDOW_HOURS: Long = 24L
 
 class EpgViewModel(
     private val mediaRepository: LiveTvRepository,
+    /** Off-Main dispatcher for the grid rebuild; injectable so jvmTest rides the test scheduler. */
+    private val gridDispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) : JellyPlayViewModel() {
 
     private val _channels = composeState<List<LiveTvChannel>>(emptyList())
@@ -96,16 +99,16 @@ class EpgViewModel(
 
     /**
      * Recompute the cached grid snapshot from the current source data. The
-     * CPU-heavy groupBy + per-channel filter + sort runs on
-     * [Dispatchers.Default]; the inputs are read and the snapshot published
-     * on the caller's context, so state assignment order is unchanged.
+     * CPU-heavy groupBy + per-channel filter + sort runs on [gridDispatcher];
+     * the inputs are read and the snapshot published on the caller's context,
+     * so state assignment order is unchanged.
      */
     private suspend fun rebuildGrid() {
         val channels = _channels.value
         val programs = _programs.value
         val windowStart = _windowStart.value
         val windowEnd = _windowEnd.value
-        _gridData.value = withContext(Dispatchers.Default) {
+        _gridData.value = withContext(gridDispatcher) {
             buildEpgGridData(
                 channels = channels,
                 programs = programs,

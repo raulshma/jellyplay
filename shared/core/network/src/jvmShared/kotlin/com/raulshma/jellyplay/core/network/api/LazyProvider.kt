@@ -10,8 +10,8 @@ package com.raulshma.jellyplay.core.network.api
  * every call-site shape working unchanged — the Koin adapter
  * (`NetworkKoinModules.memoizingLazy`) still wraps `lazy(...)` so first
  * `.get()` memoizes with the same single-evaluation semantics, and the
- * jvmTest suites still construct it with SAM syntax (`Lazy { value }`).
+ * jvmTest suites still construct it with SAM syntax (`LazyProvider { value }`).
  */
-fun interface Lazy<out T> {
+fun interface LazyProvider<out T> {
     fun get(): T
 }

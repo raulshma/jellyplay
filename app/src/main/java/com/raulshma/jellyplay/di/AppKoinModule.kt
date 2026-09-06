@@ -135,7 +135,11 @@ fun androidAppModule(context: Context): Module = module {
         WidgetWorkSchedulerImpl(context = context)
     }
     single<ContinueWatchingBroadcaster> {
-        ContinueWatchingBroadcasterImpl(context = context)
+        ContinueWatchingBroadcasterImpl(
+            context = context,
+            widgetDataStore = get(),
+            playbackRepository = get(),
+        )
     }
     single<LibrarySyncHook> {
         LibrarySyncHookImpl(

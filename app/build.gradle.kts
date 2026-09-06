@@ -100,6 +100,16 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // BIN-9 (audit): StartupBenchmark measures the release build with
+            // CompilationMode.None; on API 29+ macrobenchmark/systrace
+            // visibility of a non-debuggable app requires profileability,
+            // otherwise release timings silently degrade. Harmless on debug
+            // builds (debuggable implies profileability). Set via the DSL,
+            // NOT a manifest element: this AGP's aapt2 link rejects a
+            // root-level <profileable> (verified with the bundled binary),
+            // and inside <application> the element compiles but the runtime
+            // package parser ignores it — neither works.
+            isProfileable = true
             // BIN-7 (audit): ship native symbol tables (function names + frame
             // addresses, no full DWARF) so libmpv/libvlc/libass/ffmpeg-decoder
             // crash stacks can be symbolicated. Config-only at this level —

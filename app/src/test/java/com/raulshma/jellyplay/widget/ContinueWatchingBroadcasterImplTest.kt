@@ -2,6 +2,8 @@ package com.raulshma.jellyplay.widget
 
 import android.content.Context
 import android.content.Intent
+import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
@@ -28,8 +30,13 @@ class ContinueWatchingBroadcasterImplTest {
     @Test
     fun `refresh sends an explicit-component broadcast to the widget provider`() {
         every { context.packageName } returns "com.raulshma.jellyplay"
+        // Relaxed fakes: an empty continue-watching snapshot keeps the poster
+        // prewarm a no-op, so the test pins only the broadcast contract.
+        val widgetDataStore = mockk<WidgetDataStore>(relaxed = true)
+        val playbackRepository = mockk<PlaybackRepository>(relaxed = true)
 
-        ContinueWatchingBroadcasterImpl(context).refreshContinueWatching()
+        ContinueWatchingBroadcasterImpl(context, widgetDataStore, playbackRepository)
+            .refreshContinueWatching()
 
         val intent = slot<Intent>()
         verify(exactly = 1) { context.sendBroadcast(capture(intent)) }

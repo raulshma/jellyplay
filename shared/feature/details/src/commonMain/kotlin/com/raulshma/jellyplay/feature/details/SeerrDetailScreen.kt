@@ -574,6 +574,28 @@ private fun SeerrDetailContent(
                         .fillMaxWidth()
                         .background(headerFadeBrush)
                 ) {
+                    // Landscape and portrait branches share the whole detail
+                    // body; only its layout modifier differs (weighted inside
+                    // the landscape Row, full-width in the portrait Column).
+                    val detailBody: @Composable (Modifier) -> Unit = { bodyModifier ->
+                        SeerrDetailBody(
+                            movieDetail = movieDetail,
+                            tvDetail = tvDetail,
+                            ratings = ratings,
+                            recommendations = recommendations,
+                            similar = similar,
+                            onNavigate = onNavigate,
+                            modifier = bodyModifier,
+                            streamingRegion = streamingRegion,
+                            discoverRegion = discoverRegion,
+                            seerrServerUrl = seerrServerUrl,
+                            selectedSeasonNumber = selectedSeasonNumber,
+                            episodesBySeason = episodesBySeason,
+                            isLoadingEpisodes = isLoadingEpisodes,
+                            onSeasonClick = onSeasonClick,
+                            onVideoClick = onVideoClick,
+                        )
+                    }
                     if (isExpanded && adaptiveInfo.isLandscape) {
                         Row(
                             modifier = Modifier
@@ -636,23 +658,7 @@ private fun SeerrDetailContent(
                                 )
                             }
 
-                            SeerrDetailBody(
-                                movieDetail = movieDetail,
-                                tvDetail = tvDetail,
-                                ratings = ratings,
-                                recommendations = recommendations,
-                                similar = similar,
-                                onNavigate = onNavigate,
-                                modifier = Modifier.weight(1f),
-                                streamingRegion = streamingRegion,
-                                discoverRegion = discoverRegion,
-                                seerrServerUrl = seerrServerUrl,
-                                selectedSeasonNumber = selectedSeasonNumber,
-                                episodesBySeason = episodesBySeason,
-                                isLoadingEpisodes = isLoadingEpisodes,
-                                onSeasonClick = onSeasonClick,
-                                onVideoClick = onVideoClick,
-                            )
+                            detailBody(Modifier.weight(1f))
                         }
                     } else {
                         Column(
@@ -741,23 +747,7 @@ private fun SeerrDetailContent(
 
                             Spacer(Modifier.height(32.dp))
 
-                            SeerrDetailBody(
-                                movieDetail = movieDetail,
-                                tvDetail = tvDetail,
-                                ratings = ratings,
-                                recommendations = recommendations,
-                                similar = similar,
-                                onNavigate = onNavigate,
-                                modifier = Modifier.fillMaxWidth(),
-                                streamingRegion = streamingRegion,
-                                discoverRegion = discoverRegion,
-                                seerrServerUrl = seerrServerUrl,
-                                selectedSeasonNumber = selectedSeasonNumber,
-                                episodesBySeason = episodesBySeason,
-                                isLoadingEpisodes = isLoadingEpisodes,
-                                onSeasonClick = onSeasonClick,
-                                onVideoClick = onVideoClick,
-                            )
+                            detailBody(Modifier.fillMaxWidth())
                         }
                     }
                 }
