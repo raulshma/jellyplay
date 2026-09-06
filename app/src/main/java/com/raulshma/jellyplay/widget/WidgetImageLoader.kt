@@ -173,10 +173,11 @@ object WidgetImageLoader {
      * but each URL is still individually bounded by
      * [WIDGET_LOAD_TIMEOUT_MS] via [loadPoster], and the same
      * [WIDGET_PRELOAD_MAX_URLS] cap applies. Never triggers widget updates
-     * itself; cache hits are free, so repeat calls are cheap.
+     * itself; cache hits are free, so repeat calls are cheap. Accepts null
+     * urls (snapshot item types carry nullable poster urls) and skips them.
      */
-    fun prewarmPosters(context: Context, urls: Collection<String>) {
-        val distinct = urls.filter { it.isNotBlank() }.distinct().take(WIDGET_PRELOAD_MAX_URLS)
+    fun prewarmPosters(context: Context, urls: Collection<String?>) {
+        val distinct = urls.filter { !it.isNullOrBlank() }.distinct().take(WIDGET_PRELOAD_MAX_URLS)
         if (distinct.isEmpty()) return
         prewarmScope.launch {
             distinct.map { url -> async { loadPoster(context, url) } }.awaitAll()
@@ -206,6 +207,22 @@ object WidgetImageLoader {
     ): ContinueWatchingPosterEntry {
         val imageId = continueWatchingPosterImageId(item)
         return ContinueWatchingPosterEntry(imageId, playbackRepository.getImageUrl(imageId, maxWidth = 300))
+    }
+
+    /**
+     * Fire-and-forget prewarm (CONC-6) for the whole Continue-Watching
+     * snapshot: derives each row's url via [continueWatchingPosterEntry] —
+     * the same rule the CW factory's preload uses — so the prewarmed urls
+     * and the factory's binds cannot drift. It serves every widget instance
+     * at once (per-widget item counts are unknown to the caller), so it maps
+     * the whole snapshot and lets [prewarmPosters] apply its batch cap.
+     */
+    fun prewarmContinueWatchingPosters(
+        context: Context,
+        items: List<MediaItem>,
+        playbackRepository: PlaybackRepository,
+    ) {
+        prewarmPosters(context, items.map { continueWatchingPosterEntry(it, playbackRepository).url })
     }
 
     private fun applyRoundedCorners(context: Context, bitmap: Bitmap, cornerRadiusDp: Float = 10f): Bitmap {

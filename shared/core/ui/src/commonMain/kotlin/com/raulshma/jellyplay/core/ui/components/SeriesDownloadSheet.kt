@@ -180,7 +180,7 @@ fun SeriesDownloadSheet(
                 val seasonEpisodes = episodes[season.id].orEmpty()
                 val isLoadingThis = season.id in loadingSeasons
 
-                item(key = "season-${season.id}", contentType = "season") {
+                seasonHeaderItem(season.id) {
                     val downloadedInSeason = remember(seasonEpisodes, downloadedEpisodeIds) {
                         seasonEpisodes.count { it.id in downloadedEpisodeIds }
                     }

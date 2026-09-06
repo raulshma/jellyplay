@@ -229,6 +229,22 @@ fun SeasonHeaderRow(
 }
 
 /**
+ * Emits the keyed, content-typed season header item shared by the season
+ * lists in [DeleteDownloadedEpisodesSheet] and [SeriesDownloadSheet],
+ * pinning the "season-{id}" key + "season" contentType of the key family
+ * ("season-{id}", "season-{id}-ep-…", "season-{id}-divider") so both lists
+ * scroll-preserve the same way. The header body stays a per-sheet slot:
+ * selection tri-state and subtitle counts must be read inside the item's
+ * composable scope, so each sheet composes its own [SeasonHeaderRow] there.
+ */
+fun LazyListScope.seasonHeaderItem(
+    seasonId: String,
+    content: @Composable () -> Unit,
+) {
+    item(key = "season-$seasonId", contentType = "season") { content() }
+}
+
+/**
  * Per-season closing divider shared by the season lists in
  * [DeleteDownloadedEpisodesSheet] and [SeriesDownloadSheet], keyed and
  * content-typed identically so both lists scroll-preserve the same way.

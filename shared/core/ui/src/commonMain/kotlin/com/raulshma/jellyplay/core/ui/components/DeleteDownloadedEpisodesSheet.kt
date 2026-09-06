@@ -204,7 +204,7 @@ fun DeleteDownloadedEpisodesSheet(
                 val isExpanded = season.id in expandedSeasonIds
                 val seasonEpisodes = episodes[season.id].orEmpty()
 
-                item(key = "season-${season.id}", contentType = "season") {
+                seasonHeaderItem(season.id) {
                     val triState = selection.triStateForSeason(season.id)
 
                     SeasonHeaderRow(

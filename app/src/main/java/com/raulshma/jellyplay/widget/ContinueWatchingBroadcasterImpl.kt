@@ -36,22 +36,19 @@ class ContinueWatchingBroadcasterImpl(
      * is about to re-bind against. The data push itself (`setContinueWatching`)
      * lives in the shared home refresher; this broadcast is the app-side
      * signal that the snapshot changed, so it doubles as the prewarm hook.
-     * Derives each row's url via the shared
-     * [WidgetImageLoader.continueWatchingPosterEntry] rule, so the prewarm
-     * and the factory cannot drift. It serves every widget instance at once
-     * (per-widget item counts are unknown here), so it maps the whole
-     * snapshot and lets [WidgetImageLoader.prewarmPosters] apply its batch
-     * cap. The prewarm never triggers a widget update itself; the broadcast
-     * in [refreshContinueWatching] remains the only rebind trigger.
+     * Delegates the url derivation to
+     * [WidgetImageLoader.prewarmContinueWatchingPosters] so the prewarm and
+     * the factory cannot drift. The prewarm never triggers a widget update
+     * itself; the broadcast in [refreshContinueWatching] remains the only
+     * rebind trigger.
      */
     private fun prewarmContinueWatchingPosters() {
         runCatching {
-            val urls = widgetDataStore.continueWatchingSnapshot().mapNotNull { item ->
-                WidgetImageLoader.continueWatchingPosterEntry(item, playbackRepository)
-                    .url
-                    .takeIf { it.isNotBlank() }
-            }
-            WidgetImageLoader.prewarmPosters(context, urls)
+            WidgetImageLoader.prewarmContinueWatchingPosters(
+                context,
+                widgetDataStore.continueWatchingSnapshot(),
+                playbackRepository,
+            )
         }
     }
 }

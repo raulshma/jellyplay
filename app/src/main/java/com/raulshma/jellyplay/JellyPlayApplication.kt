@@ -81,6 +81,7 @@ import androidx.work.DelegatingWorkerFactory
 import com.raulshma.jellyplay.widget.AppWidgetWorkerFactory
 import okhttp3.OkHttpClient
 import okio.Path.Companion.toPath
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -411,7 +412,7 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
         // needs this read to win that — both slices launch ahead of the async
         // prewarms, preserving exactly the head start they had before.
         applicationScope.launch(Dispatchers.IO) {
-            runCatching { networkOfflineStore.networkOffline.first() }
+            runCatchingRethrowingCancellation { networkOfflineStore.networkOffline.first() }
             // STA-3: NOT the audit's literal `identity.first()` — a
             // stateIn(Eagerly) StateFlow always has its initial value
             // available, so a plain first() returns the all-null placeholder
@@ -423,7 +424,7 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
             // reads-or-persists the UUID off main, and awaiting the non-null
             // publication guarantees every later `.value.deviceId` read in
             // AndroidNetworkModule resolves the fast path.
-            runCatching {
+            runCatchingRethrowingCancellation {
                 serverIdentityStore.ensureDeviceId()
                 // Bounded wait: a wedged DataStore (corruption, upstream
                 // error stranding the Eagerly-started identity flow on its
@@ -445,7 +446,10 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                 // neither cancels the sibling nor fails the outer launch —
                 // the same per-call swallow the sequential runCatching chain
                 // had.
-                async { runCatching { koin?.get<com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider>()?.prewarm() } }
+                // FontProvider.prewarm() suspends, so it needs the
+                // cancellation-rethrowing variant; VideoStreamCache.prewarm()
+                // doesn't, so plain runCatching still suffices there.
+                async { runCatchingRethrowingCancellation { koin?.get<com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider>()?.prewarm() } }
                 async { runCatching { koin?.get<com.raulshma.jellyplay.feature.player.video.engine.VideoStreamCache>()?.prewarm() } }
             }
         }
@@ -545,4 +549,19 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
     }
 
     override fun newImageLoader(context: Context): ImageLoader = imageLoader
+
+    /**
+     * [runCatching] variant for the suspend prewarms above: a
+     * [CancellationException] must pass through so cancelling the launching
+     * coroutine isn't swallowed as a failed prewarm. Plain inline
+     * `runCatching` around suspend calls catches it like any other
+     * [Throwable].
+     */
+    private suspend fun <T> runCatchingRethrowingCancellation(block: suspend () -> T): Result<T> = try {
+        Result.success(block())
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Throwable) {
+        Result.failure(e)
+    }
 }
