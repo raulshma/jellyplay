@@ -45,7 +45,7 @@ class EpgViewModelRecordTest {
         coEvery { mediaRepository.getLiveTvGuide(any(), any(), any()) } returns Result.success(
             EpgGuide(channels = emptyList(), programs = emptyList())
         )
-        viewModel = EpgViewModel(mediaRepository)
+        viewModel = EpgViewModel(mediaRepository, gridDispatcher = mainDispatcher)
     }
 
     @AfterTest

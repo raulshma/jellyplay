@@ -145,10 +145,13 @@ class EngineActivityRecorder {
 
         /**
          * The record's three observer jobs (state collector, isPlaying
-         * collector, position sampler), set by recordCreated right after the
-         * launches. @Volatile: release (and thus recordReleased) can race the
-         * assignment from another thread — a cancel that sees the empty
-         * pre-assignment default only leaks to the pre-CONC-1 behavior.
+         * collector, position sampler). Not a constructor val: the launch
+         * blocks capture this record, so the jobs can only exist after it
+         * does. The sole publication path to [cancelObservers] is the
+         * [recordCreated] put into the observers map, which is sequenced
+         * after this assignment and gives the cancelling thread its
+         * happens-before (ConcurrentHashMap) — @Volatile is kept purely as
+         * insurance should a second publication path ever appear.
          */
         @Volatile var jobs: List<Job> = emptyList()
 

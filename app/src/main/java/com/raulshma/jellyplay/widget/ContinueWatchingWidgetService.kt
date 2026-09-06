@@ -55,8 +55,8 @@ class ContinueWatchingWidgetService : RemoteViewsService() {
         private var items: List<MediaItem> = emptyList()
         // Poster cache populated in [onDataSetChanged] so [getViewAt] never
         // performs network I/O on the binder thread. Keyed by the image id
-        // from [WidgetImageLoader.continueWatchingPosterEntry] (the series id
-        // when the row is an episode — the same key getViewAt looks up).
+        // from [WidgetImageLoader.continueWatchingPosterImageId] (the series
+        // id when the row is an episode — the same key getViewAt looks up).
         private var posterCache: Map<String, Bitmap?> = emptyMap()
         private var widgetDims: WidgetDimensions? = null
 
@@ -135,7 +135,7 @@ class ContinueWatchingWidgetService : RemoteViewsService() {
                 view.setViewVisibility(R.id.cw_item_remaining, View.GONE)
             }
 
-            val imageId = item.seriesId ?: item.id
+            val imageId = WidgetImageLoader.continueWatchingPosterImageId(item)
             val posterBitmap = if (!hidePoster) {
                 posterCache[imageId]
             } else null

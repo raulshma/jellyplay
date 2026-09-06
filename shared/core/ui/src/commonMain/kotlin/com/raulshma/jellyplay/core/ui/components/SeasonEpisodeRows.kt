@@ -1,17 +1,45 @@
 package com.raulshma.jellyplay.core.ui.components
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TriStateCheckbox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.state.ToggleableState
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.ChevronDown
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.designsystem.theme.defaultContentSizeSpec
+import com.raulshma.jellyplay.core.designsystem.theme.defaultSpatialSpring
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.ui.generated.resources.Res
+import com.raulshma.jellyplay.core.ui.generated.resources.detail_cd_collapse
+import com.raulshma.jellyplay.core.ui.generated.resources.detail_cd_expand
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * Episode title + runtime labels shared by the season-scoped episode lists in
@@ -37,6 +65,86 @@ fun RowScope.SeasonEpisodeMetaLabels(episode: MediaItem, nameColor: Color) {
                 text = "${minutes}m",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+/**
+ * Season header row shared by the season lists in
+ * [DeleteDownloadedEpisodesSheet] and [SeriesDownloadSheet]: tri-state
+ * checkbox, title, optional subtitle, and the rotation-animated expand
+ * chevron on an animateContentSize column. The caller passes the expanded
+ * container color so each sheet keeps its own selected/downloaded tinting
+ * while the header chassis itself can't drift between the two.
+ */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+fun SeasonHeaderRow(
+    title: String,
+    subtitle: String?,
+    triState: ToggleableState,
+    isExpanded: Boolean,
+    expandedContainerColor: Color,
+    onHeaderClick: () -> Unit,
+    onCheckboxClick: () -> Unit,
+    checkboxEnabled: Boolean = true,
+) {
+    val seasonBgColor by animateColorAsState(
+        targetValue = if (isExpanded) expandedContainerColor
+        else MaterialTheme.colorScheme.surfaceContainer,
+        animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
+        label = "seasonBg",
+    )
+
+    val chevronRotation by animateFloatAsState(
+        targetValue = if (isExpanded) 180f else 0f,
+        animationSpec = defaultSpatialSpring(),
+        label = "chevron",
+    )
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .animateContentSize(animationSpec = defaultContentSizeSpec()),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(ShapeCache.smooth16)
+                .background(seasonBgColor)
+                .clickable(onClick = onHeaderClick)
+                .padding(horizontal = 8.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TriStateCheckbox(
+                state = triState,
+                onClick = onCheckboxClick,
+                enabled = checkboxEnabled,
+            )
+            Spacer(Modifier.width(4.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                if (subtitle != null) {
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            Icon(
+                imageVector = Tabler.Outline.ChevronDown,
+                contentDescription = stringResource(if (isExpanded) Res.string.detail_cd_collapse else Res.string.detail_cd_expand),
+                modifier = Modifier
+                    .size(20.dp)
+                    .graphicsLayer { rotationZ = chevronRotation },
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }

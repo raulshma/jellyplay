@@ -2,8 +2,6 @@ package com.raulshma.jellyplay.core.ui.components
 import com.raulshma.jellyplay.core.ui.generated.resources.Res
 import com.raulshma.jellyplay.core.ui.generated.resources.detail_episode_count
 import com.raulshma.jellyplay.core.ui.generated.resources.detail_cancel
-import com.raulshma.jellyplay.core.ui.generated.resources.detail_cd_collapse
-import com.raulshma.jellyplay.core.ui.generated.resources.detail_cd_expand
 import com.raulshma.jellyplay.core.ui.generated.resources.detail_delete_count
 import com.raulshma.jellyplay.core.ui.generated.resources.detail_delete_count_with_freed
 import com.raulshma.jellyplay.core.ui.generated.resources.detail_delete_downloads_title
@@ -16,8 +14,6 @@ import com.raulshma.jellyplay.core.ui.generated.resources.detail_select_all
 import com.raulshma.jellyplay.core.ui.generated.resources.detail_select_episodes_to_remove
 
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -43,7 +39,6 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TriStateCheckbox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -52,17 +47,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.graphicsLayer
 import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
-import com.composables.icons.tabler.outline.ChevronDown
 import com.composables.icons.tabler.outline.Trash
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
-import com.raulshma.jellyplay.core.designsystem.theme.defaultContentSizeSpec
-import com.raulshma.jellyplay.core.designsystem.theme.defaultSpatialSpring
 import com.raulshma.jellyplay.core.designsystem.theme.expressiveListShape
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.formatBytes
@@ -224,77 +214,32 @@ fun DeleteDownloadedEpisodesSheet(
                 item(key = "season-${season.id}", contentType = "season") {
                     val triState = selection.triStateForSeason(season.id)
 
-                    val seasonBgColor by animateColorAsState(
-                        targetValue = if (isExpanded) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
-                        else MaterialTheme.colorScheme.surfaceContainer,
-                        animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
-                        label = "seasonBg",
-                    )
-
-                    val chevronRotation by animateFloatAsState(
-                        targetValue = if (isExpanded) 180f else 0f,
-                        animationSpec = defaultSpatialSpring(),
-                        label = "chevron",
-                    )
-
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .animateContentSize(animationSpec = defaultContentSizeSpec()),
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(ShapeCache.smooth16)
-                                .background(seasonBgColor)
-                                .clickable {
-                                    expandedSeasonIds = if (isExpanded) {
-                                        expandedSeasonIds - season.id
-                                    } else {
-                                        expandedSeasonIds + season.id
-                                    }
-                                }
-                                .padding(horizontal = 8.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            TriStateCheckbox(
-                                state = triState,
-                                onClick = { selection.toggleSeason(season.id) },
+                    SeasonHeaderRow(
+                        title = season.name.takeIf { it.isNotBlank() }
+                            ?: stringResource(Res.string.detail_season_default, season.seasonNumber ?: 1),
+                        subtitle = if (seasonEpisodes.isNotEmpty()) {
+                            pluralStringResource(
+                                Res.plurals.detail_episode_count,
+                                seasonEpisodes.size,
+                                seasonEpisodes.size,
                             )
-                            Spacer(Modifier.width(4.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = season.name.takeIf { it.isNotBlank() }
-                                        ?: stringResource(Res.string.detail_season_default, season.seasonNumber ?: 1),
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    fontWeight = FontWeight.SemiBold,
-                                )
-                                if (seasonEpisodes.isNotEmpty()) {
-                                    Text(
-                                        text = pluralStringResource(
-                                            Res.plurals.detail_episode_count,
-                                            seasonEpisodes.size,
-                                            seasonEpisodes.size,
-                                        ),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
+                        } else null,
+                        triState = triState,
+                        isExpanded = isExpanded,
+                        expandedContainerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f),
+                        onHeaderClick = {
+                            expandedSeasonIds = if (isExpanded) {
+                                expandedSeasonIds - season.id
+                            } else {
+                                expandedSeasonIds + season.id
                             }
-                            Icon(
-                                imageVector = Tabler.Outline.ChevronDown,
-                                contentDescription = stringResource(if (isExpanded) Res.string.detail_cd_collapse else Res.string.detail_cd_expand),
-                                modifier = Modifier
-                                    .size(20.dp)
-                                    .graphicsLayer { rotationZ = chevronRotation },
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
+                        },
+                        onCheckboxClick = { selection.toggleSeason(season.id) },
+                    )
                 }
 
                 if (isExpanded) {
+                    val selectedInSeason = selection.selectedForSeason(season.id)
                     itemsIndexed(
                         seasonEpisodes,
                         key = { _, episode -> "season-${season.id}-ep-${episode.id}" },
@@ -307,7 +252,6 @@ fun DeleteDownloadedEpisodesSheet(
                             modifier = Modifier
                                 .padding(start = 12.dp, end = 4.dp),
                         ) {
-                            val selectedInSeason = selection.selectedForSeason(season.id)
                             val isEpisodeSelected = episode.id in selectedInSeason
                             val shape = expressiveListShape(
                                 index = idx,

@@ -136,10 +136,11 @@ jobs:
           # Require BOTH artifacts, not any-of: a partial write (e.g. only
           # startup-prof.txt survived an emulator flake) still assembles a
           # release without the merged baseline profile, which is just as
-          # profile-less as an empty directory.
+          # profile-less as an empty directory. -s, not -f: a zero-byte
+          # artifact is just as profile-less as a missing one.
           missing=()
           for f in "$profile_dir/baseline-prof.txt" "$profile_dir/startup-prof.txt"; do
-            [ -f "$f" ] || missing+=("$f")
+            [ -s "$f" ] || missing+=("$f")
           done
           if [ ${#missing[@]} -ne 0 ]; then
             echo "::error::Missing baseline profile artifacts: ${missing[*]}"

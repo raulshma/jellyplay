@@ -181,20 +181,27 @@ object WidgetImageLoader {
     }
 
     /**
+     * Poster-cache key for a Continue-Watching row: the series id when the
+     * row is an episode, else the item id. Single source for the entry's
+     * [ContinueWatchingPosterEntry.imageId] AND the factory's getViewAt
+     * lookup, so the key rule cannot drift between the two.
+     */
+    fun continueWatchingPosterImageId(item: MediaItem): String = item.seriesId ?: item.id
+
+    /**
      * Canonical Continue-Watching poster rule (CONC-6): the CW factory's
      * onDataSetChanged preload and the broadcaster's snapshot prewarm must
-     * derive the SAME (image id, url) per row — image id is the series when
-     * the row is an episode, maxWidth pins the widget's single-column cell
-     * size. Returns the entry so the factory's posterCache key and the
-     * prewarmed url share one definition and can't drift; getViewAt's
-     * `item.seriesId ?: item.id` lookup key stays in sync with
-     * [ContinueWatchingPosterEntry.imageId].
+     * derive the SAME (image id, url) per row — image id comes from
+     * [continueWatchingPosterImageId], maxWidth pins the widget's
+     * single-column cell size. Returns the entry so the factory's
+     * posterCache key and the prewarmed url share one definition and can't
+     * drift.
      */
     fun continueWatchingPosterEntry(
         item: MediaItem,
         playbackRepository: PlaybackRepository,
     ): ContinueWatchingPosterEntry {
-        val imageId = item.seriesId ?: item.id
+        val imageId = continueWatchingPosterImageId(item)
         return ContinueWatchingPosterEntry(imageId, playbackRepository.getImageUrl(imageId, maxWidth = 300))
     }
 
