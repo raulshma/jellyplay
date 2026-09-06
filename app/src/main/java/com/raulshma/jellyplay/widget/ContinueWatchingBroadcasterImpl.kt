@@ -2,7 +2,10 @@ package com.raulshma.jellyplay.widget
 
 import android.content.Context
 import android.content.Intent
+import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.widget.ContinueWatchingBroadcaster
+import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
+import org.koin.mp.KoinPlatform
 
 /**
  * Sends an explicit-component broadcast to [ContinueWatchingWidget] so it
@@ -20,9 +23,36 @@ class ContinueWatchingBroadcasterImpl (
 ) : ContinueWatchingBroadcaster {
 
     override fun refreshContinueWatching() {
+        prewarmContinueWatchingPosters()
         val intent = Intent(ContinueWatchingWidget.ACTION_REFRESH).apply {
             setClassName(context.packageName, ContinueWatchingWidget::class.java.name)
         }
         context.sendBroadcast(intent)
+    }
+
+    /**
+     * CONC-6: fire-and-forget poster prewarm for the snapshot the CW factory
+     * is about to re-bind against. The data push itself (`setContinueWatching`)
+     * lives in the shared home refresher; this broadcast is the app-side
+     * signal that the snapshot changed, so it doubles as the prewarm hook.
+     * Derives the same (image id, url) pairs the factory will — via the
+     * shared [WidgetImageLoader.continueWatchingPosterEntry] rule, so the
+     * two paths cannot drift — and hands the urls to
+     * [WidgetImageLoader.prewarmPosters]. The prewarm never triggers a
+     * widget update itself; the broadcast in [refreshContinueWatching]
+     * remains the only rebind trigger.
+     */
+    private fun prewarmContinueWatchingPosters() {
+        runCatching {
+            val koin = KoinPlatform.getKoin() ?: return
+            val store: WidgetDataStore = koin.get()
+            val playbackRepository: PlaybackRepository = koin.get()
+            val urls = store.continueWatchingSnapshot().mapNotNull { item ->
+                WidgetImageLoader.continueWatchingPosterEntry(item, playbackRepository)
+                    .second
+                    .takeIf { it.isNotBlank() }
+            }
+            WidgetImageLoader.prewarmPosters(context, urls)
+        }
     }
 }

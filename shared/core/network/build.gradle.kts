@@ -80,9 +80,10 @@ kotlin {
             // anywhere in the repo — Koin constructs every type). The
             // dependency only keeps those annotations compiling.
             implementation(libs.javax.inject)
-            // dagger.Lazy ctor params on JellyfinApiEngine (deferred SDK +
-            // OkHttp construction off the synchronous Hilt graph).
-            implementation(libs.dagger)
+            // (BIN-8, audit: the plain dagger artifact that used to sit here
+            // existed only to source dagger.Lazy for JellyfinApiEngine's ctor
+            // — replaced by the local api/Lazy.kt fun interface. No other
+            // dagger artifact exists in the repo.)
         }
         getByName("jvmMain").dependencies {
             // Real org.json for the desktop target (see jvmShared note above);

@@ -25,10 +25,6 @@ composeMultiplatformMaterial3 = "1.11.0-alpha07"
 # (wasmJs stable since 4.0.0). Hand-written DSL modules — koin-annotations
 # deferred until its KSP line settles (kspWasmJs unverified).
 koin = "4.2.2"
-# Plain dagger artifact only — shared/core/network's JellyfinApiEngine ctor
-# takes dagger.Lazy (fed by a memoizing wrapper in NetworkKoinModules). All
-# Hilt artifacts left the repo with the wave-8 Hilt extinction.
-dagger = "2.60.1"
 navigation3 = "1.1.5"
 # JetBrains fork of navigation3-ui: google's -ui artifact ships Android plus
 # jvm/linux STUBS only (runtime throws "Implemented only in JetBrains fork");
@@ -98,7 +94,10 @@ junit = "4.13.2"
 junitVersion = "1.3.0"
 espressoCore = "3.7.0"
 mockk = "1.14.11"
-orgJson = "20240303"
+# org.json for the jvmShared websocket-event path (android resolves the same
+# classes from android.jar). Moved off the 2024 pin (audit BIN-10) — 2026 line
+# carries two years of parser fixes; both consumers get it via this ref.
+orgJson = "20260814"
 coroutinesTest = "1.11.0"
 robolectric = "4.16.1"
 androidxTestCore = "1.7.0"
@@ -192,13 +191,10 @@ koin-test = { group = "io.insert-koin", name = "koin-test", version.ref = "koin"
 koin-compose = { group = "io.insert-koin", name = "koin-compose", version.ref = "koin" }
 koin-compose-viewmodel = { group = "io.insert-koin", name = "koin-compose-viewmodel", version.ref = "koin" }
 
-# javax.inject (Hilt constructor-injection annotations, usable from non-Hilt modules)
+# javax.inject — compile-only vestige of the pre-Koin Hilt graph: only the
+# @Singleton/@Inject annotations on a few shared classes remain (all Hilt
+# processing left with the wave-8 Hilt extinction; Koin ignores them).
 javax-inject = { group = "javax.inject", name = "javax.inject", version = "1" }
-
-# Plain dagger artifact: dagger.Lazy ctor params on shared-module classes
-# (JellyfinApiEngine) need the type on the KMP compile classpath without
-# pulling an Android-only AAR into the jvm target.
-dagger = { group = "com.google.dagger", name = "dagger", version.ref = "dagger" }
 
 # Jellyfin SDK
 jellyfin-core = { group = "org.jellyfin.sdk", name = "jellyfin-core", version.ref = "jellyfinSdk" }

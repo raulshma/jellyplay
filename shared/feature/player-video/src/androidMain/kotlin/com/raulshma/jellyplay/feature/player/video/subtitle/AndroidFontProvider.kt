@@ -34,7 +34,11 @@ class AndroidFontProvider(
         File(context.cacheDir, "subtitle-fonts").apply { mkdirs() }
     }
 
-    /** Bundled fallback font, always present in the fonts dir. */
+    /**
+     * Bundled fallback font, always present in the fonts dir. Locale-scoped
+     * subset (en,de,es,fr,it,pt,ja,ko,zh) of "Droid Sans Fallback", regenerated
+     * via tools/font/subset_subfont.py.
+     */
     private val bundledFallback: File by lazy {
         File(fontsDir, "subfont.ttf").also { f ->
             if (!f.exists() || f.length() == 0L) {
@@ -128,14 +132,19 @@ class AndroidFontProvider(
         val key = "${fontFile.absolutePath}|${style.bold}|${style.italic}|$typefaceStyle"
         // Access-order LinkedHashMap touched from Main here and from IO in
         // [installUserFont] eviction — every read/write holds the map lock.
-        // The TTF parse inside getOrPut only runs on a miss, at most once per
-        // key, so the lock is never held across repeated expensive work.
+        // Cache lookup and insert hold the lock, but the disk IO + TTF parse
+        // of a first-use miss run outside it, so concurrent IO-thread cache
+        // work never queues behind a parse. A race may parse the same file
+        // twice; [Typeface] is immutable and only one instance is cached,
+        // so the observable behavior is unchanged.
         synchronized(typefaceCache) {
-            return typefaceCache.getOrPut(key) {
-                val base = runCatching { Typeface.createFromFile(fontFile) }
-                    .getOrDefault(Typeface.SANS_SERIF)
-                Typeface.create(base, typefaceStyle)
-            }
+            typefaceCache[key]?.let { return it }
+        }
+        val base = runCatching { Typeface.createFromFile(fontFile) }
+            .getOrDefault(Typeface.SANS_SERIF)
+        val typeface = Typeface.create(base, typefaceStyle)
+        synchronized(typefaceCache) {
+            return typefaceCache.getOrPut(key) { typeface }
         }
     }
 

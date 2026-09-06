@@ -55,6 +55,7 @@ import com.raulshma.jellyplay.di.KoinViewModelFactory
 import com.raulshma.jellyplay.navigation.JellyPlayApp
 import com.raulshma.jellyplay.shell.AppLockRedirect
 import com.raulshma.jellyplay.shell.AppLockState
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.koin.mp.KoinPlatform
 
@@ -90,11 +91,14 @@ class MainActivity : FragmentActivity() {
 
     private var backgroundedAt = 0L
 
-    // Set in onCreate before setContent: whether the one-time CastContext
-    // initialization succeeded. The hidden media-route button in setContent
-    // composes only on success so its setUpMediaRouteButton resolves the
-    // cached CastContext instead of re-triggering the Dynamite dex load.
-    private var castPreinitialized = false
+    // Flipped by the cast-init coroutine kicked off in onCreate just before
+    // setContent (STA-6): whether the one-time CastContext initialization
+    // succeeded. Held as plain mutableStateOf — NOT remember-cached at the
+    // read site — so the hidden media-route button in setContent composes the
+    // moment it flips true (a frame or two after the first composition), and
+    // its setUpMediaRouteButton resolves the cached CastContext instead of
+    // re-triggering the Dynamite dex load.
+    private var castPreinitialized by mutableStateOf(false)
 
     private val requestNotificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -119,21 +123,14 @@ class MainActivity : FragmentActivity() {
         // in landscape with no control to unlock it. UNSPECIFIED follows the
         // system auto-rotate setting, matching the fresh-install default.
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-        // Initialize the Cast SDK here on Main — getSharedInstance is
-        // main-thread-only, so the old Dispatchers.Default prewarm always
-        // threw (silently swallowed), leaving the first composed frame to
-        // pay the full Dynamite dex load mid-composition. Running it in
-        // onCreate, before setContent and while the splash starting-window
-        // still covers the screen, hides that one-time cost; the dex reads
-        // are third-party and unavoidable, so debug StrictMode permits them.
-        // Every later getSharedInstance caller (the hidden route button
-        // below, CastManager, GoogleCastStrategy) hits the cached singleton.
-        castPreinitialized = packageManager.hasSystemFeature("com.google.android.gms.cast") &&
-            runCatching {
-                withCastDiskReadsPermitted {
-                    com.google.android.gms.cast.framework.CastContext.getSharedInstance(this)
-                }
-            }.isSuccess
+        // The one-time CastContext initialization (Dynamite dex load +
+        // hasSystemFeature binder call) used to run synchronously here, before
+        // setContent, putting both straight into TTID — the splash cannot
+        // release until onCreate + the first composition finish. It now runs
+        // in the coroutine kicked off just before setContent below (STA-6);
+        // every later getSharedInstance caller (the hidden route button
+        // there, CastManager, GoogleCastStrategy) still hits the cached
+        // singleton.
         splashScreen.setKeepOnScreenCondition { viewModel.sessionCoordinator.isRestoring.value }
         // No custom setOnExitAnimationListener: the system default splash exit
         // is a clean cross-fade to the first composed frame. A manual listener
@@ -212,6 +209,28 @@ class MainActivity : FragmentActivity() {
             }
         }
 
+        // STA-6: the CastContext init, kicked off here so it runs CONCURRENTLY
+        // with setContent instead of serially before it — onCreate (and thus
+        // TTID) no longer pays the Dynamite dex load + hasSystemFeature binder
+        // call. Still on Main (getSharedInstance is main-thread-only, the API
+        // has no off-thread variant), but on Dispatchers.Main — NOT
+        // Main.immediate, which would execute this body inline inside onCreate
+        // itself (there are no suspension points before the CastContext call)
+        // and reproduce today's serial cost — the posted task interleaves with
+        // the first composed frames, and castPreinitialized flips the hidden
+        // 1dp route button in one or two frames. The dex reads stay wrapped in
+        // withCastDiskReadsPermitted: the StrictMode permit is thread-scoped
+        // and the coroutine still runs on Main, so debug builds keep
+        // permitting exactly those third-party reads (release installs no
+        // policy either way).
+        lifecycleScope.launch(Dispatchers.Main) {
+            castPreinitialized = packageManager.hasSystemFeature("com.google.android.gms.cast") &&
+                runCatching {
+                    withCastDiskReadsPermitted {
+                        com.google.android.gms.cast.framework.CastContext.getSharedInstance(this@MainActivity)
+                    }
+                }.isSuccess
+        }
         setContent {
             val preferences by viewModel.preferences.collectAsStateWithLifecycle()
             // The unlocked flag lives in the app-scoped holder (wave 20E) —
@@ -222,12 +241,17 @@ class MainActivity : FragmentActivity() {
                 var pinVerifying by rememberSaveable { mutableStateOf(false) }
             val context = androidx.compose.ui.platform.LocalContext.current
 
-            // Hidden Cast media-route button, composed only when the onCreate
-            // CastContext prewarm succeeded — so setUpMediaRouteButton
-            // resolves the cached singleton and does no dex I/O. When Cast is
-            // unavailable the branch is skipped outright, matching the old
-            // fallback plain View (nothing references the invisible button).
-            if (remember { castPreinitialized }) {
+            // Hidden Cast media-route button, composed only once the onCreate
+            // cast-init coroutine (kicked off just before setContent, STA-6)
+            // reports success — so setUpMediaRouteButton resolves the cached
+            // singleton and does no dex I/O. Reading castPreinitialized
+            // directly (no remember {}) subscribes this call site, so the
+            // button appears on the recomposition that lands the flip, a
+            // frame or two after the first composition. When Cast is
+            // unavailable (or not yet initialized) the branch is skipped
+            // outright, matching the old fallback plain View (nothing
+            // references the invisible button).
+            if (castPreinitialized) {
                 Box(
                     modifier = Modifier
                         .size(1.dp)

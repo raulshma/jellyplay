@@ -47,7 +47,7 @@ private const val SAVED_KEY_POSITION_MS = "video_player.saved_position_ms"
 private const val SAVED_KEY_PLAY_SESSION_ID = "video_player.saved_play_session_id"
 private const val SAVED_KEY_POSITION_PERSISTED_AT = "video_player.saved_position_persisted_at"
 
-/** Minimum position delta (ms) between throttled process-death persists. */
+/** Minimum wall-clock interval (ms) between throttled process-death persists. */
 private const val POSITION_PERSIST_MIN_INTERVAL_MS = 5_000L
 
 /**
@@ -366,10 +366,19 @@ internal class PlaybackSession(
     internal var lastSeekTimestamp: Long = 0L
 
     /**
-     * Last position (ms) written to the process-death persistence; used to
-     * throttle writes.
+     * Last position (ms) written to the process-death persistence; feeds the
+     * stop-report fallback when the engine reports 0 after STATE_ENDED.
      */
     internal var lastPersistedPositionMs: Long = Long.MIN_VALUE
+
+    /**
+     * Wall clock of the last process-death persist; the throttle key for
+     * [persistPlaybackPosition]. A wall-clock gate (not a position delta)
+     * keeps the write cadence fixed at
+     * [POSITION_PERSIST_MIN_INTERVAL_MS] regardless of playback speed —
+     * a position delta made 2× speed halve the interval between writes.
+     */
+    internal var lastPersistedAtMs: Long = 0L
 
     /**
      * Locally-allocated UUID play-session id — the fallback used until (and
@@ -450,7 +459,7 @@ internal class PlaybackSession(
      *     old position by the process-death play-session restore
      *     ([restoreOrAllocatePlaySessionId]);
      * 12. persistence-latch resets ([lastPersistedPositionMs],
-     *     [pendingSeekProgressJob]);
+     *     [lastPersistedAtMs], [pendingSeekProgressJob]);
      * 13. [SessionLifecycleHooks.clearTrickplay];
      * 14. [SessionLifecycleHooks.reattachSyncPlay] (conditional on step 7);
      * 15. start the [SessionLoadPipeline] and track it as [loadJob].
@@ -513,6 +522,7 @@ internal class PlaybackSession(
         // ticks (see onPlayheadSeeded) — seeding from the raw request ticks
         // missed the offline-mirror resume that resolution produces.
         lastPersistedPositionMs = Long.MIN_VALUE
+        lastPersistedAtMs = 0L
         pendingSeekProgressJob?.cancel()
         pendingSeekProgressJob = null
         hooks.clearTrickplay()
@@ -937,10 +947,15 @@ internal class PlaybackSession(
      */
     fun seekPersisted(positionMs: Long) {
         lastSeekPositionMs = positionMs
-        lastSeekTimestamp = System.currentTimeMillis()
+        val now = System.currentTimeMillis()
+        lastSeekTimestamp = now
         val itemId = playerSessionManager.sessionState.value.currentItemId ?: return
         lastPersistedPositionMs = positionMs
-        positionStore.persist(itemId, positionMs, currentPlaySessionId, System.currentTimeMillis())
+        // The seek just persisted the store; restart the tick throttle's
+        // wall-clock window so post-seek ticks inside the window don't
+        // immediately re-persist.
+        lastPersistedAtMs = now
+        positionStore.persist(itemId, positionMs, currentPlaySessionId, now)
         // The DB mirror is coalesced: rapid scrubbing no longer queues one
         // recordProgress per seek. The store snapshot above is already
         // immediate, and the throttled tick mirror catches up regardless.
@@ -951,14 +966,21 @@ internal class PlaybackSession(
     /**
      * Persists the current playback position so it survives process death.
      * Throttled to at most one write per [POSITION_PERSIST_MIN_INTERVAL_MS]
-     * unless [force] (e.g. an explicit seek). Also stashes the server session
-     * id so the post-restore stop-report pairs with the original start-report.
+     * of WALL CLOCK unless [force] (e.g. an explicit seek) — keying on
+     * wall clock rather than a position delta keeps the write cadence fixed
+     * regardless of playback speed (a delta gate wrote every 2.5 s at 2×);
+     * the accepted trade-off is that crash-resume granularity at >1× speed
+     * is ≤5 s wall-clock (coarser in content terms). Also stashes the server
+     * session id so the post-restore stop-report pairs with the original
+     * start-report.
      */
     fun persistPlaybackPosition(positionMs: Long, force: Boolean) {
-        if (!force && kotlin.math.abs(positionMs - lastPersistedPositionMs) < POSITION_PERSIST_MIN_INTERVAL_MS) return
+        val now = System.currentTimeMillis()
+        if (!force && now - lastPersistedAtMs < POSITION_PERSIST_MIN_INTERVAL_MS) return
         val itemId = playerSessionManager.sessionState.value.currentItemId ?: return
         lastPersistedPositionMs = positionMs
-        positionStore.persist(itemId, positionMs, currentPlaySessionId, System.currentTimeMillis())
+        lastPersistedAtMs = now
+        positionStore.persist(itemId, positionMs, currentPlaySessionId, now)
         // Mirror progress into the offline store so downloads render watched /
         // resume state while offline. No-op for non-downloaded items.
         val durationMs = playerSessionManager.engine?.durationMs ?: 0L

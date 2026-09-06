@@ -46,8 +46,8 @@ class LibraryApiClientImplTest {
     fun setup() {
         val jellyfin = mockk<Jellyfin>(relaxed = true)
         engine = JellyfinApiEngine(
-            jellyfinLazy = dagger.Lazy { jellyfin },
-            okHttpClientLazy = dagger.Lazy { OkHttpClient() },
+            jellyfinLazy = Lazy { jellyfin },
+            okHttpClientLazy = Lazy { OkHttpClient() },
             deviceProfileProvider = DeviceProfileProvider(DesktopDeviceCodecCapabilities()),
             addressRouter = ServerAddressRouter(),
         )

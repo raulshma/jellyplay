@@ -36,8 +36,12 @@ class LicensesViewModel(
                     libraries = emptyList()
                     error = getString(Res.string.settings_licenses_load_error)
                 } else {
-                    val parsed = Libs.Builder().withJson(jsonText).build()
-                    libraries = parsed.libraries.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
+                    // Parse + sort off the main thread — the aboutlibraries
+                    // JSON is ~167 KB, heavy enough to drop a frame on open.
+                    libraries = withContext(Dispatchers.Default) {
+                        val parsed = Libs.Builder().withJson(jsonText).build()
+                        parsed.libraries.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
+                    }
                 }
             } catch (_: Exception) {
                 libraries = emptyList()

@@ -14,10 +14,15 @@ import coil3.request.ImageRequest
 import coil3.request.allowHardware
 import coil3.toBitmap
 import android.util.LruCache
+import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.model.MediaItem
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -67,6 +72,14 @@ object WidgetImageLoader {
     private val posterMemoryCache: LruCache<String, Bitmap> = object : LruCache<String, Bitmap>(6 * 1024 * 1024) {
         override fun sizeOf(key: String, value: Bitmap): Int = value.byteCount
     }
+
+    // Background prewarm scope (CONC-6): fire-and-forget poster fetches kicked
+    // from the widget snapshot-push paths, so a later factory
+    // `onDataSetChanged` resolves from [posterMemoryCache] instead of paying
+    // its bounded blocking preload against a cold server. Process-scoped like
+    // the cache itself; SupervisorJob so one failed URL never cancels the
+    // rest of a prewarm batch.
+    private val prewarmScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     suspend fun loadPoster(context: Context, url: String?, cornerRadiusDp: Float = 10f): Bitmap? {
         if (url.isNullOrBlank()) return null
@@ -134,6 +147,44 @@ object WidgetImageLoader {
                     .toMap()
             }
         } ?: emptyMap()
+    }
+
+    /**
+     * Fire-and-forget [posterMemoryCache] prewarm (CONC-6) for the widget
+     * snapshot-push paths: decodes the same URLs, at the same target size and
+     * default corner radius, into the same cache the factories read — so a
+     * later factory bind resolves from memory. Purely additive warm-up: the
+     * factories' own bounded `onDataSetChanged` preload remains the fallback
+     * whenever the prewarm hasn't landed (or was evicted). Unlike
+     * [preloadPosters] there is no batch deadline — nobody waits on this —
+     * but each URL is still individually bounded by
+     * [WIDGET_LOAD_TIMEOUT_MS] via [loadPoster], and the same
+     * [WIDGET_PRELOAD_MAX_URLS] cap applies. Never triggers widget updates
+     * itself; cache hits are free, so repeat calls are cheap.
+     */
+    fun prewarmPosters(context: Context, urls: Collection<String>) {
+        val distinct = urls.filter { it.isNotBlank() }.distinct().take(WIDGET_PRELOAD_MAX_URLS)
+        if (distinct.isEmpty()) return
+        prewarmScope.launch {
+            distinct.map { url -> async { loadPoster(context, url) } }.awaitAll()
+        }
+    }
+
+    /**
+     * Canonical Continue-Watching poster rule (CONC-6): the CW factory's
+     * onDataSetChanged preload and the broadcaster's snapshot prewarm must
+     * derive the SAME (image id, url) per row — image id is the series when
+     * the row is an episode, maxWidth pins the widget's single-column cell
+     * size. Returns the pair so the factory's posterCache key and the
+     * prewarmed url share one definition and can't drift; getViewAt's
+     * `item.seriesId ?: item.id` lookup key stays in sync with `.first`.
+     */
+    fun continueWatchingPosterEntry(
+        item: MediaItem,
+        playbackRepository: PlaybackRepository,
+    ): Pair<String, String> {
+        val imageId = item.seriesId ?: item.id
+        return imageId to playbackRepository.getImageUrl(imageId, maxWidth = 300)
     }
 
     private fun applyRoundedCorners(context: Context, bitmap: Bitmap, cornerRadiusDp: Float = 10f): Bitmap {

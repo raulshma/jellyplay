@@ -40,12 +40,17 @@ import kotlin.test.assertTrue
  *  - loadGuide success/failure populates channels/programs/grid vs error;
  *  - confirmRecord drives Confirm → Requesting → Success/Error and reloads
  *    the guide so the timer badges reflect the new timer;
- *  - the auto-refresh loop refetches at exactly the 5-minute virtual mark.
+ *  - the auto-refresh loop (started explicitly by these tests since the EPG
+ *    screen now gates it on STARTED) refetches at exactly the 5-minute
+ *    virtual mark.
  *
  * The infinite auto-refresh/now-tick loops park on delays, so tests only ever
  * [runCurrent] / [advanceTimeBy] — never `advanceUntilIdle`, which would spin
  * forever on the rescheduling loops. The now-tick loop itself is not asserted:
  * it stamps the REAL clock (`Instant.now()`), not the virtual scheduler's.
+ * rebuildGrid hops to Dispatchers.Default (a real thread under jvmTest), so
+ * tests [settleDefaultHop] after any action that rebuilds the grid before
+ * asserting on gridData/isLoading.
  * Because `Dispatchers.setMain` installs a `TestDispatcher`, `runTest` ADOPTS
  * its scheduler (verified: `testScheduler === mainDispatcher.scheduler`), so
  * the VM's loops ride the same scheduler the tests pump — and every test runs
@@ -79,7 +84,7 @@ class EpgViewModelTest {
         Dispatchers.resetMain()
     }
 
-    /** Runs the init loadGuide; the refresh/now-tick loops park on their delays. */
+    /** Runs the init loadGuide; any auto-refresh loop a test starts parks on its delay. */
     private fun TestScope.createViewModel(): EpgViewModel {
         val vm = EpgViewModel(mediaRepository)
         createdViewModels += vm
@@ -97,6 +102,21 @@ class EpgViewModelTest {
      */
     private fun EpgViewModel.stopLoops() {
         viewModelScope.cancel()
+    }
+
+    /**
+     * Gives a pending grid rebuild's `withContext(Dispatchers.Default)` hop
+     * (a real thread under jvmTest) a few beats to land back on the test
+     * scheduler — the resumption is queued only after the hop finishes, so a
+     * bare [runCurrent] can drain the queue before it. Never advances virtual
+     * time (`advanceUntilIdle` would spin forever on the rescheduling loops);
+     * same idea as OfflineLibraryViewModelTest's settle().
+     */
+    private fun TestScope.settleDefaultHop() {
+        repeat(5) {
+            Thread.sleep(20)
+            testScheduler.runCurrent()
+        }
     }
 
     /**
@@ -166,6 +186,7 @@ class EpgViewModelTest {
             Result.success(EpgGuide(channels = listOf(channel), programs = listOf(airing)))
 
         val vm = createViewModel()
+        settleDefaultHop()
 
         assertEquals(listOf(channel), vm.channels)
         assertEquals(listOf(airing), vm.programs)
@@ -272,6 +293,7 @@ class EpgViewModelTest {
     @Test
     fun autoRefresh_refetches_the_guide_at_the_5_minute_mark_only() = vmTest {
         val vm = createViewModel()
+        vm.startAutoRefresh()
         coVerify(exactly = 1) { mediaRepository.getLiveTvGuide(any(), any(), any(), any()) }
 
         // 4:59.999 — not yet.
@@ -284,7 +306,10 @@ class EpgViewModelTest {
         mainDispatcher.scheduler.runCurrent()
         coVerify(exactly = 2) { mediaRepository.getLiveTvGuide(any(), any(), any(), any()) }
 
-        // And it keeps going on schedule.
+        // And it keeps going on schedule. The hop settle lets the second loop
+        // iteration finish — its rebuildGrid suspends on Dispatchers.Default —
+        // before the next delay is scheduled.
+        settleDefaultHop()
         mainDispatcher.scheduler.advanceTimeBy(5 * 60 * 1000L)
         mainDispatcher.scheduler.runCurrent()
         coVerify(exactly = 3) { mediaRepository.getLiveTvGuide(any(), any(), any(), any()) }
@@ -294,12 +319,14 @@ class EpgViewModelTest {
     @Test
     fun autoRefresh_updates_the_window_and_grid_with_the_fresh_guide() = vmTest {
         val vm = createViewModel()
+        vm.startAutoRefresh()
         val channel = LiveTvChannel(id = "chan-9", name = "Fresh")
         coEvery { mediaRepository.getLiveTvGuide(any(), any(), any(), any()) } returns
             Result.success(EpgGuide(channels = listOf(channel), programs = emptyList()))
 
         mainDispatcher.scheduler.advanceTimeBy(5 * 60 * 1000L)
         mainDispatcher.scheduler.runCurrent()
+        settleDefaultHop()
 
         assertEquals(listOf(channel), vm.channels)
         assertEquals(listOf("chan-9"), vm.gridData.rows.map { it.channel.id })

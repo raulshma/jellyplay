@@ -31,16 +31,19 @@ import javax.inject.Singleton
 
 @Singleton
 class JellyfinApiEngine @Inject constructor(
-    // dagger.Lazy defers construction of both the Jellyfin SDK instance and
-    // the shared OkHttpClient off the synchronous Hilt graph: MainViewModel's
+    // Lazy ctor params (the local seam in Lazy.kt, audit BIN-8 — this used
+    // to be dagger.Lazy, back when a Hilt graph constructed this class)
+    // defer construction of both the Jellyfin SDK instance and the shared
+    // OkHttpClient off the synchronous Koin graph: MainViewModel's
     // constructor chain resolves this engine on the main thread before
-    // setContent, and provideJellyfin/provideOkHttpClient both do real work
-    // (DataStore-backed device-id read, PackageManager binder call, disk cache
-    // mkdirs). First .get() happens inside suspend repository code well after
-    // ServerIdentityStore.identity (Eagerly-started) has populated, so the
-    // runBlocking fallback in provideJellyfin never fires on the main thread.
-    private val jellyfinLazy: dagger.Lazy<Jellyfin>,
-    private val okHttpClientLazy: dagger.Lazy<OkHttpClient>,
+    // setContent, and the Jellyfin/OkHttpClient Koin definitions both do
+    // real work (DataStore-backed device-id read, PackageManager binder
+    // call, disk cache mkdirs). First .get() happens inside suspend
+    // repository code well after ServerIdentityStore.identity (Eagerly-
+    // started) has populated, so the ensureDeviceId() runBlocking fallbacks
+    // in the platform network modules never fire on the main thread.
+    private val jellyfinLazy: Lazy<Jellyfin>,
+    private val okHttpClientLazy: Lazy<OkHttpClient>,
     private val deviceProfileProvider: DeviceProfileProvider,
     private val addressRouter: ServerAddressRouter,
 ) {

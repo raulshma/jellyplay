@@ -83,6 +83,8 @@ import okhttp3.OkHttpClient
 import okio.Path.Companion.toPath
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.koin.core.context.startKoin
@@ -112,6 +114,17 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
     // memoized instance the rest of the graph sees).
     private val okHttpClient: OkHttpClient by lazyFromKoin()
     private val networkOfflineStore: com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore by lazyFromKoin()
+    // STA-3 (2026-09 perf audit): resolved ONLY inside the IO prewarm block
+    // below (same deferred-construction pattern as networkOfflineStore above).
+    // ServerIdentityStore.identity is stateIn(Eagerly) on Dispatchers.Default,
+    // so on a first-launch cold start the network single's `identity.value
+    // .deviceId ?: runBlocking { ensureDeviceId() }` fallback
+    // (AndroidNetworkModule) could win the race against that eager DataStore
+    // read and block MainViewModel construction on main. The prewarm calls the
+    // idempotent ensureDeviceId() itself and awaits the published id, so the
+    // runBlocking branch never fires — same UUID either way, and DataStore
+    // serializes the (first-launch-only) write.
+    private val serverIdentityStore: com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore by lazyFromKoin()
     // (Wave 7C: the FontProvider/VideoStreamCache prewarm Providers that used
     // to live here left with the player-video migration — both impls are
     // Koin-owned in shared/feature/player-video's androidPlayerVideoModule, so
@@ -373,21 +386,64 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
             )
         }
         super.onCreate()
-        // Critical path: audio + widget updaters (no dependency on the groups
-        // below). Also pre-warms (a) the network-offline DataStore slice — the
-        // real persisted read happens in the store's eager stateIn upstream,
-        // this keeps the flow warm for the imageLoader's lazily-sized DiskCache —
-        // and (b) the subtitle font byte cache so the first ASS playback doesn't
-        // read fonts on Main.
+        // Critical-path prewarms: (a) the network-offline DataStore slice —
+        // the real persisted read happens in the store's eager stateIn
+        // upstream, this keeps the flow warm for the imageLoader's
+        // lazily-sized DiskCache — (b) the identity slice (STA-3, see the
+        // field comment above), and (c) the subtitle font byte cache and
+        // video stream cache so the first ASS playback doesn't read fonts
+        // on Main.
+        //
+        // STA-5 (2026-09 perf audit): this block used to await, strictly in
+        // order, offline read → font prewarm → stream-cache prewarm → audio
+        // start → widget start — off-main but serialized. The two cache
+        // prewarms now run concurrently (no shared state between the
+        // font byte cache and the video stream cache), and the audio+widget
+        // group moved to its own sibling launch below (this block's own
+        // original comment: "no dependency on the groups below"). The DataStore
+        // prewarms stay FIRST in this coroutine: the Coil DiskCache sizing in
+        // newImageLoader reads networkOffline.value lazily on the first
+        // networked image write, and the documented lazily-sized-DiskCache race
+        // needs this read to win that — both slices launch ahead of the async
+        // prewarms, preserving exactly the head start they had before.
         applicationScope.launch(Dispatchers.IO) {
             runCatching { networkOfflineStore.networkOffline.first() }
+            // STA-3: NOT the audit's literal `identity.first()` — a
+            // stateIn(Eagerly) StateFlow always has its initial value
+            // available, so a plain first() returns the all-null placeholder
+            // instantly during the DataStore-read window and closes nothing;
+            // and a bare `first { deviceId != null }` would hang forever on a
+            // fresh install (nothing writes DEVICE_ID until ensureDeviceId
+            // runs). Calling the idempotent ensureDeviceId() here — the same
+            // call the network single's runBlocking fallback would make —
+            // reads-or-persists the UUID off main, and awaiting the non-null
+            // publication guarantees every later `.value.deviceId` read in
+            // AndroidNetworkModule resolves the fast path.
+            runCatching {
+                serverIdentityStore.ensureDeviceId()
+                serverIdentityStore.identity.first { !it.deviceId.isNullOrEmpty() }
+            }
             // Wave 7C: Koin-owned since the player-video migration (the Hilt
             // javax.inject.Provider fields died with the module flip); still
             // resolved here, inside the IO launcher, so the font-asset copy +
             // cache-index open stay off the cold-start critical path.
             val koin = org.koin.mp.KoinPlatform.getKoin()
-            runCatching { koin?.get<com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider>()?.prewarm() }
-            runCatching { koin?.get<com.raulshma.jellyplay.feature.player.video.engine.VideoStreamCache>()?.prewarm() }
+            coroutineScope {
+                // runCatching stays INSIDE each async so a failed prewarm
+                // neither cancels the sibling nor fails the outer launch —
+                // the same per-call swallow the sequential runCatching chain
+                // had.
+                async { runCatching { koin?.get<com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider>()?.prewarm() } }
+                async { runCatching { koin?.get<com.raulshma.jellyplay.feature.player.video.engine.VideoStreamCache>()?.prewarm() } }
+            }
+        }
+        // STA-5: the audio + widget updaters — launched as a sibling of the
+        // prewarm block above instead of serializing behind it. Resolves the
+        // same lazy fields as before (AudioPlaybackManager's 14-dep graph +
+        // Room queue restore, then NowPlayingWidgetUpdater), in the same
+        // order, just no longer gated on the DataStore reads and cache
+        // prewarms finishing first.
+        applicationScope.launch(Dispatchers.IO) {
             audioPlaybackManager.start()
             nowPlayingWidgetUpdater.start()
         }

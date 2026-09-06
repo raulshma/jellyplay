@@ -159,6 +159,20 @@ private fun ArtistDetailContent(
     val albumCardWidth = if (isExpanded) 180.dp else 150.dp
     val backgroundColorState = rememberScreenBackgroundColorState()
 
+    // Header scrim rebuilt only when the theme surface colour changes, not on
+    // every recomposition (the remembered-fadeBrush pattern from the detail screens).
+    val surfaceColor = androidx.compose.material3.MaterialTheme.colorScheme.surface
+    val headerScrimBrush = remember(surfaceColor) {
+        Brush.verticalGradient(
+            colors = listOf(
+                surfaceColor.copy(alpha = 0.3f),
+                Color.Transparent,
+                surfaceColor.copy(alpha = 0.7f),
+                surfaceColor,
+            )
+        )
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -177,16 +191,7 @@ private fun ArtistDetailContent(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(if (adaptiveInfo.isLandscape && isExpanded) 220.dp else 300.dp)
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            androidx.compose.material3.MaterialTheme.colorScheme.surface.copy(alpha = 0.3f),
-                            Color.Transparent,
-                            androidx.compose.material3.MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
-                            androidx.compose.material3.MaterialTheme.colorScheme.surface,
-                        )
-                    )
-                )
+                .background(headerScrimBrush)
         )
 
         CircleBgBackButton(
@@ -330,15 +335,18 @@ private fun AlbumCard(
     val isSoothing = LocalIsSoothingTheme.current
     val isAurora = com.raulshma.jellyplay.core.designsystem.theme.LocalThemeVariant.current ==
         com.raulshma.jellyplay.core.designsystem.theme.ThemeVariant.AURORA
+    // Synthwave gradient-border brush rebuilt only when the palette changes, not
+    // on every card recomposition — keyed on BOTH accent colours so theme
+    // switches rebuild it.
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val secondaryColor = MaterialTheme.colorScheme.secondary
+    val synthwaveBorderBrush = remember(primaryColor, secondaryColor) {
+        Brush.linearGradient(colors = listOf(primaryColor, secondaryColor))
+    }
     val borderModifier = when {
         isSynthwave -> Modifier.border(
             width = 1.5.dp,
-            brush = Brush.linearGradient(
-                colors = listOf(
-                    MaterialTheme.colorScheme.primary,
-                    MaterialTheme.colorScheme.secondary
-                )
-            ),
+            brush = synthwaveBorderBrush,
             shape = ShapeCache.smooth8
         )
         isSoothing -> Modifier.border(

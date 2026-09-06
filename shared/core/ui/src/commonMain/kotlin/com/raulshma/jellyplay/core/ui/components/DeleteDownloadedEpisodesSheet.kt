@@ -31,7 +31,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
@@ -207,152 +207,169 @@ fun DeleteDownloadedEpisodesSheet(
         Spacer(Modifier.height(8.dp))
 
         // ── Seasons + episodes ──
+        // The season header and each expanded season's episode rows are
+        // individual keyed items so an expanded 100+ episode season composes
+        // only its visible rows instead of one giant unvirtualized item.
+        // Episode keys are season-scoped because expandedSeasonIds is a set —
+        // multiple seasons can be expanded at once.
         LazyColumn(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            items(seasons, key = { it.id }, contentType = { "season" }) { season ->
+            seasons.forEach { season ->
                 val isExpanded = season.id in expandedSeasonIds
                 val seasonEpisodes = episodes[season.id].orEmpty()
-                val selectedInSeason = selection.selectedForSeason(season.id)
-                val triState = selection.triStateForSeason(season.id)
 
-                val seasonBgColor by animateColorAsState(
-                    targetValue = if (isExpanded) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
-                    else MaterialTheme.colorScheme.surfaceContainer,
-                    animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
-                    label = "seasonBg",
-                )
+                item(key = "season-${season.id}", contentType = "season") {
+                    val triState = selection.triStateForSeason(season.id)
 
-                val chevronRotation by animateFloatAsState(
-                    targetValue = if (isExpanded) 180f else 0f,
-                    animationSpec = defaultSpatialSpring(),
-                    label = "chevron",
-                )
+                    val seasonBgColor by animateColorAsState(
+                        targetValue = if (isExpanded) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
+                        else MaterialTheme.colorScheme.surfaceContainer,
+                        animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
+                        label = "seasonBg",
+                    )
 
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .animateContentSize(animationSpec = defaultContentSizeSpec()),
-                ) {
-                    Row(
+                    val chevronRotation by animateFloatAsState(
+                        targetValue = if (isExpanded) 180f else 0f,
+                        animationSpec = defaultSpatialSpring(),
+                        label = "chevron",
+                    )
+
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(ShapeCache.smooth16)
-                            .background(seasonBgColor)
-                            .clickable {
-                                expandedSeasonIds = if (isExpanded) {
-                                    expandedSeasonIds - season.id
-                                } else {
-                                    expandedSeasonIds + season.id
+                            .animateContentSize(animationSpec = defaultContentSizeSpec()),
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(ShapeCache.smooth16)
+                                .background(seasonBgColor)
+                                .clickable {
+                                    expandedSeasonIds = if (isExpanded) {
+                                        expandedSeasonIds - season.id
+                                    } else {
+                                        expandedSeasonIds + season.id
+                                    }
+                                }
+                                .padding(horizontal = 8.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            TriStateCheckbox(
+                                state = triState,
+                                onClick = { selection.toggleSeason(season.id) },
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = season.name.takeIf { it.isNotBlank() }
+                                        ?: stringResource(Res.string.detail_season_default, season.seasonNumber ?: 1),
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                                if (seasonEpisodes.isNotEmpty()) {
+                                    Text(
+                                        text = pluralStringResource(
+                                            Res.plurals.detail_episode_count,
+                                            seasonEpisodes.size,
+                                            seasonEpisodes.size,
+                                        ),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
                                 }
                             }
-                            .padding(horizontal = 8.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        TriStateCheckbox(
-                            state = triState,
-                            onClick = { selection.toggleSeason(season.id) },
-                        )
-                        Spacer(Modifier.width(4.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = season.name.takeIf { it.isNotBlank() }
-                                    ?: stringResource(Res.string.detail_season_default, season.seasonNumber ?: 1),
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                fontWeight = FontWeight.SemiBold,
+                            Icon(
+                                imageVector = Tabler.Outline.ChevronDown,
+                                contentDescription = stringResource(if (isExpanded) Res.string.detail_cd_collapse else Res.string.detail_cd_expand),
+                                modifier = Modifier
+                                    .size(20.dp)
+                                    .graphicsLayer { rotationZ = chevronRotation },
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
-                            if (seasonEpisodes.isNotEmpty()) {
-                                Text(
-                                    text = pluralStringResource(
-                                        Res.plurals.detail_episode_count,
-                                        seasonEpisodes.size,
-                                        seasonEpisodes.size,
-                                    ),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
                         }
-                        Icon(
-                            imageVector = Tabler.Outline.ChevronDown,
-                            contentDescription = stringResource(if (isExpanded) Res.string.detail_cd_collapse else Res.string.detail_cd_expand),
-                            modifier = Modifier
-                                .size(20.dp)
-                                .graphicsLayer { rotationZ = chevronRotation },
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
                     }
+                }
 
-                    if (isExpanded) {
+                if (isExpanded) {
+                    itemsIndexed(
+                        seasonEpisodes,
+                        key = { _, episode -> "season-${season.id}-ep-${episode.id}" },
+                        contentType = { _, _ -> "episode" },
+                    ) { idx, episode ->
+                        // The horizontal inset replaces the padding the Column
+                        // around the episode list used to apply; the
+                        // LazyColumn's 4 dp item spacing supplies the rest.
                         Column(
                             modifier = Modifier
-                                .padding(start = 12.dp, top = 4.dp, end = 4.dp, bottom = 4.dp),
+                                .padding(start = 12.dp, end = 4.dp),
                         ) {
-                            seasonEpisodes.forEachIndexed { idx, episode ->
-                                val isEpisodeSelected = episode.id in selectedInSeason
-                                val shape = expressiveListShape(
-                                    index = idx,
-                                    count = seasonEpisodes.size,
-                                    outerRadius = 14.dp,
-                                    innerRadius = 8.dp,
-                                )
+                            val selectedInSeason = selection.selectedForSeason(season.id)
+                            val isEpisodeSelected = episode.id in selectedInSeason
+                            val shape = expressiveListShape(
+                                index = idx,
+                                count = seasonEpisodes.size,
+                                outerRadius = 14.dp,
+                                innerRadius = 8.dp,
+                            )
 
-                                val episodeBgColor by animateColorAsState(
-                                    targetValue = if (isEpisodeSelected) {
-                                        MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)
-                                    } else {
-                                        androidx.compose.ui.graphics.Color.Transparent
-                                    },
-                                    animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
-                                    label = "epBg",
-                                )
+                            val episodeBgColor by animateColorAsState(
+                                targetValue = if (isEpisodeSelected) {
+                                    MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)
+                                } else {
+                                    androidx.compose.ui.graphics.Color.Transparent
+                                },
+                                animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
+                                label = "epBg",
+                            )
 
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(shape)
-                                        .background(episodeBgColor)
-                                        .clickable {
-                                            selection.toggleEpisode(season.id, episode.id)
-                                        }
-                                        .padding(horizontal = 8.dp, vertical = 6.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    Checkbox(
-                                        checked = isEpisodeSelected,
-                                        onCheckedChange = null,
-                                        colors = CheckboxDefaults.colors(
-                                            checkedColor = MaterialTheme.colorScheme.error,
-                                            uncheckedColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        ),
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(shape)
+                                    .background(episodeBgColor)
+                                    .clickable {
+                                        selection.toggleEpisode(season.id, episode.id)
+                                    }
+                                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Checkbox(
+                                    checked = isEpisodeSelected,
+                                    onCheckedChange = null,
+                                    colors = CheckboxDefaults.colors(
+                                        checkedColor = MaterialTheme.colorScheme.error,
+                                        uncheckedColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    ),
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = buildString {
+                                            episode.episodeNumber?.let { append("E$it. ") }
+                                            append(episode.name)
+                                        },
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurface,
                                     )
-                                    Spacer(Modifier.width(8.dp))
-                                    Column(modifier = Modifier.weight(1f)) {
+                                    episode.runTimeTicks?.let { ticks ->
+                                        val minutes = ticks / 600_000_000
                                         Text(
-                                            text = buildString {
-                                                episode.episodeNumber?.let { append("E$it. ") }
-                                                append(episode.name)
-                                            },
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = MaterialTheme.colorScheme.onSurface,
+                                            text = "${minutes}m",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         )
-                                        episode.runTimeTicks?.let { ticks ->
-                                            val minutes = ticks / 600_000_000
-                                            Text(
-                                                text = "${minutes}m",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            )
-                                        }
                                     }
                                 }
                             }
                         }
+                    }
 
+                    item(key = "season-${season.id}-divider", contentType = "divider") {
                         HorizontalDivider(
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
                             color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),

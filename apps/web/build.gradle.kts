@@ -1,5 +1,7 @@
 @file:OptIn(ExperimentalWasmDsl::class)
 
+import java.util.zip.GZIPOutputStream
+
 import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
 
 plugins {
@@ -188,4 +190,83 @@ configurations.all {
             .using(module(libs.jb.navigation3.ui.get().toString()))
             .because("google navigation3-ui has no web artifacts; JB fork publishes the wasm klib")
     }
+}
+
+// ---------------------------------------------------------------------------
+// Production-bundle precompression (audit BIN-5b) + binaryen status (BIN-5a).
+//
+// BIN-5a — deliberately NO binaryenArgs override: KGP 2.3.21 already seeds
+// every BinaryenExec task with an aggressive default pipeline (verified by
+// disassembling kotlin-gradle-plugin-2.3.21: BinaryenExec's constructor
+// copies BinaryenConfig.binaryenArgs), namely
+//   --enable-gc --enable-reference-types --enable-exception-handling
+//   --enable-bulk-memory --enable-nontrapping-float-to-int --closed-world
+//   --no-inline=... (x3) --inline-functions-with-loops --traps-never-happen
+//   --fast-math --type-ssa -O3 --gufa -O3 --type-merging -O3 -Oz
+// which already exceeds the audit's suggested -O3/--shrink-level=2/
+// --closed-world tuning. There is no ADD-only argument left worth risk.
+//
+// BIN-5b — kmp-release.yml zips build/dist/wasmJs/productionExecutable
+// verbatim, so self-hosters who unzip it lose every byte of wire
+// compression unless their server compresses on the fly. This task writes
+// sibling <name>.gz sidecars for every *.wasm / *.js / *.css in the
+// distribution (originals untouched) so a static file server can serve
+// them with zero per-request cost:
+//   nginx:  gzip_static on;      caddy:  file_server precompressed
+// (GH-Pages-style hosts without gzip_static simply ignore the extras.)
+// Wired BOTH ways: a finalizer of wasmJsBrowserDistribution (local runs get
+// the sidecars automatically) and a dependsOn from the task itself, so the
+// standalone `./gradlew :apps:web:precompressWasmDist` invocation the
+// release lane uses builds the distribution first when it is not there
+// yet. Always re-runs (gzip of a rebuilt dist is cheap; a cached PASS
+// would serve stale sidecars after an incremental rebuild) — same policy
+// as :app:verifyPhoneDebugComposeResources.
+// ---------------------------------------------------------------------------
+abstract class PrecompressWasmDistTask : DefaultTask() {
+    /** apps/web/build/dist/wasmJs/productionExecutable — what wasmJsBrowserDistribution emits. */
+    @get:Internal
+    abstract val distDir: DirectoryProperty
+
+    @TaskAction
+    fun compress() {
+        val dir = distDir.get().asFile
+        if (!dir.isDirectory) {
+            throw GradleException(
+                "precompressWasmDist: distribution directory $dir does not exist — " +
+                    "run :apps:web:wasmJsBrowserDistribution first"
+            )
+        }
+        var written = 0
+        dir.walkTopDown()
+            .filter { it.isFile && !it.name.endsWith(".gz") && it.extension in setOf("wasm", "js", "css") }
+            .forEach { file ->
+                val target = file.resolveSibling("${file.name}.gz")
+                file.inputStream().use { input ->
+                    GZIPOutputStream(target.outputStream().buffered()).use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                written++
+            }
+        if (written == 0) {
+            throw GradleException(
+                "precompressWasmDist: no *.wasm/*.js/*.css found under $dir — " +
+                    "distribution layout changed?"
+            )
+        }
+        logger.lifecycle("precompressWasmDist: wrote $written .gz sidecar(s) under $dir")
+    }
+}
+
+val precompressWasmDist = tasks.register<PrecompressWasmDistTask>("precompressWasmDist") {
+    group = "build"
+    description = "gzip sidecars (*.wasm/*.js/*.css -> <name>.gz) inside the production wasm " +
+        "distribution — for self-hosters serving them via nginx gzip_static / Caddy precompressed."
+    dependsOn("wasmJsBrowserDistribution")
+    distDir.set(layout.buildDirectory.dir("dist/wasmJs/productionExecutable"))
+    outputs.upToDateWhen { false }
+}
+
+tasks.named("wasmJsBrowserDistribution") {
+    finalizedBy(precompressWasmDist)
 }

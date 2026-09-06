@@ -99,6 +99,12 @@ fun AlbumDetailScreen(
         viewModel.loadAlbum(albumId)
     }
 
+    // Stable URL-builder refs (MediaDetailScreen's rememberedGetImageUrl idiom) so
+    // AlbumDetailContent can skip recomposition while trackDownloads re-emits a
+    // fresh Map on every download-progress tick.
+    val rememberedGetImageUrl = remember(viewModel) { { id: String -> viewModel.getImageUrl(id) } }
+    val rememberedGetBackdropUrl = remember(viewModel) { { id: String -> viewModel.getBackdropUrl(id) } }
+
     // One collected mix snapshot drives both the isStartingMix progress gate
     // and the first-track navigation one-shot (InstantMixStateHolder fold).
     val mixState by viewModel.mixState.collectAsStateWithLifecycle()
@@ -142,8 +148,8 @@ fun AlbumDetailScreen(
                     detail = viewModel.detail!!,
                     tracks = viewModel.tracks,
                     trackDownloads = trackDownloads,
-                    getImageUrl = { viewModel.getImageUrl(it) },
-                    getBackdropUrl = { viewModel.getBackdropUrl(it) },
+                    getImageUrl = rememberedGetImageUrl,
+                    getBackdropUrl = rememberedGetBackdropUrl,
                     onTrackClick = onTrackClick,
                     onPlayAlbum = { tracks, startIndex ->
                         viewModel.playAlbum(tracks, startIndex)

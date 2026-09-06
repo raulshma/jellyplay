@@ -18,6 +18,12 @@ internal object WidgetPersistHelper {
     ) {
         val previous = store.libraryWidgetItems.first()
         val previousVersion = store.libraryWidgetVersion.first()
+        // CONC-6: pre-warm the poster cache for the freshly pushed snapshot
+        // (fire-and-forget, off this worker's dispatcher) so the next factory
+        // bind resolves from memory instead of the ≤2 s blocking preload in
+        // onDataSetChanged. Same URLs the factory will preload; runs on the
+        // unchanged-content path too — cache hits are free.
+        WidgetImageLoader.prewarmPosters(context, items.mapNotNull { it.posterUrl })
         val now = System.currentTimeMillis()
         val version = if (versionBumpOnly) previousVersion + 1L else now
         if (!versionBumpOnly && sameContentById(previous, items) { it.itemId }) {
@@ -36,6 +42,9 @@ internal object WidgetPersistHelper {
     ) {
         val previous = store.seerrWidgetItems.first()
         val previousVersion = store.seerrWidgetVersion.first()
+        // CONC-6: same poster-cache pre-warm as [persistLibraryItems] — the
+        // Seerr factory binds against these exact snapshot URLs.
+        WidgetImageLoader.prewarmPosters(context, items.mapNotNull { it.posterUrl })
         val now = System.currentTimeMillis()
         val version = if (versionBumpOnly) previousVersion + 1L else now
         if (!versionBumpOnly && sameContentById(previous, items) { it.tmdbId }) {

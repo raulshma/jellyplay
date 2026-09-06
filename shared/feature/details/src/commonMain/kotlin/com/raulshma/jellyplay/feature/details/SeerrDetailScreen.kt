@@ -556,51 +556,167 @@ private fun SeerrDetailContent(
             item { Spacer(modifier = Modifier.height(baseBackdropHeight - 150.dp)) }
 
             item {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Transparent,
-                                backgroundColor.copy(alpha = 0.9f),
-                                backgroundColor,
-                            ),
-                            startY = 0f,
-                            endY = with(density) { 150.dp.toPx() }
-                        )
+                // Rebuilt only when the theme colour / density change, not on every
+                // scroll frame (mirrors the backdrop scrimBrush above).
+                val headerFadeBrush = remember(backgroundColor, density) {
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color.Transparent,
+                            backgroundColor.copy(alpha = 0.9f),
+                            backgroundColor,
+                        ),
+                        startY = 0f,
+                        endY = with(density) { 150.dp.toPx() }
                     )
-            ) {
-                if (isExpanded && adaptiveInfo.isLandscape) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = adaptiveInfo.contentPadding(isTv))
-                            .offset(y = (-80).dp),
-                        horizontalArrangement = Arrangement.spacedBy(32.dp),
-                        verticalAlignment = Alignment.Top
-                    ) {
-                        Column(
-                            modifier = Modifier.width(240.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
+                }
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(headerFadeBrush)
+                ) {
+                    if (isExpanded && adaptiveInfo.isLandscape) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = adaptiveInfo.contentPadding(isTv))
+                                .offset(y = (-80).dp),
+                            horizontalArrangement = Arrangement.spacedBy(32.dp),
+                            verticalAlignment = Alignment.Top
                         ) {
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .aspectRatio(2f / 3f),
-                                shape = ShapeCache.smooth12,
-                                border = cardBorder,
-                                elevation = CardDefaults.cardElevation(defaultElevation = if (isSoothing) 1.5.dp else 12.dp)
+                            Column(
+                                modifier = Modifier.width(240.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
                             ) {
-                                MediaImage(
-                                    url = posterUrl ?: "",
-                                    contentDescription = title,
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Crop
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .aspectRatio(2f / 3f),
+                                    shape = ShapeCache.smooth12,
+                                    border = cardBorder,
+                                    elevation = CardDefaults.cardElevation(defaultElevation = if (isSoothing) 1.5.dp else 12.dp)
+                                ) {
+                                    MediaImage(
+                                        url = posterUrl ?: "",
+                                        contentDescription = title,
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                }
+
+                                Spacer(Modifier.height(24.dp))
+
+                                MediaInfoCondensed(
+                                    movieDetail = movieDetail,
+                                    tvDetail = tvDetail,
+                                    ratings = ratings,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+
+                                Spacer(Modifier.height(24.dp))
+
+                                SeerrActionButtons(
+                                    movieDetail = movieDetail,
+                                    tvDetail = tvDetail,
+                                    onRequestClick = onRequestClick,
+                                    jellyfinItemId = jellyfinItemId,
+                                    onOpenInLibrary = { id ->
+                                        onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.MediaDetail(id))
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    contentFocusRequester = contentFocusRequester,
+                                )
+
+                                Spacer(Modifier.height(24.dp))
+
+                                ExternalLinksRow(
+                                    tmdbId = movieDetail?.id ?: tvDetail?.id ?: 0,
+                                    imdbId = movieDetail?.imdbId ?: tvDetail?.externalIds?.imdbId,
+                                    tvdbId = tvDetail?.externalIds?.tvdbId,
+                                    mediaType = if (movieDetail != null) "movie" else "tv"
                                 )
                             }
 
-                            Spacer(Modifier.height(24.dp))
+                            SeerrDetailBody(
+                                movieDetail = movieDetail,
+                                tvDetail = tvDetail,
+                                ratings = ratings,
+                                recommendations = recommendations,
+                                similar = similar,
+                                onNavigate = onNavigate,
+                                modifier = Modifier.weight(1f),
+                                streamingRegion = streamingRegion,
+                                discoverRegion = discoverRegion,
+                                seerrServerUrl = seerrServerUrl,
+                                selectedSeasonNumber = selectedSeasonNumber,
+                                episodesBySeason = episodesBySeason,
+                                isLoadingEpisodes = isLoadingEpisodes,
+                                onSeasonClick = onSeasonClick,
+                                onVideoClick = onVideoClick,
+                            )
+                        }
+                    } else {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 24.dp)
+                                .offset(y = (-40).dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.Bottom) {
+                                Card(
+                                    modifier = Modifier
+                                        .width(120.dp)
+                                        .aspectRatio(2f / 3f),
+                                    shape = ShapeCache.smooth8,
+                                    border = cardBorder,
+                                    elevation = CardDefaults.cardElevation(defaultElevation = if (isSoothing) 1.5.dp else 8.dp)
+                                ) {
+                                    MediaImage(
+                                        url = posterUrl ?: "",
+                                        contentDescription = title,
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                }
+                                Spacer(Modifier.width(16.dp))
+                                Column {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = title,
+                                            style = MaterialTheme.typography.headlineMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            modifier = Modifier.weight(1f, fill = false)
+                                        )
+                                    
+                                        val contentRating = tvDetail?.contentRatings?.results?.find { it.iso31661 == "US" }?.rating
+                                        if (contentRating != null) {
+                                            Spacer(Modifier.width(8.dp))
+                                            Surface(
+                                                color = Color.Transparent,
+                                                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)),
+                                                shape = ShapeCache.smooth4
+                                            ) {
+                                                Text(
+                                                    text = contentRating,
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                    val tagline = movieDetail?.tagline ?: tvDetail?.tagline
+                                    tagline?.takeIf { it.isNotBlank() }?.let {
+                                        Text(
+                                            text = it,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                        )
+                                    }
+                                }
+                            }
+
+                            Spacer(Modifier.height(16.dp))
 
                             MediaInfoCondensed(
                                 movieDetail = movieDetail,
@@ -623,141 +739,28 @@ private fun SeerrDetailContent(
                                 contentFocusRequester = contentFocusRequester,
                             )
 
-                            Spacer(Modifier.height(24.dp))
+                            Spacer(Modifier.height(32.dp))
 
-                            ExternalLinksRow(
-                                tmdbId = movieDetail?.id ?: tvDetail?.id ?: 0,
-                                imdbId = movieDetail?.imdbId ?: tvDetail?.externalIds?.imdbId,
-                                tvdbId = tvDetail?.externalIds?.tvdbId,
-                                mediaType = if (movieDetail != null) "movie" else "tv"
+                            SeerrDetailBody(
+                                movieDetail = movieDetail,
+                                tvDetail = tvDetail,
+                                ratings = ratings,
+                                recommendations = recommendations,
+                                similar = similar,
+                                onNavigate = onNavigate,
+                                modifier = Modifier.fillMaxWidth(),
+                                streamingRegion = streamingRegion,
+                                discoverRegion = discoverRegion,
+                                seerrServerUrl = seerrServerUrl,
+                                selectedSeasonNumber = selectedSeasonNumber,
+                                episodesBySeason = episodesBySeason,
+                                isLoadingEpisodes = isLoadingEpisodes,
+                                onSeasonClick = onSeasonClick,
+                                onVideoClick = onVideoClick,
                             )
                         }
-
-                        SeerrDetailBody(
-                            movieDetail = movieDetail,
-                            tvDetail = tvDetail,
-                            ratings = ratings,
-                            recommendations = recommendations,
-                            similar = similar,
-                            onNavigate = onNavigate,
-                            modifier = Modifier.weight(1f),
-                            streamingRegion = streamingRegion,
-                            discoverRegion = discoverRegion,
-                            seerrServerUrl = seerrServerUrl,
-                            selectedSeasonNumber = selectedSeasonNumber,
-                            episodesBySeason = episodesBySeason,
-                            isLoadingEpisodes = isLoadingEpisodes,
-                            onSeasonClick = onSeasonClick,
-                            onVideoClick = onVideoClick,
-                        )
-                    }
-                } else {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 24.dp)
-                            .offset(y = (-40).dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.Bottom) {
-                            Card(
-                                modifier = Modifier
-                                    .width(120.dp)
-                                    .aspectRatio(2f / 3f),
-                                shape = ShapeCache.smooth8,
-                                border = cardBorder,
-                                elevation = CardDefaults.cardElevation(defaultElevation = if (isSoothing) 1.5.dp else 8.dp)
-                            ) {
-                                MediaImage(
-                                    url = posterUrl ?: "",
-                                    contentDescription = title,
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Crop
-                                )
-                            }
-                            Spacer(Modifier.width(16.dp))
-                            Column {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(
-                                        text = title,
-                                        style = MaterialTheme.typography.headlineMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                        modifier = Modifier.weight(1f, fill = false)
-                                    )
-                                    
-                                    val contentRating = tvDetail?.contentRatings?.results?.find { it.iso31661 == "US" }?.rating
-                                    if (contentRating != null) {
-                                        Spacer(Modifier.width(8.dp))
-                                        Surface(
-                                            color = Color.Transparent,
-                                            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)),
-                                            shape = ShapeCache.smooth4
-                                        ) {
-                                            Text(
-                                                text = contentRating,
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
-                                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-                                            )
-                                        }
-                                    }
-                                }
-                                val tagline = movieDetail?.tagline ?: tvDetail?.tagline
-                                tagline?.takeIf { it.isNotBlank() }?.let {
-                                    Text(
-                                        text = it,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                                    )
-                                }
-                            }
-                        }
-
-                        Spacer(Modifier.height(16.dp))
-
-                        MediaInfoCondensed(
-                            movieDetail = movieDetail,
-                            tvDetail = tvDetail,
-                            ratings = ratings,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
-                        Spacer(Modifier.height(24.dp))
-
-                        SeerrActionButtons(
-                            movieDetail = movieDetail,
-                            tvDetail = tvDetail,
-                            onRequestClick = onRequestClick,
-                            jellyfinItemId = jellyfinItemId,
-                            onOpenInLibrary = { id ->
-                                onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.MediaDetail(id))
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            contentFocusRequester = contentFocusRequester,
-                        )
-
-                        Spacer(Modifier.height(32.dp))
-
-                        SeerrDetailBody(
-                            movieDetail = movieDetail,
-                            tvDetail = tvDetail,
-                            ratings = ratings,
-                            recommendations = recommendations,
-                            similar = similar,
-                            onNavigate = onNavigate,
-                            modifier = Modifier.fillMaxWidth(),
-                            streamingRegion = streamingRegion,
-                            discoverRegion = discoverRegion,
-                            seerrServerUrl = seerrServerUrl,
-                            selectedSeasonNumber = selectedSeasonNumber,
-                            episodesBySeason = episodesBySeason,
-                            isLoadingEpisodes = isLoadingEpisodes,
-                            onSeasonClick = onSeasonClick,
-                            onVideoClick = onVideoClick,
-                        )
                     }
                 }
-            }
             }
         }
 
@@ -1660,6 +1663,16 @@ private fun VideosSection(
     val uniqueVideos = remember(videos) {
         videos.distinctBy { it.key }.filter { !it.key.isNullOrBlank() }
     }
+    // The bottom scrim gradient is identical across every card in the same theme
+    // state, so compute it once per row instead of allocating a Brush per card
+    // as cards scroll in/out of view (the HomeMediaRows pattern).
+    val surfaceColor = MaterialTheme.colorScheme.surface
+    val surfaceScrimBrush = remember(surfaceColor) {
+        Brush.verticalGradient(
+            colors = listOf(Color.Transparent, surfaceColor.copy(alpha = 0.85f)),
+            startY = 100f
+        )
+    }
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(
             text = stringResource(Res.string.detail_section_videos),
@@ -1712,15 +1725,7 @@ private fun VideosSection(
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .background(
-                                    Brush.verticalGradient(
-                                        colors = listOf(
-                                            Color.Transparent,
-                                            MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
-                                        ),
-                                        startY = 100f
-                                    )
-                                )
+                                .background(surfaceScrimBrush)
                         )
                         
                         Text(

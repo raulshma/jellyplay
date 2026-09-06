@@ -26,6 +26,8 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import com.raulshma.jellyplay.core.data.log.Log
 import androidx.collection.LruCache
 import kotlinx.serialization.json.Json
@@ -52,6 +54,23 @@ class AuthRepositoryImpl constructor(
 
     private companion object {
         private val folderIdsCache = LruCache<String, List<String>>(16)
+
+        /**
+         * Audit STA-1 (docs/perf/codebase-audit-2026-09.md): the network half
+         * of session restore must not gate the first real frame on a live
+         * round trip. Address selection probes sequentially (5 s callTimeout
+         * per address) and the restore-time token check is an authenticated
+         * GET behind apiResultWithRetry on a 15 s connect timeout — with the
+         * server unreachable that held the Android system splash / the
+         * desktop "Restoring session…" pane for potentially tens of seconds.
+         * Each network stage now waits at most this long inside
+         * [restoreSession]; past it the gate releases with the DB-restored
+         * session kept (the exact outcome a non-401 validation failure
+         * already produces) and the stage re-runs on the application scope,
+         * where a definitive 401 still tears the session down through the
+         * isAuthenticated flow the shell already collects.
+         */
+        private const val RESTORE_NETWORK_STAGE_TIMEOUT_MS = 2_000L
     }
 
     override val servers: Flow<List<ServerInfo>> = serverDao.getAllServers().map { entities ->
@@ -298,7 +317,13 @@ class AuthRepositoryImpl constructor(
             // alternates exist this is a no-op and offline/cached use is
             // unchanged. Re-selection runs again periodically (health monitor)
             // and switches back to the primary once it is reachable.
-            runCatching { apiClient.selectReachableAddress() }
+            // STA-1: the probes are sequential network calls, so the wait is
+            // bounded — on timeout the gate below releases on the primary
+            // address and selection re-runs off the gate in the deferred pass.
+            val addressSelected = withTimeoutOrNull(RESTORE_NETWORK_STAGE_TIMEOUT_MS) {
+                runCatching { apiClient.selectReachableAddress() }
+                true
+            }
 
             val userEntity = userDao.getUserById(userId)
             if (userEntity == null) {
@@ -326,7 +351,31 @@ class AuthRepositoryImpl constructor(
                         } ?: emptyList(),
                     )
                 )
-                validateRestoredSession()
+                // STA-1: the token check is a live authenticated GET — bound it
+                // the same way. On timeout the restored session stands exactly
+                // as a successful (or non-401-failed) validation leaves it, so
+                // the first-frame gate releases with the session kept.
+                val validationCompleted = withTimeoutOrNull(RESTORE_NETWORK_STAGE_TIMEOUT_MS) {
+                    validateRestoredSession()
+                    true
+                }
+                if (addressSelected == null || validationCompleted == null) {
+                    // Deferred validation pass (STA-1) on the application
+                    // scope — never cancelled for this singleton. A definitive
+                    // 401 here funnels through validateRestoredSession's
+                    // disconnect + clearSession, the same teardown the shell
+                    // already observes through isAuthenticated flipping false,
+                    // so a late rejection swaps shell → login a few frames
+                    // later instead of holding the splash hostage to it.
+                    externalScope.launch {
+                        if (addressSelected == null) {
+                            runCatching { apiClient.selectReachableAddress() }
+                        }
+                        if (validationCompleted == null) {
+                            validateRestoredSession()
+                        }
+                    }
+                }
             } else {
                 Log.w("AuthRepository", "restoreSession: no access token for active user")
             }

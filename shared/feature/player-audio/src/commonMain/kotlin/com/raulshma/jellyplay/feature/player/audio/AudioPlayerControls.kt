@@ -76,6 +76,16 @@ internal fun PixelProgressSection(
     onSeek: (Float) -> Unit,
 ) {
     val positionMs = currentPosition.value
+    // Position-derived labels memoized by second to cut formatDurationMs
+    // allocations during the 4 Hz position tick — the elapsed label changes
+    // once per second and the duration never changes. Mirrors the video
+    // player's PlayerControls.
+    val positionText = remember(positionMs / 1000) {
+        com.raulshma.jellyplay.core.ui.components.formatDurationMs(positionMs)
+    }
+    val durationText = remember(duration) {
+        if (duration > 0) com.raulshma.jellyplay.core.ui.components.formatDurationMs(duration) else "--:--"
+    }
     WaveformSeekBar(
         progress = if (duration > 0) positionMs.toFloat() / duration else 0f,
         isPlaying = isPlaying,
@@ -93,12 +103,12 @@ internal fun PixelProgressSection(
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Text(
-            com.raulshma.jellyplay.core.ui.components.formatDurationMs(positionMs),
+            positionText,
             style = MaterialTheme.typography.labelSmall,
             color = accentColor.copy(alpha = 0.8f),
         )
         Text(
-            if (duration > 0) com.raulshma.jellyplay.core.ui.components.formatDurationMs(duration) else "--:--",
+            durationText,
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

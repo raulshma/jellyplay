@@ -614,7 +614,17 @@ class AdminStatisticsRepositoryImpl constructor(
             while (true) {
                 val page = fetchNextPage() ?: break
                 val items = mapRows(page.second)
-                allResults.addAll(items)
+                // Retain at most MAX_SCAN_RESULTS stubs (DATA-5): without the
+                // cap the scan accumulates the whole server library in memory
+                // and then serializes it as one JSON blob — on a 50k-item
+                // server a transient double allocation (list + multi-MB
+                // string) on this background worker. Truncation past the cap
+                // is accepted behavior for these explicit admin actions (the
+                // cleanup UI already reads the audit log at LIMIT 500);
+                // progressOf still sees the full raw page, so the progress
+                // accounting is unchanged.
+                val room = MAX_SCAN_RESULTS - allResults.size
+                allResults.addAll(if (room >= items.size) items else items.take(room))
 
                 // Targeted progress write; 0 affected rows = scan row deleted
                 // (cancelled) — stop without the full-row read.
@@ -628,6 +638,10 @@ class AdminStatisticsRepositoryImpl constructor(
                 ) {
                     return
                 }
+
+                // Cap reached — stop paging; every further page would only be
+                // fetched to be discarded.
+                if (allResults.size >= MAX_SCAN_RESULTS) break
             }
 
             val entity = scanStateDao.getById(scanId) ?: return
@@ -1028,5 +1042,16 @@ class AdminStatisticsRepositoryImpl constructor(
             longestStreak = longestStreak,
             streakStartDate = streakStartDate,
         )
+    }
+
+    companion object {
+        /**
+         * Upper bound on the stubs a cleanup scan retains (and serializes
+         * into one `scan_state` row) — see [runScan]. Two orders of magnitude
+         * above the audit-log LIMIT 500 the cleanup UI already reads
+         * ([AuditLogDao.getAll]), and far beyond any actionable manual
+         * selection; only >5k-item explicit admin scans are truncated.
+         */
+        private const val MAX_SCAN_RESULTS = 5_000
     }
 }

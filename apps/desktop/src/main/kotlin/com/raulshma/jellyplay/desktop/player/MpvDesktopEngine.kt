@@ -234,6 +234,19 @@ open class MpvDesktopEngine(
     @Volatile private var running = ctx != null
     private val released = AtomicBoolean(false)
 
+    /**
+     * Optional release notification (CONC-1, 2026-09 audit): invoked EXACTLY
+     * ONCE from [release] — right after the released CAS wins, before any
+     * teardown — so instrumentation attached to the constructed engine (the
+     * session harness's EngineActivityRecorder, wired by the factory) can stop
+     * observing instead of sampling a released handle forever. Null for every
+     * engine nobody wired (the audio queue manager's engine, tests). Assigned
+     * by the factory AFTER construction (it observes the constructed engine);
+     * @Volatile because release() can be invoked from any thread. Pure
+     * notification — callbacks must not touch the engine back.
+     */
+    @Volatile var onReleased: (() -> Unit)? = null
+
     private val eventThread = thread(
         name = "mpv-desktop-event-loop",
         isDaemon = true,
@@ -554,6 +567,10 @@ open class MpvDesktopEngine(
 
     override fun release() {
         if (!released.compareAndSet(false, true)) return
+        // First thing after the CAS: stop external observers (the recorder's
+        // sampler — see onReleased) BEFORE teardown, so their last reads saw
+        // a live engine and no sample lands against a destroyed handle.
+        onReleased?.invoke()
         running = false
         val context = ctx ?: return
         repeat(RELEASE_JOIN_ATTEMPTS) {

@@ -48,7 +48,12 @@ import kotlinx.coroutines.delay
  * Wave 13B: every created engine (and which branch created it) is reported to
  * the [EngineActivityRecorder] Koin single — pure observation feeding the
  * DesktopSessionHarness evidence; a null recorder (tests constructing the
- * factory bare) records nothing.
+ * factory bare) records nothing. CONC-1 (2026-09 audit): every DESKTOP-owned
+ * engine additionally wires its release into the recorder, so the per-engine
+ * observer jobs die with the engine instead of sampling a released mpv handle
+ * 2×/s forever. The EXTERNAL branch's shared no-op engine has no desktop
+ * release hook — its record keeps the documented always-observe behavior
+ * (pure-state reads, sample-capped memory).
  *
  * @param recorder engine-activity recorder, or null to skip recording.
  */
@@ -109,6 +114,17 @@ class DesktopMpvPlayerEngineFactory(
             }
         }
         recorder?.recordCreated(engine, surface)
+        // CONC-1: hook the recorder's cancellation onto the engine's own
+        // release() — the session manager (PlayerSessionManager) owns engine
+        // teardown and calls release() on every dispose path, so riding the
+        // engine is the one release signal that never misses. Assignment is
+        // race-free: the engine is unpublished until create() returns, so no
+        // releaser can run before the hook lands. Only the mpv engines carry
+        // the hook (the shared no-op has none — see class KDoc).
+        val rec = recorder
+        if (rec != null && engine is MpvDesktopEngine) {
+            engine.onReleased = { rec.recordReleased(engine) }
+        }
         return engine
     }
 

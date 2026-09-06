@@ -135,11 +135,19 @@ class MediaRepositoryImpl(
     // Series-scoped seasons/episodes caches used to live here; they've moved
     // into [episodeCatalogue], the single owner of the series snapshot. The
     // remaining series-adjacent caches (similar, album tracks, collection
-    // items) stay — they're not part of the catalogue's "seasons → episodes →
-    // sorted" shape.
+    // items, theme songs) stay — they're not part of the catalogue's
+    // "seasons → episodes → sorted" shape.
     private val similarCache = TtlCache<List<MediaItem>>(ttlMs = DETAIL_CACHE_TTL_MS)
     private val albumTracksCache = TtlCache<List<MediaItem>>(ttlMs = DETAIL_CACHE_TTL_MS)
     private val collectionItemsCache = TtlCache<SearchResult>(ttlMs = DETAIL_CACHE_TTL_MS)
+
+    // Theme songs for a detail item: ThemeMusicPlayer releases its player on
+    // screen exit, so every detail re-entry re-fetched the (almost always
+    // empty) list — one HTTP round-trip per navigation for nothing. Cached
+    // with the same 2-minute TTL and epoch-guarded write as
+    // similarCache/albumTracksCache above; a stale list ≤2 min after a
+    // server change is harmless for ambient audio.
+    private val themeSongsCache = TtlCache<List<MediaItem>>(ttlMs = DETAIL_CACHE_TTL_MS)
 
     // Child-photo URLs for a photo folder (player backdrop fan-out); declared
     // with the other caches so the identity registration in the init block
@@ -160,10 +168,13 @@ class MediaRepositoryImpl(
             // similarCache keys are `similar_${itemId}_$limit` (the limit is
             // part of the key so a different limit never serves a truncated
             // list), so evict by prefix to drop every limit variant.
+            // themeSongsCache keys are `themes_$itemId` — same prefix evict.
             similarCache.removeByKeyPrefix(identity, "similar_$itemId")
+            themeSongsCache.removeByKeyPrefix(identity, "themes_$itemId")
         } else {
             detailCache.clear()
             similarCache.clear()
+            themeSongsCache.clear()
         }
     }
 
@@ -260,7 +271,7 @@ class MediaRepositoryImpl(
         // The action carries only the reactions a plain registry drop
         // cannot express: the detail cache's epoch bump (an in-flight
         // previous-identity fetch must not write back into the cleared
-        // cache) together with its similarCache companion, and the
+        // cache) together with its similar/theme-songs companions, and the
         // previous identity's persisted SWR rows. The episode catalogue's
         // snapshot drop + epoch bump lives in its own registration —
         // routing through invalidateCaches() here would clear every cache
@@ -353,6 +364,81 @@ class MediaRepositoryImpl(
         return withContext(Dispatchers.Default) { entity.payload }
     }
 
+    /**
+     * In-memory record of the last home snapshot this process persisted (or
+     * verified byte-identical) for one (server, user, cacheKey): the DB row's
+     * `fetchedAt` it was computed against, plus the cheap fingerprint of the
+     * payload ([homeSnapshotFingerprint]). Lets the dedup window in
+     * [persistHomeSectionsSnapshot] skip the full JSON re-encode on
+     * usually-identical foreground refreshes. Null until the first persist
+     * of the process — a miss simply takes the exact encode+compare path.
+     */
+    private class HomeSnapshotDedupState(
+        val serverId: String,
+        val userId: String,
+        val cacheKey: String,
+        val rowFetchedAt: Long,
+        val fingerprint: Int,
+    )
+
+    // @Volatile: persistHomeSectionsSnapshot runs on the caller's dispatcher
+    // (the home refresh path), which is not pinned to one thread.
+    @Volatile
+    private var lastHomeSnapshotDedup: HomeSnapshotDedupState? = null
+
+    /**
+     * Cheap structural fingerprint of a [HomeSectionsResult] for the dedup
+     * window below (DATA-1): ONE string per fetch (indexed loops, no
+     * per-item object allocations), covering what a foreground home refresh
+     * can change — failed section types, per-section header identity
+     * (id/title/type/libraryId/collectionType/seed id) and, per item, the id
+     * plus the user-data fields the home rows render (playback position,
+     * played + favorite flags). Deliberately NOT the full payload:
+     * metadata-only changes (overview text, ratings, …) do not alter it,
+     * which is exactly the "equal fingerprint does not imply a byte-identical
+     * encode" caveat documented in [persistHomeSectionsSnapshot]. Hashed to a
+     * single Int for retention in [lastHomeSnapshotDedup].
+     */
+    private fun homeSnapshotFingerprint(result: HomeSectionsResult): Int {
+        val sb = StringBuilder()
+        for (failedType in result.failedSectionTypes) {
+            sb.append(failedType.name)
+            sb.append('|')
+        }
+        sb.append('#')
+        val sections = result.sections
+        for (s in sections.indices) {
+            val section = sections[s]
+            sb.append(section.id)
+            sb.append('|')
+            sb.append(section.title)
+            sb.append('|')
+            sb.append(section.type.name)
+            sb.append('|')
+            sb.append(section.libraryId)
+            sb.append('|')
+            sb.append(section.collectionType)
+            sb.append('|')
+            sb.append(section.seedItem?.id)
+            sb.append('|')
+            val sectionItems = section.items
+            for (i in sectionItems.indices) {
+                val item = sectionItems[i]
+                sb.append(item.id)
+                sb.append('|')
+                sb.append(item.playbackPositionTicks)
+                sb.append('|')
+                sb.append(item.isPlayed)
+                sb.append('|')
+                sb.append(item.isFavorite)
+                sb.append(';')
+            }
+            sb.append('#')
+        }
+        // toString() first: StringBuilder's own hashCode is identity-based.
+        return sb.toString().hashCode()
+    }
+
     private suspend fun persistHomeSectionsSnapshot(cacheKey: String, result: HomeSectionsResult) {
         val identity = homeSession.currentIdentity() ?: return
         runCatching {
@@ -364,6 +450,30 @@ class MediaRepositoryImpl(
             // fetchedAt SWR staleness ceiling for every other path.
             val now = timeSource.nowEpochMillis()
             val existing = homeSectionCacheDao.get(identity.serverId, identity.userId, cacheKey)
+            // Cheap-path dedup (DATA-1): inside the window, a fingerprint
+            // match against the last payload this process persisted/verified
+            // for this exact (server, user, cacheKey, row) skips the full
+            // encode — that encode used to run on every ~1/min refresh and
+            // allocate a several-hundred-KB string even when byte-identical.
+            // INVARIANT: fingerprint equal ⇒ the encode would have been
+            // byte-identical is NOT guaranteed (only section identity, item
+            // ids and their user-data fields are fingerprinted — see
+            // [homeSnapshotFingerprint]), so a metadata-only change inside
+            // the window persists one refresh cycle later (audit-accepted).
+            // Fingerprint unequal, window expired, or no prior state ⇒ the
+            // exact pre-existing encode+compare+write path below runs.
+            if (existing != null && now - existing.fetchedAt < HOME_PERSIST_DEDUP_WINDOW_MS) {
+                val last = lastHomeSnapshotDedup
+                if (last != null &&
+                    last.serverId == identity.serverId &&
+                    last.userId == identity.userId &&
+                    last.cacheKey == cacheKey &&
+                    last.rowFetchedAt == existing.fetchedAt &&
+                    last.fingerprint == homeSnapshotFingerprint(result)
+                ) {
+                    return
+                }
+            }
             // Encode off the caller's (Main) dispatcher — this runs on every
             // successful home refresh (min. once/minute in foreground).
             val payloadJson = withContext(Dispatchers.Default) {
@@ -373,6 +483,16 @@ class MediaRepositoryImpl(
                 now - existing.fetchedAt < HOME_PERSIST_DEDUP_WINDOW_MS &&
                 existing.payloadJson == payloadJson
             ) {
+                // Byte-identical inside the window: remember the fingerprint
+                // (against this row's fetchedAt) so the next in-window
+                // refresh can take the cheap path above.
+                lastHomeSnapshotDedup = HomeSnapshotDedupState(
+                    serverId = identity.serverId,
+                    userId = identity.userId,
+                    cacheKey = cacheKey,
+                    rowFetchedAt = existing.fetchedAt,
+                    fingerprint = homeSnapshotFingerprint(result),
+                )
                 return
             }
             homeSectionCacheDao.upsert(
@@ -391,6 +511,13 @@ class MediaRepositoryImpl(
                     // against HomeFreshness's 24h SWR staleness ceiling.
                     fetchedAt = now,
                 ),
+            )
+            lastHomeSnapshotDedup = HomeSnapshotDedupState(
+                serverId = identity.serverId,
+                userId = identity.userId,
+                cacheKey = cacheKey,
+                rowFetchedAt = now,
+                fingerprint = homeSnapshotFingerprint(result),
             )
         }
     }
@@ -591,7 +718,18 @@ class MediaRepositoryImpl(
         apiClient.getItemsByPerson(personId, limit)
 
     override suspend fun getThemeSongs(itemId: String): Result<List<MediaItem>> =
-        apiClient.getThemeSongs(itemId)
+        // Cached exactly like getSimilarItems above (DATA-3): identity-keyed,
+        // item-scoped key, 2-minute TTL, epoch-guarded write so a user-data
+        // invalidation landing mid-fetch cannot pin a stale list for the
+        // full TTL — see [detailCacheEpoch]. Evicted with the detail's other
+        // per-item caches in [invalidateDetailCache].
+        themeSongsCache.getOrFetchGuarded(
+            { homeSession.cacheIdentity() },
+            "themes_$itemId",
+            currentEpoch = { detailCacheEpoch.get() },
+        ) {
+            apiClient.getThemeSongs(itemId)
+        }
 
     override suspend fun getSeasons(seriesId: String): Result<List<MediaItem>> =
         // Thin passthrough: the catalogue owns the seasons/episodes snapshot

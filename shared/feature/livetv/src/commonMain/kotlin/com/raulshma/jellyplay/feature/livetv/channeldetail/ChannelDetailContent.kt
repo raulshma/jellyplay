@@ -139,7 +139,7 @@ internal fun ChannelDetailContent(
             }
         } else {
             val airingId = current?.id
-            items(items = state.programs, key = { it.id }) { program ->
+            items(items = state.programs, key = { it.id }, contentType = { "program" }) { program ->
                 ProgramTimelineRow(
                     program = program,
                     isAiring = program.id == airingId,

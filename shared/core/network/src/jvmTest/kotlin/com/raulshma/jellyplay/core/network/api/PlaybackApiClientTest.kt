@@ -43,8 +43,8 @@ class PlaybackApiClientImplTest {
         val jellyfin = mockk<Jellyfin>(relaxed = true)
         val okHttpClient = OkHttpClient()
         engine = JellyfinApiEngine(
-            jellyfinLazy = dagger.Lazy { jellyfin },
-            okHttpClientLazy = dagger.Lazy { okHttpClient },
+            jellyfinLazy = Lazy { jellyfin },
+            okHttpClientLazy = Lazy { okHttpClient },
             deviceProfileProvider = DeviceProfileProvider(DesktopDeviceCodecCapabilities()),
             addressRouter = com.raulshma.jellyplay.core.network.failover.ServerAddressRouter(),
         )

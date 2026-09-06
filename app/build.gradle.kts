@@ -40,20 +40,42 @@ android {
         }
     }
 
+    // ABI splits are property-gated (audit BIN-3 + BIN-11), not task-name-
+    // sniffed: gradle.startParameter.taskNames is configuration-cache-hostile
+    // and misfired on any invocation containing "debug" (testPhoneDebugUnitTest
+    // never packages an APK but still paid the extra-ABI configuration).
     splits {
         abi {
             isEnable = true
             reset()
             include("arm64-v8a")
-            if (gradle.startParameter.taskNames.any { it.contains("debug", ignoreCase = true) }) {
-                // x86_64 for modern emulators; x86 for the 32-bit-only Android TV
-                // system images (API 30 and older).
-                include("x86_64")
-                include("x86")
-            }
-            // Universal (all 4 ABIs of the native player stacks) ships for
-            // sideload only; local debug builds skip packaging it.
-            isUniversalApk = !gradle.startParameter.taskNames.any { it.contains("debug", ignoreCase = true) }
+            // BIN-11: debug builds default to arm64-only — the device fleet is
+            // physical phones, and every developer/CI invocation used to pay
+            // for three dex+package passes. The emulator ABIs (x86_64 for
+            // modern images; x86 for the 32-bit-only Android TV system images,
+            // API 30 and older) are opt-in via a comma-separated property:
+            //   ./gradlew assemblePhoneDebug -PdebugAbis=x86_64,x86
+            // Empty/unset/blank entries parse to "arm64 only"; no CI lane
+            // passes the property (codeql's assembleDebug is compile-analysis
+            // only, kmp-build's androidTest/verify lanes never install on an
+            // emulator, and the device e2e pass installs the arm64 split).
+            providers.gradleProperty("debugAbis")
+                .map { raw ->
+                    raw.split(',').map(String::trim).filter { it.isNotBlank() }.distinct()
+                }
+                .orElse(emptyList())
+                .get()
+                .forEach { include(it) }
+            // BIN-3: the universal APK (all 4 ABIs of every native player
+            // stack, ~3-4x the arm64 payload) is a sideload-only convenience
+            // and no longer builds by default. The release lane opts back in
+            // (-PbuildUniversal=true in release.yml on BOTH the baseline-
+            // profile generate step — which assembles and installs release
+            // APKs on the x86_64 ciPixel8 GMD — and the assemble step), so
+            // its artifact set is unchanged; every other build skips it.
+            isUniversalApk = providers.gradleProperty("buildUniversal")
+                .map(String::toBoolean)
+                .getOrElse(false)
         }
     }
 
@@ -78,6 +100,15 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // BIN-7 (audit): ship native symbol tables (function names + frame
+            // addresses, no full DWARF) so libmpv/libvlc/libass/ffmpeg-decoder
+            // crash stacks can be symbolicated. Config-only at this level —
+            // extraction runs during release packaging only when an NDK is
+            // present (CI runners ship the NDK sidecar with the SDK; local
+            // builds without one log a warning and skip it, never fail).
+            ndk {
+                debugSymbolLevel = "SYMBOL_TABLE"
+            }
             val hasSigning = !System.getenv("KEYSTORE_PASSWORD").isNullOrBlank()
             if (hasSigning) {
                 signingConfig = signingConfigs.getByName("release")
@@ -294,6 +325,10 @@ baselineProfile {
     // committed and regenerate on demand, like aboutlibraries.json. Builds
     // not preceded by a generate step pick up the committed files instead of
     // producing profile-less APKs.
+    // STA-8 follow-up (audit): the src/phoneRelease/generated/baselineProfiles
+    // tree is still EMPTY — commit the baseline-prof.txt/startup-prof.txt the
+    // next release run writes (release.yml gates on them existing). Until
+    // then, local release builds package no baseline rules.
     saveInSrc = true
     variants {
         create("phone") {

@@ -14,6 +14,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.awt.ComposeWindow
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isCtrlPressed
@@ -29,6 +30,7 @@ import androidx.compose.ui.window.rememberWindowState
 import androidx.compose.ui.Alignment
 import coil3.ImageLoader
 import coil3.SingletonImageLoader
+import coil3.disk.DiskCache
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import coil3.request.crossfade
 import coil3.serviceLoaderEnabled
@@ -39,8 +41,11 @@ import com.raulshma.jellyplay.core.data.worker.DesktopDownloadManager
 import com.raulshma.jellyplay.core.database.di.databaseDaosModule
 import com.raulshma.jellyplay.core.database.di.desktopDatabaseModule
 import com.raulshma.jellyplay.core.datastore.di.datastoreCommonModule
+import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
 import com.raulshma.jellyplay.core.datastore.di.desktopDatastoreModule
+import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
 import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
+import com.raulshma.jellyplay.core.model.ImageCache
 import com.raulshma.jellyplay.core.ui.components.JellyPlayPreferenceTheme
 import com.raulshma.jellyplay.core.ui.components.rememberPreferenceDarkTheme
 import com.raulshma.jellyplay.core.network.di.desktopNetworkModule
@@ -85,6 +90,10 @@ import com.raulshma.jellyplay.feature.auth.di.desktopAuthPlatformModule
 import com.raulshma.jellyplay.feature.player.live.di.playerLiveModule
 import com.raulshma.jellyplay.feature.player.video.di.desktopPlayerVideoModule
 
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import okio.Path.Companion.toPath
 
 import org.koin.compose.koinInject
 import org.koin.core.context.startKoin
@@ -197,7 +206,7 @@ fun main() {
             // update-check row went live with the AppUpdate split (Wave xB;
             // AppUpdateRepository resolves from desktopDataModule), and the
             // storage actuals went REAL with wave 21B (downloads + http-cache
-            // walked/cleared, Coil's temp-dir disk cache cleared through the
+            // walked/cleared, Coil's disk cache cleared through the
             // injected image-cache handle).
             settingsModule,
             desktopSettingsPlatformModule(
@@ -374,18 +383,75 @@ fun main() {
     // milestone of boot (module list above is untouched — no reordering).
     startupPerf.markKoinStarted()
 
-    // V3 downloads conveyor: the desktop download engine — in-process
-    // supervisor observing PENDING rows (resume + reconnect edge handled
-    // inside), plus the auto-download loop. Construction is side-effect free;
-    // start() launches the loops on the application scope and is idempotent.
-    koinApp.koin.get<DesktopDownloadManager>().start()
-    koinApp.koin.get<DesktopAutoDownloadScheduler>().start()
+    // V3 downloads conveyor + wave 9B real audio: the download engine (the
+    // in-process supervisor observing PENDING rows, plus the 6 h
+    // auto-download loop) and the desktop audio core's app-lifetime kickoff
+    // (persisted queue/state restore + Room persistence observation — the
+    // Android Application.onCreate `manager.start()` twin). Construction is
+    // documented side-effect free; every start() launches its loops on the
+    // manager's OWN scope and is idempotent.
+    //
+    // STA-2 (2026-09 perf audit): these three gets used to resolve
+    // synchronously here, ON MAIN, building the whole download/audio graph
+    // inside the koin→windowShown segment — Room databaseBuilder().build(),
+    // DesktopTokenCipher's key-file read-or-create, and DesktopNetworkMonitor's
+    // stateIn(initialValue = probeNetworkStatus()) synchronous NIC/address
+    // enumeration (slow on Windows with WSL/Hyper-V/VPN adapters). Nothing
+    // between here and the first frame needs the instances — the Coil factory
+    // below defers every Koin resolution to the first image load, and the
+    // composition resolves ViewModels lazily; when a VM DOES race this block,
+    // Koin's memoized single construction hands it the SAME instance, so
+    // identities are unchanged. The whole group therefore constructs and
+    // starts on the Koin application scope, off the window's critical path.
+    // Start ORDER is preserved exactly (download manager → auto-download
+    // scheduler → audio queue manager), and an enqueue racing ahead of
+    // start() cannot double-start a transfer: kick() reserves the row via
+    // putIfAbsent BEFORE launching (the ExistingWorkPolicy.KEEP equivalent),
+    // and start()'s own pending-rows observer re-kicks through that same
+    // reservation.
+    // Shared launcher for the off-critical-path startup work below (STA-2's
+    // manager starts, STA-7's icon decode, STA-3's identity prewarm).
+    val appScope = koinApp.koin.get<CoroutineScope>(DatastoreQualifiers.applicationScope)
+    appScope
+        .launch(Dispatchers.Default) {
+            koinApp.koin.get<DesktopDownloadManager>().start()
+            koinApp.koin.get<DesktopAutoDownloadScheduler>().start()
+            koinApp.koin.get<com.raulshma.jellyplay.desktop.player.DesktopAudioQueueManager>()
+                .start()
+        }
 
-    // Wave 9B real audio: the desktop audio core's app-lifetime kickoff —
-    // restore the persisted queue/state and observe queue changes for Room
-    // persistence (the Android Application.onCreate `manager.start()` twin;
-    // equally safe off the cold-start critical path).
-    koinApp.koin.get<com.raulshma.jellyplay.desktop.player.DesktopAudioQueueManager>().start()
+    // Wave 12A runtime icon (title bar + tray), decoded OFF the pre-window
+    // critical path (STA-7, 2026-09 audit): desktopAppIconOrNull() is a
+    // classpath PNG read + Skia decode — small, but it used to run inside a
+    // remember {} during the first composition, so the IO + decode sat inside
+    // the measured koin→windowShown segment (the largest of the small
+    // synchronous pre-window reads; the mkdirs/crash-marker/window-state IO
+    // above deliberately stays — each is correctness-ordered before use).
+    // The state starts null — the EXISTING icon-less fallback, identical to
+    // today's null when the resource is unreadable — and the Window/Tray/
+    // DesktopTitleBar icon slots below pick the painter up on the
+    // recomposition that lands it (a frame or two later than the old inline
+    // decode, which is exactly the trade this finding asks for).
+    val appIconState = mutableStateOf<Painter?>(null)
+    appScope.launch {
+        appIconState.value = desktopAppIconOrNull()
+    }
+
+    // STA-3 desktop twin (2026-09 audit): ServerIdentityStore.identity is
+    // stateIn(Eagerly) on Dispatchers.Default, and DesktopNetworkModule's
+    // `?: runBlocking { ensureDeviceId() }` fallback blocks the resolving
+    // thread on a first-launch DataStore read+write whenever the network
+    // single wins that race. ensureDeviceId() is idempotent (same UUID
+    // either way, DataStore serializes the write), so resolving it here —
+    // off the EDT, before anything touches the network module — makes the
+    // runBlocking branch unreachable in practice, exactly like the Android
+    // Application.onCreate prewarm.
+    appScope.launch {
+        runCatching {
+            koinApp.koin.get<com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore>()
+                .ensureDeviceId()
+        }
+    }
 
     // Desktop image engine: an explicit OkHttp fetcher over the Koin-owned
     // base STREAMING client (same seam as the Android app's imageClient) —
@@ -416,6 +482,36 @@ fun main() {
                     ),
                 )
             }
+            // DATA-2 (2026-09 perf audit): explicit disk cache, mirroring the
+            // Android builder in JellyPlayApplication — desktop previously
+            // ran on coil3's default (the process-wide singleton DiskCache
+            // under the SYSTEM TEMP directory, sized 2% of that volume
+            // clamped to 10–250 MB), so the user's "max cache size" setting
+            // did nothing on this platform. SAME pref slice as Android
+            // (NetworkOfflineStore.networkOffline.maxCacheSizeMb — > 0 wins,
+            // anything else falls back to the same 256 MB) and the SAME
+            // ImageCache.DIR name, rooted at the app's cache root — here
+            // <configDir>, next to the OkHttp http-cache (DesktopStorageAreas
+            // walks ONLY the http-cache subtree, so the image cache is never
+            // double-counted; its storage bucket measures through
+            // DesktopCoilImageCache, which resolves THIS loader's diskCache —
+            // by construction the same directory it clears, the audit's
+            // directory-match constraint). Like Android, sized inside the
+            // builder lambda: coil builds the DiskCache lazily on first
+            // access (the first networked image write), not at ImageLoader
+            // construction, and the slice is an Eagerly-stateIn StateFlow, so
+            // the persisted value is normally published by then.
+            .diskCache {
+                val cacheMb = koinApp.koin.get<NetworkOfflineStore>()
+                    .networkOffline.value.maxCacheSizeMb
+                val cacheSize = if (cacheMb > 0) cacheMb * 1024L * 1024L else 256L * 1024 * 1024
+                DiskCache.Builder()
+                    .directory(
+                        paths.configDir.toFile().resolve(ImageCache.DIR).absolutePath.toPath(),
+                    )
+                    .maxSizeBytes(cacheSize)
+                    .build()
+            }
             .crossfade(true)
             .build()
     }
@@ -444,9 +540,13 @@ fun main() {
         val showAbout = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
 
         // Wave 12A: runtime icon for the title bar + tray (packaging icons are
-        // NOT on the runtime classpath — see DesktopAppIcon). Null means the
-        // resource was unreadable; the window then simply stays icon-less.
-        val appIcon = remember { desktopAppIconOrNull() }
+        // NOT on the runtime classpath — see DesktopAppIcon). The decode was
+        // kicked off BEFORE `application {}` on the Koin application scope
+        // (see appIconState above, STA-7); reading .value here subscribes
+        // this composition, so the painter pops in on the recomposition that
+        // lands it — and a null keeps the pre-existing icon-less fallback
+        // (unreadable resource, or the decode simply hasn't landed yet).
+        val appIcon = appIconState.value
         // AWT-side window handle so the tray's Show action can restore/focus
         // the ComposeWindow from outside the Window content lambda.
         val windowRef = remember {

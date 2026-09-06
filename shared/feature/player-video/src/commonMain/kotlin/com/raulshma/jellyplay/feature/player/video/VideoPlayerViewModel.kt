@@ -110,7 +110,10 @@ private const val SUBTITLE_DELAY_APPLY_DEBOUNCE_MS = 500L
  * Calls [SegmentCalculator] directly with the projected inputs — no
  * throwaway [VideoPlayerUiState] allocation. The input is rebuilt only
  * when the projection/duration changes; the position-dependent evaluation
- * runs per tick against the cached input.
+ * runs per tick against the cached input. The active segment is scanned
+ * exactly once per tick and threaded through the precomputed-segment
+ * overloads, so the intro/credits/up-next verdicts do not each re-run the
+ * scan.
  */
 private fun computeOverlay(positionMs: Long, input: SegmentCalculatorInput): SegmentOverlayState {
     val activeSegment = SegmentCalculator.computeActiveSegment(input, positionMs)
@@ -119,9 +122,9 @@ private fun computeOverlay(positionMs: Long, input: SegmentCalculatorInput): Seg
         activeSegmentBehavior = activeSegment?.let {
             SegmentCalculator.behaviorForType(input, it.type)
         } ?: SegmentBehavior.IGNORE,
-        isInIntro = SegmentCalculator.isInSegmentType(input, positionMs, MediaSegmentType.INTRO),
-        isInCredits = SegmentCalculator.isInSegmentType(input, positionMs, MediaSegmentType.OUTRO),
-        shouldShowUpNext = SegmentCalculator.shouldShowUpNext(input, positionMs),
+        isInIntro = SegmentCalculator.isInSegmentType(input, activeSegment, MediaSegmentType.INTRO),
+        isInCredits = SegmentCalculator.isInSegmentType(input, activeSegment, MediaSegmentType.OUTRO),
+        shouldShowUpNext = SegmentCalculator.shouldShowUpNext(input, positionMs, activeSegment),
     )
 }
 

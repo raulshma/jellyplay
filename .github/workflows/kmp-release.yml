@@ -168,6 +168,15 @@ jobs:
       - name: Build web wasm bundle (production)
         run: ./gradlew :apps:web:wasmJsBrowserDistribution --stacktrace
 
+      # BIN-5b (audit): write <name>.gz sidecars for every *.wasm/*.js/*.css
+      # inside the distribution BEFORE the zip step below (it takes the whole
+      # directory verbatim), so self-hosters can serve them with nginx
+      # `gzip_static on;` / Caddy `file_server precompressed` instead of
+      # on-the-fly compression. The task dependsOn the distribution, so this
+      # is a cheap re-entry: the bundle itself is already up to date here.
+      - name: Precompress web bundle (gzip sidecars)
+        run: ./gradlew :apps:web:precompressWasmDist --stacktrace
+
       - name: Zip web bundle with alpha version
         run: |
           VERSION="${{ needs.determine-version.outputs.display }}"

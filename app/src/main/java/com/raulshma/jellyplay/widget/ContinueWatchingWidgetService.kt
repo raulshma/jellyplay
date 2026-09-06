@@ -54,8 +54,9 @@ class ContinueWatchingWidgetService : RemoteViewsService() {
 
         private var items: List<MediaItem> = emptyList()
         // Poster cache populated in [onDataSetChanged] so [getViewAt] never
-        // performs network I/O on the binder thread. Keyed by image id (matches
-        // the lookup key used by `playbackRepository.getImageUrl(...)`).
+        // performs network I/O on the binder thread. Keyed by the image id
+        // from [WidgetImageLoader.continueWatchingPosterEntry] (the series id
+        // when the row is an episode — the same key getViewAt looks up).
         private var posterCache: Map<String, Bitmap?> = emptyMap()
         private var widgetDims: WidgetDimensions? = null
 
@@ -70,8 +71,7 @@ class ContinueWatchingWidgetService : RemoteViewsService() {
             // Pre-fetch posters concurrently so each `getViewAt` is a map lookup.
             // A slow URL is bounded by `WidgetImageLoader`'s internal timeout.
             val urlById = items.associate { item ->
-                val id = item.seriesId ?: item.id
-                id to playbackRepository.getImageUrl(id, maxWidth = 300)
+                WidgetImageLoader.continueWatchingPosterEntry(item, playbackRepository)
             }
             posterCache = if (urlById.isEmpty()) {
                 emptyMap()

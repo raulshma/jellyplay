@@ -53,8 +53,8 @@ class DetailFetchAuthLoopTest {
     }
 
     private fun newEngine(): JellyfinApiEngine = JellyfinApiEngine(
-        dagger.Lazy { jellyfin },
-        dagger.Lazy { OkHttpClient() },
+        Lazy { jellyfin },
+        Lazy { OkHttpClient() },
         DeviceProfileProvider(DesktopDeviceCodecCapabilities()),
         ServerAddressRouter(),
     )

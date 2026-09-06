@@ -46,6 +46,11 @@ import androidx.compose.foundation.focusable
 
 private const val WAVE_FREQUENCY = 6.0f
 
+// Minimum time between waveform phase updates (~30 Hz). The wave scrolls
+// slowly enough that display-rate (60-120 Hz) phase writes are wasted redraws;
+// a time-based gate yields ~30 Hz on any display refresh rate.
+private const val MIN_PHASE_UPDATE_INTERVAL_NS = 33_000_000L
+
 private fun formatTime(ms: Long): String {
     val totalSeconds = ms / 1000
     val minutes = totalSeconds / 60
@@ -71,9 +76,17 @@ fun WaveformSeekBar(
     val isAnimating = isPlaying || isDragging
     LaunchedEffect(isAnimating) {
         if (!isAnimating) return@LaunchedEffect
+        var lastPhaseUpdateNanos = 0L
         while (true) {
             withFrameNanos { nanoTime ->
-                phaseState.floatValue = ((nanoTime / 1_000_000f) % 2000f) / 2000f * (2 * PI).toFloat()
+                // Accept a frame only if enough wall time has passed, so the
+                // phase (and with it the draw phase) advances at ~30 Hz
+                // instead of display frame rate. The phase stays derived from
+                // the frame timestamp, so motion is unchanged — just stepped.
+                if (nanoTime - lastPhaseUpdateNanos >= MIN_PHASE_UPDATE_INTERVAL_NS) {
+                    lastPhaseUpdateNanos = nanoTime
+                    phaseState.floatValue = ((nanoTime / 1_000_000f) % 2000f) / 2000f * (2 * PI).toFloat()
+                }
             }
         }
     }

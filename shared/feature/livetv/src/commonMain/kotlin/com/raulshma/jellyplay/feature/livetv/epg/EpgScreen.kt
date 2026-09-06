@@ -47,6 +47,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import org.koin.compose.viewmodel.koinViewModel
+import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
@@ -108,6 +109,15 @@ fun EpgScreen(
 
     val backgroundColorState = rememberScreenBackgroundColorState()
     val focusRequester = remember { FocusRequester() }
+
+    // Guide auto-refresh is tied to screen visibility (same STARTED/STOP gate
+    // as the settings admin session polling): the 5-minute loop runs only
+    // while the EPG is foregrounded, not for the VM's whole lifetime in the
+    // back stack.
+    LifecycleStartEffect(Unit) {
+        viewModel.startAutoRefresh()
+        onStopOrDispose { viewModel.stopAutoRefresh() }
+    }
 
     JellyPlayScreenScaffold(
         title = stringResource(Res.string.livetv_epg_title),

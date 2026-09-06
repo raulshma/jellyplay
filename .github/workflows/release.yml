@@ -111,20 +111,48 @@ jobs:
       # merges them into the release APK automatically during assemble.
       # Phone only — AGP cannot run TV images on Gradle Managed Devices, so the
       # tv flavor ships without generated profiles.
+      # -PbuildUniversal=true (BIN-3): this step assembles and installs the
+      # app's release APKs on the x86_64 ciPixel8 GMD — keep its APK set
+      # identical to what it built before the universal-APK gating (the
+      # universal APK is where the emulator's ABI coverage came from).
       - name: Generate Baseline Profile
         if: matrix.flavor == 'phone'
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: ./gradlew :app:generate${{ matrix.flavor == 'phone' && 'Phone' || 'Tv' }}ReleaseBaselineProfile -PversionName="${{ needs.determine-version.outputs.apk_version }}" -PversionCode="${{ github.run_number }}"
+        run: ./gradlew :app:generate${{ matrix.flavor == 'phone' && 'Phone' || 'Tv' }}ReleaseBaselineProfile -PversionName="${{ needs.determine-version.outputs.apk_version }}" -PversionCode="${{ github.run_number }}" -PbuildUniversal=true
+
+      # STA-8 (audit): saveInSrc writes the generated profiles into
+      # app/src/phoneRelease/generated/baselineProfiles (baseline-prof.txt /
+      # startup-prof.txt). The generate step can silently produce nothing
+      # (emulator flake, runner regressions) and the lane would still ship a
+      # profile-less release APK — fail it here instead, before the assemble
+      # step reuses an empty profile source set.
+      - name: Verify Baseline Profile Artifacts
+        if: matrix.flavor == 'phone'
+        run: |
+          profile_dir="app/src/phoneRelease/generated/baselineProfiles"
+          shopt -s nullglob
+          profs=("$profile_dir"/*.prof "$profile_dir"/baseline-prof.txt "$profile_dir"/startup-prof.txt)
+          if [ ! -d "$profile_dir" ] || [ ${#profs[@]} -eq 0 ]; then
+            echo "::error::No baseline profile files were written to $profile_dir"
+            ls -laR app/src/phoneRelease 2>/dev/null || true
+            exit 1
+          fi
+          echo "Baseline profile artifacts present:"
+          ls -la "$profile_dir"
 
       - name: Build Android App (Release - ${{ matrix.flavor }})
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: ./gradlew assemble${{ matrix.flavor == 'phone' && 'Phone' || 'Tv' }}Release -PversionName="${{ needs.determine-version.outputs.apk_version }}" -PversionCode="${{ github.run_number }}"
+        # -PbuildUniversal=true (BIN-3): the universal APK is opt-in since the
+        # splits gating; this lane is its only consumer (the rename step's
+        # known_abis list includes it), so pass the property and the published
+        # artifact set stays byte-identical.
+        run: ./gradlew assemble${{ matrix.flavor == 'phone' && 'Phone' || 'Tv' }}Release -PversionName="${{ needs.determine-version.outputs.apk_version }}" -PversionCode="${{ github.run_number }}" -PbuildUniversal=true
 
       - name: Rename APK Outputs
         run: |

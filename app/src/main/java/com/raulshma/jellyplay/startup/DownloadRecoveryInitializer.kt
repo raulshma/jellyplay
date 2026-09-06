@@ -6,15 +6,18 @@ import com.raulshma.jellyplay.core.database.dao.DownloadDao
 import com.raulshma.jellyplay.core.data.repository.DownloadEnqueuer
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import java.io.File
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 
 /**
  * Cold-start download recovery. Extracted out of `JellyPlayApplication` so the
  * Application class *composes* startup steps rather than *containing* them.
  *
  * Re-enqueues `PENDING` downloads and resets `DOWNLOADING` rows back to
- * `PENDING` on every cold start, then deletes orphaned partial bytes for
- * `FAILED` rows. Both enqueues use `ExistingWorkPolicy.KEEP` so an in-flight
- * worker is never cancelled by a process restart.
+ * `PENDING` on every cold start, and deletes orphaned partial bytes for
+ * `FAILED` rows (that cleanup pass runs concurrently with the two ordered
+ * passes — see [recover]). Both enqueues use `ExistingWorkPolicy.KEEP` so an
+ * in-flight worker is never cancelled by a process restart.
  */
 class DownloadRecoveryInitializer (
     private val context: Context,
@@ -22,12 +25,24 @@ class DownloadRecoveryInitializer (
     private val downloadEnqueuer: DownloadEnqueuer,
 ) {
     suspend fun recover() {
-        // Must run first: reconciliation resets truncated/missing completed
-        // downloads to PENDING so recoverPendingDownloads() re-enqueues them
-        // (KEEP policy) on the same pass, self-healing the offline library.
-        reconcileCompletedDownloads()
-        recoverPendingDownloads()
-        cleanupStuckDownloads()
+        // STA-9 (2026-09 perf audit): the three passes used to run strictly
+        // sequentially at every cold start. The reconcile→recover order stays
+        // exactly as written below (load-bearing); the cleanup pass is independent —
+        // its FAILED-row file deletes touch a disjoint row set, and its bulk
+        // resetStuckDownloading() writes the same DOWNLOADING/QUEUED→PENDING
+        // transition (bytes untouched) recoverPendingDownloads() applies
+        // per-row, so any interleaving converges on identical row states —
+        // so it launches alongside instead of serializing behind them. The
+        // coroutineScope still joins it: recover() returns only once all
+        // three passes are done.
+        coroutineScope {
+            launch { cleanupStuckDownloads() }
+            // Must run first: reconciliation resets truncated/missing completed
+            // downloads to PENDING so recoverPendingDownloads() re-enqueues them
+            // (KEEP policy) on the same pass, self-healing the offline library.
+            reconcileCompletedDownloads()
+            recoverPendingDownloads()
+        }
     }
 
     /**

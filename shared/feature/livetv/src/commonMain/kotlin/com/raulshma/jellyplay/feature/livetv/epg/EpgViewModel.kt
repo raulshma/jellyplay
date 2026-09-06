@@ -7,11 +7,14 @@ import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.feature.livetv.components.RecordActions
 import com.raulshma.jellyplay.feature.livetv.components.RecordDialogState
 import com.raulshma.jellyplay.feature.livetv.components.RecordOutcome
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.withContext
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 
@@ -89,19 +92,31 @@ class EpgViewModel(
     )
     val gridData: EpgGridData get() = _gridData.value
 
-    /** Recompute the cached grid snapshot from the current source data. */
-    private fun rebuildGrid() {
-        _gridData.value = buildEpgGridData(
-            channels = _channels.value,
-            programs = _programs.value,
-            windowStart = _windowStart.value,
-            windowEnd = _windowEnd.value,
-        )
+    private var autoRefreshJob: Job? = null
+
+    /**
+     * Recompute the cached grid snapshot from the current source data. The
+     * CPU-heavy groupBy + per-channel filter + sort runs on
+     * [Dispatchers.Default]; the inputs are read and the snapshot published
+     * on the caller's context, so state assignment order is unchanged.
+     */
+    private suspend fun rebuildGrid() {
+        val channels = _channels.value
+        val programs = _programs.value
+        val windowStart = _windowStart.value
+        val windowEnd = _windowEnd.value
+        _gridData.value = withContext(Dispatchers.Default) {
+            buildEpgGridData(
+                channels = channels,
+                programs = programs,
+                windowStart = windowStart,
+                windowEnd = windowEnd,
+            )
+        }
     }
 
     init {
         loadGuide()
-        startAutoRefresh()
     }
 
     fun loadGuide() {
@@ -137,8 +152,15 @@ class EpgViewModel(
 
     fun dismissRecordDialog() { _recordDialog.value = null }
 
-    private fun startAutoRefresh() {
-        launch {
+    /**
+     * Starts the 5-minute guide auto-refresh loop. Tied to screen visibility
+     * (STARTED) by the EPG screen via [stopAutoRefresh] on exit so refreshes
+     * do not run while the screen sits in the back stack. Repeated calls
+     * replace the previous loop instead of stacking another one.
+     */
+    fun startAutoRefresh() {
+        autoRefreshJob?.cancel()
+        autoRefreshJob = launch {
             while (true) {
                 delay(REFRESH_INTERVAL_MS)
                 val now = Instant.now()
@@ -154,6 +176,12 @@ class EpgViewModel(
                     }
             }
         }
+    }
+
+    /** Stops the guide auto-refresh loop started by [startAutoRefresh]. */
+    fun stopAutoRefresh() {
+        autoRefreshJob?.cancel()
+        autoRefreshJob = null
     }
 
 }

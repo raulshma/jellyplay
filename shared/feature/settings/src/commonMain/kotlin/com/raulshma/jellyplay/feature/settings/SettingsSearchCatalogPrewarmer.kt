@@ -4,6 +4,7 @@ import com.raulshma.jellyplay.core.ui.settingssearch.resolve
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.concurrent.Volatile
 
@@ -37,9 +38,28 @@ import kotlin.concurrent.Volatile
  * first read, then cached); an exception must not take down the injected
  * applicationScope child.
  */
+
+/**
+ * Defers the default warm pass out of the t=0 first-frame window (STA-4,
+ * 2026-09 perf audit). The Koin single is eager and fires [SettingsSearchCatalogPrewarmer.warm]
+ * inside startKoin, so the 771 blocking per-entry reads (each an APK-asset
+ * DEFLATE inflation on Android) were contending the Default/IO threads
+ * against first-frame classloading and rendering for the first seconds of
+ * every cold start, on both platforms. Two seconds in, the first frame has
+ * long landed and the pass runs uncontended; a settings screen opened during
+ * the delay simply takes the documented cold per-read path — never worse
+ * than the pre-prewarmer behavior. Lived in the default pass (not in
+ * `warm()`'s launch body) so injected passes — the unit tests' gated and
+ * failing stubs — keep their immediate single-flight semantics verbatim.
+ */
+private const val DEFAULT_PASS_DEFERRAL_MS = 2_000L
+
 class SettingsSearchCatalogPrewarmer(
     private val scope: CoroutineScope,
-    private val warmPass: suspend () -> Unit = { SettingsSearchCatalog.items.resolve() },
+    private val warmPass: suspend () -> Unit = {
+        delay(DEFAULT_PASS_DEFERRAL_MS)
+        SettingsSearchCatalog.items.resolve()
+    },
 ) {
 
     @Volatile
