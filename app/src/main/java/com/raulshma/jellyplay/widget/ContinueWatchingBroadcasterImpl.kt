@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.widget
 
 import android.content.Context
 import android.content.Intent
+import android.util.Log
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.widget.ContinueWatchingBroadcaster
 import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
@@ -49,6 +50,16 @@ class ContinueWatchingBroadcasterImpl(
                 widgetDataStore.continueWatchingSnapshot(),
                 playbackRepository,
             )
+        }.onFailure { e ->
+            // The prewarm is best-effort (the factory falls back to cached
+            // entries), but a silent failure here would make a broken prewarm
+            // indistinguishable from a cold cache — log it like the other
+            // widget-side best-effort paths.
+            Log.w(TAG, "Continue-watching poster prewarm failed", e)
         }
+    }
+
+    private companion object {
+        private const val TAG = "ContinueWatchingBcast"
     }
 }

@@ -370,7 +370,7 @@ class MediaRepositoryImpl(
      * In-memory record of the last home snapshot this process persisted (or
      * verified byte-identical) for one (server, user, cacheKey): the DB row's
      * `fetchedAt` it was computed against, plus the cheap fingerprint of the
-     * payload ([homeSnapshotFingerprint]). Lets the dedup window in
+     * payload ([HomeSnapshotFingerprint]). Lets the dedup window in
      * [persistHomeSectionsSnapshot] skip the full JSON re-encode on
      * usually-identical foreground refreshes. Null until the first persist
      * of the process — a miss simply takes the exact encode+compare path.
@@ -388,59 +388,6 @@ class MediaRepositoryImpl(
     @Volatile
     private var lastHomeSnapshotDedup: HomeSnapshotDedupState? = null
 
-    /**
-     * Cheap structural fingerprint of a [HomeSectionsResult] for the dedup
-     * window below (DATA-1): ONE string per fetch (indexed loops, no
-     * per-item object allocations), covering what a foreground home refresh
-     * can change — failed section types, per-section header identity
-     * (id/title/type/libraryId/collectionType/seed id) and, per item, the id
-     * plus the user-data fields the home rows render (playback position,
-     * played + favorite flags). Deliberately NOT the full payload:
-     * metadata-only changes (overview text, ratings, …) do not alter it,
-     * which is exactly the "equal fingerprint does not imply a byte-identical
-     * encode" caveat documented in [persistHomeSectionsSnapshot]. Hashed to a
-     * single Int for retention in [lastHomeSnapshotDedup].
-     */
-    private fun homeSnapshotFingerprint(result: HomeSectionsResult): Int {
-        val sb = StringBuilder()
-        for (failedType in result.failedSectionTypes) {
-            sb.append(failedType.name)
-            sb.append('|')
-        }
-        sb.append('#')
-        val sections = result.sections
-        for (s in sections.indices) {
-            val section = sections[s]
-            sb.append(section.id)
-            sb.append('|')
-            sb.append(section.title)
-            sb.append('|')
-            sb.append(section.type.name)
-            sb.append('|')
-            sb.append(section.libraryId)
-            sb.append('|')
-            sb.append(section.collectionType)
-            sb.append('|')
-            sb.append(section.seedItem?.id)
-            sb.append('|')
-            val sectionItems = section.items
-            for (i in sectionItems.indices) {
-                val item = sectionItems[i]
-                sb.append(item.id)
-                sb.append('|')
-                sb.append(item.playbackPositionTicks)
-                sb.append('|')
-                sb.append(item.isPlayed)
-                sb.append('|')
-                sb.append(item.isFavorite)
-                sb.append(';')
-            }
-            sb.append('#')
-        }
-        // toString() first: StringBuilder's own hashCode is identity-based.
-        return sb.toString().hashCode()
-    }
-
     private suspend fun persistHomeSectionsSnapshot(cacheKey: String, result: HomeSectionsResult) {
         val identity = homeSession.currentIdentity() ?: return
         // Fire-and-forget persist on the home refresh path: a cancelled
@@ -457,7 +404,7 @@ class MediaRepositoryImpl(
             val existing = homeSectionCacheDao.get(identity.serverId, identity.userId, cacheKey)
             // Computed once here: the cheap-path check and both
             // rememberHomeSnapshotDedup exits below all need the same value.
-            val fingerprint = homeSnapshotFingerprint(result)
+            val fingerprint = HomeSnapshotFingerprint.of(result)
             // Cheap-path dedup (DATA-1): inside the window, a fingerprint
             // match against the last payload this process persisted/verified
             // for this exact (server, user, cacheKey, row) skips the full
@@ -466,7 +413,7 @@ class MediaRepositoryImpl(
             // INVARIANT: fingerprint equal ⇒ the encode would have been
             // byte-identical is NOT guaranteed (only section identity, item
             // ids and their user-data fields are fingerprinted — see
-            // [homeSnapshotFingerprint]), so a metadata-only change inside
+            // [HomeSnapshotFingerprint]), so a metadata-only change inside
             // the window persists one refresh cycle later (audit-accepted).
             // Fingerprint unequal, window expired, or no prior state ⇒ the
             // exact pre-existing encode+compare+write path below runs.

@@ -70,6 +70,13 @@ jobs:
       fail-fast: false
       matrix:
         flavor: [phone, tv]
+    env:
+      # BIN-3: the universal APK is opt-in, and BOTH gradle invocations below
+      # must pass the same property — the baseline-profile lane so its GMD
+      # APK set stays identical to pre-gating, the assemble lane so the
+      # published artifact set (the rename step's known_abis) stays
+      # byte-identical. Defined once here so the two steps cannot drift.
+      BUILD_UNIVERSAL: -PbuildUniversal=true
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v7
@@ -111,7 +118,8 @@ jobs:
       # merges them into the release APK automatically during assemble.
       # Phone only — AGP cannot run TV images on Gradle Managed Devices, so the
       # tv flavor ships without generated profiles.
-      # -PbuildUniversal=true (BIN-3): this step assembles and installs the
+      # -PbuildUniversal=true (BIN-3, job-level $BUILD_UNIVERSAL): this step
+      # assembles and installs the
       # app's release APKs on the x86_64 ciPixel8 GMD — keep its APK set
       # identical to what it built before the universal-APK gating (the
       # universal APK is where the emulator's ABI coverage came from).
@@ -121,7 +129,7 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: ./gradlew :app:generate${{ matrix.flavor == 'phone' && 'Phone' || 'Tv' }}ReleaseBaselineProfile -PversionName="${{ needs.determine-version.outputs.apk_version }}" -PversionCode="${{ github.run_number }}" -PbuildUniversal=true
+        run: ./gradlew :app:generate${{ matrix.flavor == 'phone' && 'Phone' || 'Tv' }}ReleaseBaselineProfile -PversionName="${{ needs.determine-version.outputs.apk_version }}" -PversionCode="${{ github.run_number }}" $BUILD_UNIVERSAL
 
       # STA-8 (audit): saveInSrc writes the generated profiles into
       # app/src/phoneRelease/generated/baselineProfiles (baseline-prof.txt /
@@ -155,11 +163,12 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        # -PbuildUniversal=true (BIN-3): the universal APK is opt-in since the
+        # -PbuildUniversal=true (BIN-3, job-level $BUILD_UNIVERSAL): the
+        # universal APK is opt-in since the
         # splits gating; this lane is its only consumer (the rename step's
         # known_abis list includes it), so pass the property and the published
         # artifact set stays byte-identical.
-        run: ./gradlew assemble${{ matrix.flavor == 'phone' && 'Phone' || 'Tv' }}Release -PversionName="${{ needs.determine-version.outputs.apk_version }}" -PversionCode="${{ github.run_number }}" -PbuildUniversal=true
+        run: ./gradlew assemble${{ matrix.flavor == 'phone' && 'Phone' || 'Tv' }}Release -PversionName="${{ needs.determine-version.outputs.apk_version }}" -PversionCode="${{ github.run_number }}" $BUILD_UNIVERSAL
 
       - name: Rename APK Outputs
         run: |

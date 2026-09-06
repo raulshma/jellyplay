@@ -361,39 +361,7 @@ class AuthRepositoryImpl constructor(
                     validateRestoredSession()
                 }
                 if (!addressSelected || !validationCompleted) {
-                    // Deferred validation pass (STA-1) on the application
-                    // scope — never cancelled for this singleton. A definitive
-                    // 401 here funnels through validateRestoredSession's
-                    // disconnect + clearSession, the same teardown the shell
-                    // already observes through isAuthenticated flipping false,
-                    // so a late rejection swaps shell → login a few frames
-                    // later instead of holding the splash hostage to it.
-                    externalScope.launch {
-                        if (!addressSelected) {
-                            // Bounded like the gated pass above: an
-                            // unreachable server's probes must not suspend
-                            // forever on the app-lifetime scope — that would
-                            // starve the deferred 401 validation below.
-                            withTimeoutOrNull(RESTORE_NETWORK_STAGE_TIMEOUT_MS) {
-                                runCatchingRethrowingCancellation { apiClient.selectReachableAddress() }
-                            }
-                        }
-                        if (!validationCompleted) {
-                            // Unguarded, a DataStore failure inside
-                            // clearSession() surfaces as an unhandled
-                            // exception on the app-lifetime scope. Unlike the
-                            // gated pass this stage is not timeout-bounded:
-                            // nothing suspends on its completion (the shell
-                            // has long since left the splash), and this pass
-                            // is the last chance for a definitive 401 verdict
-                            // — abandoning it on a slow server would lose
-                            // that teardown until the next cold start.
-                            runCatchingRethrowingCancellation { validateRestoredSession() }
-                                .onFailure { e ->
-                                    Log.w("AuthRepository", "Deferred session validation failed", e)
-                                }
-                        }
-                    }
+                    launchDeferredRestoreValidation(addressSelected, validationCompleted)
                 }
             } else {
                 Log.w("AuthRepository", "restoreSession: no access token for active user")
@@ -414,6 +382,41 @@ class AuthRepositoryImpl constructor(
             stage()
             true
         } ?: false
+
+    /**
+     * Deferred validation pass (STA-1) on the application scope — never
+     * cancelled for this singleton. A definitive 401 here funnels through
+     * validateRestoredSession's disconnect + clearSession, the same teardown
+     * the shell already observes through isAuthenticated flipping false, so
+     * a late rejection swaps shell → login a few frames later instead of
+     * holding the splash hostage to it.
+     */
+    private fun launchDeferredRestoreValidation(addressSelected: Boolean, validationCompleted: Boolean) {
+        externalScope.launch {
+            if (!addressSelected) {
+                // Bounded like the gated pass above: an unreachable server's
+                // probes must not suspend forever on the app-lifetime scope —
+                // that would starve the deferred 401 validation below.
+                withTimeoutOrNull(RESTORE_NETWORK_STAGE_TIMEOUT_MS) {
+                    runCatchingRethrowingCancellation { apiClient.selectReachableAddress() }
+                }
+            }
+            if (!validationCompleted) {
+                // Unguarded, a DataStore failure inside clearSession()
+                // surfaces as an unhandled exception on the app-lifetime
+                // scope. Unlike the gated pass this stage is not
+                // timeout-bounded: nothing suspends on its completion (the
+                // shell has long since left the splash), and this pass is the
+                // last chance for a definitive 401 verdict — abandoning it on
+                // a slow server would lose that teardown until the next cold
+                // start.
+                runCatchingRethrowingCancellation { validateRestoredSession() }
+                    .onFailure { e ->
+                        Log.w("AuthRepository", "Deferred session validation failed", e)
+                    }
+            }
+        }
+    }
 
     /**
      * Restore-time guard on top of [storedTokenRejected]: a token the server
