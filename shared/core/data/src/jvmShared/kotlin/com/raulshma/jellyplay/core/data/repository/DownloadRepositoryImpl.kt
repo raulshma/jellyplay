@@ -349,32 +349,59 @@ class DownloadRepositoryImpl(
             Log.w(TAG, "Failed to enumerate interrupted downloads for resume", e)
             return
         }
+        // Eligible rows resume in two batched UPDATEs (one per byte-offset rule,
+        // see [DownloadStates.keepsResumeBytes]) instead of a per-row loop.
+        val keepBytesIds = mutableListOf<String>()
+        val fromZeroIds = mutableListOf<String>()
         for (row in candidates) {
+            // A user-paused download stays paused until the user resumes it.
+            if (DownloadStates.isUserPaused(row.status, row.pausedReason)) continue
+            // Exhausted the auto-retry budget — leave it FAILED for a manual
+            // retry rather than spinning on every reconnect.
+            if (DownloadStates.isExhausted(row.retryCount)) continue
+            if (DownloadStates.keepsResumeBytes(row.status)) keepBytesIds += row.id else fromZeroIds += row.id
+        }
+        // Rows are only enqueued once their status flip succeeded — a failed
+        // batch UPDATE must not leave FAILED/PAUSED rows enqueued. The two
+        // batches are isolated: one failing must not abort the other (the old
+        // per-row resume loop let every independent row proceed).
+        suspend fun resumeBatch(
+            ids: List<String>,
+            label: String,
+            update: suspend (List<String>) -> Unit,
+        ): List<String> = try {
+            update(ids)
+            ids
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to resume $label", e)
+            emptyList()
+        }
+
+        // Paused rows keep their contiguous byte prefix (untouched here);
+        // FAILED partials were deleted by cleanupStuckDownloads (multi-
+        // connection scattered writes can't be appended to) and resume
+        // from 0. Status + cleared pause reason in one UPDATE each; the
+        // retry budget is deliberately preserved (the eligibility checks
+        // above already dead-lettered exhausted rows).
+        val resumedIds = buildList {
+            if (keepBytesIds.isNotEmpty()) addAll(
+                resumeBatch(keepBytesIds, "paused downloads") {
+                    downloadDao.updateStatusWithPausedReasonForIds(it, DownloadStatus.PENDING.name, null)
+                },
+            )
+            if (fromZeroIds.isNotEmpty()) addAll(
+                resumeBatch(fromZeroIds, "failed downloads") {
+                    downloadDao.markResumedFromZeroForIds(it, DownloadStatus.PENDING.name, null)
+                },
+            )
+        }
+        for (id in resumedIds) {
             try {
-                // A user-paused download stays paused until the user resumes it.
-                if (DownloadStates.isUserPaused(row.status, row.pausedReason)) continue
-                // Exhausted the auto-retry budget — leave it FAILED for a manual
-                // retry rather than spinning on every reconnect.
-                if (DownloadStates.isExhausted(row.retryCount)) continue
-                // A FAILED partial was deleted by cleanupStuckDownloads (multi-
-                // connection scattered writes can't be appended to), so resume
-                // FAILED rows from 0. A NETWORK-paused single-connection row has
-                // a contiguous prefix, so preserve its byte offset. The rule
-                // lives in [DownloadStates.resumeByteOffset] — the single home
-                // shared with the recovery initializer and the multi-connection
-                // strategy.
-                val startBytes = DownloadStates.resumeByteOffset(row.status, row.downloadedBytes)
-                // Status + cleared pause reason in one UPDATE; the retry budget
-                // is deliberately preserved (the eligibility check above already
-                // dead-lettered exhausted rows).
-                downloadDao.updateProgressWithPausedReason(
-                    row.id, startBytes, DownloadStatus.PENDING.name, null,
-                )
-                enqueueDownload(row.id)
+                enqueueDownload(id)
             } catch (e: Exception) {
-                // One bad row/enqueue must not abort the whole batch — the other
+                // One bad enqueue must not abort the whole batch — the other
                 // interrupted downloads still resume this pass.
-                Log.w(TAG, "Failed to resume interrupted download ${row.id}", e)
+                Log.w(TAG, "Failed to resume interrupted download $id", e)
             }
         }
         refreshDownloadSummary()

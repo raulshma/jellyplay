@@ -24,15 +24,4 @@ object LibraryGrouper {
         GroupBy.GENRE -> item.genres.firstOrNull() ?: "Unknown"
         GroupBy.YEAR -> item.year?.toString() ?: "Unknown"
     }
-
-    /**
-     * Sort comparator that orders items to match the active [GroupBy] dimension,
-     * so groups come out contiguous when building header/item rows. Without this,
-     * grouping a snapshot that is server-sorted by a different dimension (e.g.
-     * Name) scatters the same group key across the list, which produced duplicate
-     * `"header_${key}"` lazy keys and crashed the app (issue #113). Within a group,
-     * the server's existing order is preserved (stable sort).
-     */
-    fun groupComparator(groupBy: GroupBy): Comparator<MediaItem> =
-        Comparator { a, b -> groupKey(a, groupBy).compareTo(groupKey(b, groupBy)) }
 }

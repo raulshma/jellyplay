@@ -12,6 +12,7 @@ import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.search.MediaSearchEngine
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestStateHolder
+import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestSnapshot
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.Genre
@@ -87,8 +88,8 @@ class SearchViewModel(
     private val _searchHistory = stateFlow<List<SearchHistoryItem>>(emptyList())
     val searchHistory: StateFlow<List<SearchHistoryItem>> = _searchHistory.flow
 
-    private val seerrPrefs: Flow<com.raulshma.jellyplay.core.model.seerr.SeerrPreferences> =
-        seerrRepository.getPreferences()
+    private val seerrPrefs: StateFlow<SeerrPreferences> =
+        seerrRepository.getPreferences().stateIn(scope, SharingStarted.Lazily, SeerrPreferences())
 
     val isSeerrConnected: StateFlow<Boolean> = seerrPrefs.map {
         it.serverUrl.isNotBlank()

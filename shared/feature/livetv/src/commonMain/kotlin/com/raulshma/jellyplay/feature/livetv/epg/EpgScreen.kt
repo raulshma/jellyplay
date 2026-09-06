@@ -141,7 +141,7 @@ fun EpgScreen(
                 ) {
                     EpgGrid(
                         gridData = viewModel.gridData,
-                        now = viewModel.now,
+                        now = viewModel.now.collectAsStateWithLifecycle().value,
                         contentPadding = contentPad,
                         bottomPadding = bottomPad,
                         onProgramClick = onProgramClick,
@@ -364,9 +364,7 @@ private fun ChannelProgramsRow(
     val liveProgramId by remember(rowLayout, windowStart) {
         derivedStateOf {
             val live = rowLayout.programLayouts.firstOrNull { layout ->
-                val s = layout.program.startInstant()
-                val e = layout.program.endInstant() ?: s
-                s != null && currentNow >= s && currentNow < (e ?: s)
+                currentNow >= layout.start && currentNow < layout.end
             }
             live?.program?.id
         }

@@ -9,6 +9,7 @@ import coil3.disk.DiskCache
 import coil3.memory.MemoryCache
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import coil3.request.crossfade
+import coil3.serviceLoaderEnabled
 import coil3.size.Size
 import com.raulshma.jellyplay.core.data.di.CoreDataWorkerFactory
 import com.raulshma.jellyplay.core.data.di.androidCoreDataModule
@@ -444,6 +445,10 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
         val memoryCachePercent = if (isLowRamDevice) 0.12 else 0.20
 
         ImageLoader.Builder(this)
+            // The explicit OkHttp fetcher registered below always wins, so
+            // Coil's ServiceLoader discovery of its default fetcher is dead
+            // work — skip it, mirroring the desktop builder in Main.kt.
+            .serviceLoaderEnabled(false)
             .components {
                 add(OkHttpNetworkFetcherFactory(callFactory = { imageClient }))
             }

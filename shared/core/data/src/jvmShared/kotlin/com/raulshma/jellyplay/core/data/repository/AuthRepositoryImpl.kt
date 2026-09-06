@@ -71,11 +71,11 @@ class AuthRepositoryImpl constructor(
      * switchUser) produced, briefly reporting authenticated for an identity
      * that never existed. Never combine the two separate flows back.
      */
-    override val isAuthenticated: Flow<Boolean> = apiClient.session
+    override val isAuthenticated: StateFlow<Boolean> = apiClient.session
         .map { it != null }
         .stateIn(externalScope, SharingStarted.WhileSubscribed(5_000), false)
 
-    override val currentServerUsers: Flow<List<UserInfo>> =
+    override val currentServerUsers: StateFlow<List<UserInfo>> =
         apiClient.currentServer.flatMapLatest { server ->
             server?.id?.let { sid ->
                 userDao.getUsersForServer(sid).map { list ->

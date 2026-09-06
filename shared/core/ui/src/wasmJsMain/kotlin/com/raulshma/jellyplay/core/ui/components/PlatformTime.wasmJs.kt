@@ -46,12 +46,17 @@ internal actual fun hourOfDayAt(epochMillis: Long?): Int =
 private const val MDY_REGIONS = "US|PH|CA|KE|GH|FM|PW|PG|BZ|MT"
 private const val YMD_REGIONS = "JP|KR|KP|CN|TW|HU|MN|LT"
 
+private val ISO_DATE_SHAPE = Regex("""^\d{4}-\d{2}-\d{2}$""")
+private val ISO_TIMESTAMP_SHAPE = Regex(
+    """^-?\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?$""",
+)
+
 internal actual fun isoDateIsAfterToday(dateStr: String): Boolean {
     // Strictly-shaped yyyy-MM-dd only (the Seerr wire form); anything else
     // fails like the old try/catch around LocalDate.parse did. The field-range
     // check rejects impossible dates the shape regex alone would admit
     // ("2099-02-31") — java.time accepted no such input either.
-    if (!Regex("""^\d{4}-\d{2}-\d{2}$""").matches(dateStr)) return false
+    if (!ISO_DATE_SHAPE.matches(dateStr)) return false
     val (year, month, day) = dateStr.split('-').map { it.toInt() }
     if (month !in 1..12 || day !in 1..maxDayInMonth(year, month)) return false
     val nowMs = wallNowMillis()
@@ -70,10 +75,7 @@ internal actual fun parseIsoTimestampToEpochMillis(value: String?): Long? {
     value ?: return null
     // Shape-guard first so legacy non-ISO strings reach a clean null instead
     // of browser lenient-parsing garbage.
-    val isoShape = Regex(
-        """^-?\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?$""",
-    )
-    if (!isoShape.matches(value)) return null
+    if (!ISO_TIMESTAMP_SHAPE.matches(value)) return null
     // Date.parse resolves Z / ±HH:mm offsets natively and treats the bare
     // form as browser-local time — the analog of LocalDateTime.atZone(systemDefault).
     val parsed = jsParseMillis(value)

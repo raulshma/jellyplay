@@ -15,6 +15,7 @@ import com.raulshma.jellyplay.feature.auth.generated.resources.auth_qc_error_tim
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 
 sealed class QuickConnectUiState {
@@ -36,8 +37,7 @@ class AuthViewModel(
     private val _serverHealth = stateFlow<Map<String, ServerHealth>>(emptyMap())
     val serverHealth = _serverHealth.flow
 
-    val currentServerUsers = authRepository.currentServerUsers
-        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    val currentServerUsers: StateFlow<List<UserInfo>> = authRepository.currentServerUsers
 
     private val _isLoading = stateFlow(false)
     val isLoading = _isLoading.flow

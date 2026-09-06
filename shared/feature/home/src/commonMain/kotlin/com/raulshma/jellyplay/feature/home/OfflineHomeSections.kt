@@ -17,6 +17,7 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMediaTypeGroup
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.isFinishedOffline
+import com.raulshma.jellyplay.core.model.sortedWithCachedKey
 import com.raulshma.jellyplay.core.model.toMediaItem
 import com.raulshma.jellyplay.core.model.typeGroup
 import java.util.PriorityQueue
@@ -267,12 +268,13 @@ internal fun buildOfflineHomeSections(
             .filter { it.hasResumePosition() }
             .filter { it.playedPercentage >= 1.0 && !it.isPlayed && !it.isFinishedOffline }
             .filter { it.id !in prefs.hiddenCwItemIds }
-            .sortedWith(
-                compareByDescending<OfflineMediaItem> { isoEpochMillis(it.lastPlayedDate) ?: Long.MIN_VALUE }
-                    .thenByDescending { it.createdAt }
+            .toList()
+            .sortedWithCachedKey(
+                keySelector = { isoEpochMillis(it.lastPlayedDate) ?: Long.MIN_VALUE },
+                comparator = compareByDescending<Pair<OfflineMediaItem, Long>> { (_, lastPlayedMillis) -> lastPlayedMillis }
+                    .thenByDescending { (item, _) -> item.createdAt },
             )
             .take(CONTINUE_WATCHING_LIMIT)
-            .toList()
     } else {
         emptyList()
     }

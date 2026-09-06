@@ -539,7 +539,7 @@ fun HomeMediaRow(
             val cardImage = rememberEpisodeCardImage(
                 item = item,
                 itemImageUrl = remember(item) { imageUrlBuilder(item) },
-                fallbackImageUrls = fallbackImageUrlBuilder(item),
+                fallbackImageUrls = remember(item) { fallbackImageUrlBuilder(item) },
                 seriesPosterResolver = seriesPosterResolver,
                 seriesBackdropResolver = seriesBackdropResolver,
                 showEpisodeSeriesBadge = showEpisodeSeriesBadge,

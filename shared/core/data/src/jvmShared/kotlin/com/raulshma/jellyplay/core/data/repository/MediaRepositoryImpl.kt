@@ -356,10 +356,24 @@ class MediaRepositoryImpl(
     private suspend fun persistHomeSectionsSnapshot(cacheKey: String, result: HomeSectionsResult) {
         val identity = homeSession.currentIdentity() ?: return
         runCatching {
+            // Foreground refreshes arrive ~once/minute with usually-identical
+            // content; when the prior row is younger than the refresh cadence
+            // and the payload is byte-identical, the rewrite would advance
+            // nothing (fetchedAt refreshes at the next real change) — skip it.
+            // Rows older than the window still rewrite, preserving the 24h
+            // fetchedAt SWR staleness ceiling for every other path.
+            val now = timeSource.nowEpochMillis()
+            val existing = homeSectionCacheDao.get(identity.serverId, identity.userId, cacheKey)
             // Encode off the caller's (Main) dispatcher — this runs on every
             // successful home refresh (min. once/minute in foreground).
             val payloadJson = withContext(Dispatchers.Default) {
                 com.raulshma.jellyplay.core.database.Converters.encodeHomeSectionsResult(result)
+            }
+            if (existing != null &&
+                now - existing.fetchedAt < HOME_PERSIST_DEDUP_WINDOW_MS &&
+                existing.payloadJson == payloadJson
+            ) {
+                return
             }
             homeSectionCacheDao.upsert(
                 HomeSectionCacheEntity(
@@ -375,7 +389,7 @@ class MediaRepositoryImpl(
                     // share one test fake.
                     // fetchedAt is load-bearing: getCachedHomeSections reads it
                     // against HomeFreshness's 24h SWR staleness ceiling.
-                    fetchedAt = timeSource.nowEpochMillis(),
+                    fetchedAt = now,
                 ),
             )
         }
@@ -997,6 +1011,9 @@ class MediaRepositoryImpl(
         private const val SYNTHETIC_CHANGES_BUFFER = 64
         /** 10 minutes — library folders change rarely during a session. */
         private const val FOLDERS_CACHE_TTL_MS = 10 * 60 * 1000L
+
+        /** Window within which a byte-identical home SWR persist is skipped (foreground refresh cadence). */
+        private const val HOME_PERSIST_DEDUP_WINDOW_MS = 60 * 1000L
         /** 2 minutes — "latest" content should feel fresh on re-entry. */
         private const val LATEST_CACHE_TTL_MS = 2 * 60 * 1000L
     }

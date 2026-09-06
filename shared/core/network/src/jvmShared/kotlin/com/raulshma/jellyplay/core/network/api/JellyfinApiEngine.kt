@@ -158,13 +158,16 @@ class JellyfinApiEngine @Inject constructor(
      */
     private fun rebuildApiFor(address: String) {
         if (_api == null) return
-        val user = _currentUser.value
-        _api = user?.let { jellyfin.createApi(baseUrl = address, accessToken = it.accessToken) }
-        if (user != null) {
-            // updateUser (not a raw assignment) so the combined session flow
-            // republishes the pair with the mirrored address.
-            updateUser(user.copy(serverAddress = address))
-        }
+        // No user yet → no token to preserve; keep the existing client rather
+        // than nulling it. A live client must not die merely because an
+        // address flap raced the session seeding (updateServer → updateApi →
+        // updateUser is not atomic) — the next address change after the user
+        // lands performs the retarget.
+        val user = _currentUser.value ?: return
+        _api = jellyfin.createApi(baseUrl = address, accessToken = user.accessToken)
+        // updateUser (not a raw assignment) so the combined session flow
+        // republishes the pair with the mirrored address.
+        updateUser(user.copy(serverAddress = address))
     }
 
     suspend fun <T> apiResult(block: suspend () -> T): Result<T> =

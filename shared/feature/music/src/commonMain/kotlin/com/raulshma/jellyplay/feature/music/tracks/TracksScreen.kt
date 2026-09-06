@@ -186,7 +186,9 @@ fun TracksScreen(
                                         artist = track.albumArtist,
                                         album = track.album,
                                         duration = track.runTimeTicks?.let { ticks ->
-                                            com.raulshma.jellyplay.core.ui.components.formatDurationMs(ticks / 10_000)
+                                            remember(ticks) {
+                                                com.raulshma.jellyplay.core.ui.components.formatDurationMs(ticks / 10_000)
+                                            }
                                         },
                                         imageUrl = imageUrl,
                                         onClick = onClick,

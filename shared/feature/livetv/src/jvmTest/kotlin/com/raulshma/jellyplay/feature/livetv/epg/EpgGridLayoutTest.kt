@@ -63,9 +63,9 @@ class EpgGridLayoutTest {
 
         assertEquals(3, grid.rows.size)
         assertEquals(listOf("cnn", "espn", "hbo"), grid.rows.map { it.channel.id })
-        assertEquals(listOf("p2"), grid.rows[0].programs.map { it.id })
-        assertEquals(listOf("p1", "p3"), grid.rows[1].programs.map { it.id })
-        assertTrue(grid.rows[2].programs.isEmpty())
+        assertEquals(listOf("p2"), grid.rows[0].timedPrograms.map { it.program.id })
+        assertEquals(listOf("p1", "p3"), grid.rows[1].timedPrograms.map { it.program.id })
+        assertTrue(grid.rows[2].timedPrograms.isEmpty())
     }
 
     @Test
@@ -83,7 +83,7 @@ class EpgGridLayoutTest {
         val grid = buildEpgGridData(channels, programs, windowStart, windowEnd)
 
         assertEquals(1, grid.rows.size)
-        assertEquals(listOf("inside"), grid.rows[0].programs.map { it.id })
+        assertEquals(listOf("inside"), grid.rows[0].timedPrograms.map { it.program.id })
     }
 
     @Test
@@ -98,7 +98,7 @@ class EpgGridLayoutTest {
 
         val grid = buildEpgGridData(channels, programs, windowStart, windowEnd)
 
-        assertEquals(2, grid.rows[0].programs.size)
+        assertEquals(2, grid.rows[0].timedPrograms.size)
     }
 
     @Test
@@ -112,7 +112,7 @@ class EpgGridLayoutTest {
 
         val grid = buildEpgGridData(channels, programs, windowStart, windowEnd)
 
-        assertEquals(listOf("early", "mid", "late"), grid.rows[0].programs.map { it.id })
+        assertEquals(listOf("early", "mid", "late"), grid.rows[0].timedPrograms.map { it.program.id })
     }
 
     @Test
@@ -120,7 +120,7 @@ class EpgGridLayoutTest {
         val channels = listOf(channel("empty"))
         val grid = buildEpgGridData(channels, emptyList(), windowStart, windowEnd)
         assertEquals(1, grid.rows.size)
-        assertTrue(grid.rows[0].programs.isEmpty())
+        assertTrue(grid.rows[0].timedPrograms.isEmpty())
     }
 
     // ── layoutChannelRow ────────────────────────────────────────────────────

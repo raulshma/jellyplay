@@ -52,7 +52,6 @@ import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchProvider
 import com.raulshma.jellyplay.core.ui.settingssearch.settingsSearchResults
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -61,7 +60,6 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onSubscription
 import kotlinx.coroutines.flow.onStart
-import kotlinx.coroutines.flow.stateIn
 import java.time.LocalDate
 
 internal class HomeViewModel(
@@ -289,7 +287,6 @@ internal class HomeViewModel(
      * it's already populated after login — no extra fetch.
      */
     val currentServerUsers: StateFlow<List<UserInfo>> = authRepository.currentServerUsers
-        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /**
      * The offline home's advanced "delete downloaded episodes" sheet for a

@@ -73,6 +73,9 @@ private val SEARCH_SUGGESTIONS_PROJECTION = SEARCH_SUGGESTIONS_FIELDS.map { toke
         ?: error("ItemFields has no serial name '$token' — SDK drift vs the search-suggestions projection")
 }
 
+/** ImageType resolved by serial name once — [ImageType.fromNameOrNull] linear-scans per call and Coil binds run per item. Keys lowercased: [fromNameOrNull] matches serial names case-insensitively, so callers passing server-JSON casing ("primary") must resolve too. */
+private val IMAGE_TYPES_BY_SERIAL_NAME = ImageType.entries.associateBy { it.serialName.lowercase() }
+
 @Singleton
 class LibraryApiClientImpl @Inject constructor(
     private val engine: JellyfinApiEngine,
@@ -976,7 +979,7 @@ class LibraryApiClientImpl @Inject constructor(
 
     override fun getImageUrl(itemId: String, imageType: String, maxWidth: Int?, imageIndex: Int?, tag: String?): String {
         val api = engine.api ?: return ""
-        val imageTypeEnum = org.jellyfin.sdk.model.api.ImageType.fromNameOrNull(imageType)
+        val imageTypeEnum = IMAGE_TYPES_BY_SERIAL_NAME[imageType.lowercase()]
             ?: return ""
         return api.imageApi.getItemImageUrl(
             itemId = runCatching { itemId.toUUID() }.getOrNull() ?: return "",

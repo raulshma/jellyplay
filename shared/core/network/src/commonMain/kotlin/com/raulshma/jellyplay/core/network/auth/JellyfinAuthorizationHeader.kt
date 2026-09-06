@@ -57,7 +57,7 @@ object JellyfinAuthorizationHeader {
 
     /** Trim, remove line feeds, then percent-encode — SDK order preserved. */
     internal fun encodeParameterValue(raw: String): String =
-        encodeUrlPart(raw.trim().replace(Regex("\\n"), ""))
+        encodeUrlPart(raw.trim().replace(LINE_FEEDS, ""))
 
     /**
      * Percent-encoding mirroring the SDK's `encodeURLPart`: unreserved
@@ -83,6 +83,8 @@ object JellyfinAuthorizationHeader {
     private fun Char.isUnreserved(): Boolean =
         this in 'A'..'Z' || this in 'a'..'z' || this in '0'..'9' ||
             this == '-' || this == '.' || this == '_' || this == '~'
+
+    private val LINE_FEEDS = Regex("\\n")
 
     private const val HEX = "0123456789ABCDEF"
 }

@@ -93,7 +93,14 @@ class ServerAddressRouter @Inject constructor(
     @Volatile
     private var primaryUrl: HttpUrl? = null
 
+    /** Parsed mirror of [_activeAddress]; spares a String→HttpUrl parse per request. */
+    @Volatile
+    private var activeUrl: HttpUrl? = null
+
     private val _activeAddress = MutableStateFlow<String?>(null)
+
+    /** Serializes [setActive]; see the write-ordering note there. */
+    private val activeStateLock = Any()
 
     /** The address all server traffic should use right now (no trailing slash). */
     val activeAddress: StateFlow<String?> = _activeAddress.asStateFlow()
@@ -126,9 +133,9 @@ class ServerAddressRouter @Inject constructor(
         primaryUrl = primary
         endpoints = listOf(Endpoint(primary, isPrimary = true)) +
             alternates.map { Endpoint(it, isPrimary = false) }
-        val activeUrl = _activeAddress.value?.toHttpUrlOrNull()
-        if (primaryChanged || activeUrl == null || endpoints.none { it.url == activeUrl }) {
-            _activeAddress.value = addressString(primary)
+        val currentActiveUrl = activeUrl
+        if (primaryChanged || currentActiveUrl == null || endpoints.none { it.url == currentActiveUrl }) {
+            setActive(addressString(primary))
         }
     }
 
@@ -136,7 +143,22 @@ class ServerAddressRouter @Inject constructor(
     fun clear() {
         endpoints = emptyList()
         primaryUrl = null
-        _activeAddress.value = null
+        setActive(null)
+    }
+
+    /**
+     * Single write path for the active address: keeps the parsed mirror in
+     * sync. Writes [activeUrl] before publishing [_activeAddress] so a reader
+     * that observes the new address string never sees a stale parsed mirror;
+     * the lock serializes concurrent setters so two racing [markActive] calls
+     * cannot leave the pair permanently torn.
+     */
+    private fun setActive(address: String?) {
+        val parsed = address?.toHttpUrlOrNull()
+        synchronized(activeStateLock) {
+            activeUrl = parsed
+            _activeAddress.value = address
+        }
     }
 
     /** Whether the active server has more than one address to route between. */
@@ -152,8 +174,7 @@ class ServerAddressRouter @Inject constructor(
      * server (matched on scheme + host + port), else null. Requests that
      * return null (GitHub, TMDB, Seerr, …) must never be rewritten.
      */
-    fun endpointFor(url: HttpUrl): Endpoint? =
-        endpoints.firstOrNull { it.url.scheme == url.scheme && it.url.host == url.host && it.url.port == url.port }
+    fun endpointFor(url: HttpUrl): Endpoint? = endpoints.firstOrNull { sameTarget(it.url, url) }
 
     /** Canonical no-trailing-slash address string for an endpoint. */
     fun addressString(url: HttpUrl): String {
@@ -167,10 +188,10 @@ class ServerAddressRouter @Inject constructor(
      * (url not a known endpoint, or already targeting the active one).
      */
     fun rewriteToActive(url: HttpUrl): HttpUrl? {
-        val activeUrl = _activeAddress.value?.toHttpUrlOrNull() ?: return null
+        val active = activeUrl ?: return null
         val known = endpointFor(url) ?: return null
-        if (known.url == activeUrl) return null
-        return retarget(url, activeUrl)
+        if (known.url == active) return null
+        return retarget(url, active)
     }
 
     /**
@@ -182,12 +203,16 @@ class ServerAddressRouter @Inject constructor(
     fun failoverCandidates(url: HttpUrl): List<HttpUrl> {
         if (endpoints.isEmpty()) return emptyList()
         if (endpointFor(url) == null) return emptyList()
-        val activeUrl = _activeAddress.value?.toHttpUrlOrNull()
+        val currentActiveUrl = activeUrl
         val ordered = buildList {
-            activeUrl?.let { add(it) }
-            endpoints.forEach { endpoint -> if (endpoint.url != activeUrl) add(endpoint.url) }
+            currentActiveUrl?.let { add(it) }
+            endpoints.forEach { endpoint -> if (endpoint.url != currentActiveUrl) add(endpoint.url) }
         }
-        return ordered.map { candidate -> if (candidate == url) url else retarget(url, candidate) }
+        return ordered.map { candidate ->
+            // sameTarget ⇒ retarget would rebuild the identical HttpUrl —
+            // skip the allocation.
+            if (sameTarget(candidate, url)) url else retarget(url, candidate)
+        }
     }
 
     /**
@@ -197,8 +222,20 @@ class ServerAddressRouter @Inject constructor(
      */
     fun markActive(address: String) {
         val url = address.toHttpUrlOrNull() ?: return
+        markActive(url)
+    }
+
+    /**
+     * [HttpUrl] variant of [markActive] — the failover interceptor already
+     * holds the parsed candidate, so no re-parse; a no-op when [url] is
+     * unknown or already active (the common case: every successful response
+     * lands here).
+     */
+    fun markActive(url: HttpUrl) {
         if (endpointFor(url) == null) return
-        _activeAddress.value = addressString(url)
+        val address = addressString(url)
+        if (_activeAddress.value == address) return
+        setActive(address)
     }
 
     /**
@@ -229,7 +266,7 @@ class ServerAddressRouter @Inject constructor(
         val primaryAddress = addressString(primary.url)
         if (prober(primaryAddress).reachable) {
             val changed = _activeAddress.value != primaryAddress
-            _activeAddress.value = primaryAddress
+            setActive(primaryAddress)
             return changed
         }
 
@@ -244,7 +281,7 @@ class ServerAddressRouter @Inject constructor(
         val firstReachable = results.firstOrNull { it.second.reachable } ?: return false
         val address = firstReachable.first
         val changed = _activeAddress.value != address
-        _activeAddress.value = address
+        setActive(address)
         changed
     }
 
@@ -290,6 +327,16 @@ class ServerAddressRouter @Inject constructor(
     } catch (_: Exception) {
         null to null
     }
+
+    /**
+     * Two URLs target the same endpoint when their scheme/host/port match —
+     * the exact triple [retarget] rewrites, so `retarget(x, y) == x`
+     * whenever this holds (any broadening of [retarget] must widen this
+     * predicate to match). [endpointFor] and [failoverCandidates] both
+     * branch on it.
+     */
+    private fun sameTarget(a: HttpUrl, b: HttpUrl): Boolean =
+        a.scheme == b.scheme && a.host == b.host && a.port == b.port
 
     private fun retarget(url: HttpUrl, endpoint: HttpUrl): HttpUrl =
         url.newBuilder()

@@ -295,9 +295,8 @@ internal fun PlayerControls(
     // ~670-line body on every 4 Hz position tick and was a primary driver of
     // the MPV playback ANR. videoStats is projected through a derivedStateOf
     // below so only the low-churn codec/HDR slice reaches PlaybackMetadataRow;
-    // sleepTimerRemainingMs changes at most once per second.
+    // sleepTimerRemainingMs is collected inside PlayerOverflowMenu, its only reader.
     val videoStats by videoStatsFlow.collectAsStateWithLifecycle()
-    val sleepTimerRemainingMs by sleepTimerRemainingFlow.collectAsStateWithLifecycle()
     // Project only the static codec/HDR/audio-channel slice that
     // PlaybackMetadataRow reads. The full EngineVideoStats stream also carries
     // high-churn fields (droppedFrames, bufferedPositionMs, videoBitrate,
@@ -830,7 +829,8 @@ internal fun PlayerControls(
                 onChannelMixModeChange(it)
             },
             sleepTimerActive = sleepTimerActive,
-            sleepTimerDisplayText = if (sleepTimerEndOfEpisode) "End of episode" else formatDuration(sleepTimerRemainingMs),
+            sleepTimerEndOfEpisode = sleepTimerEndOfEpisode,
+            sleepTimerRemainingFlow = sleepTimerRemainingFlow,
             onSleepTimerClick = {
                 showOverflow = false
                 onSleepTimerClick()
@@ -1466,7 +1466,7 @@ private fun rememberEndsAtTime(remainingMs: Long, controlsVisible: Boolean): Str
             kotlinx.coroutines.delay(msToNextMinute.coerceAtLeast(1_000L))
         }
     }
-    return remember(currentSystemTime, remainingMs, formatter) {
+    return remember((currentSystemTime + remainingMs) / 60_000L, formatter) {
         val endsAtDate = Date(currentSystemTime + remainingMs)
         formatter.format(endsAtDate)
     }

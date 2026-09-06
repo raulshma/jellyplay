@@ -22,6 +22,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -102,19 +105,16 @@ import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.feature.player.video.AbRepeatState
 import com.raulshma.jellyplay.feature.player.video.formatDuration
 
+/** Stand-in for callers with no sleep timer; hoisted so the default doesn't allocate per invocation. */
+private val NoSleepTimerRemainingFlow: StateFlow<Long> = MutableStateFlow(0L)
+
 /**
  * The three-dot overflow menu in [PlayerControls]: subtitle style, dialogue
  * boost, night mode, audio normalization, channel mixing, A/V sync, playback
  * mode, decoder, passthrough, subtitle download, stats, sleep timer, video
  * filters.
  *
- * Extracted verbatim from `PlayerControls.kt` — decompose
- * the 1.6 kLOC controls overlay into smaller, self-contained stateless
- * composables). All state is hoisted to the caller via explicit parameters;
- * only the per-submenu open/close state is local to this composable.
- */
-/**
- * The three-dot overflow menu, rendered **in-window** rather than via a Material3
+ * Rendered **in-window** rather than via a Material3
  * [androidx.compose.material3.DropdownMenu]. A DropdownMenu opens a separate Popup
  * window that does not inherit the player's immersive mode, so the status/navigation
  * bars would flash on every open — the same problem solved for the bottom sheets
@@ -124,7 +124,13 @@ import com.raulshma.jellyplay.feature.player.video.formatDuration
  *
  * Must be hosted inside a full-size [Box]: it emits a transparent full-size interceptor
  * (taps outside dismiss) and the panel itself, anchored to [Alignment.TopEnd].
+ *
+ * Extracted verbatim from `PlayerControls.kt` — decompose
+ * the 1.6 kLOC controls overlay into smaller, self-contained stateless
+ * composables). All state is hoisted to the caller via explicit parameters;
+ * only the per-submenu open/close state is local to this composable.
  */
+
 @Composable
 internal fun BoxScope.PlayerOverflowMenu(
     expanded: Boolean,
@@ -148,7 +154,8 @@ internal fun BoxScope.PlayerOverflowMenu(
     channelMixMode: ChannelMixMode = ChannelMixMode.AUTO,
     channelMixEnabled: Boolean = false,
     sleepTimerActive: Boolean = false,
-    sleepTimerDisplayText: String = "",
+    sleepTimerEndOfEpisode: Boolean = false,
+    sleepTimerRemainingFlow: StateFlow<Long> = NoSleepTimerRemainingFlow,
     onSubtitleHubClick: () -> Unit,
     onDialogueBoostClick: () -> Unit,
     onDialogueBoostStrengthChange: (EffectStrength) -> Unit,
@@ -179,6 +186,8 @@ internal fun BoxScope.PlayerOverflowMenu(
     onToggleAudioOnly: () -> Unit = {},
 ) {
     if (!expanded) return
+    val sleepTimerRemainingMs by sleepTimerRemainingFlow.collectAsStateWithLifecycle()
+    val sleepTimerDisplayText = if (sleepTimerEndOfEpisode) "End of episode" else formatDuration(sleepTimerRemainingMs)
     var showDialogueBoostSubmenu by remember { mutableStateOf(false) }
     var showNightModeSubmenu by remember { mutableStateOf(false) }
     var showAudioNormalizationSubmenu by remember { mutableStateOf(false) }

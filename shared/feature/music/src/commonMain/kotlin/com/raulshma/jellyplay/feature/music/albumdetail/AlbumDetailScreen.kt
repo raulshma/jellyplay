@@ -517,10 +517,13 @@ private fun TrackItem(
         }
 
         track.runTimeTicks?.let { ticks ->
-            val minutes = (ticks / 600_000_000)
-            val seconds = ((ticks / 10_000_000) % 60)
+            val durationText = remember(ticks) {
+                val minutes = (ticks / 600_000_000)
+                val seconds = ((ticks / 10_000_000) % 60)
+                String.format("%d:%02d", minutes, seconds)
+            }
             Text(
-                text = String.format("%d:%02d", minutes, seconds),
+                text = durationText,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

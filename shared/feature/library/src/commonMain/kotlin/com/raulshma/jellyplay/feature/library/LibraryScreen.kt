@@ -1174,7 +1174,7 @@ fun LibraryScreen(
                     // scrolls. Reads the state delegates directly inside derivedStateOf
                     // so it recomputes on scroll. MASONRY is excluded (no hoisted grid
                     // state); the rail simply shows no active highlight in that mode.
-                    val activeLetter by remember {
+                    val activeLetter by remember(viewMode) {
                         derivedStateOf {
                             val firstVisible = when (viewMode) {
                                 LibraryViewMode.LIST -> listState.firstVisibleItemIndex

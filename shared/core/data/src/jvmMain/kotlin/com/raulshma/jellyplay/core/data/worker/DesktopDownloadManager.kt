@@ -197,8 +197,12 @@ class DesktopDownloadManager(
     private suspend fun recoverStaleRows() {
         val stale = downloadDao.getRecoveryRows(DownloadStatus.DOWNLOADING.name) +
             downloadDao.getRecoveryRows(DownloadStatus.QUEUED.name)
-        for (row in stale) {
-            downloadDao.updateProgress(row.id, row.downloadedBytes, DownloadStatus.PENDING.name)
+        // One UPDATE: the per-row loop rewrote each row's own downloadedBytes
+        // back unchanged, so only the status transition matters.
+        if (stale.isNotEmpty()) {
+            downloadDao.updateStatusForIds(
+                stale.map { it.id }, DownloadStatus.PENDING.name,
+            )
         }
     }
 

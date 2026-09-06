@@ -59,6 +59,10 @@ class WatchProgressHeatmapViewModel(
     private val playbackRepository: PlaybackRepository,
 ) : JellyPlayViewModel() {
 
+    private companion object {
+        val SELECTED_DAY_LABEL_FORMAT = DateTimeFormatter.ofPattern("EEEE, MMMM d, yyyy")
+    }
+
     private val _uiState = stateFlow(WatchProgressHeatmapUiState())
     val uiState: StateFlow<WatchProgressHeatmapUiState> = _uiState.flow
 
@@ -150,9 +154,7 @@ class WatchProgressHeatmapViewModel(
                 it.copy(
                     selectedDay = SelectedDayInfo(
                         date = date,
-                        dateLabel = date.format(
-                            DateTimeFormatter.ofPattern("EEEE, MMMM d, yyyy")
-                        ),
+                        dateLabel = date.format(SELECTED_DAY_LABEL_FORMAT),
                         sessions = sessions,
                         resolvedItems = cachedResolvedItems.toMap(),
                     ),

@@ -45,15 +45,28 @@ data class EpgGridData(
     val isEmpty: Boolean get() = rows.isEmpty()
 }
 
+/**
+ * A program with its timestamps already parsed ([start] is never null —
+ * programs with unparseable start times are dropped before this is built).
+ */
+@Immutable
+data class TimedProgram(
+    val program: LiveTvProgram,
+    val start: Instant,
+    val end: Instant,
+)
+
 @Immutable
 data class EpgChannelRow(
     val channel: LiveTvChannel,
-    val programs: List<LiveTvProgram>,
+    val timedPrograms: List<TimedProgram>,
 )
 
 @Immutable
 data class ProgramLayout(
     val program: LiveTvProgram,
+    val start: Instant,
+    val end: Instant,
     val startOffsetDp: Float,
     val widthDp: Float,
 )
@@ -87,15 +100,20 @@ fun buildEpgGridData(
 ): EpgGridData {
     val byChannel = programs.groupBy { it.channelId }
     val rows = channels.map { channel ->
+        val timed = (byChannel[channel.id] ?: emptyList())
+            .mapNotNull { program ->
+                val start = program.startInstant() ?: return@mapNotNull null
+                TimedProgram(
+                    program = program,
+                    start = start,
+                    end = program.endInstant() ?: start,
+                )
+            }
+            .filter { it.end > windowStart && it.start < windowEnd }
+            .sortedBy { it.start.toEpochMilli() }
         EpgChannelRow(
             channel = channel,
-            programs = (byChannel[channel.id] ?: emptyList())
-                .filter { program ->
-                    val s = program.startInstant() ?: return@filter false
-                    val e = program.endInstant() ?: s
-                    e > windowStart && s < windowEnd
-                }
-                .sortedBy { it.startInstant()?.toEpochMilli() ?: Long.MAX_VALUE },
+            timedPrograms = timed,
         )
     }
     return EpgGridData(
@@ -122,16 +140,16 @@ fun layoutChannelRow(
     row: EpgChannelRow,
     gridData: EpgGridData,
 ): ChannelRowLayout {
-    val layouts = row.programs.mapNotNull { program ->
-        val start = program.startInstant() ?: return@mapNotNull null
-        val end = program.endInstant() ?: start
-        val clampedStart = maxOf(start, gridData.windowStart)
-        val clampedEnd = minOf(end, gridData.windowEnd)
+    val layouts = row.timedPrograms.mapNotNull { timed ->
+        val clampedStart = maxOf(timed.start, gridData.windowStart)
+        val clampedEnd = minOf(timed.end, gridData.windowEnd)
         if (clampedEnd <= clampedStart) return@mapNotNull null
         val startMinutes = ChronoUnit.MINUTES.between(gridData.windowStart, clampedStart).toFloat()
         val durationMinutes = ChronoUnit.MINUTES.between(clampedStart, clampedEnd).toFloat()
         ProgramLayout(
-            program = program,
+            program = timed.program,
+            start = timed.start,
+            end = timed.end,
             startOffsetDp = startMinutes * EpgGridLayout.DP_PER_MINUTE,
             widthDp = durationMinutes * EpgGridLayout.DP_PER_MINUTE,
         )

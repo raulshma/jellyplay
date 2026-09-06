@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.player.video
 
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.model.ChapterInfo
+import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.EffectStrength
@@ -31,6 +32,58 @@ data class CinemaIntroUiState(
     val currentIndex: Int,
     val totalCount: Int,
 )
+
+/**
+ * Segment-relevant slice of [VideoPlayerUiState]. Projecting only these fields
+ * (and `distinctUntilChanged`-ing them) means a 4 Hz position tick does not
+ * allocate a fresh `VideoPlayerUiState.copy(...)` or re-run
+ * [SegmentCalculator.computeActiveSegment] unless one of these fields actually
+ * changed. Shared by the ViewModel's overlay flow and the
+ * [PlaybackProgressReporter] tick path so the field mapping lives in exactly
+ * one place.
+ *
+ * Note: `isInIntro` / `isInCredits` / `shouldShowUpNext` are deliberately NOT
+ * captured here — they are computed properties on [VideoPlayerUiState] that
+ * depend on the live position/duration, so they are re-derived inside
+ * `computeOverlay` from the position-aware state. Only the *inputs* that do
+ * not change every tick are projected.
+ */
+internal data class SegmentProjection(
+    val segments: List<MediaSegment>,
+    val chapters: List<ChapterInfo>,
+    val segmentBehaviors: Map<MediaSegmentType, SegmentBehavior>,
+    val autoplayCancelled: Boolean,
+    val isInSyncPlaySession: Boolean,
+    val nextEpisode: MediaItem?,
+    val seriesId: String?,
+) {
+    constructor(state: VideoPlayerUiState) : this(
+        segments = state.segmentState.segments,
+        chapters = state.chapters,
+        segmentBehaviors = state.segmentState.segmentBehaviors,
+        autoplayCancelled = state.autoplay.autoplayCancelled,
+        isInSyncPlaySession = state.isInSyncPlaySession,
+        nextEpisode = state.episodes.nextEpisode,
+        seriesId = state.media.seriesId,
+    )
+
+    /**
+     * Builds the position-independent [SegmentCalculatorInput] for a given
+     * duration. Everything here is low-frequency (projection + duration), so
+     * the input is built only when one of those changes — not on every 4 Hz
+     * position tick.
+     */
+    fun toSegmentInput(durationMs: Long) = SegmentCalculatorInput(
+        segments = segments,
+        chapters = chapters,
+        segmentBehaviors = segmentBehaviors,
+        durationMs = durationMs,
+        autoplayCancelled = autoplayCancelled,
+        isInSyncPlaySession = isInSyncPlaySession,
+        hasNextEpisode = nextEpisode != null,
+        seriesId = seriesId,
+    )
+}
 
 /**
  * Narrow, low-frequency view of the segment / up-next overlays.
@@ -265,16 +318,7 @@ data class VideoPlayerUiState(
     fun computeActiveSegment(positionMs: Long): MediaSegment? =
         SegmentCalculator.computeActiveSegment(toSegmentInput(), positionMs)
 
-    private fun toSegmentInput() = SegmentCalculatorInput(
-        segments = segmentState.segments,
-        chapters = chapters,
-        segmentBehaviors = segmentState.segmentBehaviors,
-        durationMs = duration,
-        autoplayCancelled = autoplay.autoplayCancelled,
-        isInSyncPlaySession = isInSyncPlaySession,
-        hasNextEpisode = episodes.nextEpisode != null,
-        seriesId = media.seriesId,
-    )
+    internal fun toSegmentInput() = SegmentProjection(this).toSegmentInput(duration)
 
     val activeSegment: MediaSegment?
         get() = computeActiveSegment()

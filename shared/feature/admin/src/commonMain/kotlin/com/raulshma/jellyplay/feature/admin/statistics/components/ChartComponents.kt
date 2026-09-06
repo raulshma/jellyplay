@@ -470,6 +470,8 @@ fun TrendLineChart(
     val maxValue = data.maxOfOrNull { it.value }?.coerceAtLeast(1L) ?: 1L
     val animatedProgress = remember { Animatable(0f) }
     val entranceSpec = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
+    val fillPath = remember { androidx.compose.ui.graphics.Path() }
+    val linePath = remember { androidx.compose.ui.graphics.Path() }
 
     LaunchedEffect(data) {
         animatedProgress.animateTo(
@@ -488,37 +490,35 @@ fun TrendLineChart(
             val chartHeight = size.height - 24f
             val progress = animatedProgress.value
 
-            val points = data.mapIndexed { index, point ->
-                val x = if (data.size > 1) {
+            fun xAt(index: Int): Float =
+                if (data.size > 1) {
                     (index.toFloat() / (data.size - 1)) * chartWidth
                 } else chartWidth / 2
-                val y = chartHeight - (point.value.toFloat() / maxValue.toFloat()) * chartHeight * progress
-                Offset(x, y)
-            }
 
-            if (points.size > 1) {
+            fun yAt(index: Int): Float =
+                chartHeight - (data[index].value.toFloat() / maxValue.toFloat()) * chartHeight * progress
+
+            if (data.size > 1) {
                 val fillColor = lineColor.copy(alpha = 0.1f)
-                val path = androidx.compose.ui.graphics.Path().apply {
-                    moveTo(points.first().x, points.first().y)
-                    for (i in 1 until points.size) {
-                        val prev = points[i - 1]
-                        val curr = points[i]
-                        val cpx = (prev.x + curr.x) / 2
-                        cubicTo(cpx, prev.y, cpx, curr.y, curr.x, curr.y)
+                fillPath.rewind()
+                fillPath.apply {
+                    moveTo(xAt(0), yAt(0))
+                    for (i in 1 until data.size) {
+                        val cpx = (xAt(i - 1) + xAt(i)) / 2
+                        cubicTo(cpx, yAt(i - 1), cpx, yAt(i), xAt(i), yAt(i))
                     }
-                    lineTo(points.last().x, chartHeight)
-                    lineTo(points.first().x, chartHeight)
+                    lineTo(xAt(data.lastIndex), chartHeight)
+                    lineTo(xAt(0), chartHeight)
                     close()
                 }
-                drawPath(path = path, color = fillColor)
+                drawPath(path = fillPath, color = fillColor)
 
-                val linePath = androidx.compose.ui.graphics.Path().apply {
-                    moveTo(points.first().x, points.first().y)
-                    for (i in 1 until points.size) {
-                        val prev = points[i - 1]
-                        val curr = points[i]
-                        val cpx = (prev.x + curr.x) / 2
-                        cubicTo(cpx, prev.y, cpx, curr.y, curr.x, curr.y)
+                linePath.rewind()
+                linePath.apply {
+                    moveTo(xAt(0), yAt(0))
+                    for (i in 1 until data.size) {
+                        val cpx = (xAt(i - 1) + xAt(i)) / 2
+                        cubicTo(cpx, yAt(i - 1), cpx, yAt(i), xAt(i), yAt(i))
                     }
                 }
                 drawPath(
@@ -528,11 +528,11 @@ fun TrendLineChart(
                 )
             }
 
-            points.forEach { point ->
+            data.forEachIndexed { index, _ ->
                 drawCircle(
                     color = lineColor,
                     radius = 3.dp.toPx(),
-                    center = point,
+                    center = Offset(xAt(index), yAt(index)),
                 )
             }
         }

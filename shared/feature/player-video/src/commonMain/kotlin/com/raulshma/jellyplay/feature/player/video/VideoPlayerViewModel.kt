@@ -22,10 +22,7 @@ import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregate
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregateStore
 import com.raulshma.jellyplay.core.model.EffectStrength
-import com.raulshma.jellyplay.core.model.ChapterInfo
 import com.raulshma.jellyplay.core.model.MediaDetail
-import com.raulshma.jellyplay.core.model.MediaItem as JellyfinMediaItem
-import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.MediaStreamSelection
@@ -107,66 +104,25 @@ private const val CONFIG_SYNC_DEBOUNCE_MS = 150L
 private const val SUBTITLE_DELAY_APPLY_DEBOUNCE_MS = 500L
 
 /**
- * Segment-relevant slice of [VideoPlayerUiState], used by
- * [VideoPlayerViewModel.segmentOverlayState]. Projecting only these fields
- * (and `distinctUntilChanged`-ing them) means a 4 Hz [currentPositionMs][VideoPlayerViewModel.currentPositionMs]
- * tick does not allocate a fresh `VideoPlayerUiState.copy(...)` or
- * re-run `computeActiveSegment()` unless one of these fields actually changed.
+ * Builds the [SegmentOverlayState] for a given live position against a
+ * pre-built [SegmentCalculatorInput].
  *
- * Note: `isInIntro` / `isInCredits` / `shouldShowUpNext` are deliberately NOT
- * captured here — they are computed properties on [VideoPlayerUiState] that
- * depend on the live position/duration, so they are re-derived inside
- * [computeOverlay] from the position-aware state. Only the *inputs* that do
- * not change every tick are projected.
+ * Calls [SegmentCalculator] directly with the projected inputs — no
+ * throwaway [VideoPlayerUiState] allocation. The input is rebuilt only
+ * when the projection/duration changes; the position-dependent evaluation
+ * runs per tick against the cached input.
  */
-private data class SegmentProjection(
-    val segments: List<MediaSegment>,
-    val chapters: List<ChapterInfo>,
-    val segmentBehaviors: Map<MediaSegmentType, SegmentBehavior>,
-    val autoplayCancelled: Boolean,
-    val isInSyncPlaySession: Boolean,
-    val nextEpisode: JellyfinMediaItem?,
-    val seriesId: String?,
-) {
-    constructor(state: VideoPlayerUiState) : this(
-        segments = state.segmentState.segments,
-        chapters = state.chapters,
-        segmentBehaviors = state.segmentState.segmentBehaviors,
-        autoplayCancelled = state.autoplay.autoplayCancelled,
-        isInSyncPlaySession = state.isInSyncPlaySession,
-        nextEpisode = state.episodes.nextEpisode,
-        seriesId = state.media.seriesId,
+private fun computeOverlay(positionMs: Long, input: SegmentCalculatorInput): SegmentOverlayState {
+    val activeSegment = SegmentCalculator.computeActiveSegment(input, positionMs)
+    return SegmentOverlayState(
+        activeSegment = activeSegment,
+        activeSegmentBehavior = activeSegment?.let {
+            SegmentCalculator.behaviorForType(input, it.type)
+        } ?: SegmentBehavior.IGNORE,
+        isInIntro = SegmentCalculator.isInSegmentType(input, positionMs, MediaSegmentType.INTRO),
+        isInCredits = SegmentCalculator.isInSegmentType(input, positionMs, MediaSegmentType.OUTRO),
+        shouldShowUpNext = SegmentCalculator.shouldShowUpNext(input, positionMs),
     )
-
-    /**
-     * Builds the [SegmentOverlayState] for a given live position/duration.
-     *
-     * Calls [SegmentCalculator] directly with the projected inputs — no
-     * throwaway [VideoPlayerUiState] allocation. Runs only when the
-     * projection changes — not on every 4 Hz tick.
-     */
-    fun computeOverlay(positionMs: Long, durationMs: Long): SegmentOverlayState {
-        val input = SegmentCalculatorInput(
-            segments = segments,
-            chapters = chapters,
-            segmentBehaviors = segmentBehaviors,
-            durationMs = durationMs,
-            autoplayCancelled = autoplayCancelled,
-            isInSyncPlaySession = isInSyncPlaySession,
-            hasNextEpisode = nextEpisode != null,
-            seriesId = seriesId,
-        )
-        val activeSegment = SegmentCalculator.computeActiveSegment(input, positionMs)
-        return SegmentOverlayState(
-            activeSegment = activeSegment,
-            activeSegmentBehavior = activeSegment?.let {
-                SegmentCalculator.behaviorForType(input, it.type)
-            } ?: SegmentBehavior.IGNORE,
-            isInIntro = SegmentCalculator.isInSegmentType(input, positionMs, MediaSegmentType.INTRO),
-            isInCredits = SegmentCalculator.isInSegmentType(input, positionMs, MediaSegmentType.OUTRO),
-            shouldShowUpNext = SegmentCalculator.shouldShowUpNext(input, positionMs),
-        )
-    }
 }
 
 class VideoPlayerViewModel(
@@ -286,13 +242,15 @@ class VideoPlayerViewModel(
      */
     val segmentOverlayState: StateFlow<SegmentOverlayState> = stateIn(
         initial = SegmentOverlayState(),
-        flow = combine(
-            currentPositionMs,
+    flow = combine(
+        currentPositionMs,
+        combine(
             durationMs,
             uiState.map(::SegmentProjection).distinctUntilChanged(),
-        ) { pos, dur, proj ->
-            proj.computeOverlay(pos, dur)
-        },
+        ) { dur, proj -> proj.toSegmentInput(dur) },
+    ) { pos, input ->
+        computeOverlay(pos, input)
+    },
     )
 
     private val _closePlayer = Channel<Unit>(Channel.BUFFERED)

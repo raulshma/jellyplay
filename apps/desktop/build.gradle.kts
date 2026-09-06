@@ -689,19 +689,24 @@ compose.desktop {
             description = "JellyPlay — Jellyfin client for desktop"
             vendor = "JellyPlay"
 
-            // includeAllModules WON over explicit modules(...) enumeration:
-            // this graph pulls 30 shared feature/core implementation edges plus
-            // reflection edges JNA cannot declare statically (com.sun.jna
-            // native loading), coil's ServiceLoader-registered OkHttp network
-            // fetcher and kotlinx.serialization polymorphic lookups — jlink
-            // auto-analysis misses those classes of wiring, and each missed
-            // hint costs a full package + boot-smoke cycle to discover.
-            // Merging everything into the single unified module keeps
-            // ServiceLoader and reflection intact. Measured cost (wave 10A,
-            // Windows, version 0.1.0): app image ~276 MB, MSI installer
-            // ~155 MB (MSIs embed timestamps — exact bytes do not reproduce) —
-            // accepted for v1.
-            includeAllModules = true
+            // Explicit module enumeration instead of includeAllModules:
+            // the compose plugin auto-runs jdeps over the app jars and adds
+            // what it finds; `modules(...)` below layers the extras jdeps
+            // cannot see on top (output of `suggestRuntimeModules`, plus the
+            // reflection-typical JDK modules this graph is known to touch:
+            // JNA native loading, JMX management, LDAP/JNDI naming, JDBC,
+            // and the crypto providers). Validated via
+            // `./gradlew :apps:desktop:createReleaseDistributable`.
+            modules(
+                "java.instrument",
+                "jdk.security.auth",
+                "jdk.unsupported",
+                "java.management",
+                "java.naming",
+                "java.sql",
+                "jdk.crypto.ec",
+                "jdk.crypto.cryptoki",
+            )
 
             // Bundled libmpv (see fetchBundledLibmpv above): the windows-x64
             // subtree is copied into the installed app image and exposed at

@@ -5,6 +5,7 @@ import org.jetbrains.compose.resources.StringResource
 import com.raulshma.jellyplay.core.data.repository.AdminStatisticsRepository
 import com.raulshma.jellyplay.core.model.PlaybackReportingStatus
 import com.raulshma.jellyplay.core.model.UserStatistics
+import com.raulshma.jellyplay.core.model.sortedWithCachedKey
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.feature.admin.generated.resources.Res
 import com.raulshma.jellyplay.feature.admin.generated.resources.user_stats_sort_name
@@ -53,16 +54,16 @@ class UserStatisticsViewModel(
 
     private fun applySort(users: List<UserStatistics>, sort: UserStatisticsSort): List<UserStatistics> {
         val comparator = when (sort) {
-            UserStatisticsSort.PLAYS -> compareByDescending<UserStatistics> { it.totalPlayCount }
-                .thenByDescending { it.totalWatchTimeSec }
-                .thenBy { it.userName.lowercase() }
-            UserStatisticsSort.TIME -> compareByDescending<UserStatistics> { it.totalWatchTimeSec }
-                .thenByDescending { it.totalPlayCount }
-                .thenBy { it.userName.lowercase() }
-            UserStatisticsSort.NAME -> compareBy<UserStatistics> { it.userName.lowercase() }
-                .thenByDescending { it.totalPlayCount }
+            UserStatisticsSort.PLAYS -> compareByDescending<Pair<UserStatistics, String>> { (user, _) -> user.totalPlayCount }
+                .thenByDescending { (user, _) -> user.totalWatchTimeSec }
+                .thenBy { (_, nameKey) -> nameKey }
+            UserStatisticsSort.TIME -> compareByDescending<Pair<UserStatistics, String>> { (user, _) -> user.totalWatchTimeSec }
+                .thenByDescending { (user, _) -> user.totalPlayCount }
+                .thenBy { (_, nameKey) -> nameKey }
+            UserStatisticsSort.NAME -> compareBy<Pair<UserStatistics, String>> { (_, nameKey) -> nameKey }
+                .thenByDescending { (user, _) -> user.totalPlayCount }
         }
-        return users.sortedWith(comparator)
+        return users.sortedWithCachedKey({ it.userName.lowercase() }, comparator)
     }
 
     fun loadStatistics() {

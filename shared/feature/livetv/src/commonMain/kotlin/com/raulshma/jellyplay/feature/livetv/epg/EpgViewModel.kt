@@ -8,6 +8,10 @@ import com.raulshma.jellyplay.feature.livetv.components.RecordActions
 import com.raulshma.jellyplay.feature.livetv.components.RecordDialogState
 import com.raulshma.jellyplay.feature.livetv.components.RecordOutcome
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.stateIn
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 
@@ -35,8 +39,13 @@ class EpgViewModel(
     val error: String? get() = _error.value
 
     /** Ticking "now" timestamp so the time ruler + live indicator stay live. */
-    private val _now = composeState(Instant.now())
-    val now: Instant get() = _now.value
+    val now: StateFlow<Instant> = flow {
+        emit(Instant.now())
+        while (true) {
+            delay(NOW_TICK_INTERVAL_MS)
+            emit(Instant.now())
+        }
+    }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), Instant.now())
 
     /** Half-open window [start, end) covered by the current guide fetch. */
     private val _windowStart = composeState(Instant.now().minus(GUIDE_LOOKBACK_HOURS, ChronoUnit.HOURS))
@@ -93,7 +102,6 @@ class EpgViewModel(
     init {
         loadGuide()
         startAutoRefresh()
-        startNowTick()
     }
 
     fun loadGuide() {
@@ -148,12 +156,4 @@ class EpgViewModel(
         }
     }
 
-    private fun startNowTick() {
-        launch {
-            while (true) {
-                delay(NOW_TICK_INTERVAL_MS)
-                _now.value = Instant.now()
-            }
-        }
-    }
 }

@@ -14,7 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.toComposeImageBitmap
+import androidx.compose.ui.graphics.asComposeImageBitmap
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
@@ -32,7 +32,7 @@ import kotlinx.coroutines.withContext
 import org.jetbrains.skia.ColorAlphaType
 import org.jetbrains.skia.ColorSpace
 import org.jetbrains.skia.ColorType
-import org.jetbrains.skia.Image
+import org.jetbrains.skia.Bitmap
 import org.jetbrains.skia.ImageInfo
 
 /**
@@ -92,12 +92,12 @@ interface SoftwareFrameVideoSurface {
  * Pixel path (zero format conversion): the sink allocates one JNA [Memory]
  * with 64-byte-aligned stride (render.h recommends pointer/stride multiples of
  * 64 for the SIMD path); mpv writes bgr0 into it; each CHANGED payload is
- * wrapped as a fresh Skia raster with ColorType.BGRA_8888 + OPAQUE alpha
- * (skia ignores mpv's uninitialized 4th channel) + sRGB — the same
- * deterministic non-N32 pattern the BlurHash jvmShared actual established.
- * Per-frame image allocation is deliberate v1 simplicity (~8 MB/frame at
- * 1080p, native-backed); double-buffering via Bitmap.installPixels is the
- * identified future optimization.
+ * wrapped with ColorType.BGRA_8888 + OPAQUE alpha (skia ignores mpv's
+ * uninitialized 4th channel) + sRGB — the same deterministic non-N32 pattern
+ * the BlurHash jvmShared actual established. Each changed frame is installed
+ * into a reused pre-allocated Skia [Bitmap] via installPixels (round-robin
+ * over a small pool, see [FrameSink]) instead of allocating a fresh ~8 MB
+ * raster per frame at 1080p.
  *
  * Geometry: the sink is sized to the MEASURED PIXEL size of this pane
  * (onSizeChanged) and rebuilt on change; mpv itself scales + letterboxes the
@@ -231,19 +231,7 @@ private suspend fun publishFrame(
         // missed update.
         if (!sink.stageBytes.contentEquals(sink.lastPublished)) {
             System.arraycopy(sink.stageBytes, 0, sink.lastPublished, 0, sink.stageBytes.size)
-            into(
-                Image.makeRaster(
-                    ImageInfo(
-                        width = sink.widthPx,
-                        height = sink.heightPx,
-                        colorType = ColorType.BGRA_8888,
-                        alphaType = ColorAlphaType.OPAQUE,
-                        colorSpace = ColorSpace.sRGB,
-                    ),
-                    sink.stageBytes,
-                    sink.strideBytes.toInt(),
-                ).toComposeImageBitmap(),
-            )
+            into(sink.acquireImageBitmap())
         }
     }
 }
@@ -297,7 +285,63 @@ private class FrameSink(widthPx: Int, heightPx: Int) {
     /** Snapshot of the last RASTERIZED payload — the dedup baseline. */
     val lastPublished: ByteArray = ByteArray((strideBytes * heightPx).toInt())
 
+    /**
+     * Pixel layout the pooled [Bitmap]s present to Skia — identical to what
+     * [Image.makeRaster] produced before the pool existed (BGRA_8888, opaque,
+     * sRGB, the native sink's 64-byte rowbytes), so rendered output is
+     * bit-identical.
+     */
+    val imageInfo = ImageInfo(
+        width = widthPx,
+        height = heightPx,
+        colorType = ColorType.BGRA_8888,
+        alphaType = ColorAlphaType.OPAQUE,
+        colorSpace = ColorSpace.sRGB,
+    )
+
+    /**
+     * Round-robin raster pool (wave 12B perf fix): publishes install
+     * [stageBytes] into a pooled [Bitmap] instead of allocating a fresh Image +
+     * ImageBitmap wrapper chain per frame. Pool size 3, not 2: a buffer is "in
+     * flight" from its publish until Compose draws the NEXT-BUT-ONE publish
+     * (double-buffering covers the normal case, but a compose-side frame stall
+     * — window drag, GC pause — can hold a reference one frame longer), so the
+     * third buffer guarantees the one being rewritten is never the one Compose
+     * is reading. Resolution changes recreate the whole [FrameSink] (see the
+     * `remember(surfaceSizePx)` in the pane), so the pool never needs a
+     * mid-life reallocation.
+     *
+     * Note: skiko's `installPixels(ByteArray)` copies the array into freshly
+     * allocated native pixel memory (Bitmap.cc allocates `new jbyte[]` and
+     * installs it with a delete proc — it never wraps the Java buffer), so one
+     * native pixel copy per publish is unavoidable through the public API; the
+     * `allocPixels` pre-allocation below is superseded on first install. What
+     * the pool removes is the per-frame Image/Bitmap/ImageBitmap object churn
+     * the old `makeRaster(...).toComposeImageBitmap()` path produced.
+     */
+    private val rasterPool = Array(POOL_SIZE) {
+        Bitmap().apply { allocPixels(imageInfo) }
+    }
+    private var poolCursor = 0
+
+    /**
+     * Installs the current [stageBytes] payload into the next pooled bitmap
+     * and returns it as an [ImageBitmap]. The bytes are copied into the
+     * bitmap's native pixels; the bitmap then stays unmutated for the next two
+     * publishes (see [rasterPool]).
+     */
+    fun acquireImageBitmap(): ImageBitmap {
+        val bitmap = rasterPool[poolCursor]
+        poolCursor = (poolCursor + 1) % POOL_SIZE
+        bitmap.installPixels(imageInfo, stageBytes, strideBytes.toInt())
+        bitmap.notifyPixelsChanged()
+        return bitmap.asComposeImageBitmap()
+    }
+
     companion object {
         private const val STRIDE_ALIGN = 64L
+
+        /** Round-robin depth — see [rasterPool] for why it is 3. */
+        private const val POOL_SIZE = 3
     }
 }

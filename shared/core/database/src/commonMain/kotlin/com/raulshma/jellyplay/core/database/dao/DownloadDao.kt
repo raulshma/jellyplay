@@ -228,6 +228,32 @@ interface DownloadDao {
     suspend fun updateProgressWithPausedReason(id: String, bytes: Long, status: String, reason: String?)
 
     /**
+     * Batch auto-resume for interrupted `PAUSED` rows whose byte offset survives
+     * ([com.raulshma.jellyplay.core.data.repository.DownloadStates.resumeByteOffset]
+     * keeps a paused row's contiguous prefix, so the bytes column is untouched —
+     * the reconnect path's former per-row [updateProgressWithPausedReason] loop
+     * wrote each row's own bytes back, i.e. changed nothing but status/reason).
+     */
+    @Query("UPDATE downloads SET status = :status, pausedReason = :reason WHERE id IN (:ids)")
+    suspend fun updateStatusWithPausedReasonForIds(ids: List<String>, status: String, reason: String?)
+
+    /**
+     * Batch auto-resume for interrupted `FAILED` rows, which always resume from
+     * 0 (a partial multi-connection body cannot be appended to) — the batched
+     * form of `updateProgressWithPausedReason(id, 0, status, reason)`.
+     */
+    @Query("UPDATE downloads SET downloadedBytes = 0, status = :status, pausedReason = :reason WHERE id IN (:ids)")
+    suspend fun markResumedFromZeroForIds(ids: List<String>, status: String, reason: String?)
+
+    /**
+     * Batch stale-row recovery: re-kicks stuck `DOWNLOADING`/`QUEUED` rows back
+     * to `PENDING` without touching their byte offsets (the per-row
+     * [updateProgress] loop wrote each row's own bytes back unchanged).
+     */
+    @Query("UPDATE downloads SET status = :status WHERE id IN (:ids)")
+    suspend fun updateStatusForIds(ids: List<String>, status: String)
+
+    /**
      * Manual resume/retry in one statement: status back to `PENDING`, pause
      * reason cleared, auto-retry budget reset — the exact end state of the
      * former updateProgress + updatePausedReason + resetRetryCount triple.

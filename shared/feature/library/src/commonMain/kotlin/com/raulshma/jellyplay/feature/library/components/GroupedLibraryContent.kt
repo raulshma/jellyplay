@@ -38,6 +38,7 @@ import com.raulshma.jellyplay.core.model.LibraryGrouper
 import com.raulshma.jellyplay.core.model.LibraryViewMode
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.sortedByCachedKey
 import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.components.displayTitle
 import com.raulshma.jellyplay.core.ui.components.libraryListSubtitle
@@ -66,15 +67,6 @@ import com.raulshma.jellyplay.feature.library.components.LibraryListItem
  * Composable so it can be unit-tested (it was the site of two #113 crashes).
  */
 private fun MediaItem.groupKey(groupBy: GroupBy): String = LibraryGrouper.groupKey(this, groupBy)
-
-/**
- * Sort comparator that orders items to match the active [GroupBy] dimension, so groups
- * come out contiguous when building header/item rows. Without this, grouping a snapshot
- * that is server-sorted by a different dimension (e.g. Name) scatters the same group key
- * across the list, which produced duplicate `"header_${key}"` lazy keys and crashed the
- * app (issue #113). Within a group, the server's existing order is preserved (stable sort).
- */
-private fun groupComparator(groupBy: GroupBy): Comparator<MediaItem> = LibraryGrouper.groupComparator(groupBy)
 
 /**
  * A flattened (header | item) row emitted into the grouped LazyColumn/LazyVerticalGrid.
@@ -154,7 +146,7 @@ fun GroupedLibraryContent(
                 // Degenerate case: render every item with no headers.
                 items.map { item -> GroupedRow.Item(item) }
             } else {
-                val ordered = items.sortedWith(groupComparator(groupBy))
+                val ordered = items.sortedByCachedKey { it.groupKey(groupBy) }
                 buildList<GroupedRow> {
                     var lastHeader: String? = null
                     var headerSeq = 0

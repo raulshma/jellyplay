@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.admin.tasks
 
 import com.raulshma.jellyplay.core.model.ScheduledTaskInfo
+import com.raulshma.jellyplay.core.model.sortedByCachedKey
 
 /**
  * Groups scheduled tasks by category, mirroring jellyfin-web's
@@ -24,5 +25,5 @@ internal fun groupScheduledTasksByCategory(
         .filter { !it.category.isNullOrBlank() }
         .groupBy { it.category!! }
         .toSortedMap(compareBy(String.CASE_INSENSITIVE_ORDER) { it })
-        .mapValues { (_, grouped) -> grouped.sortedBy { it.name.lowercase() } }
+        .mapValues { (_, grouped) -> grouped.sortedByCachedKey { it.name.lowercase() } }
         .map { (category, grouped) -> category to grouped }

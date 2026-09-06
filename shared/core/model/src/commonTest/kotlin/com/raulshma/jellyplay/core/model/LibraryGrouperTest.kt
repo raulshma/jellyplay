@@ -92,43 +92,4 @@ LibraryGrouper.groupKey(item("2", "X", year = null), GroupBy.YEAR),
 "Unknown",
 )
     }
-
-    // ---- groupComparator ----
-
-    @Test
-    fun `groupComparator sorts groups contiguous for a scattered snapshot`() {
-        // Issue #113: a snapshot server-sorted by a different dimension scattered
-        // the same group key across the list → duplicate "header_${key}" lazy keys
-        // → IllegalArgumentException crash. The comparator must make groups contiguous.
-        val scattered = listOf(
-            item("1", "Apple", year = 2020),
-            item("2", "Banana", year = 2021),
-            item("3", "Apricot", year = 2020),
-            item("4", "Blueberry", year = 2021),
-            item("5", "Almond", year = 2020),
-        )
-        val ordered = scattered.sortedWith(LibraryGrouper.groupComparator(GroupBy.NAME))
-        val keys = ordered.map { LibraryGrouper.groupKey(it, GroupBy.NAME) }
-        // All 'A' keys contiguous, then all 'B' keys.
-        assertEquals(listOf("A", "A", "A", "B", "B"), keys)
-    }
-
-    @Test
-    fun `groupComparator is stable - preserves within-group server order`() {
-        val scattered = listOf(
-            item("1", "Apple", year = 2020),
-            item("2", "Apricot", year = 2020),
-            item("3", "Almond", year = 2020),
-        )
-        val ordered = scattered.sortedWith(LibraryGrouper.groupComparator(GroupBy.NAME))
-        // Stable sort preserves input order within the single 'A' group.
-        assertEquals(listOf("1", "2", "3"), ordered.map { it.id })
-    }
-
-    @Test
-    fun `groupComparator with NONE is a stable no-op order`() {
-        val items = listOf(item("1", "A"), item("2", "B"), item("3", "C"))
-        val ordered = items.sortedWith(LibraryGrouper.groupComparator(GroupBy.NONE))
-        assertEquals(listOf("1", "2", "3"), ordered.map { it.id })
-    }
 }

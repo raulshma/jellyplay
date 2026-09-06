@@ -170,7 +170,7 @@ class EpgViewModelTest {
         assertEquals(listOf(channel), vm.channels)
         assertEquals(listOf(airing), vm.programs)
         assertEquals(listOf("chan-1"), vm.gridData.rows.map { it.channel.id })
-        assertEquals(listOf("p1"), vm.gridData.rows.single().programs.map { it.id })
+        assertEquals(listOf("p1"), vm.gridData.rows.single().timedPrograms.map { it.program.id })
         assertFalse(vm.isLoading)
         assertNull(vm.error)
         vm.stopLoops()
