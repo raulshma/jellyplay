@@ -32,15 +32,19 @@ class DownloadRecoveryInitializer (
         // resetStuckDownloading() writes the same DOWNLOADING/QUEUED→PENDING
         // transition (bytes untouched) recoverPendingDownloads() applies
         // per-row, so any interleaving converges on identical row states —
-        // so it launches alongside instead of serializing behind them. The
-        // coroutineScope still joins it: recover() returns only once all
-        // three passes are done.
+        // so it overlaps reconcile (the slow file-I/O pass) instead of
+        // serializing behind it. It is joined before recover() snapshots
+        // rows: a resetStuckDownloading() flip landing between recover's
+        // PENDING and DOWNLOADING queries would leave that row PENDING with
+        // no worker until the next cold start. The coroutineScope still
+        // joins it: recover() returns only once all three passes are done.
         coroutineScope {
-            launch { cleanupStuckDownloads() }
+            val cleanup = launch { cleanupStuckDownloads() }
             // Must run first: reconciliation resets truncated/missing completed
             // downloads to PENDING so recoverPendingDownloads() re-enqueues them
             // (KEEP policy) on the same pass, self-healing the offline library.
             reconcileCompletedDownloads()
+            cleanup.join()
             recoverPendingDownloads()
         }
     }

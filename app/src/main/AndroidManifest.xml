@@ -55,7 +55,6 @@
         android:theme="@style/Theme.JellyPlay"
         android:usesCleartextTraffic="true"
         tools:targetApi="37">
-
         <activity
             android:name=".MainActivity"
             android:exported="true"

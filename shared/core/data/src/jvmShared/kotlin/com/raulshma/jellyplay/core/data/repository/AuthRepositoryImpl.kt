@@ -391,7 +391,7 @@ class AuthRepositoryImpl constructor(
         withTimeoutOrNull(RESTORE_NETWORK_STAGE_TIMEOUT_MS) {
             stage()
             true
-        } == true
+        } ?: false
 
     /**
      * Restore-time guard on top of [storedTokenRejected]: a token the server
