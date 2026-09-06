@@ -38,7 +38,6 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -347,34 +346,15 @@ fun DeleteDownloadedEpisodesSheet(
                                     ),
                                 )
                                 Spacer(Modifier.width(8.dp))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = buildString {
-                                            episode.episodeNumber?.let { append("E$it. ") }
-                                            append(episode.name)
-                                        },
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                    )
-                                    episode.runTimeTicks?.let { ticks ->
-                                        val minutes = ticks / 600_000_000
-                                        Text(
-                                            text = "${minutes}m",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        )
-                                    }
-                                }
+                                SeasonEpisodeMetaLabels(
+                                    episode = episode,
+                                    nameColor = MaterialTheme.colorScheme.onSurface,
+                                )
                             }
                         }
                     }
 
-                    item(key = "season-${season.id}-divider", contentType = "divider") {
-                        HorizontalDivider(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
-                        )
-                    }
+                    seasonDividerItem(season.id)
                 }
             }
         }
