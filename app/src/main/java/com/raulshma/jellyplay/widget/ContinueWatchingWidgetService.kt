@@ -77,7 +77,7 @@ class ContinueWatchingWidgetService : RemoteViewsService() {
                 emptyMap()
             } else {
                 runBlocking {
-                    WidgetImageLoader.preloadPosters(context, entries.map { it.url })
+                    WidgetImageLoader.fetchPosters(context, entries.map { it.url })
                 }.let { urlToBitmap ->
                     entries.associate { it.imageId to urlToBitmap[it.url] }
                 }

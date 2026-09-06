@@ -87,8 +87,12 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import org.koin.core.context.startKoin
 import org.koin.mp.KoinPlatform
+
+/** Bound on the STA-3 device-id prewarm await; see the launch in [onCreate]. */
+private const val DEVICE_ID_PREWARM_TIMEOUT_MS = 5_000L
 
 class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Configuration.Provider {
 
@@ -421,7 +425,15 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
             // AndroidNetworkModule resolves the fast path.
             runCatching {
                 serverIdentityStore.ensureDeviceId()
-                serverIdentityStore.identity.first { !it.deviceId.isNullOrEmpty() }
+                // Bounded wait: a wedged DataStore (corruption, upstream
+                // error stranding the Eagerly-started identity flow on its
+                // all-null placeholder) would suspend a bare first{}
+                // forever and gate the font/stream prewarms below. On
+                // timeout they proceed anyway; the network module readers
+                // keep their own runBlocking ensureDeviceId() fallback.
+                withTimeoutOrNull(DEVICE_ID_PREWARM_TIMEOUT_MS) {
+                    serverIdentityStore.identity.first { !it.deviceId.isNullOrEmpty() }
+                }
             }
             // Wave 7C: Koin-owned since the player-video migration (the Hilt
             // javax.inject.Provider fields died with the module flip); still

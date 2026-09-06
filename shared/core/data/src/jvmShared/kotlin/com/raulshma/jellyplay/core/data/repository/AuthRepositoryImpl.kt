@@ -16,6 +16,7 @@ import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.network.websocket.JellyfinWebSocketClient
 import com.raulshma.jellyplay.core.data.repository.withTransaction
 import com.raulshma.jellyplay.core.data.util.TimeSource
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -321,7 +322,7 @@ class AuthRepositoryImpl constructor(
             // bounded — on timeout the gate below releases on the primary
             // address and selection re-runs off the gate in the deferred pass.
             val addressSelected = runRestoreNetworkStage {
-                runCatching { apiClient.selectReachableAddress() }
+                runCatchingRethrowingCancellation { apiClient.selectReachableAddress() }
             }
 
             val userEntity = userDao.getUserById(userId)
@@ -367,7 +368,7 @@ class AuthRepositoryImpl constructor(
                     // later instead of holding the splash hostage to it.
                     externalScope.launch {
                         if (!addressSelected) {
-                            runCatching { apiClient.selectReachableAddress() }
+                            runCatchingRethrowingCancellation { apiClient.selectReachableAddress() }
                         }
                         if (!validationCompleted) {
                             validateRestoredSession()
@@ -392,6 +393,21 @@ class AuthRepositoryImpl constructor(
             stage()
             true
         } ?: false
+
+    /**
+     * [runCatching] variant for code that runs inside (or alongside) a
+     * cancellable coroutine: a [CancellationException] must pass through.
+     * Plain `runCatching` inside a [kotlinx.coroutines.withTimeoutOrNull]
+     * stage swallows the timeout's cancellation, so the stage reports
+     * success and the deferred re-run in [restoreSession] is skipped.
+     */
+    private suspend fun <T> runCatchingRethrowingCancellation(block: suspend () -> T): Result<T> = try {
+        Result.success(block())
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Throwable) {
+        Result.failure(e)
+    }
 
     /**
      * Restore-time guard on top of [storedTokenRejected]: a token the server
@@ -431,7 +447,7 @@ class AuthRepositoryImpl constructor(
      * network/5xx failures keep the session so offline use is unchanged.
      */
     private suspend fun storedTokenRejected(): Boolean {
-        val rejected = runCatching { apiClient.getCurrentUser().exceptionOrNull() }
+        val rejected = runCatchingRethrowingCancellation { apiClient.getCurrentUser().exceptionOrNull() }
             .getOrNull() as? com.raulshma.jellyplay.core.network.api.ApiException
             ?: return false
         return rejected.httpCode == 401

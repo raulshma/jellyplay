@@ -15,6 +15,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.time.Instant
 import java.time.temporal.ChronoUnit
@@ -98,12 +100,22 @@ class EpgViewModel(
     private var autoRefreshJob: Job? = null
 
     /**
+     * Serializes [rebuildGrid] passes. The grid computation runs on the
+     * multi-threaded [gridDispatcher], so a user-triggered [loadGuide] can
+     * overlap the auto-refresh loop; without the lock the older rebuild can
+     * publish last and overwrite the newer snapshot, leaving [gridData]
+     * stale against [channels]/[programs] until the next refresh.
+     */
+    private val rebuildGridMutex = Mutex()
+
+    /**
      * Recompute the cached grid snapshot from the current source data. The
      * CPU-heavy groupBy + per-channel filter + sort runs on [gridDispatcher];
-     * the inputs are read and the snapshot published on the caller's context,
-     * so state assignment order is unchanged.
+     * reading the inputs and publishing the snapshot happen inside
+     * [rebuildGridMutex], so overlapping rebuilds publish in invocation order
+     * and the last one out always reflects the newest sources.
      */
-    private suspend fun rebuildGrid() {
+    private suspend fun rebuildGrid() = rebuildGridMutex.withLock {
         val channels = _channels.value
         val programs = _programs.value
         val windowStart = _windowStart.value

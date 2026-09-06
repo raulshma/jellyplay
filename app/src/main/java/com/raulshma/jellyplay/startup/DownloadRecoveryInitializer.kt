@@ -15,8 +15,9 @@ import kotlinx.coroutines.launch
  *
  * Re-enqueues `PENDING` downloads and resets `DOWNLOADING` rows back to
  * `PENDING` on every cold start, and deletes orphaned partial bytes for
- * `FAILED` rows (that cleanup pass runs concurrently with the two ordered
- * passes — see [recover]). Both enqueues use `ExistingWorkPolicy.KEEP` so an
+ * `FAILED` rows (that cleanup pass overlaps only the reconciliation pass and
+ * is joined before the recovery pass snapshots rows — see [recover]). Both
+ * enqueues use `ExistingWorkPolicy.KEEP` so an
  * in-flight worker is never cancelled by a process restart.
  */
 class DownloadRecoveryInitializer (

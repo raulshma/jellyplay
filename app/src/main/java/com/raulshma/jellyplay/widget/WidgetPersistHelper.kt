@@ -18,7 +18,10 @@ internal object WidgetPersistHelper {
     ) {
         val previous = store.libraryWidgetItems.first()
         val previousVersion = store.libraryWidgetVersion.first()
-        prewarmSnapshotPosters(context, items) { it.posterUrl }
+        // CONC-6: fire-and-forget prewarm of the snapshot's posters (the
+        // factory binds against these exact URLs), so the next bind resolves
+        // from memory instead of the bounded blocking fetch.
+        WidgetImageLoader.prewarmPosters(context, items.mapNotNull { it.posterUrl })
         val now = System.currentTimeMillis()
         val version = if (versionBumpOnly) previousVersion + 1L else now
         if (!versionBumpOnly && sameContentById(previous, items) { it.itemId }) {
@@ -37,7 +40,9 @@ internal object WidgetPersistHelper {
     ) {
         val previous = store.seerrWidgetItems.first()
         val previousVersion = store.seerrWidgetVersion.first()
-        prewarmSnapshotPosters(context, items) { it.posterUrl }
+        // CONC-6: same prewarm as the library path above — each factory binds
+        // against the exact URLs prewarmed here, so the two paths cannot drift.
+        WidgetImageLoader.prewarmPosters(context, items.mapNotNull { it.posterUrl })
         val now = System.currentTimeMillis()
         val version = if (versionBumpOnly) previousVersion + 1L else now
         if (!versionBumpOnly && sameContentById(previous, items) { it.tmdbId }) {
@@ -46,19 +51,6 @@ internal object WidgetPersistHelper {
         }
         store.setSeerrWidgetItems(items, version, now)
         notifySeerrWidgets(context)
-    }
-
-    /**
-     * CONC-6: fire-and-forget poster-cache pre-warm for a freshly pushed
-     * snapshot (off the caller's dispatcher) so the next factory bind
-     * resolves from memory instead of the ≤2 s blocking preload in
-     * onDataSetChanged. Both recommendation-widget persist paths share it —
-     * each factory binds against the exact URLs prewarmed here, so the two
-     * paths cannot drift. Runs on the unchanged-content path too; cache hits
-     * are free.
-     */
-    private fun <T> prewarmSnapshotPosters(context: Context, items: List<T>, urlOf: (T) -> String?) {
-        WidgetImageLoader.prewarmPosters(context, items.mapNotNull(urlOf))
     }
 
     private fun <T> sameContentById(

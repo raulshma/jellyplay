@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CheckboxDefaults
@@ -167,9 +166,9 @@ fun SeriesDownloadSheet(
         Spacer(Modifier.height(8.dp))
 
         // The season header and each expanded season's episode rows are
-        // individual keyed items so an expanded 100+ episode season composes
-        // only its visible rows instead of one giant unvirtualized item.
-        // Episode keys are season-scoped ("season-{id}-ep-…") to stay unique.
+        // individual keyed items (see [seasonEpisodeItems]) so an expanded
+        // 100+ episode season composes only its visible rows instead of one
+        // giant unvirtualized item.
         LazyColumn(
             modifier = Modifier
                 .fillMaxWidth()
@@ -243,48 +242,42 @@ fun SeriesDownloadSheet(
                         }
                     } else {
                         val selectedInSeason = selection.selectedForSeason(season.id)
-                        itemsIndexed(
-                            seasonEpisodes,
-                            key = { _, episode -> "season-${season.id}-ep-${episode.id}" },
-                            contentType = { _, _ -> "episode" },
-                        ) { idx, episode ->
-                            val isDownloaded = episode.id in downloadedEpisodeIds
-                            val isEpisodeSelected = isDownloaded || episode.id in selectedInSeason
-                            SeasonEpisodeRow(
-                                episode = episode,
-                                index = idx,
-                                count = seasonEpisodes.size,
-                                selected = isEpisodeSelected,
-                                selectedContainerColor = if (isDownloaded) {
-                                    MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.4f)
-                                } else {
-                                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
-                                },
-                                nameColor = if (isDownloaded) MaterialTheme.colorScheme.onSurfaceVariant
-                                else MaterialTheme.colorScheme.onSurface,
-                                checkboxColors = if (isDownloaded) {
-                                    CheckboxDefaults.colors(
-                                        checkedColor = MaterialTheme.colorScheme.tertiary,
+                        seasonEpisodeItems(
+                            seasonId = season.id,
+                            episodes = seasonEpisodes,
+                            selected = { episodeId ->
+                                episodeId in downloadedEpisodeIds || episodeId in selectedInSeason
+                            },
+                            tints = { episode ->
+                                if (episode.id in downloadedEpisodeIds) {
+                                    SeasonEpisodeRowTints(
+                                        selectedContainerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.4f),
+                                        nameColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        checkboxColors = CheckboxDefaults.colors(
+                                            checkedColor = MaterialTheme.colorScheme.tertiary,
+                                        ),
                                     )
                                 } else {
-                                    CheckboxDefaults.colors()
-                                },
-                                onToggle = { selection.toggleEpisode(season.id, episode.id) },
-                                enabled = !isDownloaded,
-                                trailingContent = if (isDownloaded) {
-                                    {
-                                        Text(
-                                            text = stringResource(Res.string.detail_downloaded_status),
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.tertiary,
-                                            fontWeight = FontWeight.Medium,
-                                        )
-                                    }
-                                } else {
-                                    null
-                                },
-                            )
-                        }
+                                    SeasonEpisodeRowTints(
+                                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                                        nameColor = MaterialTheme.colorScheme.onSurface,
+                                        checkboxColors = CheckboxDefaults.colors(),
+                                    )
+                                }
+                            },
+                            onToggle = { episodeId -> selection.toggleEpisode(season.id, episodeId) },
+                            enabled = { episodeId -> episodeId !in downloadedEpisodeIds },
+                            trailingContent = { episode ->
+                                if (episode.id in downloadedEpisodeIds) {
+                                    Text(
+                                        text = stringResource(Res.string.detail_downloaded_status),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.tertiary,
+                                        fontWeight = FontWeight.Medium,
+                                    )
+                                }
+                            },
+                        )
                     }
 
                     seasonDividerItem(season.id)

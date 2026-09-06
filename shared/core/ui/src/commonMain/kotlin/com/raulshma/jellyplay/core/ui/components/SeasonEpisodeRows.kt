@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxColors
 import androidx.compose.material3.CheckboxDefaults
@@ -75,15 +76,27 @@ fun RowScope.SeasonEpisodeMetaLabels(episode: MediaItem, nameColor: Color) {
 }
 
 /**
+ * Per-sheet tint bundle for [SeasonEpisodeRow]: the delete sheet paints
+ * selections with the error scheme, the download sheet with primary (queued)
+ * or tertiary (already downloaded) containers. Bundled so the triple travels
+ * as one value through [seasonEpisodeItems] instead of three loose params.
+ */
+class SeasonEpisodeRowTints(
+    val selectedContainerColor: Color,
+    val nameColor: Color,
+    val checkboxColors: CheckboxColors,
+)
+
+/**
  * Episode row chassis shared by the season lists in
  * [DeleteDownloadedEpisodesSheet] and [SeriesDownloadSheet]: horizontal inset,
  * expressive-list shape, selected-background color animation, checkbox, and
- * [SeasonEpisodeMetaLabels]. The caller passes the selected-container color,
- * name color, and checkbox colors so each sheet keeps its own
- * selected/downloaded tinting while the row shape itself can't drift between
- * the two. [enabled] gates both the row click and the checkbox (locked
- * downloaded rows pass false); [trailingContent] slots per-sheet extras after
- * the labels (e.g. the "Downloaded" status tag).
+ * [SeasonEpisodeMetaLabels]. The caller passes a [SeasonEpisodeRowTints]
+ * bundle so each sheet keeps its own selected/downloaded tinting while the
+ * row shape itself can't drift between the two. [enabled] gates both the row
+ * click and the checkbox (locked downloaded rows pass false);
+ * [trailingContent] slots per-sheet extras after the labels (e.g. the
+ * "Downloaded" status tag).
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -92,9 +105,7 @@ fun SeasonEpisodeRow(
     index: Int,
     count: Int,
     selected: Boolean,
-    selectedContainerColor: Color,
-    nameColor: Color,
-    checkboxColors: CheckboxColors,
+    tints: SeasonEpisodeRowTints,
     onToggle: () -> Unit,
     enabled: Boolean = true,
     trailingContent: (@Composable RowScope.() -> Unit)? = null,
@@ -110,7 +121,7 @@ fun SeasonEpisodeRow(
         )
 
         val episodeBgColor by animateColorAsState(
-            targetValue = if (selected) selectedContainerColor else Color.Transparent,
+            targetValue = if (selected) tints.selectedContainerColor else Color.Transparent,
             animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
             label = "epBg",
         )
@@ -128,10 +139,10 @@ fun SeasonEpisodeRow(
                 checked = selected,
                 onCheckedChange = null,
                 enabled = enabled,
-                colors = checkboxColors,
+                colors = tints.checkboxColors,
             )
             Spacer(Modifier.width(8.dp))
-            SeasonEpisodeMetaLabels(episode = episode, nameColor = nameColor)
+            SeasonEpisodeMetaLabels(episode = episode, nameColor = tints.nameColor)
             trailingContent?.invoke(this)
         }
     }
@@ -227,6 +238,44 @@ fun LazyListScope.seasonDividerItem(seasonId: String) {
         HorizontalDivider(
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
             color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
+        )
+    }
+}
+
+/**
+ * Emits one keyed, content-typed [SeasonEpisodeRow] per episode of an
+ * expanded season, wiring the season-scoped key scheme ("season-{id}-ep-…")
+ * and the row invocation both sheets share so an expanded 100+ episode
+ * season composes only its visible rows and the keys can't drift between the
+ * two lists. Keys are season-scoped because a sheet may keep several seasons
+ * expanded at once. Per-episode lambdas supply each sheet's own selection,
+ * tinting (downloaded rows lock + re-tint), enabled state, and trailing
+ * extras.
+ */
+fun LazyListScope.seasonEpisodeItems(
+    seasonId: String,
+    episodes: List<MediaItem>,
+    selected: (episodeId: String) -> Boolean,
+    tints: @Composable (episode: MediaItem) -> SeasonEpisodeRowTints,
+    onToggle: (episodeId: String) -> Unit,
+    enabled: (episodeId: String) -> Boolean = { true },
+    trailingContent: (@Composable RowScope.(episode: MediaItem) -> Unit)? = null,
+) {
+    itemsIndexed(
+        episodes,
+        key = { _, episode -> "season-$seasonId-ep-${episode.id}" },
+        contentType = { _, _ -> "episode" },
+    ) { index, episode ->
+        val episodeTints = tints(episode)
+        SeasonEpisodeRow(
+            episode = episode,
+            index = index,
+            count = episodes.size,
+            selected = selected(episode.id),
+            tints = episodeTints,
+            onToggle = { onToggle(episode.id) },
+            enabled = enabled(episode.id),
+            trailingContent = trailingContent?.let { content -> { content(episode) } },
         )
     }
 }

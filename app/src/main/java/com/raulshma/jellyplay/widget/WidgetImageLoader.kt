@@ -57,16 +57,16 @@ object WidgetImageLoader {
     // fall back to its placeholder drawable — preferable to a frozen cell.
     private const val WIDGET_LOAD_TIMEOUT_MS = 2_000L
 
-    // Overall deadline for a whole batch preload. RemoteViewsFactory callbacks
+    // Overall deadline for a whole batch fetch. RemoteViewsFactory callbacks
     // run on the widget host's binder thread, so without a hard ceiling N slow
     // URLs (each up to WIDGET_LOAD_TIMEOUT_MS) can stall the launcher and ANR
-    // it. Bounded preloads return a partial map; unresolved URLs fall back to
+    // it. Bounded batches return a partial map; unresolved URLs fall back to
     // the placeholder just like an individual timeout.
     private const val WIDGET_PRELOAD_DEADLINE_MS = 2_000L
 
-    // Cap how many distinct posters a single preload attempts. A widget cell
-    // count is small; loading more just widens the blocking window on the
-    // binder thread for content the user has to scroll to see anyway.
+    // Cap how many distinct posters a single batch fetch attempts. A widget
+    // cell count is small; loading more just widens the blocking window on
+    // the binder thread for content the user has to scroll to see anyway.
     private const val WIDGET_PRELOAD_MAX_URLS = 12
 
     /**
@@ -125,9 +125,11 @@ object WidgetImageLoader {
     }
 
     /**
-     * Pre-fetches posters concurrently so `RemoteViewsFactory.getViewAt`
-     * can read from the resulting cache instead of doing per-cell network I/O
-     * on the binder thread.
+     * Awaited batch poster fetch so `RemoteViewsFactory.getViewAt` can read
+     * from the resulting cache instead of doing per-cell network I/O on the
+     * binder thread. Distinct from [prewarmPosters]: this one suspends until
+     * the batch resolves (or its deadline hits) and returns the bitmaps;
+     * prewarm is fire-and-forget cache fill.
      *
      * Two safety rails keep this from ANR-ing the launcher when called from a
      * factory's `onDataSetChanged`:
@@ -135,10 +137,11 @@ object WidgetImageLoader {
      *   2. The whole batch is bounded by [WIDGET_PRELOAD_DEADLINE_MS]; any URL
      *      not resolved in time simply maps to `null` (placeholder fallback).
      *
-     * Already-cached posters (from a prior preload in this process) are served
-     * instantly from [posterMemoryCache] and don't count against the deadline.
+     * Already-cached posters (from a prior fetch or [prewarmPosters] in this
+     * process) are served instantly from [posterMemoryCache] and don't count
+     * against the deadline.
      */
-    suspend fun preloadPosters(
+    suspend fun fetchPosters(
         context: Context,
         urls: Collection<String>,
         cornerRadiusDp: Float = 10f,
@@ -164,9 +167,9 @@ object WidgetImageLoader {
      * snapshot-push paths: decodes the same URLs, at the same target size and
      * default corner radius, into the same cache the factories read — so a
      * later factory bind resolves from memory. Purely additive warm-up: the
-     * factories' own bounded `onDataSetChanged` preload remains the fallback
-     * whenever the prewarm hasn't landed (or was evicted). Unlike
-     * [preloadPosters] there is no batch deadline — nobody waits on this —
+     * factories' own bounded `onDataSetChanged` [fetchPosters] remains the
+     * fallback whenever the prewarm hasn't landed (or was evicted). Unlike
+     * [fetchPosters] there is no batch deadline — nobody waits on this —
      * but each URL is still individually bounded by
      * [WIDGET_LOAD_TIMEOUT_MS] via [loadPoster], and the same
      * [WIDGET_PRELOAD_MAX_URLS] cap applies. Never triggers widget updates
@@ -224,7 +227,7 @@ object WidgetImageLoader {
         } finally {
             // The input bitmap is no longer referenced once it has been drawn
             // into `output`; recycle it promptly to avoid N pairs of bitmaps
-            // briefly coexisting during concurrent `preloadPosters` fetches.
+            // briefly coexisting during concurrent `fetchPosters` fetches.
             bitmap.recycle()
         }
         return output

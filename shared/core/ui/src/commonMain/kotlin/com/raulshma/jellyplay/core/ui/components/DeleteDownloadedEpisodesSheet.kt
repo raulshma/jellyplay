@@ -24,7 +24,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CheckboxDefaults
@@ -192,10 +191,9 @@ fun DeleteDownloadedEpisodesSheet(
 
         // ── Seasons + episodes ──
         // The season header and each expanded season's episode rows are
-        // individual keyed items so an expanded 100+ episode season composes
-        // only its visible rows instead of one giant unvirtualized item.
-        // Episode keys are season-scoped because expandedSeasonIds is a set —
-        // multiple seasons can be expanded at once.
+        // individual keyed items (see [seasonEpisodeItems]) so an expanded
+        // 100+ episode season composes only its visible rows instead of one
+        // giant unvirtualized item.
         LazyColumn(
             modifier = Modifier
                 .fillMaxWidth()
@@ -235,25 +233,22 @@ fun DeleteDownloadedEpisodesSheet(
 
                 if (isExpanded) {
                     val selectedInSeason = selection.selectedForSeason(season.id)
-                    itemsIndexed(
-                        seasonEpisodes,
-                        key = { _, episode -> "season-${season.id}-ep-${episode.id}" },
-                        contentType = { _, _ -> "episode" },
-                    ) { idx, episode ->
-                        SeasonEpisodeRow(
-                            episode = episode,
-                            index = idx,
-                            count = seasonEpisodes.size,
-                            selected = episode.id in selectedInSeason,
-                            selectedContainerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
-                            nameColor = MaterialTheme.colorScheme.onSurface,
-                            checkboxColors = CheckboxDefaults.colors(
-                                checkedColor = MaterialTheme.colorScheme.error,
-                                uncheckedColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                            ),
-                            onToggle = { selection.toggleEpisode(season.id, episode.id) },
-                        )
-                    }
+                    seasonEpisodeItems(
+                        seasonId = season.id,
+                        episodes = seasonEpisodes,
+                        selected = { episodeId -> episodeId in selectedInSeason },
+                        tints = {
+                            SeasonEpisodeRowTints(
+                                selectedContainerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
+                                nameColor = MaterialTheme.colorScheme.onSurface,
+                                checkboxColors = CheckboxDefaults.colors(
+                                    checkedColor = MaterialTheme.colorScheme.error,
+                                    uncheckedColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                ),
+                            )
+                        },
+                        onToggle = { episodeId -> selection.toggleEpisode(season.id, episodeId) },
+                    )
 
                     seasonDividerItem(season.id)
                 }

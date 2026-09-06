@@ -71,7 +71,7 @@ class SeerrRecommendationsWidgetService : RemoteViewsService() {
                 emptyMap()
             } else {
                 val nonNullUrls = items.map { it.posterUrl }.filterNotNull()
-                runBlocking { WidgetImageLoader.preloadPosters(context, nonNullUrls) }
+                runBlocking { WidgetImageLoader.fetchPosters(context, nonNullUrls) }
             }
             widgetDims = refreshWidgetDimensions(context, appWidgetId, 250)
         }
