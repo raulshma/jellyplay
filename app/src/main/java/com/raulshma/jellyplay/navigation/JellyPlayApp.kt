@@ -224,13 +224,12 @@ fun JellyPlayApp(
                     com.raulshma.jellyplay.core.ui.components.LocalSurpriseOnLaunch provides surpriseController,
                 ) {
                     MainContent(
-                        onLogout = { revoke ->
-                            if (revoke) {
-                                session.revokeServerSession()
-                            } else {
-                                session.logout()
-                            }
-                        },
+                        // ADR 0001: the revoke/plain fork dispatches through
+                        // the shared ShellSessionController, whose sign-out
+                        // action lands in SessionCoordinator (remote-control
+                        // stop + sign-out) — the same fork desktop runs
+                        // against AuthRepository.
+                        onLogout = { revoke -> viewModel.logout(revoke) },
                         viewModel = viewModel,
                         preferences = preferences,
                         infra = infra,

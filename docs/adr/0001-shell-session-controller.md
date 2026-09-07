@@ -1,6 +1,6 @@
 # 0001 — Shell session-policy wiring moves to a shared `ShellSessionController`
 
-- **Status:** accepted (design; implementation pending)
+- **Status:** accepted (landed 2026-09-07)
 - **Date:** 2026-09-07
 - **Scope:** `:app` (Android shell), `:apps:desktop` (desktop shell), `shared/feature/shell`
 

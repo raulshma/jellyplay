@@ -85,6 +85,9 @@ kotlin {
         // AdminRefreshGate policy pins (settings/core-data precedent).
         getByName("jvmTest").dependencies {
             implementation(kotlin("test"))
+            // The session controller's arbitration/collect tests (runTest +
+            // fake clock, the core-data jvmTest pattern).
+            implementation(libs.coroutines.test)
         }
     }
 }

@@ -1174,17 +1174,28 @@ desktop: the bridge-probed `Route.VideoPlayer`). `ShellSectionRegistry` is
 a registration ledger: `shellEntryProvider` stamps a sentinel contentKey on
 its fallback entry, so `isRegistered(route)` is a derived test — the
 desktop dead-end guard is routes-minus-registered, and the hand-kept
-"keep in sync" three-route mirror is gone. Admin/logout/homeMode policy
-stays per-shell (Android: `MainViewModel`; desktop: inlined) — it was
-deliberately NOT absorbed into the hooks: one consumer per policy, and
-forcing it through would drag `AuthRepository` into a "shared" module for
-one shell's sake.
-The desktop alpha channel made
-the wiring a two-consumer duplication; a commonMain `ShellSessionController`
-in this module is the sanctioned home for the session-policy wiring once
-landed — the hooks stay a registration surface, and platform-conditional
-blocks (rail, media keys, surface probe, saved-state config) stay
-per-shell.
+"keep in sync" three-route mirror is gone.
+
+**`ShellSessionController`** (landed 2026-09-07; the old per-shell ruling
+for this wiring is reversed — see
+`docs/adr/0001-shell-session-controller.md`) is the session-policy wiring
+both shells share: admin status + `AdminRefreshGate` arbitration
+(`refreshAdminStatusNow`'s gate early-out → refresh → success-only stamp
+→ finally-reset), `homeMode` set with optimistic write, and
+`logout(revoke)`, over pure injected flows/suspend lambdas (the gate's
+construction pattern; no Koin in this module — each shell constructs it
+with its own scope, Android's `MainViewModel` delegates, desktop's
+`DesktopAppRoot` collects it where the inlined "MainViewModel duties"
+block used to be). `updateCheckMessage(Result<AppUpdateInfo>)` is the
+one shared update fact (a pure companion fold → `UpdateAvailable` /
+`UpToDate` / `Failed`); the update SURFACES stay per-shell (Android's
+`UpdateCoordinator` is structurally richer; the desktop inert sentinel
+per `docs/adr/desktop-auto-update.md` untouched). Android's rendered
+homeMode stays `MainPreferences`-derived (the ADR's "other duties stay"),
+so Android passes `homeModeChanges = null` while desktop feeds the store
+flow for its optimistic rail switch. Platform-conditional blocks (rail,
+media keys, surface probe, saved-state config) stay per-shell. Pinned by
+`ShellSessionControllerTest` (11 tests).
 
 The shells share the platform-free shell policy in `shared/feature/shell`:
 **`AdminRefreshGate`** is the admin-status dedupe (30 s window + in-flight

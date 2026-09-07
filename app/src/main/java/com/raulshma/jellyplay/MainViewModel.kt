@@ -17,7 +17,7 @@ import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.deeplink.DeepLinkHandler
-import com.raulshma.jellyplay.feature.shell.AdminRefreshGate
+import com.raulshma.jellyplay.feature.shell.ShellSessionController
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolver
 import com.raulshma.jellyplay.shell.SessionCoordinator
@@ -25,9 +25,9 @@ import com.raulshma.jellyplay.shell.SyncPlayOpenCoordinator
 import com.raulshma.jellyplay.shell.UpdateCoordinator
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.withTimeout
@@ -132,7 +132,7 @@ class MainViewModel(
 
     /** Persists the Home mode (Video / Music) switch from the app-shell nav. */
     fun setHomeMode(mode: com.raulshma.jellyplay.core.model.HomeMode) {
-        scope.launch { homeDiscoveryStore.setHomeMode(mode) }
+        sessionController.setHomeMode(mode)
     }
 
     /** Marks onboarding completed (TV skips the phone onboarding flow). */
@@ -154,9 +154,31 @@ class MainViewModel(
         _surpriseRequests.tryEmit(Unit)
     }
 
-    val isAdmin = authRepository.currentUser
-        .map { it?.isAdmin == true }
-        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
+    /**
+     * The shell session-policy wiring, owned by the shared
+     * [ShellSessionController] (ADR 0001) instead of duplicated here: admin
+     * status + [com.raulshma.jellyplay.feature.shell.AdminRefreshGate]
+     * arbitration, homeMode persist, and the revoke/plain logout fork.
+     * Constructed over this shell's own collaborators — logout lands in
+     * [sessionCoordinator] (remote-control stop + sign-out), the admin and
+     * homeMode seams in [authRepository] / [homeDiscoveryStore]. Android does
+     * NOT pass `homeModeChanges`: the rendered homeMode comes from the
+     * [preferences] pipeline below, so the controller's homeMode state stays
+     * unpopulated on this shell.
+     */
+    private val sessionController = ShellSessionController(
+        scope = scope,
+        nowMs = { System.currentTimeMillis() },
+        currentUser = authRepository.currentUser,
+        refreshCurrentUser = { authRepository.refreshCurrentUser() },
+        persistHomeMode = { mode -> homeDiscoveryStore.setHomeMode(mode) },
+        homeModeChanges = null,
+        signOut = { revoke ->
+            if (revoke) sessionCoordinator.revokeServerSession() else sessionCoordinator.logout()
+        },
+    )
+
+    val isAdmin: StateFlow<Boolean> get() = sessionController.isAdmin
 
     /**
      * True while a server admin-status refresh is in flight. Collected by the
@@ -164,20 +186,16 @@ class MainViewModel(
      * guard so it can show a brief loading state instead of flashing the
      * access-denied screen before the first refresh completes.
      */
-    private val _isRefreshingAdmin = stateFlow(false)
-    val isRefreshingAdmin = _isRefreshingAdmin.flow
+    val isRefreshingAdmin: StateFlow<Boolean> get() = sessionController.isRefreshingAdmin
 
     /**
-     * The admin refresh dedupe policy (the shared [AdminRefreshGate]: 30 s
-     * window + in-flight guard). The in-flight state itself stays here —
-     * [MainViewModel.isRefreshingAdmin] is the flow the
-     * [com.raulshma.jellyplay.feature.admin.navigation.AdminRouteContainer]
-     * guard renders from.
+     * Ends the session through [sessionCoordinator]: `revoke = true` also
+     * revokes the server session token, `false` signs out locally only.
+     * Dispatched by [ShellSessionController.logout] (the shared fork).
      */
-    private val adminRefreshGate = AdminRefreshGate(
-        isRefreshInFlight = { _isRefreshingAdmin.value },
-        nowMs = { System.currentTimeMillis() },
-    )
+    fun logout(revoke: Boolean) {
+        sessionController.logout(revoke)
+    }
 
     /**
      * Preferences read by the app-shell composables (MainActivity +
@@ -230,28 +248,15 @@ class MainViewModel(
     /**
      * Re-validates the current user's admin status against the server. Called
      * by [com.raulshma.jellyplay.feature.admin.navigation.AdminRouteContainer]
-     * on entering any admin screen, but de-duplicated by the shared
-     * [AdminRefreshGate] (at most once per 30 s window) so navigation between
-     * admin screens doesn't hammer the server. Failures other than
-     * access-denied are swallowed (the cached value is kept) — see
-     * [AuthRepository.refreshCurrentUser].
+     * on entering any admin screen; the dedupe lives in
+     * [ShellSessionController.refreshAdminStatusNow] (the shared
+     * [com.raulshma.jellyplay.feature.shell.AdminRefreshGate] 30 s window +
+     * in-flight guard) so navigation between admin screens doesn't hammer the
+     * server. Failures other than access-denied are swallowed (the cached
+     * value is kept) — see [AuthRepository.refreshCurrentUser].
      */
     fun refreshAdminStatus() {
-        // Early-out synchronously (before launch) to guard against the window
-        // where two admin entries compose simultaneously during a transition
-        // and both fire LaunchedEffect. The in-flight flag serializes genuine
-        // concurrent entries; the gate's timestamp bounds re-fetches to one
-        // per window.
-        if (!adminRefreshGate.shouldStart()) return
-        launch {
-            _isRefreshingAdmin.set(true)
-            try {
-                val result = authRepository.refreshCurrentUser()
-                if (result.isSuccess) adminRefreshGate.onRefreshCompleted()
-            } finally {
-                _isRefreshingAdmin.set(false)
-            }
-        }
+        sessionController.refreshAdminStatusNow()
     }
 
     fun handleShortcutIntent(intent: Intent) {

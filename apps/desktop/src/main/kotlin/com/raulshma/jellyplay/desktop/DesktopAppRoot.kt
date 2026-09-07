@@ -65,7 +65,6 @@ import com.raulshma.jellyplay.core.data.update.AppUpdateRepository
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore
 import com.raulshma.jellyplay.core.datastore.navigation.NavigationStore
 import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore
-import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.ServerHealth
 import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
 import com.raulshma.jellyplay.core.ui.components.LocalPullToRefreshRegistry
@@ -85,7 +84,8 @@ import com.raulshma.jellyplay.feature.player.video.DesktopVideoSurfaceBridge
 import com.raulshma.jellyplay.feature.player.video.VideoPlayerScreen
 import com.raulshma.jellyplay.feature.music.feedback.DesktopMusicMessageBus
 import com.raulshma.jellyplay.feature.music.feedback.MusicMessageBus
-import com.raulshma.jellyplay.feature.shell.AdminRefreshGate
+import com.raulshma.jellyplay.feature.shell.ShellSessionController
+import com.raulshma.jellyplay.feature.shell.UpdateCheckMessage
 import com.raulshma.jellyplay.feature.shell.navigation.ShellHostHooks
 import com.raulshma.jellyplay.feature.shell.navigation.ShellSectionRegistry
 import com.raulshma.jellyplay.feature.shell.navigation.shellEntryProvider
@@ -93,6 +93,7 @@ import com.raulshma.jellyplay.desktop.player.DesktopAudioQueueManager
 import com.raulshma.jellyplay.desktop.player.MpvSoftwareSurfaceSupport
 import kotlin.reflect.KClass
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.serializer
@@ -333,87 +334,58 @@ private fun DesktopNavScaffold(
     val networkMonitor: NetworkMonitor = koinInject()
     val serverHealth = remember { MutableStateFlow(ServerHealth.Unknown) }
 
-    // Home Video/Music mode — the Android shell persists this through
-    // MainViewModel.setHomeMode; desktop writes the same HomeDiscoveryStore
-    // slice so the pick survives restarts and matches the server-synced
-    // default (VIDEO).
+    // Shell session policy (ADR 0001): the wiring this scaffold used to carry
+    // inline ("the Android shell's MainViewModel duties, inlined for desktop")
+    // now lives in the shared ShellSessionController beside AdminRefreshGate —
+    // admin-status state + the 30 s refresh arbitration, homeMode
+    // collect/persist, and the revoke/plain logout fork. Constructed directly
+    // over this shell's own stores (no Koin binding, the same direct
+    // construction MainViewModel performs on Android) on this composition's
+    // scope, so every job dies with the scaffold exactly as the inlined
+    // copies did.
+    val authRepository: AuthRepository = koinInject()
     val homeDiscoveryStore: HomeDiscoveryStore = koinInject()
-    var homeMode by remember { mutableStateOf(HomeMode.VIDEO) }
-    LaunchedEffect(homeDiscoveryStore) {
-        homeDiscoveryStore.homeDiscovery.collect { slice -> homeMode = slice.homeMode }
+    val sessionController = remember(authRepository, homeDiscoveryStore) {
+        ShellSessionController(
+            scope = scope,
+            nowMs = { System.currentTimeMillis() },
+            currentUser = authRepository.currentUser,
+            refreshCurrentUser = { authRepository.refreshCurrentUser() },
+            persistHomeMode = { mode -> homeDiscoveryStore.setHomeMode(mode) },
+            homeModeChanges = homeDiscoveryStore.homeDiscovery.map { it.homeMode },
+            signOut = { revoke ->
+                if (revoke) authRepository.revokeServerSession() else authRepository.logout()
+            },
+        )
     }
+    val homeMode by sessionController.homeMode.collectAsState()
+    val isAdmin by sessionController.isAdmin.collectAsState()
+    val isRefreshingAdmin by sessionController.isRefreshingAdmin.collectAsState()
     // Bottom-nav customization (#152): the same NavigationStore the phone
     // settings write through drives which items this rail shows and in what
     // order (see the rail composition below).
     val navigationStore: NavigationStore = koinInject()
-    val onHomeModeChange: (HomeMode) -> Unit = { mode ->
-        homeMode = mode
-        scope.launch { homeDiscoveryStore.setHomeMode(mode) }
-    }
 
     // Live desktop audio core — the Home music pane's Now Playing / Ambient
     // cards read the current item + metadata from it (same source the tray
     // and title bar observe; flows are read at click time, not collected).
     val audioQueueManager: DesktopAudioQueueManager = koinInject()
 
-    // Admin gate + logout — the Android shell's MainViewModel duties,
-    // inlined for desktop (no desktop MainViewModel exists). isAdmin maps
-    // the shared currentUser flow; refreshAdminStatus dedupes through the
-    // shared AdminRefreshGate (30 s window + in-flight guard) — the same
-    // contract AdminRouteContainer gets on Android
-    // (MainViewModel.refreshAdminStatus).
-    val authRepository: AuthRepository = koinInject()
-    var isAdmin by remember { mutableStateOf(false) }
-    var isRefreshingAdmin by remember { mutableStateOf(false) }
-    val adminRefreshGate = remember {
-        AdminRefreshGate(
-            isRefreshInFlight = { isRefreshingAdmin },
-            nowMs = { System.currentTimeMillis() },
-        )
-    }
-    LaunchedEffect(authRepository) {
-        authRepository.currentUser.collect { user -> isAdmin = user?.isAdmin == true }
-    }
-    val refreshAdminStatus = {
-        if (adminRefreshGate.shouldStart()) {
-            isRefreshingAdmin = true
-            scope.launch {
-                try {
-                    val result = authRepository.refreshCurrentUser()
-                    if (result.isSuccess) adminRefreshGate.onRefreshCompleted()
-                } finally {
-                    isRefreshingAdmin = false
-                }
-            }
-        }
-    }
-    val onLogout: (Boolean) -> Unit = { revoke ->
-        // Same semantics as the Android SessionCoordinator pair: revoke=true
-        // also revokes the server session. isAuthenticated flips false and
-        // DesktopAppRoot swaps in the signed-out auth host.
-        scope.launch {
-            if (revoke) authRepository.revokeServerSession() else authRepository.logout()
-        }
-    }
-
-    // AppUpdate split (Wave xB): the About screen's "Check for updates" row.
-    // Desktop has no self-update (the desktopDataModule version sentinel makes
-    // isUpdateAvailable permanently false, so selectAsset can never offer an
-    // Android APK), so a successful check always reads "up to date" — same
-    // wording as the Android update sheet. The row itself is pref-gated by
-    // selfUpdateCheckEnabled (default on).
+    // AppUpdate split (Wave xB): the About screen's "Check for updates" row —
+    // this shell's OWN update surface. The check→message MAPPING is shared
+    // (ShellSessionController.updateCheckMessage, ADR 0001's split); only the
+    // wording below is desktop's. Desktop has no self-update (the
+    // desktopDataModule version sentinel makes isUpdateAvailable permanently
+    // false, so selectAsset can never offer an Android APK), so a successful
+    // check always reads "up to date" — same wording as the Android update
+    // sheet. The row itself is pref-gated by selfUpdateCheckEnabled (default
+    // on). Android never uses the shared mapping: its UpdateCoordinator maps
+    // the same repository result into the full update-sheet state machine.
     val appUpdateRepository: AppUpdateRepository = koinInject()
     val onCheckForUpdates: () -> Unit = {
         scope.launch {
-            val result = appUpdateRepository.checkForUpdate()
-            val message = result.getOrNull()?.let { info ->
-                if (info.isUpdateAvailable) {
-                    "Version ${info.latestVersion} is available; self-update is not supported on desktop yet."
-                } else {
-                    "You're up to date"
-                }
-            } ?: "Update check failed: ${result.exceptionOrNull()?.message ?: "unknown error"}"
-            snackbarHostState.showSnackbar(message)
+            val message = ShellSessionController.updateCheckMessage(appUpdateRepository.checkForUpdate())
+            snackbarHostState.showSnackbar(message.desktopUpdateText())
         }
     }
 
@@ -488,14 +460,14 @@ private fun DesktopNavScaffold(
 
     // Shell-supplied surface behind the shared section graph (ShellHostHooks):
     // the now-playing/ambient lambdas read the desktop audio core
-    // (DesktopAudioQueueManager) at click time, and the settings/admin seams
-    // wrap the inlined MainViewModel duties above — the same values, same
-    // lazy reads the old inline entryProvider captured. Remembered on the
-    // values the hooks capture, so the graph rebuilds only when they change.
+    // (DesktopAudioQueueManager) at click time, and the session seams wrap the
+    // shared ShellSessionController above — the same values, same lazy reads
+    // the old inline entryProvider captured. Remembered on the values the
+    // hooks capture, so the graph rebuilds only when they change.
     val shellHost = remember(guardedNavigator, homeMode) {
         ShellHostHooks(
             homeMode = homeMode,
-            onHomeModeChange = onHomeModeChange,
+            onHomeModeChange = sessionController::setHomeMode,
             onNowPlayingClick = {
                 audioQueueManager.currentPlayingItemId.value?.let { itemId ->
                     guardedNavigator.navigate(Route.AudioPlayer(itemId))
@@ -510,12 +482,12 @@ private fun DesktopNavScaffold(
                     ),
                 )
             },
-            onLogout = onLogout,
+            onLogout = sessionController::logout,
             onCheckForUpdates = onCheckForUpdates,
             // Lazy reads — admin refreshes don't rebuild the graph.
             isAdmin = { isAdmin },
             isRefreshingAdmin = { isRefreshingAdmin },
-            onRefreshAdmin = { refreshAdminStatus() },
+            onRefreshAdmin = sessionController::refreshAdminStatusNow,
         )
     }
 
@@ -685,6 +657,22 @@ private fun DesktopNavScaffold(
             }
         }
     }
+}
+
+/**
+ * Desktop rendering of the shared [UpdateCheckMessage] — ADR 0001's split:
+ * the check→message mapping lives in ShellSessionController (commonMain),
+ * the WORDING is this shell's own surface. A successful check always reads
+ * "up to date" in practice (the desktopDataModule version sentinel keeps
+ * `isUpdateAvailable` permanently false — desktop has no self-update), but
+ * the available branch is kept honest so a future desktop update story only
+ * swaps the sentinel.
+ */
+private fun UpdateCheckMessage.desktopUpdateText(): String = when (this) {
+    is UpdateCheckMessage.UpdateAvailable ->
+        "Version $latestVersion is available; self-update is not supported on desktop yet."
+    UpdateCheckMessage.UpToDate -> "You're up to date"
+    is UpdateCheckMessage.Failed -> "Update check failed: ${reason ?: "unknown error"}"
 }
 
 /**
