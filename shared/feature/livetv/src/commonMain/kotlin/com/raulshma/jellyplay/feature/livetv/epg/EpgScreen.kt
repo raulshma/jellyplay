@@ -70,6 +70,7 @@ import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKey
+import com.raulshma.jellyplay.feature.livetv.isAiringAt
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -373,8 +374,11 @@ private fun ChannelProgramsRow(
     val currentNow by rememberUpdatedState(now)
     val liveProgramId by remember(rowLayout, windowStart) {
         derivedStateOf {
+            // The shared airing predicate over the already-parsed layout
+            // Instants (non-null on both bounds → the same half-open
+            // [start, end) comparison this used to inline).
             val live = rowLayout.programLayouts.firstOrNull { layout ->
-                currentNow >= layout.start && currentNow < layout.end
+                isAiringAt(start = layout.start, end = layout.end, now = currentNow)
             }
             live?.program?.id
         }

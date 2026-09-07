@@ -1,10 +1,10 @@
 package com.raulshma.jellyplay.widget
 
-import android.appwidget.AppWidgetManager
-import android.content.ComponentName
 import android.content.Context
 import android.graphics.Bitmap
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
+import com.raulshma.jellyplay.widget.skeleton.updateAllProviderWidgets
+import com.raulshma.jellyplay.widget.skeleton.widgetIdsFor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -48,16 +48,19 @@ class NowPlayingWidgetUpdater (
 
     fun start() {
         if (metadataJob?.isActive == true) return
-        val appWidgetManager = AppWidgetManager.getInstance(context)
-        val componentName = ComponentName(context, NowPlayingWidget::class.java)
-        val ids = appWidgetManager.getAppWidgetIds(componentName)
-        if (ids.isEmpty()) {
+        // The helper returns the ids it refreshed; the return is this
+        // site's presence check — nothing pinned means stay dormant.
+        val boundWidgetIds = updateAllProviderWidgets(
+            context = context,
+            providerClass = NowPlayingWidget::class.java,
+            updateAppWidget = { manager, id ->
+                NowPlayingWidget.updateAppWidget(context, manager, id)
+            },
+        )
+        if (boundWidgetIds.isEmpty()) {
             // Nothing pinned: stay dormant. The widget provider's
             // onEnabled/onAppWidgetOptionsChanged re-kicks us when one lands.
             return
-        }
-        for (id in ids) {
-            NowPlayingWidget.updateAppWidget(context, appWidgetManager, id)
         }
         metadataJob = scope.launch { observeMetadata() }
         positionJob = scope.launch { observePosition() }
@@ -70,9 +73,7 @@ class NowPlayingWidgetUpdater (
      */
     fun onWidgetPresenceChanged() {
         scope.launch {
-            val hasWidgets = AppWidgetManager.getInstance(context)
-                .getAppWidgetIds(ComponentName(context, NowPlayingWidget::class.java))
-                .isNotEmpty()
+            val hasWidgets = widgetIdsFor(context, NowPlayingWidget::class.java).isNotEmpty()
             if (hasWidgets) {
                 start()
             } else {

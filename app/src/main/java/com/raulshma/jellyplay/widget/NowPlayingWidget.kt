@@ -3,7 +3,6 @@ package com.raulshma.jellyplay.widget
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
@@ -13,6 +12,8 @@ import android.widget.RemoteViews
 import com.raulshma.jellyplay.R
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.widget.skeleton.WidgetProviderSkeleton
+import com.raulshma.jellyplay.widget.skeleton.toViewVisibility
+import com.raulshma.jellyplay.widget.skeleton.widgetIdsFor
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
@@ -271,8 +272,7 @@ class NowPlayingWidget : WidgetProviderSkeleton() {
             isEmptyState: Boolean = false,
         ) {
             val appWidgetManager = AppWidgetManager.getInstance(context)
-            val componentName = ComponentName(context, NowPlayingWidget::class.java)
-            val appWidgetIds = appWidgetManager.getAppWidgetIds(componentName)
+            val appWidgetIds = widgetIdsFor(context, NowPlayingWidget::class.java)
             if (appWidgetIds.isEmpty()) return
 
             for (appWidgetId in appWidgetIds) {
@@ -308,8 +308,7 @@ class NowPlayingWidget : WidgetProviderSkeleton() {
             isPlaying: Boolean,
         ) {
             val appWidgetManager = AppWidgetManager.getInstance(context)
-            val componentName = ComponentName(context, NowPlayingWidget::class.java)
-            val appWidgetIds = appWidgetManager.getAppWidgetIds(componentName)
+            val appWidgetIds = widgetIdsFor(context, NowPlayingWidget::class.java)
             if (appWidgetIds.isEmpty()) return
 
             val views = RemoteViews(context.packageName, R.layout.now_playing_widget)
@@ -342,22 +341,19 @@ class NowPlayingWidget : WidgetProviderSkeleton() {
             ) ?: return
             val layout = responsiveNowPlayingLayout(widthDp = dims.width, heightDp = dims.height)
 
-            views.setViewVisibility(R.id.widget_album_art, viewVisibility(layout.showAlbumArt))
+            views.setViewVisibility(R.id.widget_album_art, layout.showAlbumArt.toViewVisibility())
             views.setViewVisibility(
                 R.id.widget_progress_container,
-                viewVisibility(layout.showProgressContainer),
+                layout.showProgressContainer.toViewVisibility(),
             )
-            views.setViewVisibility(R.id.widget_position, viewVisibility(layout.showPosition))
-            views.setViewVisibility(R.id.widget_subtitle, viewVisibility(layout.showSubtitle))
-            views.setViewVisibility(R.id.widget_rewind, viewVisibility(layout.showRewind))
-            views.setViewVisibility(R.id.widget_forward, viewVisibility(layout.showForward))
-            views.setViewVisibility(R.id.widget_prev, viewVisibility(layout.showPrev))
-            views.setViewVisibility(R.id.widget_next, viewVisibility(layout.showNext))
-            views.setViewVisibility(R.id.widget_play_pause, viewVisibility(layout.showPlayPause))
+            views.setViewVisibility(R.id.widget_position, layout.showPosition.toViewVisibility())
+            views.setViewVisibility(R.id.widget_subtitle, layout.showSubtitle.toViewVisibility())
+            views.setViewVisibility(R.id.widget_rewind, layout.showRewind.toViewVisibility())
+            views.setViewVisibility(R.id.widget_forward, layout.showForward.toViewVisibility())
+            views.setViewVisibility(R.id.widget_prev, layout.showPrev.toViewVisibility())
+            views.setViewVisibility(R.id.widget_next, layout.showNext.toViewVisibility())
+            views.setViewVisibility(R.id.widget_play_pause, layout.showPlayPause.toViewVisibility())
         }
-
-        private fun viewVisibility(visible: Boolean): Int =
-            if (visible) android.view.View.VISIBLE else android.view.View.GONE
 
         private fun wireClickIntents(context: Context, views: RemoteViews) {
             val app = context.applicationContext

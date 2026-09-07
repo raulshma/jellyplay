@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.widget
 
 import android.appwidget.AppWidgetManager
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
@@ -10,6 +9,7 @@ import com.raulshma.jellyplay.core.model.LibraryRecommendationsSource
 import com.raulshma.jellyplay.widget.skeleton.GridWidgetRequestCodes
 import com.raulshma.jellyplay.widget.skeleton.GridWidgetUi
 import com.raulshma.jellyplay.widget.skeleton.WidgetProviderSkeleton
+import com.raulshma.jellyplay.widget.skeleton.notifyProviderDataChanged
 import com.raulshma.jellyplay.widget.skeleton.updateRecommendationGridWidget
 import kotlinx.coroutines.cancel
 import org.koin.mp.KoinPlatform
@@ -87,10 +87,7 @@ class LibraryRecommendationsWidget : WidgetProviderSkeleton() {
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
         if (intent.action == ACTION_REFRESH) {
-            val appWidgetManager = AppWidgetManager.getInstance(context)
-            val componentName = ComponentName(context, LibraryRecommendationsWidget::class.java)
-            val ids = appWidgetManager.getAppWidgetIds(componentName)
-            appWidgetManager.notifyAppWidgetViewDataChanged(ids, R.id.lr_widget_grid)
+            notifyProviderDataChanged(context, LibraryRecommendationsWidget::class.java, R.id.lr_widget_grid)
             launchWithPendingResult {
                 widgetScheduler(context).refreshLibraryNow()
             }

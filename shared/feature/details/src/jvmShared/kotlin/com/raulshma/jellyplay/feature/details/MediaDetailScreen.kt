@@ -48,6 +48,7 @@ import com.raulshma.jellyplay.core.ui.components.SeerrPrefetchCallback
 import com.raulshma.jellyplay.core.ui.components.SeerrRequestDialog
 import com.raulshma.jellyplay.core.ui.components.SeriesDownloadSheet
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
+import com.raulshma.jellyplay.core.ui.components.downloadedSeasonSlices
 import com.raulshma.jellyplay.core.ui.components.rememberConfirmState
 import com.raulshma.jellyplay.core.ui.components.rememberMediaQuickActionController
 import com.raulshma.jellyplay.core.ui.components.rememberRemoveDownloadState
@@ -734,19 +735,16 @@ fun MediaDetailScreen(
         // selected season into a single deleteOfflineSeason transaction). ──
         if (showDeleteEpisodesSheet && detailItem?.mediaType == MediaType.SERIES) {
             // For a LOCAL origin every episode in the snapshot is downloaded;
-            // the sheet treats each listed episode as deletable. Only seasons
-            // that actually carry episodes are passed so the sheet renders no
-            // empty rows.
-            val downloadedEpisodesBySeason = remember(uiState.episodes) {
-                uiState.episodes.filterValues { it.isNotEmpty() }
-            }
-            val downloadableSeasons = remember(uiState.seasons, downloadedEpisodesBySeason) {
-                uiState.seasons.filter { it.id in downloadedEpisodesBySeason }
+            // the sheet treats each listed episode as deletable. The shared
+            // derivation drops seasons that carry no episodes so the sheet
+            // renders no empty rows.
+            val downloadedSlices = remember(uiState.seasons, uiState.episodes) {
+                downloadedSeasonSlices(seasons = uiState.seasons, episodesBySeason = uiState.episodes)
             }
             val totalSizeBytes = uiState.detailContext?.seriesAggregate?.totalSizeBytes ?: 0L
-            val downloadedEpisodeCount = remember(uiState.detailContext, downloadedEpisodesBySeason) {
+            val downloadedEpisodeCount = remember(uiState.detailContext, downloadedSlices) {
                 uiState.detailContext?.seriesAggregate?.downloadedEpisodeCount
-                    ?: downloadedEpisodesBySeason.values.sumOf { it.size }
+                    ?: downloadedSlices.episodesBySeason.values.sumOf { it.size }
             }
             val deleteSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
             TvSafeSheet(
@@ -754,8 +752,8 @@ fun MediaDetailScreen(
                 sheetState = deleteSheetState,
             ) {
                 DeleteDownloadedEpisodesSheet(
-                    seasons = downloadableSeasons,
-                    episodes = downloadedEpisodesBySeason,
+                    seasons = downloadedSlices.seasons,
+                    episodes = downloadedSlices.episodesBySeason,
                     totalSizeBytes = totalSizeBytes,
                     episodeSizeBytes = uiState.detailContext?.seriesAggregate?.episodeSizeBytes ?: emptyMap(),
                     onDelete = { episodeIds ->

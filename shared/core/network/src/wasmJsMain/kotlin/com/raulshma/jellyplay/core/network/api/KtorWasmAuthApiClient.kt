@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.model.QuickConnectInfo
 import com.raulshma.jellyplay.core.model.QuickConnectState
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
+import com.raulshma.jellyplay.core.model.normalizeServerAddress
 import com.raulshma.jellyplay.core.network.NetworkLog
 import com.raulshma.jellyplay.core.network.RetryPolicy
 import com.raulshma.jellyplay.core.network.auth.AtomicSessionState
@@ -145,14 +146,8 @@ class KtorWasmAuthApiClient(
             .toServerInfo(address = address, fallbackServerId = randomUuidV4())
     }
 
-    /** Address normalization, verbatim from `AuthApiClientImpl`. */
-    private fun normalizeAddress(address: String): String = address.trim().trimEnd('/').let {
-        if (it.startsWith("http://") || it.startsWith("https://")) it
-        else "https://$it"
-    }
-
     override suspend fun connectToServer(address: String): Result<ServerInfo> {
-        val normalizedAddress = normalizeAddress(address)
+        val normalizedAddress = normalizeServerAddress(address)
         // Same RetryPolicy wrap (max 2 retries) the JVM discovery path uses —
         // one call with backoff instead of re-taps each firing fresh probes.
         return RetryPolicy.executeWithRetry(maxRetries = 2) {
@@ -174,7 +169,7 @@ class KtorWasmAuthApiClient(
     }
 
     override suspend fun getServerInfo(address: String): Result<ServerInfo> {
-        val normalizedAddress = normalizeAddress(address)
+        val normalizedAddress = normalizeServerAddress(address)
         return runCatchingRethrowingCancellation { probeServerInfo(normalizedAddress) }
     }
 
@@ -187,10 +182,10 @@ class KtorWasmAuthApiClient(
         // The primary is normalized like the alternates — a stored address
         // with a trailing '/' or missing scheme must not fail fetch and
         // wrongly skip to the alternates.
-        val normalizedPrimary = normalizeAddress(server.address)
+        val normalizedPrimary = normalizeServerAddress(server.address)
         if (probeHttp(normalizedPrimary).reachable) return normalizedPrimary
         for (alternate in server.alternateAddresses) {
-            val normalized = normalizeAddress(alternate)
+            val normalized = normalizeServerAddress(alternate)
             if (probeHttp(normalized).reachable) return normalized
         }
         return normalizedPrimary

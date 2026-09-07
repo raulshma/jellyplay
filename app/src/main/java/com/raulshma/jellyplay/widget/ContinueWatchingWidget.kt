@@ -2,7 +2,6 @@ package com.raulshma.jellyplay.widget
 
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -13,6 +12,7 @@ import com.raulshma.jellyplay.R
 import com.raulshma.jellyplay.core.model.deeplink.DeepLinkGrammar
 import com.raulshma.jellyplay.widget.skeleton.WidgetProviderSkeleton
 import com.raulshma.jellyplay.widget.skeleton.continueWatchingChromeVisibility
+import com.raulshma.jellyplay.widget.skeleton.notifyProviderDataChanged
 import com.raulshma.jellyplay.widget.skeleton.toViewVisibility
 
 class ContinueWatchingWidget : WidgetProviderSkeleton() {
@@ -48,10 +48,7 @@ class ContinueWatchingWidget : WidgetProviderSkeleton() {
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
         if (intent.action == ACTION_REFRESH) {
-            val appWidgetManager = AppWidgetManager.getInstance(context)
-            val componentName = ComponentName(context, ContinueWatchingWidget::class.java)
-            val appWidgetIds = appWidgetManager.getAppWidgetIds(componentName)
-            appWidgetManager.notifyAppWidgetViewDataChanged(appWidgetIds, R.id.cw_widget_list)
+            notifyProviderDataChanged(context, ContinueWatchingWidget::class.java, R.id.cw_widget_list)
         }
     }
 
@@ -60,15 +57,7 @@ class ContinueWatchingWidget : WidgetProviderSkeleton() {
             "com.raulshma.jellyplay.widget.ACTION_REFRESH_CONTINUE_WATCHING"
 
         fun triggerUpdate(context: Context) {
-            val appWidgetManager = AppWidgetManager.getInstance(context)
-            val componentName = ComponentName(context, ContinueWatchingWidget::class.java)
-            val appWidgetIds = appWidgetManager.getAppWidgetIds(componentName)
-            if (appWidgetIds.isNotEmpty()) {
-                appWidgetManager.notifyAppWidgetViewDataChanged(
-                    appWidgetIds,
-                    R.id.cw_widget_list,
-                )
-            }
+            notifyProviderDataChanged(context, ContinueWatchingWidget::class.java, R.id.cw_widget_list)
         }
 
         fun updateWidget(

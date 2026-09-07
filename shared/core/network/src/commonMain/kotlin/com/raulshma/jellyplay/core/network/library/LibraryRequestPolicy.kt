@@ -27,6 +27,24 @@ internal val DETAIL_PROJECTION_FIELDS: List<String> = listOf(
 )
 
 /**
+ * Fields every library LIST projection requests — the two-field minimum both
+ * clients attach to their list-shaped queries (latest media, next up, resume,
+ * search hints, studio/artist/album/person/collection/favorite/playlist
+ * listings; wire serial names; the JVM client resolves them against the SDK
+ * [org.jellyfin.sdk.model.api.ItemFields] enum, the wasm client sends them
+ * as-is). The genre-rendering queries (the library grid and the empty-library
+ * fallback's latest probe) and the playlists listing compose on top of it
+ * (`LIST_PROJECTION_FIELDS + "Genres"` /
+ * `LIST_PROJECTION_FIELDS + listOf("CanDelete", "DateCreated")`); documented
+ * one-offs that project something else (CHILD_COUNT for collection summaries,
+ * TAGS for the tag index, the photo grid's aspect-ratio-only projection) stay
+ * at their call sites.
+ */
+internal val LIST_PROJECTION_FIELDS: List<String> = listOf(
+    "Overview", "PrimaryImageAspectRatio",
+)
+
+/**
  * The jellyfin-web `useSearchSuggestions` query shape: getItems sorted by
  * IsFavoriteOrLiked,Random over Movies, Series and MusicArtists, projecting
  * the poster/genre fields (wire serial names; the JVM client resolves them

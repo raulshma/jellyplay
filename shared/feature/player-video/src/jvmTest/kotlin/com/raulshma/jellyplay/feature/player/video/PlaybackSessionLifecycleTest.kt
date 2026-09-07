@@ -670,6 +670,23 @@ class PlaybackSessionLifecycleTest {
     }
 
     @Test
+    fun beginCinemaMode_rebindsTheMediaSession_andTracking_butSuppressesProgressReporting() = runTest {
+        buildSession()
+
+        session.beginCinemaMode(listOf(intro("intro-1", "Previously On")), request(itemId = "main"))
+
+        // The cinema adopt site goes through the same rebind funnel as the
+        // reload/reclaim paths: media session created for the INTRO item,
+        // position tracking restarted (seek/buffer bars read it)...
+        verify(exactly = 1) { mediaSessionController.createForItem("intro-1", "Test Movie", "2024") }
+        verify(exactly = 1) { progressReporter.startPositionTracking() }
+        // ...but pre-roll intros are not part of the user's library history —
+        // the trackProgress=false divergence: no server-side progress
+        // reporting may start for them.
+        verify(exactly = 0) { progressReporter.startProgressReporting() }
+    }
+
+    @Test
     fun advanceCinemaIntro_movesToTheNextIntro() = runTest {
         buildSession()
         val intros = listOf(intro("intro-1", "One"), intro("intro-2", "Two"))

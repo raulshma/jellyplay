@@ -95,17 +95,32 @@ class AdminStatisticsRepositoryImpl constructor(
         }
     }
 
-    override suspend fun getAllUsersWithStatistics(): Result<List<UserStatistics>> = runCatchingRethrowingCancellation {
-        val pluginAvailable = _pluginStatus.value == PlaybackReportingStatus.AVAILABLE
+    /**
+     * The plugin-gate fold shared by every plugin-derived list fetch —
+     * `if (pluginAvailable) call().getOrDefault(emptyList()) else emptyList()`
+     * used to appear inline at each site, hand-syncing the AVAILABLE check
+     * against [_pluginStatus]. Takes the CALLER-CAPTURED flag, not a live
+     * read: a page's gates must stay internally consistent — the detail
+     * page's group gate and its member fetches see ONE status even if an
+     * admin refresh flips [_pluginStatus] mid-load (the captured-local
+     * semantics the inline ladders had). [call] is a plain (non-suspend)
+     * lambda parameter invoked from the inline body, so suspend api calls
+     * are legal at each call site.
+     */
+    private suspend inline fun <T> whenPlugin(available: Boolean, call: () -> Result<List<T>>): List<T> =
+        if (available) {
+            call().getOrDefault(emptyList())
+        } else {
+            emptyList()
+        }
 
+    override suspend fun getAllUsersWithStatistics(): Result<List<UserStatistics>> = runCatchingRethrowingCancellation {
+        // One capture for the whole page — see [whenPlugin]'s KDoc.
+        val pluginAvailable = _pluginStatus.value == PlaybackReportingStatus.AVAILABLE
         coroutineScope {
             val usersDeferred = async { apiClient.getUsers().getOrThrow() }
             val sessionsDeferred = async { apiClient.getSessions().getOrDefault(emptyList()) }
-            val pluginDeferred = async {
-                if (pluginAvailable) {
-                    apiClient.getPlaybackReportingUserActivity(days = 30).getOrDefault(emptyList())
-                } else emptyList()
-            }
+            val pluginDeferred = async { whenPlugin(pluginAvailable) { apiClient.getPlaybackReportingUserActivity(days = 30) } }
 
             val users = usersDeferred.await()
             val activeUserIds = sessionsDeferred.await().map { it.userId }.toSet()
@@ -117,7 +132,7 @@ class AdminStatisticsRepositoryImpl constructor(
                         buildUserStatistics(
                             user = user,
                             isActive = activeUserIds.contains(user.id),
-                            pluginData = pluginMap[user.id],
+                            totalWatchTimeSec = pluginMap[user.id]?.totalTime ?: 0L,
                         )
                     }
                 }
@@ -146,23 +161,42 @@ class AdminStatisticsRepositoryImpl constructor(
         )
     }
 
+    /**
+     * The ONE [UserStatistics] builder for both pages — the per-user list and
+     * the detail page's `statistics` field (an inline copy of this body that
+     * had already drifted once: it omitted `isCurrentlyActive` and had its
+     * own verbatim completion-rate math). The completion rate
+     * (`movieTotal = unplayed + played; played/total else 0`) lives here
+     * exactly once.
+     *
+     *  - [isActive] is the session-derived "currently playing" flag. Only
+     *    the LIST path has a session source; the detail page has never
+     *    fetched sessions and nothing on it renders the field (the active
+     *    badge and the active-count header are list-screen reads), so the
+     *    detail path deliberately takes the `false` default — preserving the
+     *    pre-builder detail output exactly.
+     *  - [totalWatchTimeSec] is the already-resolved watch time: the list
+     *    path passes the plugin's per-user total (`?: 0L`), the detail path
+     *    its plugin-then-computed fallback ladder.
+     *  - [counts] lets the detail path reuse the [UserPlayCounts] it already
+     *    fetched for its type breakdown instead of re-firing the four-call
+     *    fan-out; null fetches here.
+     */
     private suspend fun buildUserStatistics(
         user: JellyfinUser,
-        isActive: Boolean,
-        pluginData: com.raulshma.jellyplay.core.model.PlaybackReportingActivity?,
+        isActive: Boolean = false,
+        totalWatchTimeSec: Long = 0L,
+        counts: UserPlayCounts? = null,
     ): UserStatistics {
-        val userId = user.id
-
-        val stats = fetchUserPlayCounts(userId)
+        val stats = counts ?: fetchUserPlayCounts(user.id)
         val moviePlayed = stats.moviePlayed
         val episodePlayed = stats.episodePlayed
         val songPlayed = stats.songPlayed
-        val movieUnplayed = stats.movieUnplayed
-        val movieTotal = movieUnplayed + moviePlayed
+        val movieTotal = stats.movieUnplayed + moviePlayed
         val completionRate = if (movieTotal > 0) moviePlayed.toFloat() / movieTotal else 0f
 
         return UserStatistics(
-            userId = userId,
+            userId = user.id,
             userName = user.name,
             userAvatarTag = user.primaryImageTag,
             isAdmin = user.isAdmin,
@@ -170,7 +204,7 @@ class AdminStatisticsRepositoryImpl constructor(
             moviePlayCount = moviePlayed,
             episodePlayCount = episodePlayed,
             songPlayCount = songPlayed,
-            totalWatchTimeSec = pluginData?.totalTime ?: 0L,
+            totalWatchTimeSec = totalWatchTimeSec,
             lastSeen = user.lastActivityDate,
             completionRate = completionRate,
             isCurrentlyActive = isActive,
@@ -178,6 +212,9 @@ class AdminStatisticsRepositoryImpl constructor(
     }
 
     override suspend fun getUserDetailStatistics(userId: String, page: Int, pageSize: Int): Result<UserDetailPage> = runCatchingRethrowingCancellation {
+        // One capture for the whole page (every gate below reads it — the
+        // group gate's non-null deferred bundle IS itself the downstream
+        // gate, so the members must see the SAME flag; see [whenPlugin]).
         val pluginAvailable = _pluginStatus.value == PlaybackReportingStatus.AVAILABLE
 
         // User lookup, played page, and plugin chart are independent round-trips
@@ -201,10 +238,7 @@ class AdminStatisticsRepositoryImpl constructor(
                 ).getOrDefault(Pair(0, emptyList()))
             }
             val pluginChartDeferred = async {
-                if (pluginAvailable) {
-                    apiClient.getPlaybackReportingPlayActivity(days = 30, dataType = "count", filter = userId)
-                        .getOrDefault(emptyList())
-                } else emptyList()
+                whenPlugin(pluginAvailable) { apiClient.getPlaybackReportingPlayActivity(days = 30, dataType = "count", filter = userId) }
             }
             user = userDeferred.await()
             playedResult = playedDeferred.await()
@@ -251,7 +285,6 @@ class AdminStatisticsRepositoryImpl constructor(
         val moviePlayedCount = counts.moviePlayed
         val episodePlayedCount = counts.episodePlayed
         val songPlayedCount = counts.songPlayed
-        val movieUnplayed = counts.movieUnplayed
 
         val typeBreakdown = listOf(
             ContentBreakdown(
@@ -278,18 +311,10 @@ class AdminStatisticsRepositoryImpl constructor(
         val breakdowns: BreakdownResults
         val enhancedDeferreds: EnhancedDeferreds?
         coroutineScope {
-            val genreDeferred = async {
-                if (pluginAvailable) apiClient.getPlaybackReportingBreakdown("Genre", days = 30, filter = userId).getOrDefault(emptyList()) else emptyList()
-            }
-            val methodDeferred = async {
-                if (pluginAvailable) apiClient.getPlaybackReportingBreakdown("PlaybackMethod", days = 30, filter = userId).getOrDefault(emptyList()) else emptyList()
-            }
-            val deviceDeferred = async {
-                if (pluginAvailable) apiClient.getPlaybackReportingBreakdown("ClientName", days = 30, filter = userId).getOrDefault(emptyList()) else emptyList()
-            }
-            val activityDeferred = async {
-                if (pluginAvailable) apiClient.getPlaybackReportingUserActivity(days = 30).getOrDefault(emptyList()) else emptyList()
-            }
+            val genreDeferred = async { whenPlugin(pluginAvailable) { apiClient.getPlaybackReportingBreakdown("Genre", days = 30, filter = userId) } }
+            val methodDeferred = async { whenPlugin(pluginAvailable) { apiClient.getPlaybackReportingBreakdown("PlaybackMethod", days = 30, filter = userId) } }
+            val deviceDeferred = async { whenPlugin(pluginAvailable) { apiClient.getPlaybackReportingBreakdown("ClientName", days = 30, filter = userId) } }
+            val activityDeferred = async { whenPlugin(pluginAvailable) { apiClient.getPlaybackReportingUserActivity(days = 30) } }
             val watchDeferred = async { computeWatchTimeBreakdown(userId) }
             enhancedDeferreds = if (pluginAvailable) {
                 EnhancedDeferreds(
@@ -338,12 +363,6 @@ class AdminStatisticsRepositoryImpl constructor(
         val pluginActivity = breakdowns.pluginActivity
         val watchTimeBreakdown = breakdowns.watchTime
 
-        val moviePlayed = moviePlayedCount
-        val episodePlayed = episodePlayedCount
-        val songPlayed = songPlayedCount
-        val movieTotal = movieUnplayed + moviePlayed
-        val completionRate = if (movieTotal > 0) moviePlayed.toFloat() / movieTotal else 0f
-
         val userPluginActivity = pluginActivity.firstOrNull { it.userId == userId }
         var totalWatchTimeSec = userPluginActivity?.totalTime ?: 0L
 
@@ -365,18 +384,13 @@ class AdminStatisticsRepositoryImpl constructor(
 
         UserDetailPage(
             user = user,
-            statistics = UserStatistics(
-                userId = userId,
-                userName = user.name,
-                userAvatarTag = user.primaryImageTag,
-                isAdmin = user.isAdmin,
-                totalPlayCount = moviePlayed + episodePlayed + songPlayed,
-                moviePlayCount = moviePlayed,
-                episodePlayCount = episodePlayed,
-                songPlayCount = songPlayed,
+            // The shared builder (see its KDoc for the isCurrentlyActive
+            // decision): watch time is the plugin-then-computed ladder above,
+            // counts are the already-fetched pair used by the type breakdown.
+            statistics = buildUserStatistics(
+                user = user,
                 totalWatchTimeSec = totalWatchTimeSec,
-                completionRate = completionRate,
-                lastSeen = user.lastActivityDate,
+                counts = counts,
             ),
             topItems = topItems,
             topItemsTotalCount = playedResult.first,

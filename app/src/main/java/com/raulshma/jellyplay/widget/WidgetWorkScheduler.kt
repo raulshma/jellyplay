@@ -8,6 +8,7 @@ import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import com.raulshma.jellyplay.widget.skeleton.widgetIdsFor
 import java.time.Duration
 
 /**
@@ -56,13 +57,8 @@ class WidgetWorkSchedulerImpl (
         // overhead (2 WorkManager DB writes + 2 scheduler reads). On devices
         // with no widgets installed this avoids scheduling two periodic
         // workers that would otherwise fire every 6 h for nothing.
-        val appWidgetManager = android.appwidget.AppWidgetManager.getInstance(context)
-        val hasLibraryWidget = appWidgetManager
-            .getAppWidgetIds(android.content.ComponentName(context, LibraryRecommendationsWidget::class.java))
-            .isNotEmpty()
-        val hasSeerrWidget = appWidgetManager
-            .getAppWidgetIds(android.content.ComponentName(context, SeerrRecommendationsWidget::class.java))
-            .isNotEmpty()
+        val hasLibraryWidget = widgetIdsFor(context, LibraryRecommendationsWidget::class.java).isNotEmpty()
+        val hasSeerrWidget = widgetIdsFor(context, SeerrRecommendationsWidget::class.java).isNotEmpty()
         if (!hasLibraryWidget && !hasSeerrWidget) return
 
         val constraints = Constraints.Builder()

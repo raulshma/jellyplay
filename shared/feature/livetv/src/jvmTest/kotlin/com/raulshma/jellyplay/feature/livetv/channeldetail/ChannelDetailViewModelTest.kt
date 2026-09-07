@@ -109,6 +109,46 @@ class ChannelDetailViewModelTest {
         assertEquals("https://img/prog", url)
     }
 
+    // ── Offset-less timestamps (the C10 declared fix) ────────────────────────
+    // The timeline filter/airing check used to strict-parse (`Instant.parse`),
+    // which returns null for offset-less strings — an ended program with an
+    // offset-less endDate stayed in the list. The shared lenient ladder
+    // (LiveTvTimeFormat) now reads its UTC instant, so the filter, the airing
+    // check and the hero agree.
+
+    @Test
+    fun ended_program_with_offset_less_dates_is_dropped_from_the_timeline() = runTest(mainDispatcher) {
+        val now = java.time.Instant.now()
+        val ended = LiveTvProgram(
+            id = "p-old", name = "Gone", channelId = "chan-1",
+            startDate = utcWallClock(now.minusSeconds(2 * 3600)),
+            endDate = utcWallClock(now.minusSeconds(3600)),
+        )
+        coEvery { mediaRepository.getLiveTvPrograms(any(), any(), any()) } returns Result.success(listOf(ended))
+
+        viewModel.loadChannel("chan-1", "Ch")
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.programs.isEmpty())
+    }
+
+    @Test
+    fun airing_program_with_offset_less_dates_resolves_as_current_program() = runTest(mainDispatcher) {
+        val now = java.time.Instant.now()
+        val airing = LiveTvProgram(
+            id = "p-now", name = "Live", channelId = "chan-1",
+            startDate = utcWallClock(now.minusSeconds(300)),
+            endDate = utcWallClock(now.plusSeconds(1500)),
+        )
+        coEvery { mediaRepository.getLiveTvPrograms(any(), any(), any()) } returns Result.success(listOf(airing))
+
+        viewModel.loadChannel("chan-1", "Ch")
+        advanceUntilIdle()
+
+        assertEquals(1, viewModel.uiState.value.programs.size)
+        assertEquals("p-now", viewModel.uiState.value.currentProgram?.id)
+    }
+
     @Test
     fun getProgramBackdropUrl_falls_back_to_program_imageUrl_when_no_tag() {
         val p = program(id = "prog-2", name = "X").copy(imageTag = null, imageUrl = "https://direct/img")
@@ -362,4 +402,8 @@ class ChannelDetailViewModelTest {
         timerId = timerId,
         seriesTimerId = seriesTimerId,
     )
+
+    /** Offset-less ISO string whose lenient (UTC) reading equals [instant]. */
+    private fun utcWallClock(instant: java.time.Instant): String =
+        java.time.LocalDateTime.ofInstant(instant, java.time.ZoneOffset.UTC).toString()
 }

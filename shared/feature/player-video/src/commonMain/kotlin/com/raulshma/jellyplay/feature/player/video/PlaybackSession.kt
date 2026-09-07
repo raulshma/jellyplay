@@ -608,7 +608,7 @@ internal class PlaybackSession(
             currentPositionMs = pos,
             selection = selection,
         ) ?: return
-        afterEngineReloadRebuildSessionAndTracking()
+        rebindSessionTracking(playerSessionManager.sessionState.value.currentItemId ?: "")
 
         if (resolved.playMethod == PlayMethod.TRANSCODE) {
             _events.tryEmit(SessionEvent.InformUser("Switched to transcoded stream — re-buffering"))
@@ -628,24 +628,38 @@ internal class PlaybackSession(
     }
 
     /**
-     * After a same-item engine reload ([reloadForMode], [retryWithEngine])
-     * the previous engine — whose `positionFlow` the position-tracking job
-     * was collecting — has been released, so the job goes silent. The media
-     * session was also bound to the released engine's player. Rebuild both so
-     * the seek bar, buffer bar, stats overlay, segment auto-skip and the
-     * system media notification track the new engine. (Every other reload
-     * path — initialize / cinema / retry — already does this; consolidating it
-     * here keeps any future engine swap covered the same way.)
+     * Re-binds the system media session and the position/progress tracking to
+     * the engine that just (re)loaded — the ONE funnel for every path that
+     * swaps or adopts an engine without running the [SessionLoadPipeline]:
+     * the reload/retry family ([reloadForMode], [launchFallbackToTranscode],
+     * [retryWithEngine], [retryPlayback]) and the mini-player reclaim
+     * ([loadReclaimedEngine]).
+     *
+     * [itemId] is the item the media session is created for — the reload
+     * family passes the session state's current item, the reclaim path its
+     * bound id. Position tracking ALWAYS restarts (the seek/buffer bars, the
+     * stats overlay and the segment auto-skip read it, and the previous
+     * engine — whose `positionFlow` the tracking job collected — has been
+     * released, so the job would otherwise go silent). [trackProgress]
+     * additionally gates the SERVER-side progress reporting: cinema pre-roll
+     * intros are not part of the user's library history, so
+     * [loadCinemaIntro] passes `false` — the deliberate divergence from the
+     * other adopt sites.
      */
-    private fun afterEngineReloadRebuildSessionAndTracking() {
+    private fun rebindSessionTracking(
+        itemId: String,
+        trackProgress: Boolean = true,
+    ) {
         val sessionState = playerSessionManager.sessionState.value
         mediaSessionController.createForItem(
-            sessionState.currentItemId ?: "",
+            itemId,
             sessionState.title,
             sessionState.subtitle,
         )
         progressReporter.startPositionTracking()
-        progressReporter.startProgressReporting()
+        if (trackProgress) {
+            progressReporter.startProgressReporting()
+        }
     }
 
     private fun launchFallbackToTranscode(
@@ -665,7 +679,7 @@ internal class PlaybackSession(
                 fromPositionMs,
                 selection,
             )
-            afterEngineReloadRebuildSessionAndTracking()
+            rebindSessionTracking(playerSessionManager.sessionState.value.currentItemId ?: "")
         }
     }
 
@@ -687,7 +701,7 @@ internal class PlaybackSession(
         scope.launch {
             playbackStore.setPreferredPlayer(playerType)
             playerSessionManager.reloadWithEngine(playerType, currentPos, playbackSpeed, maxBitrate)
-            afterEngineReloadRebuildSessionAndTracking()
+            rebindSessionTracking(playerSessionManager.sessionState.value.currentItemId ?: "")
         }
     }
 
@@ -714,7 +728,7 @@ internal class PlaybackSession(
                 playbackSpeed,
                 maxBitrate,
             )
-            afterEngineReloadRebuildSessionAndTracking()
+            rebindSessionTracking(playerSessionManager.sessionState.value.currentItemId ?: "")
         }
     }
 
@@ -763,14 +777,7 @@ internal class PlaybackSession(
             val detail = detailResult.getOrNull()
             if (detail != null) {
                 playerSessionManager.bindReclaimedEngine(reclaimed, itemId, detail)
-                val sessionState = playerSessionManager.sessionState.value
-                mediaSessionController.createForItem(
-                    itemId,
-                    sessionState.title,
-                    sessionState.subtitle,
-                )
-                progressReporter.startPositionTracking()
-                progressReporter.startProgressReporting()
+                rebindSessionTracking(itemId)
                 hooks.hydrateReclaimedItem(itemId, detail)
             }
         }
@@ -832,15 +839,12 @@ internal class PlaybackSession(
                 )
             )
             // Pre-roll intros are not part of the user's library history — skip
-            // server-side playback reporting and segment/next-episode/trickplay
-            // bookkeeping for them.
+            // server-side playback reporting (trackProgress = false) and the
+            // segment/next-episode/trickplay bookkeeping for them; the media
+            // session + position tracking still rebind so the notification and
+            // the seek bar track the intro.
             playerSessionManager.loadMedia(intro.id, null, 0L)
-            mediaSessionController.createForItem(
-                intro.id,
-                playerSessionManager.sessionState.value.title,
-                playerSessionManager.sessionState.value.subtitle,
-            )
-            progressReporter.startPositionTracking()
+            rebindSessionTracking(intro.id, trackProgress = false)
         }
     }
 

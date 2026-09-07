@@ -194,7 +194,7 @@ class PlaybackApiClientImpl @Inject constructor(
         }
 
         val dto = PlaybackInfoDto(
-            userId = engine.currentUser.value?.id?.toUUID(),
+            userId = engine.currentUserId()?.toUUID(),
             startTimeTicks = startTimeTicks.takeIf { it > 0 },
             maxStreamingBitrate = flags.sendBitrate?.toInt(),
             audioStreamIndex = audioStreamIndex,

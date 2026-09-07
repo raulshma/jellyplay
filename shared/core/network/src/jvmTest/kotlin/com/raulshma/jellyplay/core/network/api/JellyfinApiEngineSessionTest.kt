@@ -14,6 +14,7 @@ import okhttp3.OkHttpClient
 import org.jellyfin.sdk.Jellyfin
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 
 /**
@@ -135,5 +136,33 @@ class JellyfinApiEngineSessionTest {
             collector.cancel()
             coroutineContext.cancelChildren()
         }
+    }
+
+    @Test
+    fun `requireUserId throws Not authenticated and currentUserId is null without a session`() {
+        // The engine-side twin of the wasm support's requireCurrentUser():
+        // same exception type, same message.
+        val engine = newEngine()
+
+        assertNull(engine.currentUserId())
+        val error = assertFailsWith<IllegalStateException> { engine.requireUserId() }
+        assertEquals("Not authenticated", error.message)
+    }
+
+    @Test
+    fun `user id accessors read the atomic session, never the bare currentUser flow`() {
+        // updateServer(null) leaves currentUser set while the atomic session
+        // collapses to null ("user without server is no identity", pinned
+        // above) — the accessors follow the session, so the hand-rolled
+        // `currentUser.value?.id` guards they replace cannot treat that
+        // partial state as an authenticated identity.
+        val engine = newEngine()
+        engine.updateSession(server("s1"), user("u1"))
+        assertEquals("u1", engine.requireUserId())
+        assertEquals("u1", engine.currentUserId())
+
+        engine.updateServer(null)
+        assertNull(engine.currentUserId())
+        assertFailsWith<IllegalStateException> { engine.requireUserId() }
     }
 }

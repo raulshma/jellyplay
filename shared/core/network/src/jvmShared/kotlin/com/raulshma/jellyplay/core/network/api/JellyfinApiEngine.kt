@@ -113,6 +113,31 @@ class JellyfinApiEngine @Inject constructor(
     internal fun requireApi(): ApiClient =
         _api ?: throw IllegalStateException("Not connected to server")
 
+    /**
+     * The authenticated user's id, throwing when no session is established —
+     * the engine-side twin of the wasm support's `requireCurrentUser()`
+     * (message-aligned: "Not authenticated"). Reads the ATOMIC [session]
+     * value, never the separate [currentUser] flow alone: a user published
+     * without a server is no identity (see [publishSession]), and the
+     * hand-rolled `currentUser.value?.id ?: throw` guards this replaces
+     * would have treated it as one. Internal like [requireApi] — referenced
+     * only inside this module, and the ported tests land in its jvmTest
+     * where internal stays visible.
+     */
+    internal fun requireUserId(): String =
+        session.value?.user?.id ?: throw IllegalStateException("Not authenticated")
+
+    /**
+     * The authenticated user's id or null — the nullable pass-through the
+     * clients' optional `userId` parameters want. Same atomic [session]
+     * source and rationale as [requireUserId]; re-invoked per use, so
+     * freshness is the caller's. Divergence, deliberate: the realtime
+     * user-data channel keeps its own per-event `currentUser.value?.id`
+     * read — its guards key on the user flow the websocket session was
+     * opened under, not on the atomic session value.
+     */
+    internal fun currentUserId(): String? = session.value?.user?.id
+
     fun updateServer(server: ServerInfo?) {
         _currentServer.value = server
         publishSession(server, _currentUser.value)

@@ -5,11 +5,11 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
+import com.raulshma.jellyplay.feature.livetv.toInstantOrNull
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
-import java.time.format.DateTimeParseException
 import java.time.temporal.ChronoUnit
 
 /**
@@ -186,37 +186,19 @@ fun Instant.offsetDp(windowStart: Instant): Float =
 // Date parsing helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-private val ISO_PARSER: DateTimeFormatter = DateTimeFormatter.ISO_DATE_TIME
-
 private val TIME_HEADER_FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
 /**
  * Parse the loose ISO-8601 timestamp produced by `BaseItemDto.startDate.toString()`.
  * Returns `null` on parse failure — callers should treat missing timestamps as
- * "skip this program" rather than crash.
+ * "skip this program" rather than crash. The lenient parse itself is the
+ * feature's one canonical ladder,
+ * [com.raulshma.jellyplay.feature.livetv.toInstantOrNull].
  */
 fun LiveTvProgram.startInstant(): Instant? = startDate?.toInstantOrNull()
 
 fun LiveTvProgram.endInstant(): Instant? =
     endDate?.toInstantOrNull() ?: startDate?.toInstantOrNull()
-
-fun String.toInstantOrNull(): Instant? = try {
-    // ISO_DATE_TIME handles offsets and, when absent, falls back to UTC via
-    // LocalDateTime parsing. The Jellyfin SDK emits both forms depending on
-    // server version, so we try ISO first then fall back to LocalDateTime.
-    Instant.from(ISO_PARSER.parse(this))
-} catch (_: DateTimeParseException) {
-    null
-} catch (_: java.time.DateTimeException) {
-    // Instant.from() throws DateTimeException (not DateTimeParseException)
-    // when the parsed TemporalAccessor lacks zone/offset info — e.g. a bare
-    // LocalDateTime string. Fall back to assuming UTC.
-    try {
-        LocalDateTime.parse(this).toInstant(ZoneOffset.UTC)
-    } catch (_: DateTimeParseException) {
-        null
-    }
-}
 
 /** Format an [Instant] for the time-header (e.g. "14:30"). */
 fun Instant.formatTimeHeader(): String {

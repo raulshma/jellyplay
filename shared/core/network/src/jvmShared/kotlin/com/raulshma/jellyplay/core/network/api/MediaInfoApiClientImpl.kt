@@ -574,7 +574,7 @@ class MediaInfoApiClientImpl @Inject constructor(
     override suspend fun getPlaybackReportingPlayActivity(days: Int, dataType: String, filter: String?): Result<List<PlaybackActivityPoint>> = engine.apiResultWithRetry {
         val (server, token) = requireSession()
 
-        val currentUserId = engine.currentUser.value?.id
+        val currentUserId = engine.currentUserId()
         var targetUserId: String? = null
         val mediaTypes = mutableListOf<String>()
 

@@ -7,6 +7,8 @@ import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.feature.livetv.components.RecordAction
 import com.raulshma.jellyplay.feature.livetv.components.RecordActions
 import com.raulshma.jellyplay.feature.livetv.components.RecordOutcome
+import com.raulshma.jellyplay.feature.livetv.isAiringAt
+import com.raulshma.jellyplay.feature.livetv.toInstantOrNull
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
@@ -86,17 +88,17 @@ class ChannelDetailViewModel(
 
         mediaRepository.getLiveTvPrograms(channelId, startIso, endIso)
             .onSuccess { all ->
+                // Both the ended-filter and the airing check read timestamps
+                // through the feature's shared lenient vocabulary (LiveTvTimeFormat)
+                // — offset-less server strings parse here too, so the two
+                // verdicts can no longer disagree (the C10 declared fix).
                 val upcoming = all
-                    .filter { p -> p.endDate?.let { runCatching { Instant.parse(it) }.getOrNull() }?.isAfter(nowInstant) ?: true }
+                    .filter { p -> p.endDate?.toInstantOrNull()?.isAfter(nowInstant) ?: true }
                     .sortedBy { p -> p.startDate ?: "" }
                 _uiState.update { it.copy(programs = upcoming, isLoading = false) }
                 // If the channel-meta currentProgram was null, resolve from the list.
                 if (_uiState.value.currentProgram == null) {
-                    val airing = upcoming.firstOrNull { p ->
-                        val s = p.startDate?.let { runCatching { Instant.parse(it) }.getOrNull() }
-                        val e = p.endDate?.let { runCatching { Instant.parse(it) }.getOrNull() }
-                        (s == null || !s.isAfter(nowInstant)) && (e == null || e.isAfter(nowInstant))
-                    }
+                    val airing = upcoming.firstOrNull { p -> isAiringAt(p, nowInstant) }
                     if (airing != null) _uiState.update { it.copy(currentProgram = airing) }
                 } else {
                     // Keep the hero in sync with the refreshed timer-state for the

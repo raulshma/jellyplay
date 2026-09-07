@@ -454,44 +454,13 @@ class DetailViewModel internal constructor(
         loadJob = launch {
             // Single atomic reset — collapses what used to be ~14 separate
             // composeState/stateFlow mutations into one emission so observers
-            // see one recomposition, not fourteen. On refresh the detail is
-            // kept so the content stays visible under the pull-to-refresh
-            // indicator; every subsidiary slice is still cleared so fresh data
-            // replaces it wholesale.
-            _uiState.update {
-                it.copy(
-                    detail = if (refresh) it.detail else null,
-                    loadState = if (refresh) DetailUiLoadState.Refreshing else DetailUiLoadState.Loading,
-                    origin = null,
-                    detailContext = null,
-                    capabilities = DetailUiState.DefaultCapabilities,
-                    assets = com.raulshma.jellyplay.core.model.DetailAssets(),
-                    localSubtitles = emptyList(),
-                    selectedLocalSubtitleIndex = null,
-                    seasons = emptyList(),
-                    episodes = emptyMap(),
-                    fetchedSeasonIds = emptySet(),
-                    collectionItems = emptyList(),
-                    relatedItems = emptyList(),
-                    localRelatedItems = emptyList(),
-                    specialFeatures = emptyList(),
-                    albumTracks = emptyList(),
-                    // Segment availability is only re-populated on the REMOTE
-                    // success path of triggerRemoteSideEffects; reset here so a
-                    // navigation to a LOCAL item (or a failed REMOTE fetch) can't
-                    // leave the prior item's "skip available" chip stale.
-                    hasIntroSegment = false,
-                    hasCreditSegment = false,
-                    smartPlayTarget = null,
-                    selectedSubtitleIndex = null,
-                    selectedAudioIndex = null,
-                    seerrRecommendations = emptyList(),
-                    seerrSimilar = emptyList(),
-                    relatedVideos = emptyList(),
-                    tmdbReviews = emptyList(),
-                    sonarrServersResolved = false,
-                )
-            }
+            // see one recomposition, not fourteen. The surviving leaves and
+            // the per-flavour load state are declared once in
+            // [DetailUiState.clearedForReload]: on refresh the detail stays
+            // visible under the Refreshing indicator; every content slice
+            // (sortedEpisodes included) is cleared so fresh data replaces it
+            // wholesale.
+            _uiState.update { it.clearedForReload(keepDetail = refresh) }
             // Drop the provider's catalogue cache for any series we were viewing
             // so the new item's load starts fresh (the VM is reused across
             // navigations). The provider owns the catalogue internally now.

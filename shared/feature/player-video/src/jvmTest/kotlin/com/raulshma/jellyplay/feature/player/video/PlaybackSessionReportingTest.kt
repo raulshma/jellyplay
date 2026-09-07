@@ -77,8 +77,18 @@ class PlaybackSessionReportingTest {
         buildSession()
     }
 
-    /** Builds the session under test; `incognito` flips the incognito gate. */
-    private fun buildSession(incognito: Boolean = false) {
+    /**
+     * Builds the session under test; `incognito` flips the incognito gate.
+     * `mirrorQuality`/`mirrorMode` back the session's ui-mirror getter seams
+     * (read only by the decision-time transcode fallback, which has no caller
+     * arguments) so a test can make them DISAGREE with the explicit
+     * [PlaybackSession.reloadForMode] arguments.
+     */
+    private fun buildSession(
+        incognito: Boolean = false,
+        mirrorQuality: StreamingQuality = StreamingQuality.AUTO,
+        mirrorMode: PlaybackMode = PlaybackMode.AUTO,
+    ) {
         engine = FakeMediaEngine().apply {
             durationValue = 100_000L
             advanceTo(30_000L)
@@ -110,11 +120,11 @@ class PlaybackSessionReportingTest {
             setCinemaIntroState = {},
             seedDisplayedPositionMs = {},
             positionStore = positionStore,
-            getStreamingQuality = { StreamingQuality.AUTO },
+            getStreamingQuality = { mirrorQuality },
             setUiPlaybackMode = {},
             getIncognitoModeEnabled = { incognito },
             setPendingStreams = {},
-            getPlaybackMode = { PlaybackMode.AUTO },
+            getPlaybackMode = { mirrorMode },
             directPlayFallbackNotice = { it },
             passOutHours = flowOf(0),
             onEngineEventCoordinatorRearmed = {},
@@ -303,6 +313,37 @@ class PlaybackSessionReportingTest {
         // pre-swap report already latched this session — exactly one Stop.
         coVerify(exactly = 1) {
             playbackRepository.reportPlaybackStopped("item-1", "server-1", 300_000_000L)
+        }
+    }
+
+    @Test
+    fun reloadForMode_usesTheExplicitModeAndQuality_notTheMirrorGetters() = runTest {
+        // The VM's playback-pref setters (setPlaybackMode / setStreamingQuality
+        // / setAdaptiveBitrateEnabled, via the applyPlaybackPrefChange command)
+        // pass their post-change values EXPLICITLY — the reload used to read
+        // mode/quality back from the ui-prefs mirror, which only worked because
+        // each setter had written the mirror first. Pin the contract at the
+        // session seam (no full-VM harness exists in this module): the
+        // mirror-backed getter seams deliberately disagree, and the re-POST
+        // must still resolve against the caller's explicit arguments.
+        buildSession(
+            mirrorQuality = StreamingQuality.SD_480P,
+            mirrorMode = PlaybackMode.FORCE_TRANSCODE,
+        )
+        coEvery { playerSessionManager.reloadPlayback(any(), any(), any(), any()) } returns
+            resolved(PlayMethod.DIRECT_PLAY)
+
+        session.reloadForMode(PlaybackMode.FORCE_DIRECT_PLAY, StreamingQuality.UHD_4K)
+
+        // Exactly one re-POST, with the EXPLICIT mode + quality (direct play
+        // resolved, so no transcode notice and no fallback chain).
+        coVerify(exactly = 1) {
+            playerSessionManager.reloadPlayback(
+                PlaybackMode.FORCE_DIRECT_PLAY,
+                StreamingQuality.UHD_4K,
+                30_000L,
+                null,
+            )
         }
     }
 

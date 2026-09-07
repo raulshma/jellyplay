@@ -4,6 +4,7 @@ import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
 import com.raulshma.jellyplay.core.model.ServerInfo
+import com.raulshma.jellyplay.core.model.normalizeServerAddress
 import com.raulshma.jellyplay.core.network.config.SelfSignedTrustMatcher
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -126,7 +127,7 @@ class ServerManagementViewModel(
      * honors (wave-21 review finding — display drift).
      */
     fun isSelfSignedTrustGranted(server: ServerInfo): Boolean =
-        SelfSignedTrustMatcher.isAddressGranted(selfSignedTrustHosts, normalizeAddress(server.address))
+        SelfSignedTrustMatcher.isAddressGranted(selfSignedTrustHosts, normalizeServerAddress(server.address))
 
     /**
      * Grants or revokes this server's self-signed-certificate trust. Grant
@@ -143,10 +144,10 @@ class ServerManagementViewModel(
     fun setSelfSignedTrust(server: ServerInfo, granted: Boolean) {
         launch {
             if (granted) {
-                networkOfflineStore.addSelfSignedTrustHost(normalizeAddress(server.address))
+                networkOfflineStore.addSelfSignedTrustHost(normalizeServerAddress(server.address))
             } else {
                 val serverAddresses = (listOf(server.address) + server.alternateAddresses)
-                    .map { normalizeAddress(it) }
+                    .map { normalizeServerAddress(it) }
                 selfSignedTrustHosts.forEach { grant ->
                     val coversThisServer = serverAddresses.any { address ->
                         SelfSignedTrustMatcher.isAddressGranted(setOf(grant), address)
@@ -158,11 +159,6 @@ class ServerManagementViewModel(
             }
         }
     }
-
-    private fun normalizeAddress(address: String): String =
-        address.trim().trimEnd('/').let {
-            if (it.startsWith("http://") || it.startsWith("https://")) it else "https://$it"
-        }
 
     /**
      * Orphan-grant cleanup, run after an address or whole server is removed:
@@ -182,7 +178,7 @@ class ServerManagementViewModel(
     private suspend fun pruneOrphanedTrustGrants() {
         val knownAddresses = authRepository.servers.first()
             .flatMap { listOf(it.address) + it.alternateAddresses }
-            .map { normalizeAddress(it) }
+            .map { normalizeServerAddress(it) }
         val granted = networkOfflineStore.networkOffline.value.selfSignedTrustHosts
         granted.forEach { grant ->
             val stillCoversSomeAddress = knownAddresses.any { address ->

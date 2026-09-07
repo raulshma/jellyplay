@@ -4,6 +4,7 @@ import com.raulshma.jellyplay.core.data.offline.OfflineDeleteActions
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.toMediaItem
+import com.raulshma.jellyplay.core.ui.components.downloadedSeasonSlices
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -77,19 +78,24 @@ internal class SeriesDeleteStateHolder(
                 val episodesOffBySeason = seasonsOff.associate { season ->
                     season.id to (episodesBySeasonOff[season.id] ?: emptyList())
                 }
-                val downloadedBySeason = episodesOffBySeason.filterValues { it.isNotEmpty() }
-                val seasons = seasonsOff.filter { it.id in downloadedBySeason }.map { it.toMediaItem() }
-                val episodesBySeason = downloadedBySeason.mapValues { (_, eps) -> eps.map { it.toMediaItem() } }
+                // The sheet's seasons/episodes pair via the shared core/ui
+                // derivation (drops seasons with no downloaded episodes).
+                // Sizes come from the offline items — flattening the
+                // unfiltered map is identical to the filtered one (empty
+                // seasons contribute nothing), so the fold doesn't carry them.
+                val allOfflineEpisodes = episodesOffBySeason.values.flatten()
                 // Per-episode on-disk sizes from the offline store, so the delete
                 // sheet's freed-space figure is exact for partial selections too.
-                val episodeSizeBytes = downloadedBySeason.values
-                    .flatten()
-                    .associate { it.id to it.totalSizeBytes }
-                val totalSizeBytes = episodesOffBySeason.values.flatten().sumOf { it.totalSizeBytes }
+                val episodeSizeBytes = allOfflineEpisodes.associate { it.id to it.totalSizeBytes }
+                val totalSizeBytes = allOfflineEpisodes.sumOf { it.totalSizeBytes }
+                val slices = downloadedSeasonSlices(
+                    seasons = seasonsOff.map { it.toMediaItem() },
+                    episodesBySeason = episodesOffBySeason.mapValues { (_, eps) -> eps.map { it.toMediaItem() } },
+                )
                 _state.value = HomeSeriesDeleteState(
                     seriesId = series.id,
-                    seasons = seasons,
-                    episodesBySeason = episodesBySeason,
+                    seasons = slices.seasons,
+                    episodesBySeason = slices.episodesBySeason,
                     totalSizeBytes = totalSizeBytes,
                     episodeSizeBytes = episodeSizeBytes,
                     isLoading = false,

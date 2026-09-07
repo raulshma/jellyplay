@@ -35,6 +35,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -66,7 +67,10 @@ import com.raulshma.jellyplay.core.model.formatBytes
  * Callers wrap it in [TvSafeSheet].
  *
  * Data note: callers must pre-filter [episodes] to downloaded episodes only —
- * every episode passed in is treated as deletable. The freed-space figure is
+ * every episode passed in is treated as deletable. Both list params come from
+ * the ONE derivation [downloadedSeasonSlices] (drops empty seasons, keeps
+ * order); callers whose source map is already downloaded-only and keyed by
+ * known season ids pass it through as-is. The freed-space figure is
  * exact for any selection when [episodeSizeBytes] is supplied (per-episode
  * sizes); otherwise it falls back to the aggregate [totalSizeBytes], shown
  * only when the selection covers every episode. Both current callers (the
@@ -75,7 +79,8 @@ import com.raulshma.jellyplay.core.model.formatBytes
  * remains for any future caller that lacks it.
  *
  * @param seasons season rows (for names + ordering); each should exist as a key
- *   in [episodes]. Only seasons with at least one downloaded episode.
+ *   in [episodes]. Only seasons with at least one downloaded episode — see
+ *   [downloadedSeasonSlices].
  * @param episodes downloaded episodes keyed by season id.
  * @param totalSizeBytes aggregate on-disk size of the series' downloads; 0
  *   hides the aggregate freed-space figure (ignored when [episodeSizeBytes]
@@ -307,4 +312,41 @@ fun DeleteDownloadedEpisodesSheet(
             }
         }
     }
+}
+
+/**
+ * The delete sheet's [DeleteDownloadedEpisodesSheet.seasons] /
+ * [DeleteDownloadedEpisodesSheet.episodes] parameter pair, derived once.
+ * The two hosts (the media-detail screen's offline snapshot and the home
+ * delete holder's offline store read) hand-derived this same two-step before
+ * the fold: drop the episode map's empty seasons, then keep only the season
+ * rows that still carry a key in it.
+ *
+ * The only-downloaded rule is the CALLER's half of the contract: every
+ * surviving episode is treated as deletable, so callers must pass a map
+ * already restricted to downloaded episodes (both do — a LOCAL-origin
+ * snapshot is downloaded by construction; the offline store read is
+ * pre-filtered). The fold does NOT additionally intersect the map with
+ * [seasons]: entries for season ids missing from the list survive in
+ * [episodesBySeason] (select-all's selectable set reads the map's keys), so
+ * a caller wanting them gone restricts its own map — the home holder builds
+ * its map keyed by known season ids before calling. Order is preserved from
+ * both inputs; the sheet renders seasons in list order.
+ */
+@Immutable
+data class DownloadedSeasonSlices(
+    val seasons: List<MediaItem>,
+    val episodesBySeason: Map<String, List<MediaItem>>,
+)
+
+/** Builds [DownloadedSeasonSlices]; see the value's KDoc for the rule. */
+fun downloadedSeasonSlices(
+    seasons: List<MediaItem>,
+    episodesBySeason: Map<String, List<MediaItem>>,
+): DownloadedSeasonSlices {
+    val downloaded = episodesBySeason.filterValues { it.isNotEmpty() }
+    return DownloadedSeasonSlices(
+        seasons = seasons.filter { it.id in downloaded },
+        episodesBySeason = downloaded,
+    )
 }

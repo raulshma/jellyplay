@@ -27,6 +27,7 @@ import com.raulshma.jellyplay.core.network.library.FavoriteFlagCache
 import com.raulshma.jellyplay.core.network.library.HomeSectionSources
 import com.raulshma.jellyplay.core.network.library.HomeSectionsFetcher
 import com.raulshma.jellyplay.core.network.library.IdResultDtoWire
+import com.raulshma.jellyplay.core.network.library.LIST_PROJECTION_FIELDS
 import com.raulshma.jellyplay.core.network.library.LyricsDtoWire
 import com.raulshma.jellyplay.core.network.library.SEARCH_SUGGESTIONS_FIELDS
 import com.raulshma.jellyplay.core.network.library.SEARCH_SUGGESTIONS_ITEM_TYPES
@@ -51,8 +52,6 @@ import com.raulshma.jellyplay.core.network.library.toPlaylistItem
 import com.raulshma.jellyplay.core.network.library.toStudio
 import com.raulshma.jellyplay.core.network.library.toWireItemKind
 import io.ktor.client.HttpClient
-
-private val LIST_FIELDS = listOf("Overview", "PrimaryImageAspectRatio")
 
 /**
  * Phase W chunk 2: the wasmJs [LibraryApiClient] — a hand-rolled Ktor
@@ -130,7 +129,7 @@ class KtorWasmLibraryApiClient(
                 query = q(
                     "parentId" to parentId,
                     "limit" to limit.toString(),
-                    "fields" to (LIST_FIELDS + "Genres").joined(),
+                    "fields" to (LIST_PROJECTION_FIELDS + "Genres").joined(),
                 ),
             )
         },
@@ -185,7 +184,7 @@ class KtorWasmLibraryApiClient(
                 accessToken = currentToken(),
                 query = q(
                     "parentId" to parentId,
-                    "fields" to LIST_FIELDS.joined(),
+                    "fields" to LIST_PROJECTION_FIELDS.joined(),
                     "limit" to limit.toString(),
                     "groupItems" to "true",
                 ),
@@ -206,7 +205,7 @@ class KtorWasmLibraryApiClient(
             accessToken = currentToken(),
             query = q(
                 "limit" to limit.toString(),
-                "fields" to LIST_FIELDS.joined(),
+                "fields" to LIST_PROJECTION_FIELDS.joined(),
                 "nextUpDateCutoff" to cutoff,
                 "enableTotalRecordCount" to "true",
                 "enableResumable" to "true",
@@ -224,7 +223,7 @@ class KtorWasmLibraryApiClient(
                 accessToken = currentToken(),
                 query = q(
                     "limit" to limit.toString(),
-                    "fields" to LIST_FIELDS.joined(),
+                    "fields" to LIST_PROJECTION_FIELDS.joined(),
                     "enableTotalRecordCount" to "true",
                     "enableImages" to "true",
                     "excludeActiveSessions" to "false",
@@ -299,7 +298,7 @@ class KtorWasmLibraryApiClient(
             "searchTerm" to searchTerm?.takeIf { it.isNotBlank() },
             "filters" to itemFilters.takeIf { it.isNotEmpty() }?.joined(),
             "minCommunityRating" to filters.minRating.takeIf { it > 0f }?.toDouble()?.toString(),
-            "fields" to (LIST_FIELDS + "Genres").joined(),
+            "fields" to (LIST_PROJECTION_FIELDS + "Genres").joined(),
         ) + itemsEndpointDefaults
 
         val response = getJson<BaseItemQueryResultDtoWire>(
@@ -391,7 +390,7 @@ class KtorWasmLibraryApiClient(
                 "limit" to limit.toString(),
                 "startIndex" to startIndex.toString(),
                 "recursive" to "true",
-                "fields" to LIST_FIELDS.joined(),
+                "fields" to LIST_PROJECTION_FIELDS.joined(),
             ) + itemsEndpointDefaults,
         )
         SearchResult(
@@ -518,7 +517,7 @@ class KtorWasmLibraryApiClient(
                 "startIndex" to startIndex.toString(),
                 "limit" to limit.toString(),
                 "recursive" to "true",
-                "fields" to LIST_FIELDS.joined(),
+                "fields" to LIST_PROJECTION_FIELDS.joined(),
             ) + itemsEndpointDefaults,
         )
         SearchResult(
@@ -540,7 +539,7 @@ class KtorWasmLibraryApiClient(
                     "limit" to limit.toString(),
                     "recursive" to "true",
                     "sortBy" to "SortName",
-                    "fields" to LIST_FIELDS.joined(),
+                    "fields" to LIST_PROJECTION_FIELDS.joined(),
                 ) + itemsEndpointDefaults,
             )
             response.items.map { it.toMediaItem() }.filterByParentalRating(currentMaxParentalRating)
@@ -558,7 +557,7 @@ class KtorWasmLibraryApiClient(
                     "recursive" to "true",
                     "sortBy" to listOf("ParentIndexNumber", "IndexNumber").joined(),
                     "sortOrder" to "Ascending",
-                    "fields" to LIST_FIELDS.joined(),
+                    "fields" to LIST_PROJECTION_FIELDS.joined(),
                 ) + itemsEndpointDefaults,
             )
             response.items.map { it.toMediaItem() }.filterByParentalRating(currentMaxParentalRating)
@@ -585,7 +584,7 @@ class KtorWasmLibraryApiClient(
                 query = q(
                     "userId" to user.id,
                     "limit" to limit.toString(),
-                    "fields" to LIST_FIELDS.joined(),
+                    "fields" to LIST_PROJECTION_FIELDS.joined(),
                 ),
             )
             response.items.map { it.toMediaItem() }.filterByParentalRating(currentMaxParentalRating)
@@ -601,7 +600,7 @@ class KtorWasmLibraryApiClient(
                     "personIds" to personId,
                     "limit" to limit.toString(),
                     "recursive" to "true",
-                    "fields" to LIST_FIELDS.joined(),
+                    "fields" to LIST_PROJECTION_FIELDS.joined(),
                 ) + itemsEndpointDefaults,
             )
             response.items.map { it.toMediaItem() }.filterByParentalRating(currentMaxParentalRating)
@@ -667,7 +666,7 @@ class KtorWasmLibraryApiClient(
                 "startIndex" to startIndex.toString(),
                 "limit" to limit.toString(),
                 "recursive" to "true",
-                "fields" to LIST_FIELDS.joined(),
+                "fields" to LIST_PROJECTION_FIELDS.joined(),
             ) + itemsEndpointDefaults,
         )
         SearchResult(
@@ -754,7 +753,7 @@ class KtorWasmLibraryApiClient(
                 "limit" to limit.toString(),
                 "startIndex" to startIndex.toString(),
                 "recursive" to "true",
-                "fields" to LIST_FIELDS.joined(),
+                "fields" to LIST_PROJECTION_FIELDS.joined(),
             ) + itemsEndpointDefaults,
         )
         SearchResult(
@@ -786,7 +785,7 @@ class KtorWasmLibraryApiClient(
                 "includeItemTypes" to "Playlist",
                 "limit" to limit.toString(),
                 "recursive" to "true",
-                "fields" to (LIST_FIELDS + listOf("CanDelete", "DateCreated")).joined(),
+                "fields" to (LIST_PROJECTION_FIELDS + listOf("CanDelete", "DateCreated")).joined(),
             ) + itemsEndpointDefaults,
         )
         val currentUserId = currentUser?.id
@@ -809,7 +808,7 @@ class KtorWasmLibraryApiClient(
                 "startIndex" to startIndex.toString(),
                 "limit" to limit.toString(),
                 "recursive" to "true",
-                "fields" to LIST_FIELDS.joined(),
+                "fields" to LIST_PROJECTION_FIELDS.joined(),
             ) + itemsEndpointDefaults,
         )
         response.items.map { it.toPlaylistItem() }

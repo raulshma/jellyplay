@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.livetv.epg
 
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
+import com.raulshma.jellyplay.feature.livetv.toInstantOrNull
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneOffset

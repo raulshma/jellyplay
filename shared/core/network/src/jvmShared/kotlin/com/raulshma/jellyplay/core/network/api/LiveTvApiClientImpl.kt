@@ -23,7 +23,8 @@ class LiveTvApiClientImpl @Inject constructor(
     private val engine: JellyfinApiEngine,
 ) : LiveTvApiClient {
 
-    private fun userIdUuid() = engine.currentUser.value?.id?.toUUID()
+    /** Nullable user-id UUID via the engine's atomic-session accessor. */
+    private fun userIdUuid() = engine.currentUserId()?.toUUID()
 
     override suspend fun getLiveTvChannels(
         startIndex: Int,

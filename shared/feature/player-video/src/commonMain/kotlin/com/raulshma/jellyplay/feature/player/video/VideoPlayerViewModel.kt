@@ -1936,50 +1936,90 @@ class VideoPlayerViewModel(
     }
 
     fun setPlaybackMode(mode: PlaybackMode) {
-        if (_uiState.value.uiPrefs.playbackMode == mode) return
+        val prefs = _uiState.value.uiPrefs
+        if (prefs.playbackMode == mode) return
         // User explicitly changed the mode — re-arm the direct-play fallback so
         // a future FORCE_DIRECT_PLAY attempt can fail-and-retry again.
         playbackSession.engineEventCoordinator.onPlaybackModeChanged()
+        // The sibling quality the reload must still resolve against, captured
+        // from the SAME pre-write snapshot the guard read (this setter does not
+        // change it) — never read back after the mirror write.
+        val quality = prefs.streamingQuality
         _uiState.update { it.copy(uiPrefs = it.uiPrefs.copy(playbackMode = mode)) }
-        launch {
-            playbackStore.setPlaybackMode(mode)
-            reloadPlaybackForMode()
-        }
+        applyPlaybackPrefChange(
+            mode = mode,
+            quality = quality,
+            persist = { playbackStore.setPlaybackMode(mode) },
+        )
     }
 
     fun setStreamingQuality(quality: StreamingQuality) {
-        if (_uiState.value.uiPrefs.streamingQuality == quality) return
+        val prefs = _uiState.value.uiPrefs
+        if (prefs.streamingQuality == quality) return
+        val mode = prefs.playbackMode
         _uiState.update { it.copy(uiPrefs = it.uiPrefs.copy(streamingQuality = quality)) }
-        launch {
-            playbackStore.setStreamingQuality(quality)
-            reloadPlaybackForMode()
-        }
+        applyPlaybackPrefChange(
+            mode = mode,
+            quality = quality,
+            persist = { playbackStore.setStreamingQuality(quality) },
+        )
     }
 
     /**
      * Toggles adaptive bitrate (the AUTO-mode network cap). Persisted and
      * re-resolved immediately so the cap change takes effect for the running
      * stream: disabling it drops the cap so the server direct-plays instead of
-     * transcoding high-bitrate media.
+     * transcoding high-bitrate media. ABR changes NEITHER the mode nor the
+     * quality tier — the reload resolves against the pre-change mirror
+     * snapshot (captured synchronously, before any suspension can interleave
+     * a projection); it re-resolves at all because the resolved cap feeds the
+     * server's PlaybackInfo decision.
      */
     fun setAdaptiveBitrateEnabled(enabled: Boolean) {
-        if (_uiState.value.uiPrefs.adaptiveBitrateEnabled == enabled) return
+        val prefs = _uiState.value.uiPrefs
+        if (prefs.adaptiveBitrateEnabled == enabled) return
+        val mode = prefs.playbackMode
+        val quality = prefs.streamingQuality
         _uiState.update { it.copy(uiPrefs = it.uiPrefs.copy(adaptiveBitrateEnabled = enabled)) }
+        applyPlaybackPrefChange(
+            mode = mode,
+            quality = quality,
+            persist = { networkOfflineStore.setAdaptiveBitrateEnabled(enabled) },
+        )
+    }
+
+    /**
+     * The playback-pref write choreography shared by [setPlaybackMode],
+     * [setStreamingQuality] and [setAdaptiveBitrateEnabled]: launch →
+     * persist the caller-specific store write → reload the running session
+     * with EXPLICIT [mode]/[quality] values. The reload never reads the
+     * ui-prefs mirror back — the setters' mirror writes stay a pure UI
+     * projection, and each caller passes exactly the post-change values
+     * (its own new argument for the pref it changed; the pre-write snapshot
+     * for the siblings it did not). The relative order mirror-write → launch
+     * is unchanged from the former per-setter bodies.
+     */
+    private fun applyPlaybackPrefChange(
+        mode: PlaybackMode,
+        quality: StreamingQuality,
+        persist: suspend () -> Unit,
+    ) {
         launch {
-            networkOfflineStore.setAdaptiveBitrateEnabled(enabled)
-            reloadPlaybackForMode()
+            persist()
+            reloadPlaybackForMode(mode = mode, quality = quality)
         }
     }
 
     /**
      * Thin delegate to [PlaybackSession.reloadForMode]: the VM supplies the
-     * current mode + quality from its ui-prefs mirror and the stored per-item
-     * stream selection from the engine store (the session never reads either);
-     * the session owns the stop-report / reload / selection re-arm /
-     * media-session-rebuild choreography and surfaces its transcode notices
-     * as [SessionEvent.InformUser]s.
+     * caller's post-change mode + quality (passed in explicitly — this never
+     * reads the ui-prefs mirror) and the stored per-item stream selection
+     * from the engine store (the session never reads either); the session
+     * owns the stop-report / reload / selection re-arm / media-session-rebuild
+     * choreography and surfaces its transcode notices as
+     * [SessionEvent.InformUser]s.
      */
-    private suspend fun reloadPlaybackForMode() {
+    private suspend fun reloadPlaybackForMode(mode: PlaybackMode, quality: StreamingQuality) {
         // Carry the stored per-item stream selection into the re-POST: the
         // server bakes one audio track into a transcoded manifest and burns in
         // image subs, so dropping the indices would reset those choices. The
@@ -1988,8 +2028,8 @@ class VideoPlayerViewModel(
         val itemId = playerSessionManager.sessionState.value.currentItemId
         val selection = itemId?.let { engineStore.playerEngine.value.mediaStreamSelections[it] }
         playbackSession.reloadForMode(
-            mode = _uiState.value.uiPrefs.playbackMode,
-            quality = _uiState.value.uiPrefs.streamingQuality,
+            mode = mode,
+            quality = quality,
             selection = selection,
         )
     }

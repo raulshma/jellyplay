@@ -25,6 +25,7 @@ import com.raulshma.jellyplay.core.network.library.EmptyLibraryFallback
 import com.raulshma.jellyplay.core.network.library.FavoriteFlagCache
 import com.raulshma.jellyplay.core.network.library.HomeSectionSources
 import com.raulshma.jellyplay.core.network.library.HomeSectionsFetcher
+import com.raulshma.jellyplay.core.network.library.LIST_PROJECTION_FIELDS
 import com.raulshma.jellyplay.core.network.library.SEARCH_SUGGESTIONS_FIELDS
 import com.raulshma.jellyplay.core.network.library.SEARCH_SUGGESTIONS_ITEM_TYPES
 import com.raulshma.jellyplay.core.network.library.SEARCH_SUGGESTIONS_SORT_BY
@@ -54,6 +55,18 @@ import java.util.UUID
 private val DETAIL_ITEM_FIELDS = DETAIL_PROJECTION_FIELDS.map { name ->
     requireNotNull(ItemFields.entries.firstOrNull { it.serialName == name }) {
         "ItemFields has no serial name '$name' — SDK drift vs the shared projection"
+    }
+}
+
+/**
+ * Fields every library LIST projection requests, resolved once from the
+ * shared commonMain wire projection ([LIST_PROJECTION_FIELDS]) — the dozen
+ * hand-copied OVERVIEW + PRIMARY_IMAGE_ASPECT_RATIO pairs (plus the Genres
+ * and playlists compositions on top of it) all flow from here.
+ */
+private val LIST_ITEM_FIELDS = LIST_PROJECTION_FIELDS.map { name ->
+    requireNotNull(ItemFields.entries.firstOrNull { it.serialName == name }) {
+        "ItemFields has no serial name '$name' — SDK drift vs the shared list projection"
     }
 }
 
@@ -110,11 +123,7 @@ class LibraryApiClientImpl @Inject constructor(
             engine.requireApi().userLibraryApi.getLatestMedia(
                 parentId = parentId.toUUID(),
                 limit = limit,
-                fields = listOf(
-                    ItemFields.OVERVIEW,
-                    ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
-                    ItemFields.GENRES,
-                ),
+                fields = LIST_ITEM_FIELDS + ItemFields.GENRES,
             ).content ?: emptyList()
         },
     )
@@ -155,10 +164,7 @@ class LibraryApiClientImpl @Inject constructor(
             val response = engine.requireApi().userLibraryApi.getLatestMedia(
                 parentId = parentId.toUUID(),
                 limit = limit,
-                fields = listOf(
-                    ItemFields.OVERVIEW,
-                    ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
-                ),
+                fields = LIST_ITEM_FIELDS,
             ).content ?: emptyList()
             engine.run { response.toFilteredMediaItems() }
         }
@@ -177,10 +183,7 @@ class LibraryApiClientImpl @Inject constructor(
             limit = limit,
             enableRewatching = enableRewatching,
             nextUpDateCutoff = cutoff,
-            fields = listOf(
-                ItemFields.OVERVIEW,
-                ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
-            ),
+            fields = LIST_ITEM_FIELDS,
         ).content
         engine.run { (response?.items ?: emptyList()).toFilteredMediaItems() }
     }
@@ -188,10 +191,7 @@ class LibraryApiClientImpl @Inject constructor(
     override suspend fun getContinueWatching(limit: Int): Result<List<MediaItem>> = engine.apiResultWithRetry {
         val response = engine.requireApi().itemsApi.getResumeItems(
             limit = limit,
-            fields = listOf(
-                ItemFields.OVERVIEW,
-                ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
-            ),
+            fields = LIST_ITEM_FIELDS,
         ).content
         engine.run {
             (response?.items ?: emptyList()).toFilteredMediaItems()
@@ -275,11 +275,7 @@ class LibraryApiClientImpl @Inject constructor(
             searchTerm = searchTerm?.takeIf { it.isNotBlank() },
             filters = itemFilters.takeIf { it.isNotEmpty() },
             minCommunityRating = filters.minRating.takeIf { it > 0f }?.toDouble(),
-            fields = listOf(
-                ItemFields.OVERVIEW,
-                ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
-                ItemFields.GENRES,
-            ),
+            fields = LIST_ITEM_FIELDS + ItemFields.GENRES,
         ).content
         val rawItems = emptyLibraryFallback.resolve(
             primaryItems = response.items,
@@ -389,8 +385,7 @@ class LibraryApiClientImpl @Inject constructor(
     }
 
     override suspend fun getIntros(itemId: String): Result<List<MediaItem>> = engine.apiResultWithRetry {
-        val userId = engine.currentUser.value?.id?.toUUID()
-            ?: throw IllegalStateException("Not authenticated")
+        val userId = engine.requireUserId().toUUID()
         val response = engine.requireApi().userLibraryApi.getIntros(
             itemId = itemId.toUUID(),
             userId = userId,
@@ -401,8 +396,7 @@ class LibraryApiClientImpl @Inject constructor(
     }
 
     override suspend fun getSpecialFeatures(itemId: String): Result<List<MediaItem>> = engine.apiResultWithRetry {
-        val userId = engine.currentUser.value?.id?.toUUID()
-            ?: throw IllegalStateException("Not authenticated")
+        val userId = engine.requireUserId().toUUID()
         // Unlike getIntros (a BaseItemDtoQueryResult with a paginated `.items`
         // wrapper), getSpecialFeatures returns a bare List<BaseItemDto> directly
         // — the /Items/{id}/SpecialFeatures endpoint emits a JSON array, so the
@@ -428,10 +422,7 @@ class LibraryApiClientImpl @Inject constructor(
             limit = limit,
             startIndex = startIndex,
             recursive = true,
-            fields = listOf(
-                ItemFields.OVERVIEW,
-                ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
-            ),
+            fields = LIST_ITEM_FIELDS,
         ).content
         SearchResult(
             items = engine.run { response.items.toFilteredMediaItems() },
@@ -479,7 +470,7 @@ class LibraryApiClientImpl @Inject constructor(
 
     override suspend fun getGenres(parentId: String?, startIndex: Int, limit: Int): Result<List<Genre>> =
         engine.apiResultWithRetry {
-            val userId = engine.currentUser.value?.id?.toUUID()
+            val userId = engine.currentUserId()?.toUUID()
             val response = engine.requireApi().genresApi.getGenres(
                 parentId = parentId?.let { it.toUUID() },
                 userId = userId,
@@ -516,7 +507,7 @@ class LibraryApiClientImpl @Inject constructor(
         startIndex: Int,
         limit: Int,
     ): Result<List<Studio>> = engine.apiResultWithRetry {
-        val userId = engine.currentUser.value?.id?.toUUID()
+        val userId = engine.currentUserId()?.toUUID()
         val response = engine.requireApi().studiosApi.getStudios(
             parentId = parentId?.let { it.toUUID() },
             userId = userId,
@@ -540,10 +531,7 @@ class LibraryApiClientImpl @Inject constructor(
             startIndex = startIndex,
             limit = limit,
             recursive = true,
-            fields = listOf(
-                ItemFields.OVERVIEW,
-                ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
-            ),
+            fields = LIST_ITEM_FIELDS,
         ).content
         SearchResult(
             items = engine.run { response.items.toFilteredMediaItems() },
@@ -559,10 +547,7 @@ class LibraryApiClientImpl @Inject constructor(
             limit = limit,
             recursive = true,
             sortBy = listOf(ItemSortBy.SORT_NAME),
-            fields = listOf(
-                ItemFields.OVERVIEW,
-                ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
-            ),
+            fields = LIST_ITEM_FIELDS,
         ).content
         engine.run { response.items.toFilteredMediaItems() }
     }
@@ -574,10 +559,7 @@ class LibraryApiClientImpl @Inject constructor(
             recursive = true,
             sortBy = listOf(ItemSortBy.PARENT_INDEX_NUMBER, ItemSortBy.INDEX_NUMBER),
             sortOrder = listOf(SortOrder.ASCENDING),
-            fields = listOf(
-                ItemFields.OVERVIEW,
-                ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
-            ),
+            fields = LIST_ITEM_FIELDS,
         ).content
         engine.run { response.items.toFilteredMediaItems() }
     }
@@ -594,17 +576,14 @@ class LibraryApiClientImpl @Inject constructor(
 
     override suspend fun getInstantMix(itemId: String, limit: Int): Result<List<MediaItem>> =
         engine.apiResultWithRetry {
-            val userId = engine.currentUser.value?.id?.toUUID()
+            val userId = engine.currentUserId()?.toUUID()
                 ?: return@apiResultWithRetry emptyList()
             engine.run {
                 engine.requireApi().instantMixApi.getInstantMixFromItem(
                     userId = userId,
                     itemId = itemId.toUUID(),
                     limit = limit,
-                    fields = listOf(
-                        ItemFields.OVERVIEW,
-                        ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
-                    ),
+                    fields = LIST_ITEM_FIELDS,
                 ).content.items.toFilteredMediaItems()
             }
         }
@@ -615,10 +594,7 @@ class LibraryApiClientImpl @Inject constructor(
                 personIds = listOf(personId.toUUID()),
                 limit = limit,
                 recursive = true,
-                fields = listOf(
-                    ItemFields.OVERVIEW,
-                    ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
-                ),
+                fields = LIST_ITEM_FIELDS,
             ).content
             engine.run { response.items.toFilteredMediaItems() }
         }
@@ -668,10 +644,7 @@ class LibraryApiClientImpl @Inject constructor(
             startIndex = startIndex,
             limit = limit,
             recursive = true,
-            fields = listOf(
-                ItemFields.OVERVIEW,
-                ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
-            ),
+            fields = LIST_ITEM_FIELDS,
         ).content
         SearchResult(
             items = engine.run { response.items.toFilteredMediaItems() },
@@ -748,10 +721,7 @@ class LibraryApiClientImpl @Inject constructor(
             limit = limit,
             startIndex = startIndex,
             recursive = true,
-            fields = listOf(
-                ItemFields.OVERVIEW,
-                ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
-            ),
+            fields = LIST_ITEM_FIELDS,
         ).content
         SearchResult(
             items = engine.run { response.items.toFilteredMediaItems() },
@@ -769,14 +739,9 @@ class LibraryApiClientImpl @Inject constructor(
             includeItemTypes = listOf(BaseItemKind.PLAYLIST),
             limit = limit,
             recursive = true,
-            fields = listOf(
-                ItemFields.OVERVIEW,
-                ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
-                ItemFields.CAN_DELETE,
-                ItemFields.DATE_CREATED,
-            ),
+            fields = LIST_ITEM_FIELDS + listOf(ItemFields.CAN_DELETE, ItemFields.DATE_CREATED),
         ).content
-        val currentUserId = engine.currentUser.value?.id
+        val currentUserId = engine.currentUserId()
         response.items.map { item ->
             Playlist(
                 id = item.id.toString(),
@@ -807,10 +772,7 @@ class LibraryApiClientImpl @Inject constructor(
             startIndex = startIndex,
             limit = limit,
             recursive = true,
-            fields = listOf(
-                ItemFields.OVERVIEW,
-                ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
-            ),
+            fields = LIST_ITEM_FIELDS,
         ).content
         response.items.map { item ->
             PlaylistItem(
@@ -831,7 +793,7 @@ class LibraryApiClientImpl @Inject constructor(
         itemIds: List<String>,
         mediaType: MediaType,
     ): Result<String> = engine.apiResultWithRetry {
-        val userId = engine.currentUser.value?.id?.toUUID()
+        val userId = engine.currentUserId()?.toUUID()
         // Jellyfin tags a playlist with a single media type so the server can
         // sort/limit it correctly. Music callers (the default) keep AUDIO;
         // video detail screens pass VIDEO. Without this, a playlist created
@@ -875,7 +837,7 @@ class LibraryApiClientImpl @Inject constructor(
         playlistId: String,
         itemIds: List<String>,
     ): Result<Unit> = engine.apiResultWithRetry {
-        val userId = engine.currentUser.value?.id?.toUUID()
+        val userId = engine.currentUserId()?.toUUID()
         engine.requireApi().playlistsApi.addItemToPlaylist(
             playlistId = playlistId.toUUID(),
             ids = itemIds.map { it.toUUID() },
@@ -909,8 +871,7 @@ class LibraryApiClientImpl @Inject constructor(
     }
 
     override suspend fun markPlayed(itemId: String): Result<Unit> = engine.apiResultWithRetry {
-        val userId = engine.currentUser.value?.id
-            ?: throw IllegalStateException("Not authenticated")
+        val userId = engine.requireUserId()
         engine.requireApi().playStateApi.markPlayedItem(
             userId = userId.toUUID(),
             itemId = itemId.toUUID(),
@@ -918,8 +879,7 @@ class LibraryApiClientImpl @Inject constructor(
     }
 
     override suspend fun markUnplayed(itemId: String): Result<Unit> = engine.apiResultWithRetry {
-        val userId = engine.currentUser.value?.id
-            ?: throw IllegalStateException("Not authenticated")
+        val userId = engine.requireUserId()
         engine.requireApi().playStateApi.markUnplayedItem(
             userId = userId.toUUID(),
             itemId = itemId.toUUID(),
@@ -927,8 +887,7 @@ class LibraryApiClientImpl @Inject constructor(
     }
 
     override suspend fun toggleFavorite(itemId: String, currentIsFavorite: Boolean?): Result<Boolean> = engine.apiResultWithRetry {
-        val userId = engine.currentUser.value?.id
-            ?: throw IllegalStateException("Not authenticated")
+        val userId = engine.requireUserId()
         val uuid = itemId.toUUID()
         favoriteFlags.toggle(
             cacheKey = uuid.toString(),
@@ -952,8 +911,7 @@ class LibraryApiClientImpl @Inject constructor(
     }
 
     override suspend fun setFavorite(itemId: String, isFavorite: Boolean): Result<Unit> = engine.apiResultWithRetry {
-        val userId = engine.currentUser.value?.id
-            ?: throw IllegalStateException("Not authenticated")
+        val userId = engine.requireUserId()
         val uuid = itemId.toUUID()
         if (isFavorite) {
             engine.requireApi().userLibraryApi.markFavoriteItem(

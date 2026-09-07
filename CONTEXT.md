@@ -119,7 +119,14 @@ a playback session's lifecycle:
   tracking, mini-player reclaim, and WHEN the `SessionLoadPipeline` starts.
 - **retry / reload / decisions** — `retryWithEngine`, `retryPlayback`,
   `reloadForMode`, `reloadForStreamChange`, plus the
-  `EngineEventCoordinator` lifecycle and its decision fan-out.
+  `EngineEventCoordinator` lifecycle and its decision fan-out. Every
+  engine-adopting path outside `SessionLoadPipeline` rebinds through one
+  funnel, `rebindSessionTracking(itemId, trackProgress = true)` (reload ×4,
+  retry, reclaim); cinema pre-roll intros call it with
+  `trackProgress = false` (not part of library history) — the former
+  `afterEngineReload…` helper's KDoc claimed a consolidation its own
+  reclaim/cinema bodies contradicted; now true, and pinned (reclaim trio +
+  cinema suppression in the session suites).
 - **reporting + release** — stop reports (deduped via a per-session latch so
   two release paths never double-report), `getReportPositionMs` seek latches,
   and the release split: the session-owned teardown half runs first, then the
@@ -144,6 +151,16 @@ new-item resets, routing gates, the VM teardown half, trickplay clear,
 SyncPlay reattach). `sessionState` / `engineFlow` are direct aliases of
 `PlayerSessionManager`'s flows — same instance, no re-publish, so dispatch
 ordering is unchanged.
+
+The VM's three playback-pref setters (`setPlaybackMode`,
+`setStreamingQuality`, `setAdaptiveBitrateEnabled`) funnel through one
+private command, `applyPlaybackPrefChange(mode, quality, persist)` —
+guard/coordinator/mirror-write stay per-setter (different fields, same
+order), the command owns launch → persist → reload with EXPLICIT
+post-change values; `reloadPlaybackForMode(mode, quality)` no longer reads
+the ui-prefs mirror back (previously correct only because each setter
+wrote the mirror first — undocumented and untested; now pinned at the
+session seam in `PlaybackSessionReportingTest`).
 
 **`EpisodeNavigator`** (`shared/feature/player-video/src/commonMain/kotlin/.../EpisodeNavigator.kt`)
 owns episode navigation: season/episode browsing writes (through a single
@@ -440,6 +457,18 @@ snapshot fields; commands go through the ViewModel wrappers (or the
 `viewModel.seerrRequests` seam on the media-detail screen).
 
 ## Details feature
+
+**`DetailUiState.clearedForReload(keepDetail)`** (beside the data class,
+the `VideoPlayerUiState.keepAcrossItems` twin) is the details feature's
+navigation/refresh reset declared once: survivors are its constructor
+arguments — `detail` on refresh, the three connection-level Seerr leaves
+(`isSeerrConnected`, `isSeerrRecommendationsEnabled`, `seerrRequest` —
+re-folded by the VM's outer combine anyway) — `loadState` flips
+Loading/Refreshing per flavour, and every content slice resets
+structurally, `sortedEpisodes` included (the former 34-line inline copy
+cleared seasons/episodes/fetchedSeasonIds but leaked the sorted mirror
+across navigation into smart-play resolution — the drift the builder
+kills). Pinned in `DetailViewModelTest`.
 
 **`AddToTargetActions<T>`** (`shared/feature/details/src/commonMain/kotlin/.../AddToTargetActions.kt`)
 is the add-to-container concern for ONE generic target type:
@@ -810,6 +839,21 @@ per-item failure semantics stay separate). Pinned by `RequestsFilterStateTest`.
 
 ## Live TV recording & music collections
 
+**`LiveTvTimeFormat`** (`shared/feature/livetv/.../LiveTvTimeFormat.kt`)
+is the Live-TV feature's one timestamp/airing vocabulary:
+`toInstantOrNull` (the EPG's loose ISO_DATE_TIME + bare-LocalDateTime→UTC
+ladder, kept verbatim — the canonical parse), `formatLiveTvTime` /
+`formatLiveTvDateLabel` over one shared offset-then-naive-local core (the
+string-munging fallback lives once, byte-identical), the `isAiringAt`
+predicate (half-open `[start, end)`, null bound = unconstrained), and
+`liveProgressFraction` (epochSecond math, clamps, `Float?`). Declared fix
+(2026-09-07): channel detail's five strict `Instant.parse` sites now parse
+leniently, so offset-less server timestamps no longer make the
+ended-filter, airing check and live progress bar disagree (an ended
+program with an offset-less endDate is dropped instead of lingering).
+Pinned by `LiveTvTimeFormatTest`; `EpgGridLayout` keeps only its
+`startInstant`/`endInstant` program folds.
+
 **`RecordActions`** (`shared/feature/livetv/src/commonMain/kotlin/.../components/RecordActions.kt`)
 is the one recording choreography behind every Live TV tab, constructed over
 `LiveTvRepository` and the owning ViewModel's scope. Commands
@@ -867,6 +911,15 @@ pure `supports(...)`/`targets(...)` folds. The VM's bulk family is
 the six former composable predicates are gone, so the screen-enables/VM-
 filters drift is structurally impossible. Pinned by `DownloadActionsTest`.
 
+**`downloadedSeasonSlices`** (beside `DeleteDownloadedEpisodesSheet`,
+core/ui, the `MultiEpisodeSelection` placement precedent) derives the
+delete sheet's seasons/episodes pair once: drop the episode map's empty
+seasons, keep only season rows still keyed in it, order preserved. The
+only-downloaded rule stays the caller's half — no map↔list intersection
+(select-all's selectable set reads the map's keys). The detail screen and
+home's `SeriesDeleteStateHolder` call it (holder sizes still derive from
+offline items); pinned by `DownloadedSeasonSlicesTest` (core/ui jvmTest).
+
 **`HeatmapGridModel`** (beside `WatchProgressHeatmapScreen`) is the
 heatmap's Compose-free geometry: week-column grid construction (with the
 mid-year `minActivityDate` Sunday backup), quartile level policy,
@@ -922,14 +975,32 @@ caches then runs the actions in registration order, each per-owner failure
 caught and logged so one bad owner cannot kill the stream, and registration
 is idempotent per owner (re-registering replaces). Registered owners today:
 `media` (all of `MediaRepositoryImpl`'s TtlCaches plus its
-`media-identity-clear` action: `invalidateDetailCache()` — the detail
+`media-identity-clear` action: `DetailCacheGroup.invalidateAll()` — the detail
 cache's epoch bump + similarCache companion, which a plain registry drop
 can't express; routing through `invalidateCaches()` would clear every
 cache twice and double-bump the catalogue's epoch — + the previous
 identity's SWR room rows), `episode-catalogue` (an action —
 `invalidateAll()` also bumps the in-flight epoch, which a bare cache clear
 wouldn't), `playback` (the media-segments cache) and `seerr` (the detail
-cache). Reactions run in registration order. Session- and identity-path
+cache). Reactions run in registration order.
+
+`media`'s detail-side caches are one file-private **`DetailCacheGroup`**
+(beside `MediaRepositoryImpl`, the `EpisodeCatalogue` shape in miniature):
+the detail/similar/tracks/themes quartet, the shared epoch (guarded
+`getOrFetchGuarded` + the SingleFlight detail fetch), and the item-scoped
+KEY GRAMMAR — similar's get key is derived from its evict-all-limits
+prefix (`similar_$id` + `_$limit`), so the historical get-key/evict-prefix
+drift (a no-op invalidation pinning every limit variant for the TTL) is
+structurally impossible; themes/tracks are unshaped. The group's
+`invalidateItem` is the old `invalidateDetailCache` body (epoch bump +
+detail remove + similar prefix + themes prefix), `invalidateUserData`
+returns the pre-eviction detail for the repo's series resolution, and the
+group contributes `[albumTracksCache]` to the registry's cache list (the
+one member a plain clear fully invalidates — the detail/similar/themes
+trio rides the `media-identity-clear` action's epoch bump instead). Adding
+an item-scoped cache is now a group-internal edit, not the five-site
+ritual. Pinned by `MediaRepositoryDetailCacheGroupTest` (limit-variant
+co-eviction, the force lever, wholesale theme clear). Session- and identity-path
 collectors in shared/core/data (`HomeSession`, `SessionCacheRegistry`, the
 repositories' registrations) inject the application-scope `CoroutineScope`
 (`named("applicationScope")` Koin single, owned by shared/core:datastore's
@@ -1076,7 +1147,15 @@ per-scan continuation rules live in the fetch closures) and its enhanced
 stats through one builder (fallback = `build(null)`); every clock read goes
 through the injected `TimeSource.today(zone)` — the four direct
 `LocalDate.now()` reads are gone, and month-boundary math is fake-clock
-pinned. **`PlaybackRepositoryImpl.getMediaSegments`** rides
+pinned. Its two pages share one `buildUserStatistics` (the detail page's
+inline copy — drifted completion-rate math, omitted `isCurrentlyActive` —
+is gone; the detail path deliberately takes `isActive = false`: no session
+source there and nothing on it renders the flag) and one `whenPlugin` fold
+for the six plugin-gated list fetches (caller-captured `_pluginStatus`
+read — a page's gates see one status even if an admin refresh lands
+mid-load; the enhanced wave's group gate stays open-coded because its
+non-null deferred bundle IS the downstream gate in
+`buildEnhancedStatistics`). **`PlaybackRepositoryImpl.getMediaSegments`** rides
 `SingleFlightFetcher(segmentsCache, segmentsEpoch)` like the detail cache
 (the intro/credit fallback wave is the fetch lambda; a failed API fetch
 bumps the epoch to veto the write-back, preserving the empty-vs-failed
@@ -1094,6 +1173,26 @@ triplication. `updateCastState`/`toggleTicker` stay hand-folded
 deliberately (per-branch state writes and predicates that map to no
 strategy member); compile-verified only — the legacy Robolectric suite
 runs in no CI lane.
+
+The 2026-09-07 review wave deepened the auth establishment path and the
+server-address vocabulary. **`AuthRepositoryImpl`** folds the
+`switchServer`/`switchUser` session-establishment choreography into one
+private `adoptPersistedSession(serverEntity, userEntity, caller,
+persistStamps)` — disconnect → `setServer` → failover → `setUser` →
+stored-token-401 guard (caller-named log line) → `setActiveSession` → one
+`withTransaction` of caller-supplied `lastConnected` stamps; a null
+resolved user still runs the chain head. The best-effort failover body is
+`selectReachableAddressDefensively()`, shared by `restoreSession`'s
+bounded stages; `restoreSession` itself stays hand-rolled (timeout staging,
+`clearSession` teardown — the divergence is documented in the helper
+KDoc). **`normalizeServerAddress`** (core/model `ServerAddress.kt`, pure,
+pinned by `ServerAddressTest` in commonTest) is the one server-address
+typing policy — trim, trailing-slash strip, `https://` defaulting; the
+eight copies across core:data / core:network (jvm + wasm failover probing)
+/ auth's TLS-trust prompt / settings' trust toggle now call it, and the two
+private twins are gone. Trim-only sites (`switchServerAddress`,
+`NetworkOfflineStore`, `ServerAddressRouter`, `SocketUrl`) are a different
+policy and stay local.
 
 ## Concurrency (`shared/core/concurrency`)
 
@@ -1131,6 +1230,11 @@ stays site-side and rebinds the bundle.
 is the one home for the request-level policies the `LibraryApiClient` twins
 (`LibraryApiClientImpl`, `KtorWasmLibraryApiClient`) used to ship hand-copied
 per source set: the 12-field detail projection (`DETAIL_PROJECTION_FIELDS`),
+the list projection (`LIST_PROJECTION_FIELDS` — the two-field
+"Overview"+"PrimaryImageAspectRatio" set every list-shaped query attaches;
+the genre and playlists variants compose on top; the JVM client resolves
+it through the wire-name ladder, the wasm client's private `LIST_FIELDS`
+twin is gone; pinned by `LibraryRequestPolicyTest` in commonTest),
 the jellyfin-web search-suggestions shape, the SEASON/EPISODE exclude-drop,
 the empty-library fallback ladder (`EmptyLibraryFallback` + the known-empty
 memo probe and `emptyFallbackTotalCount`), and the favorite-flag cache-aside
@@ -1147,6 +1251,15 @@ tables (`parentalRatingAge` / the sort-token parser) instead of carrying
 is invisible to commonMain). Both clients compile against the single policy
 in `:shared:core:network:jvmTest`; the wasm client has no test lane of its
 own, which is exactly why the policies must not live there.
+`JellyfinApiEngine.requireUserId()` / `currentUserId()` (internal, beside
+`requireApi()`) are the named user-id contract replacing the 15+
+hand-rolled `currentUser.value?.id` guards across the jvmShared clients —
+both read the ATOMIC `session` value (a user without a server is no
+identity; the separate `currentUser` flow must not be re-combined for
+this), message-aligned with wasm's `requireCurrentUser()` and pinned in
+`JellyfinApiEngineSessionTest`; the token accessors
+(`PluginApiClientImpl.requireToken`,
+`MediaInfoApiClientImpl.requireSession`) deliberately remain separate.
 
 ## Navigation destinations
 
@@ -1452,6 +1565,24 @@ therefore carries no restorer; `TvFocusableGrid`/`TvFocusableColumn` own
 theirs. `TvDrawerFolderFilterTest` (app) pins the folder filter;
 `TvDrawerFocusWiringTest` (core/ui) pins the modifier order.
 
+## App widgets (`:app`)
+
+The **widget grid skeleton** (landed `aec4c138b`, app-local) owns the
+byte-identical factory chassis — snapshot read → poster preload → dims
+refresh → deep-link `getViewAt` — plus refresh-scope, height thresholds
+and the grid PendingIntent wiring (`WidgetGridFactory`, provider bases,
+one generic persist; the blank-widget version-bump bug class is fixed in
+one copy). The 2026-09-07 review completed the straggler family:
+`widgetIdsFor` / `notifyProviderDataChanged` / `updateAllProviderWidgets`
+(`WidgetProviderSkeleton.kt`, internal) own the `getInstance` →
+`ComponentName` → `getAppWidgetIds` triple the package hand-copied 12× —
+the ContinueWatching/Library/Seerr refresh-broadcast tails, the persist
+helper's Library/Seerr notify twins (deleted), the Now Playing updater's
+start/presence reads, and the work scheduler's bound-widget gates all call
+them; `NowPlayingWidget.viewVisibility` is deleted for the skeleton's
+`toViewVisibility`. No helper test — trivial Android pass-throughs
+(`WidgetPersistHelperTest` already pins the empty-id branch).
+
 ## Rejected designs
 
 Recorded with evidence so future reviews don't re-suggest them.
@@ -1552,15 +1683,8 @@ re-derives the designs nor lands them casually.
   table; specs become plain-value tests. Deferred: ~7k lines of surface
   across both platforms — land per family (arr first, piggybacking
   `ArrServiceClient`), in a dedicated session.
-- **Widget grid skeleton**: the three RemoteViewsFactories share a
-  byte-identical skeleton (snapshot read → poster preload → dims refresh →
-  deep-link `getViewAt`), the providers share refresh-scope + height
-  thresholds + PendingIntent wiring, and `WidgetPersistHelper` carries the
-  same persist function twice — the blank-widget version-bump bug was
-  fixed in two copies with the same comment. Design: abstract factory +
-  provider bases over (snapshotProvider, posterUrlOf, bind, stableIdOf) +
-  one generic persist. Deferred: the widget package carries in-flight
-  feature work — land first thing after it commits.
+- **Widget grid skeleton**: LANDED (`aec4c138b`, plus the 2026-09-07
+  id-resolution/notify straggler helpers) — see "App widgets" above.
 - **`DetailViewModel` intent fold**: ~29 public funs force the 160-line
   hand-built `DetailContentCallbacks` adapter in `MediaDetailScreen`
   (keyed on 15 values). Design: sealed `DetailIntent` + `onEvent` (the

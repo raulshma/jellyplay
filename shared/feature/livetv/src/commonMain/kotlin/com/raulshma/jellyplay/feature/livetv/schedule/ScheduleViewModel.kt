@@ -8,11 +8,7 @@ import com.raulshma.jellyplay.core.model.LiveTvRecording
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.feature.livetv.components.RecordActions
 import com.raulshma.jellyplay.feature.livetv.components.RecordOutcome
-import java.time.OffsetDateTime
-import java.time.format.DateTimeFormatter
-import java.time.format.DateTimeParseException
-
-private val DATE_LABEL_FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern("EEE, MMM d")
+import com.raulshma.jellyplay.feature.livetv.formatLiveTvDateLabel
 
 /** Timers grouped by their start date, matching jellyfin-web `getTimersHtml`. */
 @Immutable
@@ -92,18 +88,9 @@ class ScheduleViewModel(
     /** Groups timers by their start-date label (e.g. "Mon, Jul 14"), sorted ascending. */
     private fun groupByDate(timers: List<DvrTimer>): List<TimerDateGroup> =
         timers.mapNotNull { t ->
-            t.startDate?.let { parseDateLabel(it) }?.let { label -> label to t }
+            t.startDate?.let { formatLiveTvDateLabel(it) }?.let { label -> label to t }
         }
             .groupBy({ it.first }, { it.second })
             .map { (label, list) -> TimerDateGroup(label, list.sortedBy { it.startDate }) }
             .sortedBy { group -> group.timers.firstNotNullOfOrNull { it.startDate } }
-
-    private fun parseDateLabel(iso: String): String? = runCatching {
-        OffsetDateTime.parse(iso, DateTimeFormatter.ISO_OFFSET_DATE_TIME)
-            .format(DATE_LABEL_FORMATTER)
-    }.recoverCatching {
-        java.time.LocalDateTime.parse(
-            iso.replace("Z", "").replace("T", " ").substringBefore('+').trim()
-        ).format(DATE_LABEL_FORMATTER)
-    }.getOrNull()
 }
