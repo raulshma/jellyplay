@@ -221,10 +221,36 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_unli
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_x_days
 
 private val THEME_HIGHLIGHT_IDS = setOf("theme_mode", "theme_scheduler")
-private val APPEARANCE_LIBRARY_GROUP_IDS = setOf("show_unwatched_badge", "show_watched_checkmark", "hide_watched_items", "hide_episode_thumbnails", "skip_specials", "show_share_media", "show_external_ratings")
-private val PERFORMANCE_GROUP_IDS = setOf("performance_mode", "reduce_motion")
-private val BLUE_LIGHT_GROUP_IDS = setOf("blue_light_filter", "blue_light_strength")
-private val NEWSLETTER_GROUP_IDS = setOf("newsletter_enabled", "newsletter_delivery_day", "newsletter_sections")
+
+/**
+ * The declared appearance screen groups in LazyColumn order — the derivation
+ * source the deep-link scroll resolver consumes (see HighlightScroll.kt), so
+ * the scroll target can never drift from the UI. Indices 0-3 always render;
+ * 4-6 (performance, eye care, newsletter) only compose when advanced settings
+ * are shown.
+ */
+private val appearanceScreenGroups: List<Set<String>> = listOf(
+    SettingsScreenGroups.appearanceTheme.itemIdSet,
+    SettingsScreenGroups.appearanceNavigation.itemIdSet,
+    SettingsScreenGroups.appearanceLibrary.itemIdSet,
+    SettingsScreenGroups.appearanceHomeLayout.itemIdSet,
+    SettingsScreenGroups.appearancePerformance.itemIdSet,
+    SettingsScreenGroups.appearanceEyeCare.itemIdSet,
+    SettingsScreenGroups.appearanceNewsletter.itemIdSet,
+)
+
+/**
+ * [resolveHighlightScrollIndex]'s [rememberHighlightScrollIndex adjustForAdvanced]
+ * for this screen's LazyColumn: with advanced hidden the three trailing
+ * expert groups don't compose, so their ids cannot scroll (`-1`). Pure (and
+ * internal) so the contract test can pin the derivation against it.
+ */
+internal fun appearanceAdjustForAdvanced(showAdvanced: Boolean): (Int) -> Int =
+    if (showAdvanced) {
+        { it }
+    } else {
+        { raw -> if (raw >= 4) -1 else raw }
+    }
 
 /**
  * The persisted accent id for a themed variant, or null when the variant has
@@ -262,38 +288,13 @@ fun AppearanceSettingsScreen(
         tag = "appearance_init",
     )
 
-    val homeLayoutGroup = remember { listOf("pinned_home_sections", "home_layout_presets", "configure_libraries", "home_section_layout") }
+    val homeLayoutGroupIds = SettingsScreenGroups.appearanceHomeLayout.itemIdSet
     val scrollState = rememberLazyListState()
-    val scrollIndex = remember(highlightSettingId, showAdvanced) {
-        val themeGroup = listOf(
-            "theme_mode", "theme_scheduler", "theme_style", "style_accent",
-            "dynamic_theming", "oled_mode", "contrast", "library_view_mode", "home_mode", "hero_section", "home_backdrop",
-            "clock_home", "settings_in_home_search", "continue_watching_click", "unhide_cw", "merge_continue_next_up", "next_up_max_days",
-            "next_up_rewatching", "theme_music", "nav_labels", "date_format", "font_scale", "color_blind_mode",
-            "hand_mode", "scheduled_start", "scheduled_end",
-        )
-        val libraryGroup = listOf(
-            "show_unwatched_badge", "show_watched_checkmark", "hide_watched_items", "hide_episode_thumbnails",
-            "skip_specials", "haptics_enabled", "show_share_media", "hide_search_history", "show_external_ratings",
-        )
-        val performanceGroup = listOf("performance_mode", "reduce_motion")
-        val eyeCareGroup = listOf("blue_light_filter", "blue_light_strength")
-        val newsletterGroup = listOf("newsletter_enabled", "newsletter_delivery_day")
-        val navBarGroup = listOf("nav_bar_customization", "nav_hide_on_scroll")
-        // Index 0 = Theme, 1 = Navigation customization, 2 = Library & Cards, 3 = Home Screen Layout.
-        // Performance/Eye Care/Newsletter only exist when advanced is on
-        // and occupy indices 4/5/6 respectively.
-        when (highlightSettingId) {
-            in themeGroup -> 0
-            in navBarGroup -> 1
-            in libraryGroup -> 2
-            in homeLayoutGroup -> 3
-            in performanceGroup -> if (showAdvanced) 4 else -1
-            in eyeCareGroup -> if (showAdvanced) 5 else -1
-            in newsletterGroup -> if (showAdvanced) 6 else -1
-            else -> -1
-        }
-    }
+    val scrollIndex = rememberHighlightScrollIndex(
+        highlightSettingId,
+        appearanceScreenGroups,
+        appearanceAdjustForAdvanced(showAdvanced),
+    )
 
     // Phase 1 (coarse): scroll the containing group into the LazyColumn's composition window so the
     // target item is actually composed — items in off-screen groups (later sections) are otherwise
@@ -906,9 +907,11 @@ fun AppearanceSettingsScreen(
                         listOfNotNull(unwatched, checkmarks, hideWatched, hideThumbnails, skipSpecials, shareOpt, ratingsOpt).joinToString(", ").ifEmpty { stringResource(Res.string.settings_summary_all_hidden) }
                     },
                     modifier = Modifier.padding(vertical = 8.dp),
-                    initiallyExpanded = highlightSettingId in APPEARANCE_LIBRARY_GROUP_IDS,
+                    initiallyExpanded = highlightSettingId in SettingsScreenGroups.appearanceLibrary.itemIdSet,
                 ) {
-                    val cardTotal = 8
+                    // The declared library rows plus the confirm-library-reset
+                    // action row (a screen-local row with no search entry).
+                    val cardTotal = SettingsScreenGroups.appearanceLibrary.items.size + 1
                     var cardIdx = 0
 
                     SettingToggleItem(
@@ -1032,7 +1035,7 @@ fun AppearanceSettingsScreen(
                         stringResource(Res.string.settings_home_sections_visible, enabled.size, HomeSectionType.CONFIGURABLE.size)
                     },
                     modifier = Modifier.padding(vertical = 8.dp),
-                    initiallyExpanded = highlightSettingId in homeLayoutGroup,
+                    initiallyExpanded = highlightSettingId in homeLayoutGroupIds,
                 ) {
                     SettingListItem(
                         icon = Tabler.Outline.Pinned,
@@ -1103,9 +1106,9 @@ fun AppearanceSettingsScreen(
                         parts.joinToString(", ").ifEmpty { stringResource(Res.string.settings_standard_experience) }
                     },
                     modifier = Modifier.padding(vertical = 8.dp),
-                    initiallyExpanded = highlightSettingId in PERFORMANCE_GROUP_IDS,
+                    initiallyExpanded = highlightSettingId in SettingsScreenGroups.appearancePerformance.itemIdSet,
                 ) {
-                    val perfTotal = 2
+                    val perfTotal = SettingsScreenGroups.appearancePerformance.items.size
                     SettingToggleItem(
                         icon = Tabler.Outline.Gauge,
                         title = stringResource(Res.string.settings_performance_mode),
@@ -1139,9 +1142,9 @@ fun AppearanceSettingsScreen(
                         }
                     },
                     modifier = Modifier.padding(vertical = 8.dp),
-                    initiallyExpanded = highlightSettingId in BLUE_LIGHT_GROUP_IDS,
+                    initiallyExpanded = highlightSettingId in SettingsScreenGroups.appearanceEyeCare.itemIdSet,
                 ) {
-                    val eyeCareTotal = 2
+                    val eyeCareTotal = SettingsScreenGroups.appearanceEyeCare.items.size
                     SettingToggleItem(
                         icon = Tabler.Outline.Moon,
                         title = stringResource(Res.string.settings_blue_light_filter),
@@ -1176,14 +1179,20 @@ fun AppearanceSettingsScreen(
                         }
                     },
                     modifier = Modifier.padding(vertical = 8.dp),
-                    initiallyExpanded = highlightSettingId in NEWSLETTER_GROUP_IDS,
+                    initiallyExpanded = highlightSettingId in SettingsScreenGroups.appearanceNewsletter.itemIdSet,
                 ) {
                     val newsletterSections = rememberReorderableOrderedList(
                         storedOrder = preferences.newsletterSectionOrder,
                         onPersist = { order -> viewModel.edit { it.notification.setNewsletterSectionOrder(order) } },
                     )
 
-                    SettingsItemList(total = newsletterSections.items.size + 2) {
+                    // The two static declared rows (enable + delivery day) plus
+                    // the runtime-reorderable section rows (the declared
+                    // newsletter_sections id renders as those rows).
+                    SettingsItemList(
+                        total = newsletterSections.items.size +
+                            SettingsScreenGroups.appearanceNewsletter.items.count { it.id != "newsletter_sections" },
+                    ) {
 
                     SettingToggleItem(
                         icon = Tabler.Outline.Mail,

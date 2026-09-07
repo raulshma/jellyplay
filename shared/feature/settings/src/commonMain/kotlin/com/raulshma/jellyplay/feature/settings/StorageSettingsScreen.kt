@@ -144,9 +144,17 @@ private fun streamingQualityLabelRes(quality: StreamingQuality): StringResource 
     StreamingQuality.UHD_4K -> Res.string.settings_quality_4k_ultra_hd
 }
 
-private val STORAGE_CACHE_GROUP_IDS = setOf("clear_cache", "clear_image_cache", "wifi_only_downloads", "download_connections", "max_concurrent_downloads", "auto_delete_cache", "max_cache_size")
-private val STORAGE_NETWORK_GROUP_IDS = setOf("offline_mode", "auto_offline", "adaptive_bitrate", "bandwidth_cap", "metered_network_behavior", "cellular_streaming_quality", "cellular_download_warning", "data_saver", "network_timeout", "verbose_logging", "user_data_sync")
-private val STORAGE_DOWNLOADS_GROUP_IDS = setOf("download_quality", "smart_downloads", "auto_download_new_episodes", "download_schedule", "download_schedule_start", "download_schedule_end", "download_schedule_wifi_only", "max_download_storage_limit", "download_storage_location", "auto_delete_after_watch")
+/**
+ * The declared storage screen groups in LazyColumn order — the derivation
+ * source the deep-link scroll resolver consumes (see HighlightScroll.kt), so
+ * the scroll target can never drift from the UI. All three groups always
+ * render, so no advanced offset applies.
+ */
+private val storageScreenGroups: List<Set<String>> = listOf(
+    SettingsScreenGroups.storageCache.itemIdSet,
+    SettingsScreenGroups.storageNetwork.itemIdSet,
+    SettingsScreenGroups.storageDownloads.itemIdSet,
+)
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
@@ -165,14 +173,7 @@ fun StorageSettingsScreen(
     LaunchedEffect(Unit) { viewModel.refreshCacheSize() }
 
     val scrollState = rememberLazyListState()
-    val scrollIndex = remember(highlightSettingId) {
-        when (highlightSettingId) {
-            in STORAGE_CACHE_GROUP_IDS -> 0
-            in STORAGE_NETWORK_GROUP_IDS -> 1
-            in STORAGE_DOWNLOADS_GROUP_IDS -> 2
-            else -> -1
-        }
-    }
+    val scrollIndex = resolveHighlightScrollIndex(highlightSettingId, storageScreenGroups)
 
     // Phase 1 (coarse): scroll the containing group into the LazyColumn's composition window so the
     // target item is actually composed — items in off-screen groups (later sections) are otherwise
@@ -293,7 +294,12 @@ fun StorageSettingsScreen(
                         }
                     }
 
-                    val storageTotal = if (showAdvanced) 8 else 3
+                    // Derived from the cache group declaration: the declared
+                    // rows behind the advanced toggle plus the cache-used info
+                    // row (a screen-local row with no search entry).
+                    val storageTotal = 1 + SettingsScreenGroups.storageCache.items.count {
+                        showAdvanced || !it.isAdvanced
+                    }
                     var storageIdx = 0
                     SettingInfoItem(
                         icon = Tabler.Outline.Database,
@@ -404,9 +410,9 @@ fun StorageSettingsScreen(
                         stringResource(Res.string.settings_status_value, status)
                     },
                     modifier = Modifier.padding(vertical = 8.dp),
-                    initiallyExpanded = highlightSettingId in STORAGE_NETWORK_GROUP_IDS,
+                    initiallyExpanded = highlightSettingId in SettingsScreenGroups.storageNetwork.itemIdSet,
                 ) {
-                    val networkTotal = 11
+                    val networkTotal = SettingsScreenGroups.storageNetwork.items.size
                     var networkIdx = 0
 
                     SettingToggleItem(
@@ -578,7 +584,13 @@ fun StorageSettingsScreen(
                     modifier = Modifier.padding(vertical = 8.dp),
                     initiallyExpanded = true,
                 ) {
-                    val downloadTotal = 8
+                    // Derived from the downloads group declaration: the three
+                    // schedule-window rows only render when scheduling is on.
+                    val downloadTotal = SettingsScreenGroups.storageDownloads.items.count { item ->
+                        item.id == "download_schedule" ||
+                            !item.id.startsWith("download_schedule_") ||
+                            preferences.downloadScheduleEnabled
+                    }
                     var downloadIdx = 0
 
                     val downloadQualityTitle = stringResource(Res.string.settings_download_quality)

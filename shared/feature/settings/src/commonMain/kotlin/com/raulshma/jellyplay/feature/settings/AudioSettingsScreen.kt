@@ -735,16 +735,16 @@ fun AudioSettingsScreen(
             // there) — the whole group stays off the surface.
             if (settingsCapabilities.supportsAudioCache) {
                 item {
-                    SettingsGroup(
-                        icon = Tabler.Outline.Database,
-                        title = stringResource(Res.string.settings_audio_caching_title),
-                        summary = { stringResource(Res.string.settings_audio_caching_summary) },
-                        modifier = Modifier.padding(vertical = 8.dp),
-                        initiallyExpanded = false,
-                    ) {
-                        var cacheIdx = 0
-                        val cacheTotal = 6
-                        SettingToggleItem(
+                SettingsGroup(
+                    icon = Tabler.Outline.Database,
+                    title = stringResource(Res.string.settings_audio_caching_title),
+                    summary = { stringResource(Res.string.settings_audio_caching_summary) },
+                    modifier = Modifier.padding(vertical = 8.dp),
+                    // Derived from the audio-cache declaration: a deep-linked
+                    // cache id expands the group it renders in.
+                    initiallyExpanded = highlightSettingId in SettingsScreenGroups.audioCache.itemIdSet,
+                ) {
+                    SettingToggleItem(
                             icon = Tabler.Outline.Database,
                             title = stringResource(Res.string.settings_audio_caching_enable),
                             subtitle = if (preferences.audioCachingEnabled)

@@ -43,7 +43,7 @@ internal val SecuritySettingsSearchItems = listOf(
         keywords = listOf("biometric", "fingerprint", "face lock", "iris", "sensors"),
         route = Route.SecuritySettings(),
         icon = Tabler.Outline.Fingerprint,
-        platforms = ANDROID_ONLY_PLATFORMS,
+        platforms = platformsFor(settingsCapabilities.supportsBiometric),
     ),
     SettingsSearchItem(
         id = "pin_for_player_lock",

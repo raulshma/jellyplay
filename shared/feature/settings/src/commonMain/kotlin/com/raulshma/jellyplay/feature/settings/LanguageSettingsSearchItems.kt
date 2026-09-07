@@ -52,7 +52,7 @@ internal val LanguageSettingsSearchItems = listOf(
         keywords = listOf("language", "display", "interface", "locale", "ui language", "app language"),
         route = Route.LanguageSettings(),
         icon = Tabler.Outline.Language,
-        platforms = ANDROID_ONLY_PLATFORMS,
+        platforms = platformsFor(settingsCapabilities.supportsAppLocaleOverride),
     ),
     SettingsSearchItem(
         id = "audio_language",

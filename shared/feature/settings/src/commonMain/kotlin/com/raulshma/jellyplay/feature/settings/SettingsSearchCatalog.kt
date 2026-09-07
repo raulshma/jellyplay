@@ -28,6 +28,18 @@ internal fun List<SettingsSearchItem>.androidOnly(): List<SettingsSearchItem> =
     map { it.copy(platforms = ANDROID_ONLY_PLATFORMS) }
 
 /**
+ * The per-item platform tag derived from the [SettingsCapabilities] flag
+ * that gates the row's visibility: `all` where the capability backs the row
+ * (the tag then carries no information), `ANDROID_ONLY_PLATFORMS` where it
+ * doesn't. Used at the `*SearchItems` declaration sites so the tag and the
+ * screen's row condition are the same fact instead of two hand-kept copies.
+ * (TV-only rows stay hand-tagged — form factor is the runtime `LocalTvMode`
+ * axis, not a platform, so no capability flag exists for them.)
+ */
+internal fun platformsFor(supported: Boolean): Set<PlatformKind> =
+    if (supported) PlatformKind.entries.toSet() else ANDROID_ONLY_PLATFORMS
+
+/**
  * The single aggregation of every settings-search item list, in the curated
  * flat order the old core/ui `SettingsSearchRegistry` used — tie-breaking in
  * [com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchMatcher] relies
@@ -55,27 +67,15 @@ object SettingsSearchCatalog : SettingsSearchProvider {
     private val defaultResolve: suspend (List<SettingsSearchItem>) -> List<ResolvedSettingsItem> =
         { it.resolve() }
 
+    /**
+     * The flat catalog, built as the pure concatenation of the aggregation
+     * decoration ([SettingsScreenGroups.all]) — a declaration list that is
+     * not decorated into a screen group cannot reach the catalog, which is
+     * what makes the group decoration the single declaration of each
+     * screen's group facts.
+     */
     override val items: List<SettingsSearchItem> =
-        AccountSearchItems +
-            IntegrationsSearchItems +
-            ActivityInsightsSearchItems +
-            SystemSearchItems +
-            AppearanceSettingsSearchItems +
-            PlaybackSettingsSearchItems +
-            MpvEngineSearchItems +
-            VlcEngineSearchItems +
-            ExoPlayerEngineSearchItems +
-            SyncPlaySearchItems +
-            CastingSearchItems +
-            LiveTvSearchItems +
-            AudioSettingsSearchItems +
-            LanguageSettingsSearchItems +
-            NotificationSettingsSearchItems +
-            StorageSettingsSearchItems +
-            SecuritySettingsSearchItems +
-            BackupSettingsSearchItems +
-            AboutSearchItems +
-            ExperimentalSettingsSearchItems
+        SettingsScreenGroups.all.flatMap { it.items }
 
     /**
      * The whole catalog resolved to the current locale for fuzzy matching and
@@ -89,7 +89,7 @@ object SettingsSearchCatalog : SettingsSearchProvider {
      *
      * Dispatched onto [Dispatchers.Default] as a hard rule: one
      * resolve call fans out to a compose-resources read per catalog entry
-     * (257 items × title/subtitle/category = 771 reads today), and each
+     * (258 items × title/subtitle/category = 774 reads today), and each
      * not-yet-cached read blocks its caller — on Android the runtime resolves
      * a string via `runBlocking` on the composition thread and re-opens the
      * per-locale asset, inflating from byte 0 to the entry offset (the app's

@@ -43,6 +43,7 @@ import com.raulshma.jellyplay.core.model.PreloadBufferSize
 import com.raulshma.jellyplay.core.model.LiveStreamOption
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.VlcAudioOutput
+import com.raulshma.jellyplay.core.model.VlcVideoOutput
 import com.raulshma.jellyplay.core.model.SyncPlayJoinBehavior
 import com.raulshma.jellyplay.core.model.CastingStrategy
 import com.raulshma.jellyplay.core.model.platformEngineSupport
@@ -359,19 +360,43 @@ private fun vlcSkipFrameLabelRes(level: Int): StringResource = when (level) {
     else -> Res.string.settings_b_frames_level
 }
 
-private val PLAYBACK_ADVANCED_GROUP_IDS = setOf("dialogue_boost", "dialogue_boost_strength", "decoder", "audio_passthrough", "frame_rate_matching", "streaming_quality", "audio_delay")
-private val PLAYBACK_ENGINE_GROUP_IDS = setOf(
-    "mpv_video_output", "mpv_scaler", "mpv_debanding", "mpv_interpolation", "mpv_audio_output",
-    "mpv_audio_fallback", "mpv_buffer_size", "mpv_hwdec_override", "mpv_skip_loop_filter", "mpv_frame_drop",
-    "mpv_extra_config", "reset_engine_defaults",
-    "vlc_audio_output", "vlc_audio_time_stretch", "vlc_network_caching",
-    "vlc_skip_loop_filter", "vlc_skip_frames", "vlc_decoder_threads", "vlc_drop_late_frames",
-    "exo_video_scaling", "exo_frame_rate_strategy", "exo_skip_silence", "exo_audio_offload",
-    "exo_decoder_fallback", "exo_back_buffer", "exo_preferred_codecs",
+/**
+ * The declared screen groups in LazyColumn order — the derivation source the
+ * deep-link scroll resolver consumes (see HighlightScroll.kt): passing the
+ * same declaration the rows are built from means the scroll target can never
+ * drift from the UI. Index 0 is the always-visible player group; indices 1-3
+ * (advanced video, engine config, media segments) only compose when advanced
+ * settings are shown; 4-6 (SyncPlay, casting, DVR) always render.
+ */
+private val playbackScreenGroups: List<Set<String>> = listOf(
+    SettingsScreenGroups.playbackPlayer.itemIdSet,
+    SettingsScreenGroups.playbackAdvancedVideo.itemIdSet,
+    SettingsScreenGroups.playbackEngine.itemIdSet,
+    SettingsScreenGroups.playbackMediaSegments.itemIdSet,
+    SettingsScreenGroups.playbackSyncPlay.itemIdSet,
+    SettingsScreenGroups.playbackCasting.itemIdSet,
+    SettingsScreenGroups.playbackDvr.itemIdSet,
 )
-private val PLAYBACK_SYNCPLAY_GROUP_IDS = setOf("syncplay_join_behavior", "syncplay_tolerance", "syncplay_auto_accept_invites")
-private val PLAYBACK_CASTING_GROUP_IDS = setOf("casting_strategy", "background_casting", "preferred_renderer")
-private val PLAYBACK_DVR_GROUP_IDS = setOf("dvr_pre_padding", "dvr_post_padding", "dvr_recording_quality")
+
+/**
+ * [resolveHighlightScrollIndex]'s [rememberHighlightScrollIndex adjustForAdvanced]
+ * for this screen's LazyColumn: with advanced hidden the three advanced-only
+ * groups don't compose — their rows cannot take a highlight (`-1`) — while the
+ * three always-visible trailing groups shift up by exactly those three slots.
+ * Pure (and internal) so the contract test can pin the drift fixes against it.
+ */
+internal fun playbackAdjustForAdvanced(showAdvanced: Boolean): (Int) -> Int =
+    if (showAdvanced) {
+        { it }
+    } else {
+        { raw ->
+            when {
+                raw == 0 -> 0
+                raw <= 3 -> -1
+                else -> raw - 3
+            }
+        }
+    }
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
@@ -396,46 +421,11 @@ fun PlaybackSettingsScreen(
     )
 
     val scrollState = rememberLazyListState()
-    val scrollIndex = remember(highlightSettingId, showAdvanced) {
-        val playerGroup = listOf(
-            "player_engine", "seek_duration", "orientation", "gestures", "default_speed",
-            "hold_speed_multiplier", "default_aspect", "video_autoplay_next", "autoplay_countdown",
-            "controls_timeout", "skip_back_on_resume", "pass_out_protection", "autoplay_trailers",
-            "cinema_mode", "android_tv_watch_next", "tv_zoom_mode", "episode_browser", "playback_metadata",
-            "swipe_seek_range", "remember_brightness", "default_brightness_level", "trickplay_preview",
-            "trickplay_on_gestures", "preload_buffer", "video_cache_size", "background_audio", "keep_screen_on", "incognito_mode",
-            "show_time_remaining", "show_clock_player", "pause_on_focus_loss", "duck_on_transient_focus_loss",
-        )
-        val advancedVideo = listOf(
-            "dialogue_boost", "decoder", "audio_passthrough", "frame_rate_matching",
-            "streaming_quality", "audio_delay",
-        )
-        val engineConfig = listOf(
-            "mpv_video_output", "mpv_scaler", "mpv_debanding", "mpv_interpolation", "mpv_audio_output",
-            "mpv_audio_fallback", "mpv_buffer_size", "mpv_hwdec_override", "mpv_skip_loop_filter", "mpv_frame_drop",
-            "vlc_audio_output", "vlc_audio_time_stretch", "vlc_network_caching",
-            "vlc_skip_loop_filter", "vlc_skip_frames", "vlc_decoder_threads", "vlc_drop_late_frames",
-            "exo_video_scaling", "exo_frame_rate_strategy", "exo_skip_silence", "exo_audio_offload",
-            "exo_decoder_fallback", "exo_back_buffer", "exo_preferred_codecs",
-        )
-        val syncPlay = listOf("syncplay_join_behavior", "syncplay_tolerance", "syncplay_auto_accept_invites")
-        val casting = listOf("casting_strategy", "background_casting", "preferred_renderer")
-        val dvr = listOf("dvr_pre_padding", "dvr_post_padding", "dvr_recording_quality")
-        val mediaSegments = listOf(
-            "media_segment_intro", "media_segment_outro", "media_segment_preview",
-            "media_segment_recap", "media_segment_commercial", "media_segment_unknown",
-        )
-        when (highlightSettingId) {
-            in playerGroup -> 0
-            in advancedVideo -> if (showAdvanced) 1 else -1
-            in engineConfig -> if (showAdvanced) 2 else 1
-            in mediaSegments -> if (showAdvanced) 3 else 2
-            in syncPlay -> if (showAdvanced) 4 else 3
-            in casting -> if (showAdvanced) 5 else 4
-            in dvr -> if (showAdvanced) 6 else 5
-            else -> -1
-        }
-    }
+    val scrollIndex = rememberHighlightScrollIndex(
+        highlightSettingId,
+        playbackScreenGroups,
+        playbackAdjustForAdvanced(showAdvanced),
+    )
 
     // Phase 1 (coarse): scroll the containing group into the LazyColumn's composition window so the
     // target item is actually composed — items in off-screen groups (later sections) are otherwise
@@ -497,15 +487,20 @@ fun PlaybackSettingsScreen(
                     modifier = Modifier.padding(vertical = 8.dp),
                     initiallyExpanded = true,
                 ) {
-                    // Rows that only exist where the platform can back them
-                    // are hidden on desktop, so the expressiveListShape total
-                    // shrinks with them: orientation contributes one row
-                    // (orientation lock), touch gestures three (double-tap
-                    // seek duration, gestures toggle, gesture-indicator side).
-                    val orientationRowCount = if (settingsCapabilities.supportsScreenOrientation) 1 else 0
-                    val touchGestureRowCount = if (settingsCapabilities.supportsTouchGestures) 3 else 0
+                    // Derived from the player group declaration: the platform-
+                    // gated rows drop where the capability is missing, the TV
+                    // rows need the TV form factor, and isAdvanced rows only
+                    // render behind the advanced toggle — the declared total
+                    // tracks the rows instead of a hand-bumped count.
                     SettingsItemList(
-                        total = (if (showAdvanced) 30 else 11) - orientationRowCount - touchGestureRowCount,
+                        total = SettingsScreenGroups.playbackPlayer.items.count { item ->
+                            when (item.id) {
+                                "orientation" -> settingsCapabilities.supportsScreenOrientation
+                                "seek_duration", "gestures", "gesture_indicator_side" -> settingsCapabilities.supportsTouchGestures
+                                "android_tv_watch_next", "tv_zoom_mode" -> isTv
+                                else -> showAdvanced || !item.isAdvanced
+                            }
+                        },
                     ) {
                     val preferredPlayerTitle = stringResource(Res.string.settings_preferred_player)
                     SettingListItem(
@@ -983,9 +978,13 @@ fun PlaybackSettingsScreen(
                     title = stringResource(Res.string.settings_advanced_video),
                     summary = { stringResource(Res.string.settings_decoder_summary, preferences.decoderMode.displayName) },
                     modifier = Modifier.padding(vertical = 8.dp),
-                    initiallyExpanded = highlightSettingId in PLAYBACK_ADVANCED_GROUP_IDS,
+                    initiallyExpanded = highlightSettingId in SettingsScreenGroups.playbackAdvancedVideo.itemIdSet,
                 ) {
-                    SettingsItemList(total = 6 + (if (preferences.dialogueBoostEnabled) 1 else 0)) {
+                    SettingsItemList(
+                        total = SettingsScreenGroups.playbackAdvancedVideo.items.count { item ->
+                            item.id != "dialogue_boost_strength" || preferences.dialogueBoostEnabled
+                        },
+                    ) {
                     SettingToggleItem(
                         icon = Tabler.Outline.Microphone2,
                         title = stringResource(Res.string.settings_dialogue_boost),
@@ -1001,6 +1000,7 @@ fun PlaybackSettingsScreen(
                             title = stringResource(Res.string.settings_dialogue_boost_strength),
                             subtitle = preferences.dialogueBoostStrength.displayName,
                             trailingText = preferences.dialogueBoostStrength.displayName,
+                            highlighted = highlightSettingId == "dialogue_boost_strength",
                             onClick = {
                                 val strengths = EffectStrength.entries
                                 activePicker = pickerChip(
@@ -1142,13 +1142,18 @@ fun PlaybackSettingsScreen(
                     title = stringResource(Res.string.settings_engine_config),
                     summary = { preferences.preferredPlayer.displayName },
                     modifier = Modifier.padding(vertical = 8.dp),
-                    initiallyExpanded = highlightSettingId in PLAYBACK_ENGINE_GROUP_IDS,
+                    initiallyExpanded = highlightSettingId in SettingsScreenGroups.playbackEngine.itemIdSet,
                 ) {
                     when (preferences.preferredPlayer) {
                         PlayerType.MPV -> {
                             val mpvCfg = preferences.mpvConfig
                             val mpvDefault = MpvEngineConfig()
-                            SettingsItemList(total = 12) {
+                            // The branch's declared rows plus the one reset row —
+                            // the declared reset_engine_defaults item renders as
+                            // that row in every engine branch.
+                            SettingsItemList(
+                                total = SettingsScreenGroups.playbackEngine.items.count { it.id.startsWith("mpv_") } + 1,
+                            ) {
                             val videoOutputTitle = stringResource(Res.string.settings_video_output)
                             SettingListItem(
                                 icon = Tabler.Outline.Video,
@@ -1347,7 +1352,9 @@ fun PlaybackSettingsScreen(
                         PlayerType.LIBVLC -> {
                             val vlcCfg = preferences.libVlcConfig
                             val vlcDefault = LibVlcEngineConfig()
-                            val vlcTotal = 8
+                            // Same branch-shape as MPV: declared VLC rows (which
+                            // include vlc_video_output) plus the reset row.
+                            val vlcTotal = SettingsScreenGroups.playbackEngine.items.count { it.id.startsWith("vlc_") } + 1
                             var vlcIdx = 0
 
                             val networkCachingTitle = stringResource(Res.string.settings_network_caching)
@@ -1384,6 +1391,25 @@ fun PlaybackSettingsScreen(
                                 highlighted = highlightSettingId == "vlc_audio_time_stretch",
                                 index = vlcIdx++, count = vlcTotal,
                                 onCheckedChange = { viewModel.edit { scope -> scope.engine.setLibVlcConfig(vlcCfg.copy(audioTimeStretch = it)) } },
+                            )
+                            val vlcVideoOutputTitle = stringResource(Res.string.settings_video_output)
+                            SettingListItem(
+                                icon = Tabler.Outline.Video,
+                                title = vlcVideoOutputTitle,
+                                subtitle = "${vlcCfg.videoOutput.displayName} (${vlcCfg.videoOutput.key})",
+                                trailingText = vlcCfg.videoOutput.key,
+                                highlighted = highlightSettingId == "vlc_video_output",
+                                index = vlcIdx++, count = vlcTotal,
+                                onClick = {
+                                    activePicker = PickerState.List(
+                                        title = vlcVideoOutputTitle,
+                                        items = VlcVideoOutput.entries,
+                                        label = { it.displayName },
+                                        subtitle = { it.key },
+                                        isSelected = { it == vlcCfg.videoOutput },
+                                        onSelect = { viewModel.edit { scope -> scope.engine.setLibVlcConfig(vlcCfg.copy(videoOutput = it)) } },
+                                    )
+                                },
                             )
                             SettingListItem(
                                 icon = Tabler.Outline.Wifi,
@@ -1484,7 +1510,7 @@ fun PlaybackSettingsScreen(
                         PlayerType.EXO_PLAYER -> {
                             val exoCfg = preferences.exoPlayerConfig
                             val exoDefault = ExoPlayerEngineConfig()
-                            val exoTotal = 8
+                            val exoTotal = SettingsScreenGroups.playbackEngine.items.count { it.id.startsWith("exo_") } + 1
                             var exoIdx = 0
 
                             val videoScalingTitle = stringResource(Res.string.settings_video_scaling)
@@ -1681,9 +1707,9 @@ fun PlaybackSettingsScreen(
                     title = stringResource(Res.string.settings_syncplay),
                     summary = { stringResource(Res.string.settings_syncplay_join_summary, preferences.syncPlayJoinBehavior.displayName) },
                     modifier = Modifier.padding(vertical = 8.dp),
-                    initiallyExpanded = highlightSettingId in PLAYBACK_SYNCPLAY_GROUP_IDS,
+                    initiallyExpanded = highlightSettingId in SettingsScreenGroups.playbackSyncPlay.itemIdSet,
                 ) {
-                    val syncTotal = 3
+                    val syncTotal = SettingsScreenGroups.playbackSyncPlay.items.size
                     var syncIdx = 0
                     val joinBehaviorDescs = SyncPlayJoinBehavior.entries.associateWith {
                         when (it) {
@@ -1758,9 +1784,9 @@ fun PlaybackSettingsScreen(
                     title = stringResource(Res.string.settings_casting_dlna),
                     summary = { stringResource(Res.string.settings_casting_strategy_summary, preferences.defaultCastingStrategy.displayName) },
                     modifier = Modifier.padding(vertical = 8.dp),
-                    initiallyExpanded = highlightSettingId in PLAYBACK_CASTING_GROUP_IDS,
+                    initiallyExpanded = highlightSettingId in SettingsScreenGroups.playbackCasting.itemIdSet,
                 ) {
-                    val castTotal = 3
+                    val castTotal = SettingsScreenGroups.playbackCasting.items.size
                     var castIdx = 0
                     val castingStrategyDescs = CastingStrategy.entries.associateWith {
                         when (it) {
@@ -1827,9 +1853,9 @@ fun PlaybackSettingsScreen(
                     title = stringResource(Res.string.settings_live_tv_dvr),
                     summary = { stringResource(Res.string.settings_dvr_padding_summary, preferences.dvrPrePaddingMinutes, preferences.dvrPostPaddingMinutes) },
                     modifier = Modifier.padding(vertical = 8.dp),
-                    initiallyExpanded = highlightSettingId in PLAYBACK_DVR_GROUP_IDS,
+                    initiallyExpanded = highlightSettingId in SettingsScreenGroups.playbackDvr.itemIdSet,
                 ) {
-                    val dvrTotal = 3
+                    val dvrTotal = SettingsScreenGroups.playbackDvr.items.size
                     var dvrIdx = 0
                     val noneLabel = stringResource(Res.string.settings_none)
 

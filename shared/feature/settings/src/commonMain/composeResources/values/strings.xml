@@ -1586,6 +1586,8 @@
     <string name="ss_clear_image_cache_subtitle">Clear cached posters and images (reloads on next view)</string>
     <string name="ss_wifi_only_downloads_title">WiFi Only Downloads</string>
     <string name="ss_wifi_only_downloads_subtitle">Restricts downloads to unmetered WiFi connections</string>
+    <string name="ss_auto_delete_after_watch_title">Auto-Delete After Watching</string>
+    <string name="ss_auto_delete_after_watch_subtitle">Remove downloads once fully watched</string>
     <string name="ss_auto_delete_cache_title">Auto-delete Cache</string>
     <string name="ss_auto_delete_cache_subtitle">Automatically clear cached files on low storage threshold</string>
     <string name="ss_max_cache_size_title">Max Cache Size Limit</string>
