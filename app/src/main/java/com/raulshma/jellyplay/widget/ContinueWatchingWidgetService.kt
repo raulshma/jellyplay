@@ -33,7 +33,7 @@ import org.koin.mp.KoinPlatform
  * progress-bar/remaining-text row decisions, and the
  * `jellyfin://media/{id}` fill-in link. It is also the one factory whose
  * poster cache is keyed by the image id from
- * [WidgetImageLoader.continueWatchingPosterImageId] (the series id when the
+ * [WidgetPosterIdentity.continueWatchingPosterImageId] (the series id when the
  * row is an episode) rather than by url, so it overrides the skeleton's
  * poster pipeline instead of [WidgetGridFactory.posterUrlOf].
  *
@@ -92,7 +92,7 @@ class ContinueWatchingWidgetService : RemoteViewsService() {
         }
 
         override fun posterFor(item: MediaItem): Bitmap? =
-            posterCache[WidgetImageLoader.continueWatchingPosterImageId(item)]
+            posterCache[WidgetPosterIdentity.continueWatchingPosterImageId(item)]
 
         override fun stableIdOf(item: MediaItem): Long = item.id.hashCode().toLong()
 

@@ -110,7 +110,6 @@ fun androidAppModule(context: Context): Module = module {
     // driven off the @ApplicationScope coroutine scope).
     single {
         DownloadRecoveryInitializer(
-            context = context,
             downloadDao = get(),
             downloadEnqueuer = get(),
         )

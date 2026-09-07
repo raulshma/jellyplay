@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.startup
 
-import android.content.Context
 import android.util.Log
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
 import com.raulshma.jellyplay.core.data.repository.DownloadEnqueuer
@@ -22,7 +21,6 @@ import kotlinx.coroutines.supervisorScope
  * in-flight worker is never cancelled by a process restart.
  */
 class DownloadRecoveryInitializer (
-    private val context: Context,
     private val downloadDao: DownloadDao,
     private val downloadEnqueuer: DownloadEnqueuer,
 ) {

@@ -41,7 +41,7 @@ class SettingsViewModel(
     private val authRepository: AuthRepository,
     private val seerrRepository: SeerrRepository,
     private val adminRepository: AdminRepository,
-    appearanceStore: com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore,
+    private val advancedSettings: AdvancedSettingsGate,
     private val editor: PreferencesEditor,
     private val recentsStore: SettingsRecentsStore,
 ) : JellyPlayViewModel() {
@@ -50,8 +50,6 @@ class SettingsViewModel(
         /** JSON field name carrying the backup schema version in the envelope. */
         const val SCHEMA_VERSION_FIELD = "schemaVersion"
     }
-
-    private val advancedSettings = AdvancedSettingsGate(appearanceStore, editor)
 
     private val preferencesFlow: kotlinx.coroutines.flow.StateFlow<SettingsScreenPreferences> =
         projections.settingsScreenPreferences

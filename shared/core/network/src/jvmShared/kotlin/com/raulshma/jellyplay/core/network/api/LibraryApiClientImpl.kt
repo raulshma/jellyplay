@@ -25,7 +25,6 @@ import com.raulshma.jellyplay.core.network.library.EmptyLibraryFallback
 import com.raulshma.jellyplay.core.network.library.FavoriteFlagCache
 import com.raulshma.jellyplay.core.network.library.HomeSectionSources
 import com.raulshma.jellyplay.core.network.library.HomeSectionsFetcher
-import com.raulshma.jellyplay.core.network.library.LIST_PROJECTION_FIELDS
 import com.raulshma.jellyplay.core.network.library.SEARCH_SUGGESTIONS_FIELDS
 import com.raulshma.jellyplay.core.network.library.SEARCH_SUGGESTIONS_ITEM_TYPES
 import com.raulshma.jellyplay.core.network.library.SEARCH_SUGGESTIONS_SORT_BY
@@ -55,18 +54,6 @@ import java.util.UUID
 private val DETAIL_ITEM_FIELDS = DETAIL_PROJECTION_FIELDS.map { name ->
     requireNotNull(ItemFields.entries.firstOrNull { it.serialName == name }) {
         "ItemFields has no serial name '$name' — SDK drift vs the shared projection"
-    }
-}
-
-/**
- * Fields every library LIST projection requests, resolved once from the
- * shared commonMain wire projection ([LIST_PROJECTION_FIELDS]) — the dozen
- * hand-copied OVERVIEW + PRIMARY_IMAGE_ASPECT_RATIO pairs (plus the Genres
- * and playlists compositions on top of it) all flow from here.
- */
-private val LIST_ITEM_FIELDS = LIST_PROJECTION_FIELDS.map { name ->
-    requireNotNull(ItemFields.entries.firstOrNull { it.serialName == name }) {
-        "ItemFields has no serial name '$name' — SDK drift vs the shared list projection"
     }
 }
 
@@ -123,7 +110,7 @@ class LibraryApiClientImpl @Inject constructor(
             engine.requireApi().userLibraryApi.getLatestMedia(
                 parentId = parentId.toUUID(),
                 limit = limit,
-                fields = LIST_ITEM_FIELDS + ItemFields.GENRES,
+                fields = LIST_ITEM_FIELDS_WITH_GENRES,
             ).content ?: emptyList()
         },
     )
@@ -166,7 +153,7 @@ class LibraryApiClientImpl @Inject constructor(
                 limit = limit,
                 fields = LIST_ITEM_FIELDS,
             ).content ?: emptyList()
-            engine.run { response.toFilteredMediaItems() }
+            response.toFilteredMediaItems(engine.currentMaxParentalRating)
         }
 
     override suspend fun getNextUp(
@@ -185,7 +172,7 @@ class LibraryApiClientImpl @Inject constructor(
             nextUpDateCutoff = cutoff,
             fields = LIST_ITEM_FIELDS,
         ).content
-        engine.run { (response?.items ?: emptyList()).toFilteredMediaItems() }
+        (response?.items ?: emptyList()).toFilteredMediaItems(engine.currentMaxParentalRating)
     }
 
     override suspend fun getContinueWatching(limit: Int): Result<List<MediaItem>> = engine.apiResultWithRetry {
@@ -193,10 +180,9 @@ class LibraryApiClientImpl @Inject constructor(
             limit = limit,
             fields = LIST_ITEM_FIELDS,
         ).content
-        engine.run {
-            (response?.items ?: emptyList()).toFilteredMediaItems()
-                .distinctBy { it.id }
-        }
+        (response?.items ?: emptyList())
+            .toFilteredMediaItems(engine.currentMaxParentalRating)
+            .distinctBy { it.id }
     }
 
     override suspend fun getLibraryFolders(): Result<List<LibraryFolder>> = engine.apiResultWithRetry {
@@ -275,7 +261,7 @@ class LibraryApiClientImpl @Inject constructor(
             searchTerm = searchTerm?.takeIf { it.isNotBlank() },
             filters = itemFilters.takeIf { it.isNotEmpty() },
             minCommunityRating = filters.minRating.takeIf { it > 0f }?.toDouble(),
-            fields = LIST_ITEM_FIELDS + ItemFields.GENRES,
+            fields = LIST_ITEM_FIELDS_WITH_GENRES,
         ).content
         val rawItems = emptyLibraryFallback.resolve(
             primaryItems = response.items,
@@ -289,7 +275,7 @@ class LibraryApiClientImpl @Inject constructor(
             serverTotal = response.totalRecordCount,
         )
         SearchResult(
-            items = engine.run { rawItems.toFilteredMediaItems() },
+            items = rawItems.toFilteredMediaItems(engine.currentMaxParentalRating),
             totalRecordCount = totalCount,
             startIndex = startIndex,
         )
@@ -390,9 +376,7 @@ class LibraryApiClientImpl @Inject constructor(
             itemId = itemId.toUUID(),
             userId = userId,
         ).content
-        engine.run {
-            (response?.items ?: emptyList()).toFilteredMediaItems()
-        }
+        (response?.items ?: emptyList()).toFilteredMediaItems(engine.currentMaxParentalRating)
     }
 
     override suspend fun getSpecialFeatures(itemId: String): Result<List<MediaItem>> = engine.apiResultWithRetry {
@@ -405,9 +389,7 @@ class LibraryApiClientImpl @Inject constructor(
             itemId = itemId.toUUID(),
             userId = userId,
         ).content
-        engine.run {
-            (response ?: emptyList()).toFilteredMediaItems()
-        }
+        (response ?: emptyList()).toFilteredMediaItems(engine.currentMaxParentalRating)
     }
 
     override suspend fun getSearchHints(
@@ -425,7 +407,7 @@ class LibraryApiClientImpl @Inject constructor(
             fields = LIST_ITEM_FIELDS,
         ).content
         SearchResult(
-            items = engine.run { response.items.toFilteredMediaItems() },
+            items = response.items.toFilteredMediaItems(engine.currentMaxParentalRating),
             totalRecordCount = response.totalRecordCount,
             startIndex = startIndex,
         )
@@ -442,7 +424,7 @@ class LibraryApiClientImpl @Inject constructor(
             fields = SEARCH_SUGGESTIONS_PROJECTION,
         ).content
         SearchResult(
-            items = engine.run { response.items.toFilteredMediaItems() },
+            items = response.items.toFilteredMediaItems(engine.currentMaxParentalRating),
             totalRecordCount = response.totalRecordCount,
             startIndex = 0,
         )
@@ -496,7 +478,7 @@ class LibraryApiClientImpl @Inject constructor(
             recursive = true,
         ).content
         SearchResult(
-            items = engine.run { response.items.toFilteredMediaItems() },
+            items = response.items.toFilteredMediaItems(engine.currentMaxParentalRating),
             totalRecordCount = response.totalRecordCount,
             startIndex = startIndex,
         )
@@ -534,7 +516,7 @@ class LibraryApiClientImpl @Inject constructor(
             fields = LIST_ITEM_FIELDS,
         ).content
         SearchResult(
-            items = engine.run { response.items.toFilteredMediaItems() },
+            items = response.items.toFilteredMediaItems(engine.currentMaxParentalRating),
             totalRecordCount = response.totalRecordCount,
             startIndex = startIndex,
         )
@@ -549,7 +531,7 @@ class LibraryApiClientImpl @Inject constructor(
             sortBy = listOf(ItemSortBy.SORT_NAME),
             fields = LIST_ITEM_FIELDS,
         ).content
-        engine.run { response.items.toFilteredMediaItems() }
+        response.items.toFilteredMediaItems(engine.currentMaxParentalRating)
     }
 
     override suspend fun getAlbumTracks(albumId: String): Result<List<MediaItem>> = engine.apiResultWithRetry {
@@ -561,31 +543,27 @@ class LibraryApiClientImpl @Inject constructor(
             sortOrder = listOf(SortOrder.ASCENDING),
             fields = LIST_ITEM_FIELDS,
         ).content
-        engine.run { response.items.toFilteredMediaItems() }
+        response.items.toFilteredMediaItems(engine.currentMaxParentalRating)
     }
 
     override suspend fun getSimilarItems(itemId: String, limit: Int): Result<List<MediaItem>> =
         engine.apiResultWithRetry {
-            engine.run {
-                engine.requireApi().libraryApi.getSimilarItems(
-                    itemId = itemId.toUUID(),
-                    limit = limit,
-                ).content.items.toFilteredMediaItems()
-            }
+            engine.requireApi().libraryApi.getSimilarItems(
+                itemId = itemId.toUUID(),
+                limit = limit,
+            ).content.items.toFilteredMediaItems(engine.currentMaxParentalRating)
         }
 
     override suspend fun getInstantMix(itemId: String, limit: Int): Result<List<MediaItem>> =
         engine.apiResultWithRetry {
             val userId = engine.currentUserId()?.toUUID()
                 ?: return@apiResultWithRetry emptyList()
-            engine.run {
-                engine.requireApi().instantMixApi.getInstantMixFromItem(
-                    userId = userId,
-                    itemId = itemId.toUUID(),
-                    limit = limit,
-                    fields = LIST_ITEM_FIELDS,
-                ).content.items.toFilteredMediaItems()
-            }
+            engine.requireApi().instantMixApi.getInstantMixFromItem(
+                userId = userId,
+                itemId = itemId.toUUID(),
+                limit = limit,
+                fields = LIST_ITEM_FIELDS,
+            ).content.items.toFilteredMediaItems(engine.currentMaxParentalRating)
         }
 
     override suspend fun getItemsByPerson(personId: String, limit: Int): Result<List<MediaItem>> =
@@ -596,7 +574,7 @@ class LibraryApiClientImpl @Inject constructor(
                 recursive = true,
                 fields = LIST_ITEM_FIELDS,
             ).content
-            engine.run { response.items.toFilteredMediaItems() }
+            response.items.toFilteredMediaItems(engine.currentMaxParentalRating)
         }
 
     override suspend fun getThemeSongs(itemId: String): Result<List<MediaItem>> =
@@ -604,34 +582,28 @@ class LibraryApiClientImpl @Inject constructor(
             val response = engine.requireApi().libraryApi.getThemeSongs(
                 itemId = itemId.toUUID(),
             ).content
-            engine.run { response.items.toFilteredMediaItems() }
+            response.items.toFilteredMediaItems(engine.currentMaxParentalRating)
         }
 
     override suspend fun getSeasons(seriesId: String): Result<List<MediaItem>> = engine.apiResultWithRetry {
-        engine.run {
-            engine.requireApi().tvShowsApi.getSeasons(
-                seriesId = seriesId.toUUID(),
-            ).content.items.toFilteredMediaItems()
-        }
+        engine.requireApi().tvShowsApi.getSeasons(
+            seriesId = seriesId.toUUID(),
+        ).content.items.toFilteredMediaItems(engine.currentMaxParentalRating)
     }
 
     override suspend fun getEpisodes(seriesId: String, seasonId: String): Result<List<MediaItem>> =
         engine.apiResultWithRetry {
-            engine.run {
-                engine.requireApi().tvShowsApi.getEpisodes(
-                    seriesId = seriesId.toUUID(),
-                    seasonId = seasonId.toUUID(),
-                ).content.items.toFilteredMediaItems()
-            }
+            engine.requireApi().tvShowsApi.getEpisodes(
+                seriesId = seriesId.toUUID(),
+                seasonId = seasonId.toUUID(),
+            ).content.items.toFilteredMediaItems(engine.currentMaxParentalRating)
         }
 
     override suspend fun getAllEpisodes(seriesId: String): Result<List<MediaItem>> =
         engine.apiResultWithRetry {
-            engine.run {
-                engine.requireApi().tvShowsApi.getEpisodes(
-                    seriesId = seriesId.toUUID(),
-                ).content.items.toFilteredMediaItems()
-            }
+            engine.requireApi().tvShowsApi.getEpisodes(
+                seriesId = seriesId.toUUID(),
+            ).content.items.toFilteredMediaItems(engine.currentMaxParentalRating)
         }
 
     override suspend fun getCollectionItems(
@@ -647,7 +619,7 @@ class LibraryApiClientImpl @Inject constructor(
             fields = LIST_ITEM_FIELDS,
         ).content
         SearchResult(
-            items = engine.run { response.items.toFilteredMediaItems() },
+            items = response.items.toFilteredMediaItems(engine.currentMaxParentalRating),
             totalRecordCount = response.totalRecordCount,
             startIndex = startIndex,
         )
@@ -724,7 +696,7 @@ class LibraryApiClientImpl @Inject constructor(
             fields = LIST_ITEM_FIELDS,
         ).content
         SearchResult(
-            items = engine.run { response.items.toFilteredMediaItems() },
+            items = response.items.toFilteredMediaItems(engine.currentMaxParentalRating),
             totalRecordCount = response.totalRecordCount,
             startIndex = startIndex,
         )

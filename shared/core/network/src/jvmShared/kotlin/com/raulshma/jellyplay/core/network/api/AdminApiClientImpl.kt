@@ -30,51 +30,36 @@ class AdminApiClientImpl @Inject constructor(
     private val itemCountsCache = TtlCache<ItemCounts>(maxSize = 4, ttlMs = ITEM_COUNTS_TTL_MS)
 
     override suspend fun getSystemInfo(): Result<SystemInfo> = engine.apiResultWithRetry {
-        systemInfoCache.get(KEY_SYSTEM_INFO)?.let { return@apiResultWithRetry it }
-        val dto = engine.requireApi().systemApi.getSystemInfo().content
-        val info = SystemInfo(
-            serverName = dto.serverName ?: "",
-            version = dto.version ?: "",
-            productName = dto.productName ?: "",
-            id = dto.id?.toString() ?: "",
-            localAddress = dto.localAddress ?: "",
-            wanAddress = "",
-            operatingSystem = dto.operatingSystem ?: "",
-            operatingSystemDisplayName = dto.operatingSystemDisplayName ?: "",
-            hasPendingRestart = dto.hasPendingRestart,
-            isShuttingDown = dto.isShuttingDown,
-            startupWizardCompleted = dto.startupWizardCompleted ?: true,
-            webSocketPortNumber = dto.webSocketPortNumber,
-            packageName = dto.packageName ?: "",
-            canSelfRestart = dto.canSelfRestart ?: false,
-            canLaunchWebBrowser = dto.canLaunchWebBrowser ?: false,
-            transcodingTempPath = dto.transcodingTempPath ?: "",
-            cachePath = dto.cachePath ?: "",
-            logPath = dto.logPath ?: "",
-            internalMetadataPath = dto.internalMetadataPath ?: "",
-        )
-        systemInfoCache.put(KEY_SYSTEM_INFO, info)
-        info
+        systemInfoCache.getOrPut(KEY_SYSTEM_INFO) {
+            val dto = engine.requireApi().systemApi.getSystemInfo().content
+            SystemInfo(
+                serverName = dto.serverName ?: "",
+                version = dto.version ?: "",
+                productName = dto.productName ?: "",
+                id = dto.id?.toString() ?: "",
+                localAddress = dto.localAddress ?: "",
+                wanAddress = "",
+                operatingSystem = dto.operatingSystem ?: "",
+                operatingSystemDisplayName = dto.operatingSystemDisplayName ?: "",
+                hasPendingRestart = dto.hasPendingRestart,
+                isShuttingDown = dto.isShuttingDown,
+                startupWizardCompleted = dto.startupWizardCompleted ?: true,
+                webSocketPortNumber = dto.webSocketPortNumber,
+                packageName = dto.packageName ?: "",
+                canSelfRestart = dto.canSelfRestart ?: false,
+                canLaunchWebBrowser = dto.canLaunchWebBrowser ?: false,
+                transcodingTempPath = dto.transcodingTempPath ?: "",
+                cachePath = dto.cachePath ?: "",
+                logPath = dto.logPath ?: "",
+                internalMetadataPath = dto.internalMetadataPath ?: "",
+            )
+        }
     }
 
     override suspend fun getItemCounts(): Result<ItemCounts> = engine.apiResultWithRetry {
-        itemCountsCache.get(KEY_ITEM_COUNTS)?.let { return@apiResultWithRetry it }
-        val dto = engine.requireApi().libraryApi.getItemCounts().content
-        val counts = ItemCounts(
-            movieCount = dto.movieCount.toLong(),
-            seriesCount = dto.seriesCount.toLong(),
-            episodeCount = dto.episodeCount.toLong(),
-            albumCount = dto.albumCount.toLong(),
-            songCount = dto.songCount.toLong(),
-            musicVideoCount = dto.musicVideoCount.toLong(),
-            bookCount = dto.bookCount.toLong(),
-            totalCount = dto.movieCount.toLong() + dto.seriesCount.toLong() +
-                    dto.episodeCount.toLong() + dto.albumCount.toLong() +
-                    dto.songCount.toLong() + dto.musicVideoCount.toLong() +
-                    dto.bookCount.toLong(),
-        )
-        itemCountsCache.put(KEY_ITEM_COUNTS, counts)
-        counts
+        itemCountsCache.getOrPut(KEY_ITEM_COUNTS) {
+            engine.requireApi().libraryApi.getItemCounts().content.toItemCounts()
+        }
     }
 
     override suspend fun restartServer(): Result<Unit> = engine.apiResultWithRetry {

@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.datastore.PreferencesEditor
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore
 import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
+import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleLanguageStore
 import com.raulshma.jellyplay.core.model.LanguagePreferences
 import com.raulshma.jellyplay.core.model.SubtitleStyle
@@ -31,10 +32,12 @@ import kotlin.test.assertSame
 /**
  * Pins the Language/subtitle preference-mirror wiring (LibraryLayout jvmTest
  * pattern): the screen's state is the [PreferenceProjections.languagePreferences]
- * slice, subtitle-style writes route to [PreferencesEditor], and — the
- * load-bearing one — `setAppLanguage` persists the choice through the subtitle
- * store **and then** applies the platform locale via the [AppLocaleSetter]
- * seam, in that order within the same launched job.
+ * slice, every write persists through the owning store inside the VM's
+ * `edit { }` command (captured and replayed against a stub scope, since a
+ * relaxed editor mock never runs the block), and — the load-bearing one —
+ * `setAppLanguage` persists the choice through the subtitle store **and then**
+ * applies the platform locale via the [AppLocaleSetter] seam, in that order
+ * within the same launched job.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class LanguageSettingsViewModelTest {
@@ -48,6 +51,10 @@ class LanguageSettingsViewModelTest {
     private lateinit var editor: PreferencesEditor
     private lateinit var editScope: PreferencesEditScope
     private lateinit var subtitleStore: SubtitleLanguageStore
+    private lateinit var playbackStore: PlaybackStore
+
+    /** Every `edit { }` block the VM hands the editor, in call order. */
+    private val editBlocks = mutableListOf<suspend PreferencesEditScope.() -> Unit>()
 
     @BeforeTest
     fun setUp() {
@@ -59,9 +66,15 @@ class LanguageSettingsViewModelTest {
         editor = mockk(relaxed = true)
         editScope = mockk(relaxed = true)
         subtitleStore = mockk(relaxed = true)
+        playbackStore = mockk(relaxed = true)
+        editBlocks.clear()
         every { projections.languagePreferences } returns MutableStateFlow(LanguagePreferences())
         every { appearanceStore.showAdvancedSettings } returns MutableStateFlow(false)
         every { editScope.subtitle } returns subtitleStore
+        every { editScope.playback } returns playbackStore
+        // List capture: blocks append across calls (the per-test slot in
+        // [captureEdit] re-stubs over this when a suite wants a single block).
+        every { editor.edit(capture(editBlocks)) } returns mockk<Job>()
     }
 
     @AfterTest
@@ -75,7 +88,13 @@ class LanguageSettingsViewModelTest {
     }
 
     private fun viewModel() =
-        LanguageSettingsViewModel(appLocaleSetter, store, projections, appearanceStore, editor)
+        LanguageSettingsViewModel(
+            appLocaleSetter,
+            store,
+            projections,
+            AdvancedSettingsGate(appearanceStore, editor),
+            editor,
+        )
 
     @Test
     fun `preferences exposes the language projection flow`() = runTest {
@@ -89,28 +108,38 @@ class LanguageSettingsViewModelTest {
     }
 
     @Test
-    fun `subtitle language and style delegate to the editor named setters`() = runTest {
+    fun `subtitle writes persist through the subtitle store inside edit`() = runTest {
         val viewModel = viewModel()
         val style = SubtitleStyle(applyCustomStyle = true, fontSize = 30)
 
-        viewModel.setPreferredSubtitleLanguage("en")
-        viewModel.setSubtitleStyle(style)
+        viewModel.edit { it.subtitle.setPreferredSubtitleLanguage("en") }
+        viewModel.edit { it.subtitle.setPreferredAudioLanguage("ja") }
+        viewModel.edit { it.subtitle.setSubtitleStyle(style) }
+        viewModel.edit { it.subtitle.setSubtitlesForcedOnly(true) }
+        viewModel.edit { it.subtitle.setHighContrastSubtitles(true) }
+        viewModel.edit { it.subtitle.setHdrSubtitleStyleEnabled(true) }
+        viewModel.edit { it.subtitle.setHdrSubtitleStyle(style) }
         advanceUntilIdle()
+        editBlocks.forEach { it.invoke(editScope) }
 
-        verify(exactly = 1) { editor.setPreferredSubtitleLanguage("en") }
-        verify(exactly = 1) { editor.setSubtitleStyle(style) }
+        coVerify(exactly = 1) { subtitleStore.setPreferredSubtitleLanguage("en") }
+        coVerify(exactly = 1) { subtitleStore.setPreferredAudioLanguage("ja") }
+        coVerify(exactly = 1) { subtitleStore.setSubtitleStyle(style) }
+        coVerify(exactly = 1) { subtitleStore.setSubtitlesForcedOnly(true) }
+        coVerify(exactly = 1) { subtitleStore.setHighContrastSubtitles(true) }
+        coVerify(exactly = 1) { subtitleStore.setHdrSubtitleStyleEnabled(true) }
+        coVerify(exactly = 1) { subtitleStore.setHdrSubtitleStyle(style) }
     }
 
     @Test
-    fun `preferred audio language persists through the subtitle store`() = runTest {
+    fun `pgs direct play persists through the playback store inside edit`() = runTest {
         val viewModel = viewModel()
-        val edit = captureEdit()
 
-        viewModel.setPreferredAudioLanguage("ja")
+        viewModel.edit { it.playback.setPgsSubtitleDirectPlay(true) }
         advanceUntilIdle()
-        edit.captured.invoke(editScope)
+        editBlocks.forEach { it.invoke(editScope) }
 
-        coVerify(exactly = 1) { subtitleStore.setPreferredAudioLanguage("ja") }
+        coVerify(exactly = 1) { playbackStore.setPgsSubtitleDirectPlay(true) }
     }
 
     @Test

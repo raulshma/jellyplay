@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.widget
 
+import com.raulshma.jellyplay.core.model.WidgetConfig
 import com.raulshma.jellyplay.core.ui.components.formatDurationMsNoHours
 
 /**
@@ -73,6 +74,42 @@ internal fun responsiveNowPlayingLayout(widthDp: Int, heightDp: Int): NowPlaying
         showPlayPause = true,
     )
 }
+
+/**
+ * Final artwork/progress visibility for one full push after the per-widget
+ * config toggles fold onto the responsive ladder: a toggled-off row stays
+ * hidden even when the ladder would show it (the config is the user's
+ * explicit word; the ladder only re-arranges). Covers the two views the
+ * ladder never touches (backdrop, progress bar) so the config pass is one
+ * decision.
+ */
+internal data class NowPlayingConfigFold(
+    val showAlbumArt: Boolean,
+    val showBackdrop: Boolean,
+    val showProgressContainer: Boolean,
+    val showProgressBar: Boolean,
+    val showPosition: Boolean,
+)
+
+/**
+ * The config fold for a full push. `null` [layout] models the
+ * unavailable-options pass where no ladder ran at all — the widget's XML
+ * defaults (visible) stand in for the ladder, and the config toggles still
+ * apply. The empty player state keeps the backdrop hidden regardless of the
+ * artwork toggle — the backdrop is a top-level view behind the empty-state
+ * text, and the pre-renderer paths never re-showed it there.
+ */
+internal fun nowPlayingConfigFold(
+    layout: NowPlayingWidgetLayout?,
+    config: WidgetConfig,
+    isEmptyState: Boolean,
+): NowPlayingConfigFold = NowPlayingConfigFold(
+    showAlbumArt = (layout?.showAlbumArt ?: true) && config.nowPlayingShowArtwork,
+    showBackdrop = config.nowPlayingShowArtwork && !isEmptyState,
+    showProgressContainer = (layout?.showProgressContainer ?: true) && config.nowPlayingShowProgress,
+    showProgressBar = config.nowPlayingShowProgress,
+    showPosition = (layout?.showPosition ?: true) && config.nowPlayingShowProgress,
+)
 
 /**
  * The position label: `cur / total` while playing, `Paused · cur / total`

@@ -21,7 +21,11 @@ import kotlin.test.assertEquals
  *     entirely;
  *  4. an empty repository URL is never cached (a later login/server change
  *     must be able to start producing URLs);
- *  5. poster/backdrop/chapter cache keys never collide.
+ *  5. poster/backdrop/chapter cache keys never collide;
+ *  6. the interface's tag-guard default ([ImageUrlProvider.getImageUrlOrNull]
+ *     — inherited, not overridden): a null tag is empty with NO repository
+ *     call, any tag delegates to [ImageUrlProvider.getImageUrl] at its
+ *     default width — the fold the Live TV ViewModels formerly hand-copied.
  */
 class ImageUrlProviderImplTest {
 
@@ -108,6 +112,24 @@ class ImageUrlProviderImplTest {
 
         assertEquals("https://s/poster", provider.getImageUrl(ITEM))
         assertEquals("https://s/backdrop", provider.getBackdropUrl(ITEM, maxWidth = 400))
+    }
+
+    // ── the interface's tag-guard default (inherited, not overridden) ──────
+
+    @Test
+    fun `a null image tag yields the empty string without touching the repository`() {
+        assertEquals("", provider.getImageUrlOrNull(ITEM, null))
+
+        verify(exactly = 0) { playbackRepository.getImageUrl(any(), any(), any()) }
+    }
+
+    @Test
+    fun `any image tag delegates to getImageUrl at the default width`() {
+        every { playbackRepository.getImageUrl(ITEM, "Primary", 400) } returns "https://s/p400"
+
+        assertEquals("https://s/p400", provider.getImageUrlOrNull(ITEM, "tag"))
+
+        verify(exactly = 1) { playbackRepository.getImageUrl(ITEM, "Primary", 400) }
     }
 
     private companion object {

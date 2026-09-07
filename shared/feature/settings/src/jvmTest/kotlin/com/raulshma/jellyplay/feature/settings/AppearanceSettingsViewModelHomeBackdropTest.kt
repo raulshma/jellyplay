@@ -73,7 +73,7 @@ class AppearanceSettingsViewModelHomeBackdropTest {
 
     @Test
     fun `setHomeBackdropEnabled persists through the homeDiscovery store`() = runTest {
-        val viewModel = AppearanceSettingsViewModel(store, projections, appearanceStore, editor)
+        val viewModel = AppearanceSettingsViewModel(store, projections, AdvancedSettingsGate(appearanceStore, editor), editor)
 
         viewModel.edit { it.homeDiscovery.setHomeBackdropEnabled(false) }
         editBlocks.forEach { it.invoke(editScope) }

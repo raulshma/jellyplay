@@ -37,7 +37,7 @@ data class StorageBreakdown(
  */
 class StorageSettingsViewModel(
     private val projections: com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections,
-    private val appearanceStore: com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore,
+    private val advancedSettings: AdvancedSettingsGate,
     private val editor: PreferencesEditor,
     private val autoDownloadSync: AutoDownloadSync,
     private val storageAreas: StorageAreas,
@@ -66,8 +66,6 @@ class StorageSettingsViewModel(
             storageMounts = mounts
         }
     }
-
-    private val advancedSettings = AdvancedSettingsGate(appearanceStore, editor)
 
     val showAdvancedSettings: StateFlow<Boolean> = advancedSettings.showAdvancedSettings
 

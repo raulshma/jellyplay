@@ -57,9 +57,8 @@ class SeerrRecommendationsWidgetWorkerTest {
     fun setUp() {
         every { seerrPreferencesStore.preferences } returns seerrPreferences
         every { widgetDataStore.widgetConfig } returns widgetConfig
-        // The persist helper reads the current snapshot/version before writing.
+        // The persist helper reads the current snapshot before writing.
         every { widgetDataStore.seerrWidgetItems } returns MutableStateFlow(emptyList())
-        every { widgetDataStore.seerrWidgetVersion } returns MutableStateFlow(0L)
     }
 
     private fun createWorker() = SeerrRecommendationsWidgetWorker(
@@ -93,7 +92,7 @@ class SeerrRecommendationsWidgetWorkerTest {
 
         assertTrue(result is WorkResult.Success)
         coVerify(exactly = 0) { seerrRepository.getTrending(any()) }
-        coVerify(exactly = 0) { widgetDataStore.setSeerrWidgetItems(any(), any(), any()) }
+        coVerify(exactly = 0) { widgetDataStore.setSeerrWidgetItems(any()) }
     }
 
     @Test
@@ -108,7 +107,7 @@ class SeerrRecommendationsWidgetWorkerTest {
 
         assertTrue(result is WorkResult.Success)
         val items = slot<List<com.raulshma.jellyplay.core.model.SeerrWidgetItem>>()
-        coVerify(exactly = 1) { widgetDataStore.setSeerrWidgetItems(capture(items), any(), any()) }
+        coVerify(exactly = 1) { widgetDataStore.setSeerrWidgetItems(capture(items)) }
         val persisted = items.captured
         assertEquals(9, persisted.size)
         assertEquals(1, persisted.first().tmdbId)
@@ -134,7 +133,7 @@ class SeerrRecommendationsWidgetWorkerTest {
         createWorker().doWork()
 
         val items = slot<List<com.raulshma.jellyplay.core.model.SeerrWidgetItem>>()
-        coVerify(exactly = 1) { widgetDataStore.setSeerrWidgetItems(capture(items), any(), any()) }
+        coVerify(exactly = 1) { widgetDataStore.setSeerrWidgetItems(capture(items)) }
         assertEquals(2, items.captured.size)
         val movie = items.captured[0]
         assertEquals("Title 1", movie.title)
@@ -186,7 +185,7 @@ class SeerrRecommendationsWidgetWorkerTest {
         val result = createWorker().doWork()
 
         assertTrue(result is WorkResult.Success)
-        coVerify(exactly = 0) { widgetDataStore.setSeerrWidgetItems(any(), any(), any()) }
+        coVerify(exactly = 0) { widgetDataStore.setSeerrWidgetItems(any()) }
     }
 
     @Test
@@ -209,6 +208,6 @@ class SeerrRecommendationsWidgetWorkerTest {
         val result = createWorker().doWork()
 
         assertTrue(result is WorkResult.Success)
-        coVerify(exactly = 0) { widgetDataStore.setSeerrWidgetItems(any(), any(), any()) }
+        coVerify(exactly = 0) { widgetDataStore.setSeerrWidgetItems(any()) }
     }
 }

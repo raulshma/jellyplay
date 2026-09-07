@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.livetv.programs
 
 import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
+import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.core.model.ProgramFilters
 import com.raulshma.jellyplay.feature.livetv.components.RecordDialogState
@@ -18,6 +19,8 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import java.time.LocalDate
+import java.time.ZoneId
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -36,13 +39,16 @@ class ProgramsViewModelTest {
     private lateinit var imageUrlProvider: ImageUrlProvider
     private lateinit var viewModel: ProgramsViewModel
 
+    /** The fake clock behind the full-render throttle; tests move [FakeTimeSource.nowMs] across its boundary. */
+    private val fakeTimeSource = FakeTimeSource()
+
     @BeforeTest
     fun setUp() {
         Dispatchers.setMain(mainDispatcher)
         mediaRepository = mockk(relaxed = true)
         imageUrlProvider = mockk(relaxed = true)
         coEvery { mediaRepository.getRecommendedPrograms(any(), any()) } returns Result.success(emptyList())
-        viewModel = ProgramsViewModel(mediaRepository, imageUrlProvider)
+        viewModel = ProgramsViewModel(mediaRepository, imageUrlProvider, fakeTimeSource)
     }
 
     @AfterTest
@@ -137,7 +143,7 @@ class ProgramsViewModelTest {
         coEvery {
             mediaRepository.getRecommendedPrograms(match<ProgramFilters> { it.isSeries == true && it.hasAired == false }, any())
         } returns Result.success(shows)
-        viewModel = ProgramsViewModel(mediaRepository, imageUrlProvider)
+        viewModel = ProgramsViewModel(mediaRepository, imageUrlProvider, fakeTimeSource)
         advanceUntilIdle()
         assertEquals(2, viewModel.uiState.value.rows.size)
 
@@ -164,6 +170,32 @@ class ProgramsViewModelTest {
         assertFalse(viewModel.uiState.value.isLoading)
         // The throttled reload added no category queries (initial render only).
         coVerify(exactly = 0) {
+            mediaRepository.getRecommendedPrograms(match<ProgramFilters> { it.isSeries == true }, any())
+        }
+    }
+
+    @Test
+    fun full_render_throttle_boundary_is_strict_at_the_5_minute_mark() = runTest(mainDispatcher) {
+        viewModel = ProgramsViewModel(mediaRepository, imageUrlProvider, fakeTimeSource)
+        advanceUntilIdle()
+        clearMocks(mediaRepository, answers = false)
+
+        // Exactly 5:00.000 after the init full render (which stamped the fake
+        // epoch) → the strict `>` keeps the reload THROTTLED (no category
+        // queries).
+        fakeTimeSource.nowMs = BOOT_MS + 5 * 60 * 1000L
+        viewModel.load()
+        advanceUntilIdle()
+        coVerify(exactly = 0) {
+            mediaRepository.getRecommendedPrograms(match<ProgramFilters> { it.isSeries == true }, any())
+        }
+
+        // The throttled reload re-stamped the clock, so the full render lands
+        // one virtual ms past the NEXT 5-minute boundary.
+        fakeTimeSource.nowMs = BOOT_MS + 2 * 5 * 60 * 1000L + 1
+        viewModel.load()
+        advanceUntilIdle()
+        coVerify(exactly = 1) {
             mediaRepository.getRecommendedPrograms(match<ProgramFilters> { it.isSeries == true }, any())
         }
     }
@@ -252,20 +284,42 @@ class ProgramsViewModelTest {
     }
 
     // ── Image url tag quirk (same as channels/recordings) ────────────────────
+    // The null-tag policy itself lives on the interface default now (pinned
+    // in ImageUrlProviderImplTest); these pin the VM forwarding BOTH args
+    // through it instead of re-deciding the fold.
 
     @Test
-    fun getImageUrl_without_a_tag_returns_empty_without_touching_the_provider() {
+    fun getImageUrl_forwards_the_null_tag_to_the_interface_fold() {
+        every { imageUrlProvider.getImageUrlOrNull("p1", null) } returns ""
+
         assertEquals("", viewModel.getImageUrl("p1", null))
-        verify(exactly = 0) { imageUrlProvider.getImageUrl(any()) }
+
+        verify(exactly = 1) { imageUrlProvider.getImageUrlOrNull("p1", null) }
     }
 
     @Test
-    fun getImageUrl_with_a_tag_delegates_to_the_provider() {
-        every { imageUrlProvider.getImageUrl("p1") } returns "http://img/p1"
+    fun getImageUrl_forwards_a_present_tag_to_the_interface_fold() {
+        every { imageUrlProvider.getImageUrlOrNull("p1", "tag") } returns "http://img/p1"
 
         assertEquals("http://img/p1", viewModel.getImageUrl("p1", "tag"))
 
-        verify(exactly = 1) { imageUrlProvider.getImageUrl("p1") }
+        verify(exactly = 1) { imageUrlProvider.getImageUrlOrNull("p1", "tag") }
+    }
+
+    /**
+     * Controllable [TimeSource] on a fixed epoch well past the zero start of
+     * the throttle's lastFullRender stamp (the HomeRefresher fake idiom) —
+     * the init load is a full render, and tests move [nowMs] across the
+     * 5-minute boundary relative to [BOOT_MS].
+     */
+    private class FakeTimeSource(var nowMs: Long = BOOT_MS) : TimeSource {
+        override fun nowEpochMillis(): Long = nowMs
+        override fun nowElapsedRealtimeMillis(): Long = nowMs
+        override fun today(zone: ZoneId): LocalDate = LocalDate.of(2026, 1, 1)
+    }
+
+    private companion object {
+        const val BOOT_MS: Long = 1_000_000L
     }
 
     private fun sampleProgram(

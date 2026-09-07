@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.dp
 import org.koin.compose.viewmodel.koinViewModel
 import com.raulshma.jellyplay.core.model.AudioCacheNetworkPolicy
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
+import com.raulshma.jellyplay.core.model.AudioPreferences
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.ReverbPreset
 import com.raulshma.jellyplay.core.model.ChannelMixMode
@@ -134,6 +135,44 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_volu
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_volume_boost_gain_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_volume_normalization
 
+/**
+ * The audio group's `SettingsItemList(total = …)` row count, derived from the
+ * [SettingsScreenGroups.audio] declaration (the Playback screen's landed
+ * shape): non-advanced rows always render; an advanced row renders only
+ * behind the advanced toggle — and the effect-dependent strength rows (plus
+ * the replaygain pre-amp and the equalizer preset) only while their parent
+ * effect is enabled. The dialogue-boost pair renders inside this screen's
+ * equalizer block too, but its declaration lives with the playback
+ * advanced-video group (both screens render the shared audio-effects rows),
+ * so it is counted from that group's declaration: the toggle rides
+ * `equalizerEnabled`, the strength row the dialogue-boost toggle itself.
+ *
+ * Pure (and internal) so the contract test can pin each conditional against
+ * the declaration.
+ */
+internal fun audioScreenRowTotal(
+    showAdvanced: Boolean,
+    preferences: AudioPreferences,
+): Int = SettingsScreenGroups.audio.items.count { item ->
+    !item.isAdvanced || (showAdvanced && when (item.id) {
+        "replaygain_preamp" -> preferences.audioNormalizationMode == AudioNormalizationMode.TRACK ||
+            preferences.audioNormalizationMode == AudioNormalizationMode.ALBUM
+        "equalizer_preset" -> preferences.equalizerEnabled
+        "night_mode_strength" -> preferences.nightModeEnabled
+        "bass_boost_strength" -> preferences.bassBoostEnabled
+        "virtualizer_strength" -> preferences.virtualizerEnabled
+        "volume_boost_gain" -> preferences.volumeBoostEnabled
+        "channel_mix_mode" -> preferences.channelMixEnabled
+        else -> true
+    })
+} + SettingsScreenGroups.playbackAdvancedVideo.items.count { item ->
+    when (item.id) {
+        "dialogue_boost" -> showAdvanced && preferences.equalizerEnabled
+        "dialogue_boost_strength" -> showAdvanced && preferences.dialogueBoostEnabled
+        else -> false
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun AudioSettingsScreen(
@@ -196,30 +235,7 @@ fun AudioSettingsScreen(
                     modifier = Modifier.padding(vertical = 8.dp),
                     initiallyExpanded = true,
                 ) {
-                    val total = run {
-                        var c = 5 // Default Speed, Auto-play Next, Visualizer, Sleep Timer, Audio Description
-                        if (showAdvanced) {
-                            c += 7 // Night Volume, Night Gain, Skip Prev, Gapless, Crossfade, Preload, Normalization
-                            if (preferences.audioNormalizationMode == AudioNormalizationMode.TRACK ||
-                                preferences.audioNormalizationMode == AudioNormalizationMode.ALBUM) c++ // Pre-Amp
-                            c += 1 // Equalizer toggle
-                            if (preferences.equalizerEnabled) c += 2 // Equalizer Preset, Dialogue Boost toggle
-                            if (preferences.dialogueBoostEnabled) c++ // Dialogue Boost Strength
-                            c += 1 // Night Mode toggle
-                            if (preferences.nightModeEnabled) c++ // Night Mode Strength
-                            c += 1 // Bass Boost toggle
-                            if (preferences.bassBoostEnabled) c++ // Bass Boost Strength
-                            c += 1 // Virtualizer toggle
-                            if (preferences.virtualizerEnabled) c++ // Virtualizer Strength
-                            c += 1 // Volume Boost toggle
-                            if (preferences.volumeBoostEnabled) c++ // Volume Boost Gain
-                            c += 5 // Reverb, Auto-EQ, Channel Mix toggle, L/R Balance, Pitch Shift
-                            if (preferences.channelMixEnabled) c++ // Channel Mix Mode
-                        }
-                        c
-                    }
-
-                    SettingsItemList(total = total) {
+                    SettingsItemList(total = audioScreenRowTotal(showAdvanced, preferences)) {
                     val audioDefaultSpeedTitle = stringResource(Res.string.settings_audio_default_speed)
                     SettingListItem(
                         icon = Tabler.Outline.Gauge,

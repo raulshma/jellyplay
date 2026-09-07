@@ -2,7 +2,6 @@ package com.raulshma.jellyplay.core.datastore.widget
 
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.edit
 import com.raulshma.jellyplay.core.datastore.ParsedCache
@@ -14,7 +13,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
@@ -76,25 +74,8 @@ class WidgetDataStore constructor(
     val libraryWidgetItems: StateFlow<List<LibraryWidgetItem>> =
         decodedListStateFlow(Keys.LIBRARY_WIDGET_ITEMS, libraryItemsLoaded)
 
-    val libraryWidgetVersion: StateFlow<Long> =
-        sharedPrefs.map { it[Keys.LIBRARY_WIDGET_VERSION] ?: 0L }
-            .stateIn(scope, SharingStarted.Eagerly, 0L)
-
-    val libraryWidgetUpdatedAtMs: Flow<Long> =
-        sharedPrefs.map { it[Keys.LIBRARY_WIDGET_UPDATED_AT_MS] ?: 0L }
-
     val seerrWidgetItems: StateFlow<List<SeerrWidgetItem>> =
         decodedListStateFlow(Keys.SEERR_WIDGET_ITEMS, seerrItemsLoaded)
-
-    val seerrWidgetVersion: StateFlow<Long> =
-        sharedPrefs.map { it[Keys.SEERR_WIDGET_VERSION] ?: 0L }
-            .stateIn(scope, SharingStarted.Eagerly, 0L)
-
-    val seerrWidgetUpdatedAtMs: Flow<Long> =
-        sharedPrefs.map { it[Keys.SEERR_WIDGET_UPDATED_AT_MS] ?: 0L }
-
-    val widgetLastRefreshMs: Flow<Long> =
-        sharedPrefs.map { it[Keys.WIDGET_LAST_REFRESH_MS] ?: 0L }
 
     suspend fun setWidgetConfig(config: WidgetConfig) {
         dataStore.edit { it[Keys.WIDGET_CONFIG] = json.encodeToString(config) }
@@ -184,32 +165,16 @@ class WidgetDataStore constructor(
         }
     }
 
-    suspend fun setLibraryWidgetItems(
-        items: List<LibraryWidgetItem>,
-        version: Long,
-        updatedAtMs: Long,
-    ) {
+    suspend fun setLibraryWidgetItems(items: List<LibraryWidgetItem>) {
         dataStore.edit { prefs ->
             prefs[Keys.LIBRARY_WIDGET_ITEMS] = json.encodeToString(items)
-            prefs[Keys.LIBRARY_WIDGET_VERSION] = version
-            prefs[Keys.LIBRARY_WIDGET_UPDATED_AT_MS] = updatedAtMs
         }
     }
 
-    suspend fun setSeerrWidgetItems(
-        items: List<SeerrWidgetItem>,
-        version: Long,
-        updatedAtMs: Long,
-    ) {
+    suspend fun setSeerrWidgetItems(items: List<SeerrWidgetItem>) {
         dataStore.edit { prefs ->
             prefs[Keys.SEERR_WIDGET_ITEMS] = json.encodeToString(items)
-            prefs[Keys.SEERR_WIDGET_VERSION] = version
-            prefs[Keys.SEERR_WIDGET_UPDATED_AT_MS] = updatedAtMs
         }
-    }
-
-    suspend fun setWidgetLastRefreshMs(ms: Long) {
-        dataStore.edit { it[Keys.WIDGET_LAST_REFRESH_MS] = ms }
     }
 
     /** Persists the current continue-watching shelf so widgets can render it offline / on cold start. */
@@ -282,11 +247,6 @@ class WidgetDataStore constructor(
         val WIDGET_CONFIG = stringPreferencesKey("widget_config")
         val WIDGET_CONFIGS = stringPreferencesKey("widget_configs")
         val LIBRARY_WIDGET_ITEMS = stringPreferencesKey("library_widget_items")
-        val LIBRARY_WIDGET_VERSION = longPreferencesKey("library_widget_version")
-        val LIBRARY_WIDGET_UPDATED_AT_MS = longPreferencesKey("library_widget_updated_at_ms")
         val SEERR_WIDGET_ITEMS = stringPreferencesKey("seerr_widget_items")
-        val SEERR_WIDGET_VERSION = longPreferencesKey("seerr_widget_version")
-        val SEERR_WIDGET_UPDATED_AT_MS = longPreferencesKey("seerr_widget_updated_at_ms")
-        val WIDGET_LAST_REFRESH_MS = longPreferencesKey("widget_last_refresh_ms")
     }
 }

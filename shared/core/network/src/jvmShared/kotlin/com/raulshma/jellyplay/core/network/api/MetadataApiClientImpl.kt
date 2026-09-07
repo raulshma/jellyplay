@@ -29,6 +29,13 @@ class MetadataApiClientImpl @Inject constructor(
     private val engine: JellyfinApiEngine,
 ) : MetadataApiClient {
 
+    /** The item-id guard every endpoint opens with: an unparseable UUID fails the call. */
+    private fun requireItemUuid(itemId: String) = runCatching { itemId.toUUID() }.getOrThrow()
+
+    /** The image-type guard: an unknown wire name fails the call. */
+    private fun requireImageType(imageType: String) = ImageType.fromNameOrNull(imageType)
+        ?: throw IllegalArgumentException("Unknown image type: $imageType")
+
     override suspend fun updateItem(
         itemId: String, name: String, originalTitle: String?, sortName: String?,
         overview: String?, tagline: String?, genres: List<String>, tags: List<String>,
@@ -82,12 +89,12 @@ class MetadataApiClientImpl @Inject constructor(
             dateCreated = dateCreated?.let { runCatching { java.time.LocalDateTime.parse(it) }.getOrNull() },
             lockData = lockData,
         )
-        api.itemUpdateApi.updateItem(itemId = runCatching { itemId.toUUID() }.getOrThrow(), data = dto)
+        api.itemUpdateApi.updateItem(itemId = requireItemUuid(itemId), data = dto)
     }
 
     override suspend fun getMetadataEditorInfo(itemId: String): Result<MetadataEditorInfo> = engine.apiResultWithRetry {
         val api = engine.requireApi()
-        val uuid = runCatching { itemId.toUUID() }.getOrThrow()
+        val uuid = requireItemUuid(itemId)
         val dto = api.itemUpdateApi.getMetadataEditorInfo(itemId = uuid).content
         MetadataEditorInfo(
             parentalRatingOptions = dto.parentalRatingOptions.map { it.toAppParentalRating() },
@@ -120,7 +127,7 @@ class MetadataApiClientImpl @Inject constructor(
         regenerateTrickplay: Boolean,
     ): Result<Unit> = engine.apiResultWithRetry {
         val api = engine.requireApi()
-        val uuid = runCatching { itemId.toUUID() }.getOrThrow()
+        val uuid = requireItemUuid(itemId)
         api.itemRefreshApi.refreshItem(
             itemId = uuid,
             metadataRefreshMode = MetadataRefreshMode.fromNameOrNull(metadataRefreshMode) ?: MetadataRefreshMode.DEFAULT,
@@ -133,7 +140,7 @@ class MetadataApiClientImpl @Inject constructor(
 
     override suspend fun getItemImageInfo(itemId: String): Result<List<ImageInfo>> = engine.apiResultWithRetry {
         val api = engine.requireApi()
-        val uuid = runCatching { itemId.toUUID() }.getOrThrow()
+        val uuid = requireItemUuid(itemId)
         api.imageApi.getItemImageInfos(itemId = uuid).content.map { dto ->
             ImageInfo(
                 imageType = dto.imageType.serialName,
@@ -148,8 +155,8 @@ class MetadataApiClientImpl @Inject constructor(
 
     override suspend fun setItemImage(itemId: String, imageType: String, imageBytes: ByteArray): Result<Unit> = engine.apiResultWithRetry {
         val api = engine.requireApi()
-        val uuid = runCatching { itemId.toUUID() }.getOrThrow()
-        val type = ImageType.fromNameOrNull(imageType) ?: throw IllegalArgumentException("Unknown image type: $imageType")
+        val uuid = requireItemUuid(itemId)
+        val type = requireImageType(imageType)
         api.imageApi.setItemImage(
             itemId = uuid,
             imageType = type,
@@ -159,8 +166,8 @@ class MetadataApiClientImpl @Inject constructor(
 
     override suspend fun deleteItemImage(itemId: String, imageType: String, imageIndex: Int?): Result<Unit> = engine.apiResultWithRetry {
         val api = engine.requireApi()
-        val uuid = runCatching { itemId.toUUID() }.getOrThrow()
-        val type = ImageType.fromNameOrNull(imageType) ?: throw IllegalArgumentException("Unknown image type: $imageType")
+        val uuid = requireItemUuid(itemId)
+        val type = requireImageType(imageType)
         api.imageApi.deleteItemImage(itemId = uuid, imageType = type, imageIndex = imageIndex)
     }
 
@@ -172,7 +179,7 @@ class MetadataApiClientImpl @Inject constructor(
         limit: Int?,
     ): Result<RemoteImageResult> = engine.apiResultWithRetry {
         val api = engine.requireApi()
-        val uuid = runCatching { itemId.toUUID() }.getOrThrow()
+        val uuid = requireItemUuid(itemId)
         val dto = api.remoteImageApi.getRemoteImages(
             itemId = uuid,
             type = imageType?.let { ImageType.fromNameOrNull(it) },
@@ -190,7 +197,7 @@ class MetadataApiClientImpl @Inject constructor(
 
     override suspend fun getRemoteImageProviders(itemId: String): Result<List<ImageProviderInfo>> = engine.apiResultWithRetry {
         val api = engine.requireApi()
-        val uuid = runCatching { itemId.toUUID() }.getOrThrow()
+        val uuid = requireItemUuid(itemId)
         api.remoteImageApi.getRemoteImageProviders(itemId = uuid).content.map { dto ->
             ImageProviderInfo(
                 name = dto.name,
@@ -201,8 +208,8 @@ class MetadataApiClientImpl @Inject constructor(
 
     override suspend fun downloadRemoteImage(itemId: String, imageType: String, imageUrl: String): Result<Unit> = engine.apiResultWithRetry {
         val api = engine.requireApi()
-        val uuid = runCatching { itemId.toUUID() }.getOrThrow()
-        val type = ImageType.fromNameOrNull(imageType) ?: throw IllegalArgumentException("Unknown image type: $imageType")
+        val uuid = requireItemUuid(itemId)
+        val type = requireImageType(imageType)
         api.remoteImageApi.downloadRemoteImage(itemId = uuid, type = type, imageUrl = imageUrl)
     }
 
@@ -215,7 +222,7 @@ class MetadataApiClientImpl @Inject constructor(
         isHearingImpaired: Boolean,
     ): Result<Unit> = engine.apiResultWithRetry {
         val api = engine.requireApi()
-        val uuid = runCatching { itemId.toUUID() }.getOrThrow()
+        val uuid = requireItemUuid(itemId)
         api.subtitleApi.uploadSubtitle(
             itemId = uuid,
             data = UploadSubtitleDto(
@@ -230,13 +237,13 @@ class MetadataApiClientImpl @Inject constructor(
 
     override suspend fun deleteSubtitle(itemId: String, index: Int): Result<Unit> = engine.apiResultWithRetry {
         val api = engine.requireApi()
-        val uuid = runCatching { itemId.toUUID() }.getOrThrow()
+        val uuid = requireItemUuid(itemId)
         api.subtitleApi.deleteSubtitle(itemId = uuid, index = index)
     }
 
     override suspend fun searchRemoteSubtitles(itemId: String, language: String): Result<List<RemoteSubtitleInfo>> = engine.apiResultWithRetry {
         val api = engine.requireApi()
-        val uuid = runCatching { itemId.toUUID() }.getOrThrow()
+        val uuid = requireItemUuid(itemId)
         api.subtitleApi.searchRemoteSubtitles(itemId = uuid, language = language, isPerfectMatch = null).content.map { dto ->
             RemoteSubtitleInfo(
                 id = dto.id ?: "",

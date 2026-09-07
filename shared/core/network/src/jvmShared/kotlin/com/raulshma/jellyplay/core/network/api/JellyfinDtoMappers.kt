@@ -12,6 +12,7 @@ import com.raulshma.jellyplay.core.model.DvrTimer
 import com.raulshma.jellyplay.core.model.DvrTimerStatus
 import com.raulshma.jellyplay.core.model.ImageBlurHashes
 import com.raulshma.jellyplay.core.model.GuideInfo
+import com.raulshma.jellyplay.core.model.ItemCounts
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.core.model.LiveTvRecording
@@ -30,6 +31,7 @@ import com.raulshma.jellyplay.core.model.TaskExecutionInfo
 import com.raulshma.jellyplay.core.model.TaskState
 import com.raulshma.jellyplay.core.model.TaskTriggerInfo
 import com.raulshma.jellyplay.core.model.TrickplayInfo
+import com.raulshma.jellyplay.core.network.library.filterByParentalRating
 import com.raulshma.jellyplay.core.network.library.parseItemSortList as parseItemSortTokens
 import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.BaseItemKind
@@ -91,6 +93,19 @@ internal fun BaseItemDto.toMediaItem() = MediaItem(
     lastPlayedDate = userData?.lastPlayedDate?.toString(),
     unplayedItemCount = userData?.unplayedItemCount,
 )
+
+/**
+ * The standard tail of every library listing call: map the DTOs to
+ * [MediaItem]s, then parental-rate them through the commonMain policy
+ * ([filterByParentalRating] over the caller-supplied max, e.g.
+ * `JellyfinApiEngine.currentMaxParentalRating`) — the JVM twin of the wasm
+ * client's `map { it.toMediaItem() }.filterByParentalRating(max)` tail. The
+ * map-then-filter order is equivalent to the former engine member
+ * (filter-then-map keyed on `officialRating`) because [toMediaItem] carries
+ * `officialRating` through unchanged.
+ */
+internal fun List<BaseItemDto>.toFilteredMediaItems(maxParentalRating: Int?): List<MediaItem> =
+    map { it.toMediaItem() }.filterByParentalRating(maxParentalRating)
 
 internal fun BaseItemKind.toMediaType(): MediaType = when (this) {
     BaseItemKind.MOVIE -> MediaType.MOVIE
@@ -340,6 +355,26 @@ internal fun org.jellyfin.sdk.model.api.TaskResult.toExecutionModel() = TaskExec
     endTimeUtc = endTimeUtc.toIsoInstantString(),
     status = status.serialName,
     errorMessage = errorMessage,
+)
+
+/**
+ * Maps the `/Items/Counts` DTO onto the domain [ItemCounts], deriving
+ * `totalCount` as the sum of the seven per-library axes. Shared by the admin
+ * dashboard (`AdminApiClientImpl.getItemCounts`) and the newsletter's library
+ * stats (`MediaInfoApiClientImpl.getNewsletterData`).
+ */
+internal fun org.jellyfin.sdk.model.api.ItemCounts.toItemCounts() = ItemCounts(
+    movieCount = movieCount.toLong(),
+    seriesCount = seriesCount.toLong(),
+    episodeCount = episodeCount.toLong(),
+    albumCount = albumCount.toLong(),
+    songCount = songCount.toLong(),
+    musicVideoCount = musicVideoCount.toLong(),
+    bookCount = bookCount.toLong(),
+    totalCount = movieCount.toLong() + seriesCount.toLong() +
+            episodeCount.toLong() + albumCount.toLong() +
+            songCount.toLong() + musicVideoCount.toLong() +
+            bookCount.toLong(),
 )
 
 internal fun org.jellyfin.sdk.model.api.DeviceInfoDto.toDeviceModel() = DeviceInfo(

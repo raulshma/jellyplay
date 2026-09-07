@@ -66,11 +66,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.debounce
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.flow.map
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.foundation.border
@@ -127,7 +122,7 @@ import com.raulshma.jellyplay.core.ui.tv.TvFocusDefaults
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.Color
 import com.raulshma.jellyplay.core.ui.settingssearch.ResolvedSettingsItem
-import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchMatcher
+import com.raulshma.jellyplay.core.ui.settingssearch.settingsSearchResults
 import com.raulshma.jellyplay.core.ui.components.ExpressiveChipContainer
 import androidx.compose.ui.graphics.Brush
 import com.composables.icons.tabler.Tabler
@@ -246,25 +241,113 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_watc
 
 private val LocalAnimateSettingsEntrance = staticCompositionLocalOf { false }
 
-// Registry ids of the screensaver (dream) group rendered on the main Settings screen. When a
-// settings-search result for one of these is tapped, the click sets lastClickedSettingId so the
-// group expands and highlights the matching row (there is no dedicated screensaver screen).
-private val SCREENSAVER_GROUP_IDS = setOf(
-    "screensaver_show_title",
-    "screensaver_categories",
-    "screensaver_slideshow_interval",
-    "screensaver_ken_burns",
-    "screensaver_transition_style",
-)
-
 // Search-result ids that are destructive *actions* rather than settings (open a
 // confirm dialog instead of navigating). These are deliberately excluded from the
 // "recent settings" list — recents track navigable settings the user revisits, not
-// one-off sign-out actions.
+// one-off sign-out actions. Kept as a hand list on purpose: what makes these two
+// ids actions is semantics (a destructive confirm), not a derivable structural
+// property of their catalog declarations.
 private val ACTION_ONLY_IDS = setOf("logout", "sign_out_from_server")
 
 // Dream-screen pickers (slideshow interval, transition style) flow through the shared
 // `PickerState` dispatcher rather than a screen-local sealed dialog enum.
+
+/**
+ * What a settings-search result tap does — the effect vocabulary
+ * [settingsResultClickAction] decides between and the composable performs.
+ */
+internal sealed class SettingsSearchResultAction {
+    /**
+     * Navigate into a sub-screen; [route] carries the tapped id already baked
+     * in as the deep-link highlight target.
+     */
+    class NavigateToScreen(val route: Route) : SettingsSearchResultAction()
+
+    /**
+     * Open the sign-out confirm dialog; [fromServer] selects the title,
+     * message and the eventual log-out variant.
+     */
+    class OpenSignOutDialog(val fromServer: Boolean) : SettingsSearchResultAction()
+
+    /** Launch the host-indirected setup wizard. */
+    object OpenSetupWizard : SettingsSearchResultAction()
+
+    /**
+     * No navigation — an on-screen target (the screensaver rows) reveals
+     * itself through the pending highlight alone.
+     */
+    object NoOp : SettingsSearchResultAction()
+}
+
+/**
+ * The pure decision behind a search-result (or recent-setting) tap on this
+ * screen: [action] is the effect to perform, [pendingHighlightId] the id to
+ * mark for the TV re-entry focus policy (`null` for the management
+ * exemptions and the destructive actions), [enableAdvanced] whether the
+ * advanced toggle must flip on first, and [recordRecent] whether the id
+ * enters the recent-settings list (pure actions like logout never do).
+ */
+internal data class SettingsSearchResultClick(
+    val action: SettingsSearchResultAction,
+    val pendingHighlightId: String? = null,
+    val enableAdvanced: Boolean = false,
+    val recordRecent: Boolean = true,
+)
+
+/**
+ * Decides [SettingsSearchResultClick] for the tapped result. The destructive
+ * account actions open their confirm dialogs (`logout` directly,
+ * `sign_out_from_server` through the bare-`Route.Settings` branch); the other
+ * bare-Settings targets are this screen's own rows (the screensaver group)
+ * and only reveal themselves via the pending highlight; the setup wizard
+ * keeps its host indirection; everything else navigates with the id baked
+ * into the route, marking the pending highlight except for Server/User
+ * Management, which the old per-route dispatch never marked (unknown
+ * highlight ids are no-ops downstream — `rememberHighlightScrollIndex`
+ * resolves them to -1). The destructive [ACTION_ONLY_IDS] never enter the
+ * recent-settings list, and an advanced result auto-enables advanced
+ * settings when they are off.
+ */
+internal fun settingsResultClickAction(
+    id: String,
+    route: Route,
+    isAdvanced: Boolean,
+    showAdvancedSettings: Boolean,
+): SettingsSearchResultClick {
+    val click = when {
+        id == "logout" -> SettingsSearchResultClick(
+            action = SettingsSearchResultAction.OpenSignOutDialog(fromServer = false),
+        )
+        route == Route.Settings -> {
+            if (id == "sign_out_from_server") {
+                SettingsSearchResultClick(
+                    action = SettingsSearchResultAction.OpenSignOutDialog(fromServer = true),
+                )
+            } else {
+                SettingsSearchResultClick(
+                    action = SettingsSearchResultAction.NoOp,
+                    pendingHighlightId = id,
+                )
+            }
+        }
+        route == Route.Onboarding -> SettingsSearchResultClick(
+            action = SettingsSearchResultAction.OpenSetupWizard,
+            pendingHighlightId = "setup_wizard",
+        )
+        else -> SettingsSearchResultClick(
+            action = SettingsSearchResultAction.NavigateToScreen(route.withHighlightSettingId(id)),
+            pendingHighlightId = if (route is Route.ServerManagement || route is Route.UserManagement) {
+                null
+            } else {
+                id
+            },
+        )
+    }
+    return click.copy(
+        enableAdvanced = isAdvanced && !showAdvancedSettings,
+        recordRecent = id !in ACTION_ONLY_IDS,
+    )
+}
 
 /**
  * Bundles the navigation actions passed into [SettingsScreen] (and
@@ -667,21 +750,17 @@ fun SettingsScreen(
         AnimatedSettingsEntrance(if (isTv) tvStep else phoneStep) { content() }
     }
 
-    // Debounced + off-main-thread fuzzy search. Each keystroke only re-runs the
-    // matcher after a short quiet period, and the whole pipeline — the catalog
-    // resolve included — runs on Dispatchers.Default so typing stays smooth on
-    // low-end devices (the resolve is one blocking compose-resources read per
-    // catalog entry when cold; see SettingsSearchCatalog.resolved). Matching
-    // and the rendered results both reflect the user's language.
+    // Shared core/ui settings-search pipeline over this module's catalog
+    // (the same `settingsSearchResults` feature/home consumes through the
+    // provider seam): debounced, distinct-until-changed, matched off the main
+    // thread against the platform-filtered, locale-resolved catalog — and
+    // short-circuited on blank queries, so an empty search bar never pays the
+    // 258-item resolve.
     val filteredItems by produceState(
         initialValue = emptyList<ResolvedSettingsItem>(),
         searchQuery,
     ) {
-        snapshotFlow { searchQuery }
-            .debounce(120)
-            .distinctUntilChanged()
-            .map { SettingsSearchMatcher.search(it, SettingsSearchCatalog.resolved()) }
-            .flowOn(Dispatchers.Default)
+        settingsSearchResults(snapshotFlow { searchQuery }, SettingsSearchCatalog)
             .collect { value = it }
     }
 
@@ -732,53 +811,27 @@ fun SettingsScreen(
         }
 
         // Shared tap handler for both the live search results and the recent
-        // settings list: flips the advanced toggle on if needed, dispatches the
-        // navigation, records the setting as recently used (skipping pure
-        // actions like logout), then collapses the search panel. Extracted so the
-        // two lists never drift in click behavior. Navigation is the same
-        // one-liner as the home header search: inject the matched id as the
-        // route's deep-link highlight target. Only the non-navigate special
-        // cases (sign-out dialogs, the on-screen screensaver group, the
-        // host-indirected setup wizard) keep bespoke branches.
+        // settings list: the branching lives in the pure
+        // [settingsResultClickAction] (pinned by jvmTest); this reduction only
+        // performs the decided effects, records the setting as recently used
+        // when the decision says so, then collapses the search panel.
         val onResultClick: (ResolvedSettingsItem) -> Unit = { item ->
-            if (item.isAdvanced && !preferences.showAdvancedSettings) {
+            val click = settingsResultClickAction(item.id, item.route, item.isAdvanced, preferences.showAdvancedSettings)
+            if (click.enableAdvanced) {
                 viewModel.setShowAdvancedSettings(true)
                 messenger?.info(advancedEnabledMessage)
             }
-            if (item.id == "logout") {
-                signOutFromServer = false
-                showSignOutConfirm = true
-            } else {
-                when (item.route) {
-                    Route.Settings -> {
-                        // Bare-settings targets live on this screen: the
-                        // sign-out-from-server action opens the confirm dialog,
-                        // screensaver rows reveal their group.
-                        if (item.id == "sign_out_from_server") {
-                            signOutFromServer = true
-                            showSignOutConfirm = true
-                        } else {
-                            lastClickedSettingId = item.id
-                        }
-                    }
-                    Route.Onboarding -> {
-                        lastClickedSettingId = "setup_wizard"
-                        onSetupWizard()
-                    }
-                    else -> {
-                        // Entries into sub-screens mark a pending highlight for
-                        // the TV re-entry focus policy — except Server/User
-                        // Management, which the old per-route dispatch never
-                        // marked. Unknown highlight ids are no-ops downstream
-                        // (rememberHighlightScrollIndex resolves them to -1).
-                        if (item.route !is Route.ServerManagement && item.route !is Route.UserManagement) {
-                            lastClickedSettingId = item.id
-                        }
-                        onNavigate(item.route.withHighlightSettingId(item.id))
-                    }
+            click.pendingHighlightId?.let { lastClickedSettingId = it }
+            when (val action = click.action) {
+                is SettingsSearchResultAction.OpenSignOutDialog -> {
+                    signOutFromServer = action.fromServer
+                    showSignOutConfirm = true
                 }
+                is SettingsSearchResultAction.NavigateToScreen -> onNavigate(action.route)
+                SettingsSearchResultAction.OpenSetupWizard -> onSetupWizard()
+                SettingsSearchResultAction.NoOp -> {}
             }
-            if (item.id !in ACTION_ONLY_IDS) viewModel.recordSettingUsed(item.id)
+            if (click.recordRecent) viewModel.recordSettingUsed(item.id)
             // Dismiss search after navigation has been dispatched so the main
             // settings list doesn't briefly reveal during the transition.
             isSearchActive = false
@@ -1304,25 +1357,29 @@ fun SettingsScreen(
                                 },
                                 initiallyExpanded = false,
                             ) {
+                                // Row count derived from the account group
+                                // declaration — the four declared ids are
+                                // exactly the rows rendered here.
+                                val accountCount = SettingsScreenGroups.account.itemIds.size
                                 SettingListItem(
                                     icon = Tabler.Outline.Server,
                                     title = stringResource(Res.string.settings_server_management),
                                     subtitle = stringResource(Res.string.settings_server_management_subtitle),
-                                    index = 0, count = 4,
+                                    index = 0, count = accountCount,
                                     onClick = { openSetting("server_management") { Route.ServerManagement(it) } },
                                 )
                                 SettingListItem(
                                     icon = Tabler.Outline.Users,
                                     title = stringResource(Res.string.settings_switch_user),
                                     subtitle = stringResource(Res.string.settings_switch_user_subtitle),
-                                    index = 1, count = 4,
+                                    index = 1, count = accountCount,
                                     onClick = { openSetting("user_management") { Route.UserManagement(it) } },
                                 )
                                 SettingListItem(
                                     icon = Tabler.Outline.Logout,
                                     title = stringResource(Res.string.settings_sign_out),
                                     subtitle = stringResource(Res.string.settings_sign_out_subtitle),
-                                    index = 2, count = 4,
+                                    index = 2, count = accountCount,
                                     isDestructive = true,
                                     onClick = {
                                         signOutFromServer = false
@@ -1333,7 +1390,7 @@ fun SettingsScreen(
                                     icon = Tabler.Outline.Logout,
                                     title = stringResource(Res.string.settings_sign_out_from_server),
                                     subtitle = stringResource(Res.string.settings_sign_out_from_server_subtitle),
-                                    index = 3, count = 4,
+                                    index = 3, count = accountCount,
                                     isDestructive = true,
                                     onClick = {
                                         signOutFromServer = true
@@ -1368,7 +1425,9 @@ fun SettingsScreen(
                                 } else null,
                                 initiallyExpanded = false,
                             ) {
-                                val insightsCount = 5
+                                // Row count derived from the activity-insights
+                                // group declaration.
+                                val insightsCount = SettingsScreenGroups.activityInsights.itemIds.size
                                 SettingListItem(
                                     icon = Tabler.Outline.Heart,
                                     title = stringResource(Res.string.settings_browse_favorites),
@@ -1433,7 +1492,12 @@ fun SettingsScreen(
                                 } else null,
                                 initiallyExpanded = false,
                             ) {
-                                val systemCount = if (viewModel.currentUser?.isAdmin == true) 3 else 2
+                                // Row count derived from the system-core group
+                                // declaration: the admin-dashboard row drops for
+                                // non-admins, every other declared row renders.
+                                val systemCount = SettingsScreenGroups.systemCore.items.count { item ->
+                                    item.id != "admin_dashboard" || viewModel.currentUser?.isAdmin == true
+                                }
                                 var systemIndex = 0
                                 if (viewModel.currentUser?.isAdmin == true) {
                                     SettingListItem(
@@ -1569,9 +1633,12 @@ fun SettingsScreen(
                                             cats.joinToString(", ") { it.name.lowercase().replaceFirstChar { c -> c.uppercase() } }
                                         }
                                     },
-                                    initiallyExpanded = lastClickedSettingId in SCREENSAVER_GROUP_IDS,
+                                    initiallyExpanded = lastClickedSettingId in SettingsScreenGroups.systemScreensaver.itemIdSet,
                                 ) {
-                                    val dreamTotal = 5
+                                    // Row count derived from the screensaver group
+                                    // declaration — the five declared dream rows are
+                                    // exactly the rows rendered here.
+                                    val dreamTotal = SettingsScreenGroups.systemScreensaver.itemIds.size
                                     val slideshowIntervalTitle = stringResource(Res.string.settings_slideshow_interval)
                                     val transitionStyleTitle = stringResource(Res.string.settings_transition_style)
                                     val transitionCrossfadeLabel = stringResource(Res.string.settings_transition_crossfade)

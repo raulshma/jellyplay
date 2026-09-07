@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.livetv
 
+import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.model.LiveTvProgram
 import java.time.Instant
 import java.time.LocalDateTime
@@ -19,6 +20,9 @@ import java.time.format.DateTimeParseException
  *    date-label outputs over one shared parse-then-format core.
  *  - [isAiringAt] — the single "is airing now" predicate.
  *  - [liveProgressFraction] — channel detail's live progress fold.
+ *  - [LIVE_TV_STALENESS_INTERVAL_MS] + [TimeSource.nowInstant] — the shared
+ *    clock reads: the 5-minute staleness cadence and the injected-clock
+ *    Instant bridge (no direct `Instant.now()` in the ViewModels).
  */
 internal val LIVE_TV_TIME_PARSER: DateTimeFormatter = DateTimeFormatter.ISO_OFFSET_DATE_TIME
 internal val LIVE_TV_TIME_FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern("h:mm a")
@@ -168,3 +172,23 @@ internal fun liveProgressFraction(start: Instant, end: Instant, now: Instant): F
     if (totalSeconds <= 0) return null
     return ((now.epochSecond - start.epochSecond).toFloat() / totalSeconds).coerceIn(0f, 1f)
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Clock reads
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * The Live-TV staleness cadence: how long fetched data may age before a full
+ * re-fetch. One constant for both jellyfin-web-derived throttles that
+ * separately re-declared the same 5 minutes — the EPG guide auto-refresh
+ * loop and the Programs tab's full-render throttle (a re-entry within the
+ * window only refreshes the "On Now" row).
+ */
+internal const val LIVE_TV_STALENESS_INTERVAL_MS: Long = 5 * 60 * 1000L
+
+/**
+ * Wall-clock "now" through the injected [TimeSource] seam (a
+ * `SystemTimeSource` Koin single in production; fake-able in jvmTest) — the
+ * Live-TV ViewModels' only Instant read, never a direct `Instant.now()`.
+ */
+internal fun TimeSource.nowInstant(): Instant = Instant.ofEpochMilli(nowEpochMillis())

@@ -1,13 +1,16 @@
 package com.raulshma.jellyplay.feature.livetv.epg
 
 import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
+import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.model.EpgGuide
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import com.raulshma.jellyplay.feature.livetv.LIVE_TV_STALENESS_INTERVAL_MS
 import com.raulshma.jellyplay.feature.livetv.components.RecordActions
 import com.raulshma.jellyplay.feature.livetv.components.RecordDialogState
 import com.raulshma.jellyplay.feature.livetv.components.RecordOutcome
+import com.raulshma.jellyplay.feature.livetv.nowInstant
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -22,15 +25,25 @@ import kotlinx.coroutines.withContext
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 
-private const val REFRESH_INTERVAL_MS: Long = 5 * 60 * 1000L
 private const val NOW_TICK_INTERVAL_MS: Long = 30 * 1000L
 /** How far back from "now" the guide window extends (keeps recently-ended shows visible). */
 private const val GUIDE_LOOKBACK_HOURS: Long = 2L
 /** Total span of the guide window. Matches the 24h timeline used by the jellyfin-web guide. */
 private const val GUIDE_WINDOW_HOURS: Long = 24L
 
+/**
+ * The standard guide fetch window for [now] — the ONE formula behind both the
+ * boot defaults and every [EpgViewModel.fetchGuideIntoState] pass, so the two
+ * can never drift: [GUIDE_LOOKBACK_HOURS] back over the [GUIDE_WINDOW_HOURS]
+ * span.
+ */
+private fun guideWindow(now: Instant): Pair<Instant, Instant> =
+    now.minus(GUIDE_LOOKBACK_HOURS, ChronoUnit.HOURS) to
+        now.plus(GUIDE_WINDOW_HOURS - GUIDE_LOOKBACK_HOURS, ChronoUnit.HOURS)
+
 class EpgViewModel(
     private val mediaRepository: LiveTvRepository,
+    private val timeSource: TimeSource,
     /** Off-Main dispatcher for the grid rebuild; injectable so jvmTest rides the test scheduler. */
     private val gridDispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) : JellyPlayViewModel() {
@@ -49,16 +62,17 @@ class EpgViewModel(
 
     /** Ticking "now" timestamp so the time ruler + live indicator stay live. */
     val now: StateFlow<Instant> = flow {
-        emit(Instant.now())
+        emit(timeSource.nowInstant())
         while (true) {
             delay(NOW_TICK_INTERVAL_MS)
-            emit(Instant.now())
+            emit(timeSource.nowInstant())
         }
-    }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), Instant.now())
+    }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), timeSource.nowInstant())
 
     /** Half-open window [start, end) covered by the current guide fetch. */
-    private val _windowStart = composeState(Instant.now().minus(GUIDE_LOOKBACK_HOURS, ChronoUnit.HOURS))
-    private val _windowEnd = composeState(Instant.now().plus(GUIDE_WINDOW_HOURS - GUIDE_LOOKBACK_HOURS, ChronoUnit.HOURS))
+    private val initialWindow = guideWindow(timeSource.nowInstant())
+    private val _windowStart = composeState(initialWindow.first)
+    private val _windowEnd = composeState(initialWindow.second)
 
     private val _recordDialog = composeState<RecordDialogState?>(null)
     val recordDialog: RecordDialogState? get() = _recordDialog.value
@@ -138,15 +152,13 @@ class EpgViewModel(
     }
 
     /**
-     * Fetches the guide for the standard window (GUIDE_LOOKBACK_HOURS back,
-     * GUIDE_WINDOW_HOURS span) and, on success, publishes channels, programs,
-     * the window bounds and the rebuilt grid. Shared by the user-triggered
+     * Fetches the guide for the standard window ([guideWindow] over the
+     * injected clock) and, on success, publishes channels, programs, the
+     * window bounds and the rebuilt grid. Shared by the user-triggered
      * [loadGuide] and the auto-refresh loop; callers own loading/error UX.
      */
     private suspend fun fetchGuideIntoState(): Result<EpgGuide> {
-        val now = Instant.now()
-        val start = now.minus(GUIDE_LOOKBACK_HOURS, ChronoUnit.HOURS)
-        val end = now.plus(GUIDE_WINDOW_HOURS - GUIDE_LOOKBACK_HOURS, ChronoUnit.HOURS)
+        val (start, end) = guideWindow(timeSource.nowInstant())
         return mediaRepository.getLiveTvGuide(startDateUtc = start.toString(), endDateUtc = end.toString(), limit = 100)
             .onSuccess { guide ->
                 _channels.value = guide.channels
@@ -181,16 +193,17 @@ class EpgViewModel(
     fun dismissRecordDialog() { _recordDialog.value = null }
 
     /**
-     * Starts the 5-minute guide auto-refresh loop. Tied to screen visibility
-     * (STARTED) by the EPG screen via [stopAutoRefresh] on exit so refreshes
-     * do not run while the screen sits in the back stack. Repeated calls
-     * replace the previous loop instead of stacking another one.
+     * Starts the 5-minute guide auto-refresh loop
+     * ([LIVE_TV_STALENESS_INTERVAL_MS]). Tied to screen visibility (STARTED)
+     * by the EPG screen via [stopAutoRefresh] on exit so refreshes do not run
+     * while the screen sits in the back stack. Repeated calls replace the
+     * previous loop instead of stacking another one.
      */
     fun startAutoRefresh() {
         autoRefreshJob?.cancel()
         autoRefreshJob = launch {
             while (true) {
-                delay(REFRESH_INTERVAL_MS)
+                delay(LIVE_TV_STALENESS_INTERVAL_MS)
                 fetchGuideIntoState()
             }
         }

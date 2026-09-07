@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.startup
 
-import android.content.Context
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
 import com.raulshma.jellyplay.core.database.dao.ReconciliationRow
 import com.raulshma.jellyplay.core.database.entity.DownloadEntity
@@ -33,11 +32,10 @@ class DownloadRecoveryInitializerTest {
 
     @get:Rule val tempFolder = TemporaryFolder()
 
-    private val context: Context = mockk()
     private val downloadDao: DownloadDao = mockk(relaxed = true)
     private val downloadEnqueuer: DownloadEnqueuer = mockk(relaxed = true)
 
-    private fun initializer() = DownloadRecoveryInitializer(context, downloadDao, downloadEnqueuer)
+    private fun initializer() = DownloadRecoveryInitializer(downloadDao, downloadEnqueuer)
 
     private fun stubRecoveryQueriesEmpty() {
         // Neutralise recoverPendingDownloads() and cleanupStuckDownloads() so

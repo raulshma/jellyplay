@@ -1,9 +1,14 @@
 package com.raulshma.jellyplay.feature.settings
 
+import com.raulshma.jellyplay.core.model.AudioNormalizationMode
+import com.raulshma.jellyplay.core.model.AudioPreferences
 import com.raulshma.jellyplay.core.model.MediaSegmentType
+import com.raulshma.jellyplay.core.ui.navigation.Route
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.test.fail
 
@@ -119,7 +124,8 @@ class SettingsCatalogScreenContractTest {
         "account" to emptyList(),
         "integrations" to listOf("IntegrationsScreen.kt", "SeerrSettingsScreen.kt"),
         "activityInsights" to emptyList(),
-        "system" to emptyList(),
+        "system.core" to emptyList(),
+        "system.screensaver" to emptyList(),
         "appearance.theme" to listOf("AppearanceSettingsScreen.kt"),
         "appearance.navigation" to listOf("AppearanceSettingsScreen.kt"),
         "appearance.library" to listOf("AppearanceSettingsScreen.kt"),
@@ -136,7 +142,8 @@ class SettingsCatalogScreenContractTest {
         "playback.mediaSegments" to listOf("PlaybackSettingsScreen.kt"),
         "audio" to listOf("AudioSettingsScreen.kt"),
         "audio.cache" to listOf("AudioSettingsScreen.kt"),
-        "language" to listOf("LanguageSettingsScreen.kt"),
+        "language.general" to listOf("LanguageSettingsScreen.kt"),
+        "language.subtitles" to listOf("LanguageSettingsScreen.kt"),
         "notifications" to listOf("NotificationSettingsScreen.kt"),
         "storage.cache" to listOf("StorageSettingsScreen.kt"),
         "storage.network" to listOf("StorageSettingsScreen.kt"),
@@ -263,6 +270,13 @@ class SettingsCatalogScreenContractTest {
             "BLUE_LIGHT_GROUP_IDS",
             "NEWSLETTER_GROUP_IDS",
         ),
+        "LanguageSettingsScreen.kt" to listOf(
+            "LANGUAGE_GROUP_IDS",
+            "SUBTITLE_GROUP_IDS",
+        ),
+        "SettingsScreen.kt" to listOf(
+            "SCREENSAVER_GROUP_IDS",
+        ),
     )
 
     /** The derivation each rewired screen must consume (evidence in source). */
@@ -293,7 +307,20 @@ class SettingsCatalogScreenContractTest {
             "SettingsScreenGroups.storageNetwork",
             "SettingsScreenGroups.storageDownloads",
         ),
+        "LanguageSettingsScreen.kt" to listOf(
+            "rememberHighlightScrollIndex(",
+            "SettingsScreenGroups.languageGeneral",
+            "SettingsScreenGroups.languageSubtitles",
+        ),
+        "SettingsScreen.kt" to listOf(
+            "SettingsScreenGroups.account",
+            "SettingsScreenGroups.activityInsights",
+            "SettingsScreenGroups.systemCore",
+            "SettingsScreenGroups.systemScreensaver",
+            "settingsSearchResults(",
+        ),
         "AudioSettingsScreen.kt" to listOf(
+            "audioScreenRowTotal",
             "SettingsScreenGroups.audioCache",
         ),
     )
@@ -390,5 +417,167 @@ class SettingsCatalogScreenContractTest {
             SettingsScreenGroups.playbackDvr.itemIds.none { it.startsWith(SettingsScreenGroups.MEDIA_SEGMENT_ID_PREFIX) },
             "DVR group must not absorb media-segment ids",
         )
+    }
+
+    // ── The aggregation-decoration splits, pinned at their split lines ───
+
+    @Test
+    fun `language general group is exactly the declared leading trio`() {
+        // The split has no id shape to key on (the Live TV prefix precedent
+        // does not apply), so the split line is positional — pin the trio by
+        // name so a declaration inserted above the subtitles half lands loudly
+        // here instead of silently re-shaping the screen groups.
+        assertEquals(
+            listOf("app_language", "audio_language", "subtitle_language"),
+            SettingsScreenGroups.languageGeneral.itemIds,
+            "language.general split line drifted",
+        )
+        assertEquals(
+            LanguageSettingsSearchItems.size - 3,
+            SettingsScreenGroups.languageSubtitles.itemIds.size,
+            "language.subtitles must absorb every non-trio declaration",
+        )
+    }
+
+    @Test
+    fun `system screensaver split keeps the navigation pair in the core group`() {
+        assertEquals(
+            listOf("admin_dashboard", "setup_wizard"),
+            SettingsScreenGroups.systemCore.itemIds,
+        )
+        assertTrue(
+            SettingsScreenGroups.systemScreensaver.itemIds.all { it.startsWith(SettingsScreenGroups.SCREENSAVER_ID_PREFIX) },
+            "system.screensaver must hold only screensaver ids",
+        )
+        assertEquals(SystemSearchItems.size, SettingsScreenGroups.systemCore.items.size + SettingsScreenGroups.systemScreensaver.items.size)
+    }
+
+    @Test
+    fun `language deep-links scroll via the derived groups`() {
+        assertEquals(
+            0,
+            resolveHighlightScrollIndex("subtitle_language", listOf(
+                SettingsScreenGroups.languageGeneral.itemIdSet,
+                SettingsScreenGroups.languageSubtitles.itemIdSet,
+            )),
+        )
+        assertEquals(
+            1,
+            resolveHighlightScrollIndex("subtitle_tester", listOf(
+                SettingsScreenGroups.languageGeneral.itemIdSet,
+                SettingsScreenGroups.languageSubtitles.itemIdSet,
+            )),
+        )
+        assertTrue("subtitle_tester" in SettingsScreenGroups.languageSubtitles.itemIdSet)
+        assertTrue("high_contrast_subtitles" in SettingsScreenGroups.languageSubtitles.itemIdSet)
+    }
+
+    // ── The audio row-total derivation ──────────────────────────────────
+
+    @Test
+    fun `audio row total tracks the declaration and its conditionals`() {
+        // The retired arithmetic oracle: 5 base rows; +7 advanced always-on;
+        // +1 replaygain pre-amp only under TRACK/ALBUM normalization; +2 for
+        // preset + dialogue toggle under equalizerEnabled; +1 dialogue
+        // strength under dialogueBoostEnabled; one toggle each for night
+        // mode/bass/virtualizer/volume boost with one gated strength row
+        // behind each; +5 for reverb/auto-eq/channel-mix/balance/pitch; +1
+        // channel-mix mode under channelMixEnabled. The dialogue pair
+        // derives from the playback advanced-video declaration (both screens
+        // render it).
+        assertEquals(5, audioScreenRowTotal(showAdvanced = false, preferences = AudioPreferences()))
+        assertEquals(22, audioScreenRowTotal(showAdvanced = true, preferences = AudioPreferences()))
+        assertEquals(
+            31,
+            audioScreenRowTotal(
+                showAdvanced = true,
+                preferences = AudioPreferences(
+                    audioNormalizationMode = AudioNormalizationMode.TRACK,
+                    equalizerEnabled = true,
+                    dialogueBoostEnabled = true,
+                    nightModeEnabled = true,
+                    bassBoostEnabled = true,
+                    virtualizerEnabled = true,
+                    volumeBoostEnabled = true,
+                    channelMixEnabled = true,
+                ),
+            ),
+        )
+        // Each conditional moves the total by exactly its own row — except
+        // the equalizer toggle, which also reveals the dialogue-boost row
+        // (the strength row the dialogue-boost toggle itself gates).
+        assertEquals(
+            23,
+            audioScreenRowTotal(showAdvanced = true, preferences = AudioPreferences(audioNormalizationMode = AudioNormalizationMode.ALBUM)),
+        )
+        assertEquals(
+            24,
+            audioScreenRowTotal(showAdvanced = true, preferences = AudioPreferences(equalizerEnabled = true)),
+        )
+        assertEquals(
+            25,
+            audioScreenRowTotal(showAdvanced = true, preferences = AudioPreferences(equalizerEnabled = true, dialogueBoostEnabled = true)),
+        )
+    }
+
+    @Test
+    fun `audio row total counts the five non-advanced declarations unconditionally`() {
+        val nonAdvanced = SettingsScreenGroups.audio.items.count { !it.isAdvanced }
+        assertEquals(5, nonAdvanced, "the audio declaration's non-advanced set changed — update the totals pin")
+        assertEquals(
+            nonAdvanced,
+            audioScreenRowTotal(showAdvanced = false, preferences = AudioPreferences()),
+        )
+    }
+
+    // ── The search-result click action ──────────────────────────────────
+
+    @Test
+    fun `search-result clicks decide the pure action per branch`() {
+        // Both destructive dialogs, with the destructive ids kept out of recents.
+        val logout = settingsResultClickAction("logout", Route.Settings, isAdvanced = false, showAdvancedSettings = false)
+        assertTrue(logout.action is SettingsSearchResultAction.OpenSignOutDialog && !logout.action.fromServer)
+        assertFalse(logout.recordRecent)
+
+        val signOutFromServer = settingsResultClickAction("sign_out_from_server", Route.Settings, isAdvanced = false, showAdvancedSettings = true)
+        assertTrue(signOutFromServer.action is SettingsSearchResultAction.OpenSignOutDialog && signOutFromServer.action.fromServer)
+        assertFalse(signOutFromServer.recordRecent)
+
+        // Bare-settings screensaver targets reveal their on-screen group: no
+        // navigation, only the pending highlight.
+        val screensaver = settingsResultClickAction("screensaver_ken_burns", Route.Settings, isAdvanced = false, showAdvancedSettings = true)
+        assertTrue(screensaver.action is SettingsSearchResultAction.NoOp)
+        assertEquals("screensaver_ken_burns", screensaver.pendingHighlightId)
+        assertTrue(screensaver.recordRecent)
+
+        // The setup wizard keeps its host indirection.
+        val wizard = settingsResultClickAction("setup_wizard", Route.Onboarding, isAdvanced = false, showAdvancedSettings = true)
+        assertTrue(wizard.action is SettingsSearchResultAction.OpenSetupWizard)
+        assertEquals("setup_wizard", wizard.pendingHighlightId)
+
+        // Regular sub-screen entries navigate with the id baked in and mark
+        // the pending highlight — except the two management exemptions.
+        val theme = settingsResultClickAction("theme_mode", Route.AppearanceSettings(), isAdvanced = false, showAdvancedSettings = true)
+        val themeAction = theme.action as SettingsSearchResultAction.NavigateToScreen
+        assertEquals(Route.AppearanceSettings("theme_mode"), themeAction.route)
+        assertEquals("theme_mode", theme.pendingHighlightId)
+
+        val server = settingsResultClickAction("server_management", Route.ServerManagement(), isAdvanced = false, showAdvancedSettings = true)
+        assertTrue(server.action is SettingsSearchResultAction.NavigateToScreen)
+        assertNull(server.pendingHighlightId, "server_management must not mark the TV re-entry highlight")
+
+        val users = settingsResultClickAction("user_management", Route.UserManagement(), isAdvanced = false, showAdvancedSettings = true)
+        assertTrue(users.action is SettingsSearchResultAction.NavigateToScreen)
+        assertNull(users.pendingHighlightId, "user_management must not mark the TV re-entry highlight")
+    }
+
+    @Test
+    fun `advanced result clicks auto-enable advanced settings`() {
+        val off = settingsResultClickAction("equalizer", Route.AudioSettings(), isAdvanced = true, showAdvancedSettings = false)
+        assertTrue(off.enableAdvanced)
+        assertTrue(off.action is SettingsSearchResultAction.NavigateToScreen)
+
+        val on = settingsResultClickAction("equalizer", Route.AudioSettings(), isAdvanced = true, showAdvancedSettings = true)
+        assertFalse(on.enableAdvanced)
     }
 }

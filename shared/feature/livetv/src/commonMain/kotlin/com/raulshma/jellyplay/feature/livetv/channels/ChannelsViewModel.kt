@@ -85,9 +85,6 @@ class ChannelsViewModel(
         _nowPlayingChannelId.value = channelId
     }
 
-    fun getImageUrl(itemId: String, imageTag: String?): String {
-        return if (imageTag != null) {
-            imageUrlProvider.getImageUrl(itemId)
-        } else ""
-    }
+    fun getImageUrl(itemId: String, imageTag: String?): String =
+        imageUrlProvider.getImageUrlOrNull(itemId, imageTag)
 }

@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.widget
 
+import com.raulshma.jellyplay.core.model.WidgetConfig
 import com.raulshma.jellyplay.core.ui.components.formatDurationMsNoHours
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -26,7 +27,10 @@ import org.junit.Test
  *    truncation, endpoint percents, out-of-range clamping, and the unknown
  *    duration no-op;
  *  - the progress level's 0–1000 scale and clamping, the metadata fallback
- *    labels, and the seek-zone constants.
+ *    labels, and the seek-zone constants;
+ *  - the config fold onto the ladder: a toggled-off artwork/progress row
+ *    stays hidden at every rung (and with no ladder at all), while toggles
+ *    on never override the ladder's compact/short decisions.
  */
 class NowPlayingWidgetPolicyTest {
 
@@ -130,6 +134,78 @@ class NowPlayingWidgetPolicyTest {
     @Test
     fun `height 70dp is the inclusive subtitle threshold`() {
         assertTrue(responsiveNowPlayingLayout(widthDp = 300, heightDp = 70).showSubtitle)
+    }
+
+    // ── nowPlayingConfigFold (full-push visibility divergence fix) ───────
+
+    @Test
+    fun `artwork toggled off stays hidden even at a wide rung`() {
+        // The ladder shows artwork at 300dp; the config fold must keep it
+        // GONE — the updater's full push used to skip the config pass and
+        // resurrect the artwork the user disabled.
+        val layout = responsiveNowPlayingLayout(widthDp = 300, heightDp = 110)
+        val fold = nowPlayingConfigFold(layout, WidgetConfig(nowPlayingShowArtwork = false), isEmptyState = false)
+
+        assertFalse(fold.showAlbumArt)
+        assertFalse(fold.showBackdrop)
+        // The progress row is untouched by the artwork toggle.
+        assertTrue(fold.showProgressContainer)
+        assertTrue(fold.showProgressBar)
+        assertTrue(fold.showPosition)
+    }
+
+    @Test
+    fun `progress toggled off stays hidden even at a tall rung`() {
+        val layout = responsiveNowPlayingLayout(widthDp = 300, heightDp = 110)
+        val fold = nowPlayingConfigFold(layout, WidgetConfig(nowPlayingShowProgress = false), isEmptyState = false)
+
+        assertFalse(fold.showProgressContainer)
+        assertFalse(fold.showProgressBar)
+        assertFalse(fold.showPosition)
+        assertTrue(fold.showAlbumArt)
+        assertTrue(fold.showBackdrop)
+    }
+
+    @Test
+    fun `toggles on keep the ladder's decisions`() {
+        // Compact/short rungs stay hidden via the ladder alone; the fold is
+        // the AND of ladder and config, never an override back on.
+        val compact = responsiveNowPlayingLayout(widthDp = 110, heightDp = 60)
+        val fold = nowPlayingConfigFold(compact, WidgetConfig(), isEmptyState = false)
+
+        assertFalse(fold.showAlbumArt)
+        assertFalse(fold.showProgressContainer)
+        assertFalse(fold.showPosition)
+    }
+
+    @Test
+    fun `a fold without a ladder applies the config to the XML-default visibility`() {
+        // Unavailable widget options: no ladder ran, the XML defaults
+        // (visible) stand in — the config toggles still apply.
+        val artworkOff = nowPlayingConfigFold(null, WidgetConfig(nowPlayingShowArtwork = false), isEmptyState = false)
+
+        assertFalse(artworkOff.showAlbumArt)
+        assertFalse(artworkOff.showBackdrop)
+        assertTrue(artworkOff.showProgressContainer)
+
+        val defaults = nowPlayingConfigFold(null, WidgetConfig(), isEmptyState = false)
+
+        assertTrue(defaults.showAlbumArt)
+        assertTrue(defaults.showBackdrop)
+        assertTrue(defaults.showProgressContainer)
+        assertTrue(defaults.showProgressBar)
+        assertTrue(defaults.showPosition)
+    }
+
+    @Test
+    fun `the empty player state keeps the backdrop hidden regardless of the artwork toggle`() {
+        // The backdrop is a top-level view behind the empty-state text; the
+        // pre-renderer paths never re-showed it in the empty state, and the
+        // fold must not either — even with artwork enabled (the default).
+        val fold = nowPlayingConfigFold(null, WidgetConfig(), isEmptyState = true)
+
+        assertFalse(fold.showBackdrop)
+        assertTrue(fold.showAlbumArt)
     }
 
     // ── formatMs ─────────────────────────────────────────────────────────

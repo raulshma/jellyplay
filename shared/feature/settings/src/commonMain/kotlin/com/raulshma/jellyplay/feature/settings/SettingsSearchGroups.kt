@@ -55,7 +55,19 @@ internal object SettingsScreenGroups {
     val account = AccountSearchItems.asSearchGroup("account")
     val integrations = IntegrationsSearchItems.asSearchGroup("integrations")
     val activityInsights = ActivityInsightsSearchItems.asSearchGroup("activityInsights")
-    val system = SystemSearchItems.asSearchGroup("system")
+
+    /**
+     * The documented split of [SystemSearchItems]: the leading navigation pair
+     * (admin dashboard, setup wizard) renders as the main screen's System
+     * group, while the `screensaver_*` rows render as that screen's on-screen
+     * screensaver group. The list itself stays whole — the partition happens
+     * here, at the aggregation decoration (the Live TV media-segment
+     * precedent: a prefix split, no second declaration list).
+     */
+    val systemCore = SystemSearchItems.filter { !it.id.startsWith(SCREENSAVER_ID_PREFIX) }
+        .asSearchGroup("system.core")
+    val systemScreensaver = SystemSearchItems.filter { it.id.startsWith(SCREENSAVER_ID_PREFIX) }
+        .asSearchGroup("system.screensaver")
 
     // ── AppearanceSettingsScreen ────────────────────────────────────────
     val appearanceTheme = AppearanceThemeSearchItems.asSearchGroup("appearance.theme")
@@ -105,7 +117,21 @@ internal object SettingsScreenGroups {
     val audioCache = AudioCacheSearchItems.asSearchGroup("audio.cache")
 
     // ── Single-group screens ────────────────────────────────────────────
-    val language = LanguageSettingsSearchItems.asSearchGroup("language")
+
+    /**
+     * The documented split of [LanguageSettingsSearchItems]: the leading
+     * language trio renders in the screen's "Language" group, every remaining
+     * row in its "Subtitles" group. The list itself stays whole — the
+     * partition happens here, at the aggregation decoration (the Live TV
+     * precedent); unlike the media-segment prefix split there is no id shape
+     * to key on, so the split line is the leading-trio size, pinned by
+     * `SettingsCatalogScreenContractTest`.
+     */
+    val languageGeneral = LanguageSettingsSearchItems.take(LANGUAGE_GENERAL_GROUP_SIZE)
+        .asSearchGroup("language.general")
+    val languageSubtitles = LanguageSettingsSearchItems.drop(LANGUAGE_GENERAL_GROUP_SIZE)
+        .asSearchGroup("language.subtitles")
+
     val notifications = NotificationSettingsSearchItems.asSearchGroup("notifications")
 
     // ── StorageSettingsScreen ───────────────────────────────────────────
@@ -127,7 +153,8 @@ internal object SettingsScreenGroups {
         account,
         integrations,
         activityInsights,
-        system,
+        systemCore,
+        systemScreensaver,
         appearanceTheme,
         appearanceNavigation,
         appearanceLibrary,
@@ -144,7 +171,8 @@ internal object SettingsScreenGroups {
         playbackMediaSegments,
         audio,
         audioCache,
-        language,
+        languageGeneral,
+        languageSubtitles,
         notifications,
         storageCache,
         storageNetwork,
@@ -161,4 +189,14 @@ internal object SettingsScreenGroups {
 
     /** Prefix shared by every media-segment id in [LiveTvSearchItems]. */
     internal const val MEDIA_SEGMENT_ID_PREFIX = "media_segment_"
+
+    /** Prefix shared by every screensaver (dream) id in [SystemSearchItems]. */
+    internal const val SCREENSAVER_ID_PREFIX = "screensaver_"
+
+    /**
+     * The leading trio of [LanguageSettingsSearchItems] (app / audio /
+     * subtitle language) that renders in the screen's "Language" group — the
+     * split line of the [languageGeneral]/[languageSubtitles] decoration.
+     */
+    internal const val LANGUAGE_GENERAL_GROUP_SIZE = 3
 }

@@ -10,15 +10,13 @@ import kotlinx.coroutines.flow.StateFlow
 class AudioSettingsViewModel(
     private val store: UserPreferencesStore,
     private val projections: com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections,
-    private val appearanceStore: com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore,
+    private val advancedSettings: AdvancedSettingsGate,
     private val editor: PreferencesEditor,
     private val audioCacheClearer: AudioCacheClearer,
 ) : JellyPlayViewModel() {
 
     /** Audio-screen slice — recomposes this screen only on audio-field writes. */
     val preferences: StateFlow<AudioPreferences> = projections.audioPreferences
-
-    private val advancedSettings = AdvancedSettingsGate(appearanceStore, editor)
 
     val showAdvancedSettings: StateFlow<Boolean> = advancedSettings.showAdvancedSettings
 

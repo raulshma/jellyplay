@@ -64,7 +64,7 @@ class LibraryRecommendationsWidgetWorker(
         }
 
         val mapped = items.take(MAX_ITEMS).map { it.toWidgetItem() }
-        WidgetPersistHelper.persistLibraryItems(applicationContext, widgetDataStore, mapped, versionBumpOnly = false)
+        WidgetPersistHelper.persistLibraryItems(applicationContext, widgetDataStore, mapped)
     }.fold(
         onSuccess = { Result.success() },
         onFailure = { e ->
@@ -125,8 +125,13 @@ class LibraryRecommendationsWidgetWorker(
     }
 
     private fun MediaItem.toWidgetItem(): LibraryWidgetItem {
-        val imageId = seriesId ?: id
-        val poster = runCatching { playbackRepository.getImageUrl(imageId, maxWidth = 400) }
+        val imageId = WidgetPosterIdentity.libraryRecommendationsPosterImageId(this)
+        val poster = runCatching {
+            playbackRepository.getImageUrl(
+                imageId,
+                maxWidth = WidgetPosterIdentity.LIBRARY_RECOMMENDATIONS_POSTER_MAX_WIDTH,
+            )
+        }
             .getOrNull()
             ?.takeIf { it.isNotBlank() }
         return LibraryWidgetItem(

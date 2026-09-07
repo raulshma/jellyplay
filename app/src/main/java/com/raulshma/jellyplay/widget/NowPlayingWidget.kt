@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.widget
 
-import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
 import android.content.Context
@@ -12,11 +11,9 @@ import android.widget.RemoteViews
 import com.raulshma.jellyplay.R
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.widget.skeleton.WidgetProviderSkeleton
-import com.raulshma.jellyplay.widget.skeleton.toViewVisibility
 import com.raulshma.jellyplay.widget.skeleton.widgetIdsFor
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
-import java.util.concurrent.ConcurrentHashMap
 import org.koin.mp.KoinPlatform
 
 /**
@@ -26,9 +23,6 @@ import org.koin.mp.KoinPlatform
  * the caller's empty/fallback state, never a crash from the broadcast).
  */
 private fun koinAudioPlaybackManager(): AudioPlaybackManager =
-    KoinPlatform.getKoin()!!.get()
-
-private fun koinWidgetDataStore(): com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore =
     KoinPlatform.getKoin()!!.get()
 
 private fun koinNowPlayingWidgetUpdater(): NowPlayingWidgetUpdater =
@@ -88,41 +82,31 @@ class NowPlayingWidget : WidgetProviderSkeleton() {
         // A resize can arrive while the updater is dormant (e.g. after a
         // restore where no onEnabled followed) — spec's named restart point.
         notifyUpdaterPresenceChanged(context)
+        // The manager state is read once up front (same thread the former
+        // inline reads used); the render itself goes through the shared
+        // renderer, inside the main-handler post below.
         val manager = koinAudioPlaybackManager()
-        val title = manager.title.value
-        val artist = manager.artist.value
-        val isPlaying = manager.isPlaying.value
-        val position = manager.currentPosition.value
-        val duration = manager.duration.value
-        val itemId = manager.currentPlayingItemId.value
+        val snapshot = NowPlayingWidgetRenderer.readPushSnapshot(manager)
 
-        val artUrl = manager.albumArtUrl.value
         // Owns its goAsync() window inline (finish inside the posted main
         // handler, not a finally) rather than [launchWithPendingResult] —
         // the widget push happens on the main thread after the poster load.
         val pending = goAsync()
         refreshScope.launch {
             try {
-                val art = if (!artUrl.isNullOrBlank()) {
-                    WidgetImageLoader.loadPoster(context.applicationContext, artUrl)
+                val art = if (!snapshot.artUrl.isNullOrBlank()) {
+                    WidgetImageLoader.loadPoster(context.applicationContext, snapshot.artUrl)
                 } else null
 
                 val mainHandler = android.os.Handler(context.mainLooper)
                 mainHandler.post {
-                    val views = RemoteViews(context.packageName, R.layout.now_playing_widget)
-                    wireClickIntents(context, views)
-                    bindState(
-                        views = views,
-                        title = title,
-                        subtitle = artist.ifBlank { null },
-                        isPlaying = isPlaying,
+                    NowPlayingWidgetRenderer.renderFullPush(
+                        context = context,
+                        appWidgetManager = appWidgetManager,
+                        appWidgetId = appWidgetId,
+                        snapshot = snapshot,
                         albumArt = art,
-                        positionMs = position,
-                        durationMs = duration,
-                        isEmptyState = itemId == null,
                     )
-                    applyResponsiveLayout(context, appWidgetManager, appWidgetId, views)
-                    appWidgetManager.updateAppWidget(appWidgetId, views)
                     pending.finish()
                 }
             } catch (_: Exception) {
@@ -206,90 +190,55 @@ class NowPlayingWidget : WidgetProviderSkeleton() {
 
         const val EXTRA_SEEK_PERCENT = "extra_seek_percent"
 
+        /**
+         * The bind the provider's onUpdate, the updater's dormant restart and
+         * the config activity's save share: read the manager once (empty
+         * state when it cannot be resolved — the process-start race) and
+         * render through the shared pipeline. No artwork load on this path;
+         * the updater's push owns the bitmap.
+         */
         fun updateAppWidget(
             context: Context,
             appWidgetManager: AppWidgetManager,
             appWidgetId: Int,
         ) {
-            val views = RemoteViews(context.packageName, R.layout.now_playing_widget)
-            wireClickIntents(context, views)
-            val config = try {
-                koinWidgetDataStore().getWidgetConfigForIdSync(appWidgetId)
+            val snapshot = try {
+                NowPlayingWidgetRenderer.readPushSnapshot(koinAudioPlaybackManager())
             } catch (_: Exception) {
-                com.raulshma.jellyplay.core.model.WidgetConfig()
+                EMPTY_STATE_SNAPSHOT
             }
-            try {
-                val manager = koinAudioPlaybackManager()
-                val title = manager.title.value
-                val artist = manager.artist.value
-                val isPlaying = manager.isPlaying.value
-                val position = manager.currentPosition.value
-                val duration = manager.duration.value
-                val itemId = manager.currentPlayingItemId.value
-                bindState(
-                    views = views,
-                    title = title,
-                    subtitle = artist.ifBlank { null },
-                    isPlaying = isPlaying,
-                    albumArt = null,
-                    positionMs = position,
-                    durationMs = duration,
-                    isEmptyState = itemId == null,
-                )
-            } catch (e: Exception) {
-                bindState(
-                    views = views,
-                    title = null,
-                    subtitle = null,
-                    isPlaying = false,
-                    albumArt = null,
-                    positionMs = 0L,
-                    durationMs = 0L,
-                    isEmptyState = true,
-                )
-            }
-            if (!config.nowPlayingShowArtwork) {
-                views.setViewVisibility(R.id.widget_album_art, android.view.View.GONE)
-                views.setViewVisibility(R.id.widget_backdrop, android.view.View.GONE)
-            }
-            if (!config.nowPlayingShowProgress) {
-                views.setViewVisibility(R.id.widget_progress_container, android.view.View.GONE)
-                views.setViewVisibility(R.id.widget_progress, android.view.View.GONE)
-                views.setViewVisibility(R.id.widget_position, android.view.View.GONE)
-            }
-            applyResponsiveLayout(context, appWidgetManager, appWidgetId, views)
-            appWidgetManager.updateAppWidget(appWidgetId, views)
+            NowPlayingWidgetRenderer.renderFullPush(
+                context = context,
+                appWidgetManager = appWidgetManager,
+                appWidgetId = appWidgetId,
+                snapshot = snapshot,
+                albumArt = null,
+            )
         }
 
-        fun updateAllWidgets(
+        /**
+         * The updater's full push: render [snapshot] — already read through
+         * [NowPlayingWidgetRenderer.readPushSnapshot] on the updater's
+         * collector thread — onto every bound instance. Per-widget config
+         * visibility is applied inside the renderer.
+         */
+        internal fun updateAllWidgets(
             context: Context,
-            title: String?,
-            subtitle: String?,
-            isPlaying: Boolean,
+            snapshot: WidgetPushSnapshot,
             albumArt: Bitmap? = null,
-            positionMs: Long = 0L,
-            durationMs: Long = 0L,
-            isEmptyState: Boolean = false,
         ) {
             val appWidgetManager = AppWidgetManager.getInstance(context)
             val appWidgetIds = widgetIdsFor(context, NowPlayingWidget::class.java)
             if (appWidgetIds.isEmpty()) return
 
             for (appWidgetId in appWidgetIds) {
-                val views = RemoteViews(context.packageName, R.layout.now_playing_widget)
-                wireClickIntents(context, views)
-                bindState(
-                    views = views,
-                    title = title,
-                    subtitle = subtitle,
-                    isPlaying = isPlaying,
+                NowPlayingWidgetRenderer.renderFullPush(
+                    context = context,
+                    appWidgetManager = appWidgetManager,
+                    appWidgetId = appWidgetId,
+                    snapshot = snapshot,
                     albumArt = albumArt,
-                    positionMs = positionMs,
-                    durationMs = durationMs,
-                    isEmptyState = isEmptyState,
                 )
-                applyResponsiveLayout(context, appWidgetManager, appWidgetId, views)
-                appWidgetManager.updateAppWidget(appWidgetId, views)
             }
         }
 
@@ -327,196 +276,20 @@ class NowPlayingWidget : WidgetProviderSkeleton() {
             }
         }
 
-        private fun applyResponsiveLayout(
-            context: Context,
-            appWidgetManager: AppWidgetManager,
-            appWidgetId: Int,
-            views: RemoteViews,
-        ) {
-            val options = appWidgetManager.getAppWidgetOptions(appWidgetId) ?: return
-            val dims = widgetDimensionsFromOptions(
-                context,
-                options,
-                WidgetLayoutThresholds.NOW_PLAYING_DEFAULT_HEIGHT_DP,
-            ) ?: return
-            val layout = responsiveNowPlayingLayout(widthDp = dims.width, heightDp = dims.height)
-
-            views.setViewVisibility(R.id.widget_album_art, layout.showAlbumArt.toViewVisibility())
-            views.setViewVisibility(
-                R.id.widget_progress_container,
-                layout.showProgressContainer.toViewVisibility(),
-            )
-            views.setViewVisibility(R.id.widget_position, layout.showPosition.toViewVisibility())
-            views.setViewVisibility(R.id.widget_subtitle, layout.showSubtitle.toViewVisibility())
-            views.setViewVisibility(R.id.widget_rewind, layout.showRewind.toViewVisibility())
-            views.setViewVisibility(R.id.widget_forward, layout.showForward.toViewVisibility())
-            views.setViewVisibility(R.id.widget_prev, layout.showPrev.toViewVisibility())
-            views.setViewVisibility(R.id.widget_next, layout.showNext.toViewVisibility())
-            views.setViewVisibility(R.id.widget_play_pause, layout.showPlayPause.toViewVisibility())
-        }
-
-        private fun wireClickIntents(context: Context, views: RemoteViews) {
-            val app = context.applicationContext
-            views.setOnClickPendingIntent(R.id.widget_container, cachedOpenAppPending(app))
-            views.setOnClickPendingIntent(R.id.widget_album_art, cachedOpenAppPending(app))
-            views.setOnClickPendingIntent(R.id.widget_backdrop, cachedOpenAppPending(app))
-            views.setOnClickPendingIntent(R.id.widget_empty_state, cachedOpenAppPending(app))
-
-            views.setOnClickPendingIntent(
-                R.id.widget_play_pause,
-                cachedBroadcastPending(app, ACTION_PLAY_PAUSE, REQ_PLAY_PAUSE),
-            )
-            views.setOnClickPendingIntent(
-                R.id.widget_next,
-                cachedBroadcastPending(app, ACTION_NEXT, REQ_NEXT),
-            )
-            views.setOnClickPendingIntent(
-                R.id.widget_prev,
-                cachedBroadcastPending(app, ACTION_PREV, REQ_PREV),
-            )
-            views.setOnClickPendingIntent(
-                R.id.widget_rewind,
-                cachedBroadcastPending(app, ACTION_REWIND, REQ_REWIND),
-            )
-            views.setOnClickPendingIntent(
-                R.id.widget_forward,
-                cachedBroadcastPending(app, ACTION_FORWARD, REQ_FORWARD),
-            )
-
-            val seekZoneIds = SEEK_ZONE_IDS
-            for (i in seekZoneIds.indices) {
-                val percent = SEEK_PERCENTS[i]
-                views.setOnClickPendingIntent(
-                    seekZoneIds[i],
-                    cachedSeekPending(app, percent, REQ_SEEK_BASE + i),
-                )
-            }
-        }
-
-        // Click PendingIntents are process-stable (fixed request codes, fixed
-        // intents) — memoized so full widget pushes don't force the system's
-        // PendingIntent table rewrite (FLAG_UPDATE_CURRENT) on every rebuild.
-        // Request codes are unique across open-app (100), transports (101–105)
-        // and seek zones (200+), so one table keyed by request code covers all
-        // of them. Races only ever build the same instance twice, which is
-        // benign.
-        private val pendingIntents = ConcurrentHashMap<Int, PendingIntent>()
-
-        private fun cachedOpenAppPending(context: Context): PendingIntent =
-            pendingIntents.computeIfAbsent(REQ_OPEN_APP) {
-                PendingIntent.getActivity(
-                    context, REQ_OPEN_APP, openAppIntent(context),
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-                )
-            }
-
-        private fun cachedBroadcastPending(
-            context: Context,
-            action: String,
-            requestCode: Int,
-        ): PendingIntent = pendingIntents.computeIfAbsent(requestCode) {
-            broadcastPending(context, action, requestCode)
-        }
-
-        private fun cachedSeekPending(
-            context: Context,
-            percent: Int,
-            requestCode: Int,
-        ): PendingIntent = pendingIntents.computeIfAbsent(requestCode) {
-            seekPending(context, percent, requestCode)
-        }
-
-        private fun broadcastPending(
-            context: Context,
-            action: String,
-            requestCode: Int,
-        ): PendingIntent {
-            val intent = Intent(context, NowPlayingWidget::class.java).apply {
-                this.action = action
-            }
-            return PendingIntent.getBroadcast(
-                context, requestCode, intent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-            )
-        }
-
-        private fun seekPending(
-            context: Context,
-            percent: Int,
-            requestCode: Int,
-        ): PendingIntent {
-            val intent = Intent(context, NowPlayingWidget::class.java).apply {
-                action = ACTION_SEEK_TO
-                putExtra(EXTRA_SEEK_PERCENT, percent)
-            }
-            return PendingIntent.getBroadcast(
-                context, requestCode, intent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-            )
-        }
-
-        private fun bindState(
-            views: RemoteViews,
-            title: String?,
-            subtitle: String?,
-            isPlaying: Boolean,
-            albumArt: Bitmap?,
-            positionMs: Long,
-            durationMs: Long,
-            isEmptyState: Boolean,
-        ) {
-            if (isEmptyState) {
-                views.setViewVisibility(R.id.widget_empty_state, android.view.View.VISIBLE)
-                views.setViewVisibility(R.id.widget_content, android.view.View.GONE)
-                views.setViewVisibility(R.id.widget_backdrop, android.view.View.GONE)
-                return
-            }
-            views.setViewVisibility(R.id.widget_empty_state, android.view.View.GONE)
-            views.setViewVisibility(R.id.widget_content, android.view.View.VISIBLE)
-            views.setViewVisibility(R.id.widget_backdrop, android.view.View.VISIBLE)
-
-            views.setTextViewText(R.id.widget_title, widgetDisplayTitle(title))
-            views.setTextViewText(R.id.widget_subtitle, widgetDisplaySubtitle(subtitle))
-            views.setTextViewText(
-                R.id.widget_position,
-                formatPosition(positionMs, durationMs, isPlaying),
-            )
-
-            if (albumArt != null) {
-                views.setImageViewBitmap(R.id.widget_album_art, albumArt)
-                views.setImageViewBitmap(R.id.widget_backdrop, albumArt)
-            } else {
-                views.setImageViewResource(R.id.widget_album_art, R.drawable.widget_ic_music)
-                views.setImageViewResource(R.id.widget_backdrop, R.drawable.widget_backdrop_placeholder)
-            }
-            views.setImageViewResource(
-                R.id.widget_play_pause,
-                if (isPlaying) R.drawable.widget_ic_pause else R.drawable.widget_ic_play,
-            )
-            views.setProgressBar(
-                R.id.widget_progress,
-                1_000,
-                progressPerMille(positionMs, durationMs),
-                false,
-            )
-        }
-
-        private const val REQ_OPEN_APP = 100
-        private const val REQ_PLAY_PAUSE = 101
-        private const val REQ_NEXT = 102
-        private const val REQ_PREV = 103
-        private const val REQ_REWIND = 104
-        private const val REQ_FORWARD = 105
-        private const val REQ_SEEK_BASE = 200
-
-        private val SEEK_ZONE_IDS = intArrayOf(
-            R.id.widget_seek_zone_0,
-            R.id.widget_seek_zone_1,
-            R.id.widget_seek_zone_2,
-            R.id.widget_seek_zone_3,
-            R.id.widget_seek_zone_4,
-            R.id.widget_seek_zone_5,
-            R.id.widget_seek_zone_6,
+        /**
+         * Fallback render when the playback manager cannot be resolved: the
+         * empty-state branch of the bind (title/subtitle are never read
+         * there, so blanks stand in for the nulls the former inline fallback
+         * passed).
+         */
+        private val EMPTY_STATE_SNAPSHOT = WidgetPushSnapshot(
+            title = "",
+            subtitle = null,
+            isPlaying = false,
+            positionMs = 0L,
+            durationMs = 0L,
+            artUrl = null,
+            isEmptyState = true,
         )
     }
 }

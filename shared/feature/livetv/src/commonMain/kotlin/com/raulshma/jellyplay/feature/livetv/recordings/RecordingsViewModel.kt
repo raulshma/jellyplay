@@ -46,7 +46,7 @@ class RecordingsViewModel(
     }
 
     fun getImageUrl(itemId: String, imageTag: String?): String =
-        if (imageTag != null) imageUrlProvider.getImageUrl(itemId) else ""
+        imageUrlProvider.getImageUrlOrNull(itemId, imageTag)
 
     // ── Delete / cancel affordance ──────────────────────────────────────────
 

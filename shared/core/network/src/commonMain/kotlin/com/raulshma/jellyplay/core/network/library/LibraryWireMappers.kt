@@ -313,8 +313,9 @@ internal fun BaseItemDtoWire.toCollectionSummary() = CollectionSummary(
 
 /**
  * The canonical rating→age table (unknown ratings map to null = "no
- * opinion"). `JellyfinApiEngine.ratingToAge` delegates here; formerly a
- * verbatim twin lived in the engine.
+ * opinion"). Both platform parental-filter tails resolve ratings through it
+ * (jvmShared: the SDK-typed `toFilteredMediaItems` mapper tail over
+ * [filterByParentalRating]; wasm: the client's own call of the same).
  */
 internal fun parentalRatingAge(rating: String): Int? = when (rating.uppercase()) {
     "G", "TV-Y", "TV-G" -> 0
@@ -326,9 +327,8 @@ internal fun parentalRatingAge(rating: String): Int? = when (rating.uppercase())
 }
 
 /**
- * The engine's client-side parental-rating filter, verbatim semantics
- * (`JellyfinApiEngine.filterByParentalRating`): no max rating → unfiltered;
- * an unrated/unknown-rating item passes (`!= false` keeps it).
+ * The client-side parental-rating filter, verbatim semantics: no max rating →
+ * unfiltered; an unrated/unknown-rating item passes (`!= false` keeps it).
  */
 internal fun <T : MediaItem> List<T>.filterByParentalRating(maxParentalRating: Int?): List<T> {
     val max = maxParentalRating ?: return this

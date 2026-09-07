@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.settings.di
 
 import com.raulshma.jellyplay.feature.settings.AboutViewModel
+import com.raulshma.jellyplay.feature.settings.AdvancedSettingsGate
 import com.raulshma.jellyplay.feature.settings.AppearanceSettingsViewModel
 import com.raulshma.jellyplay.feature.settings.ArrSettingsViewModel
 import com.raulshma.jellyplay.feature.settings.AudioSettingsViewModel
@@ -68,6 +69,11 @@ val settingsModule: Module = module {
     // died with wave 6B's HomeViewModel flip).
     single<SettingsSearchProvider> { SettingsSearchCatalog }
 
+    // One shared instance of the stateless advanced-settings gate (read flow
+    // + write command over the shared AppearanceStore) instead of a per-VM
+    // rebuild in every settings ViewModel.
+    single { AdvancedSettingsGate(get(), get()) }
+
     // Eager at startKoin so the settings string table is warm on a background
     // dispatcher LONG before the settings screen's first composition can block
     // on cold per-entry reads (the mechanism behind the settings-open ANR —
@@ -85,7 +91,7 @@ val settingsModule: Module = module {
             authRepository = get(),
             seerrRepository = get(),
             adminRepository = get(),
-            appearanceStore = get(),
+            advancedSettings = get(),
             editor = get(),
             recentsStore = get(),
         )
@@ -94,7 +100,7 @@ val settingsModule: Module = module {
         AppearanceSettingsViewModel(
             store = get(),
             projections = get(),
-            appearanceStore = get(),
+            advancedSettings = get(),
             editor = get(),
         )
     }
@@ -103,7 +109,7 @@ val settingsModule: Module = module {
             appLocaleSetter = get(),
             store = get(),
             projections = get(),
-            appearanceStore = get(),
+            advancedSettings = get(),
             editor = get(),
         )
     }
@@ -111,7 +117,7 @@ val settingsModule: Module = module {
         PlaybackSettingsViewModel(
             store = get(),
             projections = get(),
-            appearanceStore = get(),
+            advancedSettings = get(),
             editor = get(),
             watchNextRefresher = get(),
         )
@@ -120,7 +126,7 @@ val settingsModule: Module = module {
         AudioSettingsViewModel(
             store = get(),
             projections = get(),
-            appearanceStore = get(),
+            advancedSettings = get(),
             editor = get(),
             audioCacheClearer = get(),
         )
@@ -129,7 +135,7 @@ val settingsModule: Module = module {
         ExperimentalSettingsViewModel(
             store = get(),
             projections = get(),
-            appearanceStore = get(),
+            advancedSettings = get(),
             editor = get(),
         )
     }
@@ -188,7 +194,7 @@ val settingsModule: Module = module {
     viewModel {
         StorageSettingsViewModel(
             projections = get(),
-            appearanceStore = get(),
+            advancedSettings = get(),
             editor = get(),
             autoDownloadSync = get(),
             storageAreas = get(),
@@ -221,7 +227,7 @@ val settingsModule: Module = module {
         SecuritySettingsViewModel(
             store = get(),
             projections = get(),
-            appearanceStore = get(),
+            advancedSettings = get(),
             editor = get(),
             authRepository = get(),
         )
@@ -273,7 +279,7 @@ val settingsModule: Module = module {
         NotificationSettingsViewModel(
             store = get(),
             projections = get(),
-            appearanceStore = get(),
+            advancedSettings = get(),
             editor = get(),
             mediaRepository = get(),
             notificationSync = get(),

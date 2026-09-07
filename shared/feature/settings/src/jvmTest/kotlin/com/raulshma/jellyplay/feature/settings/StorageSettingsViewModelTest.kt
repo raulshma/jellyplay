@@ -161,14 +161,17 @@ class StorageSettingsViewModelTest {
         store = userPreferencesStore,
     )
 
-    private fun viewModel(): StorageSettingsViewModel = StorageSettingsViewModel(
-        projections = projections,
-        appearanceStore = appearanceStore,
-        editor = realEditor(),
-        autoDownloadSync = AutoDownloadSync { autoDownloadSyncs.add(Unit) },
-        storageAreas = storageAreas,
-        storageMountsProvider = storageMountsProvider,
-    )
+    private fun viewModel(): StorageSettingsViewModel {
+        val editor = realEditor()
+        return StorageSettingsViewModel(
+            projections = projections,
+            advancedSettings = AdvancedSettingsGate(appearanceStore, editor),
+            editor = editor,
+            autoDownloadSync = AutoDownloadSync { autoDownloadSyncs.add(Unit) },
+            storageAreas = storageAreas,
+            storageMountsProvider = storageMountsProvider,
+        )
+    }
 
     // ---------------------------------------------------------------- init / mounts
 

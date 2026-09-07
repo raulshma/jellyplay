@@ -2,18 +2,19 @@ package com.raulshma.jellyplay.feature.livetv.channeldetail
 
 import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
+import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.feature.livetv.components.RecordAction
 import com.raulshma.jellyplay.feature.livetv.components.RecordActions
 import com.raulshma.jellyplay.feature.livetv.components.RecordOutcome
 import com.raulshma.jellyplay.feature.livetv.isAiringAt
+import com.raulshma.jellyplay.feature.livetv.nowInstant
 import com.raulshma.jellyplay.feature.livetv.toInstantOrNull
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
-import java.time.Instant
 import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -21,6 +22,7 @@ import java.time.format.DateTimeFormatter
 class ChannelDetailViewModel(
     private val mediaRepository: LiveTvRepository,
     private val imageUrlProvider: ImageUrlProvider,
+    private val timeSource: TimeSource,
 ) : JellyPlayViewModel() {
 
     private val _uiState = stateFlow(ChannelDetailUiState())
@@ -50,9 +52,7 @@ class ChannelDetailViewModel(
                             it.copy(
                                 channelName = channel.name.ifBlank { channelName },
                                 channelNumber = channel.number,
-                                channelLogoUrl = if (channel.imageTag != null) {
-                                    imageUrlProvider.getImageUrl(channelId)
-                                } else "",
+                                channelLogoUrl = imageUrlProvider.getImageUrlOrNull(channelId, channel.imageTag),
                                 channelBlurHash = channel.primaryBlurHash,
                                 currentProgram = channel.currentProgram,
                             )
@@ -80,11 +80,14 @@ class ChannelDetailViewModel(
      *   (initial-load semantics). Subsequent refreshes silently update the list.
      */
     private suspend fun refreshPrograms(channelId: String, isInitialLoad: Boolean = false) {
-        val now = OffsetDateTime.now()
+        // One injected-clock read drives both the request window and the
+        // ended/airing verdicts below, so the list can never disagree with
+        // the window it was fetched for.
+        val now = OffsetDateTime.ofInstant(timeSource.nowInstant(), ZoneId.systemDefault())
         val endOfDay = now.toLocalDate().plusDays(1).atStartOfDay(ZoneId.systemDefault()).toOffsetDateTime()
         val startIso = now.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
         val endIso = endOfDay.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
-        val nowInstant = Instant.now()
+        val nowInstant = now.toInstant()
 
         mediaRepository.getLiveTvPrograms(channelId, startIso, endIso)
             .onSuccess { all ->
@@ -163,7 +166,7 @@ class ChannelDetailViewModel(
     fun getProgramBackdropUrl(program: LiveTvProgram): String {
         val directUrl = program.imageUrl
         return when {
-            program.imageTag != null -> imageUrlProvider.getImageUrl(program.id)
+            program.imageTag != null -> imageUrlProvider.getImageUrlOrNull(program.id, program.imageTag)
             directUrl != null -> directUrl
             else -> _uiState.value.channelLogoUrl
         }

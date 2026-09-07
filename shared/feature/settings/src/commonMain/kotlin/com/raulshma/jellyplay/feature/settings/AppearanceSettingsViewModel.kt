@@ -12,7 +12,7 @@ import kotlinx.coroutines.flow.StateFlow
 class AppearanceSettingsViewModel(
     private val store: UserPreferencesStore,
     private val projections: com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections,
-    private val appearanceStore: com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore,
+    private val advancedSettings: AdvancedSettingsGate,
     private val editor: PreferencesEditor,
 ) : JellyPlayViewModel() {
 
@@ -22,8 +22,6 @@ class AppearanceSettingsViewModel(
     /** Navigation-customization slice, consumed by the embedded `NavigationCustomizationGroup`. */
     val navigationCustomizationPreferences: StateFlow<NavigationCustomizationPreferences> =
         projections.navigationCustomizationPreferences
-
-    private val advancedSettings = AdvancedSettingsGate(appearanceStore, editor)
 
     val showAdvancedSettings: StateFlow<Boolean> = advancedSettings.showAdvancedSettings
 

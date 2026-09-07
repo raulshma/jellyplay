@@ -3,6 +3,7 @@
 package com.raulshma.jellyplay.feature.livetv.epg
 
 import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
+import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.model.EpgGuide
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
@@ -13,6 +14,7 @@ import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
@@ -22,6 +24,9 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import java.time.Duration
 import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.temporal.ChronoUnit
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -38,16 +43,22 @@ import kotlin.test.assertTrue
  *  - the guide fetch window is exactly 24h long, starting 2h in the past
  *    (recently-ended shows stay visible), queried with limit=100;
  *  - loadGuide success/failure populates channels/programs/grid vs error;
+ *  - the now-ticker seeds from the injected clock and re-reads it at every
+ *    30s virtual tick;
  *  - confirmRecord drives Confirm → Requesting → Success/Error and reloads
  *    the guide so the timer badges reflect the new timer;
  *  - the auto-refresh loop (started explicitly by these tests since the EPG
  *    screen now gates it on STARTED) refetches at exactly the 5-minute
  *    virtual mark.
  *
+ * The clock is a fixed-epoch [FakeTimeSource] (the HomeRefresher seam
+ * pattern), so the window and ticker assertions below are EXACT — no
+ * real-time tolerance windows — and the ticker's emissions ride the virtual
+ * scheduler's 30s ticks like every other delay.
+ *
  * The infinite auto-refresh/now-tick loops park on delays, so tests only ever
  * [runCurrent] / [advanceTimeBy] — never `advanceUntilIdle`, which would spin
- * forever on the rescheduling loops. The now-tick loop itself is not asserted:
- * it stamps the REAL clock (`Instant.now()`), not the virtual scheduler's.
+ * forever on the rescheduling loops.
  * rebuildGrid hops to the VM's injected gridDispatcher, which these tests bind
  * to a [StandardTestDispatcher] on the same scheduler the tests pump — the
  * hop is a queued task, so a bare [runCurrent] drains it deterministically
@@ -71,6 +82,12 @@ class EpgViewModelTest {
 
     private lateinit var mediaRepository: LiveTvRepository
 
+    /** The fake clock every created VM reads; tests move [FakeTimeSource.nowMs] deliberately. */
+    private val fakeTimeSource = FakeTimeSource(BOOT_NOW_MS)
+
+    /** The VM's view of the fake clock, for fixture math relative to "now". */
+    private val fakeNow: Instant get() = Instant.ofEpochMilli(fakeTimeSource.nowMs)
+
     @BeforeTest
     fun setUp() {
         Dispatchers.setMain(mainDispatcher)
@@ -89,6 +106,7 @@ class EpgViewModelTest {
     private fun TestScope.createViewModel(): EpgViewModel {
         val vm = EpgViewModel(
             mediaRepository,
+            timeSource = fakeTimeSource,
             gridDispatcher = StandardTestDispatcher(testScheduler),
         )
         createdViewModels += vm
@@ -127,8 +145,8 @@ class EpgViewModelTest {
     private fun program(
         id: String,
         name: String = "Program $id",
-        start: Instant = Instant.now(),
-        end: Instant = Instant.now().plusSeconds(1_800),
+        start: Instant = fakeNow,
+        end: Instant = fakeNow.plusSeconds(1_800),
     ) = LiveTvProgram(
         id = id,
         name = name,
@@ -156,21 +174,17 @@ class EpgViewModelTest {
         assertEquals(2, starts.size)
         val start = Instant.parse(starts.last())
         val end = Instant.parse(ends.last())
-        // start ≈ now - 2h (a small real-time tolerance around the fetch).
-        val sinceStart = Duration.between(start, Instant.now())
-        assertTrue(
-            sinceStart > Duration.ofMinutes(119) && sinceStart < Duration.ofMinutes(123),
-            "expected start ≈ now-2h, was $start",
-        )
-        // Total window span is the jellyfin-web 24h guide.
+        // The injected clock makes the window exact: 2h back from the fixed now…
+        assertEquals(fakeNow.minus(2, ChronoUnit.HOURS), start)
+        // …over the jellyfin-web 24h guide span.
+        assertEquals(fakeNow.plus(22, ChronoUnit.HOURS), end)
         assertEquals(Duration.ofHours(24), Duration.between(start, end))
     }
 
     @Test
     fun loadGuide_success_populates_channels_programs_and_the_grid_snapshot() = vmTest {
-        val now = Instant.now()
         val channel = LiveTvChannel(id = "chan-1", name = "CNN")
-        val airing = program(id = "p1", start = now.minusSeconds(600), end = now.plusSeconds(1_200))
+        val airing = program(id = "p1", start = fakeNow.minusSeconds(600), end = fakeNow.plusSeconds(1_200))
         coEvery { mediaRepository.getLiveTvGuide(any(), any(), any(), any()) } returns
             Result.success(EpgGuide(channels = listOf(channel), programs = listOf(airing)))
 
@@ -278,6 +292,33 @@ class EpgViewModelTest {
         vm.stopLoops()
     }
 
+    // ── Now-ticker ───────────────────────────────────────────────────────────
+
+    @Test
+    fun now_ticker_seeds_from_the_injected_clock() = vmTest {
+        val vm = createViewModel()
+
+        assertEquals(fakeNow, vm.now.value)
+        vm.stopLoops()
+    }
+
+    @Test
+    fun now_ticker_re_reads_the_injected_clock_at_each_30s_tick() = vmTest {
+        val vm = createViewModel()
+        val collector = launch { vm.now.collect { } }
+        testScheduler.runCurrent()
+
+        // The clock moves between ticks; the next 30s emission must pick the
+        // NEW read up (the ticker re-reads the source, it does not cache).
+        fakeTimeSource.nowMs = BOOT_NOW_MS + 60_000L
+        testScheduler.advanceTimeBy(30_000L)
+        testScheduler.runCurrent()
+
+        assertEquals(fakeNow, vm.now.value)
+        collector.cancel()
+        vm.stopLoops()
+    }
+
     // ── Auto-refresh loop ────────────────────────────────────────────────────
 
     @Test
@@ -322,5 +363,22 @@ class EpgViewModelTest {
         assertEquals(listOf("chan-9"), vm.gridData.rows.map { it.channel.id })
         assertNull(vm.error)
         vm.stopLoops()
+    }
+
+    private companion object {
+        /** Fixed boot instant: 2026-07-01T12:00:00Z. */
+        const val BOOT_NOW_MS: Long = 1_782_907_200_000L
+    }
+
+    /**
+     * Controllable [TimeSource] on the fixed [BOOT_NOW_MS] epoch (the
+     * HomeRefresher fake idiom) — the VM's guide window, ticker seed and
+     * fetch stamps are all EXACT against it; tests move [nowMs] to prove a
+     * read re-happens.
+     */
+    private class FakeTimeSource(var nowMs: Long) : TimeSource {
+        override fun nowEpochMillis(): Long = nowMs
+        override fun nowElapsedRealtimeMillis(): Long = nowMs
+        override fun today(zone: ZoneId): LocalDate = LocalDate.of(2026, 1, 1)
     }
 }

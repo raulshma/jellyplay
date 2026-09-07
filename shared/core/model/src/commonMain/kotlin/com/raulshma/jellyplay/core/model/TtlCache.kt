@@ -72,6 +72,21 @@ class TtlCache<V>(
         map[key] = TtlEntry(value, clock())
     }
 
+    /**
+     * Cache-aside fold for the get-miss-fetch-put sequence the API clients
+     * run inside their retry blocks: returns the cached value, or runs
+     * [producer] and caches (then returns) its result. [producer] runs only
+     * on a miss and only a successful result is cached — a throw propagates
+     * WITHOUT a put, exactly like the unfolded sequence. Inline so callers
+     * inside suspend blocks can fetch in [producer] without this class
+     * depending on coroutines; the same not-single-flight caveat as the class
+     * KDoc applies (concurrent callers may both run [producer]).
+     */
+    inline fun getOrPut(key: String, producer: () -> V): V {
+        get(key)?.let { return it }
+        return producer().also { put(key, it) }
+    }
+
     /** Identity-aware [put]. */
     fun put(identity: CacheIdentity, key: String, value: V) {
         put(compositeKey(identity, key), value)

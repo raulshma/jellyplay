@@ -21,8 +21,8 @@ import org.koin.dsl.module
  *  - MediaRepository is still Hilt-owned in the legacy data shim and reaches
  *    Koin through the app composition root's Hilt interop module (dies at
  *    Phase X);
- *  - ImageUrlProvider (shared data) and AppRuntimeStateStore (shared
- *    datastore) resolve from the C4 shared-module graph;
+ *  - ImageUrlProvider, TimeSource (shared data) and AppRuntimeStateStore
+ *    (shared datastore) resolve from the C4 shared-module graph;
  *  - VideoMiniPlayerState resolves from dataJvmModule (V3 livetv conveyor:
  *    the holder moved into :shared:core:data — Koin-owned, bridged back to
  *    the legacy Hilt injectors by the legacy DataModule).
@@ -42,6 +42,7 @@ val liveTvModule: Module = module {
         ChannelDetailViewModel(
             mediaRepository = get(),
             imageUrlProvider = get(),
+            timeSource = get(),
         )
     }
     viewModel {
@@ -55,12 +56,14 @@ val liveTvModule: Module = module {
     viewModel {
         EpgViewModel(
             mediaRepository = get(),
+            timeSource = get(),
         )
     }
     viewModel {
         ProgramsViewModel(
             mediaRepository = get(),
             imageUrlProvider = get(),
+            timeSource = get(),
         )
     }
     viewModel {

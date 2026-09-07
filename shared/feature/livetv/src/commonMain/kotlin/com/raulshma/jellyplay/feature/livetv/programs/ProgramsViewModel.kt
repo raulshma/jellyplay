@@ -3,9 +3,11 @@ package com.raulshma.jellyplay.feature.livetv.programs
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
+import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.core.model.ProgramFilters
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import com.raulshma.jellyplay.feature.livetv.LIVE_TV_STALENESS_INTERVAL_MS
 import com.raulshma.jellyplay.feature.livetv.components.RecordActions
 import com.raulshma.jellyplay.feature.livetv.components.RecordDialogState
 import com.raulshma.jellyplay.feature.livetv.components.RecordOutcome
@@ -35,12 +37,13 @@ data class ProgramsUiState(
  * `GET /LiveTv/Programs/Recommended`, exactly matching jellyfin-web's
  * `livetvsuggested.js` reload(): On Now (isAiring), then Shows/Movies/Sports/
  * Kids/News (hasAired=false + the category flag). Implements the web app's
- * 5-minute full-render throttle: a re-entry within [FULL_RENDER_INTERVAL_MS]
- * only refreshes the "On Now" row.
+ * 5-minute full-render throttle: a re-entry within
+ * [LIVE_TV_STALENESS_INTERVAL_MS] only refreshes the "On Now" row.
  */
 class ProgramsViewModel(
     private val mediaRepository: LiveTvRepository,
     private val imageUrlProvider: ImageUrlProvider,
+    private val timeSource: TimeSource,
 ) : JellyPlayViewModel() {
 
     private val _uiState = stateFlow(ProgramsUiState())
@@ -71,8 +74,8 @@ class ProgramsViewModel(
 
     fun load() {
         launch {
-            val now = System.currentTimeMillis()
-            val fullRender = now - lastFullRender > FULL_RENDER_INTERVAL_MS
+            val now = timeSource.nowEpochMillis()
+            val fullRender = now - lastFullRender > LIVE_TV_STALENESS_INTERVAL_MS
             if (fullRender) {
                 _uiState.update { it.copy(isLoading = true, error = null) }
             } else {
@@ -151,7 +154,7 @@ class ProgramsViewModel(
     }
 
     fun getImageUrl(itemId: String, imageTag: String?): String =
-        if (imageTag != null) imageUrlProvider.getImageUrl(itemId) else ""
+        imageUrlProvider.getImageUrlOrNull(itemId, imageTag)
 
     // ── Recording flow (shared RecordDialog, choreography in RecordActions) ──
     fun requestRecord(program: LiveTvProgram) {
@@ -175,7 +178,6 @@ class ProgramsViewModel(
     }
 
     companion object {
-        private const val FULL_RENDER_INTERVAL_MS = 5 * 60 * 1000L
         private const val ON_NOW_LIMIT = 24
         private const val ROW_LIMIT = 12
     }

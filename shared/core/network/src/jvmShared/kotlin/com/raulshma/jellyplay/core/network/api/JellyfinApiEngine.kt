@@ -2,13 +2,10 @@ package com.raulshma.jellyplay.core.network.api
 
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.model.ActiveSession
-import com.raulshma.jellyplay.core.model.MediaItem
-import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.network.RetryPolicy
 import com.raulshma.jellyplay.core.network.failover.ServerAddressRouter
-import com.raulshma.jellyplay.core.network.library.parentalRatingAge
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -23,7 +20,6 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import org.jellyfin.sdk.Jellyfin
 import org.jellyfin.sdk.api.client.ApiClient
-import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.ClientCapabilitiesDto
 import org.jellyfin.sdk.model.api.GeneralCommandType
 import org.jellyfin.sdk.model.api.MediaType as SdkMediaType
@@ -233,30 +229,6 @@ class JellyfinApiEngine @Inject constructor(
 
     val currentMaxParentalRating: Int?
         get() = _currentUser.value?.maxParentalAgeRating
-
-    /** Delegates to the canonical commonMain table ([parentalRatingAge]). */
-    fun ratingToAge(rating: String): Int? = parentalRatingAge(rating)
-
-    /**
-     * Selector-based parental-rating filter applied on raw values (e.g. DTOs)
-     * before they are mapped to [MediaItem].
-     */
-    fun <T> List<T>.filterByParentalRating(officialRatingOf: (T) -> String?): List<T> {
-        val max = currentMaxParentalRating ?: return this
-        return filter { item ->
-            officialRatingOf(item)?.let { rating ->
-                ratingToAge(rating)?.let { age -> age <= max }
-            } != false
-        }
-    }
-
-    /**
-     * The standard tail of every library listing call: parental-rate the raw
-     * DTOs, then map to [MediaItem] — one shared shape instead of a
-     * filter+map pair repeated per call site.
-     */
-    fun List<BaseItemDto>.toFilteredMediaItems(): List<MediaItem> =
-        filterByParentalRating { it.officialRating }.map { it.toMediaItem() }
 
     val cachedCapabilities by lazy {
         ClientCapabilitiesDto(

@@ -1,9 +1,9 @@
 package com.raulshma.jellyplay.core.network.api
 
 import com.raulshma.jellyplay.core.concurrency.mapConcurrent
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.model.ActivityLogEntry
 import com.raulshma.jellyplay.core.model.ContentBreakdown
-import com.raulshma.jellyplay.core.model.ItemCounts
 import com.raulshma.jellyplay.core.model.JellyfinUser
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
@@ -24,9 +24,6 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.contentOrNull
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 import org.jellyfin.sdk.model.api.ImageType
 import org.jellyfin.sdk.model.api.ItemFields
 import org.jellyfin.sdk.model.api.ItemSortBy
@@ -41,37 +38,26 @@ class MediaInfoApiClientImpl @Inject constructor(
     private val engine: JellyfinApiEngine,
 ) : MediaInfoApiClient {
 
+    private val rawRequester = JellyfinRawRequester(engine)
+
     // The server name is effectively session-static but lives below the
     // repository layer (which already caches library folders), so every
     // newsletter render previously bypassed the in-memory cache. Short TTL
     // keeps it fresh across server renames without per-render network calls.
     private val serverNameCache = TtlCache<String>(maxSize = 4, ttlMs = 30 * 60 * 1000L)
 
-    private suspend fun getCachedServerName(): String {
-        serverNameCache.get(KEY_SERVER_NAME)?.let { return it }
-        return try {
-            val name = engine.requireApi().systemApi.getSystemInfo().content.serverName ?: ""
-            serverNameCache.put(KEY_SERVER_NAME, name)
-            name
-        } catch (_: Exception) { "" }
-    }
-
-    /**
-     * Active endpoint + auth token for the raw-OkHttp endpoints in this client
-     * (the SDK calls use `requireApi` instead). Fails like every caller used
-     * to: not-connected / not-authenticated as [IllegalStateException].
-     */
-    private fun requireSession(): Pair<String, String> {
-        val server = engine.currentServer.value?.address ?: throw IllegalStateException("Not connected")
-        val token = engine.currentUser.value?.accessToken ?: throw IllegalStateException("Not authenticated")
-        return server to token
-    }
+    private suspend fun getCachedServerName(): String =
+        runCatchingRethrowingCancellation {
+            serverNameCache.getOrPut(KEY_SERVER_NAME) {
+                engine.requireApi().systemApi.getSystemInfo().content.serverName ?: ""
+            }
+        }.getOrDefault("")
 
     override suspend fun getNewsletterData(sinceDate: String, limit: Int): Result<NewsletterData> = engine.apiResultWithRetry {
         coroutineScope {
             val serverName = async { getCachedServerName() }
             val recentlyAdded = async {
-                try {
+                runCatchingRethrowingCancellation {
                     val folders = engine.requireApi().userViewsApi.getUserViews().content?.items ?: emptyList()
                     val candidateFolders = folders.filter { folder ->
                         folder.collectionType?.serialName != "music"
@@ -88,69 +74,47 @@ class MediaInfoApiClientImpl @Inject constructor(
                         engine.requireApi().userLibraryApi.getLatestMedia(
                             parentId = folder.id,
                             limit = limit,
-                            fields = listOf(
-                                ItemFields.OVERVIEW,
-                                ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
-                            ),
+                            fields = LIST_ITEM_FIELDS,
                         ).content ?: emptyList()
                     }
                         .flatten()
                         .map { it.toMediaItem() }.distinctBy { it.id }.take(limit)
-                } catch (_: Exception) { emptyList() }
+                }.getOrDefault(emptyList())
             }
             val activityDigest = async {
-                try {
+                runCatchingRethrowingCancellation {
                     val result = engine.requireApi().activityLogApi.getLogEntries(
                         limit = limit,
                         minDate = java.time.LocalDateTime.parse(sinceDate),
                     ).content
                     result.items.map { it.toActivityModel() }
-                } catch (_: Exception) { emptyList() }
+                }.getOrDefault(emptyList())
             }
             val libraryStats = async {
-                try {
-                    val dto = engine.requireApi().libraryApi.getItemCounts().content
-                    ItemCounts(
-                        movieCount = dto.movieCount.toLong(),
-                        seriesCount = dto.seriesCount.toLong(),
-                        episodeCount = dto.episodeCount.toLong(),
-                        albumCount = dto.albumCount.toLong(),
-                        songCount = dto.songCount.toLong(),
-                        musicVideoCount = dto.musicVideoCount.toLong(),
-                        bookCount = dto.bookCount.toLong(),
-                        totalCount = dto.movieCount.toLong() + dto.seriesCount.toLong() +
-                                dto.episodeCount.toLong() + dto.albumCount.toLong() +
-                                dto.songCount.toLong() + dto.musicVideoCount.toLong() +
-                                dto.bookCount.toLong(),
-                    )
-                } catch (_: Exception) { null }
+                runCatchingRethrowingCancellation {
+                    engine.requireApi().libraryApi.getItemCounts().content.toItemCounts()
+                }.getOrNull()
             }
             val continueWatching = async {
-                try {
+                runCatchingRethrowingCancellation {
                     val response = engine.requireApi().itemsApi.getResumeItems(
                         limit = 10,
-                        fields = listOf(
-                            ItemFields.OVERVIEW,
-                            ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
-                        ),
+                        fields = LIST_ITEM_FIELDS,
                     ).content
                     (response?.items ?: emptyList()).map { it.toMediaItem() }
-                } catch (_: Exception) { emptyList() }
+                }.getOrDefault(emptyList())
             }
             val nextUp = async {
-                try {
+                runCatchingRethrowingCancellation {
                     val response = engine.requireApi().tvShowsApi.getNextUp(
                         limit = 10,
-                        fields = listOf(
-                            ItemFields.OVERVIEW,
-                            ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
-                        ),
+                        fields = LIST_ITEM_FIELDS,
                     ).content
                     (response?.items ?: emptyList()).map { it.toMediaItem() }
-                } catch (_: Exception) { emptyList() }
+                }.getOrDefault(emptyList())
             }
             val curatedPicks = async {
-                try {
+                runCatchingRethrowingCancellation {
                     val response = engine.requireApi().itemsApi.getItems(
                         includeItemTypes = listOf(
                             org.jellyfin.sdk.model.api.BaseItemKind.MOVIE,
@@ -163,15 +127,12 @@ class MediaInfoApiClientImpl @Inject constructor(
                         sortOrder = listOf(SortOrder.DESCENDING),
                         limit = limit,
                         recursive = true,
-                        fields = listOf(
-                            ItemFields.OVERVIEW,
-                            ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
-                        ),
+                        fields = LIST_ITEM_FIELDS,
                     ).content
                     (response?.items ?: emptyList())
                         .map { it.toMediaItem() }
                         .filter { it.mediaType != MediaType.COLLECTION }
-                } catch (_: Exception) { emptyList() }
+                }.getOrDefault(emptyList())
             }
             NewsletterData(
                 serverName = serverName.await(),
@@ -186,27 +147,11 @@ class MediaInfoApiClientImpl @Inject constructor(
     }
 
     override suspend fun sendNewsletter(): Result<Unit> = engine.apiResultWithRetry {
-        val (server, token) = requireSession()
-        val request = Request.Builder()
-            .url("${server}/newsletter/send")
-            .header("X-Emby-Token", token)
-            .post("".toRequestBody("application/json".toMediaType()))
-            .build()
-        engine.okHttpClient.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) throw Exception("Failed to send newsletter: ${response.code}")
-        }
+        rawRequester.postStatusOnly("/newsletter/send", "Failed to send newsletter")
     }
 
     override suspend fun sendTestNewsletter(): Result<Unit> = engine.apiResultWithRetry {
-        val (server, token) = requireSession()
-        val request = Request.Builder()
-            .url("${server}/newsletter/test")
-            .header("X-Emby-Token", token)
-            .post("".toRequestBody("application/json".toMediaType()))
-            .build()
-        engine.okHttpClient.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) throw Exception("Failed to send test newsletter: ${response.code}")
-        }
+        rawRequester.postStatusOnly("/newsletter/test", "Failed to send test newsletter")
     }
 
     override suspend fun getUsers(): Result<List<JellyfinUser>> = engine.apiResultWithRetry {
@@ -282,10 +227,7 @@ class MediaInfoApiClientImpl @Inject constructor(
             limit = limit,
             recursive = true,
             enableTotalRecordCount = true,
-            fields = listOf(
-                ItemFields.OVERVIEW,
-                ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
-            ),
+            fields = LIST_ITEM_FIELDS,
         ).content
         val total = response?.totalRecordCount ?: 0
         val items = (response?.items ?: emptyList()).map { it.toMediaItem() }
@@ -505,32 +447,16 @@ class MediaInfoApiClientImpl @Inject constructor(
     }
 
     override suspend fun checkPlaybackReportingPlugin(): Result<PlaybackReportingStatus> = engine.apiResultWithRetry {
-        val (server, token) = requireSession()
-        val url = "${server}/user_usage_stats/type_filter_list"
-        val request = Request.Builder()
-            .url(url)
-            .header("X-Emby-Token", token)
-            .build()
-        engine.okHttpClient.newCall(request).execute().use { response ->
-            if (response.isSuccessful) {
-                PlaybackReportingStatus.AVAILABLE
-            } else {
-                PlaybackReportingStatus.UNAVAILABLE
-            }
+        if (rawRequester.getBodyText("/user_usage_stats/type_filter_list") != null) {
+            PlaybackReportingStatus.AVAILABLE
+        } else {
+            PlaybackReportingStatus.UNAVAILABLE
         }
     }
 
     override suspend fun getPlaybackReportingUserActivity(days: Int): Result<List<PlaybackReportingActivity>> = engine.apiResultWithRetry {
-        val (server, token) = requireSession()
-        val url = "${server}/user_usage_stats/user_activity?days=$days"
-        val request = Request.Builder()
-            .url(url)
-            .header("X-Emby-Token", token)
-            .build()
-        engine.okHttpClient.newCall(request).execute().use { response ->
-            val body = response.body?.string() ?: ""
-            if (!response.isSuccessful) throw Exception("Plugin request failed: ${response.code}")
-            val json = JellyfinApiEngine.sharedJson.decodeFromString<JsonArray>(body)
+        rawRequester.getJson("/user_usage_stats/user_activity?days=$days", "Plugin request failed") { body ->
+            val json = JellyfinApiEngine.sharedJson.decodeFromString<JsonArray>(body?.string() ?: "")
             json.mapNotNull { element ->
                 val obj = element.jsonObject
                 PlaybackReportingActivity(
@@ -545,27 +471,14 @@ class MediaInfoApiClientImpl @Inject constructor(
         }
     }
 
-    private suspend fun getPlaybackReportingTypeFilterList(server: String, token: String): List<String> {
-        val url = "${server}/user_usage_stats/type_filter_list"
-        val request = Request.Builder()
-            .url(url)
-            .header("X-Emby-Token", token)
-            .build()
-        return try {
-            engine.okHttpClient.newCall(request).execute().use { response ->
-                if (response.isSuccessful) {
-                    val body = response.body?.string() ?: ""
-                    JellyfinApiEngine.sharedJson.decodeFromString<List<String>>(body)
-                } else emptyList()
-            }
-        } catch (_: Exception) {
-            emptyList()
-        }
-    }
+    private suspend fun getPlaybackReportingTypeFilterList(): List<String> =
+        runCatchingRethrowingCancellation {
+            rawRequester.getBodyText("/user_usage_stats/type_filter_list")?.let { body ->
+                JellyfinApiEngine.sharedJson.decodeFromString<List<String>>(body)
+            } ?: emptyList()
+        }.getOrDefault(emptyList())
 
     override suspend fun getPlaybackReportingPlayActivity(days: Int, dataType: String, filter: String?): Result<List<PlaybackActivityPoint>> = engine.apiResultWithRetry {
-        val (server, token) = requireSession()
-
         val currentUserId = engine.currentUserId()
         var targetUserId: String? = null
         val mediaTypes = mutableListOf<String>()
@@ -589,7 +502,7 @@ class MediaInfoApiClientImpl @Inject constructor(
         val serverFilter = if (mediaTypes.isNotEmpty()) {
             mediaTypes.joinToString(",")
         } else {
-            val fetchedTypes = getPlaybackReportingTypeFilterList(server, token)
+            val fetchedTypes = getPlaybackReportingTypeFilterList()
             if (fetchedTypes.isNotEmpty()) {
                 fetchedTypes.joinToString(",")
             } else {
@@ -597,15 +510,8 @@ class MediaInfoApiClientImpl @Inject constructor(
             }
         }
 
-        val url = "${server}/user_usage_stats/PlayActivity?days=$days&dataType=$dataType&filter=$serverFilter"
-        val request = Request.Builder()
-            .url(url)
-            .header("X-Emby-Token", token)
-            .build()
-        engine.okHttpClient.newCall(request).execute().use { response ->
-            val body = response.body?.string() ?: ""
-            if (!response.isSuccessful) throw Exception("Plugin request failed: ${response.code}")
-            val json = JellyfinApiEngine.sharedJson.decodeFromString<JsonArray>(body)
+        rawRequester.getJson("/user_usage_stats/PlayActivity?days=$days&dataType=$dataType&filter=$serverFilter", "Plugin request failed") { body ->
+            val json = JellyfinApiEngine.sharedJson.decodeFromString<JsonArray>(body?.string() ?: "")
             val points = mutableListOf<PlaybackActivityPoint>()
 
             val targetClean = targetUserId?.replace("-", "")?.lowercase()
@@ -634,17 +540,9 @@ class MediaInfoApiClientImpl @Inject constructor(
     }
 
     override suspend fun getPlaybackReportingUserItems(userId: String, date: String, filter: String?): Result<List<PlaybackReportingDetail>> = engine.apiResultWithRetry {
-        val (server, token) = requireSession()
         val filterParam = filter?.let { "&filter=$it" } ?: ""
-        val url = "${server}/user_usage_stats/$userId/$date/GetItems?$filterParam"
-        val request = Request.Builder()
-            .url(url)
-            .header("X-Emby-Token", token)
-            .build()
-        engine.okHttpClient.newCall(request).execute().use { response ->
-            val body = response.body?.string() ?: ""
-            if (!response.isSuccessful) throw Exception("Plugin request failed: ${response.code}")
-            val json = JellyfinApiEngine.sharedJson.decodeFromString<JsonArray>(body)
+        rawRequester.getJson("/user_usage_stats/$userId/$date/GetItems?$filterParam", "Plugin request failed") { body ->
+            val json = JellyfinApiEngine.sharedJson.decodeFromString<JsonArray>(body?.string() ?: "")
             json.mapNotNull { element ->
                 val obj = element.jsonObject
                 PlaybackReportingDetail(
@@ -662,17 +560,9 @@ class MediaInfoApiClientImpl @Inject constructor(
     }
 
     override suspend fun getPlaybackReportingBreakdown(breakdownType: String, days: Int, filter: String?): Result<List<ContentBreakdown>> = engine.apiResultWithRetry {
-        val (server, token) = requireSession()
         val filterParam = filter?.let { "&filter=$it" } ?: ""
-        val url = "${server}/user_usage_stats/$breakdownType/BreakdownReport?days=$days$filterParam"
-        val request = Request.Builder()
-            .url(url)
-            .header("X-Emby-Token", token)
-            .build()
-        engine.okHttpClient.newCall(request).execute().use { response ->
-            val body = response.body?.string() ?: ""
-            if (!response.isSuccessful) throw Exception("Plugin request failed: ${response.code}")
-            val json = JellyfinApiEngine.sharedJson.decodeFromString<JsonArray>(body)
+        rawRequester.getJson("/user_usage_stats/$breakdownType/BreakdownReport?days=$days$filterParam", "Plugin request failed") { body ->
+            val json = JellyfinApiEngine.sharedJson.decodeFromString<JsonArray>(body?.string() ?: "")
             json.mapIndexed { index, element ->
                 val obj = element.jsonObject
                 ContentBreakdown(
@@ -690,17 +580,9 @@ class MediaInfoApiClientImpl @Inject constructor(
     }
 
     override suspend fun getPlaybackReportingArtistBreakdown(days: Int, filter: String?): Result<List<ContentBreakdown>> = engine.apiResultWithRetry {
-        val (server, token) = requireSession()
         val filterParam = filter?.let { "&filter=$it" } ?: ""
-        val url = "${server}/user_usage_stats/Parent/BreakdownReport?days=$days$filterParam"
-        val request = Request.Builder()
-            .url(url)
-            .header("X-Emby-Token", token)
-            .build()
-        engine.okHttpClient.newCall(request).execute().use { response ->
-            val body = response.body?.string() ?: ""
-            if (!response.isSuccessful) throw Exception("Plugin request failed: ${response.code}")
-            val json = JellyfinApiEngine.sharedJson.decodeFromString<JsonArray>(body)
+        rawRequester.getJson("/user_usage_stats/Parent/BreakdownReport?days=$days$filterParam", "Plugin request failed") { body ->
+            val json = JellyfinApiEngine.sharedJson.decodeFromString<JsonArray>(body?.string() ?: "")
             json.mapIndexed { index, element ->
                 val obj = element.jsonObject
                 ContentBreakdown(

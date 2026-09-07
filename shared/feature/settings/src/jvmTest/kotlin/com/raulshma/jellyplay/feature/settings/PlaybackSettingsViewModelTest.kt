@@ -112,7 +112,13 @@ class PlaybackSettingsViewModelTest {
         every { editor.edit(capture(captured)) } returns mockk<Job>()
     }
 
-    private fun viewModel() = PlaybackSettingsViewModel(store, projections, appearanceStore, editor, watchNextRefresher)
+    private fun viewModel() = PlaybackSettingsViewModel(
+        store,
+        projections,
+        AdvancedSettingsGate(appearanceStore, editor),
+        editor,
+        watchNextRefresher,
+    )
 
     @Test
     fun `preferences exposes the playback projection flow`() = runTest {

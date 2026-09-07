@@ -118,7 +118,7 @@ class NowPlayingWidgetUpdater (
                 if (art != null) {
                     lastArtwork = art
                 }
-                pushUpdate(readPushSnapshot(), lastArtwork)
+                pushUpdate(NowPlayingWidgetRenderer.readPushSnapshot(audioPlaybackManager), lastArtwork)
             }
     }
 
@@ -155,7 +155,7 @@ class NowPlayingWidgetUpdater (
         // the partial-vs-full race guard: defer to the metadata collector's
         // full push whenever the partial couldn't re-render what moved, and
         // suppress redundant pushes by render equality.
-        val snapshot = readPushSnapshot()
+        val snapshot = NowPlayingWidgetRenderer.readPushSnapshot(audioPlaybackManager)
         if (!shouldPushPartialPosition(lastPushedRender, snapshot)) return
         lastPushedRender = snapshot
 
@@ -172,33 +172,12 @@ class NowPlayingWidgetUpdater (
         return WidgetImageLoader.loadPoster(context, url, cornerRadiusDp = 12f)
     }
 
-    /**
-     * Everything a full widget push renders, read from the manager in one
-     * pass. Also the sole input to the render-equality guards, so those
-     * guards and the pushes can never disagree about which values were
-     * observed.
-     */
-    private fun readPushSnapshot(): WidgetPushSnapshot = WidgetPushSnapshot(
-        title = audioPlaybackManager.title.value,
-        subtitle = audioPlaybackManager.artist.value.ifBlank { null },
-        isPlaying = audioPlaybackManager.isPlaying.value,
-        positionMs = audioPlaybackManager.currentPosition.value,
-        durationMs = audioPlaybackManager.duration.value,
-        artUrl = audioPlaybackManager.albumArtUrl.value,
-        isEmptyState = audioPlaybackManager.currentPlayingItemId.value == null,
-    )
-
     private fun pushUpdate(snapshot: WidgetPushSnapshot, albumArt: Bitmap?) {
         lastPushedRender = snapshot
         NowPlayingWidget.updateAllWidgets(
             context = context,
-            title = snapshot.title,
-            subtitle = snapshot.subtitle,
-            isPlaying = snapshot.isPlaying,
+            snapshot = snapshot,
             albumArt = albumArt,
-            positionMs = snapshot.positionMs,
-            durationMs = snapshot.durationMs,
-            isEmptyState = snapshot.isEmptyState,
         )
     }
 

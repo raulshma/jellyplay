@@ -97,7 +97,7 @@ class AudioSettingsViewModelTest {
     }
 
     private fun viewModel() =
-        AudioSettingsViewModel(store, projections, appearanceStore, editor, audioCacheClearer)
+        AudioSettingsViewModel(store, projections, AdvancedSettingsGate(appearanceStore, editor), editor, audioCacheClearer)
 
     @Test
     fun `preferences exposes the audio projection flow`() = runTest {

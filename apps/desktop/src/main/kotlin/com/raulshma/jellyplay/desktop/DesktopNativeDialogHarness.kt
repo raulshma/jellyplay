@@ -658,7 +658,7 @@ internal fun DesktopNativeDialogHarnessHost() {
     val seerrRepository: SeerrRepository = org.koin.compose.koinInject()
     val adminRepository: AdminRepository = org.koin.compose.koinInject()
     val editor: PreferencesEditor = org.koin.compose.koinInject()
-    val appearanceStore: com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore =
+    val advancedSettings: com.raulshma.jellyplay.feature.settings.AdvancedSettingsGate =
         org.koin.compose.koinInject()
     val recentsStore: SettingsRecentsStore = org.koin.compose.koinInject()
     LaunchedEffect(Unit) {
@@ -671,7 +671,7 @@ internal fun DesktopNativeDialogHarnessHost() {
                     authRepository = authRepository,
                     seerrRepository = seerrRepository,
                     adminRepository = adminRepository,
-                    appearanceStore = appearanceStore,
+                    advancedSettings = advancedSettings,
                     editor = editor,
                     recentsStore = recentsStore,
                 ),

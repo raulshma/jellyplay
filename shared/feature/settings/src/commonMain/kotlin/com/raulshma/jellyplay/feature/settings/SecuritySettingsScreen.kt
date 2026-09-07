@@ -245,12 +245,12 @@ val biometricGate = rememberBiometricGate()
                                     biometricGate.authenticate(
                                         title = biometricTitle,
                                         subtitle = biometricSubtitle,
-                                        onSuccess = { viewModel.setBiometricLockEnabled(true) },
+                                        onSuccess = { viewModel.edit { scope -> scope.security.setBiometricLockEnabled(true) } },
                                         onError = {},
                                         onFailed = {},
                                     )
                                 } else {
-                                    viewModel.setBiometricLockEnabled(false)
+                                    viewModel.edit { scope -> scope.security.setBiometricLockEnabled(false) }
                                 }
                             },
                         )
@@ -263,7 +263,9 @@ val biometricGate = rememberBiometricGate()
                             checked = preferences.usePinForPlayerLock,
                             highlighted = highlightSettingId == "pin_for_player_lock",
                             index = secIdx++, count = secTotal,
-                            onCheckedChange = { viewModel.setUsePinForPlayerLock(it) },
+                            onCheckedChange = { enabled ->
+                                viewModel.edit { scope -> scope.security.setUsePinForPlayerLock(enabled) }
+                            },
                         )
                     }
                     if (showAdvanced) {
@@ -289,7 +291,9 @@ val biometricGate = rememberBiometricGate()
                                     items = lockTimerOptions,
                                     label = { lockTimerLabels[lockTimerOptions.indexOf(it).coerceAtMost(lockTimerOptions.lastIndex)] },
                                     isSelected = { it == preferences.autoLockTimerMs },
-                                    onSelect = { viewModel.setAutoLockTimerMs(it) },
+                                    onSelect = { ms ->
+                                        viewModel.edit { scope -> scope.security.setAutoLockTimerMs(ms) }
+                                    },
                                 )
                             },
                         )
@@ -339,7 +343,9 @@ val biometricGate = rememberBiometricGate()
                         checked = preferences.remoteControlEnabled,
                         highlighted = highlightSettingId == "remote_control_enabled",
                         index = 0, count = 1,
-                        onCheckedChange = { viewModel.setRemoteControlEnabled(it) },
+                        onCheckedChange = { enabled ->
+                            viewModel.edit { scope -> scope.security.setRemoteControlEnabled(enabled) }
+                        },
                     )
                 }
             }
@@ -420,7 +426,11 @@ val biometricGate = rememberBiometricGate()
                         pinInput.length != 4 -> pinError = pinMustBe4Digits
                         pinInput != pinConfirm -> pinError = pinsDoNotMatch
                         else -> {
-                            viewModel.setPin(pinInput)
+                            // Captured before the async edit launches — the
+                            // dialog state resets below would otherwise race
+                            // the fire-and-forget store write.
+                            val newPin = pinInput
+                            viewModel.edit { scope -> scope.security.setPin(newPin) }
                             activeDialog = SecuritySettingsDialog.None
                             pinInput = ""
                             pinConfirm = ""
@@ -495,7 +505,7 @@ val biometricGate = rememberBiometricGate()
                         scope.launch {
                             val valid = viewModel.verifyPin(pinInput)
                             if (valid) {
-                                viewModel.clearPin()
+                                viewModel.edit { scope -> scope.security.clearPin() }
                                 activeDialog = SecuritySettingsDialog.None
                                 pinInput = ""
                                 pinDisableAuthError = null

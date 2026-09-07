@@ -873,6 +873,23 @@ program with an offset-less endDate is dropped instead of lingering).
 Pinned by `LiveTvTimeFormatTest`; `EpgGridLayout` keeps only its
 `startInstant`/`endInstant` program folds.
 
+The livetv VMs read the clock through the injected **`TimeSource`**
+(2026-09-07, the `HomeRefresher` pattern — the Koin single the feature
+already resolves): `EpgViewModel`, `ProgramsViewModel` and
+`ChannelDetailViewModel` take it in their constructors; the EPG guide
+window is ONE file-private pure `guideWindow(now)` used by both the
+boot defaults and every fetch pass (the init/fetch formula drift is
+dead), and the jellyfin-web-derived 5-minute staleness constant is ONE
+`LIVE_TV_STALENESS_INTERVAL_MS` in `LiveTvTimeFormat.kt` shared by the
+EPG refresh loop and the Programs full-render throttle — fake-clock
+pinned (`EpgViewModelTest` asserts exact window bounds now, replacing
+its real-clock tolerance workaround). `ChannelDetailContent`'s
+`rememberLiveProgress` keeps its wall-clock read deliberately (a
+render-clock composition, documented). **`ImageUrlProvider.getImageUrlOrNull`**
+(interface default beside `getImageUrl`) owns the "no image tag means
+no image" policy the five livetv VMs used to hand-copy; the policy
+itself is pinned in `ImageUrlProviderImplTest`.
+
 **`RecordActions`** (`shared/feature/livetv/src/commonMain/kotlin/.../components/RecordActions.kt`)
 is the one recording choreography behind every Live TV tab, constructed over
 `LiveTvRepository` and the owning ViewModel's scope. Commands
@@ -1308,9 +1325,40 @@ hand-rolled `currentUser.value?.id` guards across the jvmShared clients —
 both read the ATOMIC `session` value (a user without a server is no
 identity; the separate `currentUser` flow must not be re-combined for
 this), message-aligned with wasm's `requireCurrentUser()` and pinned in
-`JellyfinApiEngineSessionTest`; the token accessors
-(`PluginApiClientImpl.requireToken`,
-`MediaInfoApiClientImpl.requireSession`) deliberately remain separate.
+`JellyfinApiEngineSessionTest`.
+
+**`JellyfinRawRequester`** (jvmShared, beside the clients, internal —
+the 2026-09-07 fold) is the ONE seam for the hand-built raw-OkHttp
+requests the plugin catalogue, newsletter/playback-reporting plugin
+endpoints and intro/credit probes used to copy per endpoint (~28 sites
+across Plugin/MediaInfo/Playback clients, three incompatible private
+guard adapters): session guard → `X-Emby-Token` →
+`newCall().execute().use` → status check with the per-endpoint failure
+text, over `getJson`/`postStatusOnly`/`deleteStatusOnly`/`getBodyText`
+members mirroring the wasm `WasmApiSupport` shapes (this is the JVM
+twin of those helpers, NOT the deferred cross-platform WireRequest
+unification — nothing crosses source sets). The load-bearing rule:
+every member derives the base from `engine.activeServerAddress` (the
+router's active endpoint, failover-correct) — the pre-fold Plugin and
+MediaInfo sites built URLs from `currentServer.value?.address` (the
+primary, stale after failover) and were rescued only by the failover
+interceptor's absolute-URL promise. Pinned by
+`JellyfinRawRequesterTest` (MockWebServer, the `SeerrApiClientTest`
+setup) plus the first-ever `PluginApiClientImplTest` through the seam.
+The wave also landed the small folds around it:
+`ItemCountsDto`→`toItemCounts()` lives in `JellyfinDtoMappers` (the
+byte-identical Admin/MediaInfo pair is gone), the parental
+filter+map tail is the top-level
+`List<BaseItemDto>.toFilteredMediaItems(maxParentalRating)` over the
+canonical commonMain `filterByParentalRating` (the engine's member
+twins and the 21 `engine.run { … }` scope-borrows are deleted),
+`LIST_ITEM_FIELDS` / `LIST_ITEM_FIELDS_WITH_GENRES` (jvmShared
+`LibraryItemFields.kt`) resolve the shared `LIST_PROJECTION_FIELDS`
+policy against the SDK enum for every consumer (the six hand copies in
+MediaInfo/LiveTv are gone), `MetadataApiClientImpl`'s 12 UUID + 3
+ImageType ladders are two private helpers, and `TtlCache.getOrPut`
+(core/model, pinned beside `TtlCacheTest`) folds the get→fetch→put
+contortion in the Admin/MediaInfo cache-aside sites.
 
 ## Navigation destinations
 
@@ -1383,6 +1431,18 @@ no-dismiss/Short snackbars were the drift). `apps/web` has no message surface
 (inline Text only) and adopts nothing. Pinned by `UserMessageHostTest`
 (severity table, merge exactly-once/order, queue-not-drop, and the
 desktop-receives-shared-bus regression).
+
+`apps/web`'s browser-history integration is split at its natural seam:
+**`WebBackStackMirror`** (wasmJsMain, internal, 2026-09-07) is the pure
+reconcile core — hash↔index parsing, `trimToDepth`, the dispatch-first
+pop with root-refuse, reload normalization and the forward-onto-pruned
+walk-back, returning sealed `WebHistoryCommand`s (Push/Rewrite/
+NavigateBack/GoTo/None) — and `WebAppRoot` keeps only the thin JS
+adapter that applies commands to `window.history` (pushState/back/go,
+one opt-in site). The ~70 KDoc'd model rules moved with the logic;
+pinned by `WebBackStackMirrorTest` (15 cases: root refusal,
+consumed-press, stale/boot-deep/foreign reload hashes, trim depths,
+walk-back deltas).
 
 The shells share the platform-free shell policy in `shared/feature/shell`:
 **`AdminRefreshGate`** is the admin-status dedupe (30 s window + in-flight
@@ -1512,10 +1572,34 @@ counts. The platform ratchet is `SettingsSearchCatalogPlatformFilterTest`
 notifications and Exo/VLC engine-config lists are asserted absent) plus
 `SettingsSearchFlowTest`'s funnel pin (the pipeline matches against
 `resolved()`, never raw `items`).
-Known residue, deliberate: the hand-typed scroll-group id lists
-(`PlaybackSettingsScreen.kt`) and the TV / advanced / admin search
+Known residue, deliberate: the TV / advanced / admin search
 dimensions are not yet derived from the catalog declaration; TV-only items
-stay tagged ANDROID (they are a runtime-axis problem).
+stay tagged ANDROID (they are a runtime-axis problem). The scroll-group
+side is DONE — the 2026-09-07 wave finished the catalog-derivation
+migration the playback screen started: the `language` group is split
+`language.general`/`language.subtitles` and `system` into
+`system.core`/`system.screensaver` at the aggregation (the LiveTv
+prefix-split precedent; language splits on the leading-trio size,
+pinned by name), the Language/Settings screens derive scroll targets,
+expand sets and row totals from `SettingsScreenGroups` (`dreamTotal`,
+`insightsCount`, the account count), the Audio screen's 22-line
+row-count oracle is the pure `audioScreenRowTotal(showAdvanced,
+preferences)` counting the `audio` group through a per-id visibility
+predicate, and `SettingsScreen` consumes core/ui's shared
+`settingsSearchResults` pipeline instead of its inline copy (the
+blank-query short-circuit now applies there too — the copy resolved
+all 258 items on every blank query). `ACTION_ONLY_IDS` stays a hand
+set: "action" is dialog semantics, not structure. The `edit(transform)`
+migration is complete too — Security/Language VMs lost their pure
+forwarding strata (screens issue `viewModel.edit { … }`; the deciding
+members like `setAppLanguage`'s locale side effect stay), and the
+stateless `AdvancedSettingsGate` is ONE Koin single injected into all
+nine VMs (public only because their constructors are — not a stable
+API). The search-result click dispatch is the internal pure
+`settingsResultClickAction` (+ sealed `SettingsSearchResultAction`)
+beside the screen, the `playbackAdjustForAdvanced` precedent; the
+retired-list ratchet in `SettingsCatalogScreenContractTest` now covers
+every derivation.
 
 **Drag-to-reorder.** `ReorderState<T>`
 (`shared/feature/settings/src/commonMain/kotlin/.../ReorderState.kt`) is
@@ -1668,6 +1752,31 @@ twins and double `enqueuePeriodic` build collapsed onto one private
 `Flavour` table; public member names unchanged and
 `WidgetWorkSchedulerTest` passes unmodified.
 
+The 2026-09-07 architecture wave completed three more deepenings. The
+**widget version/updatedAt protocol is deleted**: `persistItems` is
+id-dedup + write + notify-on-changed-ids only, and `WidgetDataStore`
+lost the `*WidgetVersion`/`*UpdatedAtMs`/`widgetLastRefreshMs` flows,
+keys and setter params — none had a production reader (the factory's
+version-match early-return was already gone; only tests fed the
+protocol). **`WidgetPosterIdentity`** (beside the workers, pure,
+`WidgetPosterIdentityTest`) is the single home of the poster-identity
+policy — the CW and Library/Seerr image-id resolution (`seriesId ?:
+itemId`) and the per-flavour maxWidth constants (CW 300, Library 400 —
+the Library worker's hand copy with the wrong width is gone; Seerr has
+no rule, its posters are TMDB CDN urls). **`NowPlayingWidgetRenderer`**
+is the one render pipeline behind every full push: the provider's
+`onUpdate`/`onAppWidgetOptionsChanged`, the updater's push and the
+config save all read the manager ONCE (`readPushSnapshot`) and bind
+through `renderFullPush`, with the pure `nowPlayingConfigFold` (beside
+`NowPlayingWidgetPolicy`, pinned) applying the artwork/progress config
+toggles on EVERY full push AFTER the responsive ladder — the former
+`updateAllWidgets` path skipped the fold entirely and the options
+path re-showed disabled rows at wide rungs; the empty player state
+keeps the backdrop hidden regardless of the artwork toggle (the
+fold's `isEmptyState` gate — the top-level backdrop never renders
+behind the empty-state text). The options-changed path keeps only its
+goAsync/Handler threading shell.
+
 ## App shell (`:app`)
 
 **`PinGateController`** (beside `AppLockState`) is the app-lock state machine
@@ -1792,6 +1901,29 @@ re-derives the designs nor lands them casually.
   `ArrServiceClient`), in a dedicated session.
 - **Widget grid skeleton**: LANDED (`aec4c138b`, plus the 2026-09-07
   id-resolution/notify straggler helpers) — see "App widgets" above.
+- **Web session via shared `AuthRepository`**: the web shell's
+  `WebConnectController` re-implements the AuthRepository establishment
+  choreography by hand over raw `AuthApiClient` (its KDocs say "call
+  order mirrors `AuthRepositoryImpl`", "same shape as
+  `revokeServerSession`"), including its own `web_last_server_url`
+  persistence. ADR-0001's revisit trigger has FIRED (a third shell
+  gaining session state). Design: promote the `AuthRepository`
+  interface into core:data commonMain with the Room/identity edges as
+  injected seams (or a thin wasmImpl over `AtomicSessionState` + the
+  `user_prefs` DataStore — core:data has had a wasm target since wave
+  15B); `WebConnectController` deletes down to construction plus its
+  capability-note flow. Deferred: cross-module persistence-edge design
+  deserves the grilling loop, not an autonomous batch.
+- **Feature-VM load-ladder fold**: the `isLoading = true, error = null`
+  suspend-guard ladder is hand-copied in ~23 ViewModels across 10
+  feature modules (all livetv tabs, 7 admin VMs, requests, calendar,
+  editor, music, syncplay, plugin-config), with drifted settle arms
+  (final-update vs per-arm vs getOrDefault — a missed arm leaves a
+  stuck spinner). Design: one `loadInto`-shaped helper in core:ui next
+  to `JellyPlayViewModel`, VMs map Success payloads into their own
+  state. Deferred: each of the 23 conversions is a per-VM behaviour
+  decision (settle timing); land module-by-module with pinned tests,
+  not as one mechanical sweep.
 - **`DetailViewModel` intent fold**: ~29 public funs force the 160-line
   hand-built `DetailContentCallbacks` adapter in `MediaDetailScreen`
   (keyed on 15 values). Design: sealed `DetailIntent` + `onEvent` (the

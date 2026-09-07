@@ -122,7 +122,7 @@ class AppearanceSettingsViewModelTest {
     private suspend fun replayEdits() = editBlocks.forEach { it.invoke(editScope) }
 
     private fun viewModel() =
-        AppearanceSettingsViewModel(store, projections, appearanceStore, editor)
+        AppearanceSettingsViewModel(store, projections, AdvancedSettingsGate(appearanceStore, editor), editor)
 
     // ---------------------------------------------------------------- state
 

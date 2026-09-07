@@ -48,7 +48,7 @@ class SeerrRecommendationsWidgetWorker(
             return@runCatchingRethrowingCancellation
         }
         val mapped = items.map { it.toWidgetItem() }
-        WidgetPersistHelper.persistSeerrItems(applicationContext, widgetDataStore, mapped, versionBumpOnly = false)
+        WidgetPersistHelper.persistSeerrItems(applicationContext, widgetDataStore, mapped)
     }.fold(
         onSuccess = { Result.success() },
         onFailure = { e ->

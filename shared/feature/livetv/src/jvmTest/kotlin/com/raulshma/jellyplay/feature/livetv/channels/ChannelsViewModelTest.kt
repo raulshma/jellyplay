@@ -70,7 +70,7 @@ class ChannelsViewModelTest {
         videoMiniPlayerState = mockk()
         every { videoMiniPlayerState.itemId } returns miniPlayerItemId
 
-        every { imageUrlProvider.getImageUrl(any()) } returns "http://img/chan"
+        every { imageUrlProvider.getImageUrlOrNull(any(), any()) } returns "http://img/chan"
 
         coEvery { mediaRepository.getLiveTvChannels(any(), any(), any(), any(), any()) } returns
             Result.success(sampleChannels())
@@ -233,25 +233,29 @@ class ChannelsViewModelTest {
     }
 
     // ── getImageUrl tag quirk ─────────────────────────────────────────────
+    // The null-tag policy itself lives on the interface default now (pinned
+    // in ImageUrlProviderImplTest); these pin the VM forwarding both tag
+    // shapes through it instead of re-deciding the fold.
 
     @Test
-    fun getImageUrl_without_a_tag_returns_empty_without_touching_the_provider() {
+    fun getImageUrl_forwards_the_null_tag_to_the_interface_fold() {
+        every { imageUrlProvider.getImageUrlOrNull("chan-a", null) } returns ""
         val viewModel = newViewModel()
 
         assertEquals("", viewModel.getImageUrl("chan-a", null))
-        verify(exactly = 0) { imageUrlProvider.getImageUrl(any()) }
+        verify(exactly = 1) { imageUrlProvider.getImageUrlOrNull("chan-a", null) }
     }
 
     /**
-     * Pins the (quirky) contract: a non-null tag selects the provider path but
-     * the tag value itself is dropped on the floor — the provider only ever
-     * sees the item id.
+     * Pins the (quirky) forwarding contract: a non-null tag selects the
+     * provider path but the tag value itself is dropped on the floor — the
+     * provider only ever sees the item id.
      */
     @Test
-    fun getImageUrl_with_a_tag_delegates_to_the_provider_ignoring_the_tag() {
+    fun getImageUrl_forwards_a_present_tag_to_the_interface_fold_ignoring_the_tag() {
         val viewModel = newViewModel()
 
         assertEquals("http://img/chan", viewModel.getImageUrl("chan-a", "tag-xyz"))
-        verify(exactly = 1) { imageUrlProvider.getImageUrl("chan-a") }
+        verify(exactly = 1) { imageUrlProvider.getImageUrlOrNull("chan-a", "tag-xyz") }
     }
 }

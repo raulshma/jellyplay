@@ -26,7 +26,7 @@ fun interface NotificationSync {
 class NotificationSettingsViewModel(
     private val store: UserPreferencesStore,
     private val projections: com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections,
-    private val appearanceStore: com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore,
+    private val advancedSettings: AdvancedSettingsGate,
     private val editor: PreferencesEditor,
     private val mediaRepository: MediaRepository,
     private val notificationSync: NotificationSync,
@@ -34,8 +34,6 @@ class NotificationSettingsViewModel(
 
     /** Notification-screen slice — recomposes this screen only on notification-field writes. */
     val preferences: StateFlow<NotificationPreferences> = projections.notificationPreferences
-
-    private val advancedSettings = AdvancedSettingsGate(appearanceStore, editor)
 
     val showAdvancedSettings: StateFlow<Boolean> = advancedSettings.showAdvancedSettings
 
