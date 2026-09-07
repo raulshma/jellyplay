@@ -64,6 +64,7 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.formatBytes
 import com.raulshma.jellyplay.core.model.legacy.UserPreferences
 import com.raulshma.jellyplay.core.model.isAudioType
+import com.raulshma.jellyplay.core.model.progressFraction
 import com.raulshma.jellyplay.core.model.seerr.SeerrRelatedVideo
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.seerr.TmdbImageUrls
@@ -76,7 +77,6 @@ import com.raulshma.jellyplay.core.ui.components.EpisodeWatchedTag
 import com.raulshma.jellyplay.core.ui.components.ExpandableText
 import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.components.SeerrMediaCard
-import com.raulshma.jellyplay.core.ui.components.progressFraction
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableItemRow
@@ -1621,10 +1621,10 @@ internal fun UpNextSection(
                             )
                             .padding(8.dp),
                     )
-                    val t = target.startPositionTicks
-                    val rt = target.episode.runTimeTicks
-                    if (t > 0 && rt != null && rt > 0) {
-                        val progress = (t.toFloat() / rt).coerceIn(0f, 1f)
+                    // Smart-play resume math over the resolver's start position;
+                    // the > 0f check keeps the "no resume position" case barless.
+                    val progress = target.episode.progressFraction(target.startPositionTicks)
+                    if (progress != null && progress > 0f) {
                         Box(
                             modifier = Modifier
                                 .align(Alignment.BottomStart)

@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.core.database.dao.PlaybackStateDao
 import com.raulshma.jellyplay.core.database.dao.SyncBaselineDao
 import com.raulshma.jellyplay.core.database.entity.DownloadEntity
 import com.raulshma.jellyplay.core.database.entity.OfflineMediaEntity
+import com.raulshma.jellyplay.core.data.util.SystemTimeSource
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflinePersonInfo
 import io.mockk.coEvery
@@ -67,7 +68,14 @@ class OfflineRepositoryImplArtworkTest {
         // By default no surviving rows reference anyone; each delete test
         // overrides this when it needs a "still referenced" sibling.
         coEvery { offlineMediaDao.getAllPeopleJson() } returns emptyList()
-        repository = OfflineRepositoryImpl(offlineMediaDao, playbackStateDao, syncBaselineDao, downloadDao, database)
+        repository = OfflineRepositoryImpl(
+            offlineMediaDao,
+            playbackStateDao,
+            syncBaselineDao,
+            downloadDao,
+            database,
+            timeSource = SystemTimeSource(),
+        )
     }
 
     @AfterTest
@@ -441,8 +449,10 @@ class OfflineRepositoryImplArtworkTest {
         val dir = newFolder("deleteCast")
         val actorFile = File(dir, DownloadArtifacts.personImageFile("person-1"))
         actorFile.writeText("actor-bytes")
-        coEvery { offlineMediaDao.getById("movie-1") } returns movieEntityWithCast(
-            people = listOf(OfflinePersonInfo(id = "person-1", name = "Lead")),
+        // Cast ids are captured from the metadata rows of the collected downloads
+        // (the deletion core's getByIds lookup).
+        coEvery { offlineMediaDao.getByIds(listOf("movie-1")) } returns listOf(
+            movieEntityWithCast(people = listOf(OfflinePersonInfo(id = "person-1", name = "Lead"))),
         )
         coEvery { downloadDao.getDownloadByMediaItemId("movie-1") } returns
             movieDownloadEntity("movie-1", dir)
@@ -458,8 +468,8 @@ class OfflineRepositoryImplArtworkTest {
         val dir = newFolder("keepCast")
         val actorFile = File(dir, DownloadArtifacts.personImageFile("person-1"))
         actorFile.writeText("actor-bytes")
-        coEvery { offlineMediaDao.getById("movie-1") } returns movieEntityWithCast(
-            people = listOf(OfflinePersonInfo(id = "person-1", name = "Lead")),
+        coEvery { offlineMediaDao.getByIds(listOf("movie-1")) } returns listOf(
+            movieEntityWithCast(people = listOf(OfflinePersonInfo(id = "person-1", name = "Lead"))),
         )
         coEvery { downloadDao.getDownloadByMediaItemId("movie-1") } returns
             movieDownloadEntity("movie-1", dir)

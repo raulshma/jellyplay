@@ -4,6 +4,7 @@ import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
+import android.os.Handler
 import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -39,6 +40,12 @@ internal fun resolveWidgetDataStore(): WidgetDataStore? = try {
  *    `finally` (no catch) is deliberate: a failed job still closes the
  *    `goAsync()` window, while the failure surfaces exactly as it did before
  *    the extraction.
+ *  - [runWithPendingResult] — the same `finally`-closing window for work
+ *    that must stay synchronous on the broadcast's main thread (the Now
+ *    Playing transport/seek broadcasts).
+ *  - [launchFinishingOnMain] — the one-off shape whose window closes inside
+ *    a posted main-handler runnable, after the widget push that runnable
+ *    performs (the Now Playing options-changed poster path).
  *  - [launchWidgetConfigCleanup] — the `onDeleted` loop that drops each
  *    removed widget's persisted config off the main thread.
  *
@@ -64,6 +71,57 @@ abstract class WidgetProviderSkeleton : AppWidgetProvider() {
             try {
                 block()
             } finally {
+                pending.finish()
+            }
+        }
+    }
+
+    /**
+     * Runs [block] on the calling thread — the broadcast's main thread; the
+     * transport/seek work must stay there — inside the `goAsync()` window
+     * the current broadcast opened, always closing the window when the block
+     * returns. The synchronous twin of [launchWithPendingResult]: same
+     * `finally` (no catch) semantics, so a failed block still closes the
+     * window while the failure surfaces exactly as the caller's own
+     * try/catch shaped it.
+     */
+    protected fun runWithPendingResult(block: () -> Unit) {
+        val pending = goAsync()
+        try {
+            block()
+        } finally {
+            pending.finish()
+        }
+    }
+
+    /**
+     * The one-off `goAsync()` shape whose window must close on the main
+     * thread: [work] runs off the main thread (the poster load and any other
+     * slow prep), and the `Runnable` it returns — the widget push itself —
+     * is posted to [context]'s main handler with `pending.finish()` riding
+     * the SAME runnable, so the system never sees the broadcast complete
+     * before the push landed. Not a `finally`: a failure in [work] closes
+     * the window immediately via the catch (the push never happened), while
+     * a failure inside the returned runnable crashes exactly as the former
+     * inline hand copy did.
+     */
+    protected fun launchFinishingOnMain(
+        context: Context,
+        work: suspend () -> Runnable,
+    ) {
+        val pending = goAsync()
+        val mainHandler = Handler(context.mainLooper)
+        refreshScope.launch {
+            try {
+                val mainThreadTail = work()
+                mainHandler.post {
+                    mainThreadTail.run()
+                    pending.finish()
+                }
+            } catch (_: Exception) {
+                // Ensure the goAsync() window always closes even if the
+                // off-thread work fails — otherwise the system may ANR the
+                // widget host.
                 pending.finish()
             }
         }

@@ -256,7 +256,7 @@ val dataJvmModule: Module = module {
     single { WatchHistoryRepositoryImpl(get()) }
     single<WatchHistoryRepository> { get<WatchHistoryRepositoryImpl>() }
 
-    single { OfflineRepositoryImpl(get(), get(), get(), get(), get()) }
+    single { OfflineRepositoryImpl(get(), get(), get(), get(), get(), timeSource = get()) }
     single<OfflineRepository> { get<OfflineRepositoryImpl>() }
 
     single { PlaybackOutboxRepositoryImpl(get(), get()) }

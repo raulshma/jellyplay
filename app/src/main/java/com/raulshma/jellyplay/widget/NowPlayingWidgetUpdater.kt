@@ -29,6 +29,10 @@ import kotlinx.coroutines.launch
  * don't run at all — [NowPlayingWidget.onEnabled] / [onDeleted] /
  * [onDisabled] / [onAppWidgetOptionsChanged] call [onWidgetPresenceChanged]
  * to (re)start or stop us.
+ *
+ * What to push, and what the last push retained, is decided by
+ * [WidgetPushGate]; this class keeps the flow collection, the manager
+ * re-reads and the RemoteViews submission.
  */
 class NowPlayingWidgetUpdater (
     private val context: Context,
@@ -37,14 +41,7 @@ class NowPlayingWidgetUpdater (
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var metadataJob: Job? = null
     private var positionJob: Job? = null
-    private var lastArtwork: Bitmap? = null
-    private var lastItemId: String? = null
-
-    // Read/written from both the metadata and position collectors, which run
-    // as separate coroutines on the Dispatchers.Default pool — volatile so a
-    // position-tick thread always sees the metadata push that just landed.
-    // Compared via [sameRenderAs], never structural equals (WidgetPushSnapshot.kt).
-    @Volatile private var lastPushedRender: WidgetPushSnapshot? = null
+    private val pushGate = WidgetPushGate()
 
     fun start() {
         if (metadataJob?.isActive == true) return
@@ -87,9 +84,7 @@ class NowPlayingWidgetUpdater (
         positionJob?.cancel()
         metadataJob = null
         positionJob = null
-        lastArtwork = null
-        lastItemId = null
-        lastPushedRender = null
+        pushGate.reset()
     }
 
     private suspend fun observeMetadata() {
@@ -110,15 +105,17 @@ class NowPlayingWidgetUpdater (
                     old.isPlaying == new.isPlaying
             }
             .collectLatest { snapshot ->
-                if (snapshot.itemId != lastItemId) {
-                    lastItemId = snapshot.itemId
-                    lastArtwork = null
-                }
                 val art = loadArtwork(snapshot.artUrl)
-                if (art != null) {
-                    lastArtwork = art
+                // The snapshot is re-read AFTER the artwork load — the manager
+                // may have moved on while the poster downloaded, and the pushed
+                // render wins over the metadata that triggered the load.
+                val pushed = NowPlayingWidgetRenderer.readPushSnapshot(audioPlaybackManager)
+                when (val decision = pushGate.decideOnMetadata(snapshot.itemId, art, pushed)) {
+                    is WidgetPushGate.Decision.Full -> pushUpdate(pushed, decision.albumArt)
+                    // The metadata source always pushes; Partial/Skip are the
+                    // position ticker's answers.
+                    else -> Unit
                 }
-                pushUpdate(NowPlayingWidgetRenderer.readPushSnapshot(audioPlaybackManager), lastArtwork)
             }
     }
 
@@ -151,13 +148,14 @@ class NowPlayingWidgetUpdater (
     private fun pushPositionUpdate() {
         // Position-only path: sends a partial RemoteViews (position label +
         // progress bar) instead of re-parceling the artwork bitmap and
-        // re-wiring click intents at 1 Hz. [shouldPushPartialPosition] holds
-        // the partial-vs-full race guard: defer to the metadata collector's
-        // full push whenever the partial couldn't re-render what moved, and
-        // suppress redundant pushes by render equality.
+        // re-wiring click intents at 1 Hz. The gate's
+        // [WidgetPushGate.decideOnPositionTick] (over
+        // [shouldPushPartialPosition]) holds the partial-vs-full race guard:
+        // defer to the metadata collector's full push whenever the partial
+        // couldn't re-render what moved, and suppress redundant pushes by
+        // render equality.
         val snapshot = NowPlayingWidgetRenderer.readPushSnapshot(audioPlaybackManager)
-        if (!shouldPushPartialPosition(lastPushedRender, snapshot)) return
-        lastPushedRender = snapshot
+        if (pushGate.decideOnPositionTick(snapshot) != WidgetPushGate.Decision.Partial) return
 
         NowPlayingWidget.updateAllWidgetsPosition(
             context = context,
@@ -173,7 +171,6 @@ class NowPlayingWidgetUpdater (
     }
 
     private fun pushUpdate(snapshot: WidgetPushSnapshot, albumArt: Bitmap?) {
-        lastPushedRender = snapshot
         NowPlayingWidget.updateAllWidgets(
             context = context,
             snapshot = snapshot,

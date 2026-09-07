@@ -12,39 +12,30 @@ import com.raulshma.jellyplay.core.model.arr.ArrQueueItem
 import com.raulshma.jellyplay.core.model.arr.ArrQueueMessage
 import com.raulshma.jellyplay.core.model.arr.ArrWantedItem
 import com.raulshma.jellyplay.core.network.api.ApiException
-import com.raulshma.jellyplay.core.network.api.JsonRequestClient
-import com.raulshma.jellyplay.core.network.api.fromNetwork
-import com.raulshma.jellyplay.core.network.api.parseJsonRequest
 import com.raulshma.jellyplay.core.network.api.parseUnitRequest
 import com.raulshma.jellyplay.core.network.seerr.SeerrApiClientImpl
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
-import okhttp3.HttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
-import java.io.IOException
-import java.net.ConnectException
-import java.net.SocketTimeoutException
-import java.net.UnknownHostException
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
  * OkHttp-backed implementation of [RadarrApiClient]. Mirrors
- * [com.raulshma.jellyplay.core.network.seerr.SeerrApiClientImpl] verbatim:
+ * [com.raulshma.jellyplay.core.network.seerr.SeerrApiClientImpl]:
  * injects the shared unqualified [OkHttpClient], reuses
  * [SeerrApiClientImpl.lenientJson] (same lenient config the Seerr + TMDB
  * clients use), and routes failures through [ApiException.fromHttp] /
  * [ApiException.fromNetwork] so [com.raulshma.jellyplay.core.network.RetryPolicy]
- * can classify retryability.
+ * can classify retryability. The request preamble (URL join, auth header,
+ * executions, failure texts) is shared with [SonarrApiClientImpl] via
+ * [ArrClientSupport].
  *
  * Radarr's v3 API uses `X-Api-Key` for auth — the same header name Seerr uses —
  * so no new credential type is required.
@@ -56,109 +47,28 @@ class RadarrApiClientImpl @Inject constructor(
 
     private val json: Json = SeerrApiClientImpl.lenientJson
 
-    private fun buildUrl(baseUrl: String, path: String): HttpUrl {
-        val base = baseUrl.trimEnd('/')
-        // Radarr's API root is /api/v3; the trailing path is appended as-is so
-        // callers can pass query strings via [HttpUrl.Builder] after the fact.
-        return "$base/api/v3$path".toHttpUrl()
-    }
-
-    private fun Request.Builder.withApiKey(apiKey: String): Request.Builder =
-        header("X-Api-Key", apiKey)
-
-    private suspend fun executeRequest(request: Request): Result<String> {
-        return try {
-            withContext(Dispatchers.IO) {
-                okHttpClient.newCall(request).execute().use { response ->
-                    val body = response.body?.string() ?: return@withContext Result.failure<String>(
-                        ApiException.fromHttp(response.code, "Empty response body (HTTP ${response.code})")
-                    )
-                    if (!response.isSuccessful) {
-                        val errorMsg = parseErrorMessage(response.code, body)
-                        return@withContext Result.failure(ApiException.fromHttp(response.code, errorMsg))
-                    }
-                    Result.success(body)
-                }
-            }
-        } catch (e: Exception) {
-            // CancellationException must propagate for structured-concurrency correctness.
-            if (e is kotlinx.coroutines.CancellationException) throw e
-            Result.failure(ApiException.fromNetwork(e, formatNetworkError(e)))
-        }
-    }
-
-    private fun parseErrorMessage(code: Int, body: String): String = try {
-        val errorJson = json.parseToJsonElement(body)
-        // Radarr errors: [{ "errorMessage": "..." }] or { "message": "..." }
-        val msg = errorJson.toString()
-        if (msg.isNotBlank()) "HTTP $code: ${msg.take(200)}" else "HTTP $code"
-    } catch (_: Exception) {
-        "HTTP $code: ${body.take(200)}"
-    }
-
-    private fun formatNetworkError(e: Exception): String = when (e) {
-        is UnknownHostException -> "Unable to reach Radarr. Check the URL and your network connection."
-        is ConnectException -> "Could not connect to Radarr. Ensure the server is running and accessible."
-        is SocketTimeoutException -> "Connection to Radarr timed out. The server took too long to respond."
-        is IOException -> "Network error reaching Radarr: ${e.message ?: e.javaClass.simpleName}"
-        else -> e.message ?: e.javaClass.simpleName
-    }
-
-    /** Bundled [parseJsonRequest] dependencies; see [parseRequest]. */
-    private val jsonRequestClient = JsonRequestClient(
+    /**
+     * The request preamble Radarr and Sonarr share verbatim — /api/v3 URL
+     * join, `X-Api-Key` header, raw + stream-decoding executions, and the
+     * per-service failure texts (this file's only textual delta from Sonarr
+     * was the service name inside those strings).
+     */
+    private val support = ArrClientSupport(
         okHttpClient = okHttpClient,
         json = json,
-        parseErrorMessage = ::parseErrorMessage,
-        formatNetworkError = ::formatNetworkError,
+        serviceName = "Radarr",
     )
-
-    /** Stream-decoding request execution; see [parseJsonRequest]. */
-    private suspend inline fun <reified T> parseRequest(request: Request): Result<T> =
-        parseJsonRequest(jsonRequestClient, request)
-
-    /**
-     * Applies the [ArrQueueDeleteOptions] as query params on a DELETE URL.
-     * Shared by single + bulk queue deletes.
-     */
-    private fun HttpUrl.Builder.withDeleteOptions(options: ArrQueueDeleteOptions): HttpUrl.Builder = apply {
-        addQueryParameter("removeFromClient", options.removeFromClient.toString())
-        addQueryParameter("blocklist", options.blocklist.toString())
-        addQueryParameter("skipRedownload", options.skipRedownload.toString())
-    }
-
-    private suspend fun deleteRequest(baseUrl: String, apiKey: String, path: String): Result<Unit> {
-        val request = Request.Builder()
-            .url(buildUrl(baseUrl, path))
-            .withApiKey(apiKey)
-            .delete()
-            .build()
-        return parseUnitRequest(jsonRequestClient, request)
-    }
-
-    private suspend inline fun postEmpty(
-        baseUrl: String,
-        apiKey: String,
-        path: String,
-    ): Result<Unit> {
-        val body = "{}".toRequestBody("application/json".toMediaType())
-        val request = Request.Builder()
-            .url(buildUrl(baseUrl, path))
-            .withApiKey(apiKey)
-            .post(body)
-            .build()
-        return parseUnitRequest(jsonRequestClient, request)
-    }
 
     override suspend fun getQueue(baseUrl: String, apiKey: String): Result<List<ArrQueueItem>> {
         // includeMovie=true attaches the movie resource so we can pull tmdbId + title.
         // Radarr v3 (like Sonarr) wraps the page in a { records, page, pageSize,
         // totalRecords } envelope — decoded via RadarrQueueResponse and unwrapped here.
-        val url = buildUrl(baseUrl, "/queue")
+        val url = support.buildUrl(baseUrl, "/queue")
             .newBuilder()
             .addQueryParameter("includeMovie", "true")
             .build()
         val request = Request.Builder().url(url).withApiKey(apiKey).get().build()
-        return parseRequest<RadarrQueueResponse>(request)
+        return support.parseRequest<RadarrQueueResponse>(request)
             .map { resp -> resp.records.map { it.toModel() } }
     }
 
@@ -168,9 +78,9 @@ class RadarrApiClientImpl @Inject constructor(
         id: Int,
         options: ArrQueueDeleteOptions,
     ): Result<Unit> {
-        val url = buildUrl(baseUrl, "/queue/$id").newBuilder().withDeleteOptions(options).build()
+        val url = support.buildUrl(baseUrl, "/queue/$id").newBuilder().withDeleteOptions(options).build()
         val request = Request.Builder().url(url).withApiKey(apiKey).delete().build()
-        return parseUnitRequest(jsonRequestClient, request)
+        return parseUnitRequest(support.jsonRequestClient, request)
     }
 
     override suspend fun deleteQueueItems(
@@ -180,27 +90,27 @@ class RadarrApiClientImpl @Inject constructor(
         options: ArrQueueDeleteOptions,
     ): Result<Unit> {
         if (ids.isEmpty()) return Result.success(Unit)
-        val url = buildUrl(baseUrl, "/queue/bulk").newBuilder().withDeleteOptions(options).build()
+        val url = support.buildUrl(baseUrl, "/queue/bulk").newBuilder().withDeleteOptions(options).build()
         val body = json.encodeToString(RadarrQueueBulkRequest(ids = ids))
         val request = Request.Builder()
             .url(url)
             .withApiKey(apiKey)
             .delete(body.toRequestBody("application/json".toMediaType()))
             .build()
-        return parseUnitRequest(jsonRequestClient, request)
+        return parseUnitRequest(support.jsonRequestClient, request)
     }
 
     override suspend fun grabQueueItem(baseUrl: String, apiKey: String, id: Int): Result<Unit> =
-        postEmpty(baseUrl, apiKey, "/queue/grab/$id")
+        support.postEmpty(baseUrl, apiKey, "/queue/grab/$id")
 
     override suspend fun importQueueItem(baseUrl: String, apiKey: String, downloadId: String): Result<Unit> {
         // 2-step manualimport flow (the *arr v3 spec has no queue/import/{id}):
         // 1) GET the candidate import rows for this download-client guid.
-        val getUrl = buildUrl(baseUrl, "/manualimport").newBuilder()
+        val getUrl = support.buildUrl(baseUrl, "/manualimport").newBuilder()
             .addQueryParameter("downloadId", downloadId)
             .build()
         val getRequest = Request.Builder().url(getUrl).withApiKey(apiKey).get().build()
-        val rows = executeRequest(getRequest).mapCatching { json.decodeFromString<JsonArray>(it) }
+        val rows = support.executeRequest(getRequest).mapCatching { json.decodeFromString<JsonArray>(it) }
         val rowList = rows.getOrElse { return Result.failure(it) }
         if (rowList.isEmpty()) {
             return Result.failure(
@@ -212,11 +122,11 @@ class RadarrApiClientImpl @Inject constructor(
         // through unchanged is both the documented usage and immune to schema
         // drift on the 16-field ManualImportResource.
         val postRequest = Request.Builder()
-            .url(buildUrl(baseUrl, "/manualimport"))
+            .url(support.buildUrl(baseUrl, "/manualimport"))
             .withApiKey(apiKey)
             .post(rowList.toString().toRequestBody("application/json".toMediaType()))
             .build()
-        return parseUnitRequest(jsonRequestClient, postRequest)
+        return parseUnitRequest(support.jsonRequestClient, postRequest)
     }
 
     override suspend fun getCalendar(
@@ -225,13 +135,13 @@ class RadarrApiClientImpl @Inject constructor(
         start: String,
         end: String,
     ): Result<List<ArrCalendarItem>> {
-        val url = buildUrl(baseUrl, "/calendar")
+        val url = support.buildUrl(baseUrl, "/calendar")
             .newBuilder()
             .addQueryParameter("start", start)
             .addQueryParameter("end", end)
             .build()
         val request = Request.Builder().url(url).withApiKey(apiKey).get().build()
-        return parseRequest<List<RadarrMovieResource>>(request)
+        return support.parseRequest<List<RadarrMovieResource>>(request)
             .map { list -> list.map { it.toCalendarItem() } }
     }
 
@@ -240,13 +150,13 @@ class RadarrApiClientImpl @Inject constructor(
         apiKey: String,
         eventType: Int?,
     ): Result<List<ArrHistoryItem>> {
-        val builder = buildUrl(baseUrl, "/history").newBuilder()
+        val builder = support.buildUrl(baseUrl, "/history").newBuilder()
         // includeMovie defaults to false; toModel() reads movie.tmdbId + title,
         // so request the sub-object or history rows lose their movie identity.
         builder.addQueryParameter("includeMovie", "true")
         if (eventType != null) builder.addQueryParameter("eventType", eventType.toString())
         val request = Request.Builder().url(builder.build()).withApiKey(apiKey).get().build()
-        return parseRequest<RadarrHistoryResponse>(request)
+        return support.parseRequest<RadarrHistoryResponse>(request)
             .map { resp -> resp.records.map { it.toModel() } }
     }
 
@@ -256,29 +166,29 @@ class RadarrApiClientImpl @Inject constructor(
         page: Int,
         pageSize: Int,
     ): Result<List<ArrBlocklistItem>> {
-        val url = buildUrl(baseUrl, "/blocklist").newBuilder()
+        val url = support.buildUrl(baseUrl, "/blocklist").newBuilder()
             .addQueryParameter("page", page.toString())
             .addQueryParameter("pageSize", pageSize.toString())
             .addQueryParameter("sortKey", "date")
             .addQueryParameter("sortDirection", "descending")
             .build()
         val request = Request.Builder().url(url).withApiKey(apiKey).get().build()
-        return parseRequest<RadarrBlocklistResponse>(request)
+        return support.parseRequest<RadarrBlocklistResponse>(request)
             .map { resp -> resp.records.map { it.toModel() } }
     }
 
     override suspend fun deleteBlocklistItem(baseUrl: String, apiKey: String, id: Int): Result<Unit> =
-        deleteRequest(baseUrl, apiKey, "/blocklist/$id")
+        support.deleteRequest(baseUrl, apiKey, "/blocklist/$id")
 
     override suspend fun deleteBlocklistItems(baseUrl: String, apiKey: String, ids: List<Int>): Result<Unit> {
         if (ids.isEmpty()) return Result.success(Unit)
         val body = json.encodeToString(RadarrIdsBulkRequest(ids = ids))
         val request = Request.Builder()
-            .url(buildUrl(baseUrl, "/blocklist/bulk"))
+            .url(support.buildUrl(baseUrl, "/blocklist/bulk"))
             .withApiKey(apiKey)
             .delete(body.toRequestBody("application/json".toMediaType()))
             .build()
-        return parseUnitRequest(jsonRequestClient, request)
+        return parseUnitRequest(support.jsonRequestClient, request)
     }
 
     override suspend fun getWanted(
@@ -287,14 +197,14 @@ class RadarrApiClientImpl @Inject constructor(
         page: Int,
         pageSize: Int,
     ): Result<List<ArrWantedItem>> {
-        val url = buildUrl(baseUrl, "/wanted/missing").newBuilder()
+        val url = support.buildUrl(baseUrl, "/wanted/missing").newBuilder()
             .addQueryParameter("page", page.toString())
             .addQueryParameter("pageSize", pageSize.toString())
             .addQueryParameter("sortKey", "inCinemas")
             .addQueryParameter("sortDirection", "descending")
             .build()
         val request = Request.Builder().url(url).withApiKey(apiKey).get().build()
-        return parseRequest<RadarrWantedResponse>(request)
+        return support.parseRequest<RadarrWantedResponse>(request)
             .map { resp -> resp.records.map { it.toWantedItem() } }
     }
 
@@ -311,31 +221,31 @@ class RadarrApiClientImpl @Inject constructor(
             movieId = movieIds?.firstOrNull(),
         )
         val request = Request.Builder()
-            .url(buildUrl(baseUrl, "/command"))
+            .url(support.buildUrl(baseUrl, "/command"))
             .withApiKey(apiKey)
             .post(json.encodeToString(body).toRequestBody("application/json".toMediaType()))
             .build()
-        return parseRequest<RadarrCommandResource>(request).map { it.toModel() }
+        return support.parseRequest<RadarrCommandResource>(request).map { it.toModel() }
     }
 
     override suspend fun findMovieIdByTmdb(baseUrl: String, apiKey: String, tmdbId: Int): Result<Int?> {
         // /api/v3/movie?tmdbId= returns a single-element array (or empty when
         // no match). Decoded as a list rather than a bare object so the
         // not-tracked case is a clean empty list instead of a parse error.
-        val url = buildUrl(baseUrl, "/movie").newBuilder()
+        val url = support.buildUrl(baseUrl, "/movie").newBuilder()
             .addQueryParameter("tmdbId", tmdbId.toString())
             .build()
         val request = Request.Builder().url(url).withApiKey(apiKey).get().build()
-        return parseRequest<List<RadarrMovieResource>>(request)
+        return support.parseRequest<List<RadarrMovieResource>>(request)
             .map { list -> list.firstOrNull()?.id }
     }
 
     override suspend fun getMovieForTmdb(baseUrl: String, apiKey: String, tmdbId: Int): Result<RadarrMovieInfo?> {
-        val url = buildUrl(baseUrl, "/movie").newBuilder()
+        val url = support.buildUrl(baseUrl, "/movie").newBuilder()
             .addQueryParameter("tmdbId", tmdbId.toString())
             .build()
         val request = Request.Builder().url(url).withApiKey(apiKey).get().build()
-        return parseRequest<List<RadarrMovieResource>>(request)
+        return support.parseRequest<List<RadarrMovieResource>>(request)
             .map { list ->
                 list.firstOrNull()?.let {
                     RadarrMovieInfo(
@@ -349,7 +259,7 @@ class RadarrApiClientImpl @Inject constructor(
     }
 
     override suspend fun deleteMovieFile(baseUrl: String, apiKey: String, movieFileId: Int): Result<Unit> =
-        deleteRequest(baseUrl, apiKey, "/movieFile/$movieFileId")
+        support.deleteRequest(baseUrl, apiKey, "/movieFile/$movieFileId")
 
     override suspend fun monitorMovies(
         baseUrl: String,
@@ -362,20 +272,20 @@ class RadarrApiClientImpl @Inject constructor(
             RadarrMovieMonitorRequest(movieIds = movieIds, monitored = monitored),
         )
         val request = Request.Builder()
-            .url(buildUrl(baseUrl, "/movie/monitor"))
+            .url(support.buildUrl(baseUrl, "/movie/monitor"))
             .withApiKey(apiKey)
             .put(body.toRequestBody("application/json".toMediaType()))
             .build()
-        return parseUnitRequest(jsonRequestClient, request)
+        return parseUnitRequest(support.jsonRequestClient, request)
     }
 
     override suspend fun testConnection(baseUrl: String, apiKey: String): Result<Unit> {
         val request = Request.Builder()
-            .url(buildUrl(baseUrl, "/system/status"))
+            .url(support.buildUrl(baseUrl, "/system/status"))
             .withApiKey(apiKey)
             .get()
             .build()
-        return parseUnitRequest(jsonRequestClient, request)
+        return parseUnitRequest(support.jsonRequestClient, request)
     }
 
     // ── Radarr v3 DTOs (private; mapped to core/model types) ───────────────

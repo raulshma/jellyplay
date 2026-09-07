@@ -132,6 +132,20 @@ class AppearanceStoreTest {
     }
 
     @Test
+    fun `corrupt enum values fall back to defaults, siblings keep real values`() = runTest {
+        store.setHapticsEnabled(false)
+        dataStore.edit {
+            it[AppearanceStore.Keys.THEME_MODE] = "nonsense"
+            // Legacy lowercase casing matches no enum name either.
+            it[AppearanceStore.Keys.HAND_MODE] = "left"
+        }
+        val slice = store.appearance.first()
+        assertEquals(ThemeMode.SYSTEM, slice.themeMode)
+        assertEquals(HandMode.RIGHT, slice.handMode)
+        assertEquals(false, slice.hapticsEnabled)
+    }
+
+    @Test
     fun `restore(slice) round-trips a fully-populated slice`() = runTest {
         val slice = AppearanceSlice(
             dynamicTheming = false,

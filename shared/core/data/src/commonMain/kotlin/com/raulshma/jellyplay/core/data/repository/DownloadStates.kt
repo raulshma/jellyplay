@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.repository
 
+import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.model.DownloadStatus
 
 /**
@@ -78,6 +79,5 @@ object DownloadStates {
         if (keepsResumeBytes(status)) downloadedBytes else 0L
 
     /** Parses a stored status column back to the typed enum, or null if unknown. */
-    fun parse(status: String): DownloadStatus? =
-        runCatching { DownloadStatus.valueOf(status) }.getOrNull()
+    fun parse(status: String): DownloadStatus? = status.toEnumOrNull()
 }

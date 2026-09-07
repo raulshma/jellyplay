@@ -40,21 +40,15 @@ import com.raulshma.jellyplay.core.model.ActiveSession
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
-import com.raulshma.jellyplay.core.network.api.ApiException
 import com.raulshma.jellyplay.core.network.api.AuthApiClient
-import io.ktor.client.plugins.HttpRequestTimeoutException
 import kotlinx.browser.window
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.io.IOException
 
 /**
  * Connect/sign-in orchestration for the web shell (wave 12C slice 2). The web
@@ -106,12 +100,10 @@ internal class WebConnectController(
     // Post-success work that must OUTLIVE the pane which started it (see
     // SIDE-EFFECT OWNERSHIP above): the connected card can replace the
     // sign-in form the instant the atomic session publishes, disposing the
-    // pane's rememberCoroutineScope. Owned by this shell-level controller —
-    // it lives as long as the page does, like the singleton API clients, and
-    // is never cancelled explicitly. SupervisorJob keeps one failed job from
-    // tearing down siblings; Dispatchers.Default is fine for a DataStore
-    // write and one POST on wasm.
-    private val sideEffectScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    // pane's rememberCoroutineScope. Owned by this shell-level controller;
+    // the scope lifetime + degrade shape live in [WebSideEffectScope]
+    // (shared with WebSeerrController).
+    private val sideEffectScope = WebSideEffectScope()
 
     /**
      * Post-sign-in capability outcome for the connected card to render.
@@ -150,7 +142,7 @@ internal class WebConnectController(
      */
     fun declareCapabilitiesAfterSignIn() {
         _capabilityNote.value = null
-        sideEffectScope.launch {
+        sideEffectScope.launchDegrading {
             val failed = try {
                 auth.postCapabilities().isFailure
             } catch (e: CancellationException) {
@@ -199,7 +191,7 @@ internal class WebConnectController(
 
     /** Persists a just-probed URL on [sideEffectScope]; fire-and-forget. */
     fun rememberServerUrlLater(url: String) {
-        sideEffectScope.launch { rememberServerUrl(url) }
+        sideEffectScope.launchDegrading { rememberServerUrl(url) }
     }
 
     /**
@@ -633,62 +625,6 @@ private fun SignInCard(
     }
 }
 
-/**
- * True when [failure] looks like a transport-layer refusal rather than a
- * server verdict. Two signals, either suffices:
- *  - TYPE: Ktor Js/fetch IO errors (which CORS blocks surface as) or the
- *    timeout plugin. The assumption that the Js engine wraps fetch failures
- *    in [IOException] is statically unverifiable from this repo's lanes.
- *  - MESSAGE: the raw browser rejection strings ("Failed to fetch" on
- *    Chromium, "NetworkError" on Firefox, "Load failed" on WebKit) matched
- *    case-insensitively down the cause chain, so the friendly line + CORS
- *    hint survive an engine whose wrapping differs; the coordinator's
- *    real-server browser pass will confirm the actual taxonomy.
- *
- * Used only to decide whether the CORS doc pointer shows alongside the error
- * line — never to replace the typed message itself.
- */
-private fun isLikelyCorsOrTransport(failure: Throwable): Boolean {
-    var cause: Throwable? = failure
-    while (cause != null) {
-        if (cause is HttpRequestTimeoutException || cause is IOException) return true
-        val message = cause.message?.lowercase() ?: ""
-        if (
-            "failed to fetch" in message ||
-            "networkerror" in message ||
-            "load failed" in message
-        ) {
-            return true
-        }
-        cause = cause.cause
-    }
-    return false
-}
-
-/**
- * Probe-stage error mapping: transport refusals get a diagnosable line (with
- * the CORS doc hint added separately when the browser still reports
- * connectivity); anything else falls back to whatever the failure carries.
- */
-private fun friendlyProbeFailure(failure: Throwable, browserOnline: Boolean): String {
-    if (isLikelyCorsOrTransport(failure)) {
-        return if (browserOnline) {
-            "Could not reach the server (request refused or timed out)."
-        } else {
-            "The browser reports no connectivity."
-        }
-    }
-    return failure.message ?: "Could not reach the server."
-}
-
-/**
- * Sign-in-stage error mapping, invalid-credentials vs unreachable kept
- * distinct: Jellyfin answers wrong credentials with HTTP 401, which the
- * client surfaces as an access-denied ApiException; transport failures ride
- * the client's classified retryable messages ("Connection timed out…", etc.).
- */
-private fun friendlySignInFailure(failure: Throwable): String = when {
-    failure is ApiException && failure.httpCode == 401 -> "Incorrect username or password."
-    failure.message != null -> failure.message!!
-    else -> "Sign-in failed."
-}
+// The probe/sign-in failure taxonomy (isLikelyCorsOrTransport +
+// friendlyProbeFailure/friendlySignInFailure) lives in WebConnectFailurePolicy.kt
+// — same package, internal visibility, pinned by WebConnectFailurePolicyTest.

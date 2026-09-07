@@ -190,6 +190,45 @@ fun MediaDetailScreen(
     val markSeasonConfirm = rememberConfirmState()
     var markSeasonToWatched by remember { mutableStateOf(true) }
 
+    // The four mark-played callbacks (item/season × watched/unwatched) fold
+    // into one remembered dispatcher: [DetailPlayPolicies.dispatchMarkPlayedAction]
+    // owns the confirm-vs-direct table over (mediaType × season action) and this
+    // lambda only routes to the matching confirm channel + ViewModel call.
+    // mediaType is read fresh at invocation (not captured) so the gate always
+    // sees the loaded item's type.
+    val dispatchMarkPlayedAction = remember(viewModel, markSeriesConfirm, markSeasonConfirm) {
+        { isSeasonAction: Boolean, toWatched: Boolean, seasonId: String? ->
+            val confirm: () -> Unit = {
+                if (isSeasonAction) {
+                    markSeasonToWatched = toWatched
+                    markSeasonConfirm.request {
+                        if (toWatched) viewModel.markSeasonPlayed(requireNotNull(seasonId))
+                        else viewModel.markSeasonUnplayed(requireNotNull(seasonId))
+                    }
+                } else {
+                    markSeriesToWatched = toWatched
+                    markSeriesConfirm.request {
+                        if (toWatched) viewModel.markPlayed()
+                        else viewModel.markUnplayed()
+                    }
+                }
+            }
+            // Direct dispatch: reachable only for item-level marks on
+            // movies/episodes (the season row of the gate always confirms, so
+            // the season callbacks never take this branch).
+            val action: () -> Unit = {
+                if (toWatched) viewModel.markPlayed()
+                else viewModel.markUnplayed()
+            }
+            DetailPlayPolicies.dispatchMarkPlayedAction(
+                mediaType = uiState.detail?.item?.mediaType,
+                isSeasonAction = isSeasonAction,
+                confirm = confirm,
+                action = action,
+            )
+        }
+    }
+
     // Row item awaiting a remove-download confirm from the quick-action menu.
     // Hoisted so the dialog survives the card leaving composition while open.
     val removeDownloadState = rememberRemoveDownloadState()
@@ -437,6 +476,7 @@ fun MediaDetailScreen(
                     rememberedGetChapterImageUrl,
                     viewModel, onPlayClick, onAudioClick, itemId, onItemClick, onPersonClick,
                     onNavigateToSeries, onNavigate, onEditClick, onManageSeries, onBack, onVideoClick,
+                    dispatchMarkPlayedAction,
                 ) {
                     DetailContentCallbacks(
                         getImageUrl = rememberedGetImageUrl,
@@ -447,35 +487,39 @@ fun MediaDetailScreen(
                         onRefresh = { viewModel.forceRefresh() },
                         onPlayClick = { playItemId: String, sourceId: String?, start: Long ->
                             // Stream selection (local-origin subtitle index when offline)
-                            // is the shared [DetailPlayPolicies.resolvePlayStreamSelection]
+                            // is the shared [DetailPlayPolicies.resolveDetailPlayDispatch]
                             // fold; this lambda only dispatches.
+                            val dispatch = DetailPlayPolicies.resolveDetailPlayDispatch(
+                                origin = uiState.origin,
+                                localSubtitleIndex = viewModel.selectedLocalSubtitleIndex,
+                                remoteSubtitleIndex = viewModel.selectedSubtitleIndex,
+                                audioStreamIndex = viewModel.selectedAudioIndex,
+                            )
                             onPlayClick(
                                 playItemId,
                                 sourceId,
                                 start,
-                                DetailPlayPolicies.resolvePlayStreamSelection(
-                                    uiState.origin,
-                                    viewModel.selectedLocalSubtitleIndex,
-                                    viewModel.selectedSubtitleIndex,
-                                ),
-                                viewModel.selectedAudioIndex,
+                                dispatch.subtitleStreamIndex,
+                                dispatch.audioStreamIndex,
                             )
                         },
                         onPlayChapter = { start ->
                             // Resume the current item at a chapter position. Reuses the
                             // same play path + stream selection as the primary play button
-                            // via the shared [DetailPlayPolicies.resolvePlayStreamSelection]
+                            // via the shared [DetailPlayPolicies.resolveDetailPlayDispatch]
                             // fold; this lambda only dispatches.
+                            val dispatch = DetailPlayPolicies.resolveDetailPlayDispatch(
+                                origin = uiState.origin,
+                                localSubtitleIndex = viewModel.selectedLocalSubtitleIndex,
+                                remoteSubtitleIndex = viewModel.selectedSubtitleIndex,
+                                audioStreamIndex = viewModel.selectedAudioIndex,
+                            )
                             onPlayClick(
                                 itemId,
                                 null,
                                 start,
-                                DetailPlayPolicies.resolvePlayStreamSelection(
-                                    uiState.origin,
-                                    viewModel.selectedLocalSubtitleIndex,
-                                    viewModel.selectedSubtitleIndex,
-                                ),
-                                viewModel.selectedAudioIndex,
+                                dispatch.subtitleStreamIndex,
+                                dispatch.audioStreamIndex,
                             )
                         },
                         onPlayExtra = { extra ->
@@ -497,38 +541,11 @@ fun MediaDetailScreen(
                             viewModel.downloads.prepareDownloadSheetEpisodes()
                         },
                         onToggleFavorite = { viewModel.toggleFavorite() },
-                        onMarkPlayed = {
-                            // A series mark recurses into every episode and clears every
-                            // resume position; confirm first. Single movies/episodes flip
-                            // immediately (trivially reversible via the same button).
-                            if (DetailPlayPolicies.requiresMarkPlayedConfirmation(currentItem?.mediaType)) {
-                                markSeriesToWatched = true
-                                markSeriesConfirm.request { viewModel.markPlayed() }
-                            } else {
-                                viewModel.markPlayed()
-                            }
-                        },
-                        onMarkUnplayed = {
-                            if (DetailPlayPolicies.requiresMarkPlayedConfirmation(currentItem?.mediaType)) {
-                                markSeriesToWatched = false
-                                markSeriesConfirm.request { viewModel.markUnplayed() }
-                            } else {
-                                viewModel.markUnplayed()
-                            }
-                        },
-                        onMarkSeasonPlayed = { seasonId ->
-                            // A season mark is always series-scoped — unconditional gate.
-                            if (DetailPlayPolicies.requiresMarkPlayedConfirmation(currentItem?.mediaType, isSeasonAction = true)) {
-                                markSeasonToWatched = true
-                                markSeasonConfirm.request { viewModel.markSeasonPlayed(seasonId) }
-                            }
-                        },
-                        onMarkSeasonUnplayed = { seasonId ->
-                            if (DetailPlayPolicies.requiresMarkPlayedConfirmation(currentItem?.mediaType, isSeasonAction = true)) {
-                                markSeasonToWatched = false
-                                markSeasonConfirm.request { viewModel.markSeasonUnplayed(seasonId) }
-                            }
-                        },
+                        // dispatchMarkPlayedAction(isSeasonAction, toWatched, seasonId)
+                        onMarkPlayed = { dispatchMarkPlayedAction(false, true, null) },
+                        onMarkUnplayed = { dispatchMarkPlayedAction(false, false, null) },
+                        onMarkSeasonPlayed = { seasonId -> dispatchMarkPlayedAction(true, true, seasonId) },
+                        onMarkSeasonUnplayed = { seasonId -> dispatchMarkPlayedAction(true, false, seasonId) },
                         onSubtitleSelect = { idx: Int? -> viewModel.selectSubtitle(idx) },
                         onAudioSelect = { idx: Int? -> viewModel.selectAudio(idx) },
                         onItemClick = onItemClick,

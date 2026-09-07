@@ -72,7 +72,7 @@ import com.raulshma.jellyplay.core.ui.components.PlayButtonWithProgress
 import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.components.WideMediaCard
 import com.raulshma.jellyplay.core.ui.components.formatRemainingTimeFromTicks
-import com.raulshma.jellyplay.core.ui.components.progressFraction
+import com.raulshma.jellyplay.core.model.progressFraction
 import com.raulshma.jellyplay.core.ui.components.rememberEpisodeCardImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableItemRow

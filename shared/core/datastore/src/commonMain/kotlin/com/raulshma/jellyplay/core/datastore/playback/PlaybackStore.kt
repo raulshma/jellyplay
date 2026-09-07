@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
+import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.LiveStreamOption
@@ -117,29 +118,17 @@ class PlaybackStore constructor(
     private fun readPreferredPlayer(prefs: Preferences): PlayerType =
         normalizePreferredPlayer(prefs[Keys.PREFERRED_PLAYER])
 
-    private fun readStreamingQuality(prefs: Preferences): StreamingQuality = try {
-        StreamingQuality.valueOf(prefs[Keys.STREAMING_QUALITY] ?: StreamingQuality.AUTO.name)
-    } catch (_: Exception) {
-        StreamingQuality.AUTO
-    }
+    private fun readStreamingQuality(prefs: Preferences): StreamingQuality =
+        prefs[Keys.STREAMING_QUALITY].toEnumOrNull() ?: StreamingQuality.AUTO
 
-    private fun readCellularStreamingQuality(prefs: Preferences): StreamingQuality = try {
-        StreamingQuality.valueOf(prefs[Keys.CELLULAR_STREAMING_QUALITY] ?: StreamingQuality.AUTO.name)
-    } catch (_: Exception) {
-        StreamingQuality.AUTO
-    }
+    private fun readCellularStreamingQuality(prefs: Preferences): StreamingQuality =
+        prefs[Keys.CELLULAR_STREAMING_QUALITY].toEnumOrNull() ?: StreamingQuality.AUTO
 
-    private fun readLiveStreamOption(prefs: Preferences): LiveStreamOption = try {
-        LiveStreamOption.valueOf(prefs[Keys.LIVE_STREAM_OPTION] ?: LiveStreamOption.AUTO.name)
-    } catch (_: Exception) {
-        LiveStreamOption.AUTO
-    }
+    private fun readLiveStreamOption(prefs: Preferences): LiveStreamOption =
+        prefs[Keys.LIVE_STREAM_OPTION].toEnumOrNull() ?: LiveStreamOption.AUTO
 
-    private fun readDecoderMode(prefs: Preferences): DecoderMode = try {
-        DecoderMode.valueOf(prefs[Keys.DECODER_MODE] ?: DecoderMode.HW_PREFERRED.name)
-    } catch (_: Exception) {
-        DecoderMode.HW_PREFERRED
-    }
+    private fun readDecoderMode(prefs: Preferences): DecoderMode =
+        prefs[Keys.DECODER_MODE].toEnumOrNull() ?: DecoderMode.HW_PREFERRED
 
     /**
      * Reads [PlaybackSlice.playbackMode]. Migrates the legacy boolean
@@ -151,21 +140,24 @@ class PlaybackStore constructor(
      */
     private fun readPlaybackMode(prefs: Preferences): PlaybackMode {
         prefs[Keys.PLAYBACK_MODE]?.let { raw ->
-            return try { PlaybackMode.valueOf(raw) } catch (_: Exception) { PlaybackMode.AUTO }
+            return raw.toEnumOrNull() ?: PlaybackMode.AUTO
         }
         val legacyForce = PreferenceCodec.readBool(prefs, Keys.FORCE_DIRECT_PLAY, "force_direct_play", true)
         return if (legacyForce) PlaybackMode.FORCE_DIRECT_PLAY else PlaybackMode.AUTO
     }
 
-    private fun readRefreshRateMode(prefs: Preferences): RefreshRateMode = try {
-        RefreshRateMode.valueOf(prefs[Keys.REFRESH_RATE_MODE] ?: RefreshRateMode.OFF.name)
-    } catch (_: Exception) {
-        // Legacy migration: a user with the old boolean on but no mode stored
-        // is mapped to FRAME_RATE_ONLY (the old behaviour).
-        if (PreferenceCodec.readBool(prefs, Keys.FRAME_RATE_MATCHING, "frame_rate_matching", false)) {
-            RefreshRateMode.FRAME_RATE_ONLY
-        } else {
-            RefreshRateMode.OFF
+    private fun readRefreshRateMode(prefs: Preferences): RefreshRateMode {
+        // An absent key reads the OFF default directly — the legacy migration
+        // below only rescues a corrupt stored value, not a fresh install.
+        val stored = prefs[Keys.REFRESH_RATE_MODE] ?: return RefreshRateMode.OFF
+        return stored.toEnumOrNull() ?: run {
+            // Legacy migration: a user with the old boolean on but no mode stored
+            // is mapped to FRAME_RATE_ONLY (the old behaviour).
+            if (PreferenceCodec.readBool(prefs, Keys.FRAME_RATE_MATCHING, "frame_rate_matching", false)) {
+                RefreshRateMode.FRAME_RATE_ONLY
+            } else {
+                RefreshRateMode.OFF
+            }
         }
     }
 

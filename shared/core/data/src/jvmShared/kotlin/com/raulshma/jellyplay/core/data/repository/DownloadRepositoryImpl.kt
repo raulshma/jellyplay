@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.core.data.util.DownloadDelegate
 import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.data.worker.awaitResponse
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
+import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.database.JellyPlayDatabase
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
 import com.raulshma.jellyplay.core.database.dao.OfflineMediaDao
@@ -129,6 +130,18 @@ class DownloadRepositoryImpl(
     // Caps the number of episodes processed concurrently when queueing a series
     // download. Avoids launching 20+ parallel OkHttp calls + Coil decodes at once.
     private val downloadPermits = Semaphore(permits = 4)
+
+    // The shared deletion choreography (see the class KDoc for the six-step
+    // ordering spec) — the same collaborator OfflineRepositoryImpl's three
+    // delete scopes run. This repo owns no artwork memo, so it passes no
+    // evictArtworkMemo hook.
+    private val deletionCore = OfflineDeletionCore(
+        database = database,
+        downloadDao = downloadDao,
+        offlineMediaDao = offlineMediaDao,
+        playbackStateDao = playbackStateDao,
+        syncBaselineDao = syncBaselineDao,
+    )
 
     // Room re-runs download queries on every 2 s progress tick, and a full
     // structural `distinctUntilChanged` over up to 500 x ~25-field items is
@@ -1236,38 +1249,37 @@ class DownloadRepositoryImpl(
         )
     }
 
+    /**
+     * Declared delta vs the former inline body, adopted from the majority
+     * choreography: the orphan prune now runs as the core's post-transaction
+     * step (the old body pruned inside the same transaction — the difference
+     * is observable only as transiently un-pruned orphan rows between the two
+     * transactions), and the cast-image prune the old body skipped now runs —
+     * its reference scan only deletes files no surviving offline row
+     * references, so the former skip leaked cast images rather than
+     * protecting them.
+     */
     private suspend fun cleanupDownloadFiles(entity: DownloadEntity) {
-        // File deletion + directory listing off the caller's (Main) dispatcher —
-        // same pattern as the sibling helpers below.
-        withContext(Dispatchers.IO) {
-            if (entity.downloadPath.isNotBlank()) {
-                val file = File(entity.downloadPath)
-                if (file.exists()) file.delete()
-                DownloadArtifacts.cleanup(file.parentFile, entity.mediaItemId)
-            }
-        }
-        database.withTransaction {
-            downloadDao.deleteDownloadById(entity.id)
-            offlineMediaDao.deleteById(entity.mediaItemId)
-            playbackStateDao.deleteById(entity.mediaItemId)
-            syncBaselineDao.deleteById(entity.mediaItemId)
-            offlineMediaDao.deleteOrphanedSeasons()
-            offlineMediaDao.deleteOrphanedSeries()
-            playbackStateDao.deleteUnreferenced()
-            syncBaselineDao.deleteUnreferenced()
-        }
+        deletionCore.delete(
+            downloads = listOf(entity),
+            deleteMetadataRows = {
+                offlineMediaDao.deleteById(entity.mediaItemId)
+                playbackStateDao.deleteById(entity.mediaItemId)
+                syncBaselineDao.deleteById(entity.mediaItemId)
+            },
+        )
     }
 
     private fun DownloadEntity.toDownloadItem() = DownloadItem(
         id = id,
         mediaItemId = mediaItemId,
         name = name,
-        mediaType = try { MediaType.valueOf(mediaType) } catch (_: Exception) { MediaType.UNKNOWN },
+        mediaType = mediaType.toEnumOrNull() ?: MediaType.UNKNOWN,
         downloadPath = downloadPath,
         downloadUrl = downloadUrl,
         totalSizeBytes = totalSizeBytes,
         downloadedBytes = downloadedBytes,
-        status = try { DownloadStatus.valueOf(status) } catch (_: Exception) { DownloadStatus.FAILED },
+        status = status.toEnumOrNull() ?: DownloadStatus.FAILED,
         speedBytesPerSec = speedBytesPerSec,
         mediaSourceId = mediaSourceId,
         imageUrl = imageUrl,

@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.core.data.repository
 import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.database.dao.PlaybackOutboxDao
 import com.raulshma.jellyplay.core.database.entity.PlaybackOutboxEntity
+import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.model.PlayMethod
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -236,15 +237,22 @@ class PlaybackOutboxRepositoryImpl constructor(
     override fun getAllFlow(): Flow<List<PlaybackOutboxEntry>> =
         dao.getAllFlow().map { list -> list.map { it.toDomain() } }
 
+    // Parse the persisted enum columns through the repo-wide seam: a corrupt
+    // stored value degrades to the documented default instead of throwing —
+    // a throw here (from an unguarded valueOf) poisons drain()/getAllFlow()
+    // and stalls the whole outbox on one bad row. eventType has no neutral
+    // constant, so a corrupt one maps to START: the only replay path that
+    // sends no position and flips no watched/favorite state, letting the
+    // corrupt row be delivered + deleted instead of blocking the drain.
     private fun PlaybackOutboxEntity.toDomain(): PlaybackOutboxEntry =
         PlaybackOutboxEntry(
             id = id,
             itemId = itemId,
-            eventType = PlaybackOutboxEventType.valueOf(eventType),
+            eventType = eventType.toEnumOrNull() ?: PlaybackOutboxEventType.START,
             sessionId = sessionId,
             positionTicks = positionTicks,
             isPaused = isPaused,
-            playMethod = runCatching { PlayMethod.valueOf(playMethod) }.getOrDefault(PlayMethod.DIRECT_PLAY),
+            playMethod = playMethod.toEnumOrNull() ?: PlayMethod.DIRECT_PLAY,
             mediaSourceId = mediaSourceId,
             recordedAt = recordedAt,
             createdAt = createdAt,

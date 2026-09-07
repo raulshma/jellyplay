@@ -91,7 +91,6 @@ val settingsModule: Module = module {
             authRepository = get(),
             seerrRepository = get(),
             adminRepository = get(),
-            advancedSettings = get(),
             editor = get(),
             recentsStore = get(),
         )

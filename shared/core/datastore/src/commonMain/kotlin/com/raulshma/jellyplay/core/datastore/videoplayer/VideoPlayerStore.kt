@@ -11,6 +11,7 @@ import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.raulshma.jellyplay.core.datastore.ParsedCache
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
+import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.model.GestureIndicatorSide
 import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.OrientationMode
@@ -171,23 +172,14 @@ class VideoPlayerStore constructor(
         },
     )
 
-    private fun readOrientation(prefs: Preferences): OrientationMode = try {
-        OrientationMode.valueOf(prefs[Keys.VIDEO_DEFAULT_ORIENTATION] ?: OrientationMode.SENSOR_LANDSCAPE.name)
-    } catch (_: Exception) {
-        OrientationMode.SENSOR_LANDSCAPE
-    }
+    private fun readOrientation(prefs: Preferences): OrientationMode =
+        prefs[Keys.VIDEO_DEFAULT_ORIENTATION].toEnumOrNull() ?: OrientationMode.SENSOR_LANDSCAPE
 
-    private fun readGestureIndicatorSide(prefs: Preferences): GestureIndicatorSide = try {
-        GestureIndicatorSide.valueOf(prefs[Keys.VIDEO_GESTURE_INDICATOR_SIDE] ?: GestureIndicatorSide.OPPOSITE.name)
-    } catch (_: Exception) {
-        GestureIndicatorSide.OPPOSITE
-    }
+    private fun readGestureIndicatorSide(prefs: Preferences): GestureIndicatorSide =
+        prefs[Keys.VIDEO_GESTURE_INDICATOR_SIDE].toEnumOrNull() ?: GestureIndicatorSide.OPPOSITE
 
-    private fun readPreloadBufferSize(prefs: Preferences): PreloadBufferSize = try {
-        PreloadBufferSize.valueOf(prefs[Keys.VIDEO_PRELOAD_BUFFER_SIZE] ?: PreloadBufferSize.MEDIUM.name)
-    } catch (_: Exception) {
-        PreloadBufferSize.MEDIUM
-    }
+    private fun readPreloadBufferSize(prefs: Preferences): PreloadBufferSize =
+        prefs[Keys.VIDEO_PRELOAD_BUFFER_SIZE].toEnumOrNull() ?: PreloadBufferSize.MEDIUM
 
     /**
      * Reads the per-`MediaSegmentType` skip behaviour map. When the JSON
@@ -205,9 +197,9 @@ class VideoPlayerStore constructor(
             return try {
                 val stored = PreferenceCodec.json.decodeFromString<Map<String, String>>(raw)
                 val parsed = stored.mapNotNull { (typeStr, behaviorStr) ->
-                    try {
-                        MediaSegmentType.valueOf(typeStr) to SegmentBehavior.valueOf(behaviorStr)
-                    } catch (_: Exception) { null }
+                    val type = typeStr.toEnumOrNull<MediaSegmentType>() ?: return@mapNotNull null
+                    val behavior = behaviorStr.toEnumOrNull<SegmentBehavior>() ?: return@mapNotNull null
+                    type to behavior
                 }.toMap()
                 // Merge: defaults fill in any types not explicitly saved, stored values override
                 SegmentBehavior.DEFAULT_BEHAVIORS + parsed

@@ -689,13 +689,13 @@ fun SettingsScreen(
     var lastClickedSettingId by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) {
         if (isTv) {
-            kotlinx.coroutines.delay(150)
+            delay(TV_INITIAL_FOCUS_DELAY_MS)
             if (isFirstTvEntry) {
                 searchFocusRequester.tryRequestFocus()
                 isFirstTvEntry = false
             } else {
                 if (lastClickedSettingId != null) {
-                    kotlinx.coroutines.delay(1000)
+                    delay(TV_HIGHLIGHT_REFOCUS_DELAY_MS)
                     lastClickedSettingId = null
                 } else {
                     listFocusRequester.tryRequestFocus()
@@ -714,20 +714,27 @@ fun SettingsScreen(
     val advLabel = stringResource(Res.string.settings_advanced_badge)
     val advancedEnabledMessage = stringResource(Res.string.settings_advanced_enabled)
 
-    var searchQuery by remember { mutableStateOf("") }
-    var isSearchActive by remember { mutableStateOf(false) }
     var isSearchFocused by remember { mutableStateOf(false) }
-    var selectedCategory by remember { mutableStateOf<String?>(null) }
     var showSignOutConfirm by remember { mutableStateOf(false) }
     var signOutFromServer by remember { mutableStateOf(false) }
     var activeDialog by remember { mutableStateOf<PickerState<*>?>(null) }
 
+    // The search panel's five loose state pieces (query / active / category
+    // filter / display list / recents) and their interactions — open → type →
+    // filter → tap-through → dismiss, recents add/dedupe/clear — live on the
+    // JVM-testable holder ([SettingsSearchPanelState]); this composable only
+    // performs the effects (focus requests, VM persistence).
+    val searchPanel = remember {
+        SettingsSearchPanelState(
+            recordRecentSink = viewModel::recordSettingUsed,
+            clearRecentsSink = viewModel::clearRecentSettings,
+        )
+    }
+
     // Shared search-exit path: dismiss the panel and hand focus back to the
     // main list (TV focus policy depends on the list regaining focus).
     fun dismissSearchAndRefocus() {
-        isSearchActive = false
-        searchQuery = ""
-        selectedCategory = null
+        searchPanel.dismiss()
         listFocusRequester.tryRequestFocus()
     }
 
@@ -739,15 +746,21 @@ fun SettingsScreen(
         onNavigate(buildRoute(id).withHighlightSettingId(id))
     }
 
-    // Section scaffold: one lazy item wrapped in the staggered entrance, with
-    // the TV step offset (the TV-only screensaver group shifts later rows).
+    // Section scaffold: one lazy item wrapped in the staggered entrance. The
+    // (phone, tv) steps derive from the ordered SETTINGS_ENTRANCE_SECTIONS
+    // list — pinned by SettingsEntranceStepsTest to equal the hand-typed
+    // literals this replaced — so inserting a section renumbers the followers
+    // automatically.
     fun LazyListScope.settingsSection(
         key: String,
-        phoneStep: Int,
-        tvStep: Int = phoneStep,
         content: @Composable () -> Unit,
-    ) = item(key = key) {
-        AnimatedSettingsEntrance(if (isTv) tvStep else phoneStep) { content() }
+    ) {
+        val steps = requireNotNull(settingsEntranceStep(key)) {
+            "undeclared settings entrance section '$key' — add it to SETTINGS_ENTRANCE_SECTIONS"
+        }
+        item(key = key) {
+            AnimatedSettingsEntrance(if (isTv) steps.tv else steps.phone) { content() }
+        }
     }
 
     // Shared core/ui settings-search pipeline over this module's catalog
@@ -758,9 +771,9 @@ fun SettingsScreen(
     // 258-item resolve.
     val filteredItems by produceState(
         initialValue = emptyList<ResolvedSettingsItem>(),
-        searchQuery,
+        searchPanel.searchQuery,
     ) {
-        settingsSearchResults(snapshotFlow { searchQuery }, SettingsSearchCatalog)
+        settingsSearchResults(snapshotFlow { searchPanel.searchQuery }, SettingsSearchCatalog)
             .collect { value = it }
     }
 
@@ -768,12 +781,8 @@ fun SettingsScreen(
         filteredItems.map { it.category }.distinct()
     }
 
-    val displayItems = remember(filteredItems, selectedCategory) {
-        if (selectedCategory != null) {
-            filteredItems.filter { it.category == selectedCategory }
-        } else {
-            filteredItems
-        }
+    val displayItems = remember(filteredItems, searchPanel.selectedCategory) {
+        searchPanel.displayItems(filteredItems)
     }
 
     // The last-used setting ids (most-recent first), resolved back to renderable
@@ -784,14 +793,18 @@ fun SettingsScreen(
     // this producer itself runs on the composition dispatcher
     // (SettingsSearchCatalog.recentItems owns the Default hop).
     val recentIds by viewModel.recentSettingIds.collectAsStateWithLifecycle()
+    // Re-seed the holder's recents mirror whenever the store emits — the
+    // ReorderState re-sync shape (the store owns persistence; the mirror is
+    // display state).
+    LaunchedEffect(recentIds) { searchPanel.submitRecents(recentIds) }
     val recentItems by produceState(
         initialValue = emptyList<ResolvedSettingsItem>(),
-        recentIds,
+        searchPanel.recentIds,
     ) {
-        value = SettingsSearchCatalog.recentItems(recentIds)
+        value = SettingsSearchCatalog.recentItems(searchPanel.recentIds)
     }
 
-    JellyPlayBackHandler(enabled = isSearchActive) {
+    JellyPlayBackHandler(enabled = searchPanel.isSearchActive) {
         dismissSearchAndRefocus()
     }
 
@@ -818,7 +831,7 @@ fun SettingsScreen(
         val onResultClick: (ResolvedSettingsItem) -> Unit = { item ->
             val click = settingsResultClickAction(item.id, item.route, item.isAdvanced, preferences.showAdvancedSettings)
             if (click.enableAdvanced) {
-                viewModel.setShowAdvancedSettings(true)
+                viewModel.edit { scope -> scope.appearance.setShowAdvancedSettings(true) }
                 messenger?.info(advancedEnabledMessage)
             }
             click.pendingHighlightId?.let { lastClickedSettingId = it }
@@ -831,12 +844,10 @@ fun SettingsScreen(
                 SettingsSearchResultAction.OpenSetupWizard -> onSetupWizard()
                 SettingsSearchResultAction.NoOp -> {}
             }
-            if (click.recordRecent) viewModel.recordSettingUsed(item.id)
+            if (click.recordRecent) searchPanel.recordRecent(item.id)
             // Dismiss search after navigation has been dispatched so the main
             // settings list doesn't briefly reveal during the transition.
-            isSearchActive = false
-            searchQuery = ""
-            selectedCategory = null
+            searchPanel.dismiss()
         }
 
         // Admin session polling is tied to screen visibility so it only runs
@@ -863,7 +874,7 @@ fun SettingsScreen(
                     .statusBarsPadding()
             ) {
                 // Search Bar / Navigation Header
-                if (!isSearchActive) {
+                if (!searchPanel.isSearchActive) {
                     if (isTv) {
                         Box(
                             modifier = Modifier
@@ -877,9 +888,9 @@ fun SettingsScreen(
                         ) {
                             SettingsTvCollapsedSearchRow(
                                 onSearchClicked = {
-                                    isSearchActive = true
+                                    searchPanel.open()
                                     coroutineScope.launch {
-                                        kotlinx.coroutines.delay(100)
+                                        delay(SEARCH_FIELD_FOCUS_DELAY_MS)
                                         searchFocusRequester.tryRequestFocus()
                                     }
                                 },
@@ -907,9 +918,9 @@ fun SettingsScreen(
                             )
                             Surface(
                                 onClick = {
-                                    isSearchActive = true
+                                    searchPanel.open()
                                     coroutineScope.launch {
-                                        kotlinx.coroutines.delay(100)
+                                        delay(SEARCH_FIELD_FOCUS_DELAY_MS)
                                         searchFocusRequester.tryRequestFocus()
                                     }
                                 },
@@ -1011,7 +1022,7 @@ fun SettingsScreen(
                                     modifier = Modifier.weight(1f),
                                     contentAlignment = Alignment.CenterStart
                                 ) {
-                                    if (searchQuery.isEmpty()) {
+                                    if (searchPanel.searchQuery.isEmpty()) {
                                         Text(
                                             text = stringResource(Res.string.settings_search_placeholder),
                                             style = MaterialTheme.typography.bodyMedium,
@@ -1019,8 +1030,8 @@ fun SettingsScreen(
                                         )
                                     }
                                     BasicTextField(
-                                        value = searchQuery,
-                                        onValueChange = { searchQuery = it },
+                                        value = searchPanel.searchQuery,
+                                        onValueChange = { searchPanel.onQueryChange(it) },
                                         singleLine = true,
                                         textStyle = MaterialTheme.typography.bodyMedium.copy(
                                             color = MaterialTheme.colorScheme.onSurface
@@ -1036,7 +1047,7 @@ fun SettingsScreen(
                                                     true
                                                 },
                                                 onRight = {
-                                                    if (searchQuery.isNotEmpty()) {
+                                                    if (searchPanel.searchQuery.isNotEmpty()) {
                                                         trailingFocusRequester.tryRequestFocus()
                                                         true
                                                     } else false
@@ -1051,9 +1062,9 @@ fun SettingsScreen(
                                     )
                                 }
 
-                                if (searchQuery.isNotEmpty()) {
+                                if (searchPanel.searchQuery.isNotEmpty()) {
                                     SettingsIconButton(
-                                        onClick = { searchQuery = "" },
+                                        onClick = { searchPanel.clearQuery() },
                                         icon = Tabler.Outline.X,
                                         contentDescription = clearSearchCd,
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
@@ -1073,7 +1084,7 @@ fun SettingsScreen(
                     }
                 }
 
-                if (isSearchActive) {
+                if (searchPanel.isSearchActive) {
                     if (availableCategories.isNotEmpty()) {
                         LazyRow(
                             modifier = Modifier
@@ -1086,17 +1097,15 @@ fun SettingsScreen(
                             item(key = "cat_all") {
                                 SettingsCategoryChip(
                                     label = stringResource(Res.string.settings_filter_all),
-                                    selected = selectedCategory == null,
-                                    onClick = { selectedCategory = null },
+                                    selected = searchPanel.selectedCategory == null,
+                                    onClick = { searchPanel.selectAllCategories() },
                                 )
                             }
                             items(availableCategories, key = { it }) { cat ->
                                 SettingsCategoryChip(
                                     label = cat,
-                                    selected = selectedCategory == cat,
-                                    onClick = {
-                                        selectedCategory = if (selectedCategory == cat) null else cat
-                                    },
+                                    selected = searchPanel.selectedCategory == cat,
+                                    onClick = { searchPanel.toggleCategory(cat) },
                                 )
                             }
                         }
@@ -1108,14 +1117,14 @@ fun SettingsScreen(
                             .weight(1f)
                     ) {
                         when {
-                            searchQuery.isNotBlank() && displayItems.isNotEmpty() -> {
+                            searchPanel.searchQuery.isNotBlank() && displayItems.isNotEmpty() -> {
                                 SearchResultsColumn(
                                     onBack = { dismissSearchAndRefocus() }
                                 ) {
                                     itemsIndexed(displayItems, key = { _, item -> item.id }) { index, item ->
                                         SettingsSearchResultRow(
                                             item = item,
-                                            query = searchQuery,
+                                            query = searchPanel.searchQuery,
                                             index = index,
                                             count = displayItems.size,
                                             advancedBadgeLabel = advLabel,
@@ -1124,7 +1133,7 @@ fun SettingsScreen(
                                     }
                                 }
                             }
-                            searchQuery.isNotBlank() && displayItems.isEmpty() -> {
+                            searchPanel.searchQuery.isNotBlank() && displayItems.isEmpty() -> {
                                 LazyColumn(
                                     modifier = Modifier
                                         .fillMaxSize()
@@ -1168,9 +1177,9 @@ fun SettingsScreen(
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                 textAlign = TextAlign.Center
                                             )
-                                            if (selectedCategory != null) {
+                                            if (searchPanel.selectedCategory != null) {
                                                 Spacer(Modifier.height(12.dp))
-                                                TextButton(onClick = { selectedCategory = null }) {
+                                                TextButton(onClick = { searchPanel.selectAllCategories() }) {
                                                     Text(stringResource(Res.string.settings_filter_all))
                                                 }
                                             }
@@ -1195,7 +1204,7 @@ fun SettingsScreen(
                                     }
                                 }
                             }
-                            searchQuery.isBlank() && recentItems.isNotEmpty() -> {
+                            searchPanel.searchQuery.isBlank() && recentItems.isNotEmpty() -> {
                                 SearchResultsColumn(
                                     onBack = { dismissSearchAndRefocus() }
                                 ) {
@@ -1213,7 +1222,7 @@ fun SettingsScreen(
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                 fontWeight = FontWeight.SemiBold,
                                             )
-                                            TextButton(onClick = { viewModel.clearRecentSettings() }) {
+                                            TextButton(onClick = { searchPanel.clearRecents() }) {
                                                 Text(stringResource(Res.string.settings_clear_recents))
                                             }
                                         }
@@ -1316,7 +1325,7 @@ fun SettingsScreen(
                             bottom = adaptiveInfo.bottomPadding(LocalTvMode.current),
                         ),
                     ) {
-                        settingsSection("profile", 0) {
+                        settingsSection("profile") {
                             if (userName.isNotBlank()) {
                                 SettingsProfileBanner(
                                     userName = userName,
@@ -1330,14 +1339,14 @@ fun SettingsScreen(
                             }
                         }
 
-                        settingsSection("power_user_mode", 1) {
+                        settingsSection("power_user_mode") {
                             PowerUserModeCard(
                                 checked = preferences.showAdvancedSettings,
-                                onCheckedChange = { viewModel.setShowAdvancedSettings(it) },
+                                onCheckedChange = { viewModel.edit { scope -> scope.appearance.setShowAdvancedSettings(it) } },
                             )
                         }
 
-                        settingsSection("active_devices", 2) {
+                        settingsSection("active_devices") {
                             if (viewModel.currentUser?.isAdmin == true && viewModel.activeSessions.isNotEmpty()) {
                                 ActiveDevicesRow(
                                     sessions = viewModel.activeSessions,
@@ -1347,7 +1356,7 @@ fun SettingsScreen(
                             }
                         }
 
-                        settingsSection("account", 3) {
+                        settingsSection("account") {
                             SettingsGroup(
                                 icon = Tabler.Outline.User,
                                 title = stringResource(Res.string.settings_account),
@@ -1400,7 +1409,7 @@ fun SettingsScreen(
                             }
                         }
 
-                        settingsSection("activity", 4) {
+                        settingsSection("activity") {
                             val pendingCount = viewModel.pendingRequestCount.collectAsStateWithLifecycle().value
                             SettingsGroup(
                                 icon = Tabler.Outline.Activity,
@@ -1467,7 +1476,7 @@ fun SettingsScreen(
                             }
                         }
 
-                        settingsSection("system", 5) {
+                        settingsSection("system") {
                             val activeSessionCount = viewModel.activeSessions.size
                             SettingsGroup(
                                 icon = Tabler.Outline.Adjustments,
@@ -1521,7 +1530,7 @@ fun SettingsScreen(
                             }
                         }
 
-                        settingsSection("item_appearance", 6) {
+                        settingsSection("item_appearance") {
                             SettingListItem(
                                 icon = Tabler.Outline.Palette,
                                 title = stringResource(Res.string.settings_appearance),
@@ -1531,7 +1540,7 @@ fun SettingsScreen(
                             )
                         }
 
-                        settingsSection("item_playback", 7) {
+                        settingsSection("item_playback") {
                             SettingListItem(
                                 icon = Tabler.Outline.PlayerPlay,
                                 title = stringResource(Res.string.settings_playback),
@@ -1541,7 +1550,7 @@ fun SettingsScreen(
                             )
                         }
 
-                        settingsSection("item_audio", 8) {
+                        settingsSection("item_audio") {
                             SettingListItem(
                                 icon = Tabler.Outline.Music,
                                 title = stringResource(Res.string.settings_audio_player),
@@ -1551,7 +1560,7 @@ fun SettingsScreen(
                             )
                         }
 
-                        settingsSection("item_language", 9) {
+                        settingsSection("item_language") {
                             SettingListItem(
                                 icon = Tabler.Outline.Language,
                                 title = stringResource(Res.string.settings_language_subtitles),
@@ -1565,7 +1574,7 @@ fun SettingsScreen(
                         // NotificationSync seam no-ops there) — entry + screen
                         // stay Android-only.
                         if (settingsCapabilities.supportsNotifications) {
-                            settingsSection("item_notifications", 10) {
+                            settingsSection("item_notifications") {
                                 val notifPrefs = preferences.notificationPreferences
                                 SettingListItem(
                                     icon = Tabler.Outline.Bell,
@@ -1577,7 +1586,7 @@ fun SettingsScreen(
                             }
                         }
 
-                        settingsSection("item_storage", 11) {
+                        settingsSection("item_storage") {
                             SettingListItem(
                                 icon = Tabler.Outline.Database,
                                 title = stringResource(Res.string.settings_downloads_storage),
@@ -1587,7 +1596,7 @@ fun SettingsScreen(
                             )
                         }
 
-                        settingsSection("item_security", 12) {
+                        settingsSection("item_security") {
                             SettingListItem(
                                 icon = Tabler.Outline.Lock,
                                 title = stringResource(Res.string.settings_security),
@@ -1602,7 +1611,7 @@ fun SettingsScreen(
                             )
                         }
 
-                        settingsSection("item_privacy_data", 13) {
+                        settingsSection("item_privacy_data") {
                             SettingListItem(
                                 icon = Tabler.Outline.ShieldLock,
                                 title = stringResource(Res.string.settings_privacy_data),
@@ -1612,7 +1621,7 @@ fun SettingsScreen(
                             )
                         }
 
-                        settingsSection("item_backup", 14) {
+                        settingsSection("item_backup") {
                             SettingListItem(
                                 icon = Tabler.Outline.DatabaseExport,
                                 title = stringResource(Res.string.settings_backup_restore),
@@ -1623,7 +1632,7 @@ fun SettingsScreen(
                         }
 
                         if (isTv) {
-                            settingsSection("group_screensaver", 15) {
+                            settingsSection("group_screensaver") {
                                 SettingsGroup(
                                     icon = Tabler.Outline.Moon,
                                     title = stringResource(Res.string.settings_screensaver),
@@ -1651,7 +1660,7 @@ fun SettingsScreen(
                                         checked = preferences.dreamShowTitle,
                                         index = 0, count = dreamTotal,
                                         highlighted = lastClickedSettingId == "screensaver_show_title",
-                                        onCheckedChange = { viewModel.setDreamShowTitle(it) },
+                                        onCheckedChange = { viewModel.edit { scope -> scope.screensaver.setDreamShowTitle(it) } },
                                     )
                                     val categoryMovies = stringResource(Res.string.settings_category_movies)
                                     val categoryTv = stringResource(Res.string.settings_category_tv)
@@ -1681,7 +1690,7 @@ fun SettingsScreen(
                                                 val nextIndex = current.size
                                                 cycle.take(nextIndex + 1).toSet()
                                             }
-                                            viewModel.setDreamImageCategories(next)
+                                            viewModel.edit { scope -> scope.screensaver.setDreamImageCategories(next) }
                                         },
                                     )
                                     SettingListItem(
@@ -1697,7 +1706,7 @@ fun SettingsScreen(
                                                 items = listOf(5_000L, 10_000L, 15_000L, 30_000L, 60_000L),
                                                 label = { "${it / 1000}s" },
                                                 isSelected = { it == preferences.dreamSlideshowIntervalMs },
-                                                onSelect = { viewModel.setDreamSlideshowIntervalMs(it) },
+                                                onSelect = { viewModel.edit { scope -> scope.screensaver.setDreamSlideshowIntervalMs(it) } },
                                             )
                                         },
                                     )
@@ -1708,7 +1717,7 @@ fun SettingsScreen(
                                         checked = preferences.dreamKenBurnsEnabled,
                                         index = 3, count = dreamTotal,
                                         highlighted = lastClickedSettingId == "screensaver_ken_burns",
-                                        onCheckedChange = { viewModel.setDreamKenBurnsEnabled(it) },
+                                        onCheckedChange = { viewModel.edit { scope -> scope.screensaver.setDreamKenBurnsEnabled(it) } },
                                     )
                                     SettingListItem(
                                         icon = Tabler.Outline.ArrowRight,
@@ -1728,7 +1737,7 @@ fun SettingsScreen(
                                                 items = DreamTransitionStyle.entries,
                                                 label = { labels[it] ?: it.name },
                                                 isSelected = { it == preferences.dreamTransitionStyle },
-                                                onSelect = { viewModel.setDreamTransitionStyle(it) },
+                                                onSelect = { viewModel.edit { scope -> scope.screensaver.setDreamTransitionStyle(it) } },
                                             )
                                         },
                                     )
@@ -1736,7 +1745,7 @@ fun SettingsScreen(
                             }
                         }
 
-                        settingsSection("item_experimental", phoneStep = 15, tvStep = 16) {
+                        settingsSection("item_experimental") {
                             SettingListItem(
                                 icon = Tabler.Outline.Flask,
                                 title = stringResource(Res.string.settings_experimental),
@@ -1746,7 +1755,7 @@ fun SettingsScreen(
                             )
                         }
 
-                        settingsSection("item_integrations", phoneStep = 16, tvStep = 17) {
+                        settingsSection("item_integrations") {
                             SettingListItem(
                                 icon = Tabler.Outline.PlugConnected,
                                 title = stringResource(Res.string.settings_integrations),
@@ -1756,7 +1765,7 @@ fun SettingsScreen(
                             )
                         }
 
-                        settingsSection("item_about", phoneStep = 17, tvStep = 18) {
+                        settingsSection("item_about") {
                             SettingListItem(
                                 icon = Tabler.Outline.InfoCircle,
                                 title = stringResource(Res.string.settings_about),

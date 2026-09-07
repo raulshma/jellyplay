@@ -4,6 +4,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import com.raulshma.jellyplay.core.datastore.TestDataStoreProvider
 import com.raulshma.jellyplay.core.model.DownloadQuality
 import com.raulshma.jellyplay.core.model.DownloadScheduleWindow
@@ -89,6 +90,15 @@ class DownloadsStoreTest {
         dataStore.edit { it[intPreferencesKey("max_concurrent_downloads")] = 0 }
         val slice = store.downloads.first()
         assertEquals(1, slice.maxConcurrentDownloads)
+    }
+
+    @Test
+    fun `corrupt download_quality falls back to the default, siblings keep real values`() = runTest {
+        store.setSmartDownloadsEnabled(true)
+        dataStore.edit { it[stringPreferencesKey("download_quality")] = "nonsense" }
+        val slice = store.downloads.first()
+        assertEquals(DownloadQuality.ORIGINAL, slice.downloadQuality)
+        assertEquals(true, slice.smartDownloadsEnabled)
     }
 
     @Test

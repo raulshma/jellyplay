@@ -10,6 +10,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
+import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.model.CastingStrategy
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.SyncPlayJoinBehavior
@@ -77,13 +78,11 @@ class SyncPlayCastStore constructor(
         dvrRecordingQuality = prefs[Keys.DVR_RECORDING_QUALITY] ?: "AUTO",
     )
 
-    private fun readSyncPlayJoinBehavior(prefs: Preferences): SyncPlayJoinBehavior = try {
-        SyncPlayJoinBehavior.valueOf(prefs[Keys.SYNC_PLAY_JOIN_BEHAVIOR] ?: SyncPlayJoinBehavior.ASK.name)
-    } catch (_: Exception) { SyncPlayJoinBehavior.ASK }
+    private fun readSyncPlayJoinBehavior(prefs: Preferences): SyncPlayJoinBehavior =
+        prefs[Keys.SYNC_PLAY_JOIN_BEHAVIOR].toEnumOrNull() ?: SyncPlayJoinBehavior.ASK
 
-    private fun readDefaultCastingStrategy(prefs: Preferences): CastingStrategy = try {
-        CastingStrategy.valueOf(prefs[Keys.DEFAULT_CASTING_STRATEGY] ?: CastingStrategy.ASK.name)
-    } catch (_: Exception) { CastingStrategy.ASK }
+    private fun readDefaultCastingStrategy(prefs: Preferences): CastingStrategy =
+        prefs[Keys.DEFAULT_CASTING_STRATEGY].toEnumOrNull() ?: CastingStrategy.ASK
 
     // ------------------------------------------------------------------
     // Setters

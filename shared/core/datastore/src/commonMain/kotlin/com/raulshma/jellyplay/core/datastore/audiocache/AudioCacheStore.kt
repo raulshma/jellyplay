@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.model.AudioCacheNetworkPolicy
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import kotlinx.coroutines.CoroutineScope
@@ -64,13 +65,7 @@ class AudioCacheStore constructor(
         audioCacheSizeMb = prefs[Keys.AUDIO_CACHE_SIZE_MB] ?: 1024,
         audioPrefetchLookahead = prefs[Keys.AUDIO_PREFETCH_LOOKAHEAD] ?: 3,
         audioPrefetchBackfill = prefs[Keys.AUDIO_PREFETCH_BACKFILL] ?: 5,
-        audioCacheNetworkPolicy = try {
-            AudioCacheNetworkPolicy.valueOf(
-                prefs[Keys.AUDIO_CACHE_NETWORK_POLICY] ?: AudioCacheNetworkPolicy.DEFAULT.name
-            )
-        } catch (_: Exception) {
-            AudioCacheNetworkPolicy.DEFAULT
-        },
+        audioCacheNetworkPolicy = prefs[Keys.AUDIO_CACHE_NETWORK_POLICY].toEnumOrNull() ?: AudioCacheNetworkPolicy.DEFAULT,
         audioCacheCellularMonthlyCapMb = prefs[Keys.AUDIO_CACHE_CELLULAR_MONTHLY_CAP_MB] ?: 500,
     )
 

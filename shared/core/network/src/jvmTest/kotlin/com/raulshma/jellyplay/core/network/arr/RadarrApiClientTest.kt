@@ -3,14 +3,17 @@ package com.raulshma.jellyplay.core.network.arr
 import com.raulshma.jellyplay.core.model.arr.ArrCommandName
 import com.raulshma.jellyplay.core.model.arr.ArrDownloadStatus
 import com.raulshma.jellyplay.core.model.arr.ArrQueueDeleteOptions
+import com.raulshma.jellyplay.core.network.api.ApiException
 import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import java.util.concurrent.TimeUnit
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -315,5 +318,62 @@ class RadarrApiClientTest {
         val result = apiClient.findMovieIdByTmdb(mockWebServer.url("/").toString().trimEnd('/'), "k", 999)
         assertTrue(result.isSuccess)
         assertNull(result.getOrThrow())
+    }
+
+    // ── Failure shaping through the shared ArrClientSupport ────────────────
+    // The per-service texts are user-visible; these pin them byte-for-byte
+    // and the ApiException.fromHttp / fromNetwork taxonomy routing with them.
+
+    @Test
+    fun `unknown host surfaces the Radarr service text with retryable classification`() = runBlocking {
+        val result = apiClient.testConnection("http://jellyplay-no-such-host.invalid", "k")
+        assertTrue(result.isFailure)
+        val error = result.exceptionOrNull()!! as ApiException
+        assertEquals("Unable to reach Radarr. Check the URL and your network connection.", error.message)
+        assertTrue(error.isRetryable)
+    }
+
+    @Test
+    fun `connection refusal surfaces the Radarr connect text`() = runBlocking {
+        val result = apiClient.testConnection("http://127.0.0.1:1", "k")
+        assertTrue(result.isFailure)
+        val error = result.exceptionOrNull()!! as ApiException
+        assertEquals("Could not connect to Radarr. Ensure the server is running and accessible.", error.message)
+        assertTrue(error.isRetryable)
+    }
+
+    @Test
+    fun `header stall surfaces the Radarr timeout text`() = runBlocking {
+        val timeoutClient = RadarrApiClientImpl(
+            OkHttpClient.Builder().readTimeout(500, TimeUnit.MILLISECONDS).build(),
+        )
+        mockWebServer.enqueue(MockResponse().setBody("{}").setHeadersDelay(3, TimeUnit.SECONDS))
+        val result = timeoutClient.testConnection(mockWebServer.url("/").toString().trimEnd('/'), "k")
+        assertTrue(result.isFailure)
+        val error = result.exceptionOrNull()!! as ApiException
+        assertEquals("Connection to Radarr timed out. The server took too long to respond.", error.message)
+        assertTrue(error.isRetryable)
+    }
+
+    @Test
+    fun `HTTP failures carry the fromHttp taxonomy and the arr message shape`() = runBlocking {
+        mockWebServer.enqueue(MockResponse().setResponseCode(401).setBody("""{"message":"Invalid API key"}"""))
+        val unauthorized = apiClient.testConnection(mockWebServer.url("/").toString().trimEnd('/'), "bad")
+        assertTrue(unauthorized.isFailure)
+        val authError = unauthorized.exceptionOrNull()!! as ApiException
+        assertEquals(401, authError.httpCode)
+        assertTrue(authError.message!!.startsWith("HTTP 401: "))
+        assertFalse(authError.isRetryable)
+        assertTrue(authError.isAccessDenied)
+
+        mockWebServer.enqueue(MockResponse().setResponseCode(500).setBody("boom"))
+        val serverError = apiClient.testConnection(mockWebServer.url("/").toString().trimEnd('/'), "bad")
+        assertTrue(serverError.isFailure)
+        val serverApiError = serverError.exceptionOrNull()!! as ApiException
+        assertEquals(500, serverApiError.httpCode)
+        // Non-JSON body falls back to the raw-body error text.
+        assertEquals("HTTP 500: boom", serverApiError.message)
+        assertTrue(serverApiError.isRetryable)
+        assertFalse(serverApiError.isAccessDenied)
     }
 }

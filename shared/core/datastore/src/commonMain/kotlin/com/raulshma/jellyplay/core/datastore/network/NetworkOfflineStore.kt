@@ -11,6 +11,7 @@ import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
+import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.model.MeteredNetworkBehavior
 import com.raulshma.jellyplay.core.model.NetworkTimeoutPreset
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
@@ -82,13 +83,11 @@ class NetworkOfflineStore constructor(
         selfSignedTrustHosts = prefs[Keys.SELF_SIGNED_TRUST_HOSTS] ?: emptySet(),
     )
 
-    private fun readMeteredNetworkBehavior(prefs: Preferences): MeteredNetworkBehavior = try {
-        MeteredNetworkBehavior.valueOf(prefs[Keys.METERED_NETWORK_BEHAVIOR] ?: MeteredNetworkBehavior.WARN.name)
-    } catch (_: Exception) { MeteredNetworkBehavior.WARN }
+    private fun readMeteredNetworkBehavior(prefs: Preferences): MeteredNetworkBehavior =
+        prefs[Keys.METERED_NETWORK_BEHAVIOR].toEnumOrNull() ?: MeteredNetworkBehavior.WARN
 
-    private fun readNetworkTimeoutPreset(prefs: Preferences): NetworkTimeoutPreset = try {
-        NetworkTimeoutPreset.valueOf(prefs[Keys.NETWORK_TIMEOUT_PRESET] ?: NetworkTimeoutPreset.DEFAULT.name)
-    } catch (_: Exception) { NetworkTimeoutPreset.DEFAULT }
+    private fun readNetworkTimeoutPreset(prefs: Preferences): NetworkTimeoutPreset =
+        prefs[Keys.NETWORK_TIMEOUT_PRESET].toEnumOrNull() ?: NetworkTimeoutPreset.DEFAULT
 
     // ------------------------------------------------------------------
     // Setters

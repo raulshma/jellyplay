@@ -11,6 +11,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
+import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.PreloadBufferSize
@@ -80,19 +81,11 @@ class AudioStore constructor(
         audioNightModeGain = PreferenceCodec.readInt(prefs, Keys.AUDIO_NIGHT_MODE_GAIN, "audio_night_mode_gain", 1200),
         audioSkipPreviousThresholdMs = PreferenceCodec.readLong(prefs, Keys.AUDIO_SKIP_PREVIOUS_THRESHOLD_MS, "audio_skip_previous_threshold_ms", 3_000L),
         audioAutoplayNext = PreferenceCodec.readBool(prefs, Keys.AUDIO_AUTOPLAY_NEXT, "audio_autoplay_next", true),
-        audioPreloadBufferSize = try {
-            PreloadBufferSize.valueOf(prefs[Keys.AUDIO_PRELOAD_BUFFER_SIZE] ?: PreloadBufferSize.MEDIUM.name)
-        } catch (_: Exception) {
-            PreloadBufferSize.MEDIUM
-        },
+        audioPreloadBufferSize = prefs[Keys.AUDIO_PRELOAD_BUFFER_SIZE].toEnumOrNull() ?: PreloadBufferSize.MEDIUM,
         audioNormalizationMode = readNormalizationMode(prefs),
         audioNormalizationEnabled = PreferenceCodec.readBool(prefs, Keys.AUDIO_NORMALIZATION_ENABLED, "audio_normalization_enabled", false),
         replayGainPreAmpDb = PreferenceCodec.readFloat(prefs, Keys.REPLAYGAIN_PRE_AMP_DB, "replaygain_pre_amp_db", 0f),
-        channelMixMode = try {
-            ChannelMixMode.valueOf(prefs[Keys.CHANNEL_MIX_MODE] ?: ChannelMixMode.AUTO.name)
-        } catch (_: Exception) {
-            ChannelMixMode.AUTO
-        },
+        channelMixMode = prefs[Keys.CHANNEL_MIX_MODE].toEnumOrNull() ?: ChannelMixMode.AUTO,
         channelMixEnabled = PreferenceCodec.readBool(prefs, Keys.CHANNEL_MIX_ENABLED, "channel_mix_enabled", false),
         audioGaplessEnabled = PreferenceCodec.readBool(prefs, Keys.AUDIO_GAPLESS_ENABLED, "audio_gapless_enabled", true),
         audioCrossfadeDurationMs = PreferenceCodec.readLong(prefs, Keys.AUDIO_CROSSFADE_DURATION_MS, "audio_crossfade_duration_ms", 0L),
@@ -106,16 +99,13 @@ class AudioStore constructor(
     /**
      * Reads [AudioSlice.audioNormalizationMode]. Maps the legacy `"REPLAYGAIN"`
      * stored value to [AudioNormalizationMode.TRACK] (the closest modern
-     * equivalent) before falling back to the enum valueOf parse.
+     * equivalent) before the enum parse.
      */
-    private fun readNormalizationMode(prefs: Preferences): AudioNormalizationMode = try {
-        when (val stored = prefs[Keys.AUDIO_NORMALIZATION_MODE] ?: AudioNormalizationMode.NONE.name) {
+    private fun readNormalizationMode(prefs: Preferences): AudioNormalizationMode =
+        when (val stored = prefs[Keys.AUDIO_NORMALIZATION_MODE]) {
             "REPLAYGAIN" -> AudioNormalizationMode.TRACK
-            else -> AudioNormalizationMode.valueOf(stored)
+            else -> stored.toEnumOrNull() ?: AudioNormalizationMode.NONE
         }
-    } catch (_: Exception) {
-        AudioNormalizationMode.NONE
-    }
 
     // ------------------------------------------------------------------
     // Setters

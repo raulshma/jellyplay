@@ -1,24 +1,18 @@
 package com.raulshma.jellyplay.feature.settings
 
-import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import com.raulshma.jellyplay.core.data.repository.AdminRepository
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
-import com.raulshma.jellyplay.core.datastore.BackupSliceKey
-import com.raulshma.jellyplay.core.datastore.LegacySettingsBackup
+import com.raulshma.jellyplay.core.datastore.PreferencesEditScope
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
 import com.raulshma.jellyplay.core.datastore.SettingsBackup
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.datastore.search.SettingsRecentsStore
-import com.raulshma.jellyplay.core.datastore.security.SecuritySlice
 import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
-import com.raulshma.jellyplay.core.model.DreamImageCategory
-import com.raulshma.jellyplay.core.model.DreamTransitionStyle
 import com.raulshma.jellyplay.core.model.SettingsScreenPreferences
 import com.raulshma.jellyplay.core.model.UserInfo
-import com.raulshma.jellyplay.core.model.legacy.UserPreferences
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.SharingStarted
@@ -41,15 +35,9 @@ class SettingsViewModel(
     private val authRepository: AuthRepository,
     private val seerrRepository: SeerrRepository,
     private val adminRepository: AdminRepository,
-    private val advancedSettings: AdvancedSettingsGate,
     private val editor: PreferencesEditor,
     private val recentsStore: SettingsRecentsStore,
 ) : JellyPlayViewModel() {
-
-    private companion object {
-        /** JSON field name carrying the backup schema version in the envelope. */
-        const val SCHEMA_VERSION_FIELD = "schemaVersion"
-    }
 
     private val preferencesFlow: kotlinx.coroutines.flow.StateFlow<SettingsScreenPreferences> =
         projections.settingsScreenPreferences
@@ -215,7 +203,12 @@ class SettingsViewModel(
         seerrRepository.stopPolling()
     }
 
-    fun setShowAdvancedSettings(enabled: Boolean) = advancedSettings.setShowAdvancedSettings(enabled)
+    /**
+     * Single write command for this screen: `edit { it.screensaver.setDreamShowTitle(enabled) }`
+     * (the advanced toggle is `edit { it.appearance.setShowAdvancedSettings(enabled) }`).
+     * Fire-and-forget on the same application scope [PreferencesEditor.edit] uses.
+     */
+    fun edit(transform: suspend (PreferencesEditScope) -> Unit) = editor.edit { transform(this) }
 
     /**
      * Records that the setting with [id] was opened from search. Destructive
@@ -231,26 +224,6 @@ class SettingsViewModel(
         launch { recentsStore.clearRecents() }
     }
 
-    fun setDreamImageCategories(categories: Set<DreamImageCategory>) {
-        editor.edit { screensaver.setDreamImageCategories(categories) }
-    }
-
-    fun setDreamSlideshowIntervalMs(ms: Long) {
-        editor.edit { screensaver.setDreamSlideshowIntervalMs(ms) }
-    }
-
-    fun setDreamKenBurnsEnabled(enabled: Boolean) {
-        editor.edit { screensaver.setDreamKenBurnsEnabled(enabled) }
-    }
-
-    fun setDreamTransitionStyle(style: DreamTransitionStyle) {
-        editor.edit { screensaver.setDreamTransitionStyle(style) }
-    }
-
-    fun setDreamShowTitle(enabled: Boolean) {
-        editor.edit { screensaver.setDreamShowTitle(enabled) }
-    }
-
     /** Clears all preferences and resets to factory defaults. */
     fun clearAllPreferences() {
         editor.clearAllPreferences()
@@ -260,23 +233,14 @@ class SettingsViewModel(
         private set
 
     /**
-     * Details surfaced to the UI when an import needs user confirmation before
-     * overwriting preferences. [isLegacy] is true for the pre-versioning format
-     * and [versionMismatch] is true when the backup's schema version differs
-     * from the app's current one. [hasSecuritySensitive] is true when the
-     * backup would overwrite the PIN/biometric lock — the user can opt in via
-     * [confirmImport].
+     * The stage-and-navigate signal of the import flow: the picked backup uri
+     * string between the file picker and the backup screen's navigation into
+     * the import preview. Nothing is read or decoded here — the preview
+     * screen's [ImportPreviewViewModel] re-reads the file through the pure
+     * [com.raulshma.jellyplay.core.datastore.BackupParser] and owns
+     * classification, security-gating and the restore itself.
      */
-    @Immutable
-    data class PendingImport(
-        val uri: String,
-        val schemaVersion: Int,
-        val isLegacy: Boolean,
-        val versionMismatch: Boolean,
-        val hasSecuritySensitive: Boolean,
-    )
-
-    var pendingImport by composeState<PendingImport?>(null)
+    var stagedImportUri by composeState<String?>(null)
         private set
 
     fun exportSettings(uri: String) {
@@ -301,135 +265,20 @@ class SettingsViewModel(
     }
 
     /**
-     * Reads the selected backup, detects its schema version (v2 per-slice,
-     * v1 single-aggregate envelope, or the pre-versioning bare
-     * [UserPreferences] object), and stages a [PendingImport] for the UI to
-     * confirm. Nothing is written until [confirmImport] is called.
-     *
-     * Security-sensitive detection works for both formats: v2 reads it off the
-     * decoded [SecuritySlice]; v0/v1 off the [UserPreferences] aggregate.
+     * Stages the picked backup [uri] as the stage-and-navigate signal
+     * ([stagedImportUri]); the backup screen navigates to the import preview
+     * and consumes the signal. Deliberately no file read or decode here —
+     * the preview ViewModel re-reads the source and reports its own load
+     * failures, so the two paths cannot drift on classification.
      */
     fun importSettings(uri: String) {
-        launch {
-            backupRestoreStatus = null
-            runCatching {
-                val jsonString = settingsBackupIo.openImportSource(uri)?.use { stream ->
-                    stream.reader().use { it.readText() }
-                } ?: throw IOException("Cannot open input stream")
-                pendingImport = parsePendingImport(uri, jsonString)
-            }.onFailure {
-                backupRestoreStatus = "Import failed: ${it.message}"
-            }
-        }
+        backupRestoreStatus = null
+        stagedImportUri = uri
     }
 
-    /**
-     * Classifies a backup JSON string into v2 / v1 / v0 and builds the matching
-     * [PendingImport]. Extracted so the detection logic is testable without a
-     * ContentResolver.
-     *
-     * - **v2** (`schemaVersion == 2`): per-slice envelope. Security-sensitive
-     *   detection decodes the [SecuritySlice] element.
-     * - **v1** (`schemaVersion == 1`): single-aggregate envelope
-     *   ([LegacySettingsBackup]).
-     * - **v0** (no envelope, bare [UserPreferences] object): pre-versioning.
-     */
-    private suspend fun parsePendingImport(uri: String, jsonString: String): PendingImport {
-        val json = com.raulshma.jellyplay.core.datastore.PreferencesJson.import
-        val current = SettingsBackup.CURRENT_SCHEMA_VERSION
-
-        // Peek the schemaVersion field to classify without committing to one
-        // shape. A bare UserPreferences object (v0) has no envelope, so the
-        // field is absent and falls through to the legacy path.
-        val root = json.parseToJsonElement(jsonString) as? kotlinx.serialization.json.JsonObject
-        val schemaVersion = root
-            ?.let { it[SCHEMA_VERSION_FIELD] as? kotlinx.serialization.json.JsonPrimitive }
-            ?.content?.toIntOrNull()
-
-        val hasSecuritySensitive: Boolean = when (schemaVersion) {
-            SettingsBackup.CURRENT_SCHEMA_VERSION -> {
-                val backup = json.decodeFromString(SettingsBackup.serializer(), jsonString)
-                backup.slices[BackupSliceKey.SECURITY]?.let { secElement ->
-                    runCatching {
-                        json.decodeFromJsonElement(SecuritySlice.serializer(), secElement)
-                    }.getOrNull()?.hasSecuritySensitive()
-                } ?: false
-            }
-            SettingsBackup.LEGACY_AGGREGATE_SCHEMA_VERSION -> {
-                json.decodeFromString(LegacySettingsBackup.serializer(), jsonString)
-                    .preferences.hasSecuritySensitive()
-            }
-            else -> {
-                // v0 (bare aggregate) or unknown — decode as bare UserPreferences.
-                json.decodeFromString(UserPreferences.serializer(), jsonString).hasSecuritySensitive()
-            }
-        }
-
-        val isLegacy = schemaVersion == null ||
-            schemaVersion <= SettingsBackup.LEGACY_AGGREGATE_SCHEMA_VERSION
-        val resolvedVersion = schemaVersion
-            ?: SettingsBackup.LEGACY_UNENVELOPED_SCHEMA_VERSION
-
-        return PendingImport(
-            uri = uri,
-            schemaVersion = resolvedVersion,
-            isLegacy = isLegacy,
-            versionMismatch = resolvedVersion != current,
-            hasSecuritySensitive = hasSecuritySensitive,
-        )
-    }
-
-    private fun SecuritySlice.hasSecuritySensitive(): Boolean =
-        pinLockEnabled || biometricLockEnabled || pinHash != null || usePinForPlayerLock
-
-    private fun UserPreferences.hasSecuritySensitive(): Boolean =
-        pinLockEnabled || biometricLockEnabled || pinHash != null || usePinForPlayerLock
-
-    /**
-     * Applies a staged import after the user confirms. Routes by the staged
-     * schema version: v2 fans each slice to its store; v1 decodes the legacy
-     * aggregate and fans via the per-store `restorePreferences(UserPreferences)`
-     * path; v0 (bare aggregate) is decoded and handled the same as v1.
-     *
-     * Security-sensitive lock fields are only restored when
-     * [restoreSecuritySensitive] is true (the UI defaults this to false unless
-     * the user explicitly opts in).
-     */
-    fun confirmImport(restoreSecuritySensitive: Boolean) {
-        val pending = pendingImport ?: return
-        launch {
-            backupRestoreStatus = null
-            runCatching {
-                val jsonString = settingsBackupIo.openImportSource(pending.uri)?.use { stream ->
-                    stream.reader().use { it.readText() }
-                } ?: throw IOException("Cannot open input stream")
-                val json = com.raulshma.jellyplay.core.datastore.PreferencesJson.import
-                when (pending.schemaVersion) {
-                    SettingsBackup.CURRENT_SCHEMA_VERSION -> {
-                        val backup = json.decodeFromString(SettingsBackup.serializer(), jsonString)
-                        preferencesStore.restoreV2(backup, restoreSecuritySensitive)
-                    }
-                    SettingsBackup.LEGACY_AGGREGATE_SCHEMA_VERSION -> {
-                        val legacy = json.decodeFromString(LegacySettingsBackup.serializer(), jsonString)
-                        preferencesStore.restorePreferences(legacy.preferences, restoreSecuritySensitive)
-                    }
-                    else -> {
-                        // v0: bare, un-enveloped UserPreferences object.
-                        val bare = json.decodeFromString(UserPreferences.serializer(), jsonString)
-                        preferencesStore.restorePreferences(bare, restoreSecuritySensitive)
-                    }
-                }
-                pendingImport = null
-                backupRestoreStatus = "Settings imported successfully"
-            }.onFailure {
-                pendingImport = null
-                backupRestoreStatus = "Import failed: ${it.message}"
-            }
-        }
-    }
-
+    /** Discards the staged import uri after navigation (or a failed navigation). */
     fun cancelImport() {
-        pendingImport = null
+        stagedImportUri = null
     }
 
     fun clearBackupRestoreStatus() {

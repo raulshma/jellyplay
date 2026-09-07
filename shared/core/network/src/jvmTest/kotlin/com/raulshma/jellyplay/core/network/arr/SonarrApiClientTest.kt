@@ -2,14 +2,17 @@ package com.raulshma.jellyplay.core.network.arr
 
 import com.raulshma.jellyplay.core.model.arr.ArrDownloadStatus
 import com.raulshma.jellyplay.core.model.arr.ArrMediaType
+import com.raulshma.jellyplay.core.network.api.ApiException
 import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import java.util.concurrent.TimeUnit
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class SonarrApiClientTest {
@@ -138,5 +141,52 @@ class SonarrApiClientTest {
         mockWebServer.enqueue(MockResponse().setResponseCode(500).setBody("oops"))
         val result = apiClient.getQueue(mockWebServer.url("/").toString().trimEnd('/'), "k")
         assertTrue(result.isFailure)
+    }
+
+    // ── Failure shaping through the shared ArrClientSupport ────────────────
+    // Mirror of the RadarrApiClientTest failure suite: same taxonomy routing,
+    // but every text must carry the SONARR service name.
+
+    @Test
+    fun `unknown host surfaces the Sonarr service text with retryable classification`() = runBlocking {
+        val result = apiClient.testConnection("http://jellyplay-no-such-host.invalid", "k")
+        assertTrue(result.isFailure)
+        val error = result.exceptionOrNull()!! as ApiException
+        assertEquals("Unable to reach Sonarr. Check the URL and your network connection.", error.message)
+        assertTrue(error.isRetryable)
+    }
+
+    @Test
+    fun `connection refusal surfaces the Sonarr connect text`() = runBlocking {
+        val result = apiClient.testConnection("http://127.0.0.1:1", "k")
+        assertTrue(result.isFailure)
+        val error = result.exceptionOrNull()!! as ApiException
+        assertEquals("Could not connect to Sonarr. Ensure the server is running and accessible.", error.message)
+        assertTrue(error.isRetryable)
+    }
+
+    @Test
+    fun `header stall surfaces the Sonarr timeout text`() = runBlocking {
+        val timeoutClient = SonarrApiClientImpl(
+            OkHttpClient.Builder().readTimeout(500, TimeUnit.MILLISECONDS).build(),
+        )
+        mockWebServer.enqueue(MockResponse().setBody("{}").setHeadersDelay(3, TimeUnit.SECONDS))
+        val result = timeoutClient.testConnection(mockWebServer.url("/").toString().trimEnd('/'), "k")
+        assertTrue(result.isFailure)
+        val error = result.exceptionOrNull()!! as ApiException
+        assertEquals("Connection to Sonarr timed out. The server took too long to respond.", error.message)
+        assertTrue(error.isRetryable)
+    }
+
+    @Test
+    fun `HTTP failure keeps the Sonarr client on the fromHttp taxonomy`() = runBlocking {
+        mockWebServer.enqueue(MockResponse().setResponseCode(401).setBody("denied"))
+        val result = apiClient.testConnection(mockWebServer.url("/").toString().trimEnd('/'), "bad")
+        assertTrue(result.isFailure)
+        val error = result.exceptionOrNull()!! as ApiException
+        assertEquals(401, error.httpCode)
+        assertEquals("HTTP 401: denied", error.message)
+        assertFalse(error.isRetryable)
+        assertTrue(error.isAccessDenied)
     }
 }

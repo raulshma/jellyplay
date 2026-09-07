@@ -94,4 +94,96 @@ class DetailPlayPoliciesTest {
         assertTrue(DetailPlayPolicies.requiresMarkPlayedConfirmation(MediaType.MOVIE, isSeasonAction = true))
         assertTrue(DetailPlayPolicies.requiresMarkPlayedConfirmation(MediaType.SERIES, isSeasonAction = true))
     }
+
+    // ── resolveDetailPlayDispatch ─────────────────────────────────────────
+
+    @Test
+    fun dispatch_localOrigin_carriesLocalSubtitleAndPassesAudioThrough() {
+        assertEquals(
+            DetailPlayDispatch(subtitleStreamIndex = 3, audioStreamIndex = 2),
+            DetailPlayPolicies.resolveDetailPlayDispatch(
+                origin = DetailOrigin.LOCAL_OFFLINE_MODE,
+                localSubtitleIndex = 3,
+                remoteSubtitleIndex = 7,
+                audioStreamIndex = 2,
+            ),
+        )
+        assertEquals(
+            DetailPlayDispatch(subtitleStreamIndex = 1, audioStreamIndex = 4),
+            DetailPlayPolicies.resolveDetailPlayDispatch(
+                origin = DetailOrigin.LOCAL_REMOTE_FAILURE,
+                localSubtitleIndex = 1,
+                remoteSubtitleIndex = null,
+                audioStreamIndex = 4,
+            ),
+        )
+    }
+
+    @Test
+    fun dispatch_remoteOrUnresolvedOrigin_carriesServerSubtitleAndPassesAudioThrough() {
+        assertEquals(
+            DetailPlayDispatch(subtitleStreamIndex = 7, audioStreamIndex = 4),
+            DetailPlayPolicies.resolveDetailPlayDispatch(
+                origin = DetailOrigin.REMOTE,
+                localSubtitleIndex = 3,
+                remoteSubtitleIndex = 7,
+                audioStreamIndex = 4,
+            ),
+        )
+        // Origin not resolved yet — the dispatch must not silently pick the
+        // local manifest; null audio threads through untouched.
+        assertEquals(
+            DetailPlayDispatch(subtitleStreamIndex = null, audioStreamIndex = null),
+            DetailPlayPolicies.resolveDetailPlayDispatch(
+                origin = null,
+                localSubtitleIndex = 3,
+                remoteSubtitleIndex = null,
+                audioStreamIndex = null,
+            ),
+        )
+    }
+
+    // ── dispatchMarkPlayedAction table (mediaType × season action → confirm?) ──
+
+    /** Runs the gate once and reports which branch fired. */
+    private fun gateBranch(mediaType: MediaType?, isSeasonAction: Boolean): String {
+        var branch = "none"
+        DetailPlayPolicies.dispatchMarkPlayedAction(
+            mediaType = mediaType,
+            isSeasonAction = isSeasonAction,
+            confirm = { branch = "confirm" },
+            action = { branch = "action" },
+        )
+        return branch
+    }
+
+    @Test
+    fun gate_itemLevel_onlySeriesConfirms() {
+        assertEquals("confirm", gateBranch(MediaType.SERIES, isSeasonAction = false))
+        assertEquals("action", gateBranch(MediaType.MOVIE, isSeasonAction = false))
+        assertEquals("action", gateBranch(MediaType.EPISODE, isSeasonAction = false))
+        assertEquals("action", gateBranch(MediaType.SEASON, isSeasonAction = false))
+        assertEquals("action", gateBranch(null, isSeasonAction = false))
+    }
+
+    @Test
+    fun gate_seasonActions_alwaysConfirm() {
+        for (mediaType in listOf(MediaType.SERIES, MediaType.MOVIE, MediaType.EPISODE, MediaType.SEASON, null)) {
+            assertEquals("confirm", gateBranch(mediaType, isSeasonAction = true), "mediaType=$mediaType")
+        }
+    }
+
+    @Test
+    fun gate_firesExactlyOneBranch() {
+        // Both branches supplied, exactly one runs — the gate never falls
+        // through and never double-dispatches.
+        var fired = 0
+        DetailPlayPolicies.dispatchMarkPlayedAction(
+            mediaType = MediaType.SERIES,
+            isSeasonAction = false,
+            confirm = { fired += 1 },
+            action = { fired += 100 },
+        )
+        assertEquals(1, fired)
+    }
 }

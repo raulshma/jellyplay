@@ -45,7 +45,7 @@ import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.TopBarStyle
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.DelayedLoadingScreen
-import com.raulshma.jellyplay.core.ui.components.progressFraction
+import com.raulshma.jellyplay.core.model.progressFraction
 import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.components.LocalMediaQuickActionController
 import com.raulshma.jellyplay.core.ui.components.MediaQuickActionHost

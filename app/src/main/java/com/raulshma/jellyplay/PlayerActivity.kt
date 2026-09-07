@@ -9,7 +9,6 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
-import android.graphics.Rect
 import android.graphics.drawable.Icon
 import android.os.Build
 import android.os.Bundle
@@ -277,15 +276,16 @@ class PlayerActivity : FragmentActivity() {
 
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
-        // gates auto-entry on `!isControlsLocked` so swiping home while
-        // the lock overlay is up doesn't yank the user into PiP, and on
-        // `!isScreenOffOrLocked()` because several OEMs fire this callback for
-        // the power button too — entering PiP behind the keyguard arms the
-        // dismiss/finish machinery while nothing can observe it, and unlock
-        // then lands on the browse UI with the player gone (issue #145).
-        if (pipController.shouldAutoEnterPip.value &&
-            !pipController.isControlsLocked &&
-            !isScreenOffOrLocked()
+        // Auto-enter guard lives in PipLifecyclePolicy.userLeaveAutoEnter:
+        // `!isControlsLocked` so swiping home while the lock overlay is up
+        // doesn't yank the user into PiP, and `!isScreenOffOrLocked()` because
+        // several OEMs fire this callback for the power button too (issue
+        // #145). Deliberately no isPlaying term — the fallback below adds it.
+        if (PipLifecyclePolicy.onUserLeaveHint(
+                shouldAutoEnter = pipController.shouldAutoEnterPip.value,
+                controlsLocked = pipController.isControlsLocked,
+                screenOffOrLocked = isScreenOffOrLocked(),
+            ) == PipLifecyclePolicy.Action.EnterPip
         ) {
             enterPipMode()
         }
@@ -294,24 +294,29 @@ class PlayerActivity : FragmentActivity() {
     // Reliability fallback for PiP auto-entry: onUserLeaveHint is not reliably
     // fired on all OEMs/API levels for gesture "slide up to home". When this
     // activity loses the top-resumed position during active playback, enter PiP
-    // using the same guard predicate.
+    // — PipLifecyclePolicy.topResumedLossAutoEnter is the same guard predicate
+    // PLUS the isPlaying term (the documented divergence between the two
+    // hand-copied guards).
     override fun onTopResumedActivityChanged(isTopResumed: Boolean) {
         super.onTopResumedActivityChanged(isTopResumed)
-        if (isTopResumed && justExitedPip) {
-            justExitedPip = false
-            playerLifecycleManager.onActivityResume()
-        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
-            !isTopResumed &&
-            !isInPictureInPictureMode &&
-            pipController.shouldAutoEnterPip.value &&
-            pipController.isPlaying.value &&
-            !pipController.isControlsLocked &&
+        val decision = PipLifecyclePolicy.onTopResumedChanged(
+            isTopResumed = isTopResumed,
+            inPip = isInPictureInPictureMode,
+            apiSupportsAutoEnter = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S,
+            shouldAutoEnter = pipController.shouldAutoEnterPip.value,
+            isPlaying = pipController.isPlaying.value,
+            controlsLocked = pipController.isControlsLocked,
             // Same lock guard as onUserLeaveHint: the keyguard stealing the
             // top-resumed position is not a "leave" worth auto-PiP for
             // (issue #145).
-            !isScreenOffOrLocked()
-        ) {
-            enterPipMode()
+            screenOffOrLocked = isScreenOffOrLocked(),
+            justExitedPip = justExitedPip,
+        )
+        justExitedPip = decision.justExitedPip
+        when (decision.action) {
+            PipLifecyclePolicy.Action.Resume -> playerLifecycleManager.onActivityResume()
+            PipLifecyclePolicy.Action.EnterPip -> enterPipMode()
+            else -> {}
         }
     }
 
@@ -424,6 +429,9 @@ class PlayerActivity : FragmentActivity() {
 
     private fun onPipModeChanged(isInPictureInPictureMode: Boolean) {
         if (isInPictureInPictureMode) {
+            // Entry touches none of the dismiss machinery (registration, bar
+            // show and brightness stash below are execution, not policy) and
+            // none of the policy's state — no policy call here.
             registerPipActionReceiver()
             refreshPipActions()
             // Exit immersive mode on PiP entry so the system's gesture-nav
@@ -461,43 +469,27 @@ class PlayerActivity : FragmentActivity() {
             window.attributes = window.attributes.apply {
                 screenBrightness = savedBrightness
             }
-            // Leaving PiP fires for BOTH expand-to-fullscreen and dismiss. The
-            // two are distinguished by lifecycle state at this callback:
-            //
-            //  - Expand: the activity resumes, so state is >= STARTED here (and
-            //    onResume follows). Arm justExitedPip so onStop can still finish
-            //    on a later dismiss (covers the ordering where this callback fires
-            //    before onStop). onResume clears it for a genuine expand.
-            //
-            //  - Dismiss (close icon / swipe-away): on some OEMs onStop fires
-            //    BEFORE this callback (observed: onStop at isInPipMode=true,
-            //    screenOff=false, justExitedPip=false — so onStop's dismiss arm
-            //    misses — then this callback at state=CREATED). When state <
-            //    STARTED the activity is already past onStop and will not resume,
-            //    so finish here directly. This drives onDestroy → onDispose →
-            //    viewModel.release() (engine stop + playback-stop report) — the
-            //    same teardown as back-close.
-            //
-            //  - Dismiss with background audio enabled (screen interactive):
-            //    only the PiP window closes. The activity stays alive (stopped,
-            //    behind the revealed MainActivity) so its ViewModel, engine and
-            //    media session are never torn down — playback keeps running
-            //    exactly like the fullscreen→home minimise path, and the Media3
-            //    service's now-playing notification remains. Reopening via the
-            //    notification / app icon restarts this stopped instance into
-            //    fullscreen at the live position (same-item onNewIntent does not
-            //    re-initialize). If the keyguard or a screen-off lands inside
-            //    the dismissal transition, fall back to the finish path — that
-            //    is issue #145's lock-dismiss territory where the dismiss
-            //    machinery must stay deterministic.
-            if (!lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
-                justExitedPip = false
-                if (!keepPlayerAliveAfterPipDismiss() && !isFinishing) finish()
-            } else if (!lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
-                // Arm only when the dismissal should tear down; a keep-alive
-                // dismissal leaves justExitedPip clear so onStop skips finish.
-                justExitedPip = !keepPlayerAliveAfterPipDismiss()
-            }
+            // Leaving PiP fires for BOTH expand-to-fullscreen and dismiss; the
+            // two are distinguished by lifecycle state at this callback and
+            // the whole dismiss/expand fold (arm justExitedPip vs finish
+            // directly vs keep-alive no-op — including the OEM ordering where
+            // this callback fires before onStop, and the background-audio /
+            // keyguard branches) lives in PipLifecyclePolicy.pipExited — its
+            // KDoc carries the full OEM-ordering spec.
+            val decision = PipLifecyclePolicy.pipExited(
+                phase = when {
+                    lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) ->
+                        PipLifecyclePolicy.Phase.RESUMED
+                    lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED) ->
+                        PipLifecyclePolicy.Phase.STARTED_NOT_RESUMED
+                    else -> PipLifecyclePolicy.Phase.BELOW_STARTED
+                },
+                keepPlayerAlive = keepPlayerAliveAfterPipDismiss(),
+                isFinishing = isFinishing,
+                justExitedPip = justExitedPip,
+            )
+            justExitedPip = decision.justExitedPip
+            if (decision.action == PipLifecyclePolicy.Action.Finish) finish()
         }
         pipController.setPipMode(isInPictureInPictureMode)
     }
@@ -522,7 +514,13 @@ class PlayerActivity : FragmentActivity() {
 
     override fun onPause() {
         super.onPause()
-        if (!isInPictureInPictureMode || isScreenOffOrLocked()) {
+        // PipLifecyclePolicy.onPause: pause unless this is a minimise into PiP
+        // with an interactive screen (that minimise keeps playing).
+        if (PipLifecyclePolicy.onPause(
+                inPip = isInPictureInPictureMode,
+                screenOffOrLocked = isScreenOffOrLocked(),
+            ) == PipLifecyclePolicy.Action.Pause
+        ) {
             playerLifecycleManager.onActivityPause()
         }
     }
@@ -540,36 +538,38 @@ class PlayerActivity : FragmentActivity() {
         // redirect so the player lifecycle hook (and its DI graph) never
         // runs while locked.
         if (!lockGateRedirected && redirectToLockGateIfNeeded()) return
-        justExitedPip = false
-        playerLifecycleManager.onActivityResume()
+        // Genuine expand: clear the dismiss arm + resume the player lifecycle
+        // (PipLifecyclePolicy.onResume).
+        val decision = PipLifecyclePolicy.onResume(justExitedPip)
+        justExitedPip = decision.justExitedPip
+        if (decision.action == PipLifecyclePolicy.Action.Resume) {
+            playerLifecycleManager.onActivityResume()
+        }
     }
 
     override fun onStop() {
         super.onStop()
-        if (justExitedPip) {
-            // Dismiss fallback for the ordering where onPipModeChanged(false)
-            // fires BEFORE onStop (state was >= STARTED at the callback, so it
-            // armed justExitedPip instead of finishing). On OEMs where onStop
-            // fires first, onPipModeChanged(false) finishes directly at
-            // state < STARTED. finish() here drives the same onDestroy →
-            // onDispose → release() teardown as back-close. With background
-            // audio enabled the dismissal keeps the player alive instead (the
-            // arming site already skips arming; this re-check covers a keyguard
-            // landing between the callback and onStop), so only the PiP window
-            // closes and playback continues from the notification.
-            justExitedPip = false
-            if (!keepPlayerAliveAfterPipDismiss() && !isFinishing) finish()
-        } else if (isInPictureInPictureMode) {
-            // Distinguish screen-lock (pause so audio doesn't leak with bg audio
-            // OFF) from app-minimise (keep playing). onStop
-            // is the right hook: during PiP the activity is already PAUSED, so
-            // onPause can't reliably see the screen-off state; by onStop the
-            // keyguard / non-interactive flags have settled. onActivityPause is
-            // itself a no-op when backgroundVideoAudioEnabled is ON.
-            if (isScreenOffOrLocked()) {
-                playerLifecycleManager.onActivityPause()
-            }
-            // Else: plain minimise while in PiP — intentionally keep playing.
+        // The discharge point of the dismiss protocol (PipLifecyclePolicy —
+        // class KDoc has the OEM-ordering spec): an armed justExitedPip
+        // finishes (the keep-alive re-check covers a keyguard landing between
+        // the callback and this stop); an unarmed stop while in PiP pauses
+        // only for screen-lock/keyguard so audio doesn't leak with background
+        // audio OFF — by onStop the keyguard / non-interactive flags have
+        // settled, and onActivityPause is itself a no-op when background
+        // audio is ON. A plain minimise while in PiP intentionally keeps
+        // playing.
+        val decision = PipLifecyclePolicy.onStop(
+            inPip = isInPictureInPictureMode,
+            screenOffOrLocked = isScreenOffOrLocked(),
+            keepPlayerAlive = keepPlayerAliveAfterPipDismiss(),
+            isFinishing = isFinishing,
+            justExitedPip = justExitedPip,
+        )
+        justExitedPip = decision.justExitedPip
+        when (decision.action) {
+            PipLifecyclePolicy.Action.Finish -> finish()
+            PipLifecyclePolicy.Action.Pause -> playerLifecycleManager.onActivityPause()
+            else -> {}
         }
     }
 
@@ -620,27 +620,36 @@ class PlayerActivity : FragmentActivity() {
         includeActions: Boolean,
     ): PictureInPictureParams = PictureInPictureParams.Builder().apply {
         val ratio = pipController.pipAspectRatio.value ?: Rational(16, 9)
-        setAspectRatio(clampAspectRatio(ratio))
+        val clamped = PipLifecyclePolicy.clampAspectRatio(ratio.numerator, ratio.denominator)
+        setAspectRatio(Rational(clamped.first, clamped.second))
         pipController.pipSourceRect?.let { src ->
-            if (isValidSourceRect(src)) setSourceRectHint(src)
+            if (PipLifecyclePolicy.isValidSourceRect(
+                    left = src.left,
+                    top = src.top,
+                    right = src.right,
+                    bottom = src.bottom,
+                    windowWidth = window.decorView.width,
+                    windowHeight = window.decorView.height,
+                )
+            ) {
+                setSourceRectHint(src)
+            }
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val autoEnter = if (preArm && !isScreenOffOrLocked()) {
-                pipController.shouldAutoEnterPip.value && pipController.isPlaying.value
+            // PipLifecyclePolicy.systemAutoEnterEnabled — deliberately no
+            // controls-lock term (that system-side flag never gated on it).
+            val autoEnter = if (preArm) {
+                PipLifecyclePolicy.systemAutoEnterEnabled(
+                    shouldAutoEnter = pipController.shouldAutoEnterPip.value,
+                    isPlaying = pipController.isPlaying.value,
+                    screenOffOrLocked = isScreenOffOrLocked(),
+                )
             } else false
             setAutoEnterEnabled(autoEnter)
             setSeamlessResizeEnabled(autoEnter)
         }
         if (includeActions) setActions(buildPipActions())
     }.build()
-
-    private fun isValidSourceRect(src: Rect): Boolean {
-        if (src.width() <= 0 || src.height() <= 0) return false
-        if (src.left < 0 || src.top < 0) return false
-        val w = window.decorView.width
-        val h = window.decorView.height
-        return w <= 0 || h <= 0 || (src.right <= w && src.bottom <= h)
-    }
 
     private fun applyPipParams(includeActions: Boolean) {
         if (!isPipCapable()) return
@@ -735,16 +744,6 @@ class PlayerActivity : FragmentActivity() {
     private fun unregisterPipActionReceiver() {
         pipActionReceiver?.let { runCatching { unregisterReceiver(it) } }
         pipActionReceiver = null
-    }
-
-    private fun clampAspectRatio(ratio: Rational): Rational {
-        val min = Rational(100, 239)
-        val max = Rational(239, 100)
-        return when {
-            ratio < min -> min
-            ratio > max -> max
-            else -> ratio
-        }
     }
 
     companion object {

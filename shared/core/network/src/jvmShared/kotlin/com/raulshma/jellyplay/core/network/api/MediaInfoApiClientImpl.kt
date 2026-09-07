@@ -24,6 +24,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.contentOrNull
+import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.ImageType
 import org.jellyfin.sdk.model.api.ItemFields
 import org.jellyfin.sdk.model.api.ItemSortBy
@@ -292,28 +293,10 @@ class MediaInfoApiClientImpl @Inject constructor(
             }
             if (daysSince >= daysThreshold) {
                 allItems.add(
-                    StaleMediaItem(
-                        itemId = dto.id?.toString() ?: "",
-                        name = dto.name ?: "",
-                        type = dto.type?.serialName ?: "",
-                        mediaType = dto.mediaType?.serialName,
+                    dto.toStaleMediaItem(
                         lastPlayedDate = lastPlayedStr,
                         daysSincePlay = daysSince,
                         playCount = userData?.playCount ?: 0,
-                        sizeBytes = 0,
-                        sizeText = "",
-                        parentId = dto.parentId?.toString(),
-                        seriesName = dto.seriesName,
-                        seasonName = dto.seasonName,
-                        seasonNumber = dto.parentIndexNumber,
-                        episodeNumber = dto.indexNumber,
-                        posterBlurHash = dto.imageBlurHashes
-                            ?.get(ImageType.PRIMARY)
-                            ?.values?.firstOrNull(),
-                        premiereDate = dto.premiereDate?.toString(),
-                        overview = dto.overview,
-                        year = dto.productionYear,
-                        dateAdded = dto.dateCreated?.toString(),
                     )
                 )
             }
@@ -332,28 +315,10 @@ class MediaInfoApiClientImpl @Inject constructor(
                     } else Int.MAX_VALUE
                     if (daysSinceCreation >= daysThreshold) {
                         allItems.add(
-                            StaleMediaItem(
-                                itemId = dto.id?.toString() ?: "",
-                                name = dto.name ?: "",
-                                type = dto.type?.serialName ?: "",
-                                mediaType = dto.mediaType?.serialName,
+                            dto.toStaleMediaItem(
                                 lastPlayedDate = null,
                                 daysSincePlay = daysSinceCreation,
                                 playCount = 0,
-                                sizeBytes = 0,
-                                sizeText = "",
-                                parentId = dto.parentId?.toString(),
-                                seriesName = dto.seriesName,
-                                seasonName = dto.seasonName,
-                                seasonNumber = dto.parentIndexNumber,
-                                episodeNumber = dto.indexNumber,
-                                posterBlurHash = dto.imageBlurHashes
-                                    ?.get(ImageType.PRIMARY)
-                                    ?.values?.firstOrNull(),
-                                premiereDate = dto.premiereDate?.toString(),
-                                overview = dto.overview,
-                                year = dto.productionYear,
-                                dateAdded = dto.dateCreated?.toString(),
                             )
                         )
                     }
@@ -487,7 +452,7 @@ class MediaInfoApiClientImpl @Inject constructor(
             val tokens = filter.split(",")
             for (tokenStr in tokens) {
                 val trimmed = tokenStr.trim()
-                if (trimmed.length in 32..36 && (trimmed.contains("-") || trimmed.all { it.isLetterOrDigit() })) {
+                if (isPlaybackReportingUserIdToken(trimmed)) {
                     targetUserId = trimmed
                 } else if (trimmed.isNotEmpty()) {
                     mediaTypes.add(trimmed)
@@ -559,43 +524,24 @@ class MediaInfoApiClientImpl @Inject constructor(
         }
     }
 
-    override suspend fun getPlaybackReportingBreakdown(breakdownType: String, days: Int, filter: String?): Result<List<ContentBreakdown>> = engine.apiResultWithRetry {
+    override suspend fun getPlaybackReportingBreakdown(breakdownType: String, days: Int, filter: String?): Result<List<ContentBreakdown>> {
         val filterParam = filter?.let { "&filter=$it" } ?: ""
-        rawRequester.getJson("/user_usage_stats/$breakdownType/BreakdownReport?days=$days$filterParam", "Plugin request failed") { body ->
-            val json = JellyfinApiEngine.sharedJson.decodeFromString<JsonArray>(body?.string() ?: "")
-            json.mapIndexed { index, element ->
-                val obj = element.jsonObject
-                ContentBreakdown(
-                    label = obj["label"]?.jsonPrimitive?.content
-                        ?: obj["name"]?.jsonPrimitive?.content
-                        ?: "",
-                    value = obj["total"]?.jsonPrimitive?.content?.toLongOrNull()
-                        ?: obj["count"]?.jsonPrimitive?.content?.toLongOrNull()
-                        ?: obj["value"]?.jsonPrimitive?.content?.toLongOrNull()
-                        ?: 0,
-                    colorIndex = index,
-                )
-            }
-        }
+        return fetchBreakdownReport("/user_usage_stats/$breakdownType/BreakdownReport?days=$days$filterParam")
     }
 
-    override suspend fun getPlaybackReportingArtistBreakdown(days: Int, filter: String?): Result<List<ContentBreakdown>> = engine.apiResultWithRetry {
+    override suspend fun getPlaybackReportingArtistBreakdown(days: Int, filter: String?): Result<List<ContentBreakdown>> {
         val filterParam = filter?.let { "&filter=$it" } ?: ""
-        rawRequester.getJson("/user_usage_stats/Parent/BreakdownReport?days=$days$filterParam", "Plugin request failed") { body ->
-            val json = JellyfinApiEngine.sharedJson.decodeFromString<JsonArray>(body?.string() ?: "")
-            json.mapIndexed { index, element ->
-                val obj = element.jsonObject
-                ContentBreakdown(
-                    label = obj["label"]?.jsonPrimitive?.content
-                        ?: obj["name"]?.jsonPrimitive?.content
-                        ?: "",
-                    value = obj["total"]?.jsonPrimitive?.content?.toLongOrNull()
-                        ?: obj["count"]?.jsonPrimitive?.content?.toLongOrNull()
-                        ?: obj["value"]?.jsonPrimitive?.content?.toLongOrNull()
-                        ?: 0,
-                    colorIndex = index,
-                )
-            }
+        return fetchBreakdownReport("/user_usage_stats/Parent/BreakdownReport?days=$days$filterParam")
+    }
+
+    /**
+     * Shared BreakdownReport fetch: both breakdown endpoints return the same
+     * array shape, so only the request path differs between them (decode in
+     * [parseBreakdownReport]).
+     */
+    private suspend fun fetchBreakdownReport(path: String): Result<List<ContentBreakdown>> = engine.apiResultWithRetry {
+        rawRequester.getJson(path, "Plugin request failed") { body ->
+            parseBreakdownReport(body?.string() ?: "")
         }
     }
 
@@ -603,3 +549,72 @@ class MediaInfoApiClientImpl @Inject constructor(
         const val KEY_SERVER_NAME = "serverName"
     }
 }
+
+/**
+ * True when a comma token from the playback-reporting `filter` string looks
+ * like a user id (32–36 chars — dashed or bare-hex UUID) rather than a media
+ * type name. The plugin accepts either form in the same param, so
+ * [MediaInfoApiClientImpl.getPlaybackReportingPlayActivity] routes tokens by
+ * this shape test. Internal for tests.
+ */
+internal fun isPlaybackReportingUserIdToken(token: String): Boolean =
+    token.length in 32..36 && (token.contains("-") || token.all { it.isLetterOrDigit() })
+
+/**
+ * Decodes a playback-reporting BreakdownReport body — the fold shared by
+ * [MediaInfoApiClientImpl.getPlaybackReportingBreakdown] and
+ * [MediaInfoApiClientImpl.getPlaybackReportingArtistBreakdown]. The plugin's
+ * field naming varies by report type (`label` vs `name`, `total` vs `count`
+ * vs `value`), so each fold falls through in plugin-recorded order; row order
+ * becomes the colorIndex. Internal for tests.
+ */
+internal fun parseBreakdownReport(bodyText: String): List<ContentBreakdown> {
+    val json = JellyfinApiEngine.sharedJson.decodeFromString<JsonArray>(bodyText)
+    return json.mapIndexed { index, element ->
+        val obj = element.jsonObject
+        ContentBreakdown(
+            label = obj["label"]?.jsonPrimitive?.content
+                ?: obj["name"]?.jsonPrimitive?.content
+                ?: "",
+            value = obj["total"]?.jsonPrimitive?.content?.toLongOrNull()
+                ?: obj["count"]?.jsonPrimitive?.content?.toLongOrNull()
+                ?: obj["value"]?.jsonPrimitive?.content?.toLongOrNull()
+                ?: 0,
+            colorIndex = index,
+        )
+    }
+}
+
+/**
+ * Shared [StaleMediaItem] projection for getStaleItems' played + unplayed
+ * branches: the field mapping is verbatim-identical, only the watched-state
+ * inputs ([lastPlayedDate], [daysSincePlay], [playCount]) differ per branch.
+ * Internal for tests.
+ */
+internal fun BaseItemDto.toStaleMediaItem(
+    lastPlayedDate: String?,
+    daysSincePlay: Int,
+    playCount: Int,
+): StaleMediaItem = StaleMediaItem(
+    itemId = id?.toString() ?: "",
+    name = name ?: "",
+    type = type?.serialName ?: "",
+    mediaType = mediaType?.serialName,
+    lastPlayedDate = lastPlayedDate,
+    daysSincePlay = daysSincePlay,
+    playCount = playCount,
+    sizeBytes = 0,
+    sizeText = "",
+    parentId = parentId?.toString(),
+    seriesName = seriesName,
+    seasonName = seasonName,
+    seasonNumber = parentIndexNumber,
+    episodeNumber = indexNumber,
+    posterBlurHash = imageBlurHashes
+        ?.get(ImageType.PRIMARY)
+        ?.values?.firstOrNull(),
+    premiereDate = premiereDate?.toString(),
+    overview = overview,
+    year = productionYear,
+    dateAdded = dateCreated?.toString(),
+)

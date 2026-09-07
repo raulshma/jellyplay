@@ -11,6 +11,7 @@ import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.datastore.search.SettingsRecentsStore
 import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
 import com.raulshma.jellyplay.core.ui.platform.pickAwtFile
+import com.raulshma.jellyplay.feature.settings.ImportPreviewViewModel
 import com.raulshma.jellyplay.feature.settings.SettingsBackupIo
 import com.raulshma.jellyplay.feature.settings.SettingsViewModel
 import java.awt.FileDialog
@@ -69,11 +70,13 @@ import kotlinx.serialization.json.jsonPrimitive
  *     machinery.
  *  3. DIALOG_IMPORT_LOAD — the LOAD-mode dialog, same Robot mechanism,
  *     picking the file the export just wrote (the production round trip).
- *  4. IMPORT_VM_STAGE_CONFIRM — [SettingsViewModel.importSettings] stages a
- *     v2 pending import (not legacy, no version mismatch) and
- *     [SettingsViewModel.confirmImport] lands "Settings imported
- *     successfully" — the import half reads the same file back through the
- *     same dialog-produced URI.
+ *  4. IMPORT_VM_STAGE_CONFIRM — [SettingsViewModel.importSettings] stages the
+ *     dialog-picked uri (the stage-and-navigate signal) and the production
+ *     import path — [ImportPreviewViewModel.loadBackup] +
+ *     [ImportPreviewViewModel.importAll] — parses the same file back through
+ *     the pure BackupParser (v2, not legacy, no version mismatch) and lands
+ *     the "AllImported" event with the security-sensitive gate off, exactly
+ *     what a confirmed import does on the preview screen.
  *  5. DIALOG_CANCEL_ESC — a LOAD dialog dismissed with ESC (native cancel):
  *     [pickAwtFile] returns null, so the production picker fires no callback
  *     and the VM's backup-restore state is untouched — the live twin of the
@@ -125,12 +128,15 @@ object DesktopNativeDialogHarness {
 
     /**
      * Everything the harness needs; Koin-agnostic like
-     * [DesktopSessionHarness.SessionHarnessDeps]. The VM is constructed by the
-     * host (see [DesktopNativeDialogHarnessHost]) from the same Koin singles
-     * the settings module's viewModel definition would inject — a harness-owned
-     * instance, since no settings screen composes in this mode.
+     * [DesktopSessionHarness.SessionHarnessDeps]. The VMs are constructed by
+     * the host (see [DesktopNativeDialogHarnessHost]) from the same Koin
+     * singles the settings module's viewModel definitions would inject —
+     * harness-owned instances, since no settings screen composes in this mode.
      */
-    class DialogPassDeps(val settingsViewModel: SettingsViewModel)
+    class DialogPassDeps(
+        val settingsViewModel: SettingsViewModel,
+        val importPreviewViewModel: ImportPreviewViewModel,
+    )
 
     /**
      * Entry point from the host's LaunchedEffect (Main dispatcher = the AWT
@@ -172,6 +178,7 @@ object DesktopNativeDialogHarness {
         private val logsDir: Path = DesktopPaths.resolve().logsDirNio
 
         private val vm: SettingsViewModel get() = deps.settingsViewModel
+        private val preview: ImportPreviewViewModel get() = deps.importPreviewViewModel
 
         init {
             currentFatalHandler = { e -> finishWithFatal(e) }
@@ -281,30 +288,37 @@ object DesktopNativeDialogHarness {
             }
             fatalStop = fatalStop || !dialogLoadOk
 
-            // ── 4. staging + confirm through the production VM ──
+            // ── 4. staging + the surviving preview-VM import path ─────────────
             val importVmOk = !fatalStop && step("IMPORT_VM_STAGE_CONFIRM") {
                 val uri = exportTargetFile.toURI().toString()
                 vm.importSettings(uri)
-                check(awaitUntil(15_000) { vm.pendingImport != null }) {
-                    "pendingImport never staged (status='${vm.backupRestoreStatus}')"
+                check(awaitUntil(15_000) { vm.stagedImportUri != null }) {
+                    "import uri never staged (status='${vm.backupRestoreStatus}')"
                 }
-                val pending = vm.pendingImport!!
-                check(pending.uri == uri) { "staged uri '${pending.uri}' != dialog-picked '$uri'" }
-                check(!pending.isLegacy) { "exported v2 backup classified legacy" }
-                check(!pending.versionMismatch) {
-                    "version mismatch on our own fresh export (schema ${pending.schemaVersion})"
+                check(vm.stagedImportUri == uri) { "staged uri '${vm.stagedImportUri}' != dialog-picked '$uri'" }
+                // The production import path: the preview VM re-reads the same
+                // dialog-produced uri through the pure BackupParser, then
+                // imports everything with the security gate off — the exact
+                // calls the import preview screen makes on a confirmed import.
+                preview.loadBackup(uri)
+                check(awaitUntil(15_000) { preview.incomingPrefs != null || preview.error != null }) {
+                    "the export was never parsed by the import preview"
                 }
-                vm.confirmImport(restoreSecuritySensitive = false)
-                check(awaitUntil(15_000) { vm.pendingImport == null }) {
-                    "pendingImport never consumed by confirmImport"
+                check(preview.error == null) { "import preview failed to load: ${preview.error}" }
+                check(!preview.isLegacy) { "exported v2 backup classified legacy" }
+                check(!preview.versionMismatch) {
+                    "version mismatch on our own fresh export (schema ${preview.schemaVersion})"
                 }
-                check(vm.backupRestoreStatus == "Settings imported successfully") {
-                    "unexpected import status: '${vm.backupRestoreStatus}'"
+                preview.importAll(restoreSecuritySensitive = false) { }
+                check(awaitUntil(15_000) {
+                    preview.importEvent is ImportPreviewViewModel.ImportEvent.AllImported
+                }) {
+                    "import never completed (event='${preview.importEvent}')"
                 }
                 mapOf(
-                    "stagedSchemaVersion" to pending.schemaVersion.toString(),
-                    "hasSecuritySensitive" to pending.hasSecuritySensitive.toString(),
-                    "vmStatus" to vm.backupRestoreStatus.orEmpty(),
+                    "stagedSchemaVersion" to preview.schemaVersion.toString(),
+                    "hasSecuritySensitive" to preview.hasSecuritySensitive.toString(),
+                    "vmStatus" to preview.importStatus.orEmpty(),
                 )
             }
             fatalStop = fatalStop || !importVmOk
@@ -313,7 +327,7 @@ object DesktopNativeDialogHarness {
             if (!fatalStop) {
                 step("DIALOG_CANCEL_ESC") {
                     val statusBefore = vm.backupRestoreStatus
-                    val pendingBefore = vm.pendingImport
+                    val stagedBefore = vm.stagedImportUri
                     val picked = driveAndPick(
                         title = "Import settings",
                         save = false,
@@ -323,7 +337,7 @@ object DesktopNativeDialogHarness {
                         shotName = "dialog-cancel-esc",
                     )
                     check(picked == null) { "ESC left a pick behind: ${picked?.path}" }
-                    check(vm.backupRestoreStatus == statusBefore && vm.pendingImport == pendingBefore) {
+                    check(vm.backupRestoreStatus == statusBefore && vm.stagedImportUri == stagedBefore) {
                         "VM state moved on a cancelled dialog (callback fired without a pick?)"
                     }
                     mapOf(
@@ -643,11 +657,11 @@ object DesktopNativeDialogHarness {
  * Composition-site sugar so DesktopAppRoot hosts the dialog harness in one
  * call. Internal — only the desktop shell uses it. Gated by
  * [DesktopNativeDialogHarness.requested] at the call site so a normal boot
- * composes nothing here. The [SettingsViewModel] is built from the same Koin
- * singles the settings module's viewModel definition injects (a harness-owned
- * instance; no settings screen composes in this mode) — plain `get()` on a
- * viewModel definition is deliberately avoided so the harness does not depend
- * on viewModel-index resolution semantics.
+ * composes nothing here. The [SettingsViewModel] and [ImportPreviewViewModel]
+ * are built from the same Koin singles the settings module's viewModel
+ * definitions inject (harness-owned instances; no settings screen composes in
+ * this mode) — plain `get()` on a viewModel definition is deliberately avoided
+ * so the harness does not depend on viewModel-index resolution semantics.
  */
 @Composable
 internal fun DesktopNativeDialogHarnessHost() {
@@ -658,22 +672,63 @@ internal fun DesktopNativeDialogHarnessHost() {
     val seerrRepository: SeerrRepository = org.koin.compose.koinInject()
     val adminRepository: AdminRepository = org.koin.compose.koinInject()
     val editor: PreferencesEditor = org.koin.compose.koinInject()
-    val advancedSettings: com.raulshma.jellyplay.feature.settings.AdvancedSettingsGate =
-        org.koin.compose.koinInject()
     val recentsStore: SettingsRecentsStore = org.koin.compose.koinInject()
+    val playbackStore: com.raulshma.jellyplay.core.datastore.playback.PlaybackStore = org.koin.compose.koinInject()
+    val appearanceStore: com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore = org.koin.compose.koinInject()
+    val videoPlayerStore: com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerStore = org.koin.compose.koinInject()
+    val downloadsStore: com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore = org.koin.compose.koinInject()
+    val engineStore: com.raulshma.jellyplay.core.datastore.engine.PlayerEngineStore = org.koin.compose.koinInject()
+    val homeDiscoveryStore: com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore = org.koin.compose.koinInject()
+    val audioStore: com.raulshma.jellyplay.core.datastore.audio.AudioStore = org.koin.compose.koinInject()
+    val audioEffectsStore: com.raulshma.jellyplay.core.datastore.audioeffects.AudioEffectsStore = org.koin.compose.koinInject()
+    val audioCacheStore: com.raulshma.jellyplay.core.datastore.audiocache.AudioCacheStore = org.koin.compose.koinInject()
+    val libraryStore: com.raulshma.jellyplay.core.datastore.library.LibraryStore = org.koin.compose.koinInject()
+    val navigationStore: com.raulshma.jellyplay.core.datastore.navigation.NavigationStore = org.koin.compose.koinInject()
+    val networkOfflineStore: com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore = org.koin.compose.koinInject()
+    val notificationStore: com.raulshma.jellyplay.core.datastore.notification.NotificationStore = org.koin.compose.koinInject()
+    val screensaverStore: com.raulshma.jellyplay.core.datastore.screensaver.ScreensaverStore = org.koin.compose.koinInject()
+    val securityStore: com.raulshma.jellyplay.core.datastore.security.SecurityStore = org.koin.compose.koinInject()
+    val subtitleLanguageStore: com.raulshma.jellyplay.core.datastore.subtitle.SubtitleLanguageStore = org.koin.compose.koinInject()
+    val syncPlayCastStore: com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore = org.koin.compose.koinInject()
+    val experimentalStore: com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore = org.koin.compose.koinInject()
+    val appRuntimeStateStore: com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore = org.koin.compose.koinInject()
+    val pinRateLimiter: com.raulshma.jellyplay.core.datastore.security.PinRateLimiter = org.koin.compose.koinInject()
     LaunchedEffect(Unit) {
         DesktopNativeDialogHarness.runIfRequested(
             DesktopNativeDialogHarness.DialogPassDeps(
-                SettingsViewModel(
+                settingsViewModel = SettingsViewModel(
                     settingsBackupIo = settingsBackupIo,
                     preferencesStore = preferencesStore,
                     projections = projections,
                     authRepository = authRepository,
                     seerrRepository = seerrRepository,
                     adminRepository = adminRepository,
-                    advancedSettings = advancedSettings,
                     editor = editor,
                     recentsStore = recentsStore,
+                ),
+                importPreviewViewModel = ImportPreviewViewModel(
+                    settingsBackupIo = settingsBackupIo,
+                    userPreferencesStore = preferencesStore,
+                    playbackStore = playbackStore,
+                    appearanceStore = appearanceStore,
+                    videoPlayerStore = videoPlayerStore,
+                    downloadsStore = downloadsStore,
+                    engineStore = engineStore,
+                    homeDiscoveryStore = homeDiscoveryStore,
+                    audioStore = audioStore,
+                    audioEffectsStore = audioEffectsStore,
+                    audioCacheStore = audioCacheStore,
+                    libraryStore = libraryStore,
+                    navigationStore = navigationStore,
+                    networkOfflineStore = networkOfflineStore,
+                    notificationStore = notificationStore,
+                    screensaverStore = screensaverStore,
+                    securityStore = securityStore,
+                    subtitleLanguageStore = subtitleLanguageStore,
+                    syncPlayCastStore = syncPlayCastStore,
+                    experimentalStore = experimentalStore,
+                    appRuntimeStateStore = appRuntimeStateStore,
+                    pinRateLimiter = pinRateLimiter,
                 ),
             ),
         )

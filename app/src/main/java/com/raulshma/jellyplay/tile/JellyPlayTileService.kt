@@ -85,23 +85,26 @@ class JellyPlayTileService : TileService() {
 
     private fun updateTile(isPlaying: Boolean = false, title: String = "") {
         val hasSession = audioPlaybackManager.hasActiveSession
+        // The three-state fold lives in TilePlaybackState.policy (pure,
+        // truth-table tested); this is only the Android Tile plumbing — state
+        // ints + string resources.
+        val presentation = TilePlaybackState.policy(isPlaying, hasSession, title)
+        val appName = getString(R.string.app_name)
         qsTile?.apply {
-            state = if (isPlaying) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
-            label = when {
-                // Paused: a track is loaded but not playing.
-                hasSession && !isPlaying -> {
-                    val t = title.ifEmpty { getString(R.string.app_name) }
-                    getString(R.string.tile_paused_label, t)
-                }
-                // Playing: show the track title.
-                hasSession -> title.ifEmpty { getString(R.string.app_name) }
-                // No session: just the app name.
-                else -> getString(R.string.app_name)
+            state = when (presentation.state) {
+                TilePlaybackState.TileState.ACTIVE -> Tile.STATE_ACTIVE
+                TilePlaybackState.TileState.INACTIVE -> Tile.STATE_INACTIVE
             }
-            contentDescription = when {
-                isPlaying -> getString(R.string.tile_playing_cd)
-                hasSession -> getString(R.string.tile_paused_cd)
-                else -> getString(R.string.app_name)
+            label = when (val label = presentation.label) {
+                is TilePlaybackState.Label.PausedTemplate ->
+                    getString(R.string.tile_paused_label, label.title ?: appName)
+                is TilePlaybackState.Label.TrackTitle -> label.title ?: appName
+                TilePlaybackState.Label.AppName -> appName
+            }
+            contentDescription = when (presentation.description) {
+                TilePlaybackState.Description.PLAYING -> getString(R.string.tile_playing_cd)
+                TilePlaybackState.Description.PAUSED -> getString(R.string.tile_paused_cd)
+                TilePlaybackState.Description.APP_NAME -> appName
             }
             updateTile()
         }

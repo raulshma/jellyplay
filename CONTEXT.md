@@ -1796,8 +1796,143 @@ failure accounting, boundaries).
 shells shared as a hand-copied `ExitConfirmationTimeoutMs = 2000L` pair:
 `onBack(nowMs, lastAtMs, atExitPoint)` → `Pop` / `Prompt(nowMs)` / `Exit`,
 exit resets the window. `JellyPlayApp` and `TvNavigationDrawer` keep only the
-`moveTaskToBack` + Toast effects. Pinned by `BackExitConfirmationTest`
-(1999/2000 ms boundaries, window reset).
+  `moveTaskToBack` + Toast effects. Pinned by `BackExitConfirmationTest`
+  (1999/2000 ms boundaries, window reset).
+
+## The 2026-09-07 evening wave (13 deepenings)
+
+Landed autonomously with per-module pinning tests; consolidated gradle pass
+green across every touched module.
+
+- **Enum parse seam**: `String?.toEnumOrNull()` (core/datastore
+  `EnumPreferenceParsing.kt`, public reified inline, never-throws) is the
+  repo-wide seam for persisted-string → enum. ~50 former `valueOf` /
+  try-catch / `runCatching{}.getOrDefault` / name→enum-map sites across all
+  14 stores and the core/data repositories now flow through it with explicit
+  defaults. Declared delta: a corrupt persisted enum falls back to the
+  documented default instead of throwing during the read projection (a
+  throw tripped the store-level `.catch { emptyPreferences() }`, wiping ALL
+  preferences); corrupt outbox `eventType` drains as `START` (the one replay
+  path that sends nothing) instead of poisoning `drain()`. Pinned by
+  garbage-write tests per module (`EnumPreferenceParsingTest`,
+  store tests, `ItemPlaybackPreferenceRepositoryImplTest`,
+  `PlaybackOutboxRepositoryImplTest`).
+- **`OfflineDeletionCore`** (core/data, internal collaborator) is the ONE
+  deletion choreography behind `deleteOfflineItem/Series/Season` and
+  `DownloadRepositoryImpl.cleanupDownloadFiles` (former 4 hand-copies):
+  artifacts-before-DB delete → capture-before-transaction → 4-table cascade
+  → memo evict → cast prune → orphan prune; series-artwork cleanup is a
+  series-scope-only hook. The download-cleanup caller carries the wave's one
+  declared deletion delta: its former inline body pruned orphans inside its
+  single transaction and never pruned cast images; through the core it
+  adopts the majority post-transaction prune and the reference-scanned cast
+  prune (the old skip leaked orphaned cast image files — the scan only
+  deletes images no surviving row references; see the method's KDoc).
+  `OfflineRepositoryImpl` now injects `TimeSource`
+  for the `lastPlayedDate` stamps (two inline `OffsetDateTime.now()` gone).
+  Pinned by `OfflineRepositoryDeletionTest` (three scopes, shared cast image
+  retention, zero orphans) + fake-clock `applyPlayedState` tests.
+- **`ArrClientSupport(okHttp, json, serviceName)`** (core/network jvmShared)
+  folds the Radarr/Sonarr client preambles (~180 lines); all failure texts
+  byte-identical, pinned via MockWebServer. Seerr is deliberately NOT folded
+  (structurally different sentence shapes). `MediaInfoApiClientImpl` lost
+  its decode twins (`fetchBreakdownReport`/`parseBreakdownReport`,
+  `toStaleMediaItem`, `isPlaybackReportingUserIdToken` — fixture-pinned).
+- **Arr redownload ladder**: `redownloadMovie`/`redownloadEpisode` are one
+  `redownloadLadder(client, kind, ref)` over five new `ArrServiceClient`
+  ops (the seam and its redownload types are module-internal; the adapters
+  expose `serviceName` so the ladder's user-visible strings don't re-derive
+  it from the kind); the Radarr/Sonarr verify-FAILED divergence
+  (best-effort continue vs hard gate) is a kind-gated ladder rule, both
+  step tables pinned.
+  `deleteQueueItem`/`deleteBlocklistItem` share `withServer`
+  (bulk `deleteQueueItems` keeps its single end-refresh deliberately).
+  `arrBaseUrl(externalUrl, useSsl, hostname, port, baseUrl)` (core/model
+  seerr) is the single base-URL grammar behind both `getFullUrl()` bodies
+  and ArrRepositoryImpl. Note: `getFullUrl` with a blank hostname used to
+  return `"http://:7878"` garbage; via `arrBaseUrl` it now yields `""`
+  (nothing pinned the garbage — deliberate).
+- **`StatisticsMath`** (core/data, pure) owns watch-time breakdown +
+  viewing-streak math out of `AdminStatisticsRepositoryImpl` (14
+  deterministic tests); the watched scan rides `AdminStatisticsLabelProvider`
+  (its strings were already identical to the seam members). The
+  `ByteFormatter` twins were KEPT on purpose: repo `formatSize` ("" for ≤0,
+  integer KB band, locale-sensitive decimals) feeds strings persisted to
+  Room and `ArrQueueScreen.toReadableBytes` rounds the KB band — swapping
+  either changes persisted/UI text and needs a deliberate decision.
+- **Settings**: the dead import twin is deleted — `PendingImport`/
+  `parsePendingImport`/`confirmImport` gone from `SettingsViewModel`
+  (stage→navigate→`ImportPreviewViewModel`/`BackupParser` is the only
+  pipeline; desktop `DesktopNativeDialogHarness` migrated onto it; ~660
+  lines of dead-twin tests removed). Declared delta: `importSettings` no
+  longer reads the file at stage time, so an unopenable/corrupt backup
+  surfaces its error on the ImportPreview screen (pinned by
+  `ImportPreviewViewModelTest`) instead of as an inline settings-screen
+  status. `SETTINGS_ENTRANCE_SECTIONS` +
+  `settingsEntranceStep(key)` derive the 19 entrance steps (pinned equal to
+  the old literal phone/tv pairs); `SettingsSearchPanelState` owns the
+  search panel machine with named focus delays; the five `setDream*` funs
+  and `setShowAdvancedSettings` are gone (screen uses the house
+  `viewModel.edit {}` shape).
+- **`PipLifecyclePolicy`** (beside `PlayerActivity`, pure, internal) owns
+  the PiP ordering machine: `pipExited(phase,…)/onResume/onStop/
+  onUserLeaveHint/onTopResumedChanged` → `Decision(action, justExitedPip)`
+  plus `clampAspectRatio`/`isValidSourceRect`; the OEM-ordering comments are
+  its KDoc; 19-test callback-sequence table (confirmed PiP entry is
+  execution-only — no policy event). The two auto-enter predicates
+  are modelled SEPARATELY (`userLeaveAutoEnter` has no `isPlaying` term;
+  `topResumedLossAutoEnter` adds it; the pre-arm skips `controlsLocked`) —
+  no single existing predicate used all four terms, so they were not
+  unified.
+- **Shell pure folds**: `externalPlayerPositionTicks` (extras
+  "position"/"positionMs" alias, Number coercion, ≥0 gate, ×10_000) and
+  `visibleTopLevelRoutes` (homeMode set + offline LiveTv hide + nav
+  customization) leave `JellyPlayApp` with tests;
+  `OnboardingGate.onboardingGateRoute(authenticated, completed, isTv)`
+  (shared/feature/shell) is the one gate behind both shells (desktop's
+  `DesktopOnboardingGate` is a thin `isTv = false` wrapper; Android's TV
+  auto-mark stays a call-site effect). `TilePlaybackState.policy` is the
+  tile's truth-table fold.
+- **`WidgetPushGate`** owns `lastItemId`/`lastArtwork`/`lastPushedRender`
+  with `decideOnMetadata` (full push, post-artwork-load re-read is what
+  gets recorded) / `decideOnPositionTick` (partial via
+  `shouldPushPartialPosition`) / `reset()`. Beside it,
+  `WidgetWorkScheduler.claimRefreshSlot` is a CAS loop — declared fix: the
+  former get-then-set let two triggers inside the 5 s window BOTH enqueue
+  (its own KDoc already claimed they didn't); the CAS loser is now
+  suppressed without restamping (pinned: no window extension, 8-thread race
+  single winner). The skeleton's `runWithPendingResult` +
+  `launchFinishingOnMain` absorb both
+  former goAsync shapes in `NowPlayingWidget`.
+- **Web**: `WebConnectFailurePolicy` (internal, beside `WebConnectFlow`)
+  makes the CORS/transport taxonomy + 401 sign-in mapping wasmJs-test-pinned
+  (20 tests) before the real-server browser pass; `WebSideEffectScope`
+  (`launchDegrading`: swallow `Exception`, rethrow `CancellationException`)
+  replaces the two hand-rolled controller scopes. The AuthRepository
+  promotion stays deferred. Note: ktor 3.5.2's
+  `HttpRequestTimeoutException` extends `IOException`, so that cause check
+  is redundant-but-harmless (left, pinned).
+- **Details**: `DetailPlayPolicies.resolveDetailPlayDispatch` +
+  `DetailPlayPolicies.dispatchMarkPlayedAction`
+  (table: SERIES → confirm; MOVIE/EPISODE/SEASON/null → direct; any season
+  action → confirm) replace the duplicated play/chapter fold and the 4×
+  mark-played gate chain in `MediaDetailScreen`.
+  `MediaItem.progressFraction(positionTicks)` (core/model
+  `MediaItemProgress.kt`) is the single resume-fraction home — the core:ui
+  twin extension is deleted, 11 importers re-pointed,
+  `rememberProgressFraction` delegates.
+- **Hygiene**: the stale repo-root `feature/` tree (57k files of pre-KMP
+  Hilt-era build output; 0 tracked files, 0 sources) is deleted.
+- Deferred-list items were NOT landed (per their recorded blockers):
+  settings category-merge, SeerrDetailPresentation fold,
+  SideloadedTrackIdRegistry, wire-request twins, web AuthRepository
+  promotion, the load-ladder fold (fresh census: 22 canonical + 7
+  variant-form VMs across 8-11 modules, vs the recorded "~23 across 10" —
+  effectively unchanged),
+  DetailViewModel intent fold, PlayerControls callback bundles,
+  MediaDetailScreen dialog coordinator, desktop window placement policy,
+  signed-out auth shell, factory-reset field enumeration, settings row-twin
+  rendering, `ss_*`/`settings_*` string merge.
 
 ## Rejected designs
 

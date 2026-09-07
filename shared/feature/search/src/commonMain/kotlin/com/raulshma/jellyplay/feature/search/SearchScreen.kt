@@ -45,7 +45,7 @@ import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.components.JellyPlayBackHandler
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLinearProgressIndicator
-import com.raulshma.jellyplay.core.ui.components.progressFraction
+import com.raulshma.jellyplay.core.model.progressFraction
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SearchBarDefaults
 import androidx.compose.material3.Text

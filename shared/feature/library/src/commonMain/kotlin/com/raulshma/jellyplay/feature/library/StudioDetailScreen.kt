@@ -39,7 +39,7 @@ import com.raulshma.jellyplay.core.ui.components.QuickAction
 import com.raulshma.jellyplay.core.ui.components.RemoveDownloadConfirmHost
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
-import com.raulshma.jellyplay.core.ui.components.progressFraction
+import com.raulshma.jellyplay.core.model.progressFraction
 import com.raulshma.jellyplay.core.ui.components.rememberMediaQuickActionController
 import com.raulshma.jellyplay.core.ui.components.rememberRemoveDownloadState
 import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus

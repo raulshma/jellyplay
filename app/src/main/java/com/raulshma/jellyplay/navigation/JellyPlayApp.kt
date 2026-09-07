@@ -142,15 +142,11 @@ import com.raulshma.jellyplay.core.ui.animation.NavTransitionContext
 import com.raulshma.jellyplay.core.ui.animation.isReducedMotion
 import com.raulshma.jellyplay.core.ui.animation.toTransition
 import com.raulshma.jellyplay.core.ui.navigation.ALL_TOP_LEVEL_ROUTE_KEYS
-import com.raulshma.jellyplay.core.ui.navigation.MUSIC_TOP_LEVEL_ROUTES
 import com.raulshma.jellyplay.core.ui.navigation.navIcon
 import com.raulshma.jellyplay.core.ui.navigation.Navigator
 import com.raulshma.jellyplay.core.ui.navigation.Route
-import com.raulshma.jellyplay.core.ui.navigation.VIDEO_TOP_LEVEL_ROUTES
 import com.raulshma.jellyplay.core.ui.navigation.rememberNavigationState
 import com.raulshma.jellyplay.core.ui.navigation.SHORTCUTS_NAV_KEY
-import com.raulshma.jellyplay.core.ui.navigation.applyNavCustomization
-import com.raulshma.jellyplay.core.ui.navigation.navKey
 import com.raulshma.jellyplay.core.ui.navigation.toNavRouteClass
 import com.raulshma.jellyplay.core.ui.tv.TvScaffold
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -161,6 +157,7 @@ import com.raulshma.jellyplay.feature.home.navigation.HomePlayOnRedirect
 import com.raulshma.jellyplay.feature.player.live.navigation.livePlayerSection
 import com.raulshma.jellyplay.feature.shell.UserMessageDuration
 import com.raulshma.jellyplay.feature.shell.UserMessageHost
+import com.raulshma.jellyplay.feature.shell.onboardingGateRoute
 import com.raulshma.jellyplay.feature.shell.resolveUiText
 import com.raulshma.jellyplay.feature.shell.navigation.ShellHostHooks
 import com.raulshma.jellyplay.feature.shell.navigation.shellEntryProvider
@@ -205,7 +202,14 @@ fun JellyPlayApp(
     ) {
         when {
             isRestoring -> {}
-            isAuthenticated && !preferences.onboardingCompleted && !isTv -> {
+            // First-run wizard gate — the shared pure decision both shells run
+            // (feature/shell OnboardingGateRoute); the TV build auto-completes
+            // in the LaunchedEffect below instead of gating.
+            onboardingGateRoute(
+                authenticated = isAuthenticated,
+                onboardingCompleted = preferences.onboardingCompleted,
+                isTv = isTv,
+            ) != null -> {
                 OnboardingContent(
                     onComplete = {},
                     viewModel = viewModel,
@@ -366,15 +370,11 @@ private fun MainContent(
         val launch = pendingExternalLaunch
         pendingExternalLaunch = null
         if (launch != null) {
-            val finalMs = result.data?.let { data ->
-                val pos = data.extras?.get("position") ?: data.extras?.get("positionMs")
-                val ms = when (pos) {
-                    is Number -> pos.toLong()
-                    else -> -1L
-                }
-                ms.takeIf { it >= 0 }
-            }
-            val finalTicks = finalMs?.let { it * 10_000 } ?: -1L
+            // Pure parse (ExternalPlayerResultPolicy): "position"/"positionMs"
+            // alias, Number coercion, >=0 gate, ms→ticks ×10_000; -1 = none.
+            val finalTicks = result.data?.extras?.let { extras ->
+                externalPlayerPositionTicks(extras.get("position"), extras.get("positionMs"))
+            } ?: -1L
             viewModel.reportExternalPlaybackStopped(launch, finalTicks)
         }
     }
@@ -461,15 +461,14 @@ private fun MainContent(
         isOffline,
     ) {
         derivedStateOf {
-            when (homeMode) {
-                HomeMode.VIDEO -> VIDEO_TOP_LEVEL_ROUTES
-                HomeMode.MUSIC -> MUSIC_TOP_LEVEL_ROUTES
-            }.let { routes ->
-                // Server-bound destination with no offline fallback. Library is
-                // NOT here: its grid auto-switches to the offline store (#147).
-                val offlineHidden = if (isOffline) setOf(Route.LiveTv.navKey) else emptySet()
-                applyNavCustomization(routes, preferences.hiddenNavItems + offlineHidden, preferences.navItemOrder)
-            }
+            // Pure fold (VisibleTopLevelRoutes.kt): homeMode route set + the
+            // offline hide-set (LiveTv) + nav customization composition.
+            visibleTopLevelRoutes(
+                homeMode = homeMode,
+                hiddenNavItems = preferences.hiddenNavItems,
+                navItemOrder = preferences.navItemOrder,
+                isOffline = isOffline,
+            )
         }
     }
 

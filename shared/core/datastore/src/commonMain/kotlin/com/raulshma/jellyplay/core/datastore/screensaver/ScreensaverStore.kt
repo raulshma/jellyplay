@@ -10,6 +10,7 @@ import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.raulshma.jellyplay.core.datastore.ParsedCache
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
+import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.model.DreamImageCategory
 import com.raulshma.jellyplay.core.model.DreamTransitionStyle
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
@@ -90,11 +91,8 @@ class ScreensaverStore constructor(
         }
     }
 
-    private fun readDreamTransitionStyle(prefs: Preferences): DreamTransitionStyle = try {
-        DreamTransitionStyle.valueOf(prefs[Keys.DREAM_TRANSITION_STYLE] ?: DreamTransitionStyle.CROSSFADE.name)
-    } catch (_: Exception) {
-        DreamTransitionStyle.CROSSFADE
-    }
+    private fun readDreamTransitionStyle(prefs: Preferences): DreamTransitionStyle =
+        prefs[Keys.DREAM_TRANSITION_STYLE].toEnumOrNull() ?: DreamTransitionStyle.CROSSFADE
 
     // ------------------------------------------------------------------
     // Setters

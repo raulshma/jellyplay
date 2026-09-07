@@ -48,11 +48,11 @@ import kotlinx.coroutines.test.runTest
  * The tests wrap their bodies in [runTest] (kotlin.test rejects `suspend`
  * test functions on wasmJs; runTest's single-threaded dispatcher keeps the
  * controller's sideEffectScope jobs on Dispatchers.Default interleaving
- * against real time, which the polling helper awaits). Honesty note (extends
- * WebShellPureHelpersTest's): the transport-failure classifier
- * (`isLikelyCorsOrTransport`) and the friendly-error mappers stay out of
- * reach — they are private to WebConnectFlow.kt and main sources are
- * off-limits for this wave. No browser, no fetch: hand-rolled fakes for
+ * against real time, which the polling helper awaits). Honesty note: the
+ * transport-failure classifier (`isLikelyCorsOrTransport`) and the
+ * friendly-error mappers used to be private to WebConnectFlow.kt and thus out
+ * of reach here — they now live in WebConnectFailurePolicy.kt and are pinned
+ * by WebConnectFailurePolicyTest. No browser, no fetch: hand-rolled fakes for
  * [AuthApiClient] and [DataStore].
  */
 class WebConnectControllerTest {

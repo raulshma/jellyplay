@@ -528,13 +528,7 @@ data class SeerrRadarrSettings(
     val isDefault: Boolean = false,
     val externalUrl: String? = null,
 ) {
-    fun getFullUrl(): String {
-        if (!externalUrl.isNullOrBlank()) return externalUrl.trimEnd('/')
-        
-        val protocol = if (useSsl) "https" else "http"
-        val base = baseUrl?.trim('/')?.let { if (it.isNotEmpty()) "/$it" else "" } ?: ""
-        return "$protocol://$hostname:$port$base"
-    }
+    fun getFullUrl(): String = arrBaseUrl(externalUrl, useSsl, hostname, port, baseUrl) ?: ""
 }
 
 @Immutable
@@ -553,13 +547,37 @@ data class SeerrSonarrSettings(
     val isDefault: Boolean = false,
     val externalUrl: String? = null,
 ) {
-    fun getFullUrl(): String {
-        if (!externalUrl.isNullOrBlank()) return externalUrl.trimEnd('/')
-        
-        val protocol = if (useSsl) "https" else "http"
-        val base = baseUrl?.trim('/')?.let { if (it.isNotEmpty()) "/$it" else "" } ?: ""
-        return "$protocol://$hostname:$port$base"
-    }
+    fun getFullUrl(): String = arrBaseUrl(externalUrl, useSsl, hostname, port, baseUrl) ?: ""
+}
+
+/**
+ * The one home for the Radarr/Sonarr base-URL grammar shared by
+ * [SeerrRadarrSettings.getFullUrl] and [SeerrSonarrSettings.getFullUrl] (and
+ * usable for the `*ServiceDetail` types, which carry the same fields but no
+ * `getFullUrl`):
+ *
+ * 1. A non-blank [externalUrl] wins verbatim (checked first, so even a blank
+ *    [hostname] cannot stop it), trailing slashes trimmed.
+ * 2. Otherwise the URL is assembled as `http(s)://hostname:port/baseUrl` —
+ *    null when [hostname] is null/blank (callers that need a non-null String
+ *    fall back to `""`), protocol per [useSsl], [baseUrl] trimmed of
+ *    surrounding slashes into a single leading path segment (absent when
+ *    empty), and [port] rendered verbatim — including the unset 0, so
+ *    `http://host:0` is a real outcome of this grammar (null [port] behaves
+ *    as that same unset 0).
+ */
+fun arrBaseUrl(
+    externalUrl: String?,
+    useSsl: Boolean,
+    hostname: String?,
+    port: Int?,
+    baseUrl: String?,
+): String? {
+    if (!externalUrl.isNullOrBlank()) return externalUrl.trimEnd('/')
+    if (hostname.isNullOrBlank()) return null
+    val protocol = if (useSsl) "https" else "http"
+    val base = baseUrl?.trim('/')?.let { if (it.isNotEmpty()) "/$it" else "" } ?: ""
+    return "$protocol://$hostname:${port ?: 0}$base"
 }
 
 @Immutable

@@ -139,17 +139,34 @@ class WidgetWorkSchedulerImpl (
         return true
     }
 
-    private suspend fun claimRefreshSlot(lastRefreshAt: AtomicLong): Boolean {
-        val now = System.currentTimeMillis()
-        val last = lastRefreshAt.get()
-        if (last > 0L && now - last < COOLDOWN_MS) return false
-        lastRefreshAt.set(now)
-        return true
-    }
-
     companion object {
         private val REFRESH_PERIOD: Duration = Duration.ofHours(6)
         private val REFRESH_FLEX: Duration = Duration.ofMinutes(30)
-        private const val COOLDOWN_MS = 5_000L
+    }
+}
+
+/**
+ * Manual-refresh cooldown window, in-process only — two triggers inside it
+ * collapse to one enqueued one-shot (see the Flavour KDoc above).
+ */
+internal const val COOLDOWN_MS = 5_000L
+
+/**
+ * Atomically claims [lastRefreshAt]'s cooldown slot as of [nowMs] (a test
+ * seam; production passes the wall clock). The former get()-then-set() let
+ * two triggers inside the window both pass: both read the same stale stamp,
+ * then both stamped. The `compareAndSet` closes that gap — only the thread
+ * whose CAS from the observed stamp lands wins and stamps; the loser's CAS
+ * fails, its re-read finds the fresh stamp inside [COOLDOWN_MS], and it is
+ * suppressed without restamping.
+ */
+internal fun claimRefreshSlot(
+    lastRefreshAt: AtomicLong,
+    nowMs: Long = System.currentTimeMillis(),
+): Boolean {
+    while (true) {
+        val last = lastRefreshAt.get()
+        if (last > 0L && nowMs - last < COOLDOWN_MS) return false
+        if (lastRefreshAt.compareAndSet(last, nowMs)) return true
     }
 }

@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.database.dao.OfflineMediaWithPlayback
 import com.raulshma.jellyplay.core.database.dao.PlaybackStateDao
 import com.raulshma.jellyplay.core.database.dao.SyncBaselineDao
 import com.raulshma.jellyplay.core.database.entity.OfflineMediaEntity
+import com.raulshma.jellyplay.core.data.util.SystemTimeSource
 import com.raulshma.jellyplay.core.model.MediaType
 import io.mockk.coEvery
 import io.mockk.mockk
@@ -54,7 +55,14 @@ class OfflineRepositoryImplSearchTest {
 
     @BeforeTest
     fun setup() {
-        repository = OfflineRepositoryImpl(offlineMediaDao, playbackStateDao, syncBaselineDao, downloadDao, database)
+        repository = OfflineRepositoryImpl(
+            offlineMediaDao,
+            playbackStateDao,
+            syncBaselineDao,
+            downloadDao,
+            database,
+            timeSource = SystemTimeSource(),
+        )
     }
 
     @Test

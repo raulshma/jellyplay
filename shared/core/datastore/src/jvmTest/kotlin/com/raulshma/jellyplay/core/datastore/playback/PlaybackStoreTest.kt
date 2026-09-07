@@ -131,6 +131,31 @@ class PlaybackStoreTest {
     }
 
     @Test
+    fun `corrupt enum values fall back to defaults, siblings keep real values`() = runTest {
+        store.setKeepScreenOnDuringVideo(false)
+        dataStore.edit {
+            it[stringPreferencesKey("streaming_quality")] = "nonsense"
+            // Legacy lowercase casing matches no enum name either.
+            it[stringPreferencesKey("decoder_mode")] = "hw_preferred"
+        }
+        val slice = store.playback.first()
+        assertEquals(StreamingQuality.AUTO, slice.streamingQuality)
+        assertEquals(DecoderMode.HW_PREFERRED, slice.decoderMode)
+        assertEquals(false, slice.keepScreenOnDuringVideo)
+    }
+
+    @Test
+    fun `corrupt refresh_rate_mode falls back to the legacy boolean migration`() = runTest {
+        // A corrupt stored value (not an absent key, which reads OFF directly)
+        // rescues the legacy frame_rate_matching boolean: off → OFF, on →
+        // FRAME_RATE_ONLY (the old single-resolution behaviour).
+        dataStore.edit { it[stringPreferencesKey("refresh_rate_mode")] = "nonsense" }
+        assertEquals(RefreshRateMode.OFF, store.playback.first().refreshRateMode)
+        dataStore.edit { it[booleanPreferencesKey("frame_rate_matching")] = true }
+        assertEquals(RefreshRateMode.FRAME_RATE_ONLY, store.playback.first().refreshRateMode)
+    }
+
+    @Test
     fun `restore(slice) round-trips a fully-populated slice`() = runTest {
         val slice = PlaybackSlice(
             preferredPlayer = PlayerType.MPV,

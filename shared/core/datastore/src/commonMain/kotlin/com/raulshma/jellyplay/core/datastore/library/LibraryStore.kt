@@ -10,6 +10,7 @@ import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.raulshma.jellyplay.core.datastore.ParsedCache
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
+import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.model.GroupBy
 import com.raulshma.jellyplay.core.model.LibraryViewMode
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
@@ -88,13 +89,11 @@ class LibraryStore constructor(
 
     private fun readConfirmLibraryReset(prefs: Preferences): Boolean = prefs[Keys.CONFIRM_LIBRARY_RESET] ?: true
 
-    private fun readLibraryViewMode(prefs: Preferences): LibraryViewMode = try {
-        LibraryViewMode.valueOf(prefs[Keys.LIBRARY_VIEW_MODE] ?: LibraryViewMode.GRID.name)
-    } catch (_: Exception) { LibraryViewMode.GRID }
+    private fun readLibraryViewMode(prefs: Preferences): LibraryViewMode =
+        prefs[Keys.LIBRARY_VIEW_MODE].toEnumOrNull() ?: LibraryViewMode.GRID
 
-    private fun readGroupBy(prefs: Preferences): GroupBy = try {
-        GroupBy.valueOf(prefs[Keys.LIBRARY_GROUP_BY] ?: GroupBy.NONE.name)
-    } catch (_: Exception) { GroupBy.NONE }
+    private fun readGroupBy(prefs: Preferences): GroupBy =
+        prefs[Keys.LIBRARY_GROUP_BY].toEnumOrNull() ?: GroupBy.NONE
 
     private fun readDefaultLibrarySortOrders(prefs: Preferences): Map<String, String> {
         val raw = prefs[Keys.DEFAULT_LIBRARY_SORT_ORDERS]

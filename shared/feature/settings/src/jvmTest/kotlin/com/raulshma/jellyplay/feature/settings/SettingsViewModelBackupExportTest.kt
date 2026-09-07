@@ -11,12 +11,9 @@ import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeState
 import com.raulshma.jellyplay.core.datastore.search.SettingsRecentsStore
 import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
-import com.raulshma.jellyplay.core.model.DreamImageCategory
-import com.raulshma.jellyplay.core.model.DreamTransitionStyle
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.SettingsScreenPreferences
 import com.raulshma.jellyplay.core.model.UserInfo
-import com.raulshma.jellyplay.core.model.legacy.UserPreferences
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.cancel
 import io.mockk.coEvery
@@ -24,7 +21,6 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
-import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -49,13 +45,11 @@ import kotlin.test.assertTrue
 
 /**
  * Tops up [SettingsViewModel] beyond [SettingsViewModelTest] (which pins the
- * staged-import classification and the v1 confirm): the EXPORT half of the
- * backup/restore pair (v2 envelope written to the [SettingsBackupIo] sink,
- * both failure degradations), the remaining confirm routes (v2 →
- * `restoreV2` with the security-sensitive gate forwarded verbatim, v0 bare
- * aggregate → the legacy restore path), the 30-second session auto-refresh
- * loop (virtual-time beat + explicit stop), the screensaver editor wiring,
- * and the clear/reset delegations.
+ * import stage-and-navigate signal): the EXPORT half of the backup/restore
+ * pair (v2 envelope written to the [SettingsBackupIo] sink, both failure
+ * degradations), the 30-second session auto-refresh loop (virtual-time beat +
+ * explicit stop), the single [SettingsViewModel.edit] write command, and the
+ * clear/reset delegations.
  *
  * Stores/repositories are mockk'd with real [MutableStateFlow] stubs; the
  * main-dispatcher rule is inlined (StandardTestDispatcher + setMain/resetMain
@@ -135,7 +129,6 @@ class SettingsViewModelBackupExportTest {
             authRepository = authRepository,
             seerrRepository = seerrRepository,
             adminRepository = adminRepository,
-            advancedSettings = AdvancedSettingsGate(mockk(relaxed = true), editor),
             editor = editor,
             recentsStore = recentsStore,
         )
@@ -218,79 +211,6 @@ class SettingsViewModelBackupExportTest {
         assertTrue("store sealed" in vm.backupRestoreStatus.orEmpty(), "got: ${vm.backupRestoreStatus}")
     }
 
-    // ------------------------------------------------------- confirm: v2 / v0
-
-    @Test
-    fun `confirmImport on v2 fans to restoreV2 with the security gate forwarded`() = vmTest {
-        val json = PreferencesJson.export.encodeToString(
-            SettingsBackup.serializer(),
-            SettingsBackup(slices = mapOf(BackupSliceKey.APPEARANCE to JsonPrimitive("stub-slice"))),
-        )
-        coEvery { settingsBackupIo.openImportSource("backup:v2") } answers {
-            ByteArrayInputStream(json.toByteArray())
-        }
-        val vm = viewModel()
-        advanceUntilIdle()
-        vm.importSettings("backup:v2")
-        awaitUntil("the import stages") { vm.pendingImport != null }
-
-        vm.confirmImport(restoreSecuritySensitive = false)
-        awaitUntil("the confirm completes") { vm.backupRestoreStatus != null }
-
-        coVerify(exactly = 1) {
-            preferencesStore.restoreV2(withArg { assertEquals(2, it.schemaVersion) }, false)
-        }
-        assertEquals("Settings imported successfully", vm.backupRestoreStatus)
-        assertNull(vm.pendingImport)
-    }
-
-    @Test
-    fun `confirmImport on v2 restores the device lock config only when opted in`() = vmTest {
-        val json = PreferencesJson.export.encodeToString(
-            SettingsBackup.serializer(),
-            SettingsBackup(slices = emptyMap()),
-        )
-        coEvery { settingsBackupIo.openImportSource("backup:v2b") } answers {
-            ByteArrayInputStream(json.toByteArray())
-        }
-        val vm = viewModel()
-        advanceUntilIdle()
-        vm.importSettings("backup:v2b")
-        awaitUntil("the import stages") { vm.pendingImport != null }
-
-        vm.confirmImport(restoreSecuritySensitive = true)
-        awaitUntil("the confirm completes") { vm.backupRestoreStatus != null }
-
-        coVerify(exactly = 1) { preferencesStore.restoreV2(any(), true) }
-    }
-
-    @Test
-    fun `confirmImport on a bare v0 aggregate fans to the legacy restore path`() = vmTest {
-        val json = PreferencesJson.export.encodeToString(
-            UserPreferences.serializer(),
-            UserPreferences(showAdvancedSettings = true),
-        )
-        coEvery { settingsBackupIo.openImportSource("backup:v0") } answers {
-            ByteArrayInputStream(json.toByteArray())
-        }
-        val vm = viewModel()
-        advanceUntilIdle()
-        vm.importSettings("backup:v0")
-        awaitUntil("the import stages") { vm.pendingImport != null }
-        assertEquals(0, vm.pendingImport!!.schemaVersion)
-
-        vm.confirmImport(restoreSecuritySensitive = false)
-        awaitUntil("the confirm completes") { vm.backupRestoreStatus != null }
-
-        coVerify(exactly = 1) {
-            preferencesStore.restorePreferences(
-                withArg { assertTrue(it.showAdvancedSettings) },
-                false,
-            )
-        }
-        coVerify(exactly = 0) { preferencesStore.restoreV2(any(), any()) }
-    }
-
     // ------------------------------------------------- session auto-refresh
 
     @Test
@@ -333,17 +253,15 @@ class SettingsViewModelBackupExportTest {
     // ----------------------------------------------------- editor delegations
 
     @Test
-    fun `dream setters route through the editor`() = vmTest {
+    fun `edit routes store writes through the editor`() = vmTest {
         val vm = viewModel()
         advanceUntilIdle()
 
-        vm.setDreamShowTitle(true)
-        vm.setDreamImageCategories(setOf(DreamImageCategory.MUSIC))
-        vm.setDreamSlideshowIntervalMs(45_000L)
-        vm.setDreamKenBurnsEnabled(true)
-        vm.setDreamTransitionStyle(DreamTransitionStyle.CROSSFADE)
+        // The screen call sites write through the single edit command
+        // (`edit { it.screensaver.setDreamShowTitle(true) }` shape).
+        vm.edit { }
 
-        verify(exactly = 5) { editor.edit(any()) }
+        verify(exactly = 1) { editor.edit(any()) }
     }
 
     @Test

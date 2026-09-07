@@ -3,57 +3,42 @@ package com.raulshma.jellyplay.feature.settings
 import com.raulshma.jellyplay.core.data.repository.AdminRepository
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
-import com.raulshma.jellyplay.core.datastore.BackupSliceKey
-import com.raulshma.jellyplay.core.datastore.LegacySettingsBackup
-import com.raulshma.jellyplay.core.datastore.PreferencesJson
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
-import com.raulshma.jellyplay.core.datastore.SettingsBackup
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.datastore.search.SettingsRecentsStore
-import com.raulshma.jellyplay.core.datastore.security.SecuritySlice
 import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.SessionInfo
 import com.raulshma.jellyplay.core.model.SessionNowPlayingItem
 import com.raulshma.jellyplay.core.model.SettingsScreenPreferences
-import com.raulshma.jellyplay.core.model.ThemeMode
 import com.raulshma.jellyplay.core.model.UserInfo
-import com.raulshma.jellyplay.core.model.legacy.UserPreferences
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.verify
-import java.io.ByteArrayInputStream
 import java.time.Instant
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
-import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
-import kotlinx.coroutines.withContext
-import kotlinx.serialization.KSerializer
-import kotlinx.serialization.json.JsonElement
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
  * Pins the settings-root ViewModel's non-Composable surface: the cache-size
- * computation off the [SettingsBackupIo] seam, the staged
- * [SettingsViewModel.PendingImport] classification for the three backup
- * shapes (v2/v1/v0) with security-sensitive detection, the confirm path that
- * fans to the right restore call, the destructive guard rails
- * (no pending import → nothing restored), and the recent-settings tracking.
+ * computation off the [SettingsBackupIo] seam, the import stage-and-navigate
+ * signal (uri staging only — decoding/classification/the restore live on the
+ * import preview path, pinned by [ImportPreviewViewModelTest]), the
+ * destructive guard rails (cancel → nothing restored), and the recent-settings
+ * tracking.
  *
  * Stores/repositories are mockk'd with real [MutableStateFlow] stubs for the
  * init-block collectors. Main-dispatcher rule inlined
@@ -112,32 +97,9 @@ class SettingsViewModelTest {
         authRepository = authRepository,
         seerrRepository = seerrRepository,
         adminRepository = adminRepository,
-        advancedSettings = AdvancedSettingsGate(mockk(relaxed = true), editor),
         editor = editor,
         recentsStore = recentsStore,
     )
-
-    /** Fresh stream per call — the VM re-reads the source on confirm. */
-    private fun stubImportSource(uri: String, json: String) {
-        coEvery { settingsBackupIo.openImportSource(uri) } answers {
-            ByteArrayInputStream(json.toByteArray())
-        }
-    }
-
-    /** Drains the scheduler until [condition] holds (pumps across real-IO hops). */
-    private suspend fun TestScope.awaitUntil(description: String, condition: () -> Boolean) {
-        val deadline = System.currentTimeMillis() + 5_000
-        while (!condition()) {
-            advanceUntilIdle()
-            if (condition()) break
-            assertTrue(
-                System.currentTimeMillis() < deadline,
-                "$description (timed out waiting for the VM's coroutine)",
-            )
-            withContext(Dispatchers.IO) { delay(10) }
-        }
-        advanceUntilIdle()
-    }
 
     // ------------------------------------------------------------ cache size
 
@@ -173,183 +135,34 @@ class SettingsViewModelTest {
 
     // ------------------------------------------------------------ staged import
 
-    private fun <T> sliceElement(serializer: KSerializer<T>, value: T): JsonElement =
-        PreferencesJson.import.parseToJsonElement(
-            PreferencesJson.import.encodeToString(serializer, value),
-        )
-
     @Test
-    fun `v2 backup stages a current-version pending import`() = runTest(testDispatcher) {
-        val json = PreferencesJson.export.encodeToString(
-            SettingsBackup.serializer(),
-            SettingsBackup(slices = emptyMap()),
-        )
-        stubImportSource("backup:v2", json)
+    fun `importSettings stages the uri without reading or writing anything`() = runTest(testDispatcher) {
         val vm = viewModel()
         advanceUntilIdle()
 
-        vm.importSettings("backup:v2")
-        awaitUntil("the import stages") { vm.pendingImport != null }
+        vm.importSettings("backup:any")
+        advanceUntilIdle()
 
-        val pending = vm.pendingImport
-        assertTrue(pending != null, "nothing is written until the user confirms — import must stage")
-        assertEquals("backup:v2", pending!!.uri)
-        assertEquals(2, pending.schemaVersion)
-        assertEquals(false, pending.isLegacy)
-        assertEquals(false, pending.versionMismatch)
-        assertEquals(false, pending.hasSecuritySensitive)
+        assertEquals("backup:any", vm.stagedImportUri, "the stage-and-navigate signal carries the picked uri")
         assertNull(vm.backupRestoreStatus)
-    }
-
-    @Test
-    fun `v2 backup with lock config flags security-sensitive`() = runTest(testDispatcher) {
-        val json = PreferencesJson.export.encodeToString(
-            SettingsBackup.serializer(),
-            SettingsBackup(
-                slices = mapOf(
-                    BackupSliceKey.SECURITY to sliceElement(
-                        SecuritySlice.serializer(),
-                        SecuritySlice(pinHash = "stored-hash"),
-                    ),
-                ),
-            ),
-        )
-        stubImportSource("backup:v2sec", json)
-        val vm = viewModel()
-        advanceUntilIdle()
-
-        vm.importSettings("backup:v2sec")
-        awaitUntil("the import stages") { vm.pendingImport != null }
-
-        assertEquals(true, vm.pendingImport!!.hasSecuritySensitive)
-    }
-
-    @Test
-    fun `v1 envelope stages a legacy pending import`() = runTest(testDispatcher) {
-        val json = PreferencesJson.export.encodeToString(
-            LegacySettingsBackup.serializer(),
-            LegacySettingsBackup(preferences = UserPreferences(pinLockEnabled = true)),
-        )
-        stubImportSource("backup:v1", json)
-        val vm = viewModel()
-        advanceUntilIdle()
-
-        vm.importSettings("backup:v1")
-        awaitUntil("the import stages") { vm.pendingImport != null }
-
-        val pending = vm.pendingImport!!
-        assertEquals(1, pending.schemaVersion)
-        assertTrue(pending.isLegacy)
-        assertTrue(pending.versionMismatch)
-        assertTrue(pending.hasSecuritySensitive, "v0/v1 detection reads the aggregate's lock fields")
-    }
-
-    @Test
-    fun `bare v0 aggregate stages with schema zero`() = runTest(testDispatcher) {
-        val json = PreferencesJson.export.encodeToString(
-            UserPreferences.serializer(),
-            UserPreferences(showAdvancedSettings = true),
-        )
-        stubImportSource("backup:v0", json)
-        val vm = viewModel()
-        advanceUntilIdle()
-
-        vm.importSettings("backup:v0")
-        awaitUntil("the import stages") { vm.pendingImport != null }
-
-        val pending = vm.pendingImport!!
-        assertEquals(0, pending.schemaVersion)
-        assertTrue(pending.isLegacy)
-        assertTrue(pending.versionMismatch)
-        assertFalse(pending.hasSecuritySensitive)
-    }
-
-    @Test
-    fun `unopenable import source surfaces the failure and stages nothing`() = runTest(testDispatcher) {
-        val vm = viewModel()
-        advanceUntilIdle()
-
-        vm.importSettings("backup:missing")
-        awaitUntil("the failure surfaces") { vm.backupRestoreStatus != null }
-
-        assertNull(vm.pendingImport)
-        assertTrue("Import failed" in vm.backupRestoreStatus.orEmpty())
-    }
-
-    @Test
-    fun `confirmImport on v1 fans to the legacy restore path`() = runTest(testDispatcher) {
-        val json = PreferencesJson.export.encodeToString(
-            LegacySettingsBackup.serializer(),
-            LegacySettingsBackup(preferences = UserPreferences(themeMode = ThemeMode.DARK)),
-        )
-        stubImportSource("backup:v1", json)
-        val vm = viewModel()
-        advanceUntilIdle()
-        vm.importSettings("backup:v1")
-        awaitUntil("the import stages") { vm.pendingImport != null }
-
-        vm.confirmImport(restoreSecuritySensitive = false)
-        awaitUntil("the confirm completes") { vm.backupRestoreStatus != null }
-
-        coVerify(exactly = 1) {
-            preferencesStore.restorePreferences(
-                withArg { assertEquals(ThemeMode.DARK, it.themeMode) },
-                false,
-            )
-        }
-        assertNull(vm.pendingImport, "a confirmed import clears the staged state")
-        assertEquals("Settings imported successfully", vm.backupRestoreStatus)
-    }
-
-    @Test
-    fun `confirmImport without a staged import touches nothing`() = runTest(testDispatcher) {
-        val vm = viewModel()
-        advanceUntilIdle()
-
-        vm.confirmImport(restoreSecuritySensitive = true)
-        advanceUntilIdle()
-
+        // The dead twin used to read + classify here; the surviving path owns
+        // all of that — staging must not touch the file or any store.
         coVerify(exactly = 0) { settingsBackupIo.openImportSource(any()) }
         coVerify(exactly = 0) { preferencesStore.restorePreferences(any(), any()) }
         coVerify(exactly = 0) { preferencesStore.restoreV2(any(), any()) }
     }
 
     @Test
-    fun `failed confirm clears the staged import and reports the error`() = runTest(testDispatcher) {
-        val json = PreferencesJson.export.encodeToString(
-            LegacySettingsBackup.serializer(),
-            LegacySettingsBackup(preferences = UserPreferences()),
-        )
-        stubImportSource("backup:v1", json)
-        coEvery { preferencesStore.restorePreferences(any(), any()) } throws RuntimeException("disk full")
-        val vm = viewModel()
-        advanceUntilIdle()
-        vm.importSettings("backup:v1")
-        awaitUntil("the import stages") { vm.pendingImport != null }
-
-        vm.confirmImport(restoreSecuritySensitive = false)
-        awaitUntil("the failure surfaces") { vm.backupRestoreStatus != null }
-
-        assertNull(vm.pendingImport, "a failed confirm must not leave the import staged")
-        assertTrue("disk full" in vm.backupRestoreStatus.orEmpty())
-    }
-
-    @Test
     fun `cancelImport discards the staged import without restoring`() = runTest(testDispatcher) {
-        val json = PreferencesJson.export.encodeToString(
-            LegacySettingsBackup.serializer(),
-            LegacySettingsBackup(preferences = UserPreferences()),
-        )
-        stubImportSource("backup:v1", json)
         val vm = viewModel()
         advanceUntilIdle()
-        vm.importSettings("backup:v1")
-        awaitUntil("the import stages") { vm.pendingImport != null }
+        vm.importSettings("backup:any")
 
         vm.cancelImport()
 
-        assertNull(vm.pendingImport)
+        assertNull(vm.stagedImportUri)
         coVerify(exactly = 0) { preferencesStore.restorePreferences(any(), any()) }
+        coVerify(exactly = 0) { preferencesStore.restoreV2(any(), any()) }
     }
 
     // ------------------------------------------------------------ session surface
@@ -423,7 +236,7 @@ class SettingsViewModelTest {
         assertEquals(false, vm.isLoadingUsers)
     }
 
-    // ------------------------------------------------------------ recents + editor
+    // ------------------------------------------------------------ recents
 
     @Test
     fun `recordSettingUsed delegates to the recents store`() = runTest(testDispatcher) {
@@ -445,15 +258,5 @@ class SettingsViewModelTest {
         advanceUntilIdle()
 
         coVerify(exactly = 1) { recentsStore.clearRecents() }
-    }
-
-    @Test
-    fun `setShowAdvancedSettings routes through the editor`() = runTest(testDispatcher) {
-        val vm = viewModel()
-        advanceUntilIdle()
-
-        vm.setShowAdvancedSettings(true)
-
-        verify(exactly = 1) { editor.edit(any()) }
     }
 }

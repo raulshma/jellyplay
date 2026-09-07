@@ -32,9 +32,6 @@ import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
 import com.raulshma.jellyplay.core.datastore.SeerrSecureCredentialsStore
 import com.raulshma.jellyplay.core.model.seerr.SeerrAuthMethod
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -74,8 +71,9 @@ internal class WebSeerrController(
     private val seerrRepository: SeerrRepository,
 ) {
     // Post-click work that must OUTLIVE the pane (see SIDE-EFFECT OWNERSHIP).
-    // Same lifetime discipline as WebConnectController.sideEffectScope.
-    private val sideEffectScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    // Same lifetime discipline as WebConnectController.sideEffectScope — the
+    // shared shape lives in [WebSideEffectScope].
+    private val sideEffectScope = WebSideEffectScope()
 
     /** Field-seeding snapshot read by [WebSeerrPane]'s hydration effect. */
     data class CredsState(val serverUrl: String, val apiKey: String)
@@ -113,7 +111,7 @@ internal class WebSeerrController(
      * Failures degrade silently (session-only persistence).
      */
     fun saveLater(serverUrl: String, apiKey: String) {
-        sideEffectScope.launch { persist(serverUrl, apiKey) }
+        sideEffectScope.launchDegrading { persist(serverUrl, apiKey) }
     }
 
     /**
@@ -149,7 +147,7 @@ internal class WebSeerrController(
      * `SeerrSettingsViewModel.disconnect`'s store-level reset. Fire-and-forget.
      */
     fun disconnectLater() {
-        sideEffectScope.launch {
+        sideEffectScope.launchDegrading {
             try {
                 seerrPreferencesStore.disconnect()
             } catch (_: Exception) {

@@ -45,6 +45,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.progressFraction
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet
 import com.raulshma.jellyplay.core.ui.components.SheetHeader
@@ -238,11 +239,7 @@ private fun EpisodeRow(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val pos = episode.playbackPositionTicks
-    val rt = episode.runTimeTicks
-    val progress = if (pos != null && pos > 0 && rt != null && rt > 0) {
-        (pos.toFloat() / rt).coerceIn(0f, 1f)
-    } else 0f
+    val progress = episode.progressFraction() ?: 0f
 
     val focusState = rememberTvFocusState(focusedScale = 1.01f)
     val shape = ShapeCache.smooth12

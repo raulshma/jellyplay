@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.database.dao.SmartPlaylistDao
 import com.raulshma.jellyplay.core.database.entity.MoodPlaylistEntity
 import com.raulshma.jellyplay.core.database.entity.MoodPlaylistPreferenceEntity
 import com.raulshma.jellyplay.core.database.entity.SmartPlaylistEntity
+import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.model.CriterionOperator
 import com.raulshma.jellyplay.core.model.CriterionType
 import com.raulshma.jellyplay.core.model.MoodPlaylist
@@ -49,8 +50,7 @@ class SmartPlaylistRepository constructor(
             name = name,
             criteria = criteriaList,
             maxItems = maxItems,
-            sortBy = runCatching { SmartPlaylistSort.valueOf(sortBy) }
-                .getOrDefault(SmartPlaylistSort.RANDOM),
+            sortBy = sortBy.toEnumOrNull() ?: SmartPlaylistSort.RANDOM,
         )
     }
 
@@ -135,8 +135,7 @@ class MoodPlaylistRepository constructor(
             genreKeywords = keywords,
             excludedGenres = excluded,
             minRating = minRating,
-            sortBy = runCatching { MoodPlaylistSort.valueOf(sortBy) }
-                .getOrDefault(MoodPlaylistSort.RANDOM),
+            sortBy = sortBy.toEnumOrNull() ?: MoodPlaylistSort.RANDOM,
             maxItems = maxItems,
             themeColorHex = themeColorHex,
         )
@@ -164,10 +163,9 @@ private data class PlaylistCriterionDto(
     val operator: String = "EQUALS",
 ) {
     fun toDomain(): PlaylistCriterion = PlaylistCriterion(
-        type = runCatching { CriterionType.valueOf(type) }.getOrDefault(CriterionType.GENRE),
+        type = type.toEnumOrNull() ?: CriterionType.GENRE,
         value = value,
-        operator = runCatching { CriterionOperator.valueOf(operator) }
-            .getOrDefault(CriterionOperator.EQUALS),
+        operator = operator.toEnumOrNull() ?: CriterionOperator.EQUALS,
     )
 }
 

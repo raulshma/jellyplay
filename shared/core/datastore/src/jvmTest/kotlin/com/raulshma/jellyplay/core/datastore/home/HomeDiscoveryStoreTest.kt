@@ -276,6 +276,20 @@ class HomeDiscoveryStoreTest {
     }
 
     @Test
+    fun `corrupt home_mode falls back to the default, siblings keep real values`() = runTest {
+        activate("userA")
+        store.setNextUpMaxDays(5)
+        dataStore.edit { it[stringPreferencesKey("u_userA::home_mode")] = "nonsense" }
+        val corrupt = slice()
+        assertEquals(HomeMode.VIDEO, corrupt.homeMode)
+        assertEquals(5, corrupt.nextUpMaxDays)
+
+        // A valid value still parses once rewritten through the setter.
+        store.setHomeMode(HomeMode.MUSIC)
+        assertEquals(HomeMode.MUSIC, slice().homeMode)
+    }
+
+    @Test
     fun `legacy flat keys are claimed by the first active user`() = runTest {
         // Legacy (pre-namespacing) install: flat keys, no marker.
         dataStore.edit {

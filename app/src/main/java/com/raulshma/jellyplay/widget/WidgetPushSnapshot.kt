@@ -4,10 +4,9 @@ package com.raulshma.jellyplay.widget
  * Everything a full Now Playing widget push renders, read from the playback
  * manager in one pass. Deliberately pure — no Android framework types — so
  * the render-equality guards below (and the partial-vs-full push race
- * decision) are unit-testable on the JVM. NowPlayingWidgetUpdater is the
- * only holder of the "last pushed" snapshot; because the guards and the
- * pushes read the same value, they can never disagree about which values
- * were observed.
+ * decision) are unit-testable on the JVM. WidgetPushGate is the only holder
+ * of the "last pushed" snapshot; because the guards and the pushes read the
+ * same value, they can never disagree about which values were observed.
  */
 internal data class WidgetPushSnapshot(
     val title: String,
@@ -31,8 +30,8 @@ internal fun positionSecondBucket(ms: Long): Long = ms / WIDGET_POSITION_BUCKET_
 
 /**
  * Equality key for the last pushed widget render — see
- * NowPlayingWidgetUpdater.pushPositionUpdate. Position and duration are
- * bucketed to whole seconds because the partial push ticks at 1 Hz anyway.
+ * WidgetPushGate.decideOnPositionTick. Position and duration are bucketed to
+ * whole seconds because the partial push ticks at 1 Hz anyway.
  */
 internal fun WidgetPushSnapshot.sameRenderAs(other: WidgetPushSnapshot): Boolean =
     title == other.title &&

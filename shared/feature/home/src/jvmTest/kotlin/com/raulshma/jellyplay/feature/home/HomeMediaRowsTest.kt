@@ -5,7 +5,7 @@ import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.NameGuidPair
-import com.raulshma.jellyplay.core.ui.components.progressFraction
+import com.raulshma.jellyplay.core.model.progressFraction
 import kotlin.test.assertEquals
 import kotlin.test.Test
 

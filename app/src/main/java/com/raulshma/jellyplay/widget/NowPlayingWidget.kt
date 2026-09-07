@@ -13,7 +13,6 @@ import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.widget.skeleton.WidgetProviderSkeleton
 import com.raulshma.jellyplay.widget.skeleton.widgetIdsFor
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.launch
 import org.koin.mp.KoinPlatform
 
 /**
@@ -88,31 +87,22 @@ class NowPlayingWidget : WidgetProviderSkeleton() {
         val manager = koinAudioPlaybackManager()
         val snapshot = NowPlayingWidgetRenderer.readPushSnapshot(manager)
 
-        // Owns its goAsync() window inline (finish inside the posted main
-        // handler, not a finally) rather than [launchWithPendingResult] —
-        // the widget push happens on the main thread after the poster load.
-        val pending = goAsync()
-        refreshScope.launch {
-            try {
-                val art = if (!snapshot.artUrl.isNullOrBlank()) {
-                    WidgetImageLoader.loadPoster(context.applicationContext, snapshot.artUrl)
-                } else null
+        // Owns its goAsync() window inline: the finish rides the posted
+        // main-handler runnable the widget push runs in (not a finally),
+        // because the push happens on the main thread after the poster load.
+        launchFinishingOnMain(context) {
+            val art = if (!snapshot.artUrl.isNullOrBlank()) {
+                WidgetImageLoader.loadPoster(context.applicationContext, snapshot.artUrl)
+            } else null
 
-                val mainHandler = android.os.Handler(context.mainLooper)
-                mainHandler.post {
-                    NowPlayingWidgetRenderer.renderFullPush(
-                        context = context,
-                        appWidgetManager = appWidgetManager,
-                        appWidgetId = appWidgetId,
-                        snapshot = snapshot,
-                        albumArt = art,
-                    )
-                    pending.finish()
-                }
-            } catch (_: Exception) {
-                // Ensure the goAsync() window always closes even if poster load
-                // fails — otherwise the system may ANR the widget host.
-                pending.finish()
+            Runnable {
+                NowPlayingWidgetRenderer.renderFullPush(
+                    context = context,
+                    appWidgetManager = appWidgetManager,
+                    appWidgetId = appWidgetId,
+                    snapshot = snapshot,
+                    albumArt = art,
+                )
             }
         }
     }
@@ -138,35 +128,33 @@ class NowPlayingWidget : WidgetProviderSkeleton() {
     }
 
     private fun handleTransport(context: Context, action: String) {
-        val pending = goAsync()
-        val manager = resolveAudioManager(context)
-        try {
-            if (manager == null) return
-            when (action) {
-                ACTION_PLAY_PAUSE -> manager.togglePlayPause()
-                ACTION_NEXT -> manager.skipToNext()
-                ACTION_PREV -> manager.skipToPrevious()
-                ACTION_REWIND -> manager.seekByDelta(-SEEK_DELTA_MS)
-                ACTION_FORWARD -> manager.seekByDelta(SEEK_DELTA_MS)
+        runWithPendingResult {
+            val manager = resolveAudioManager(context)
+            try {
+                if (manager == null) return@runWithPendingResult
+                when (action) {
+                    ACTION_PLAY_PAUSE -> manager.togglePlayPause()
+                    ACTION_NEXT -> manager.skipToNext()
+                    ACTION_PREV -> manager.skipToPrevious()
+                    ACTION_REWIND -> manager.seekByDelta(-SEEK_DELTA_MS)
+                    ACTION_FORWARD -> manager.seekByDelta(SEEK_DELTA_MS)
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Transport command failed: $action", e)
             }
-        } catch (e: Exception) {
-            Log.w(TAG, "Transport command failed: $action", e)
-        } finally {
-            pending.finish()
         }
     }
 
     private fun handleSeek(context: Context, percent: Int) {
-        val pending = goAsync()
-        val manager = resolveAudioManager(context)
-        try {
-            if (manager == null) return
-            val target = seekTargetMs(percent, manager.duration.value) ?: return
-            manager.seekTo(target)
-        } catch (e: Exception) {
-            Log.w(TAG, "Seek command failed: $percent%", e)
-        } finally {
-            pending.finish()
+        runWithPendingResult {
+            val manager = resolveAudioManager(context)
+            try {
+                if (manager == null) return@runWithPendingResult
+                val target = seekTargetMs(percent, manager.duration.value) ?: return@runWithPendingResult
+                manager.seekTo(target)
+            } catch (e: Exception) {
+                Log.w(TAG, "Seek command failed: $percent%", e)
+            }
         }
     }
 

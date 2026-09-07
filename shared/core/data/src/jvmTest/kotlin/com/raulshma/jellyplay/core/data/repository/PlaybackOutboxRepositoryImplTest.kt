@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.core.data.repository
 import androidx.room.Room
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import com.raulshma.jellyplay.core.database.JellyPlayDatabase
+import com.raulshma.jellyplay.core.database.entity.PlaybackOutboxEntity
 import com.raulshma.jellyplay.core.model.PlayMethod
 import kotlinx.coroutines.test.runTest
 import kotlin.test.AfterTest
@@ -305,6 +306,63 @@ class PlaybackOutboxRepositoryImplTest {
         assertEquals(1, pending.size)
         assertEquals(500L, pending[0].positionTicks)
         assertEquals("s2", pending[0].sessionId)
+    }
+
+    // ── Corrupt stored values degrade to the documented default ──────
+
+    @Test
+    fun `drain with a corrupt eventType row falls back to START instead of throwing`() = runTest {
+        // A row persisted with an unknown event-type name (hand-edit / restore
+        // from an incompatible build) must not poison the sync — previously an
+        // unguarded valueOf threw inside drain(), failing the whole worker on
+        // every attempt. The corrupt row maps to START (the replay path that
+        // sends no position and flips no watched/favorite state) so the drain
+        // delivers + deletes it alongside its live neighbours.
+        database.playbackOutboxDao().upsert(
+            PlaybackOutboxEntity(
+                id = "corrupt-1",
+                itemId = "item-1",
+                eventType = "BOGUS",
+                sessionId = "s1",
+                positionTicks = 5L,
+                isPaused = false,
+                playMethod = "DIRECT_PLAY",
+                mediaSourceId = null,
+                recordedAt = 1L,
+                createdAt = 1L,
+            )
+        )
+        repository.enqueueStop("item-2", "s2", 900L)
+
+        val pending = repository.drain()
+
+        assertEquals(2, pending.size)
+        val byId = pending.associateBy { it.id }
+        assertEquals(PlaybackOutboxEventType.START, byId["corrupt-1"]?.eventType)
+        assertEquals(PlaybackOutboxEventType.STOP, pending.first { it.itemId == "item-2" }.eventType)
+    }
+
+    @Test
+    fun `corrupt playMethod falls back to DIRECT_PLAY`() = runTest {
+        database.playbackOutboxDao().upsert(
+            PlaybackOutboxEntity(
+                id = "corrupt-pm",
+                itemId = "item-1",
+                eventType = "PROGRESS",
+                sessionId = "s1",
+                positionTicks = 5L,
+                isPaused = false,
+                playMethod = "TRANSMUTE",
+                mediaSourceId = null,
+                recordedAt = 1L,
+                createdAt = 1L,
+            )
+        )
+
+        val entry = repository.drain().single()
+
+        assertEquals(PlayMethod.DIRECT_PLAY, entry.playMethod)
+        assertEquals(PlaybackOutboxEventType.PROGRESS, entry.eventType)
     }
 
     /**

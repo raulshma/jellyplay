@@ -4,6 +4,7 @@ import com.raulshma.jellyplay.core.concurrency.mapConcurrent
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.data.util.TimeSource
+import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.database.dao.AuditLogDao
 import com.raulshma.jellyplay.core.database.dao.ScanStateDao
 import com.raulshma.jellyplay.core.database.entity.MediaAuditLogEntity
@@ -577,7 +578,7 @@ class AdminStatisticsRepositoryImpl constructor(
                             type = watched.type,
                             sizeText = formatSize(watched.sizeBytes),
                             detail = buildString {
-                                append("${watched.playCount} plays")
+                                append(labels.playsCount(watched.playCount))
                                 if (watched.completionPct < 1f) {
                                     append(" · ${(watched.completionPct * 100).toInt()}%")
                                 }
@@ -586,7 +587,7 @@ class AdminStatisticsRepositoryImpl constructor(
                             seasonName = watched.seasonName,
                             seasonNumber = watched.seasonNumber,
                             episodeNumber = watched.episodeNumber,
-                            dateText = lastPlayedStr?.let { "Played $it" },
+                            dateText = lastPlayedStr?.let { labels.playedDate(it) },
                         )
                     }
             },
@@ -675,7 +676,7 @@ class AdminStatisticsRepositoryImpl constructor(
         scanStateDao.observeProgress(scanId).map { row ->
             if (row == null) ScanProgress()
             else ScanProgress(
-                phase = runCatching { ScanPhase.valueOf(row.status) }.getOrDefault(ScanPhase.IDLE),
+                phase = row.status.toEnumOrNull() ?: ScanPhase.IDLE,
                 scanned = row.progress,
                 total = row.total,
                 itemsFound = row.itemsFound,
@@ -750,7 +751,7 @@ class AdminStatisticsRepositoryImpl constructor(
                     timestamp = entity.timestamp,
                     adminUserId = entity.adminUserId,
                     adminUserName = entity.adminUserName,
-                    actionType = runCatching { CleanupActionType.valueOf(entity.actionType) }.getOrDefault(CleanupActionType.STALE_REMOVAL),
+                    actionType = entity.actionType.toEnumOrNull() ?: CleanupActionType.STALE_REMOVAL,
                     configSnapshot = entity.configJson,
                     itemCount = entity.itemCount,
                     itemDetails = runCatching {
@@ -787,14 +788,13 @@ class AdminStatisticsRepositoryImpl constructor(
         }
     }
 
-    private data class WatchTimeBreakdown(
-        val totalSeconds: Long,
-        val last30DaysSeconds: Long,
-        val last7DaysSeconds: Long,
-        val previous30DaysSeconds: Long,
-    )
-
-    private suspend fun computeWatchTimeBreakdown(userId: String): WatchTimeBreakdown {
+    /**
+     * The fetched half of the watch-time breakdown (the window math lives in
+     * [StatisticsMath.computeWatchTimeBreakdown]): one paged played-items
+     * call, `today` resolved through the clock seam, and the whole body
+     * guarded by the original catch-to-zeros tail.
+     */
+    private suspend fun computeWatchTimeBreakdown(userId: String): StatisticsMath.WatchTimeBreakdown {
         return try {
             val items = apiClient.getItemsWithUserData(
                 userId = userId,
@@ -803,45 +803,14 @@ class AdminStatisticsRepositoryImpl constructor(
                 sortOrder = "Descending",
                 startIndex = 0,
                 limit = 500,
-            ).getOrDefault(Pair(0, emptyList()))
+            ).getOrDefault(Pair(0, emptyList())).second
 
-            val now = timeSource.today(java.time.ZoneId.systemDefault())
-            var totalSec = 0L
-            var last30Sec = 0L
-            var last7Sec = 0L
-            var prev30Sec = 0L
-
-            for (item in items.second) {
-                val runtimeSec = (item.runTimeTicks ?: 0L) / 10_000_000L
-                if (runtimeSec == 0L) continue
-                val plays = item.playCount.coerceAtLeast(1)
-                totalSec += runtimeSec * plays
-
-                val lastPlayed = item.lastPlayedDate?.take(10) ?: continue
-                val playedDate = try { java.time.LocalDate.parse(lastPlayed) } catch (_: Exception) { continue }
-                val daysAgo = java.time.temporal.ChronoUnit.DAYS.between(playedDate, now)
-
-                if (daysAgo <= 30) {
-                    val recentPlays = if (plays == 1) 1 else maxOf(1, plays * 30 / (daysAgo.toInt() + 30))
-                    last30Sec += runtimeSec * recentPlays
-                }
-                if (daysAgo <= 7) {
-                    val recentPlays = if (plays == 1) 1 else maxOf(1, plays * 7 / (daysAgo.toInt() + 7))
-                    last7Sec += runtimeSec * recentPlays
-                }
-                if (daysAgo in 31..60) {
-                    prev30Sec += runtimeSec * plays
-                }
-            }
-
-            WatchTimeBreakdown(
-                totalSeconds = totalSec,
-                last30DaysSeconds = last30Sec.coerceAtMost(totalSec),
-                last7DaysSeconds = last7Sec.coerceAtMost(totalSec),
-                previous30DaysSeconds = prev30Sec.coerceAtMost(totalSec - last30Sec).coerceAtLeast(0L),
+            StatisticsMath.computeWatchTimeBreakdown(
+                items = items.map { StatisticsMath.WatchTimeItem(it.runTimeTicks, it.playCount, it.lastPlayedDate) },
+                today = timeSource.today(java.time.ZoneId.systemDefault()),
             )
         } catch (_: Exception) {
-            WatchTimeBreakdown(0L, 0L, 0L, 0L)
+            StatisticsMath.WatchTimeBreakdown(0L, 0L, 0L, 0L)
         }
     }
 
@@ -852,7 +821,7 @@ class AdminStatisticsRepositoryImpl constructor(
         val method: List<com.raulshma.jellyplay.core.model.ContentBreakdown>,
         val device: List<com.raulshma.jellyplay.core.model.ContentBreakdown>,
         val pluginActivity: List<com.raulshma.jellyplay.core.model.PlaybackReportingActivity>,
-        val watchTime: WatchTimeBreakdown,
+        val watchTime: StatisticsMath.WatchTimeBreakdown,
     )
 
     /**
@@ -893,7 +862,7 @@ class AdminStatisticsRepositoryImpl constructor(
         userPluginActivity: PlaybackReportingActivity?,
         pluginChart: List<PlaybackActivityPoint>,
         fallbackTrendData: List<PlaybackActivityPoint>,
-        watchTimeBreakdown: WatchTimeBreakdown,
+        watchTimeBreakdown: StatisticsMath.WatchTimeBreakdown,
         genreBreakdown: List<ContentBreakdown>,
     ): EnhancedStatistics {
         var weeklyWatchTimeSec = if (deferreds != null) {
@@ -1006,53 +975,9 @@ class AdminStatisticsRepositoryImpl constructor(
             0f
         }
 
-    private fun calculateViewingStreak(activityData: List<com.raulshma.jellyplay.core.model.PlaybackActivityPoint>): com.raulshma.jellyplay.core.model.ViewingStreak {
-        val activeDates = activityData
-            .filter { it.value > 0 }
-            .map { it.date }
-            .toSet()
-
-        if (activeDates.isEmpty()) {
-            return com.raulshma.jellyplay.core.model.ViewingStreak()
-        }
-
-        val today = timeSource.today(java.time.ZoneId.systemDefault())
-        var currentStreak = 0
-        var streakStartDate: String? = null
-
-        var checkDate = today
-        while (activeDates.contains(formatDate(checkDate))) {
-            currentStreak++
-            streakStartDate = formatDate(checkDate)
-            checkDate = checkDate.minusDays(1)
-        }
-
-        val sortedDates = activeDates.sorted()
-        var longestStreak = 0
-        var tempStreak = 1
-        for (i in 1 until sortedDates.size) {
-            try {
-                val prev = java.time.LocalDate.parse(sortedDates[i - 1])
-                val curr = java.time.LocalDate.parse(sortedDates[i])
-                if (java.time.temporal.ChronoUnit.DAYS.between(prev, curr) == 1L) {
-                    tempStreak++
-                } else {
-                    longestStreak = maxOf(longestStreak, tempStreak)
-                    tempStreak = 1
-                }
-            } catch (_: Exception) {
-                longestStreak = maxOf(longestStreak, tempStreak)
-                tempStreak = 1
-            }
-        }
-        longestStreak = maxOf(longestStreak, tempStreak)
-
-        return com.raulshma.jellyplay.core.model.ViewingStreak(
-            currentStreak = currentStreak,
-            longestStreak = longestStreak,
-            streakStartDate = streakStartDate,
-        )
-    }
+    /** Clock-resolving delegate to the pure [StatisticsMath.calculateViewingStreak]. */
+    private fun calculateViewingStreak(activityData: List<com.raulshma.jellyplay.core.model.PlaybackActivityPoint>): com.raulshma.jellyplay.core.model.ViewingStreak =
+        StatisticsMath.calculateViewingStreak(activityData, timeSource.today(java.time.ZoneId.systemDefault()))
 
     companion object {
         /**

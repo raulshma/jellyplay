@@ -72,7 +72,7 @@ import com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope
 import com.raulshma.jellyplay.core.ui.components.formatDurationFromTicks
 import com.raulshma.jellyplay.core.ui.components.formatRelativeTime
 import com.raulshma.jellyplay.core.ui.components.formatRemainingTimeFromTicks
-import com.raulshma.jellyplay.core.ui.components.progressFraction
+import com.raulshma.jellyplay.core.model.progressFraction
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.rowCardWidth
 import com.raulshma.jellyplay.core.ui.image.MediaImage

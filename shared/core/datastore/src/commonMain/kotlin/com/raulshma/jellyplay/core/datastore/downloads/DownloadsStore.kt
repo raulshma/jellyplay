@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
+import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.model.DownloadQuality
 import com.raulshma.jellyplay.core.model.DownloadScheduleWindow
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
@@ -93,9 +94,8 @@ class DownloadsStore constructor(
         ),
     )
 
-    private fun readDownloadQuality(prefs: Preferences): DownloadQuality = try {
-        DownloadQuality.valueOf(prefs[Keys.DOWNLOAD_QUALITY] ?: DownloadQuality.ORIGINAL.name)
-    } catch (_: Exception) { DownloadQuality.ORIGINAL }
+    private fun readDownloadQuality(prefs: Preferences): DownloadQuality =
+        prefs[Keys.DOWNLOAD_QUALITY].toEnumOrNull() ?: DownloadQuality.ORIGINAL
 
     // ------------------------------------------------------------------
     // Setters
