@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.network.api
 
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.model.seerr.SeerrAuthJellyfinRequest
 import com.raulshma.jellyplay.core.model.seerr.SeerrAuthLocalRequest
 import com.raulshma.jellyplay.core.model.seerr.SeerrCredentials
@@ -303,7 +304,7 @@ class KtorWasmSeerrApiClient(
         // Step 1 (best-effort — the JVM `runCatching` swallow kept verbatim):
         // delete the media FILE from the *arr; a failure here must not abort
         // the media deletion itself.
-        runCatching {
+        runCatchingRethrowingCancellation {
             executeForText {
                 httpClient.delete(seerrApiUrl(baseUrl, "/media/$mediaId/file?is4k=$is4k")) {
                     attachHeaders(seerrAuthHeaders(credentials))

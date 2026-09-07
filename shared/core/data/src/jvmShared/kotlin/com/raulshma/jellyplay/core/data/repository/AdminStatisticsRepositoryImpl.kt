@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.repository
 
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.database.dao.AuditLogDao
@@ -94,7 +95,7 @@ class AdminStatisticsRepositoryImpl constructor(
         }
     }
 
-    override suspend fun getAllUsersWithStatistics(): Result<List<UserStatistics>> = runCatching {
+    override suspend fun getAllUsersWithStatistics(): Result<List<UserStatistics>> = runCatchingRethrowingCancellation {
         val pluginAvailable = _pluginStatus.value == PlaybackReportingStatus.AVAILABLE
 
         coroutineScope {
@@ -176,7 +177,7 @@ class AdminStatisticsRepositoryImpl constructor(
         )
     }
 
-    override suspend fun getUserDetailStatistics(userId: String, page: Int, pageSize: Int): Result<UserDetailPage> = runCatching {
+    override suspend fun getUserDetailStatistics(userId: String, page: Int, pageSize: Int): Result<UserDetailPage> = runCatchingRethrowingCancellation {
         val pluginAvailable = _pluginStatus.value == PlaybackReportingStatus.AVAILABLE
 
         // User lookup, played page, and plugin chart are independent round-trips
@@ -396,7 +397,7 @@ class AdminStatisticsRepositoryImpl constructor(
         )
     }
 
-    override suspend fun detectStaleMedia(config: MediaCleanupConfig): Result<String> = runCatching {
+    override suspend fun detectStaleMedia(config: MediaCleanupConfig): Result<String> = runCatchingRethrowingCancellation {
         val scanId = java.util.UUID.randomUUID().toString()
         scanStateDao.insert(
             ScanStateEntity(
@@ -410,7 +411,7 @@ class AdminStatisticsRepositoryImpl constructor(
         scanId
     }
 
-    override suspend fun detectWatchedMedia(config: MediaCleanupConfig): Result<String> = runCatching {
+    override suspend fun detectWatchedMedia(config: MediaCleanupConfig): Result<String> = runCatchingRethrowingCancellation {
         val scanId = java.util.UUID.randomUUID().toString()
         scanStateDao.insert(
             ScanStateEntity(
@@ -681,7 +682,7 @@ class AdminStatisticsRepositoryImpl constructor(
         itemNameMap: Map<String, String>,
         actionType: CleanupActionType,
         config: MediaCleanupConfig,
-    ): Result<AuditLogEntry> = runCatching {
+    ): Result<AuditLogEntry> = runCatchingRethrowingCancellation {
         val currentUser = apiClient.currentUser.first()
         val adminId = currentUser?.id ?: ""
         val adminName = currentUser?.name ?: ""

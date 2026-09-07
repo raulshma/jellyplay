@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.network.api
 
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.model.ActiveSession
 import com.raulshma.jellyplay.core.model.QuickConnectInfo
 import com.raulshma.jellyplay.core.model.QuickConnectState
@@ -88,7 +89,7 @@ class AuthApiClientImpl @Inject constructor(
         // global classifier semantics are untouched — non-TLS network failures
         // below retry exactly as before.
         return RetryPolicy.executeWithRetry(maxRetries = 2) {
-            runCatching {
+            runCatchingRethrowingCancellation {
                 withContext(Dispatchers.IO) {
                     try {
                         val info = probeServerInfo(normalizedAddress)
@@ -116,7 +117,7 @@ class AuthApiClientImpl @Inject constructor(
             if (it.startsWith("http://") || it.startsWith("https://")) it
             else "https://$it"
         }
-        return runCatching {
+        return runCatchingRethrowingCancellation {
             withContext(Dispatchers.IO) { probeServerInfo(normalizedAddress) }
         }
     }

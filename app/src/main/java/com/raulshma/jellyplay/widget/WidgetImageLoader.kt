@@ -14,6 +14,7 @@ import coil3.request.ImageRequest
 import coil3.request.allowHardware
 import coil3.toBitmap
 import android.util.LruCache
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.model.MediaItem
 import kotlinx.coroutines.CoroutineScope
@@ -98,7 +99,7 @@ object WidgetImageLoader {
         posterMemoryCache.get(url)?.let { return it }
         val bitmap = withTimeoutOrNull(WIDGET_LOAD_TIMEOUT_MS) {
             withContext(Dispatchers.IO) {
-                runCatching {
+                runCatchingRethrowingCancellation {
                     val request = ImageRequest.Builder(context)
                         .data(url)
                         .size(WIDGET_IMAGE_TARGET, WIDGET_IMAGE_TARGET)

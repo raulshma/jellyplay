@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.feature.player.video.engine.EngineError
 import com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import com.raulshma.jellyplay.feature.player.video.engine.SubtitleEvent
+import com.raulshma.jellyplay.core.concurrency.TaskBundle
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -91,6 +92,8 @@ sealed interface EngineDecision {
  * it re-creates the coordinator (and re-collects its outputs) on each
  * re-initialization rather than trying to revive a disposed one.
  */
+private const val ENGINE_POLICIES = "EngineEventCoordinator.enginePolicies"
+
 class EngineEventCoordinator(
     /** Parent scope (the ViewModel's). A [SupervisorJob] child is derived internally. */
     scope: CoroutineScope,
@@ -167,15 +170,19 @@ class EngineEventCoordinator(
     @Volatile
     private var currentEngine: MediaEngine? = null
 
-    private var enginePolicyJob: Job? = null
+    // The per-engine policy slot: cancel-and-replace on every engine swap
+    // (null engine cancels and forgets). TaskBundle keeps the choreography
+    // once; the slot key is the only local fact.
+    private val enginePolicyTasks = TaskBundle(coordinatorScope)
 
     init {
         coordinatorScope.launch {
             engineFlow.collect { engine ->
-                enginePolicyJob?.cancel()
                 currentEngine = engine
                 if (engine != null) {
-                    enginePolicyJob = launchEnginePolicies(engine)
+                    enginePolicyTasks.replace(ENGINE_POLICIES) { launchEnginePolicies(engine) }
+                } else {
+                    enginePolicyTasks.cancel(ENGINE_POLICIES)
                 }
             }
         }

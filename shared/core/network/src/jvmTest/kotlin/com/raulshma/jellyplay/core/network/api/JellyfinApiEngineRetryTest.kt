@@ -10,6 +10,7 @@ import java.net.SocketTimeoutException
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
@@ -71,15 +72,19 @@ class JellyfinApiEngineRetryTest {
     }
 
     @Test
-    fun `apiResult never classifies CancellationException as retryable`() = runBlocking {
+    fun `apiResult rethrows CancellationException instead of returning a failure Result`() = runBlocking {
         val engine = newEngine()
-        // Note: Kotlin's runCatching swallows CancellationException (stdlib behaviour).
-        // The retry policy must never try to retry it, even wrapped inside ApiException.
-        val result = engine.apiResult<String> { throw kotlinx.coroutines.CancellationException("cancel") }
-        val ex = result.exceptionOrNull()
-        // Whatever the wrapper ends up being, it must not be classified as retryable.
-        assertTrue(result.isFailure, "Result must be a failure")
-        assertFalse(RetryPolicy.isRetryable(ex!!))
+        // The shared runCatchingRethrowingCancellation helper rethrows CancellationException
+        // before the typed ApiException mapping sees it: structured cancellation must
+        // never surface as Result.failure (nor, a fortiori, be retried).
+        val ex = try {
+            engine.apiResult<String> { throw kotlinx.coroutines.CancellationException("cancel") }
+            null
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            e
+        }
+        assertNotNull(ex, "CancellationException must propagate out of apiResult, not land in a Result")
+        assertFalse(RetryPolicy.isRetryable(ex))
     }
 
     @Test

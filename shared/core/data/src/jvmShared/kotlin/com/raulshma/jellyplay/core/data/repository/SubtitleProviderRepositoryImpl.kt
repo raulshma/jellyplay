@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.repository
 
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.datastore.SubtitleProviderPreferencesStore
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
@@ -87,7 +88,7 @@ class SubtitleProviderRepositoryImpl(
                         // class contract is "one bad key never blanks the rest".
                         // coroutineScope cancels siblings on a throw, so catch
                         // here and degrade to an Error outcome instead.
-                        val outcome = runCatching { searchExternal(provider, query, cred) }
+                        val outcome = runCatchingRethrowingCancellation { searchExternal(provider, query, cred) }
                             .getOrElse { e ->
                                 Log.e(TAG, "search $kind threw, isolating: ${e.javaClass.simpleName}: ${e.message}", e)
                                 ProviderSearchOutcome.Error(e.message ?: "$kind search failed")
@@ -122,7 +123,7 @@ class SubtitleProviderRepositoryImpl(
         if (!credentials.isConfigured) return ProviderSearchOutcome.Skipped
         // A raw throw escaping verifyCredentials() must surface as an Error, not
         // propagate (matching searchExternal's isolation contract).
-        val outcome = runCatching { provider.verifyCredentials(credentials) }
+        val outcome = runCatchingRethrowingCancellation { provider.verifyCredentials(credentials) }
             .getOrElse { e ->
                 Log.e(
                     TAG,
@@ -179,7 +180,7 @@ class SubtitleProviderRepositoryImpl(
 
         // Jellyfin: server-scoped language search (tolerate failure → empty).
         jobs += launch {
-            val result = runCatching { searchJellyfin(itemId, language) }
+            val result = runCatchingRethrowingCancellation { searchJellyfin(itemId, language) }
                 .getOrElse { e ->
                     Log.e(TAG, "searchJellyfin threw, isolating: ${e.javaClass.simpleName}: ${e.message}", e)
                     Result.failure(e)
@@ -200,7 +201,7 @@ class SubtitleProviderRepositoryImpl(
                 }
                 // A raw throw escaping provider.search()/searchExternal must
                 // never cancel siblings — degrade to an Error outcome instead.
-                val outcome = runCatching { searchExternal(provider, query, cred) }
+                val outcome = runCatchingRethrowingCancellation { searchExternal(provider, query, cred) }
                     .getOrElse { e ->
                         Log.e(TAG, "search $kind threw, isolating: ${e.javaClass.simpleName}: ${e.message}", e)
                         ProviderSearchOutcome.Error(e.message ?: "$kind search failed")

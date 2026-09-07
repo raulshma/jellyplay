@@ -58,6 +58,10 @@ kotlin {
 
         getByName("commonMain").dependencies {
             api(project(":shared:core:model"))
+            // runCatchingRethrowingCancellation around every suspend fetch —
+            // the helper lives below this module on purpose (repositories,
+            // workers and the wasm stack cross the same seam).
+            implementation(project(":shared:core:concurrency"))
             implementation(libs.kotlinx.serialization.json)
             // suspend/Flow surface of the api client interfaces + OkHttpConfig's
             // StateFlow.

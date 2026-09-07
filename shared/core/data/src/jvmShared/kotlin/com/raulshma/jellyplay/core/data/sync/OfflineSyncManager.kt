@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.sync
 
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.DownloadArtifacts
@@ -94,7 +95,7 @@ class OfflineSyncManager(
     init {
         // Clear any `syncChecking=1` markers left by a process death mid-check
         // so they don't render as a stuck "checking…" badge forever.
-        ioScope.launch { runCatching { syncBaselineDao.clearAllCheckingFlags() } }
+        ioScope.launch { runCatchingRethrowingCancellation { syncBaselineDao.clearAllCheckingFlags() } }
     }
 
     // ── Decision orchestration (check / resync) ───────────────────────────────

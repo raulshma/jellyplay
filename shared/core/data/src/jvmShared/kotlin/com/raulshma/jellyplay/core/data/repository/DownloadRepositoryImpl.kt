@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.repository
 
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueSnapshot
 import com.raulshma.jellyplay.core.data.log.Log
@@ -211,16 +212,16 @@ class DownloadRepositoryImpl(
         seasonNumber: Int?,
         container: String?,
         precomputedCurrentBytes: Long?,
-    ): Result<DownloadItem> = runCatching {
+    ): Result<DownloadItem> = runCatchingRethrowingCancellation {
         val existing = downloadDao.getDownloadByMediaItemId(mediaItemId)
         if (existing != null) {
             val isCompleted = existing.status == DownloadStatus.COMPLETED.name
             val fileExists = existing.downloadPath.isNotBlank() && java.io.File(existing.downloadPath).exists()
             if (isCompleted && fileExists) {
-                return@runCatching existing.toDownloadItem()
+                return@runCatchingRethrowingCancellation existing.toDownloadItem()
             }
             if (existing.status != DownloadStatus.FAILED.name && existing.status != DownloadStatus.CANCELLED.name && !isCompleted) {
-                return@runCatching existing.toDownloadItem()
+                return@runCatchingRethrowingCancellation existing.toDownloadItem()
             }
             if (existing.downloadPath.isNotBlank()) {
                 withContext(Dispatchers.IO) {
@@ -275,8 +276,8 @@ class DownloadRepositoryImpl(
     entity.toDownloadItem()
 }
 
-    override suspend fun cancelDownload(id: String): Result<Unit> = runCatching {
-        val entity = downloadDao.getDownloadById(id) ?: return@runCatching
+    override suspend fun cancelDownload(id: String): Result<Unit> = runCatchingRethrowingCancellation {
+        val entity = downloadDao.getDownloadById(id) ?: return@runCatchingRethrowingCancellation
         // Cancel any in-flight background work first so the executing transfer
         // stops promptly and stops polling DB status. Without this, the
         // transfer keeps running until its next 2-second poll tick discovers
@@ -286,8 +287,8 @@ class DownloadRepositoryImpl(
         refreshDownloadSummary()
     }
 
-    override suspend fun pauseDownload(id: String): Result<Unit> = runCatching {
-        val entity = downloadDao.getDownloadById(id) ?: return@runCatching
+    override suspend fun pauseDownload(id: String): Result<Unit> = runCatchingRethrowingCancellation {
+        val entity = downloadDao.getDownloadById(id) ?: return@runCatchingRethrowingCancellation
         if (DownloadStates.isActive(entity.status)) {
             // Cancel the in-flight transfer first so the executing engine stops
             // promptly. Without this it keeps polling DB status until its next
@@ -303,8 +304,8 @@ class DownloadRepositoryImpl(
         refreshDownloadSummary()
     }
 
-    override suspend fun resumeDownload(id: String): Result<Unit> = runCatching {
-        val entity = downloadDao.getDownloadById(id) ?: return@runCatching
+    override suspend fun resumeDownload(id: String): Result<Unit> = runCatchingRethrowingCancellation {
+        val entity = downloadDao.getDownloadById(id) ?: return@runCatchingRethrowingCancellation
         if (DownloadStates.isPausedOrFailed(entity.status)) {
             // Manual resume/retry clears both the pause reason and the
             // auto-retry budget — the user has taken ownership of this row.
@@ -313,8 +314,8 @@ class DownloadRepositoryImpl(
         refreshDownloadSummary()
     }
 
-    override suspend fun deleteDownload(id: String): Result<Unit> = runCatching {
-        val entity = downloadDao.getDownloadById(id) ?: return@runCatching
+    override suspend fun deleteDownload(id: String): Result<Unit> = runCatchingRethrowingCancellation {
+        val entity = downloadDao.getDownloadById(id) ?: return@runCatchingRethrowingCancellation
         downloadEnqueuer.cancelWork(id)
         cleanupDownloadFiles(entity)
         refreshDownloadSummary()
@@ -328,12 +329,12 @@ class DownloadRepositoryImpl(
      * itself lives behind the [DownloadProgressNotifier] seam.
      */
     private suspend fun refreshDownloadSummary() {
-        runCatching {
+        runCatchingRethrowingCancellation {
             progressNotifier.refreshSummary(downloadDao.getInFlightDownloadCount())
         }
     }
 
-    override suspend fun retryDownload(id: String): Result<Unit> = runCatching {
+    override suspend fun retryDownload(id: String): Result<Unit> = runCatchingRethrowingCancellation {
         // A manual retry starts fresh — reset the bytes, clear the auto-retry
         // budget and reason, all in one UPDATE.
         downloadDao.markPendingForManualResume(id, 0L)
@@ -444,7 +445,7 @@ class DownloadRepositoryImpl(
             // below — the same shape as a failed detail fetch on Android —
             // so episode downloads still seed their parent series/season
             // rows instead of aborting the whole metadata block.
-            val seriesDetail = runCatching { mediaRepository().getMediaDetail(seriesId) }
+            val seriesDetail = runCatchingRethrowingCancellation { mediaRepository().getMediaDetail(seriesId) }
                 .getOrNull()
                 ?.getOrNull()
             if (seriesDetail != null) {
@@ -529,7 +530,7 @@ class DownloadRepositoryImpl(
     override suspend fun downloadSeries(
         seriesId: String,
         episodeIds: Map<String, List<String>>?,
-    ): Result<List<String>> = runCatching {
+    ): Result<List<String>> = runCatchingRethrowingCancellation {
         withContext(Dispatchers.IO) {
             val prefs = downloadsStore.downloads.first()
             // The storage cap only needs to be evaluated once for the whole
@@ -850,7 +851,7 @@ class DownloadRepositoryImpl(
         if (itemId != null) {
             val scopedFile = File(dir, "${DownloadArtifacts.subtitlesDir(itemId)}/${DownloadArtifacts.SUBTITLE_MANIFEST_FILE}")
             if (scopedFile.exists()) {
-                return@withContext runCatching { json.decodeFromString<OfflineSubtitleManifest>(scopedFile.readText()) }
+                return@withContext runCatchingRethrowingCancellation { json.decodeFromString<OfflineSubtitleManifest>(scopedFile.readText()) }
                     .onFailure { Log.w(TAG, "Failed to decode local subtitle manifest", it) }
                     .getOrNull()
             }
@@ -858,7 +859,7 @@ class DownloadRepositoryImpl(
         // Fall back to legacy un-scoped path (pre-fix downloads).
         val file = File(dir, "${DownloadArtifacts.LEGACY_SUBTITLES_DIR}/${DownloadArtifacts.SUBTITLE_MANIFEST_FILE}")
         if (!file.exists()) return@withContext null
-        runCatching { json.decodeFromString<OfflineSubtitleManifest>(file.readText()) }
+        runCatchingRethrowingCancellation { json.decodeFromString<OfflineSubtitleManifest>(file.readText()) }
             .onFailure { Log.w(TAG, "Failed to decode local subtitle manifest", it) }
             .getOrNull()
     }
@@ -873,7 +874,7 @@ class DownloadRepositoryImpl(
             if (!legacy.exists()) return@withContext null
             legacy
         }
-        runCatching { json.decodeFromString<List<MediaSegment>>(file.readText()) }
+        runCatchingRethrowingCancellation { json.decodeFromString<List<MediaSegment>>(file.readText()) }
             .onFailure { Log.w(TAG, "Failed to decode local segments", it) }
             .getOrNull()
     }
@@ -1148,7 +1149,7 @@ class DownloadRepositoryImpl(
         downloadEnqueuer.enqueue(downloadId)
     }
 
-    override suspend fun setDownloadPriority(id: String, priority: Int): Result<Unit> = runCatching {
+    override suspend fun setDownloadPriority(id: String, priority: Int): Result<Unit> = runCatchingRethrowingCancellation {
         downloadDao.updatePriority(id, priority)
     }
 

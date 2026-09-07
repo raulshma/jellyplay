@@ -1,5 +1,7 @@
 package com.raulshma.jellyplay.core.network.library
 
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
+
 /**
  * The empty-library fallback ladder shared by both library clients: when the
  * primary /Items query returns nothing for an unfiltered browse (no search
@@ -38,7 +40,7 @@ internal class EmptyLibraryFallback<Item>(
     ): List<Item> {
         if (primaryItems.isNotEmpty() || parentId == null || !searchTerm.isNullOrBlank()) return primaryItems
         if (isKnownEmpty(parentId)) return emptyList()
-        val fallback = runCatching { fetchLatest(parentId, if (limit > 0) limit else 50) }
+        val fallback = runCatchingRethrowingCancellation { fetchLatest(parentId, if (limit > 0) limit else 50) }
             .getOrNull() ?: emptyList()
         if (fallback.isEmpty()) rememberEmpty(parentId)
         return fallback

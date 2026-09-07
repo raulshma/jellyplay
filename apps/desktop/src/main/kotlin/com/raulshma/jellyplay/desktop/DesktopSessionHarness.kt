@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.awt.ComposeWindow
 import androidx.navigation3.runtime.NavKey
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.desktop.player.EngineActivityRecorder
@@ -600,7 +601,7 @@ object DesktopSessionHarness {
         private suspend fun injectKey(keyCode: Int, reason: String): Boolean {
             val r = robotOrNull() ?: return false
             val window = deps.windowRef?.get() ?: return false
-            return runCatching {
+            return runCatchingRethrowingCancellation {
                 bringWindowToFront(window, "injectKey($keyCode) $reason")
                 // Wave 14D: snapshot the AWT focus state at injection time —
                 // Robot delivers to the OS-focused window whose AWT focus owner
@@ -673,7 +674,7 @@ object DesktopSessionHarness {
                         "ms bringWindowToFront($reason): SKIPPED (noWindowToFront experiment)",
                 )
             } else {
-                runCatching {
+                runCatchingRethrowingCancellation {
                     window.toFront()
                     val kfm = java.awt.KeyboardFocusManager.getCurrentKeyboardFocusManager()
                     if (kfm.focusedWindow === window && kfm.focusOwner != null) {

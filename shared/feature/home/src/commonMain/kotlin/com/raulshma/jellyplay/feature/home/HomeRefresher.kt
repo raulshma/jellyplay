@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.home
 
 import androidx.compose.runtime.Immutable
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
@@ -230,14 +231,14 @@ internal class HomeRefresher(
                     mediaRepository.getHomeSections(sectionPrefs.query, force = force)
                 }
                 val discoverDeferred = if (discoverEnabledProvider()) {
-                    async { runCatching { fetchDiscoverSections(seerrPreferencesProvider()) } }
+                    async { runCatchingRethrowingCancellation { fetchDiscoverSections(seerrPreferencesProvider()) } }
                 } else null
                 // Direct *arr "Recently Grabbed" calendar — gated by the
                 // DIRECT_ARR_INTEGRATION flag and the same TTL gate as
                 // discover sections so it never adds extra round-trips on
                 // every refresh.
                 val arrDeferred = if (directArrEnabledProvider()) {
-                    async { runCatching { fetchRecentlyGrabbed() } }
+                    async { runCatchingRethrowingCancellation { fetchRecentlyGrabbed() } }
                 } else null
 
                 mainDeferred.await()
@@ -299,7 +300,7 @@ internal class HomeRefresher(
                         // runCatching (the impl also self-guards) so a
                         // downstream failure can never break the home
                         // refresh.
-                        runCatching { librarySyncHook.onLibraryScanComplete() }
+                        runCatchingRethrowingCancellation { librarySyncHook.onLibraryScanComplete() }
                     }
                     .onFailure { throwable ->
                         // Always record the failure — stale sections stay on
@@ -813,7 +814,7 @@ internal class HomeRefresher(
      * the cold-open path in [fetchOnce].
      */
     private suspend fun orderedCachedSections(sectionPrefs: HomeSectionPrefs): List<HomeSection>? =
-        runCatching { mediaRepository.getCachedHomeSections(sectionPrefs.query) }
+        runCatchingRethrowingCancellation { mediaRepository.getCachedHomeSections(sectionPrefs.query) }
             .getOrNull()
             ?.takeIf { it.sections.isNotEmpty() }
             ?.let { cached ->

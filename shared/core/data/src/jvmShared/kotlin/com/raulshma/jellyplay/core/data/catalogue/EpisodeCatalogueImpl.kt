@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.catalogue
 
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.concurrency.SingleFlightFetcher
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.session.HomeSession
@@ -145,7 +146,7 @@ class EpisodeCatalogueImpl(
         // cache" semantics from MediaRepositoryImpl.getEpisodes). Offline has no
         // shared snapshot to merge into — it reads the store directly.
         return if (offline) {
-            runCatching {
+            runCatchingRethrowingCancellation {
                 offlineRepository.getEpisodesForSeason(seasonId).first().map { it.toMediaItem() }
             }
         } else {
@@ -274,7 +275,7 @@ class EpisodeCatalogueImpl(
     private suspend fun loadOffline(
         seriesId: String,
         epochAtStart: Long,
-    ): Result<EpisodeCatalogueSnapshot> = runCatching {
+    ): Result<EpisodeCatalogueSnapshot> = runCatchingRethrowingCancellation {
         val seasons = offlineRepository.getSeasonsForSeries(seriesId).first().map { it.toMediaItem() }
         // One series-scoped read instead of one flow-chain per season (each
         // season entry below still gets its own key so a season with zero

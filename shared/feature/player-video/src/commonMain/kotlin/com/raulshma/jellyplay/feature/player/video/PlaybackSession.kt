@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.player.video
 
 import androidx.lifecycle.SavedStateHandle
+import com.raulshma.jellyplay.core.concurrency.TaskBundle
 import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflinePlaybackFacade
@@ -104,7 +105,7 @@ internal fun resolveResumeTicks(
  *
  * Step B1a moved the session-scoped latches and bookkeeping fields. Step B1b
  * moved the initialize path: [initialize] owns the load sequence — latch
- * resets, the routing early-returns, single-flight [loadJob] tracking, and
+ * resets, the routing early-returns, single-flight the load task slot tracking, and
  * WHEN the [SessionLoadPipeline] starts. Step B2 moved the reload/retry
  * paths ([retryWithEngine], [retryPlayback], [reloadForMode],
  * [reloadForStreamChange]) plus the [EngineEventCoordinator] — its
@@ -133,7 +134,7 @@ internal fun resolveResumeTicks(
  * Construction contract:
  * - the ViewModel's [CoroutineScope] is INJECTED, never constructed here.
  *   Session-launched coroutines (e.g. the coalesced seek-mirror write tracked
- *   by [pendingSeekProgressJob]) keep launching on that scope — never on
+ *   by the seek-progress task slot) keep launching on that scope — never on
  *   [releaseScope] and never on a session-internal scope cancelled in
  *   release(), because the onDispose teardown path joins the pending seek
  *   job and depends on those launch semantics;
@@ -155,6 +156,10 @@ internal fun resolveResumeTicks(
  *   [setCinemaIntroState] and the playhead display write through
  *   [seedDisplayedPositionMs]).
  */
+private const val LOAD = "PlaybackSession.load"
+private const val SEEK_PROGRESS = "PlaybackSession.seekProgress"
+private const val ENGINE_DECISIONS = "PlaybackSession.engineDecisions"
+
 internal class PlaybackSession(
     val scope: CoroutineScope,
     val playerSessionManager: PlayerSessionManager,
@@ -261,8 +266,10 @@ internal class PlaybackSession(
     internal var engineEventCoordinator: EngineEventCoordinator = createEngineEventCoordinator()
         private set
 
-    /** Fan-out collector for the coordinator's decision stream. */
-    private var engineDecisionJob: Job? = null
+    // Task slots for the session's cancel-and-replace choreographies. The
+    // bundle owns only the slot bookkeeping; scope lifecycle (the injected VM
+    // scope + releaseScope) stays exactly where it was.
+    private val sessionTasks = TaskBundle(scope)
 
     init {
         startEngineDecisionFanOut()
@@ -274,11 +281,12 @@ internal class PlaybackSession(
      * which this class never touches.
      */
     private fun startEngineDecisionFanOut() {
-        engineDecisionJob?.cancel()
-        val coordinator = engineEventCoordinator
-        engineDecisionJob = scope.launch {
-            coordinator.decisions.collect { decision ->
-                executeEngineDecision(decision)
+        sessionTasks.replace(ENGINE_DECISIONS) {
+            val coordinator = engineEventCoordinator
+            scope.launch {
+                coordinator.decisions.collect { decision ->
+                    executeEngineDecision(decision)
+                }
             }
         }
     }
@@ -393,7 +401,6 @@ internal class PlaybackSession(
      * the ViewModel-supplied [scope] — the teardown path joins this job after
      * cancelling the viewModelScope.
      */
-    internal var pendingSeekProgressJob: Job? = null
 
     /**
      * In-flight media-load coroutine, so a new initialize call can cancel the
@@ -401,7 +408,6 @@ internal class PlaybackSession(
      * network/teardown side effects when a SyncPlay load event races a user
      * navigation.
      */
-    internal var loadJob: Job? = null
 
     /**
      * Scope for teardown work that must outlive the viewModelScope on clear()
@@ -439,7 +445,7 @@ internal class PlaybackSession(
      * 7. [SessionLifecycleHooks.wasInSyncPlay] (SyncPlay flag read) followed
      *    by the outgoing session's stop-report ([reportCurrentPlaybackStopped],
      *    session-side since B3, directly after the flag read);
-     * 8. cancel any in-flight [loadJob];
+     * 8. cancel any in-flight the load task slot;
      * 9. mini-player reclaim early-return: the GATE stays a VM hook
      *    ([SessionLifecycleHooks.tryReclaimMiniPlayer] — mini-player state
      *    knowledge), but the body ([loadReclaimedEngine]) is session-side
@@ -459,10 +465,10 @@ internal class PlaybackSession(
      *     old position by the process-death play-session restore
      *     ([restoreOrAllocatePlaySessionId]);
      * 12. persistence-latch resets ([lastPersistedPositionMs],
-     *     [lastPersistedAtMs], [pendingSeekProgressJob]);
+     *     [lastPersistedAtMs], the seek-progress task slot);
      * 13. [SessionLifecycleHooks.clearTrickplay];
      * 14. [SessionLifecycleHooks.reattachSyncPlay] (conditional on step 7);
-     * 15. start the [SessionLoadPipeline] and track it as [loadJob].
+     * 15. start the [SessionLoadPipeline] and track it as the load task slot.
      */
     fun initialize(request: LoadRequest): Job {
         released = false
@@ -503,11 +509,12 @@ internal class PlaybackSession(
         // (double stop-reports, crossed engine binds). Tracking and cancelling
         // the previous load makes "latest load wins" deterministic without
         // changing the synchronous semantics of this function.
-        loadJob?.cancel()
+        sessionTasks.cancel(LOAD)
 
         hooks.tryReclaimMiniPlayer(request.itemId)?.let { reclaimed ->
-            loadJob = loadReclaimedEngine(reclaimed, request.itemId)
-            return loadJob!!
+            return sessionTasks.replace(LOAD) {
+                loadReclaimedEngine(reclaimed, request.itemId)
+            }
         }
 
         hooks.releaseMiniPlayerState()
@@ -523,8 +530,7 @@ internal class PlaybackSession(
         // missed the offline-mirror resume that resolution produces.
         lastPersistedPositionMs = Long.MIN_VALUE
         lastPersistedAtMs = 0L
-        pendingSeekProgressJob?.cancel()
-        pendingSeekProgressJob = null
+        sessionTasks.cancel(SEEK_PROGRESS)
         hooks.clearTrickplay()
 
         if (wasInSyncPlay) {
@@ -536,9 +542,9 @@ internal class PlaybackSession(
         // hydration → media session + duration seed → trickplay → reports)
         // lives in [SessionLoadPipeline]; its stage order is pinned by
         // SessionLoadPipelineTest.
-        val job = sessionLoadPipeline.start(scope = scope, request = request)
-        loadJob = job
-        return job
+        return sessionTasks.replace(LOAD) {
+            sessionLoadPipeline.start(scope = scope, request = request)
+        }
     }
 
     /**
@@ -1010,17 +1016,18 @@ internal class PlaybackSession(
      * the teardown path joins this job after cancelling the viewModelScope.
      */
     private fun scheduleCoalescedSeekProgress(itemId: String, positionMs: Long, durationMs: Long) {
-        pendingSeekProgressJob?.cancel()
-        pendingSeekProgressJob = scope.launch {
-            delay(SEEK_PROGRESS_COALESCE_MS)
-            val positionTicks = positionMs * 10_000L // ms → ticks
-            val percentage = mirrorPlayedPercentage(positionMs, durationMs)
-            offlinePlaybackFacade.recordProgress(
-                itemId,
-                positionTicks,
-                percentage,
-                isPlayed = mirrorIsPlayed(percentage),
-            )
+        sessionTasks.replace(SEEK_PROGRESS) {
+            scope.launch {
+                delay(SEEK_PROGRESS_COALESCE_MS)
+                val positionTicks = positionMs * 10_000L // ms → ticks
+                val percentage = mirrorPlayedPercentage(positionMs, durationMs)
+                offlinePlaybackFacade.recordProgress(
+                    itemId,
+                    positionTicks,
+                    percentage,
+                    isPlayed = mirrorIsPlayed(percentage),
+                )
+            }
         }
     }
 
@@ -1118,8 +1125,7 @@ internal class PlaybackSession(
      * synchronous call chain.
      */
     private fun releaseInternalsSessionPart() {
-        loadJob?.cancel()
-        loadJob = null
+        sessionTasks.cancel(LOAD)
         progressReporter.cancelJobs()
         mediaSessionController.release()
         playerSessionManager.release()
@@ -1162,7 +1168,7 @@ internal class PlaybackSession(
         // offline store doesn't lag the final position on release. The write is
         // moved onto the release scope (IO + NonCancellable) so it survives the
         // viewModelScope being cancelled on clear().
-        val pendingSeek = pendingSeekProgressJob
+        val pendingSeek = sessionTasks[SEEK_PROGRESS]
         if (pendingSeek != null && itemId != null) {
             releaseScope.launch(NonCancellable) {
                 pendingSeek.join()

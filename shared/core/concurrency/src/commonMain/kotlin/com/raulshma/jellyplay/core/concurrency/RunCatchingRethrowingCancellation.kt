@@ -1,6 +1,6 @@
-package com.raulshma.jellyplay.core.network
+package com.raulshma.jellyplay.core.concurrency
 
-import kotlinx.coroutines.CancellationException
+import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * [runCatching] variant for code that runs inside (or alongside) a cancellable
@@ -10,6 +10,11 @@ import kotlinx.coroutines.CancellationException
  * result instead of actually stopping) and masking
  * [kotlinx.coroutines.withTimeoutOrNull] timeouts (the timed-out stage reports
  * success, so any deferred re-run is skipped).
+ *
+ * Lives in `:shared:core:concurrency` (NOT core:network, where it was born) so
+ * every layer — repositories, workers, feature modules, the API clients, the
+ * legacy Android tree via shared:core:data — crosses the same seam, and the
+ * wasm target can adopt it too (commonMain, no JVM types).
  *
  * Inline so callers keep `runCatching`'s ergonomics — non-local `return` /
  * `return@runCatchingRethrowingCancellation` from the block works exactly as

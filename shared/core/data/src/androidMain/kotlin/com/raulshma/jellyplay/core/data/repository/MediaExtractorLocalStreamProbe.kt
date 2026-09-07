@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.data.repository
 
 import android.media.MediaExtractor
 import android.media.MediaFormat
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.model.MediaStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -18,7 +19,7 @@ import kotlinx.coroutines.withContext
 class MediaExtractorLocalStreamProbe : LocalStreamProbe {
 
     override suspend fun probe(videoFilePath: String): List<MediaStream> = withContext(Dispatchers.IO) {
-        runCatching {
+        runCatchingRethrowingCancellation {
             val extractor = MediaExtractor()
             try {
                 extractor.setDataSource(videoFilePath)
@@ -28,7 +29,7 @@ class MediaExtractorLocalStreamProbe : LocalStreamProbe {
                     }
                 }
             } finally {
-                runCatching { extractor.release() }
+                runCatchingRethrowingCancellation { extractor.release() }
             }
         }.getOrDefault(emptyList())
     }

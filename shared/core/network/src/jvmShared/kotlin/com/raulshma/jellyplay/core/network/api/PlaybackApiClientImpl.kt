@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.network.api
 
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.model.CreditTimestamps
 import com.raulshma.jellyplay.core.model.IntroTimestamps
 import com.raulshma.jellyplay.core.model.LiveStreamOption
@@ -295,7 +296,7 @@ class PlaybackApiClientImpl @Inject constructor(
     }
 
     override suspend fun getMediaSegments(itemId: String): Result<List<MediaSegment>> = engine.apiResultWithRetry {
-        val segments = runCatching {
+        val segments = runCatchingRethrowingCancellation {
             engine.requireApi().mediaSegmentsApi.getItemSegments(itemId = itemId.toUUID()).content
         }.getOrNull() ?: return@apiResultWithRetry emptyList()
         segments.items.orEmpty().map { dto ->

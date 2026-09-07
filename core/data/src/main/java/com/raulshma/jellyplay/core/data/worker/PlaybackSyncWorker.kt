@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlayedStateSync
@@ -85,7 +86,7 @@ class PlaybackSyncWorker(
         // playback of its own — closes the "fixed online, not reflected
         // offline" gap. Best-effort lookup: a DB read failure degrades to an
         // outbox-only run.
-        val downloadedIds = runCatching { offlineRepository.getDownloadedItemIds() }
+        val downloadedIds = runCatchingRethrowingCancellation { offlineRepository.getDownloadedItemIds() }
             .getOrElse { emptyList() }
 
         if (pending.isEmpty() && downloadedIds.isEmpty()) return Result.success()
@@ -98,7 +99,7 @@ class PlaybackSyncWorker(
         // freshness check. Best-effort: some device OEMs restrict foreground
         // promotion; fall back to plain background if it throws.
         if (pending.isNotEmpty()) {
-            runCatching {
+            runCatchingRethrowingCancellation {
                 setForeground(PlaybackSyncNotificationHelper.createForegroundInfo(applicationContext, pending.size))
             }
         }
@@ -126,7 +127,7 @@ class PlaybackSyncWorker(
         // Drain done — dismiss the progress notification regardless of outcome.
         // On retry/failure WorkManager re-runs the worker, which will repost.
         if (pending.isNotEmpty()) {
-            runCatching { PlaybackSyncNotificationHelper.dismissNotification(applicationContext) }
+            runCatchingRethrowingCancellation { PlaybackSyncNotificationHelper.dismissNotification(applicationContext) }
         }
 
         // If anything was pushed up OR a downloaded row actually changed during
@@ -145,14 +146,14 @@ class PlaybackSyncWorker(
             // pre-drain view in the meantime (the "home shows it, detail
             // doesn't" report). The worker below is still enqueued for its
             // own warm-refetch behavior.
-            runCatching { cacheInvalidator.invalidateCaches() }
+            runCatchingRethrowingCancellation { cacheInvalidator.invalidateCaches() }
             // Synthetic user-data push: open detail sessions and the home
             // refresher listen on the same flow as WS pushes and refresh —
             // the drain's markPlayedItem calls may never arrive as a
             // UserDataChanged echo on this socket. Only delivered flips are
             // named: an undelivered derived flip changed nothing server-side.
             mediaRepository.notifyUserDataChanged(reconciledItems.toList())
-            runCatching { userDataSyncScheduler.enqueueNow() }
+            runCatchingRethrowingCancellation { userDataSyncScheduler.enqueueNow() }
         }
 
         // On a non-exhausted attempt a failure → retry (it may succeed next
@@ -180,7 +181,7 @@ class PlaybackSyncWorker(
             .map { it.itemId }
             .distinct()
             .filter { itemId ->
-                runCatching { outbox.hasUnsyncedPlayedIntent(itemId) }.getOrDefault(false)
+                runCatchingRethrowingCancellation { outbox.hasUnsyncedPlayedIntent(itemId) }.getOrDefault(false)
             }
             .toSet()
 
@@ -204,10 +205,10 @@ class PlaybackSyncWorker(
             .distinct()
             .filter { it !in playedIntentItemIds }
             .filter { itemId ->
-                runCatching { !outbox.hasUnsyncedUnplayedIntent(itemId) }.getOrDefault(false)
+                runCatchingRethrowingCancellation { !outbox.hasUnsyncedUnplayedIntent(itemId) }.getOrDefault(false)
             }
             .filter { itemId ->
-                runCatching { offlineRepository.getOfflineItem(itemId) }.getOrNull()
+                runCatchingRethrowingCancellation { offlineRepository.getOfflineItem(itemId) }.getOrNull()
                     ?.let { row -> row.isPlayed || row.isFinishedOffline }
                     ?: false
             }
@@ -257,7 +258,7 @@ class PlaybackSyncWorker(
                 remaining--
                 continue
             }
-            val ok = runCatching { playbackRepository.replayOutboxEntry(entry) }.getOrElse { false }
+            val ok = runCatchingRethrowingCancellation { playbackRepository.replayOutboxEntry(entry) }.getOrElse { false }
             if (ok) {
                 outbox.delete(entry.id)
                 reconciledItems.add(entry.itemId)
@@ -279,7 +280,7 @@ class PlaybackSyncWorker(
             // Update the notification mid-drain so the count ticks down. Only
             // worth a notify() call on meaningful batches to avoid spam.
             if (pending.size > 1 && remaining > 0) {
-                runCatching {
+                runCatchingRethrowingCancellation {
                     PlaybackSyncNotificationHelper.updateNotification(applicationContext, remaining)
                 }
             }
@@ -303,9 +304,9 @@ class PlaybackSyncWorker(
     ): Boolean {
         var anyFailure = false
         for (itemId in derivedWatchedItemIds) {
-            val push = runCatching { mediaRepository.markPlayed(itemId) }
+            val push = runCatchingRethrowingCancellation { mediaRepository.markPlayed(itemId) }
             val delivered = push.isSuccess &&
-                runCatching { outbox.isPlayedStateIntentDelivered(itemId, played = true) }.getOrDefault(false)
+                runCatchingRethrowingCancellation { outbox.isPlayedStateIntentDelivered(itemId, played = true) }.getOrDefault(false)
             if (delivered) {
                 reconciledItems.add(itemId)
             } else {
@@ -339,7 +340,7 @@ class PlaybackSyncWorker(
             itemsToReconcile.map { itemId ->
                 async {
                     gate.withPermit {
-                        runCatching { playedStateSync.reconcileOfflineRow(itemId) }
+                        runCatchingRethrowingCancellation { playedStateSync.reconcileOfflineRow(itemId) }
                     }
                 }
             }.awaitAll()

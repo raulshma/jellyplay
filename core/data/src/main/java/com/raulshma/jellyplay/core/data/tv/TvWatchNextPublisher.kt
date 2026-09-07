@@ -7,6 +7,7 @@ import androidx.core.content.edit
 import androidx.core.net.toUri
 import androidx.tvprovider.media.tv.TvContractCompat
 import androidx.tvprovider.media.tv.WatchNextProgram
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.model.HomeSectionQuery
@@ -40,8 +41,8 @@ class TvWatchNextPublisher(
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     }
 
-    suspend fun publish(): Result<Unit> = runCatching {
-        if (!isTv()) return@runCatching
+    suspend fun publish(): Result<Unit> = runCatchingRethrowingCancellation {
+        if (!isTv()) return@runCatchingRethrowingCancellation
 
         val sections = mediaRepository.getHomeSections(
             HomeSectionQuery(
@@ -122,8 +123,8 @@ class TvWatchNextPublisher(
         }
     }
 
-    suspend fun clear(): Result<Unit> = runCatching {
-        if (!isTv()) return@runCatching
+    suspend fun clear(): Result<Unit> = runCatchingRethrowingCancellation {
+        if (!isTv()) return@runCatchingRethrowingCancellation
         val existing = queryExistingPrograms()
         existing.forEach { prog ->
             context.contentResolver.delete(

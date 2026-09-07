@@ -1095,6 +1095,36 @@ deliberately (per-branch state writes and predicates that map to no
 strategy member); compile-verified only — the legacy Robolectric suite
 runs in no CI lane.
 
+## Concurrency (`shared/core/concurrency`)
+
+**`:shared:core:concurrency`** (commonMain, zero-dependency leaf below
+core:network) is the repo's one cancellation-safety seam.
+**`runCatchingRethrowingCancellation`** is THE sanctioned wrapper for any
+best-effort `runCatching` around suspend calls: stdlib `runCatching` captures
+`CancellationException` and masks structured cancellation — the recurring
+bug class (masked worker retries, half-applied offline flips, orphaned
+observers) that pre-2026-09-07 commits kept re-fixing one file per commit.
+The wrapper is born commonMain so the wasm stack rides the same
+implementation; both engines' `apiResult` (JVM `JellyfinApiEngine` + wasm
+`WasmApiSupport`) are the helper plus their own typed-exception mapping —
+declared parity, no per-platform twin. Non-suspend bodies (JSON/enum parses
+in mappers) keep stdlib `runCatching`. **`BareRunCatchingRatchetTest`**
+(module `jvmTest`) is the source ratchet: bare `runCatching` inside
+`suspend fun` bodies across core:data/network, home, player-video, the
+legacy `core/data` tree, `:app` and `:apps:desktop` never increases —
+lower the baseline when another site converts, never raise it; prefer
+extracting a legitimate parse out of the suspend body over raising it.
+**`TaskBundle`** is the cancel-and-replace slot choreography (named keys
+over a caller-owned scope; deliberately NOT thread-safe — the same
+dispatcher-confinement contract as the plain `Job?` vars it replaces).
+Adopters: `EngineEventCoordinator`'s per-engine policy slot,
+`TrickplayManager`'s preload, `ServerHealthMonitor`'s monitor loop,
+`PlaybackSession`'s load / seek-progress / decision slots. `EngineActivityRecorder`
+stays a deliberate hand-rolled one-off — its observation choreography IS
+its evidence. The bundle owns slots, never scopes: scope recreation
+(TrickplayManager's `clear()`, the health monitor's test dispatcher swap)
+stays site-side and rebinds the bundle.
+
 ## Library client policy (network)
 
 **`LibraryRequestPolicy`** (`shared/core/network/src/commonMain/kotlin/.../library/LibraryRequestPolicy.kt`)
@@ -1149,6 +1179,12 @@ stays per-shell (Android: `MainViewModel`; desktop: inlined) — it was
 deliberately NOT absorbed into the hooks: one consumer per policy, and
 forcing it through would drag `AuthRepository` into a "shared" module for
 one shell's sake.
+The desktop alpha channel made
+the wiring a two-consumer duplication; a commonMain `ShellSessionController`
+in this module is the sanctioned home for the session-policy wiring once
+landed — the hooks stay a registration surface, and platform-conditional
+blocks (rail, media keys, surface probe, saved-state config) stay
+per-shell.
 
 The shells share the platform-free shell policy in `shared/feature/shell`:
 **`AdminRefreshGate`** is the admin-status dedupe (30 s window + in-flight

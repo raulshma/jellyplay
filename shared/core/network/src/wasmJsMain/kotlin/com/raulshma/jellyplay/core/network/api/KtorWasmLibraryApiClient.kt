@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.network.api
 
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.model.CacheIdentity
 import com.raulshma.jellyplay.core.model.CollectionSummary
 import com.raulshma.jellyplay.core.model.Genre
@@ -767,7 +768,7 @@ class KtorWasmLibraryApiClient(
         // Mirrors the jvmShared LyricsApi.fetchLyrics: any failure degrades
         // to an empty UNKNOWN result rather than an error.
         val server = requireConnectedServer()
-        val dto = runCatching {
+        val dto = runCatchingRethrowingCancellation {
             getJson<LyricsDtoWire>(
                 url = apiUrl(server.address, "/Audio/$itemId/Lyrics"),
                 accessToken = currentToken(),

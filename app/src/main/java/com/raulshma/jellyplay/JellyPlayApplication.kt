@@ -24,7 +24,7 @@ import com.raulshma.jellyplay.core.database.di.databaseDaosModule
 import com.raulshma.jellyplay.core.model.ImageCache
 import com.raulshma.jellyplay.core.network.di.androidNetworkModule
 import com.raulshma.jellyplay.core.network.di.networkJvmModule
-import com.raulshma.jellyplay.core.network.runCatchingRethrowingCancellation
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.notification.di.NotificationWorkerFactory
 import com.raulshma.jellyplay.core.notification.di.androidNotificationModule
 import com.raulshma.jellyplay.core.ui.di.androidCoreUiModule

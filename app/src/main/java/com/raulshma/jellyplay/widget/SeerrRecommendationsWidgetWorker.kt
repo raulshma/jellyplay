@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
 import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
@@ -30,12 +31,12 @@ class SeerrRecommendationsWidgetWorker(
     private val seerrRepository: SeerrRepository,
 ) : CoroutineWorker(appContext, params) {
 
-    override suspend fun doWork(): Result = runCatching {
+    override suspend fun doWork(): Result = runCatchingRethrowingCancellation {
         val seerrPrefs = seerrPreferencesStore.preferences.first()
         if (seerrPrefs.serverUrl.isBlank()) {
             // No Seerr server configured: leave existing cached items intact
             // so the widget keeps showing the last good snapshot.
-            return@runCatching
+            return@runCatchingRethrowingCancellation
         }
 
         val config = widgetDataStore.widgetConfig.first()
@@ -44,7 +45,7 @@ class SeerrRecommendationsWidgetWorker(
         val items = response?.results.orEmpty().take(MAX_ITEMS)
         if (items.isEmpty()) {
             // Keep existing data instead of clearing the widget.
-            return@runCatching
+            return@runCatchingRethrowingCancellation
         }
         val mapped = items.map { it.toWidgetItem() }
         WidgetPersistHelper.persistSeerrItems(applicationContext, widgetDataStore, mapped, versionBumpOnly = false)

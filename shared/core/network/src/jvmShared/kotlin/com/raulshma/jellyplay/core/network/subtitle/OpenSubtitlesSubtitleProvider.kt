@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.network.subtitle
 
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.datastore.SubtitleProviderPreferencesStore
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleFile
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleLanguageCodes
@@ -103,7 +104,7 @@ class OpenSubtitlesSubtitleProvider @Inject constructor(
             return Result.failure(ApiException(false, message = "OpenSubtitles username and password are not configured"))
         }
         return rateLimiter.acquire {
-            runCatching {
+            runCatchingRethrowingCancellation {
                 withContext(Dispatchers.IO) {
                     val urlBuilder = "$baseUrl/api/v1/subtitles".toHttpUrl().newBuilder()
                     // Collect params, then emit them in canonical (alphabetical) order.
@@ -183,7 +184,7 @@ class OpenSubtitlesSubtitleProvider @Inject constructor(
         val username = os.username!!.trim()
         val password = os.password!!
         return rateLimiter.acquire {
-            runCatching {
+            runCatchingRethrowingCancellation {
                 withContext(Dispatchers.IO) {
                     // doLogin throws on a non-2xx (e.g. 401) via execute(); the
                     // resulting token is discarded — we only care that login
@@ -209,7 +210,7 @@ class OpenSubtitlesSubtitleProvider @Inject constructor(
             return Result.failure(ApiException(false, message = "OpenSubtitles result has no file_id"))
         }
         return rateLimiter.acquire {
-            runCatching {
+            runCatchingRethrowingCancellation {
                 withContext(Dispatchers.IO) {
                     val token = ensureValidToken(os)
                     val payload = buildJsonObject { put("file_id", fileId) }

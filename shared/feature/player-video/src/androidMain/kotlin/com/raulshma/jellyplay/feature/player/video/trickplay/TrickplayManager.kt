@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.player.video.trickplay
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import androidx.collection.LruCache
+import com.raulshma.jellyplay.core.concurrency.TaskBundle
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.model.TrickplayInfo
 import kotlinx.coroutines.CoroutineScope
@@ -20,6 +21,8 @@ import java.io.File
 import java.io.FileInputStream
 import java.io.InputStream
 import java.util.concurrent.ConcurrentHashMap
+
+private const val PRELOAD = "TrickplayManager.preload"
 
 class TrickplayManager(
     private val playbackRepository: PlaybackRepository,
@@ -70,9 +73,14 @@ class TrickplayManager(
     // item. Recreated lazily, only when inactive (mirrors the engineScope
     // pattern).
     private var scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    // The one preload slot: cancel-and-replace in [schedulePreload], cancelled
+    // with the rest of the item state in [clear]. Recreated together with the
+    // scope there; confined to the caller's thread like the plain var it
+    // replaces.
+    private var preloadTasks = TaskBundle(scope)
     private var info: TrickplayInfo? = null
     private var itemId: String? = null
-    private var preloadJob: kotlinx.coroutines.Job? = null
     private var localCacheDir: File? = null
     private var persistDir: File? = null
 
@@ -211,14 +219,15 @@ class TrickplayManager(
         currentSheetIndex: Int,
         trickplayInfo: TrickplayInfo,
     ) {
-        preloadJob?.cancel()
-        preloadJob = scope.launch {
-            val currentSheet = spriteSheetCache.get(currentSheetIndex)
-            if (currentSheet != null) {
-                extractTileRange(currentSheet, currentSheetIndex, currentIndex, PREFETCH_TILE_RANGE, trickplayInfo)
+        preloadTasks.replace(PRELOAD) {
+            scope.launch {
+                val currentSheet = spriteSheetCache.get(currentSheetIndex)
+                if (currentSheet != null) {
+                    extractTileRange(currentSheet, currentSheetIndex, currentIndex, PREFETCH_TILE_RANGE, trickplayInfo)
+                }
+                preloadAdjacentSheets(id, currentSheetIndex, trickplayInfo)
+                preloadNeighborTiles(id, currentIndex, trickplayInfo)
             }
-            preloadAdjacentSheets(id, currentSheetIndex, trickplayInfo)
-            preloadNeighborTiles(id, currentIndex, trickplayInfo)
         }
     }
 
@@ -369,8 +378,7 @@ class TrickplayManager(
     }
 
     override fun clear() {
-        preloadJob?.cancel()
-        preloadJob = null
+        preloadTasks.cancel(PRELOAD)
 
         thumbnailCache.evictAll()
         spriteSheetCache.evictAll()
@@ -390,6 +398,7 @@ class TrickplayManager(
             scope.cancel()
         }
         scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        preloadTasks = TaskBundle(scope)
     }
 
     companion object {

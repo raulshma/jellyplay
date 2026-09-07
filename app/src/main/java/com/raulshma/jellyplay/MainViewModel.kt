@@ -3,6 +3,7 @@ package com.raulshma.jellyplay
 import android.content.Intent
 import android.net.Uri
 import com.raulshma.jellyplay.core.data.remote.RemoteControlReceiver
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
@@ -390,7 +391,7 @@ class MainViewModel(
 
     fun reportExternalPlaybackStart(playerLaunch: ExternalPlayerLaunch) {
         launch {
-            runCatching {
+            runCatchingRethrowingCancellation {
                 playbackRepository.reportPlaybackStart(
                     com.raulshma.jellyplay.core.model.PlaybackStartInfo(
                         itemId = playerLaunch.itemId,
@@ -405,7 +406,7 @@ class MainViewModel(
     fun reportExternalPlaybackStopped(playerLaunch: ExternalPlayerLaunch, finalPositionTicks: Long) {
         val positionTicks = if (finalPositionTicks > 0) finalPositionTicks else playerLaunch.startPositionTicks
         launch {
-            runCatching {
+            runCatchingRethrowingCancellation {
                 withTimeout(5_000) {
                     playbackRepository.reportPlaybackStopped(
                         itemId = playerLaunch.itemId,

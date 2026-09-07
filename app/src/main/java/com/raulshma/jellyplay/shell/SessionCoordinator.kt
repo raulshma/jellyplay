@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.shell
 
 import android.content.Context
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.network.ServerHealthMonitor
 import com.raulshma.jellyplay.core.data.remote.RemoteControlReceiver
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
@@ -157,7 +158,7 @@ class SessionCoordinator(
                 realtimeConnection.isConnected.collect { connected ->
                     if (connected && !lastConnected && _isAuthenticated.value) {
                         launch {
-                            runCatching { authRepository.postCapabilities() }
+                            runCatchingRethrowingCancellation { authRepository.postCapabilities() }
                         }
                     }
                     lastConnected = connected

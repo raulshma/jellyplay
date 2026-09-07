@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.repository
 
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.database.dao.LyricsCacheDao
 import com.raulshma.jellyplay.core.database.entity.LyricsCacheEntity
@@ -50,7 +51,7 @@ class LyricsRepositoryImpl(
         artistName: String?,
         trackName: String?,
         duration: Double?,
-    ): Result<LyricsResult> = runCatching {
+    ): Result<LyricsResult> = runCatchingRethrowingCancellation {
         val cached = lyricsCacheDao.getByItemId(itemId)
         if (cached != null) {
             val cachedSynced = cached.syncedLyrics
@@ -58,14 +59,14 @@ class LyricsRepositoryImpl(
             if (!cachedSynced.isNullOrBlank()) {
                 val lines = parseLrcOffMain(cachedSynced)
                 if (lines.isNotEmpty()) {
-                    return@runCatching LyricsResult(lines = lines, source = cachedSource(cached.provider))
+                    return@runCatchingRethrowingCancellation LyricsResult(lines = lines, source = cachedSource(cached.provider))
                 }
             }
             if (!cachedPlain.isNullOrBlank() && cachedSynced.isNullOrBlank()) {
-                return@runCatching LyricsResult(lines = plainLines(cachedPlain), source = cachedSource(cached.provider))
+                return@runCatchingRethrowingCancellation LyricsResult(lines = plainLines(cachedPlain), source = cachedSource(cached.provider))
             }
             if (cachedSynced == null && cachedPlain == null && cached.artistName != null) {
-                return@runCatching noLyrics
+                return@runCatchingRethrowingCancellation noLyrics
             }
         }
 
@@ -74,12 +75,12 @@ class LyricsRepositoryImpl(
             val result = jellyfinResult.getOrThrow()
             if (result.lines.isNotEmpty()) {
                 cacheLyrics(itemId, result.source, artistName, trackName, duration, result.lines)
-                return@runCatching result
+                return@runCatchingRethrowingCancellation result
             }
         }
 
         if (artistName.isNullOrBlank() || trackName.isNullOrBlank()) {
-            return@runCatching noLyrics
+            return@runCatchingRethrowingCancellation noLyrics
         }
 
         val isLocal = networkMonitor.networkStatus.value == NetworkStatus.Local
@@ -100,7 +101,7 @@ class LyricsRepositoryImpl(
                             lrcLibId = track.id,
                         )
                     )
-                    return@runCatching LyricsResult(lines = emptyList(), source = LyricsSource.LRCLIB)
+                    return@runCatchingRethrowingCancellation LyricsResult(lines = emptyList(), source = LyricsSource.LRCLIB)
                 }
                 if (!trackSynced.isNullOrBlank()) {
                     val lines = parseLrcOffMain(trackSynced)
@@ -117,7 +118,7 @@ class LyricsRepositoryImpl(
                                 lrcLibId = track.id,
                             )
                         )
-                        return@runCatching LyricsResult(lines = lines, source = LyricsSource.LRCLIB)
+                        return@runCatchingRethrowingCancellation LyricsResult(lines = lines, source = LyricsSource.LRCLIB)
                     }
                 }
                 if (!trackPlain.isNullOrBlank()) {
@@ -133,7 +134,7 @@ class LyricsRepositoryImpl(
                             lrcLibId = track.id,
                         )
                     )
-                    return@runCatching LyricsResult(lines = lines, source = LyricsSource.LRCLIB)
+                    return@runCatchingRethrowingCancellation LyricsResult(lines = lines, source = LyricsSource.LRCLIB)
                 }
             }
         }

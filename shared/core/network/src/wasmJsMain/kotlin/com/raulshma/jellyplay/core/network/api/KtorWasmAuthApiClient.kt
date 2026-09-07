@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.network.api
 
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.model.ActiveSession
 import com.raulshma.jellyplay.core.model.QuickConnectInfo
 import com.raulshma.jellyplay.core.model.QuickConnectState
@@ -155,7 +156,7 @@ class KtorWasmAuthApiClient(
         // Same RetryPolicy wrap (max 2 retries) the JVM discovery path uses —
         // one call with backoff instead of re-taps each firing fresh probes.
         return RetryPolicy.executeWithRetry(maxRetries = 2) {
-            runCatching {
+            runCatchingRethrowingCancellation {
                 try {
                     val info = probeServerInfo(normalizedAddress)
                     // Atomically adopt the probed server AND drop any signed-in
@@ -174,7 +175,7 @@ class KtorWasmAuthApiClient(
 
     override suspend fun getServerInfo(address: String): Result<ServerInfo> {
         val normalizedAddress = normalizeAddress(address)
-        return runCatching { probeServerInfo(normalizedAddress) }
+        return runCatchingRethrowingCancellation { probeServerInfo(normalizedAddress) }
     }
 
     override suspend fun selectReachableAddress(): String? {

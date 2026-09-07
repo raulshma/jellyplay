@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
@@ -30,7 +31,7 @@ class LibraryRecommendationsWidgetWorker(
     private val authRepository: AuthRepository,
 ) : CoroutineWorker(appContext, params) {
 
-    override suspend fun doWork(): Result = runCatching {
+    override suspend fun doWork(): Result = runCatchingRethrowingCancellation {
         // Best-effort session restore. We must NOT fail the whole worker if
         // this returns a failure (e.g. transient DB or api-client error): the
         // `currentServer` check below decides whether we have enough state to
@@ -42,7 +43,7 @@ class LibraryRecommendationsWidgetWorker(
             // No server: leave existing cached items intact so the widget
             // keeps showing the last good snapshot instead of going blank
             // during the window before the app restores the session.
-            return@runCatching
+            return@runCatchingRethrowingCancellation
         }
 
         val config = widgetDataStore.widgetConfig.first()
@@ -59,7 +60,7 @@ class LibraryRecommendationsWidgetWorker(
 
         if (items.isEmpty()) {
             // Keep existing data instead of clearing the widget.
-            return@runCatching
+            return@runCatchingRethrowingCancellation
         }
 
         val mapped = items.take(MAX_ITEMS).map { it.toWidgetItem() }

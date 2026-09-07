@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.network.library
 
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.model.CacheIdentity
 import com.raulshma.jellyplay.core.model.HomeFreshness
 import com.raulshma.jellyplay.core.model.HomeSection
@@ -268,7 +269,7 @@ internal class HomeSectionsFetcher(
         seeds: List<MediaItem>,
         force: Boolean,
         identity: CacheIdentity,
-    ): Result<RecommendationResult> = runCatching {
+    ): Result<RecommendationResult> = runCatchingRethrowingCancellation {
         // Reuse caller-supplied seeds when available (e.g. the home screen has
         // already fetched Continue Watching + Next Up) to avoid duplicate
         // /Items/Resume and /Shows/NextUp round-trips within the same load.
@@ -280,7 +281,7 @@ internal class HomeSectionsFetcher(
             (continueWatching + nextUp).distinctBy { it.id }.take(5)
         }
 
-        if (seedItems.isEmpty()) return@runCatching RecommendationResult(emptyList(), null)
+        if (seedItems.isEmpty()) return@runCatchingRethrowingCancellation RecommendationResult(emptyList(), null)
 
         val seedIds = seedItems.map { it.id }.toSet()
         val semaphore = Semaphore(3)

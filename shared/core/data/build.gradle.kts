@@ -56,6 +56,9 @@ kotlin {
         getByName("commonMain").dependencies {
             api(project(":shared:core:model"))
             api(project(":shared:core:network"))
+            // Cancellation-safe suspend wrappers + TaskBundle — the module's
+            // own concurrency seam, not something borrowed from core:network.
+            api(project(":shared:core:concurrency"))
             // Room is consumed ONLY from jvmShared now (database has no wasm
             // build; demoted from api() in wave 15B).
             api(project(":shared:core:datastore"))

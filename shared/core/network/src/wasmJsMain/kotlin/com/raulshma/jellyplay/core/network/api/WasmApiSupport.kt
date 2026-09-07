@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.network.api
 
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.network.RetryPolicy
@@ -251,17 +252,14 @@ open class WasmApiSupport(
 
     /**
      * The engine's apiResult/apiResultWithRetry pair: failures map onto a
-     * typed, pre-classified ApiException. NOTE: recoverCatching swallows the
-     * CancellationException rethrow — cancellation surfaces as
-     * Result.failure(CancellationException) instead of propagating. That is
-     * byte-parity with the JVM engine (JellyfinApiEngine.apiResult has the
-     * same shape), so it is kept deliberately rather than "fixed" here.
+     * typed, pre-classified ApiException. The shared helper rethrows
+     * CancellationException before the recovery mapping sees it — the same
+     * shape as the JVM engine's JellyfinApiEngine.apiResult, one
+     * implementation for both platforms.
      */
     protected suspend fun <T> apiResult(block: suspend () -> T): Result<T> =
-        runCatching { block() }.recoverCatching {
-            if (it is CancellationException) throw it
-            throw it.toApiException()
-        }
+        runCatchingRethrowingCancellation { block() }
+            .recoverCatching { throw it.toApiException() }
 
     protected suspend fun <T> apiResultWithRetry(
         maxRetries: Int = RetryPolicy.DEFAULT_MAX_RETRIES,

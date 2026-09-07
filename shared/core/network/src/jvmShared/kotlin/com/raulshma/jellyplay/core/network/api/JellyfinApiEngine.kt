@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.network.api
 
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.model.ActiveSession
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
@@ -174,18 +175,14 @@ class JellyfinApiEngine @Inject constructor(
     }
 
     suspend fun <T> apiResult(block: suspend () -> T): Result<T> =
-        runCatching { withContext(Dispatchers.IO) { block() } }
-            .recoverCatching {
-                // CancellationException must propagate so structured concurrency
-                // (parent coroutine cancellation) is not masked as a Result.failure.
-                // runCatching captures it (Kotlin stdlib behaviour); rethrow here before
-                // wrapping into ApiException, mirroring SeerrApiClientImpl.
-                if (it is kotlinx.coroutines.CancellationException) throw it
-                // Wrap into a typed ApiException carrying a pre-classified retryable flag.
-                // The friendly message is still produced by JellyfinErrorMapper so existing
-                // consumers reading `.message` see the same user-facing text.
-                throw ApiException.fromJellyfin(it)
-            }
+        // The shared helper rethrows CancellationException before the recovery
+        // mapping sees it, so structured cancellation is never masked as a
+        // Result.failure. The recoverCatching's only remaining job is the typed
+        // wrap: an ApiException carrying a pre-classified retryable flag. The
+        // friendly message is still produced by JellyfinErrorMapper so existing
+        // consumers reading `.message` see the same user-facing text.
+        runCatchingRethrowingCancellation { withContext(Dispatchers.IO) { block() } }
+            .recoverCatching { throw ApiException.fromJellyfin(it) }
 
     suspend fun <T> apiResultWithRetry(
         maxRetries: Int = RetryPolicy.DEFAULT_MAX_RETRIES,
@@ -199,10 +196,12 @@ class JellyfinApiEngine @Inject constructor(
             // an alternate and the retry transparently uses it. Throttled so
             // a burst of parallel failures triggers one probe round, not N.
             if (e is ApiException && e.isRetryable && e.httpCode == null && addressRouter.hasAlternates) {
-                // Swallow probe errors but never cancellation — the caller's
-                // cancellation must keep propagating through the retry path.
-                runCatching { addressRouter.reselectActiveEndpoint(minIntervalMs = RESELECT_THROTTLE_MS) }
-                    .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
+                // Swallow probe errors but never cancellation — the shared
+                // helper rethrows the caller's cancellation; the Result of a
+                // best-effort probe is dropped.
+                runCatchingRethrowingCancellation {
+                    addressRouter.reselectActiveEndpoint(minIntervalMs = RESELECT_THROTTLE_MS)
+                }
             }
         }
     }

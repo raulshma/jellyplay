@@ -46,7 +46,7 @@ import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
 import com.raulshma.jellyplay.core.model.NewsletterData
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.network.realtime.UserDataRealtimeChannel
-import com.raulshma.jellyplay.core.network.runCatchingRethrowingCancellation
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.cache.getOrFetch
 import com.raulshma.jellyplay.core.data.cache.getOrFetchGuarded
 import com.raulshma.jellyplay.core.data.concurrency.SingleFlightFetcher
@@ -300,7 +300,7 @@ class MediaRepositoryImpl(
      // table, to be served to a different user on the next cold open.
      */
     private suspend fun clearHomeSectionsForIdentity(serverId: String, userId: String) {
-        runCatching { homeSectionCacheDao.clearForIdentity(serverId, userId) }
+        runCatchingRethrowingCancellation { homeSectionCacheDao.clearForIdentity(serverId, userId) }
             .onFailure { e ->
                 Log.w(
                     "MediaRepo",

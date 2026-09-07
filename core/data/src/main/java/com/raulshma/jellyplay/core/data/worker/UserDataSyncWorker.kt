@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.repository.MediaCacheInvalidator
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
@@ -46,7 +47,7 @@ class UserDataSyncWorker(
         val activeUserId = serverIdentityStore.activeUserId.firstOrNull()
         if (activeUserId.isNullOrBlank()) return Result.success()
 
-        return runCatching {
+        return runCatchingRethrowingCancellation {
             cacheInvalidator.invalidateCaches()
             // Re-fetch home sections to repopulate the cache with fresh user-data.
             // Only success/failure matters here; the sections themselves are

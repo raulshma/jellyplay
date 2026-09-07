@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.shell
 
 import android.content.Intent
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.update.ApkInstallBuilder
 import com.raulshma.jellyplay.core.data.update.AppUpdateRepository
 import com.raulshma.jellyplay.core.data.update.PendingAppUpdate
@@ -74,7 +75,7 @@ class UpdateCoordinator (
         commandScope.launch {
             val experimental = experimentalStore.experimental.first()
             if (experimental.selfUpdateCheckEnabled) {
-                val pending = runCatching { appUpdateRepository.getPendingUpdate() }.getOrNull()
+                val pending = runCatchingRethrowingCancellation { appUpdateRepository.getPendingUpdate() }.getOrNull()
                 if (pending != null && !isUpdateRecentlyDismissed(pending.info.latestVersion, experimental)) {
                     _updateState.value = UpdateState.Downloaded(pending.info, pending.apkFile)
                 } else {
@@ -118,7 +119,7 @@ class UpdateCoordinator (
         commandScope.launch {
             _updateState.value = UpdateState.Checking
             val experimental = experimentalStore.experimental.first()
-            val pending = runCatching { appUpdateRepository.getPendingUpdate() }.getOrNull()
+            val pending = runCatchingRethrowingCancellation { appUpdateRepository.getPendingUpdate() }.getOrNull()
             val result = appUpdateRepository.checkForUpdate()
             // Manual checks ignore the dismissal suppression entirely — the
             // user explicitly asked. Always hit the network so a release

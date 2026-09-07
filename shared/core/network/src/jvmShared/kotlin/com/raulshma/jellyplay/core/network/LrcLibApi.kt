@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.network
 
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.model.LrcLibTrack
 import com.raulshma.jellyplay.core.network.api.JellyfinApiEngine
 import kotlinx.coroutines.Dispatchers
@@ -60,7 +61,7 @@ class LrcLibApi @Inject constructor(
         artistName: String,
         trackName: String,
         duration: Double?,
-    ): Result<LrcLibTrack> = runCatching {
+    ): Result<LrcLibTrack> = runCatchingRethrowingCancellation {
         val urlBuilder = StringBuilder(BASE_URL)
             .append("/api/get?artist_name=")
             .append(java.net.URLEncoder.encode(artistName, "UTF-8"))
@@ -77,7 +78,7 @@ class LrcLibApi @Inject constructor(
         json.decodeFromString<LrcLibTrackDto>(executeAndReadBody(client, request)).toDomain()
     }
 
-    suspend fun search(query: String): Result<List<LrcLibTrack>> = runCatching {
+    suspend fun search(query: String): Result<List<LrcLibTrack>> = runCatchingRethrowingCancellation {
         val url = "${BASE_URL}/api/search?q=${java.net.URLEncoder.encode(query, "UTF-8")}"
         val request = Request.Builder()
             .url(url)
@@ -88,7 +89,7 @@ class LrcLibApi @Inject constructor(
         json.decodeFromString(ListSerializer(LrcLibTrackDto.serializer()), body).map { it.toDomain() }
     }
 
-    suspend fun getById(id: Long): Result<LrcLibTrack> = runCatching {
+    suspend fun getById(id: Long): Result<LrcLibTrack> = runCatchingRethrowingCancellation {
         val request = Request.Builder()
             .url("$BASE_URL/api/get/$id")
             .header("User-Agent", "JellyPlay")

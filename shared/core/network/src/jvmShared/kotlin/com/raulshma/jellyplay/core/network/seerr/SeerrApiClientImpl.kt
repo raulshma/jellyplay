@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.network.seerr
 
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.model.seerr.*
 import com.raulshma.jellyplay.core.network.api.ApiException
 import com.raulshma.jellyplay.core.network.api.JsonRequestClient
@@ -388,7 +389,7 @@ class SeerrApiClientImpl @Inject constructor(
         mediaId: Int,
         is4k: Boolean,
     ): Result<Unit> {
-        runCatching {
+        runCatchingRethrowingCancellation {
             val fileRequest = Request.Builder()
                 .url(buildUrl(baseUrl, "/media/$mediaId/file?is4k=$is4k"))
                 .withAuth(credentials)

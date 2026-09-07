@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.repository
 
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.PlayedStateSync.ComputeResult
@@ -56,8 +57,8 @@ class PlayedStateSyncImpl(
         // Offline: apply locally for immediate UI feedback and stage the flip
         // in the outbox so PlaybackSyncWorker delivers it on reconnect.
         if (offlineModeManager.isOffline) {
-            runCatching { offlineRepository.applyPlayedState(itemId, isPlayed = played) }
-            runCatching { playbackOutboxRepository.enqueuePlayedState(itemId, isPlayed = played) }
+            runCatchingRethrowingCancellation { offlineRepository.applyPlayedState(itemId, isPlayed = played) }
+            runCatchingRethrowingCancellation { playbackOutboxRepository.enqueuePlayedState(itemId, isPlayed = played) }
             // Auto-delete-after-watch: even offline, a watched flip removes the
             // download (cleanup is local-only; nothing to sync). Guarded so a
             // failure never surfaces or crashes playback.
@@ -70,7 +71,7 @@ class PlayedStateSyncImpl(
             // downloaded items in this hierarchy stay consistent. Best-effort:
             // a failure here must not surface — the server mutation already
             // succeeded and reconciliation will correct any drift.
-            runCatching { offlineRepository.applyPlayedState(itemId, isPlayed = played) }
+            runCatchingRethrowingCancellation { offlineRepository.applyPlayedState(itemId, isPlayed = played) }
             // Auto-delete-after-watch: item was just marked played — if the
             // user opted in and a finished download exists for it, remove it
             // now. The flip already succeeded, so a cleanup failure must never
@@ -79,8 +80,8 @@ class PlayedStateSyncImpl(
         } else {
             // Online but the call failed (transient 5xx, auth drop). Don't lose
             // the user's intent: apply locally and enqueue for retry.
-            runCatching { offlineRepository.applyPlayedState(itemId, isPlayed = played) }
-            runCatching { playbackOutboxRepository.enqueuePlayedState(itemId, isPlayed = played) }
+            runCatchingRethrowingCancellation { offlineRepository.applyPlayedState(itemId, isPlayed = played) }
+            runCatchingRethrowingCancellation { playbackOutboxRepository.enqueuePlayedState(itemId, isPlayed = played) }
             // The played state wasn't confirmed server-side, so don't delete
             // the download yet — wait for a confirmed played flip.
             return Result.success(Unit)
@@ -102,7 +103,7 @@ class PlayedStateSyncImpl(
             val target = result.getOrNull() ?: return result
             // Mirror into the offline store so downloaded items stay consistent;
             // best-effort like the played mirror above.
-            runCatching { offlineRepository.applyFavoriteState(itemId, target) }
+            runCatchingRethrowingCancellation { offlineRepository.applyFavoriteState(itemId, target) }
         } else {
             // Online but the call failed — don't lose the user's intent: apply
             // locally and enqueue for retry, resolving target from local state.
@@ -119,10 +120,10 @@ class PlayedStateSyncImpl(
      * caller's optimistic UI flip is correct regardless of path.
      */
     private suspend fun applyFavoriteLocallyAndEnqueue(itemId: String): Boolean {
-        val current = runCatching { offlineRepository.getOfflineItem(itemId)?.isFavorite }.getOrNull() ?: false
+        val current = runCatchingRethrowingCancellation { offlineRepository.getOfflineItem(itemId)?.isFavorite }.getOrNull() ?: false
         val target = !current
-        runCatching { offlineRepository.applyFavoriteState(itemId, target) }
-        runCatching { playbackOutboxRepository.enqueueFavoriteState(itemId, target) }
+        runCatchingRethrowingCancellation { offlineRepository.applyFavoriteState(itemId, target) }
+        runCatchingRethrowingCancellation { playbackOutboxRepository.enqueueFavoriteState(itemId, target) }
         return target
     }
 
@@ -145,7 +146,7 @@ class PlayedStateSyncImpl(
             if (!downloadsStore.value.downloads.first().autoDeleteAfterWatch) return
             val download = downloadRepository.value.getDownloadByMediaItemId(itemId) ?: return
             if (download.status != DownloadStatus.COMPLETED) return
-            runCatching { downloadRepository.value.deleteDownload(download.id) }
+            runCatchingRethrowingCancellation { downloadRepository.value.deleteDownload(download.id) }
                 .onFailure { Log.w(TAG, "Auto-delete-after-watch failed for $itemId", it) }
         } catch (e: Exception) {
             Log.w(TAG, "Auto-delete-after-watch lookup failed for $itemId", e)
@@ -165,7 +166,7 @@ class PlayedStateSyncImpl(
         // must propagate here regardless of local activity. Best-effort; the
         // played-state reconciliation below runs regardless of outcome.
         if (serverItem.isFavorite != offline.isFavorite) {
-            runCatching { offlineRepository.applyFavoriteState(itemId, serverItem.isFavorite) }
+            runCatchingRethrowingCancellation { offlineRepository.applyFavoriteState(itemId, serverItem.isFavorite) }
         }
 
         // Server watched (e.g. finished online) always wins — reset the local
@@ -247,9 +248,9 @@ class PlayedStateSyncImpl(
      * drain).
      */
     private suspend fun pushUnsyncedIntent(itemId: String, played: Boolean): ReconcileOutcome {
-        runCatching { playbackOutboxRepository.deletePlayedStateIntents(itemId) }
+        runCatchingRethrowingCancellation { playbackOutboxRepository.deletePlayedStateIntents(itemId) }
         flip(itemId, played)
-        val delivered = runCatching {
+        val delivered = runCatchingRethrowingCancellation {
             playbackOutboxRepository.isPlayedStateIntentDelivered(itemId, played)
         }.getOrDefault(false)
         return when {

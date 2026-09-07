@@ -36,6 +36,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.core.view.WindowCompat
 import com.raulshma.jellyplay.R
 import com.raulshma.jellyplay.core.data.cast.withCastDiskReadsPermitted
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.data.remote.RemoteControlReceiver
@@ -225,7 +226,7 @@ class MainActivity : FragmentActivity() {
         // policy either way).
         lifecycleScope.launch(Dispatchers.Main) {
             castPreinitialized = packageManager.hasSystemFeature("com.google.android.gms.cast") &&
-                runCatching {
+                runCatchingRethrowingCancellation {
                     withCastDiskReadsPermitted {
                         com.google.android.gms.cast.framework.CastContext.getSharedInstance(this@MainActivity)
                     }

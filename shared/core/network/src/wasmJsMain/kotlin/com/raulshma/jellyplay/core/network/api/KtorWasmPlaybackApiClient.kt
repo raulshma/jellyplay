@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.network.api
 
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.model.CreditTimestamps
 import com.raulshma.jellyplay.core.model.IntroTimestamps
 import com.raulshma.jellyplay.core.model.LiveStreamOption
@@ -308,7 +309,7 @@ class KtorWasmPlaybackApiClient(
     override suspend fun getMediaSegments(itemId: String): Result<List<MediaSegment>> =
         apiResultWithRetry {
             val server = requireConnectedServer()
-            val segments = runCatching {
+            val segments = runCatchingRethrowingCancellation {
                 getJson<MediaSegmentQueryResultDtoWire>(
                     url = apiUrl(server.address, "/MediaSegments/$itemId"),
                     accessToken = currentToken(),

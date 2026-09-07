@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.network.subtitle
 
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleFile
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleLanguageCodes
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderCredentials
@@ -81,7 +82,7 @@ class WyzieSubtitleProvider @Inject constructor(
         val idSource = if (query.imdbId?.takeIf { it.isNotBlank() } != null) "imdb" else "tmdb"
         NetworkLog.d(TAG, "search id=$id ($idSource) langs=${query.languages} s=${query.season} e=${query.episode}")
         return rateLimiter.acquire {
-            runCatching {
+            runCatchingRethrowingCancellation {
                 withContext(Dispatchers.IO) {
                     val urlBuilder = "$baseUrl/search".toHttpUrl().newBuilder()
                         .addQueryParameter("id", id)
@@ -124,7 +125,7 @@ class WyzieSubtitleProvider @Inject constructor(
             return Result.failure(ApiException(false, message = "Wyzie subtitle has no download URL"))
         }
         return rateLimiter.acquire {
-            runCatching {
+            runCatchingRethrowingCancellation {
                 withContext(Dispatchers.IO) {
                     val request = Request.Builder().url(url.toHttpUrl()).build()
                     execute(request) { response ->

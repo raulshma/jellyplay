@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.widget
 
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.widget.LibrarySyncHook
 import com.raulshma.jellyplay.core.data.worker.AutoDownloadScheduler
 
@@ -18,8 +19,8 @@ class LibrarySyncHookImpl (
 ) : LibrarySyncHook {
 
     override suspend fun onLibraryScanComplete() {
-        runCatching { autoDownloadScheduler.enqueueNow() }
-        runCatching {
+        runCatchingRethrowingCancellation { autoDownloadScheduler.enqueueNow() }
+        runCatchingRethrowingCancellation {
             widgetWorkScheduler.refreshLibraryNow()
             widgetWorkScheduler.refreshSeerrNow()
         }

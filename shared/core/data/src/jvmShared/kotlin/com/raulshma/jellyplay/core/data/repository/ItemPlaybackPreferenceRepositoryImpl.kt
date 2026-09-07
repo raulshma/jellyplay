@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.repository
 
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.repository.withTransaction
 import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.database.JellyPlayDatabase
@@ -42,7 +43,7 @@ class ItemPlaybackPreferenceRepositoryImpl constructor(
             val mergedForced = subtitleForced ?: existing?.subtitleForced
             val mergedSdh = subtitleHearingImpaired ?: existing?.subtitleHearingImpaired
             val mergedBoost = dialogueBoostStrength ?: existing?.dialogueBoostStrength?.let {
-                runCatching { com.raulshma.jellyplay.core.model.EffectStrength.valueOf(it) }.getOrNull()
+                runCatchingRethrowingCancellation { com.raulshma.jellyplay.core.model.EffectStrength.valueOf(it) }.getOrNull()
             }
             // Subtitle language and "subtitles off" are mutually exclusive:
             // pinning a language clears any prior disabled intent so the two
