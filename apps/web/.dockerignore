@@ -1,0 +1,18 @@
+# The image build context is this module directory; the Dockerfile wants only
+# the production bundle and nginx.conf. Everything else (src, Gradle build
+# intermediates, webpack caches) stays out of the context — pruning here, not
+# in the Dockerfile, keeps `docker build apps/web` from shipping megabytes of
+# irrelevance to the daemon.
+#
+# The ladder shape is deliberate: re-including a deep path needs every parent
+# directory un-pruned too (the daemon walks parents and honors last-match-
+# wins), hence the include/exclude alternation down the tree.
+*
+!nginx.conf
+!build/
+build/**
+!build/dist/
+build/dist/*
+!build/dist/wasmJs/
+build/dist/wasmJs/*
+!build/dist/wasmJs/productionExecutable/

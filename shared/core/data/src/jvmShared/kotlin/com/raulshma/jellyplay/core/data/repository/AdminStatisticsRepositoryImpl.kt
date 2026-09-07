@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.repository
 
+import com.raulshma.jellyplay.core.concurrency.mapConcurrent
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.data.util.TimeSource
@@ -27,7 +28,6 @@ import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -36,7 +36,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
@@ -126,17 +125,13 @@ class AdminStatisticsRepositoryImpl constructor(
             val activeUserIds = sessionsDeferred.await().map { it.userId }.toSet()
             val pluginMap = pluginDeferred.await().associateBy { it.userId }
 
-            users.map { user ->
-                async {
-                    statsSemaphore.withPermit {
-                        buildUserStatistics(
-                            user = user,
-                            isActive = activeUserIds.contains(user.id),
-                            totalWatchTimeSec = pluginMap[user.id]?.totalTime ?: 0L,
-                        )
-                    }
-                }
-            }.awaitAll()
+            statsSemaphore.mapConcurrent(users) { user ->
+                buildUserStatistics(
+                    user = user,
+                    isActive = activeUserIds.contains(user.id),
+                    totalWatchTimeSec = pluginMap[user.id]?.totalTime ?: 0L,
+                )
+            }
         }
     }
 

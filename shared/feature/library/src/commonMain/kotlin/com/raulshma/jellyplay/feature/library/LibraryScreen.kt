@@ -1664,6 +1664,10 @@ private fun AlphabetJumpRail(
     // column (no big gaps), tall enough to tap. Determined up front (not derived
     // from fillMaxHeight) so the row→index math is exact and stable.
     val rowPx = with(density) { LETTER_ROW_HEIGHT.toPx() }
+    // Pure math (index mapping, fisheye, jump targets) lives beside the screen
+    // so it stays Compose-free and testable; only dp/px conversion, drawing,
+    // and pointer wiring remain here.
+    val geometry = remember(letters, rowPx) { AlphabetRailGeometry(letters, rowPx) }
 
     Box(modifier = modifier) {
         // Rail body — wrap-content height (sum of letter rows), centered in the
@@ -1706,8 +1710,8 @@ private fun AlphabetJumpRail(
                         // live inside the graphicsLayer draw lambda, so the same
                         // lambda instance survives across drag frames and keeps
                         // [LetterItem] skippable.
-                        val fisheyeScaleProvider = remember(index, touchIndexState) {
-                            { fisheyeScaleAt(index, touchIndexState.value) }
+                        val fisheyeScaleProvider = remember(index, geometry) {
+                            { geometry.fisheyeScaleAt(index, touchIndexState.value) }
                         }
                         // Stable click handler per letter so the parent
                         // recomposing (on boundary crossings) doesn't hand every
@@ -1741,29 +1745,24 @@ private fun AlphabetJumpRail(
             Box(
                 modifier = Modifier
                     .matchParentSize()
-                    .pointerInput(letters, rowPx) {
-                        fun indexAt(y: Float): Float =
-                            if (rowPx <= 0f) 0f
-                            else (y / rowPx).coerceIn(0f, letters.lastIndex.toFloat())
+                    .pointerInput(geometry) {
                         detectDragGestures(
                             onDragStart = { offset ->
-                                touchIndex = indexAt(offset.y)
+                                touchIndex = geometry.indexAt(offset.y)
                                 dragging = true
-                                onJump(letters[touchIndex!!.toInt().coerceIn(0, letters.lastIndex)])
+                                onJump(geometry.letterAt(offset.y))
                             },
                             onDrag = { change, _ ->
-                                touchIndex = indexAt(change.position.y)
-                                onJump(letters[touchIndex!!.toInt().coerceIn(0, letters.lastIndex)])
+                                touchIndex = geometry.indexAt(change.position.y)
+                                onJump(geometry.letterAt(change.position.y))
                             },
                             onDragEnd = { dragging = false; touchIndex = null },
                             onDragCancel = { dragging = false; touchIndex = null },
                         )
                     }
-                    .pointerInput(letters, rowPx) {
+                    .pointerInput(geometry) {
                         detectTapGestures { offset ->
-                            val idx = if (rowPx <= 0f) 0
-                            else (offset.y / rowPx).toInt().coerceIn(0, letters.lastIndex)
-                            val l = letters[idx]
+                            val l = geometry.letterAt(offset.y)
                             bubbleForJump = l
                             onJump(l)
                         }
@@ -1817,24 +1816,6 @@ private fun AlphabetJumpRail(
 private val LETTER_ROW_HEIGHT = 18.dp
 /** Magnifier bubble diameter. */
 private val BUBBLE_SIZE = 44.dp
-
-/** Peak scale of the letter directly under the finger (fisheye lens). */
-private const val FISHEYE_PEAK = 2.5f
-/** Gaussian sigma² for the fisheye falloff — smaller = tighter bell curve. */
-private const val FISHEYE_SIGMA_SQ = 1.6f
-
-/**
- * Gaussian fisheye scale for a letter at [index] given the fractional finger
- * position [touchIndex] (null = finger not on the rail). Pure function — safe
- * to call from the draw phase (graphicsLayer lambda) so the bell-curve glides
- * with the finger without invalidating composition.
- */
-private fun fisheyeScaleAt(index: Int, touchIndex: Float?): Float {
-    if (touchIndex == null) return 1f
-    val d = index - touchIndex
-    val g = kotlin.math.exp(-(d * d) / (2 * FISHEYE_SIGMA_SQ))
-    return 1f + (FISHEYE_PEAK - 1f) * g
-}
 
 /**
  * Single letter row in the [AlphabetJumpRail]. Skippable: all parameters are

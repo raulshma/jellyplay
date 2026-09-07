@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.requests
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.snapshots.Snapshot
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
@@ -178,75 +179,112 @@ class RequestsViewModel(
         }
     }
 
+    /** Per-request media-details enrichment; rides the shared [enrichEach] choreography. */
     private fun enrichRequests(requests: List<SeerrRequestItem>) {
-        requests.forEach { request ->
-            val tmdbId = request.media.tmdbId
-            if (_state.value.mediaInfo.containsKey(tmdbId)) return@forEach
+        // tmdb ids collide across the movie/tv namespaces (movie 603 ≠ tv 603),
+        // so the fan-out key is the (tmdbId, isMovie) pair — one fetch per
+        // distinct pair, each hitting its OWN endpoint. mediaInfo stays
+        // tmdbId-keyed (the read side's shape), so same-id-different-type
+        // requests still overwrite one another on the write — the pre-fold
+        // behaviour, now at least fed by both correct fetches.
+        val distinctPairs = requests
+            .map { it.media.tmdbId to it.type.equals("movie", ignoreCase = true) }
+            .distinct()
+        enrichEach(
+            ids = distinctPairs,
+            skip = { (tmdbId, _) -> tmdbId in _state.value.mediaInfo },
+            fetch = { (tmdbId, isMovie) ->
+                if (isMovie) {
+                    seerrRepository.getMovieDetails(tmdbId).getOrNull()?.let {
+                        RequestMediaInfo(
+                            title = it.title,
+                            posterUrl = it.posterUrl,
+                            overview = it.overview,
+                            year = it.releaseDate?.take(4)?.toIntOrNull(),
+                        )
+                    }
+                } else {
+                    seerrRepository.getTvDetails(tmdbId).getOrNull()?.let {
+                        RequestMediaInfo(
+                            title = it.name,
+                            posterUrl = it.posterUrl,
+                            overview = it.overview,
+                            year = it.firstAirDate?.take(4)?.toIntOrNull(),
+                        )
+                    }
+                }
+            },
+            merge = { (tmdbId, _), info -> copy(mediaInfo = mediaInfo + (tmdbId to info)) },
+        )
+    }
 
+    /**
+     * The one enrichment choreography, shared by [enrichRequests] and
+     * [enrichDownloadProgress]: one launch per id in [ids] ([skip] drops
+     * already-cached ones at fan-out time), bounded by [enrichSemaphore], with
+     * per-item failures swallowed — [fetch] maps them to null. Each completion
+     * folds its payload through [merge] inside [updateState]'s atomic
+     * snapshot, so completions landing concurrently accumulate instead of
+     * losing one another's map writes.
+     */
+    private fun <Id, T> enrichEach(
+        ids: List<Id>,
+        skip: (Id) -> Boolean = { false },
+        fetch: suspend (Id) -> T?,
+        merge: RequestsUiState.(Id, T) -> RequestsUiState,
+    ) {
+        ids.forEach { id ->
+            if (skip(id)) return@forEach
             launch {
                 enrichSemaphore.withPermit {
-                    val info = if (request.type.equals("movie", ignoreCase = true)) {
-                        seerrRepository.getMovieDetails(tmdbId).getOrNull()?.let {
-                            RequestMediaInfo(
-                                title = it.title,
-                                posterUrl = it.posterUrl,
-                                overview = it.overview,
-                                year = it.releaseDate?.take(4)?.toIntOrNull(),
-                            )
-                        }
-                    } else {
-                        seerrRepository.getTvDetails(tmdbId).getOrNull()?.let {
-                            RequestMediaInfo(
-                                title = it.name,
-                                posterUrl = it.posterUrl,
-                                overview = it.overview,
-                                year = it.firstAirDate?.take(4)?.toIntOrNull(),
-                            )
-                        }
-                    }
-
-                    info?.let {
-                        val current = _state.value.mediaInfo.toMutableMap()
-                        current[tmdbId] = it
-                        _state.value = _state.value.copy(mediaInfo = current)
-                    }
+                    val payload = fetch(id) ?: return@withPermit
+                    updateState { it.merge(id, payload) }
                 }
             }
         }
     }
 
     /**
-     * Enriches each request with its direct *arr download progress, mirroring
-     * [enrichRequests]'s semaphore-bounded pattern. No-op when the
-     * [ExperimentalFeature.DIRECT_ARR_INTEGRATION] flag is off. Per-tmdb
+     * Atomic read-modify-write of the ui state: the whole [transform] runs in
+     * a single mutable snapshot, so two completions interleaving between
+     * another writer's read and write both land — the bare
+     * `_state.value = _state.value.copy(...)` this replaces silently dropped
+     * whichever completion lost that race. [removeQueueItem]'s two-key
+     * eviction rides the same path.
+     */
+    private fun updateState(transform: (RequestsUiState) -> RequestsUiState) {
+        Snapshot.withMutableSnapshot { _state.value = transform(_state.value) }
+    }
+
+    /**
+     * Enriches each distinct request tmdbId with its direct *arr download
+     * progress + full queue row (no-op when the
+     * [ExperimentalFeature.DIRECT_ARR_INTEGRATION] flag is off). Per-tmdb
      * failures are swallowed (the *arr repository already degrades to null);
-     * a missing download simply leaves the map untouched and the bottom sheet
-     * falls back to Seerr's raw `downloadStatus` text.
+     * a missing download simply leaves the maps untouched and the bottom
+     * sheet falls back to Seerr's raw `downloadStatus` text.
      */
     private fun enrichDownloadProgress(requests: List<SeerrRequestItem>) {
         if (!directArrEnabled.value) return
         val distinctTmdbIds = requests.mapNotNull { it.media.tmdbId.takeIf { id -> id != 0 } }.distinct()
         if (distinctTmdbIds.isEmpty()) return
-
-        distinctTmdbIds.forEach { tmdbId ->
-            launch {
-                enrichSemaphore.withPermit {
-                    val item = arrRepository.getQueueForTmdb(tmdbId) ?: return@withPermit
-                    val summary = ArrDownloadSummary(
-                        status = item.status,
-                        percent = item.percent,
-                        sizeLeft = item.sizeLeft,
-                        timeLeft = item.timeLeft,
-                    )
-                    _state.value = _state.value.let { s ->
-                        s.copy(
-                            downloadProgress = s.downloadProgress + (tmdbId to summary),
-                            queueItems = s.queueItems + (tmdbId to item),
+        enrichEach(
+            ids = distinctTmdbIds,
+            fetch = { tmdbId -> arrRepository.getQueueForTmdb(tmdbId) },
+            merge = { tmdbId, item ->
+                copy(
+                    downloadProgress = downloadProgress + (
+                        tmdbId to ArrDownloadSummary(
+                            status = item.status,
+                            percent = item.percent,
+                            sizeLeft = item.sizeLeft,
+                            timeLeft = item.timeLeft,
                         )
-                    }
-                }
-            }
-        }
+                        ),
+                    queueItems = queueItems + (tmdbId to item),
+                )
+            },
+        )
     }
 
     /**
@@ -271,7 +309,7 @@ class RequestsViewModel(
                         arrRepository.searchForTmdb(tmdbId, kind)
                     }
                     // Drop the cached progress + item; refresh re-populates if still present.
-                    _state.value = _state.value.let { s ->
+                    updateState { s ->
                         s.copy(
                             downloadProgress = s.downloadProgress - tmdbId,
                             queueItems = s.queueItems - tmdbId,

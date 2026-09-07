@@ -2,17 +2,11 @@ package com.raulshma.jellyplay.widget
 
 import android.appwidget.AppWidgetManager
 import android.content.Context
-import android.content.Intent
-import android.os.Bundle
-import android.widget.RemoteViews
 import com.raulshma.jellyplay.R
 import com.raulshma.jellyplay.core.model.SeerrWidgetSource
 import com.raulshma.jellyplay.widget.skeleton.GridWidgetRequestCodes
 import com.raulshma.jellyplay.widget.skeleton.GridWidgetUi
-import com.raulshma.jellyplay.widget.skeleton.WidgetProviderSkeleton
-import com.raulshma.jellyplay.widget.skeleton.notifyProviderDataChanged
 import com.raulshma.jellyplay.widget.skeleton.updateRecommendationGridWidget
-import kotlinx.coroutines.cancel
 import org.koin.mp.KoinPlatform
 
 /**
@@ -29,9 +23,10 @@ import org.koin.mp.KoinPlatform
  *     [com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore.seerrWidgetItems] — no network in the widget
  *     process.
  *
- * The refresh-scope/goAsync choreography and the `updateAppWidget` wiring
- * are shared with the Library grid via the widget skeleton (`WidgetProviderSkeleton`
- * and `updateRecommendationGridWidget`, parameterized by this widget's
+ * The refresh-scope/goAsync choreography, the lifecycle overrides and the
+ * `onReceive` refresh fold are shared with the Library grid via
+ * [GridWidgetProvider]; the `updateAppWidget` wiring rides the widget
+ * skeleton (`updateRecommendationGridWidget`, parameterized by this widget's
  * 7_500_0xx request-code namespace); the Seerr-only empty-state texts ride
  * the template's extra-binding hook.
  */
@@ -48,9 +43,21 @@ private fun koinSeerrPreferencesStore(): com.raulshma.jellyplay.core.datastore.S
 private fun koinWidgetWorkScheduler(): WidgetWorkScheduler =
     KoinPlatform.getKoin()!!.get()
 
-class SeerrRecommendationsWidget : WidgetProviderSkeleton() {
+class SeerrRecommendationsWidget : GridWidgetProvider() {
 
-    override fun onUpdate(
+    override val gridViewId: Int = R.id.sr_widget_grid
+
+    override val refreshAction: String = ACTION_REFRESH
+
+    override fun updateWidget(
+        context: Context,
+        appWidgetManager: AppWidgetManager,
+        appWidgetId: Int,
+    ) {
+        updateAppWidget(context, appWidgetManager, appWidgetId)
+    }
+
+    override fun onUpdateWidgets(
         context: Context,
         appWidgetManager: AppWidgetManager,
         appWidgetIds: IntArray,
@@ -61,46 +68,11 @@ class SeerrRecommendationsWidget : WidgetProviderSkeleton() {
         for (id in appWidgetIds) {
             updateAppWidget(context, appWidgetManager, id, isServerConfigured)
         }
-        triggerInitialRefresh(context)
     }
 
-    override fun onAppWidgetOptionsChanged(
-        context: Context,
-        appWidgetManager: AppWidgetManager,
-        appWidgetId: Int,
-        newOptions: Bundle
-    ) {
-        super.onAppWidgetOptionsChanged(context, appWidgetManager, appWidgetId, newOptions)
-        updateAppWidget(context, appWidgetManager, appWidgetId)
-        appWidgetManager.notifyAppWidgetViewDataChanged(appWidgetId, R.id.sr_widget_grid)
+    override suspend fun refreshNow(context: Context) {
+        koinWidgetWorkScheduler().refreshSeerrNow()
     }
-
-    override fun onEnabled(context: Context) {
-        super.onEnabled(context)
-        triggerInitialRefresh(context)
-    }
-
-    override fun onDisabled(context: Context?) {
-        super.onDisabled(context)
-        refreshScope.cancel()
-    }
-
-    private fun triggerInitialRefresh(context: Context) = launchWithPendingResult {
-        widgetScheduler(context).refreshSeerrNow()
-    }
-
-    override fun onReceive(context: Context, intent: Intent) {
-        super.onReceive(context, intent)
-        if (intent.action == ACTION_REFRESH) {
-            notifyProviderDataChanged(context, SeerrRecommendationsWidget::class.java, R.id.sr_widget_grid)
-            launchWithPendingResult {
-                widgetScheduler(context).refreshSeerrNow()
-            }
-        }
-    }
-
-    private fun widgetScheduler(context: Context): WidgetWorkScheduler =
-        koinWidgetWorkScheduler()
 
     companion object {
         const val ACTION_REFRESH = "com.raulshma.jellyplay.widget.ACTION_REFRESH_SEERR"

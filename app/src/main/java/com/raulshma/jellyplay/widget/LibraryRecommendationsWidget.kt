@@ -2,16 +2,11 @@ package com.raulshma.jellyplay.widget
 
 import android.appwidget.AppWidgetManager
 import android.content.Context
-import android.content.Intent
-import android.os.Bundle
 import com.raulshma.jellyplay.R
 import com.raulshma.jellyplay.core.model.LibraryRecommendationsSource
 import com.raulshma.jellyplay.widget.skeleton.GridWidgetRequestCodes
 import com.raulshma.jellyplay.widget.skeleton.GridWidgetUi
-import com.raulshma.jellyplay.widget.skeleton.WidgetProviderSkeleton
-import com.raulshma.jellyplay.widget.skeleton.notifyProviderDataChanged
 import com.raulshma.jellyplay.widget.skeleton.updateRecommendationGridWidget
-import kotlinx.coroutines.cancel
 import org.koin.mp.KoinPlatform
 
 /**
@@ -31,9 +26,10 @@ import org.koin.mp.KoinPlatform
  *     [com.raulshma.jellyplay.deeplink.DeepLinkHandler] and routed to
  *     the media detail screen.
  *
- * The refresh-scope/goAsync choreography and the `updateAppWidget` wiring
- * are shared with the Seerr grid via the widget skeleton (`WidgetProviderSkeleton`
- * and `updateRecommendationGridWidget`, parameterized by this widget's
+ * The refresh-scope/goAsync choreography, the lifecycle overrides and the
+ * `onReceive` refresh fold are shared with the Seerr grid via
+ * [GridWidgetProvider]; the `updateAppWidget` wiring rides the widget
+ * skeleton (`updateRecommendationGridWidget`, parameterized by this widget's
  * 7_400_0xx request-code namespace).
  */
 /**
@@ -46,56 +42,23 @@ private fun koinWidgetDataStore(): com.raulshma.jellyplay.core.datastore.widget.
 private fun koinWidgetWorkScheduler(): WidgetWorkScheduler =
     KoinPlatform.getKoin()!!.get()
 
-class LibraryRecommendationsWidget : WidgetProviderSkeleton() {
+class LibraryRecommendationsWidget : GridWidgetProvider() {
 
-    override fun onUpdate(
-        context: Context,
-        appWidgetManager: AppWidgetManager,
-        appWidgetIds: IntArray,
-    ) {
-        for (id in appWidgetIds) {
-            updateAppWidget(context, appWidgetManager, id)
-        }
-        triggerInitialRefresh(context)
-    }
+    override val gridViewId: Int = R.id.lr_widget_grid
 
-    override fun onAppWidgetOptionsChanged(
+    override val refreshAction: String = ACTION_REFRESH
+
+    override fun updateWidget(
         context: Context,
         appWidgetManager: AppWidgetManager,
         appWidgetId: Int,
-        newOptions: Bundle
     ) {
-        super.onAppWidgetOptionsChanged(context, appWidgetManager, appWidgetId, newOptions)
         updateAppWidget(context, appWidgetManager, appWidgetId)
-        appWidgetManager.notifyAppWidgetViewDataChanged(appWidgetId, R.id.lr_widget_grid)
     }
 
-    override fun onEnabled(context: Context) {
-        super.onEnabled(context)
-        triggerInitialRefresh(context)
+    override suspend fun refreshNow(context: Context) {
+        koinWidgetWorkScheduler().refreshLibraryNow()
     }
-
-    override fun onDisabled(context: Context?) {
-        super.onDisabled(context)
-        refreshScope.cancel()
-    }
-
-    private fun triggerInitialRefresh(context: Context) = launchWithPendingResult {
-        widgetScheduler(context).refreshLibraryNow()
-    }
-
-    override fun onReceive(context: Context, intent: Intent) {
-        super.onReceive(context, intent)
-        if (intent.action == ACTION_REFRESH) {
-            notifyProviderDataChanged(context, LibraryRecommendationsWidget::class.java, R.id.lr_widget_grid)
-            launchWithPendingResult {
-                widgetScheduler(context).refreshLibraryNow()
-            }
-        }
-    }
-
-    private fun widgetScheduler(context: Context): WidgetWorkScheduler =
-        koinWidgetWorkScheduler()
 
     companion object {
         const val ACTION_REFRESH = "com.raulshma.jellyplay.widget.ACTION_REFRESH_LIBRARY"

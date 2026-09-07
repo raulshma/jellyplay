@@ -1,14 +1,12 @@
 package com.raulshma.jellyplay.core.data.repository
 
-import androidx.paging.Pager
-import androidx.paging.PagingConfig
 import androidx.paging.PagingData
 import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.database.dao.HomeSectionCacheDao
 import com.raulshma.jellyplay.core.database.entity.HomeSectionCacheEntity
-import com.raulshma.jellyplay.core.data.paging.FavoritesPagingSource
-import com.raulshma.jellyplay.core.data.paging.MediaPagingSource
-import com.raulshma.jellyplay.core.data.paging.SearchPagingSource
+import com.raulshma.jellyplay.core.data.paging.JellyfinPagingSource
+import com.raulshma.jellyplay.core.data.paging.pagedMediaPager
+import com.raulshma.jellyplay.core.data.paging.searchPagingSource
 import com.raulshma.jellyplay.core.data.session.HomeSession
 import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
 import com.raulshma.jellyplay.core.data.session.SessionIdentity
@@ -556,40 +554,26 @@ class MediaRepositoryImpl(
         filters: LibraryFilters,
         studioIds: List<String>?,
         kindFilter: com.raulshma.jellyplay.core.model.ItemKindFilter,
-    ): Flow<PagingData<MediaItem>> = Pager(
-        config = PagingConfig(
-            pageSize = PAGE_SIZE,
-            enablePlaceholders = false,
-            prefetchDistance = PREFETCH_DISTANCE,
-        ),
-        pagingSourceFactory = {
-            MediaPagingSource(
-                mediaRepository = this,
+    ): Flow<PagingData<MediaItem>> = pagedMediaPager {
+        JellyfinPagingSource { startIndex, limit ->
+            getMediaItems(
                 parentId = parentId,
                 filters = filters,
                 studioIds = studioIds,
+                startIndex = startIndex,
+                limit = limit,
                 kindFilter = kindFilter,
             )
-        },
-    ).flow
+        }
+    }
 
     override fun searchPaged(
         query: String,
         filters: LibraryFilters,
-    ): Flow<PagingData<MediaItem>> = Pager(
-        config = PagingConfig(
-            pageSize = PAGE_SIZE,
-            enablePlaceholders = false,
-            prefetchDistance = PREFETCH_DISTANCE,
-        ),
-        pagingSourceFactory = {
-            SearchPagingSource(
-                mediaRepository = this,
-                query = query,
-                filters = filters,
-            )
-        },
-    ).flow
+    ): Flow<PagingData<MediaItem>> = pagedMediaPager {
+        // The blank-query guard (no repository round-trip) lives in the factory.
+        searchPagingSource(query = query, filters = filters)
+    }
 
     override suspend fun getGenres(parentId: String?, force: Boolean): Result<List<Genre>> =
         genresCache.getOrFetch({ homeSession.cacheIdentity() }, "genres_${parentId ?: "root"}", force = force) {
@@ -702,19 +686,15 @@ class MediaRepositoryImpl(
 
     override fun getFavoritesPaged(
         mediaTypes: List<MediaType>?,
-    ): Flow<PagingData<MediaItem>> = Pager(
-        config = PagingConfig(
-            pageSize = PAGE_SIZE,
-            enablePlaceholders = false,
-            prefetchDistance = PREFETCH_DISTANCE,
-        ),
-        pagingSourceFactory = {
-            FavoritesPagingSource(
-                mediaRepository = this,
+    ): Flow<PagingData<MediaItem>> = pagedMediaPager {
+        JellyfinPagingSource { startIndex, limit ->
+            getFavorites(
                 mediaTypes = mediaTypes,
+                limit = limit,
+                startIndex = startIndex,
             )
-        },
-    ).flow
+        }
+    }
 
     override suspend fun getPlaylists(limit: Int): Result<List<Playlist>> = apiClient.getPlaylists(limit)
 
@@ -1049,8 +1029,6 @@ class MediaRepositoryImpl(
         apiClient.sendTestNewsletter()
 
     companion object {
-        private const val PAGE_SIZE = 50
-        private const val PREFETCH_DISTANCE = 20
         /**
          * Buffer for [syntheticUserDataChanges]: large enough that a drain of
          * dozens of flips never suspends or drops wholesale, small enough to

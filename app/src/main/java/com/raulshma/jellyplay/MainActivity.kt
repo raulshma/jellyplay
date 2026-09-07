@@ -56,6 +56,7 @@ import com.raulshma.jellyplay.di.KoinViewModelFactory
 import com.raulshma.jellyplay.navigation.JellyPlayApp
 import com.raulshma.jellyplay.shell.AppLockRedirect
 import com.raulshma.jellyplay.shell.AppLockState
+import com.raulshma.jellyplay.shell.PinGateController
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.koin.mp.KoinPlatform
@@ -89,6 +90,17 @@ class MainActivity : FragmentActivity() {
     // flag now survives this activity's recreate() — pre-Android-13 language
     // change — instead of re-locking mid-session; see AppLockState KDoc).
     private val appLockState: AppLockState by lazy { KoinPlatform.getKoin()!!.get() }
+
+    // The PIN-attempt command fold (click-time lockout re-check, off-main
+    // verify, failure/success accounting) — composed here from the same Koin
+    // singletons the former inline `onPinEntered` body reached directly.
+    private val pinGateController: PinGateController by lazy {
+        PinGateController(
+            rateLimiter = pinRateLimiter,
+            appLockState = appLockState,
+            verifyPin = { pin -> securityStore.verifyPinOffMainThread(pin) },
+        )
+    }
 
     private var backgroundedAt = 0L
 
@@ -359,39 +371,28 @@ class MainActivity : FragmentActivity() {
                                     enabled = !lockoutActive && !pinVerifying,
                                     verifying = pinVerifying,
                                     onPinEntered = { pin ->
+                                        // Both paths fold through the controller — it owns
+                                        // the click-time lockout re-check and the
+                                        // failure/success accounting.
                                         if (pin.isEmpty()) {
-                                            appLockState.unlock()
-                                            pinError = null
-                                        } else if (preferences.pinHash != null) {
-                                            if (pinVerifying) return@AuthChallengeScreen
-                                            // Re-check the lockout at click time: the user
-                                            // may have triggered it on a previous attempt
-                                            // since the last composition. This counter read
-                                            // is cheap and stays on the caller thread.
-                                            val currentLockout = pinRateLimiter.getPinLockoutState()
-                                            val currentNow = System.currentTimeMillis()
-                                            if (currentLockout.isLockedOut && currentLockout.lockoutUntilEpochMs > currentNow) {
-                                                val remainingMs = currentLockout.lockoutUntilEpochMs - currentNow
-                                                pinError = formatLockoutMessage(context, remainingMs)
-                                                return@AuthChallengeScreen
+                                            // The empty-PIN shortcut shows no spinner (the old
+                                            // inline path unlocked synchronously);
+                                            // lifecycleScope's Main.immediate dispatch runs it
+                                            // in this frame.
+                                            lifecycleScope.launch {
+                                                pinGateController.submit(pin, onUnlocked = { pinError = null })
                                             }
-                                            // PBKDF2 verification is deliberately slow, so run
-                                            // it off the main thread; the success/failure
-                                            // accounting and optional hash upgrade follow it.
+                                        } else if (preferences.pinHash != null && !pinVerifying) {
                                             pinVerifying = true
                                             lifecycleScope.launch {
-                                                val valid = securityStore.verifyPinOffMainThread(pin)
-                                                if (valid) {
-                                                    appLockState.unlock()
-                                                    pinError = null
-                                                    pinRateLimiter.resetPinLockout()
-                                                } else {
-                                                    val newState = pinRateLimiter.recordFailedPinAttempt()
-                                                    pinError = if (newState.isLockedOut) {
-                                                        formatLockoutMessage(context, newState.lockoutUntilEpochMs - System.currentTimeMillis())
-                                                    } else {
-                                                        context.getString(R.string.pin_incorrect)
-                                                    }
+                                                when (val outcome = pinGateController.submit(pin, onUnlocked = { pinError = null })) {
+                                                    PinGateController.PinSubmitOutcome.Unlocked -> Unit
+                                                    PinGateController.PinSubmitOutcome.Incorrect ->
+                                                        pinError = context.getString(R.string.pin_incorrect)
+                                                    is PinGateController.PinSubmitOutcome.LockedOut ->
+                                                        pinError = PinGateController
+                                                            .lockoutMessage(outcome.remainingMs)
+                                                            .resolve(context)
                                                 }
                                                 pinVerifying = false
                                             }
@@ -399,7 +400,8 @@ class MainActivity : FragmentActivity() {
                                     },
                                     onErrorClear = { pinError = null },
                                     errorMessage = if (lockoutActive) {
-                                        formatLockoutMessage(context, lockoutState.lockoutUntilEpochMs - now)
+                                        PinGateController.lockoutMessage(lockoutState.lockoutUntilEpochMs - now)
+                                            .resolve(context)
                                     } else {
                                         pinError
                                     },
@@ -501,21 +503,14 @@ class MainActivity : FragmentActivity() {
 }
 
 /**
- * Formats a PIN-rate-limit lockout duration as a human-readable message.
- * Shows seconds when under a minute, otherwise minutes/hours.
+ * String-side twin of [PinGateController.lockoutMessage] — resolves the pure
+ * fold's buckets against the app resources (same `pin_lockout_*` strings the
+ * former in-activity formatter produced).
  */
-private fun formatLockoutMessage(context: Context, remainingMs: Long): String {
-    if (remainingMs <= 0L) return context.getString(R.string.pin_lockout_now)
-    val seconds = (remainingMs + 999L) / 1000L // round up so we never show 0s
-    return when {
-        seconds < 60 -> context.getString(R.string.pin_lockout_seconds, seconds)
-        seconds < 3600 -> context.getString(R.string.pin_lockout_minutes, seconds / 60)
-        seconds < 86400 -> {
-            val h = seconds / 3600
-            val m = (seconds % 3600) / 60
-            if (m == 0L) context.getString(R.string.pin_lockout_hours, h)
-            else context.getString(R.string.pin_lockout_hours_minutes, h, m)
-        }
-        else -> context.getString(R.string.pin_lockout_hours, seconds / 3600)
-    }
+private fun PinGateController.LockoutMessage.resolve(context: Context): String = when (this) {
+    is PinGateController.LockoutMessage.Now -> context.getString(R.string.pin_lockout_now)
+    is PinGateController.LockoutMessage.Seconds -> context.getString(R.string.pin_lockout_seconds, seconds)
+    is PinGateController.LockoutMessage.Minutes -> context.getString(R.string.pin_lockout_minutes, minutes)
+    is PinGateController.LockoutMessage.Hours -> context.getString(R.string.pin_lockout_hours, hours)
+    is PinGateController.LockoutMessage.HoursMinutes -> context.getString(R.string.pin_lockout_hours_minutes, hours, minutes)
 }

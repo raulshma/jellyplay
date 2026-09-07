@@ -836,6 +836,25 @@ the `RequestsUiState.withFilterState` fold), and
 `RequestsViewModel`'s five mutation commands are one-line delegates onto a
 single `runRequestAction` core (the `runBulk` shape; `runBulk`'s own
 per-item failure semantics stay separate). Pinned by `RequestsFilterStateTest`.
+The enrichment half is one private `enrichEach` core now (distinct-id fan-out,
+`Semaphore(4)`, per-item failure swallowed) whose map merge is atomic:
+every completion folds through `updateState { }` —
+`Snapshot.withMutableSnapshot` over the Compose-snapshot `_state` — so two
+enrich coroutines completing concurrently can no longer each copy the same
+stale base map and silently drop one result (the lost-update the old
+`_state.value = _state.value.copy(...)` pairs allowed); `removeQueueItem`'s
+two-key eviction rides the same fold. Pinned by
+`RequestsViewModelEnrichMergeTest` (interleaved completions, dedupe,
+failure swallow).
+
+`AlphabetRailGeometry` (beside `LibraryScreen`, the `HeatmapGridModel`
+precedent) is the alphabet rail's Compose-free math — `indexAt(y)`,
+`fisheyeScaleAt` (with its peak/sigma constants), the tap/drag jump-target
+letter fold, rail-end clamps — extracted from private functions inside the
+~1900-line screen file; the composable keeps dp/px conversion, drawing and
+pointer wiring. `groupByLabel` stays in the screen deliberately (it resolves
+`stringResource` display labels). Pinned by `AlphabetRailGeometryTest`
+(fisheye edges, `#`-bucket targets, clamps, degenerate rail height).
 
 ## Live TV recording & music collections
 
@@ -1194,6 +1213,26 @@ private twins are gone. Trim-only sites (`switchServerAddress`,
 `NetworkOfflineStore`, `ServerAddressRouter`, `SocketUrl`) are a different
 policy and stay local.
 
+The 2026-09-07 second wave deepened the paged reads and the telemetry
+capture side. **`JellyfinPagingSource`** (`shared/core/data` commonMain
+`paging/`) is the ONE paged source: the refresh-key and next/prev page math
+that `MediaPagingSource`/`FavoritesPagingSource`/`SearchPagingSource` used to
+hand-copy three times now lives behind one `fetch(startIndex, limit)` lambda,
+with `pagedMediaPager` owning the single `Pager`/`PagingConfig`
+(`PAGE_SIZE = 50`, `PREFETCH_DISTANCE = 20`) and the blank-query guard
+surviving as the `MediaRepository.searchPagingSource` extension (pinned at
+that exact seam). The three classes and their three suites are deleted —
+`JellyfinPagingSourceTest` pins the boundary math once, parameterized across
+all three flavours. **`PlaybackRepositoryImpl`'s three report methods** run
+one private `reportOrStage(stage, send)`: offline → stage, online failure →
+stage, success → send — each report declares its outbox payload exactly once
+(the enqueue argument list previously appeared twice per method and could
+desync offline staging from failure staging); STOP's
+`deletePlaybackTelemetryForItem` fires only on a delivered stop.
+`SQLITE_HOST_VARIABLE_CHUNK_SIZE` (`util/SqliteLimits.kt`) replaces the three
+local 900s (`SeenMediaRepositoryImpl`, `OfflineSyncManager`,
+`OfflineRepositoryImpl`).
+
 ## Concurrency (`shared/core/concurrency`)
 
 **`:shared:core:concurrency`** (commonMain, zero-dependency leaf below
@@ -1213,6 +1252,18 @@ in mappers) keep stdlib `runCatching`. **`BareRunCatchingRatchetTest`**
 legacy `core/data` tree, `:app` and `:apps:desktop` never increases —
 lower the baseline when another site converts, never raise it; prefer
 extracting a legitimate parse out of the suspend body over raising it.
+**`Semaphore.mapConcurrent` / `mapConcurrentCatching`**
+(`MapConcurrent.kt`, same module) is the one bounded-parallel-map surface:
+order-preserving `items.map { async { withPermit { … } } }.awaitAll()` written
+once (plus the `Catching` variant for the drop-failed-item policy, which rides
+`runCatchingRethrowingCancellation` — a failing item is dropped, a cancelling
+one still cancels the caller). Every site keeps its own concurrency constant
+and post-processing; only the permit ladder is shared. Adopters:
+`HomeSectionsFetcher`'s three fan-outs, `MediaInfoApiClientImpl`,
+`PhotoFolderPrefetcher`, `AdminStatisticsRepositoryImpl`,
+`OfflineSyncManager`, `EpisodeCatalogueImpl` and `ArrRepositoryImpl` (whose
+private `fanOut` is deleted). Pinned by `MapConcurrentTest` (order under
+randomized delays, permit bound, cancellation propagation both variants).
 **`TaskBundle`** is the cancel-and-replace slot choreography (named keys
 over a caller-owned scope; deliberately NOT thread-safe — the same
 dispatcher-confinement contract as the plain `Job?` vars it replaces).
@@ -1309,6 +1360,29 @@ so Android passes `homeModeChanges = null` while desktop feeds the store
 flow for its optimistic rail switch. Platform-conditional blocks (rail,
 media keys, surface probe, saved-state config) stay per-shell. Pinned by
 `ShellSessionControllerTest` (11 tests).
+
+**`UserMessageHost`** (`shared/feature/shell`,
+`UserMessageHost.kt`) is the message-presentation seam behind every shell —
+the fix for the two `:app` collectors that hand-copied the
+severity→duration policy and the TV-Toast/phone-Snackbar fork, and for
+desktop/web never collecting the shared `UserMessageBus` at all (shared-feature
+error feedback was silently dropped on non-Android shells). Interface:
+`UserMessageHost(resolveText, present)` + `host(vararg sources)` for shared
+`UserMessage` payloads, `hostAdapted(sources, severityOf, resolveText)` for
+shell-owned payloads (the legacy `core:ui` bus), pure `durationFor(severity)`
+(Error→Long, Info→Short), and the commonMain `resolveUiText` helper. The
+choreography inside: one collector over `merge(sources)`, serial presentation
+(a mid-presentation message queues, never drops), exactly-once, per-source
+order. Each shell supplies only the `present` adapter — Android's owns the
+entire TV-vs-phone fork (`remember(isTv)`; both `LaunchedEffect`s keep the
+`(bus, isTv)` keys), desktop's maps onto `SnackbarHostState` and now feeds the
+shared bus alongside its music relay (the relay's messages deliberately
+normalize to Error/Long with a dismiss action — the presentation Android's
+own music-bus bridge always gave the same messages; desktop's old
+no-dismiss/Short snackbars were the drift). `apps/web` has no message surface
+(inline Text only) and adopts nothing. Pinned by `UserMessageHostTest`
+(severity table, merge exactly-once/order, queue-not-drop, and the
+desktop-receives-shared-bus regression).
 
 The shells share the platform-free shell policy in `shared/feature/shell`:
 **`AdminRefreshGate`** is the admin-status dedupe (30 s window + in-flight
@@ -1581,7 +1655,40 @@ helper's Library/Seerr notify twins (deleted), the Now Playing updater's
 start/presence reads, and the work scheduler's bound-widget gates all call
 them; `NowPlayingWidget.viewVisibility` is deleted for the skeleton's
 `toViewVisibility`. No helper test — trivial Android pass-throughs
-(`WidgetPersistHelperTest` already pins the empty-id branch).
+(`WidgetPersistHelperTest` already pins the empty-id branch). The provider
+LIFECYCLE half joined too: **`GridWidgetProvider`** (between
+`WidgetProviderSkeleton` and the two recommendation providers) owns the
+`onUpdate` (loop + `triggerInitialRefresh`), `onAppWidgetOptionsChanged`,
+`onEnabled`/`onDisabled` (scope cancel) and `ACTION_REFRESH`-on-`onReceive`
+choreography the Library/Seerr twins hand-copied; subclasses keep only
+`gridViewId`/`refreshAction` plus the `updateWidget`/`refreshNow`/`onUpdateWidgets`
+seams (request codes stay in each subclass's PendingIntent wiring, values
+unchanged). `WidgetWorkScheduler`'s `refreshLibraryNow`/`refreshSeerrNow`
+twins and double `enqueuePeriodic` build collapsed onto one private
+`Flavour` table; public member names unchanged and
+`WidgetWorkSchedulerTest` passes unmodified.
+
+## App shell (`:app`)
+
+**`PinGateController`** (beside `AppLockState`) is the app-lock state machine
+that used to live inline in `MainActivity`'s `setContent`: one command
+`submit(pin)` → `Unlocked` / `Incorrect` / `LockedOut(remainingMs)`, owning
+the click-time lockout re-check (a lockout may land between composition and
+tap), the record-failure-then-re-read-limiter ordering, and the success
+ordering (unlock → clear error via `submit`'s `onUnlocked` hook → reset
+limiter) over constructor-injected `PinRateLimiter`/`AppLockState`/`verifyPin`
+seam/clock. The pure
+`lockoutMessage(remainingMs)` fold sits on its companion; the Activity is a
+thin render adapter. Pinned by `PinGateControllerTest` (lockout race,
+failure accounting, boundaries).
+
+**`BackExitConfirmation`** (`shared/core/ui/components`, the
+`ScrollDirectionVisibility` precedent) is the double-back-to-exit policy both
+shells shared as a hand-copied `ExitConfirmationTimeoutMs = 2000L` pair:
+`onBack(nowMs, lastAtMs, atExitPoint)` → `Pop` / `Prompt(nowMs)` / `Exit`,
+exit resets the window. `JellyPlayApp` and `TvNavigationDrawer` keep only the
+`moveTaskToBack` + Toast effects. Pinned by `BackExitConfirmationTest`
+(1999/2000 ms boundaries, window reset).
 
 ## Rejected designs
 

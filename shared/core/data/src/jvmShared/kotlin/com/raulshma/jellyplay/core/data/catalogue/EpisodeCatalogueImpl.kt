@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.catalogue
 
+import com.raulshma.jellyplay.core.concurrency.mapConcurrent
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.concurrency.SingleFlightFetcher
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
@@ -13,11 +14,9 @@ import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.sync.withPermit
 import java.util.concurrent.atomic.AtomicLong
 
 /**
@@ -252,21 +251,14 @@ class EpisodeCatalogueImpl(
         seasons: List<MediaItem>,
         epochAtStart: Long,
     ): EpisodeCatalogueSnapshot {
-        val grouped = java.util.concurrent.ConcurrentHashMap<String, List<MediaItem>>()
-        coroutineScope {
-            seasons.forEach { season ->
-                launch {
-                    seasonSemaphore.withPermit {
-                        val episodesResult = apiClient.getEpisodes(seriesId, season.id)
-                        if (epoch.get() == epochAtStart) {
-                            episodesResult.onSuccess { episodes ->
-                                grouped[season.id] = episodes
-                            }
-                        }
-                    }
-                }
+        val grouped = seasonSemaphore.mapConcurrent(seasons) { season ->
+            val episodesResult = apiClient.getEpisodes(seriesId, season.id)
+            if (epoch.get() == epochAtStart) {
+                episodesResult.getOrNull()?.let { season.id to it }
+            } else {
+                null
             }
-        }
+        }.filterNotNull().toMap()
         return buildSnapshot(seriesId, seasons, grouped, epochAtStart)
     }
 

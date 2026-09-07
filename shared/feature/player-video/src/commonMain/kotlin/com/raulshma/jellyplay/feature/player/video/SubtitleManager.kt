@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.player.video
 
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStore
@@ -918,30 +919,39 @@ internal class SubtitleManager(
         val itemId = getCurrentItemId() ?: return
         _state.update { it.copy(isUploadingSubtitle = true) }
         scope.launch {
-            val result = runCatching {
-                withContext(Dispatchers.IO) {
-                    val size = queryFileSizeBytes(uri)
-                    if (size in 1..MAX_SUBTITLE_UPLOAD_BYTES) {
-                        // Expected path: a real subtitle file well under the cap.
-                        readAndEncode(uri)
-                    } else if (size > MAX_SUBTITLE_UPLOAD_BYTES) {
-                        throw java.io.IOException("Subtitle file is too large (${size / 1024} KB). Limit is ${MAX_SUBTITLE_UPLOAD_BYTES / 1024} KB.")
-                    } else {
-                        // SIZE unknown (some providers return 0/null) — read the file
-                        // but reject it if it is genuinely empty. A 0-byte pick is
-                        // never a usable subtitle and would surface as a confusing
-                        // server error after Base64-encoding an empty string.
-                        val bytes = readBytes(uri)
-                        if (bytes.isEmpty()) {
-                            throw java.io.IOException("Selected subtitle file is empty")
+            // Cancellation-rethrowing variants: the suspending stages here (the
+            // IO read and the server upload) must propagate
+            // CancellationException — a bare runCatching/mapCatching would mask
+            // structured cancellation as a failed upload. The spinner reset
+            // rides a finally around the upload block alone: it lands as soon
+            // as the upload settles (the old fall-through position) and still
+            // fires on the cancelled path the rethrow introduced.
+            val result = try {
+                runCatchingRethrowingCancellation {
+                    val base64 = withContext(Dispatchers.IO) {
+                        val size = queryFileSizeBytes(uri)
+                        if (size in 1..MAX_SUBTITLE_UPLOAD_BYTES) {
+                            // Expected path: a real subtitle file well under the cap.
+                            readAndEncode(uri)
+                        } else if (size > MAX_SUBTITLE_UPLOAD_BYTES) {
+                            throw java.io.IOException("Subtitle file is too large (${size / 1024} KB). Limit is ${MAX_SUBTITLE_UPLOAD_BYTES / 1024} KB.")
+                        } else {
+                            // SIZE unknown (some providers return 0/null) — read the file
+                            // but reject it if it is genuinely empty. A 0-byte pick is
+                            // never a usable subtitle and would surface as a confusing
+                            // server error after Base64-encoding an empty string.
+                            val bytes = readBytes(uri)
+                            if (bytes.isEmpty()) {
+                                throw java.io.IOException("Selected subtitle file is empty")
+                            }
+                            java.util.Base64.getEncoder().encodeToString(bytes)
                         }
-                        java.util.Base64.getEncoder().encodeToString(bytes)
                     }
+                    playbackRepository.uploadSubtitle(itemId, base64, fileName, language, isForced, isHearingImpaired).getOrThrow()
                 }
-            }.mapCatching { base64 ->
-                playbackRepository.uploadSubtitle(itemId, base64, fileName, language, isForced, isHearingImpaired).getOrThrow()
+            } finally {
+                _state.update { it.copy(isUploadingSubtitle = false) }
             }
-            _state.update { it.copy(isUploadingSubtitle = false) }
             result.onSuccess {
                 // Refresh media detail so the uploaded track surfaces in the
                 // subtitle track list — same approach as downloadSubtitle().

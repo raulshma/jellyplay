@@ -7,6 +7,7 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import com.raulshma.jellyplay.core.data.sync.toOfflineSyncState
 import com.raulshma.jellyplay.core.data.sync.toOfflineSyncUpdate
+import com.raulshma.jellyplay.core.data.util.SQLITE_HOST_VARIABLE_CHUNK_SIZE
 import com.raulshma.jellyplay.core.database.JellyPlayDatabase
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
 import com.raulshma.jellyplay.core.database.dao.OfflineMediaDao
@@ -48,13 +49,6 @@ import androidx.collection.LruCache
  * Anything shorter would match too many unrelated items.
  */
 const val MIN_OFFLINE_SEARCH_LENGTH: Int = 2
-
-/**
- * Batch size for `WHERE mediaItemId IN (...)` download lookups. SQLite's
- * legacy host-variable cap is 999 (Android < 12); the whole-library episode
- * paths can exceed that, so ids are chunked below it.
- */
-private const val MAX_SQLITE_HOST_VARIABLES = 900
 
 private val MEDIA_TYPE_BY_NAME: Map<String, MediaType> = MediaType.entries.associateBy { it.name }
 private val DOWNLOAD_STATUS_BY_NAME: Map<String, DownloadStatus> = DownloadStatus.entries.associateBy { it.name }
@@ -236,7 +230,7 @@ class OfflineRepositoryImpl constructor(
         if (ids.isEmpty()) {
             flowOf(emptyMap())
         } else {
-            combine(ids.chunked(MAX_SQLITE_HOST_VARIABLES).map { chunk ->
+            combine(ids.chunked(SQLITE_HOST_VARIABLE_CHUNK_SIZE).map { chunk ->
                 downloadDao.getDownloadsByMediaItemIdsFlow(chunk)
                     .map { list -> list.associateBy { it.mediaItemId } }
             }) { maps -> maps.reduce { acc, map -> acc + map } }
@@ -256,14 +250,14 @@ class OfflineRepositoryImpl constructor(
         if (ids.isEmpty()) {
             flowOf(emptyMap())
         } else {
-            combine(ids.chunked(MAX_SQLITE_HOST_VARIABLES).map { chunk ->
+            combine(ids.chunked(SQLITE_HOST_VARIABLE_CHUNK_SIZE).map { chunk ->
                 query(chunk, OFFLINE_WATCHED_THRESHOLD_PERCENT)
                     .map { rows -> rows.associate { it.groupedId to it.unplayedCount } }
             }) { maps -> maps.reduce { acc, map -> acc + map } }
         }
 
     private suspend fun downloadsByItemIds(ids: List<String>): Map<String, DownloadEntity> =
-        ids.chunked(MAX_SQLITE_HOST_VARIABLES)
+        ids.chunked(SQLITE_HOST_VARIABLE_CHUNK_SIZE)
             .flatMap { downloadDao.getDownloadsByMediaItemIds(it) }
             .associateBy { it.mediaItemId }
 

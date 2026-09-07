@@ -17,6 +17,8 @@ import com.raulshma.jellyplay.core.model.OfflineSyncState
 import com.raulshma.jellyplay.core.model.ResyncBatchProgress
 import com.raulshma.jellyplay.core.model.ResyncCheckResult
 import com.raulshma.jellyplay.core.model.ResyncItemProgress
+import com.raulshma.jellyplay.core.concurrency.mapConcurrent
+import com.raulshma.jellyplay.core.data.util.SQLITE_HOST_VARIABLE_CHUNK_SIZE
 import com.raulshma.jellyplay.core.model.ResyncCategory
 import com.raulshma.jellyplay.core.model.ResyncOptions
 import com.raulshma.jellyplay.core.model.ResyncPhase
@@ -27,14 +29,11 @@ import com.raulshma.jellyplay.core.model.SyncStatus
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import java.io.File
 
@@ -199,12 +198,10 @@ class OfflineSyncManager(
         if (itemIds.isEmpty()) return@withContext emptyList()
         // Chunked like SeenMediaRepositoryImpl's IN queries: Android SQLite caps
         // a statement at 999 bound params, and the item list is uncapped.
-        val baselinesById = itemIds.chunked(BASELINE_QUERY_CHUNK_SIZE)
+        val baselinesById = itemIds.chunked(SQLITE_HOST_VARIABLE_CHUNK_SIZE)
             .flatMap { syncBaselineDao.getBaselines(it) }
             .associateBy { it.id }
-        itemIds.map { id ->
-            async { checkPermits.withPermit { checkForUpdates(id, force, baselinesById[id]) } }
-        }.awaitAll()
+        checkPermits.mapConcurrent(itemIds) { checkForUpdates(it, force, baselinesById[it]) }
     }
 
     /**
@@ -550,8 +547,6 @@ class OfflineSyncManager(
         const val SYNC_TTL_MS = 60L * 60 * 1000
         // Caps concurrent detail fetches during a batch check.
         private val checkPermits = Semaphore(permits = 4)
-        // SQLite allows at most 999 bound params per statement; stay safely under.
-        private const val BASELINE_QUERY_CHUNK_SIZE = 900
     }
 }
 

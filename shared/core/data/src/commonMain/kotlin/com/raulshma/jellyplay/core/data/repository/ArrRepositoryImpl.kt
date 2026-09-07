@@ -21,6 +21,7 @@ import com.raulshma.jellyplay.core.network.arr.SonarrApiClient
 import com.raulshma.jellyplay.core.model.arr.ArrServerConfig
 import com.raulshma.jellyplay.core.model.arr.ArrServiceKind
 import com.raulshma.jellyplay.core.model.arr.ArrServiceSummary
+import com.raulshma.jellyplay.core.concurrency.mapConcurrent
 import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrSettings
 import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrSettings
 import com.raulshma.jellyplay.core.network.api.ApiException
@@ -33,7 +34,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.LocalDate
 
@@ -149,11 +149,11 @@ class ArrRepositoryImpl(
             _queue.value = emptyList()
             return@withContext Result.success(Unit)
         }
-        val combined = fanOut(summary.radarrServers + summary.sonarrServers) { srv ->
+        val combined = resolveSemaphore.mapConcurrent(summary.radarrServers + summary.sonarrServers) { srv ->
             clientFor(srv).getQueue()
                 .getOrElse { emptyList() }
                 .map { it.tagged(srv.id, srv.kind) }
-        }
+        }.flatten()
         _queue.value = combined
         Result.success(Unit)
     }
@@ -171,9 +171,9 @@ class ArrRepositoryImpl(
             // params to the Radarr/Sonarr `/api/v3/calendar` endpoints).
             val startStr = from.toString()
             val endStr = to.toString()
-            val combined = fanOut(summary.radarrServers + summary.sonarrServers) { srv ->
+            val combined = resolveSemaphore.mapConcurrent(summary.radarrServers + summary.sonarrServers) { srv ->
                 clientFor(srv).getCalendar(startStr, endStr).getOrElse { emptyList() }
-            }
+            }.flatten()
             _calendar.value = CalendarCache(key, combined)
             Result.success(Unit)
         }
@@ -204,11 +204,11 @@ class ArrRepositoryImpl(
             _blocklist.value = emptyList()
             return@withContext Result.success(Unit)
         }
-        val combined = fanOut(summary.radarrServers + summary.sonarrServers) { srv ->
+        val combined = resolveSemaphore.mapConcurrent(summary.radarrServers + summary.sonarrServers) { srv ->
             clientFor(srv).getBlocklist()
                 .getOrElse { emptyList() }
                 .map { it.tagged(srv.id, srv.kind) }
-        }
+        }.flatten()
         _blocklist.value = combined
         Result.success(Unit)
     }
@@ -765,22 +765,6 @@ class ArrRepositoryImpl(
         } else {
             SonarrServiceClient(sonarrApiClient, server)
         }
-
-    /**
-     * One queue/calendar/blocklist-style fan-out: every server is fetched
-     * concurrently under [resolveSemaphore] (bounded), a per-server failure
-     * degrades to an empty contribution, and the survivors are concatenated
-     * in encounter order — the merge order the hand-copied twins
-     * (radarr jobs + sonarr jobs) had.
-     */
-    private suspend fun <T> fanOut(
-        servers: List<ArrServerConfig>,
-        fetch: suspend (ArrServerConfig) -> List<T>,
-    ): List<T> = coroutineScope {
-        servers.map { srv ->
-            async { resolveSemaphore.withPermit { fetch(srv) } }
-        }.awaitAll().flatten()
-    }
 
     private suspend fun findServer(serverId: String, kind: ArrServiceKind): ArrServerConfig? {
         val summary = resolveServers().getOrDefault(ArrServiceSummary())

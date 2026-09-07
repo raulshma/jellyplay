@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.network.api
 
+import com.raulshma.jellyplay.core.concurrency.mapConcurrent
 import com.raulshma.jellyplay.core.model.ActivityLogEntry
 import com.raulshma.jellyplay.core.model.ContentBreakdown
 import com.raulshma.jellyplay.core.model.ItemCounts
@@ -15,8 +16,8 @@ import com.raulshma.jellyplay.core.model.StaleMediaItem
 import com.raulshma.jellyplay.core.model.TtlCache
 import com.raulshma.jellyplay.core.model.WatchedMediaItem
 import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Semaphore
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
@@ -83,26 +84,17 @@ class MediaInfoApiClientImpl @Inject constructor(
                     // HTTP requests against a single Jellyfin instance, which
                     // often has a per-connection thread cap and degrades
                     // everyone's experience.
-                    val semaphore = kotlinx.coroutines.sync.Semaphore(4)
-                    candidateFolders
-                        .map { folder ->
-                            async {
-                                semaphore.acquire()
-                                try {
-                                    engine.requireApi().userLibraryApi.getLatestMedia(
-                                        parentId = folder.id,
-                                        limit = limit,
-                                        fields = listOf(
-                                            ItemFields.OVERVIEW,
-                                            ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
-                                        ),
-                                    ).content ?: emptyList()
-                                } finally {
-                                    semaphore.release()
-                                }
-                            }
-                        }.awaitAll()
-                        .flatMap { it }
+                    Semaphore(4).mapConcurrent(candidateFolders) { folder ->
+                        engine.requireApi().userLibraryApi.getLatestMedia(
+                            parentId = folder.id,
+                            limit = limit,
+                            fields = listOf(
+                                ItemFields.OVERVIEW,
+                                ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
+                            ),
+                        ).content ?: emptyList()
+                    }
+                        .flatten()
                         .map { it.toMediaItem() }.distinctBy { it.id }.take(limit)
                 } catch (_: Exception) { emptyList() }
             }

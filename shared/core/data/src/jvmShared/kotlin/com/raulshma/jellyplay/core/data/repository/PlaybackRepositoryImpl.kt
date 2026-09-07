@@ -58,32 +58,20 @@ class PlaybackRepositoryImpl(
         sessionCacheRegistry.registerCaches("playback", segmentsCache)
     }
 
-    override suspend fun reportPlaybackStart(info: PlaybackStartInfo): Result<Unit> {
-        // Offline (or a transient HTTP failure): stage the event so the
-        // PlaybackSyncWorker can replay it on reconnect. Report success back
-        // to the caller so it does not double-enqueue or surface an error UI.
-        if (offlineModeManager.isOffline) {
+    override suspend fun reportPlaybackStart(info: PlaybackStartInfo): Result<Unit> = reportOrStage(
+        stage = {
             outbox.enqueueStart(
                 itemId = info.itemId,
                 sessionId = info.sessionId,
                 playMethod = info.playMethod,
                 startPositionTicks = info.startPositionTicks,
             )
-            return Result.success(Unit)
-        }
-        return apiClient.reportPlaybackStart(info.itemId, info.sessionId, info.playMethod)
-            .onFailure {
-                outbox.enqueueStart(
-                    itemId = info.itemId,
-                    sessionId = info.sessionId,
-                    playMethod = info.playMethod,
-                    startPositionTicks = info.startPositionTicks,
-                )
-            }
-    }
+        },
+        send = { apiClient.reportPlaybackStart(info.itemId, info.sessionId, info.playMethod) },
+    )
 
-    override suspend fun reportPlaybackProgress(progress: PlaybackProgress): Result<Unit> {
-        if (offlineModeManager.isOffline) {
+    override suspend fun reportPlaybackProgress(progress: PlaybackProgress): Result<Unit> = reportOrStage(
+        stage = {
             outbox.enqueueProgress(
                 itemId = progress.itemId,
                 sessionId = progress.sessionId,
@@ -92,45 +80,53 @@ class PlaybackRepositoryImpl(
                 playMethod = progress.playMethod,
                 mediaSourceId = progress.mediaSourceId,
             )
-            return Result.success(Unit)
-        }
-        return apiClient.reportPlaybackProgress(
-            progress.itemId,
-            progress.sessionId,
-            progress.positionTicks,
-            progress.isPaused,
-            progress.playMethod,
-        ).onFailure {
-            outbox.enqueueProgress(
-                itemId = progress.itemId,
-                sessionId = progress.sessionId,
-                positionTicks = progress.positionTicks,
-                isPaused = progress.isPaused,
-                playMethod = progress.playMethod,
-                mediaSourceId = progress.mediaSourceId,
+        },
+        send = {
+            apiClient.reportPlaybackProgress(
+                progress.itemId,
+                progress.sessionId,
+                progress.positionTicks,
+                progress.isPaused,
+                progress.playMethod,
             )
-        }
-    }
+        },
+    )
 
     override suspend fun reportPlaybackStopped(
         itemId: String,
         sessionId: String,
         positionTicks: Long,
+    ): Result<Unit> = reportOrStage(
+        stage = { outbox.enqueueStop(itemId, sessionId, positionTicks) },
+        send = {
+            apiClient.reportPlaybackStopped(itemId, sessionId, positionTicks).onSuccess {
+                // A delivered STOP supersedes any pending START/PROGRESS/STOP for
+                // this item — the server now has the authoritative final position.
+                // Scoped to telemetry only: a pending PLAYED/UNPLAYED flip is an
+                // orthogonal user intent and must still drain.
+                outbox.deletePlaybackTelemetryForItem(itemId)
+            }
+        },
+    )
+
+    /**
+     * Stage-or-send shared by the three telemetry reports: offline, [stage]
+     * enqueues the event so the PlaybackSyncWorker can replay it on reconnect
+     * and success is reported back so the caller does not double-enqueue or
+     * surface an error UI; online, [send] reports straight through and the
+     * SAME [stage] payload is enqueued only on failure — the enqueue argument
+     * list is declared exactly once, at the [stage] parameter.
+     */
+    private suspend fun reportOrStage(
+        stage: suspend () -> Unit,
+        send: suspend () -> Result<Unit>,
     ): Result<Unit> {
         if (offlineModeManager.isOffline) {
-            outbox.enqueueStop(itemId, sessionId, positionTicks)
+            stage()
             return Result.success(Unit)
         }
-        val result = apiClient.reportPlaybackStopped(itemId, sessionId, positionTicks)
-        if (result.isSuccess) {
-            // A delivered STOP supersedes any pending START/PROGRESS/STOP for
-            // this item — the server now has the authoritative final position.
-            // Scoped to telemetry only: a pending PLAYED/UNPLAYED flip is an
-            // orthogonal user intent and must still drain.
-            outbox.deletePlaybackTelemetryForItem(itemId)
-        } else {
-            outbox.enqueueStop(itemId, sessionId, positionTicks)
-        }
+        val result = send()
+        if (result.isFailure) stage()
         return result
     }
 

@@ -1,16 +1,12 @@
 package com.raulshma.jellyplay.core.data.repository
 
+import com.raulshma.jellyplay.core.data.util.SQLITE_HOST_VARIABLE_CHUNK_SIZE
 import com.raulshma.jellyplay.core.database.dao.SeenMediaDao
 import com.raulshma.jellyplay.core.database.entity.SeenMediaEntity
 
 class SeenMediaRepositoryImpl constructor(
     private val seenMediaDao: SeenMediaDao,
 ) : SeenMediaRepository {
-
-    private companion object {
-        /** SQLite allows at most 999 bound params per statement; stay safely under. */
-        const val SEEN_IDS_QUERY_CHUNK_SIZE = 900
-    }
 
     override suspend fun count(): Int = seenMediaDao.count()
 
@@ -19,7 +15,7 @@ class SeenMediaRepositoryImpl constructor(
         // Chunk the input so a >999-element library does not throw
         // SQLiteBindOrColumnIndexOutOfRangeException.
         if (itemIds.isEmpty()) return emptySet()
-        return itemIds.chunked(SEEN_IDS_QUERY_CHUNK_SIZE)
+        return itemIds.chunked(SQLITE_HOST_VARIABLE_CHUNK_SIZE)
             .flatMap { seenMediaDao.getSeenIds(it) }
             .toSet()
     }
@@ -73,7 +69,7 @@ class SeenMediaRepositoryImpl constructor(
         val orphans = (allSeen.toSet() - liveItemIds)
         if (orphans.isEmpty()) return 0
         var removed = 0
-        for (chunk in orphans.chunked(SEEN_IDS_QUERY_CHUNK_SIZE)) {
+        for (chunk in orphans.chunked(SQLITE_HOST_VARIABLE_CHUNK_SIZE)) {
             removed += seenMediaDao.deleteByItemIds(chunk)
         }
         return removed

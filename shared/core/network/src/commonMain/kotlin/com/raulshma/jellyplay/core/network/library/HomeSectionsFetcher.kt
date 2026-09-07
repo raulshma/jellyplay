@@ -1,5 +1,7 @@
 package com.raulshma.jellyplay.core.network.library
 
+import com.raulshma.jellyplay.core.concurrency.mapConcurrent
+import com.raulshma.jellyplay.core.concurrency.mapConcurrentCatching
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.model.CacheIdentity
 import com.raulshma.jellyplay.core.model.HomeFreshness
@@ -18,7 +20,6 @@ import com.raulshma.jellyplay.core.model.TtlCache
 import com.raulshma.jellyplay.core.model.descriptor
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Semaphore
 
@@ -172,16 +173,9 @@ internal class HomeSectionsFetcher(
             foldersResult.onSuccess { folders ->
                 val filteredFolders = folders
                     .filter { it.collectionType != "music" }
-                val semaphore = Semaphore(4)
-                latestPerFolder = filteredFolders
-                    .map { folder ->
-                        async {
-                            semaphore.acquire()
-                            try { folder to getLatestMediaForHome(folder.id, limit = 16, force = force, identity = identity) }
-                            finally { semaphore.release() }
-                        }
-                    }
-                    .map { it.await() }
+                latestPerFolder = Semaphore(4).mapConcurrent(filteredFolders) { folder ->
+                    folder to getLatestMediaForHome(folder.id, limit = 16, force = force, identity = identity)
+                }
             }
         }
 
@@ -284,24 +278,15 @@ internal class HomeSectionsFetcher(
         if (seedItems.isEmpty()) return@runCatchingRethrowingCancellation RecommendationResult(emptyList(), null)
 
         val seedIds = seedItems.map { it.id }.toSet()
-        val semaphore = Semaphore(3)
-        val allSimilar = coroutineScope {
-            seedItems.map { seed ->
-                async {
-                    semaphore.acquire()
-                    try {
-                        // Routed through homeSimilarCache: recommendations are the
-                        // most expensive part of a home refresh (up to 5 concurrent
-                        // similar-items calls) and seeds rarely change within the
-                        // TTL window, so back-to-back refreshes (60s cadence) skip
-                        // the fan-out. Also benefits the detail screen's re-entry.
-                        val perSeedLimit = limit / seedItems.size + 2
-                        getSimilarItemsForHome(seed.id, perSeedLimit, force, identity).getOrDefault(emptyList())
-                    }
-                    finally { semaphore.release() }
-                }
-            }.flatMap { it.await() }
-        }
+        val allSimilar = Semaphore(3).mapConcurrent(seedItems) { seed ->
+            // Routed through homeSimilarCache: recommendations are the
+            // most expensive part of a home refresh (up to 5 concurrent
+            // similar-items calls) and seeds rarely change within the
+            // TTL window, so back-to-back refreshes (60s cadence) skip
+            // the fan-out. Also benefits the detail screen's re-entry.
+            val perSeedLimit = limit / seedItems.size + 2
+            getSimilarItemsForHome(seed.id, perSeedLimit, force, identity).getOrDefault(emptyList())
+        }.flatten()
 
         val recommendations = allSimilar
             .filter { it.id !in seedIds }
@@ -315,32 +300,19 @@ internal class HomeSectionsFetcher(
         pinnedSections: List<PinnedHomeSection>,
     ): List<HomeSection> {
         if (pinnedSections.isEmpty()) return emptyList()
-        val semaphore = Semaphore(4)
-        return coroutineScope {
-            val deferred = pinnedSections.map { pinned ->
-                async {
-                    semaphore.acquire()
-                    try {
-                        val items = getPinnedSectionItems(pinned)
-                        if (items.isNotEmpty()) {
-                            HomeSection(
-                                id = HomeSectionType.PINNED.descriptor.idFor(pinned.id),
-                                title = pinned.title,
-                                type = HomeSectionType.PINNED,
-                                items = items,
-                            )
-                        } else null
-                    } catch (_: Exception) {
-                        // A single failing pin (e.g. deleted collection) must not
-                        // break the whole home screen; just drop that row.
-                        null
-                    } finally {
-                        semaphore.release()
-                    }
-                }
-            }
-            deferred.awaitAll().filterNotNull()
-        }
+        // A single failing pin (e.g. deleted collection) must not break the
+        // whole home screen; drop that row — mapConcurrentCatching's policy.
+        return Semaphore(4).mapConcurrentCatching(pinnedSections) { pinned ->
+            val items = getPinnedSectionItems(pinned)
+            if (items.isNotEmpty()) {
+                HomeSection(
+                    id = HomeSectionType.PINNED.descriptor.idFor(pinned.id),
+                    title = pinned.title,
+                    type = HomeSectionType.PINNED,
+                    items = items,
+                )
+            } else null
+        }.filterNotNull()
     }
 
     /** Resolves the items for a single pinned section using its source type. */

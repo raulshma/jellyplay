@@ -1,13 +1,10 @@
 package com.raulshma.jellyplay.core.data.util
 
+import com.raulshma.jellyplay.core.concurrency.mapConcurrent
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
 
 /**
  * Prefetches child image URLs for photo-folder items in parallel with a bounded
@@ -34,14 +31,9 @@ class PhotoFolderPrefetcher(
             it.mediaType == MediaType.PHOTO_FOLDER && it.id !in alreadyFetched
         }
         if (toFetch.isEmpty()) return emptyMap()
-        val permits = Semaphore(concurrency)
-        return coroutineScope {
-            toFetch.map { folder ->
-                async {
-                    permits.withPermit { folder.id to mediaRepository.getPhotoFolderChildImageUrls(folder.id) }
-                }
-            }.awaitAll().toMap()
-        }
+        return Semaphore(concurrency).mapConcurrent(toFetch) { folder ->
+            folder.id to mediaRepository.getPhotoFolderChildImageUrls(folder.id)
+        }.toMap()
     }
 
     companion object {

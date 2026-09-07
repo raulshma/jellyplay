@@ -126,6 +126,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.containerTint
 import com.raulshma.jellyplay.core.designsystem.theme.shadowElevation
 import com.raulshma.jellyplay.core.designsystem.theme.tonalElevation
 import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
+import com.raulshma.jellyplay.core.ui.components.BackExitConfirmation
 import com.raulshma.jellyplay.core.ui.components.MiniPlayer
 import com.raulshma.jellyplay.core.ui.components.clearFloatingNav
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
@@ -158,6 +159,9 @@ import com.raulshma.jellyplay.core.ui.tv.isTv
 import com.raulshma.jellyplay.feature.auth.navigation.authSection
 import com.raulshma.jellyplay.feature.home.navigation.HomePlayOnRedirect
 import com.raulshma.jellyplay.feature.player.live.navigation.livePlayerSection
+import com.raulshma.jellyplay.feature.shell.UserMessageDuration
+import com.raulshma.jellyplay.feature.shell.UserMessageHost
+import com.raulshma.jellyplay.feature.shell.resolveUiText
 import com.raulshma.jellyplay.feature.shell.navigation.ShellHostHooks
 import com.raulshma.jellyplay.feature.shell.navigation.shellEntryProvider
 import com.raulshma.jellyplay.feature.subtitle.tester.navigation.subtitleTesterSection
@@ -168,8 +172,6 @@ import com.raulshma.jellyplay.shell.UpdateCoordinator
 import kotlinx.coroutines.launch
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
-
-private const val ExitConfirmationTimeoutMs = 2000L
 
 @Composable
 fun JellyPlayApp(
@@ -567,68 +569,62 @@ private fun MainContent(
     val previewBlurModifier =
         if (previewBlur > 0.5f) Modifier.blur(previewBlur.dp) else Modifier
 
-    // Single root collector for app-wide one-shot messages.
-    // Phone renders a Snackbar (accessible, dismissible, localizable); TV keeps
-    // a system Toast since the TV layout has no root SnackbarHost. Either way,
-    // emission is now centralized through UserMessageBus instead of scattered
-    // Toast.makeText calls across modules.
-    androidx.compose.runtime.LaunchedEffect(userMessageBus, isTv) {
-        userMessageBus.messages.collect { message ->
-            val resolvedText = message.text.resolve(context)
-            if (isTv) {
-                android.widget.Toast.makeText(
-                    context,
-                    resolvedText,
-                    if (message is UserMessage.Error) android.widget.Toast.LENGTH_LONG
-                    else android.widget.Toast.LENGTH_SHORT,
-                ).show()
-            } else {
-                snackbarHostState.showSnackbar(
-                    message = resolvedText,
-                    withDismissAction = true,
-                    duration = if (message is UserMessage.Error) {
-                        androidx.compose.material3.SnackbarDuration.Long
-                    } else {
-                        androidx.compose.material3.SnackbarDuration.Short
-                    },
-                )
-            }
-        }
+    // Single root collector for app-wide one-shot messages, behind the shared
+    // UserMessageHost seam: the merge→resolve→present choreography (serial
+    // presentation, queue-not-drop, exactly-once, per-source order) lives in
+    // feature/shell; this shell owns only the final surface. Phone renders a
+    // Snackbar (accessible, dismissible, localizable); TV keeps a system Toast
+    // since the TV layout has no root SnackbarHost. The host is rebuilt on
+    // isTv and both collectors key on (bus, isTv), so a TV/phone flip restarts
+    // collection exactly as the former hand-copied collectors did.
+    val userMessageHost = remember(isTv) {
+        UserMessageHost(
+            resolveText = ::resolveUiText,
+            present = { text, duration ->
+                if (isTv) {
+                    android.widget.Toast.makeText(
+                        context,
+                        text,
+                        when (duration) {
+                            UserMessageDuration.Long -> android.widget.Toast.LENGTH_LONG
+                            UserMessageDuration.Short -> android.widget.Toast.LENGTH_SHORT
+                        },
+                    ).show()
+                } else {
+                    snackbarHostState.showSnackbar(
+                        message = text,
+                        withDismissAction = true,
+                        duration = when (duration) {
+                            UserMessageDuration.Long -> androidx.compose.material3.SnackbarDuration.Long
+                            UserMessageDuration.Short -> androidx.compose.material3.SnackbarDuration.Short
+                        },
+                    )
+                }
+            },
+        )
     }
 
-    // Same severity→duration mapping as the legacy bus above, but for the
-    // shared (commonMain) bus the migrated ViewModels post through. Resource
-    // messages resolve via compose-resources' suspend getString (asString()
-    // is @Composable-only, unavailable inside a collect lambda).
+    // Legacy (:core:ui feedback) bus — its Android payload type stays outside
+    // the seam via hostAdapted: the severity projection and the legacy
+    // UiText.resolve(context) resolution are supplied here, not the shared
+    // compose-resources resolver.
+    androidx.compose.runtime.LaunchedEffect(userMessageBus, isTv) {
+        userMessageHost.hostAdapted(
+            sources = listOf(userMessageBus.messages),
+            severityOf = { message ->
+                when (message) {
+                    is UserMessage.Error -> com.raulshma.jellyplay.core.ui.message.UserMessage.Severity.Error
+                    is UserMessage.Info -> com.raulshma.jellyplay.core.ui.message.UserMessage.Severity.Info
+                }
+            },
+            resolveText = { message -> message.text.resolve(context) },
+        )
+    }
+
+    // Shared (commonMain) bus the migrated ViewModels post through — its
+    // payloads are already seam UserMessages, so plain host().
     androidx.compose.runtime.LaunchedEffect(sharedUserMessageBus, isTv) {
-        sharedUserMessageBus.messages.collect { message ->
-            val resolvedText = when (val text = message.text) {
-                is com.raulshma.jellyplay.core.ui.message.UiText.Raw -> text.value
-                is com.raulshma.jellyplay.core.ui.message.UiText.Resource ->
-                    org.jetbrains.compose.resources.getString(text.res, *text.args.toTypedArray())
-            }
-            if (isTv) {
-                android.widget.Toast.makeText(
-                    context,
-                    resolvedText,
-                    if (message is com.raulshma.jellyplay.core.ui.message.UserMessage.Error) {
-                        android.widget.Toast.LENGTH_LONG
-                    } else {
-                        android.widget.Toast.LENGTH_SHORT
-                    },
-                ).show()
-            } else {
-                snackbarHostState.showSnackbar(
-                    message = resolvedText,
-                    withDismissAction = true,
-                    duration = if (message is com.raulshma.jellyplay.core.ui.message.UserMessage.Error) {
-                        androidx.compose.material3.SnackbarDuration.Long
-                    } else {
-                        androidx.compose.material3.SnackbarDuration.Short
-                    },
-                )
-            }
-        }
+        userMessageHost.host(sharedUserMessageBus.messages)
     }
 
     val adaptiveInfo = rememberAdaptiveInfo()
@@ -787,24 +783,28 @@ private fun MainContent(
                     // Wire the system/gesture back button to in-app navigation so back
                     // from a deep screen returns to the tab root. At a tab root, mirror
                     // the TV path: prompt with a toast and only exit on a second press
-                    // within ExitConfirmationTimeoutMs. The full-screen player is
-                    // excluded — it owns its own BackHandler.
+                    // inside the shared BackExitConfirmation window. The full-screen
+                    // player is excluded — it owns its own BackHandler.
+                    val backExitConfirmation = remember { BackExitConfirmation() }
                     var lastBackPressTime by remember { mutableLongStateOf(0L) }
                     BackHandler(enabled = true) {
-                        if (!navigator.isAtTabRoot()) {
-                            navigator.goBack()
-                        } else {
-                            val now = System.currentTimeMillis()
-                            if (now - lastBackPressTime < ExitConfirmationTimeoutMs) {
-                                lastBackPressTime = 0L
-                                (context as? android.app.Activity)?.moveTaskToBack(true)
-                            } else {
-                                lastBackPressTime = now
+                        when (val decision = backExitConfirmation.onBack(
+                            nowMs = System.currentTimeMillis(),
+                            lastAtMs = lastBackPressTime,
+                            atExitPoint = navigator.isAtTabRoot(),
+                        )) {
+                            BackExitConfirmation.Decision.Pop -> navigator.goBack()
+                            is BackExitConfirmation.Decision.Prompt -> {
+                                lastBackPressTime = decision.nowMs
                                 android.widget.Toast.makeText(
                                     context,
                                     context.getString(R.string.press_back_again_to_exit),
                                     android.widget.Toast.LENGTH_SHORT,
                                 ).show()
+                            }
+                            BackExitConfirmation.Decision.Exit -> {
+                                lastBackPressTime = 0L
+                                (context as? android.app.Activity)?.moveTaskToBack(true)
                             }
                         }
                     }

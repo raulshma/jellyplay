@@ -75,6 +75,11 @@ kotlin {
             implementation(libs.jb.compose.ui)
             implementation(libs.jb.compose.foundation)
             implementation(libs.jb.compose.material3)
+            // The UserMessageHost seam's shared UiText resolver (suspend
+            // getString) — the shared core:ui keeps compose-resources
+            // implementation-scoped, so the module that resolves messages
+            // carries the runtime (core/ui precedent).
+            implementation(compose.components.resources)
             // ShellHostHooks.surpriseRequests is Flow<Unit>.
             implementation(libs.kotlinx.coroutines.core)
             // entryProvider / EntryProviderScope / NavEntry — runtime only:

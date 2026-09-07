@@ -15,6 +15,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -72,6 +73,9 @@ import com.raulshma.jellyplay.core.ui.components.LocalServerHealth
 import com.raulshma.jellyplay.core.ui.components.LocalSurpriseOnLaunch
 import com.raulshma.jellyplay.core.ui.components.PullToRefreshRegistry
 import com.raulshma.jellyplay.core.ui.components.SurpriseLaunchController
+import com.raulshma.jellyplay.core.ui.message.UiText
+import com.raulshma.jellyplay.core.ui.message.UserMessage
+import com.raulshma.jellyplay.core.ui.message.UserMessageBus
 import com.raulshma.jellyplay.core.ui.navigation.NAV_DESTINATION_BY_ROUTE
 import com.raulshma.jellyplay.core.ui.navigation.NavDestination
 import com.raulshma.jellyplay.core.ui.navigation.Navigator
@@ -85,14 +89,19 @@ import com.raulshma.jellyplay.feature.player.video.VideoPlayerScreen
 import com.raulshma.jellyplay.feature.music.feedback.DesktopMusicMessageBus
 import com.raulshma.jellyplay.feature.music.feedback.MusicMessageBus
 import com.raulshma.jellyplay.feature.shell.ShellSessionController
+import com.raulshma.jellyplay.feature.shell.UserMessageDuration
+import com.raulshma.jellyplay.feature.shell.UserMessageHost
 import com.raulshma.jellyplay.feature.shell.UpdateCheckMessage
+import com.raulshma.jellyplay.feature.shell.resolveUiText
 import com.raulshma.jellyplay.feature.shell.navigation.ShellHostHooks
 import com.raulshma.jellyplay.feature.shell.navigation.ShellSectionRegistry
 import com.raulshma.jellyplay.feature.shell.navigation.shellEntryProvider
 import com.raulshma.jellyplay.desktop.player.DesktopAudioQueueManager
 import com.raulshma.jellyplay.desktop.player.MpvSoftwareSurfaceSupport
 import kotlin.reflect.KClass
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.serialization.KSerializer
@@ -165,8 +174,11 @@ import java.util.concurrent.atomic.AtomicReference
  * playlists cluster AND play/enqueue/instant-mix actions drive real playback.
  * Track clicks navigate to the live Route.AudioPlayer (registered by
  * [audioPlayerSection] above). Since wave 21B the music error-feedback seam
- * has a host here too: the shell snackbar collects DesktopMusicMessageBus's
- * relay (one surface shared with the dead-end guard below).
+ * has a host here too, and since the shared UserMessageHost wave that host
+ * is the seam itself: the shell snackbar serves BOTH the DesktopMusicMessageBus
+ * relay and the shared UserMessageBus (whose messages desktop previously
+ * dropped) through one collector — one surface shared with the dead-end guard
+ * below.
  *
  * First-run onboarding gate (wave 21B): once an authenticated session enters
  * [DesktopNavScaffold], a one-shot read of the persisted `onboarding_completed`
@@ -438,19 +450,48 @@ private fun DesktopNavScaffold(
         )?.let(guardedNavigator::navigate)
     }
 
+    // User-message host (the shared seam): ONE collector behind every message
+    // source this shell shows. The shared UserMessageBus the migrated shared
+    // ViewModels (Home, Library, …) post through was never collected on
+    // desktop — its messages were silently dropped; the music relay below was
+    // the only hosted source. Both feed the UserMessageHost now: the
+    // severity→duration policy is the shared module's, and the snackbar is
+    // this shell's present adapter (withDismissAction, matching the Android
+    // collector this seam replaces).
+    val sharedUserMessageBus: UserMessageBus = koinInject()
     // Music message-bus host (wave 21B): the desktop MusicMessageBus actual
     // is a buffering relay (DesktopMusicMessageBus, desktopMusicMessageBus
-    // Module) — surface its error messages in the shell snackbar, the twin
-    // of Android bridging the same seam into the app-wide UserMessageBus.
-    // The is-check (not a cast) is the degrade path: a hypothetical custom
-    // Koin binding for MusicMessageBus simply goes unhosted, never crashes.
+    // Module), mapped onto UserMessage.Error — the severity Android's own
+    // bridge (AppMusicMessageBus) gives the same messages. The is-check (not
+    // a cast) stays the degrade path: a hypothetical custom Koin binding for
+    // MusicMessageBus simply goes unhosted, never crashes. Remembered on the
+    // bus so the host's collector isn't restarted (and relay bursts dropped)
+    // on every recomposition.
     val musicMessageBus: MusicMessageBus = koinInject()
-    if (musicMessageBus is DesktopMusicMessageBus) {
-        LaunchedEffect(musicMessageBus) {
-            musicMessageBus.messages.collect { message ->
-                snackbarHostState.showSnackbar(message)
-            }
+    val musicMessages: Flow<UserMessage> = remember(musicMessageBus) {
+        if (musicMessageBus is DesktopMusicMessageBus) {
+            musicMessageBus.messages.map { UserMessage.Error(UiText.Raw(it)) }
+        } else {
+            emptyFlow()
         }
+    }
+    val userMessageHost = remember(sharedUserMessageBus, musicMessages) {
+        UserMessageHost(
+            resolveText = ::resolveUiText,
+            present = { text, duration ->
+                snackbarHostState.showSnackbar(
+                    message = text,
+                    withDismissAction = true,
+                    duration = when (duration) {
+                        UserMessageDuration.Short -> SnackbarDuration.Short
+                        UserMessageDuration.Long -> SnackbarDuration.Long
+                    },
+                )
+            },
+        )
+    }
+    LaunchedEffect(sharedUserMessageBus, musicMessages) {
+        userMessageHost.host(sharedUserMessageBus.messages, musicMessages)
     }
 
     val currentTopLevel by navigation.topLevelRoute
