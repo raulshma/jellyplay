@@ -3,7 +3,7 @@ package com.raulshma.jellyplay.widget
 import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.Intent
-import android.graphics.Bitmap
+import android.net.Uri
 import android.view.View
 import android.widget.RemoteViews
 import android.widget.RemoteViewsService
@@ -11,13 +11,23 @@ import com.raulshma.jellyplay.R
 import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
 import com.raulshma.jellyplay.core.model.LibraryWidgetItem
 import com.raulshma.jellyplay.core.model.deeplink.DeepLinkGrammar
+import com.raulshma.jellyplay.widget.skeleton.WidgetGridFactory
+import com.raulshma.jellyplay.widget.skeleton.gridCellTextVisible
+import com.raulshma.jellyplay.widget.skeleton.libraryRowSubtitle
+import com.raulshma.jellyplay.widget.skeleton.libraryRowTitle
+import com.raulshma.jellyplay.widget.skeleton.toViewVisibility
 import org.koin.mp.KoinPlatform
-import kotlinx.coroutines.runBlocking
 
 /**
  * Backs the Library Recommendations widget's `GridView` with a
  * [RemoteViewsFactory] that loads cached items from
  * [WidgetDataStore.libraryWidgetItems].
+ *
+ * The factory is an adapter over [WidgetGridFactory], which owns the
+ * lifecycle choreography (snapshot read → poster preload → dims refresh →
+ * deep-link `getViewAt`); this class supplies only the Library seams: the
+ * store accessor, the row's view ids, its title/subtitle decisions, and the
+ * `jellyfin://media/{id}` fill-in link.
  *
  * `onDataSetChanged` runs on the main thread; items are read from the
  * store's eagerly-warmed [kotlinx.coroutines.flow.StateFlow] snapshots, so
@@ -42,127 +52,60 @@ class LibraryRecommendationsWidgetService : RemoteViewsService() {
     }
 
     private class LibraryRecommendationsFactory(
-        private val context: Context,
+        context: Context,
         private val store: WidgetDataStore,
-        private val appWidgetId: Int,
-    ) : RemoteViewsFactory {
+        appWidgetId: Int,
+    ) : WidgetGridFactory<LibraryWidgetItem>(
+        context = context,
+        appWidgetId = appWidgetId,
+        itemLayoutRes = R.layout.library_recommendations_item,
+        itemRootViewId = R.id.lr_item_root,
+        titleViewId = R.id.lr_item_title,
+        subtitleViewId = R.id.lr_item_subtitle,
+        defaultHeightDp = WidgetLayoutThresholds.RECOMMENDATION_GRID_DEFAULT_HEIGHT_DP,
+    ) {
 
-        private var items: List<LibraryWidgetItem> = emptyList()
-        private var loadedVersion: Long = -1L
-        // Poster cache populated in [onDataSetChanged] so [getViewAt] never
-        // performs network I/O on the binder thread.
-        private var posterCache: Map<String, Bitmap?> = emptyMap()
-        private var widgetDims: WidgetDimensions? = null
+        override fun snapshotProvider(): List<LibraryWidgetItem> = store.libraryWidgetItemsSnapshot()
 
-        override fun onCreate() = Unit
+        override fun posterUrlOf(item: LibraryWidgetItem): String? = item.posterUrl
 
-        override fun onDataSetChanged() {
-            // Always re-read the latest snapshot. The previous early-return
-            // (`if (version == loadedVersion) return`) skipped loads whenever
-            // the persisted version matched the factory's cached value, but
-            // that left the widget blank if the factory was recreated (new
-            // binder, process restart) and the worker happened to short-circuit
-            // the version bump in [WidgetPersistHelper] because the content
-            // was unchanged. Always reading is cheap (single DataStore read)
-            // and makes the widget resilient to those edge cases.
-            // Memory reads from the store's eagerly-warmed snapshots — no
-            // DataStore disk IO on the main thread once warmed (cold-process
-            // behavior: see WidgetDataStore's *Snapshot() docs).
-            val (fresh, version) = store.libraryWidgetItemsSnapshot() to store.libraryWidgetVersion.value
-            items = fresh
-            loadedVersion = version
-            // Pre-fetch posters concurrently so each `getViewAt` is a map lookup.
-            // `posterUrl` is nullable; blank/null entries fall through to the placeholder.
-            posterCache = if (items.isEmpty()) {
-                emptyMap()
-            } else {
-                val nonNullUrls = items.map { it.posterUrl }.filterNotNull()
-                runBlocking { WidgetImageLoader.fetchPosters(context, nonNullUrls) }
-            }
-            widgetDims = refreshWidgetDimensions(context, appWidgetId, 250)
+        override fun stableIdOf(item: LibraryWidgetItem): Long = item.itemId.hashCode().toLong()
+
+        override fun fillInIntent(item: LibraryWidgetItem): Intent = Intent().apply {
+            action = Intent.ACTION_VIEW
+            data = Uri.parse(DeepLinkGrammar.mediaLink(item.itemId))
+            putExtra(EXTRA_ITEM_ID, item.itemId)
         }
 
-        override fun onDestroy() {
-            items = emptyList()
-            posterCache = emptyMap()
-            widgetDims = null
-        }
-
-        override fun getCount(): Int = items.size
-
-        override fun getViewAt(position: Int): RemoteViews {
-            val item = items.getOrNull(position) ?: return loadingView()
-            val view = RemoteViews(context.packageName, R.layout.library_recommendations_item)
-            val title = buildTitle(item)
-            view.setTextViewText(R.id.lr_item_title, title)
+        override fun bind(view: RemoteViews, item: LibraryWidgetItem) {
+            view.setTextViewText(R.id.lr_item_title, libraryRowTitle(item.name))
             view.setViewVisibility(R.id.lr_item_title, View.VISIBLE)
-            view.setTextViewText(R.id.lr_item_subtitle, buildSubtitle(item))
+            view.setTextViewText(R.id.lr_item_subtitle, libraryRowSubtitle(item.year, item.communityRating))
             view.setViewVisibility(R.id.lr_item_subtitle, View.VISIBLE)
 
             // Apply responsive rules based on widget options
-            val hideText = widgetDims?.isTooSmallForText() == true
+            view.setViewVisibility(
+                R.id.lr_item_text_container,
+                gridCellTextVisible(widgetDims).toViewVisibility(),
+            )
 
-            if (hideText) {
-                view.setViewVisibility(R.id.lr_item_text_container, View.GONE)
-            } else {
-                view.setViewVisibility(R.id.lr_item_text_container, View.VISIBLE)
-            }
-
-            val bitmap = posterCache[item.posterUrl]
+            val bitmap = posterFor(item)
             if (bitmap != null) {
                 view.setImageViewBitmap(R.id.lr_item_poster, bitmap)
             } else {
                 view.setImageViewResource(R.id.lr_item_poster, R.drawable.widget_backdrop_placeholder)
             }
-
-            val fillIn = Intent().apply {
-                action = Intent.ACTION_VIEW
-                data = android.net.Uri.parse(DeepLinkGrammar.mediaLink(item.itemId))
-                putExtra(EXTRA_ITEM_ID, item.itemId)
-            }
-            view.setOnClickFillInIntent(R.id.lr_item_root, fillIn)
-            return view
         }
 
-        override fun getLoadingView(): RemoteViews = loadingView()
-
-        override fun getViewTypeCount(): Int = 1
-
-        override fun getItemId(position: Int): Long =
-            items.getOrNull(position)?.itemId?.hashCode()?.toLong() ?: position.toLong()
-
-        override fun hasStableIds(): Boolean = true
-
-        private fun loadingView(): RemoteViews {
-            val view = RemoteViews(context.packageName, R.layout.library_recommendations_item)
-            view.setTextViewText(R.id.lr_item_title, "")
-            view.setTextViewText(R.id.lr_item_subtitle, "")
-            view.setViewVisibility(R.id.lr_item_title, View.INVISIBLE)
-            view.setViewVisibility(R.id.lr_item_subtitle, View.INVISIBLE)
-
-            val hideText = widgetDims?.isTooSmallForText() == true
-            if (hideText) {
-                view.setViewVisibility(R.id.lr_item_text_container, View.GONE)
-            } else {
-                view.setViewVisibility(R.id.lr_item_text_container, View.VISIBLE)
-            }
-            return view
-        }
-
-        private fun buildTitle(item: LibraryWidgetItem): String {
-            val raw = item.name.ifBlank { "Untitled" }
-            return raw
-        }
-
-        private fun buildSubtitle(item: LibraryWidgetItem): String {
-            val parts = mutableListOf<String>()
-            item.year?.let { parts.add(it.toString()) }
-            item.communityRating?.let {
-                if (it > 0f) parts.add("★ %.1f".format(it))
-            }
-            if (parts.isEmpty()) return " "
-            return parts.joinToString("  ·  ")
-        }
+        override fun loadingView(): RemoteViews =
+            RemoteViews(context.packageName, R.layout.library_recommendations_item)
+                .clearRowTexts()
+                .apply {
+                    setViewVisibility(
+                        R.id.lr_item_text_container,
+                        gridCellTextVisible(widgetDims).toViewVisibility(),
+                    )
+                }
     }
 
     companion object {

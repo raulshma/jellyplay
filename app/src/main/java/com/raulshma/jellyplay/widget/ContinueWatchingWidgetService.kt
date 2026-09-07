@@ -9,17 +9,33 @@ import android.view.View
 import android.widget.RemoteViews
 import android.widget.RemoteViewsService
 import com.raulshma.jellyplay.R
+import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.deeplink.DeepLinkGrammar
+import com.raulshma.jellyplay.widget.skeleton.WidgetGridFactory
+import com.raulshma.jellyplay.widget.skeleton.continueWatchingMinutesLeft
+import com.raulshma.jellyplay.widget.skeleton.continueWatchingProgressPercent
+import com.raulshma.jellyplay.widget.skeleton.continueWatchingRowSubtitle
+import com.raulshma.jellyplay.widget.skeleton.continueWatchingRowVisibility
+import com.raulshma.jellyplay.widget.skeleton.toViewVisibility
 import org.koin.mp.KoinPlatform
-import kotlinx.coroutines.runBlocking
-import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 
 /**
  * Backs the Continue Watching widget's `ListView` with a
  * [RemoteViewsFactory] that pulls the latest snapshot from
  * [WidgetDataStore.continueWatching].
+ *
+ * The factory is an adapter over [WidgetGridFactory], which owns the
+ * lifecycle choreography (snapshot read → poster preload → dims refresh →
+ * deep-link `getViewAt`); this class supplies the Continue Watching seams:
+ * the snapshot read (capped by the widget's per-widget item count), the
+ * progress-bar/remaining-text row decisions, and the
+ * `jellyfin://media/{id}` fill-in link. It is also the one factory whose
+ * poster cache is keyed by the image id from
+ * [WidgetImageLoader.continueWatchingPosterImageId] (the series id when the
+ * row is an episode) rather than by url, so it overrides the skeleton's
+ * poster pipeline instead of [WidgetGridFactory.posterUrlOf].
  *
  * `onDataSetChanged` runs on the main thread; the list is read from the
  * store's eagerly-warmed [kotlinx.coroutines.flow.StateFlow] snapshot, so
@@ -46,82 +62,62 @@ class ContinueWatchingWidgetService : RemoteViewsService() {
     }
 
     private class ContinueWatchingFactory(
-        private val context: Context,
+        context: Context,
         private val store: WidgetDataStore,
         private val playbackRepository: PlaybackRepository,
-        private val appWidgetId: Int,
-    ) : RemoteViewsFactory {
+        appWidgetId: Int,
+    ) : WidgetGridFactory<MediaItem>(
+        context = context,
+        appWidgetId = appWidgetId,
+        itemLayoutRes = R.layout.continue_watching_item,
+        itemRootViewId = R.id.cw_item_root,
+        titleViewId = R.id.cw_item_title,
+        subtitleViewId = R.id.cw_item_subtitle,
+        defaultHeightDp = WidgetLayoutThresholds.CONTINUE_WATCHING_DEFAULT_HEIGHT_DP,
+    ) {
 
-        private var items: List<MediaItem> = emptyList()
-        // Poster cache populated in [onDataSetChanged] so [getViewAt] never
-        // performs network I/O on the binder thread. Keyed by the image id
-        // from [WidgetImageLoader.continueWatchingPosterImageId] (the series
-        // id when the row is an episode — the same key getViewAt looks up).
-        private var posterCache: Map<String, Bitmap?> = emptyMap()
-        private var widgetDims: WidgetDimensions? = null
+        override fun snapshotProvider(): List<MediaItem> =
+            store.continueWatchingSnapshot()
+                .take(store.getWidgetConfigForIdSync(appWidgetId).continueWatchingItemCount)
 
-        override fun onCreate() = Unit
-
-        override fun onDataSetChanged() {
-            val maxCount = store.getWidgetConfigForIdSync(appWidgetId).continueWatchingItemCount
-            // Memory read from the store's eagerly-warmed snapshot — no
-            // DataStore disk IO on the main thread once warmed (cold-process
-            // behavior: see WidgetDataStore's *Snapshot() docs).
-            items = store.continueWatchingSnapshot().take(maxCount)
-            // Pre-fetch posters concurrently so each `getViewAt` is a map lookup.
-            // A slow URL is bounded by `WidgetImageLoader`'s internal timeout.
+        // The cache is keyed by the continue-watching image id (the series id
+        // when the row is an episode — the same key [posterFor] looks up), so
+        // the preload maps url → bitmap back into (imageId → bitmap).
+        override suspend fun preloadPosters(items: List<MediaItem>): Map<String, Bitmap?> {
             val entries = items.map { item ->
                 WidgetImageLoader.continueWatchingPosterEntry(item, playbackRepository)
             }
-            posterCache = if (entries.isEmpty()) {
-                emptyMap()
-            } else {
-                runBlocking {
-                    WidgetImageLoader.fetchPosters(context, entries.map { it.url })
-                }.let { urlToBitmap ->
-                    entries.associate { it.imageId to urlToBitmap[it.url] }
-                }
-            }
-            widgetDims = refreshWidgetDimensions(context, appWidgetId, 220)
+            val urlToBitmap = WidgetImageLoader.fetchPosters(context, entries.map { it.url })
+            return entries.associate { it.imageId to urlToBitmap[it.url] }
         }
 
-        override fun onDestroy() {
-            items = emptyList()
-            posterCache = emptyMap()
-            widgetDims = null
+        override fun posterFor(item: MediaItem): Bitmap? =
+            posterCache[WidgetImageLoader.continueWatchingPosterImageId(item)]
+
+        override fun stableIdOf(item: MediaItem): Long = item.id.hashCode().toLong()
+
+        override fun fillInIntent(item: MediaItem): Intent = Intent().apply {
+            action = Intent.ACTION_VIEW
+            data = Uri.parse(DeepLinkGrammar.mediaLink(item.id))
+            putExtra(EXTRA_ITEM_ID, item.id)
         }
 
-        override fun getCount(): Int = items.size
-
-        override fun getViewAt(position: Int): RemoteViews {
-            val item = items.getOrNull(position) ?: return loadingView()
-            val view = RemoteViews(context.packageName, R.layout.continue_watching_item)
+        override fun bind(view: RemoteViews, item: MediaItem) {
             view.setTextViewText(R.id.cw_item_title, item.name)
-            view.setTextViewText(R.id.cw_item_subtitle, buildSubtitle(item))
+            view.setTextViewText(
+                R.id.cw_item_subtitle,
+                continueWatchingRowSubtitle(item.seriesName, item.seasonNumber, item.episodeNumber),
+            )
 
             // Apply responsive rules based on widget options
-            var hideProgress = false
-            var hidePoster = false
+            val visibility = continueWatchingRowVisibility(widgetDims?.width)
+            view.setViewVisibility(
+                R.id.cw_item_poster,
+                visibility.showPoster.toViewVisibility(),
+            )
 
-            widgetDims?.let { dims ->
-                val width = dims.width
-
-                if (width < 240) {
-                    hideProgress = true
-                }
-                if (width < 180) {
-                    hidePoster = true
-                }
-            }
-
-            if (hidePoster) {
-                view.setViewVisibility(R.id.cw_item_poster, View.GONE)
-            } else {
-                view.setViewVisibility(R.id.cw_item_poster, View.VISIBLE)
-            }
-
-            val progress = computeProgress(item)
-            if (progress != null && !hideProgress) {
+            val progress = continueWatchingProgressPercent(item.runTimeTicks, item.playbackPositionTicks)
+            if (progress != null && visibility.showProgress) {
                 view.setProgressBar(R.id.cw_item_progress, 100, progress, false)
                 view.setViewVisibility(R.id.cw_item_progress, View.VISIBLE)
                 view.setViewVisibility(R.id.cw_item_remaining, View.VISIBLE)
@@ -135,75 +131,30 @@ class ContinueWatchingWidgetService : RemoteViewsService() {
                 view.setViewVisibility(R.id.cw_item_remaining, View.GONE)
             }
 
-            val imageId = WidgetImageLoader.continueWatchingPosterImageId(item)
-            val posterBitmap = if (!hidePoster) {
-                posterCache[imageId]
-            } else null
-
-            if (!hidePoster) {
+            if (visibility.showPoster) {
+                val posterBitmap = posterFor(item)
                 if (posterBitmap != null) {
                     view.setImageViewBitmap(R.id.cw_item_poster, posterBitmap)
                 } else {
                     view.setImageViewResource(R.id.cw_item_poster, R.drawable.ic_banner)
                 }
             }
+        }
 
-            val deepLinkUri = Uri.parse(DeepLinkGrammar.mediaLink(item.id))
-            val fillIn = Intent().apply {
-                action = Intent.ACTION_VIEW
-                data = deepLinkUri
-                putExtra(EXTRA_ITEM_ID, item.id)
+        // The Continue Watching loading row does not dim its texts (no
+        // INVISIBLE pass and no text-container rule) — plain clears only.
+        override fun loadingView(): RemoteViews =
+            RemoteViews(context.packageName, R.layout.continue_watching_item).apply {
+                setTextViewText(R.id.cw_item_title, "")
+                setTextViewText(R.id.cw_item_subtitle, "")
             }
-            view.setOnClickFillInIntent(R.id.cw_item_root, fillIn)
-            return view
-        }
-
-        override fun getLoadingView(): RemoteViews = loadingView()
-
-        override fun getViewTypeCount(): Int = 1
-
-        override fun getItemId(position: Int): Long =
-            items.getOrNull(position)?.id?.hashCode()?.toLong() ?: position.toLong()
-
-        override fun hasStableIds(): Boolean = true
-
-        private fun loadingView(): RemoteViews {
-            val view = RemoteViews(context.packageName, R.layout.continue_watching_item)
-            view.setTextViewText(R.id.cw_item_title, "")
-            view.setTextViewText(R.id.cw_item_subtitle, "")
-            return view
-        }
-
-        private fun buildSubtitle(item: MediaItem): String {
-            val parts = mutableListOf<String>()
-            item.seriesName?.takeIf { it.isNotBlank() }?.let { parts.add(it) }
-            item.seasonNumber?.let { season ->
-                item.episodeNumber?.let { ep ->
-                    parts.add("S${season}E${ep.toString().padStart(2, '0')}")
-                } ?: parts.add("S$season")
-            }
-            return parts.joinToString(" · ")
-        }
 
         private fun buildRemainingText(item: MediaItem, progress: Int): String {
-            val totalTicks = item.runTimeTicks ?: 0L
-            val posTicks = item.playbackPositionTicks ?: 0L
-            val leftTicks = totalTicks - posTicks
-            if (leftTicks > 0L) {
-                val minsLeft = (leftTicks / 10_000_000L / 60L).toInt()
-                if (minsLeft > 0) {
-                    return context.getString(R.string.widget_minutes_left, minsLeft)
-                }
+            val minsLeft = continueWatchingMinutesLeft(item.runTimeTicks, item.playbackPositionTicks)
+            if (minsLeft != null) {
+                return context.getString(R.string.widget_minutes_left, minsLeft)
             }
             return context.getString(R.string.widget_progress_percent, progress)
-        }
-
-        private fun computeProgress(item: MediaItem): Int? {
-            val total = item.runTimeTicks ?: return null
-            val pos = item.playbackPositionTicks ?: return null
-            if (total <= 0L) return null
-            val pct = (pos.toDouble() / total.toDouble() * 100.0).toInt()
-            return pct.coerceIn(0, 100)
         }
     }
 

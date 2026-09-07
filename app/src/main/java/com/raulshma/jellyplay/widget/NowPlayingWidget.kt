@@ -10,12 +10,9 @@ import android.graphics.Bitmap
 import android.os.Bundle
 import android.util.Log
 import android.widget.RemoteViews
-import com.raulshma.jellyplay.MainActivity
 import com.raulshma.jellyplay.R
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
+import com.raulshma.jellyplay.widget.skeleton.WidgetProviderSkeleton
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
@@ -36,16 +33,7 @@ private fun koinWidgetDataStore(): com.raulshma.jellyplay.core.datastore.widget.
 private fun koinNowPlayingWidgetUpdater(): NowPlayingWidgetUpdater =
     KoinPlatform.getKoin()!!.get()
 
-class NowPlayingWidget : AppWidgetProvider() {
-
-    /**
-     * Hoisted out of [onAppWidgetOptionsChanged] so the orphaned `SupervisorJob`
-     * graph is not rebuilt on every widget refresh broadcast (the updater can
-     * fire many times per minute during position changes). Mirrors the sibling
-     * `LibraryRecommendationsWidget.refreshScope` pattern — cancelled in
-     * [onDisabled] when the last widget instance is removed.
-     */
-    private val refreshScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+class NowPlayingWidget : WidgetProviderSkeleton() {
 
     override fun onUpdate(
         context: Context,
@@ -76,22 +64,7 @@ class NowPlayingWidget : AppWidgetProvider() {
     override fun onDeleted(context: Context?, appWidgetIds: IntArray?) {
         super.onDeleted(context, appWidgetIds)
         notifyUpdaterPresenceChanged(context)
-        if (context == null || appWidgetIds == null) return
-        val store = try {
-            koinWidgetDataStore()
-        } catch (_: Exception) {
-            return
-        }
-        val pending = goAsync()
-        refreshScope.launch {
-            try {
-                for (id in appWidgetIds) {
-                    store.removeWidgetConfigForId(id)
-                }
-            } finally {
-                pending.finish()
-            }
-        }
+        launchWidgetConfigCleanup(context, appWidgetIds)
     }
 
     private fun notifyUpdaterPresenceChanged(context: Context?) {
@@ -123,6 +96,9 @@ class NowPlayingWidget : AppWidgetProvider() {
         val itemId = manager.currentPlayingItemId.value
 
         val artUrl = manager.albumArtUrl.value
+        // Owns its goAsync() window inline (finish inside the posted main
+        // handler, not a finally) rather than [launchWithPendingResult] —
+        // the widget push happens on the main thread after the poster load.
         val pending = goAsync()
         refreshScope.launch {
             try {
@@ -359,7 +335,11 @@ class NowPlayingWidget : AppWidgetProvider() {
             views: RemoteViews,
         ) {
             val options = appWidgetManager.getAppWidgetOptions(appWidgetId) ?: return
-            val dims = widgetDimensionsFromOptions(context, options, 110) ?: return
+            val dims = widgetDimensionsFromOptions(
+                context,
+                options,
+                WidgetLayoutThresholds.NOW_PLAYING_DEFAULT_HEIGHT_DP,
+            ) ?: return
             val layout = responsiveNowPlayingLayout(widthDp = dims.width, heightDp = dims.height)
 
             views.setViewVisibility(R.id.widget_album_art, viewVisibility(layout.showAlbumArt))

@@ -1,24 +1,19 @@
 package com.raulshma.jellyplay.widget
 
-import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
-import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
 import android.os.Bundle
 import android.widget.RemoteViews
-import com.raulshma.jellyplay.MainActivity
 import com.raulshma.jellyplay.R
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.SeerrWidgetSource
-import org.koin.mp.KoinPlatform
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
+import com.raulshma.jellyplay.widget.skeleton.GridWidgetRequestCodes
+import com.raulshma.jellyplay.widget.skeleton.GridWidgetUi
+import com.raulshma.jellyplay.widget.skeleton.WidgetProviderSkeleton
+import com.raulshma.jellyplay.widget.skeleton.updateRecommendationGridWidget
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.launch
+import org.koin.mp.KoinPlatform
 
 /**
  * Home-screen widget that surfaces Seerr (Jellyseerr/Overseerr)
@@ -33,6 +28,12 @@ import kotlinx.coroutines.launch
  *     adapter and reads from
  *     [com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore.seerrWidgetItems] — no network in the widget
  *     process.
+ *
+ * The refresh-scope/goAsync choreography and the `updateAppWidget` wiring
+ * are shared with the Library grid via the widget skeleton (`WidgetProviderSkeleton`
+ * and `updateRecommendationGridWidget`, parameterized by this widget's
+ * 7_500_0xx request-code namespace); the Seerr-only empty-state texts ride
+ * the template's extra-binding hook.
  */
 /**
  * Koin accessors (wave 8B — Hilt removal): resolved straight from the
@@ -47,9 +48,7 @@ private fun koinSeerrPreferencesStore(): com.raulshma.jellyplay.core.datastore.S
 private fun koinWidgetWorkScheduler(): WidgetWorkScheduler =
     KoinPlatform.getKoin()!!.get()
 
-class SeerrRecommendationsWidget : AppWidgetProvider() {
-
-    private val refreshScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+class SeerrRecommendationsWidget : WidgetProviderSkeleton() {
 
     override fun onUpdate(
         context: Context,
@@ -86,15 +85,8 @@ class SeerrRecommendationsWidget : AppWidgetProvider() {
         refreshScope.cancel()
     }
 
-    private fun triggerInitialRefresh(context: Context) {
-        val pending = goAsync()
-        refreshScope.launch {
-            try {
-                widgetScheduler(context).refreshSeerrNow()
-            } finally {
-                pending.finish()
-            }
-        }
+    private fun triggerInitialRefresh(context: Context) = launchWithPendingResult {
+        widgetScheduler(context).refreshSeerrNow()
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -104,13 +96,8 @@ class SeerrRecommendationsWidget : AppWidgetProvider() {
             val componentName = ComponentName(context, SeerrRecommendationsWidget::class.java)
             val ids = appWidgetManager.getAppWidgetIds(componentName)
             appWidgetManager.notifyAppWidgetViewDataChanged(ids, R.id.sr_widget_grid)
-            val pending = goAsync()
-            refreshScope.launch {
-                try {
-                    widgetScheduler(context).refreshSeerrNow()
-                } finally {
-                    pending.finish()
-                }
+            launchWithPendingResult {
+                widgetScheduler(context).refreshSeerrNow()
             }
         }
     }
@@ -131,86 +118,50 @@ class SeerrRecommendationsWidget : AppWidgetProvider() {
             appWidgetId: Int,
             isServerConfigured: Boolean = hasServerConfigured(context),
         ) {
-            val views = RemoteViews(context.packageName, R.layout.seerr_recommendations_widget)
-            views.setTextViewText(R.id.sr_widget_subtitle, readSourceLabel(context, appWidgetId))
-
-            // Apply responsive rules
-            val dims = widgetDimensionsFromOptions(context, appWidgetManager.getAppWidgetOptions(appWidgetId), 250)
-            if (dims != null) {
-                val height = dims.height
-
-                if (height < 130) {
-                    views.setViewVisibility(R.id.sr_widget_header, android.view.View.GONE)
-                } else {
-                    views.setViewVisibility(R.id.sr_widget_header, android.view.View.VISIBLE)
-                    if (height < 180) {
-                        views.setViewVisibility(R.id.sr_widget_subtitle, android.view.View.GONE)
-                        views.setViewVisibility(R.id.sr_widget_refresh, android.view.View.GONE)
+            updateRecommendationGridWidget(
+                context = context,
+                appWidgetManager = appWidgetManager,
+                appWidgetId = appWidgetId,
+                subtitleText = readSourceLabel(context, appWidgetId),
+                ui = GridWidgetUi(
+                    layoutRes = R.layout.seerr_recommendations_widget,
+                    headerViewId = R.id.sr_widget_header,
+                    headerTextContainerViewId = R.id.sr_widget_header_text_container,
+                    subtitleViewId = R.id.sr_widget_subtitle,
+                    refreshViewId = R.id.sr_widget_refresh,
+                    gridViewId = R.id.sr_widget_grid,
+                    emptyViewId = R.id.sr_widget_empty,
+                    refreshAction = ACTION_REFRESH,
+                    refreshBroadcastTarget = SeerrRecommendationsWidget::class.java,
+                    serviceClass = SeerrRecommendationsWidgetService::class.java,
+                    requestCodes = GridWidgetRequestCodes(
+                        header = REQUEST_CODE_HEADER,
+                        refresh = REQUEST_CODE_REFRESH,
+                        item = REQUEST_CODE_ITEM,
+                    ),
+                ),
+                bindExtraContent = { views ->
+                    if (isServerConfigured) {
+                        views.setTextViewText(
+                            R.id.sr_widget_empty_title,
+                            context.getString(R.string.widget_seerr_no_recommendations)
+                        )
+                        views.setTextViewText(
+                            R.id.sr_widget_empty_subtitle,
+                            context.getString(R.string.widget_seerr_no_recommendations_subtitle)
+                        )
                     } else {
-                        views.setViewVisibility(R.id.sr_widget_subtitle, android.view.View.VISIBLE)
-                        views.setViewVisibility(R.id.sr_widget_refresh, android.view.View.VISIBLE)
+                        views.setTextViewText(
+                            R.id.sr_widget_empty_title,
+                            context.getString(R.string.widget_seerr_recommendations_empty)
+                        )
+                        views.setTextViewText(
+                            R.id.sr_widget_empty_subtitle,
+                            context.getString(R.string.widget_seerr_recommendations_empty_subtitle)
+                        )
                     }
-                }
-            }
-
-            if (isServerConfigured) {
-                views.setTextViewText(
-                    R.id.sr_widget_empty_title,
-                    context.getString(R.string.widget_seerr_no_recommendations)
-                )
-                views.setTextViewText(
-                    R.id.sr_widget_empty_subtitle,
-                    context.getString(R.string.widget_seerr_no_recommendations_subtitle)
-                )
-            } else {
-                views.setTextViewText(
-                    R.id.sr_widget_empty_title,
-                    context.getString(R.string.widget_seerr_recommendations_empty)
-                )
-                views.setTextViewText(
-                    R.id.sr_widget_empty_subtitle,
-                    context.getString(R.string.widget_seerr_recommendations_empty_subtitle)
-                )
-            }
-
-            val openApp = openAppPendingIntent(context, REQUEST_CODE_HEADER)
-            views.setOnClickPendingIntent(R.id.sr_widget_header_text_container, openApp)
-            views.setOnClickPendingIntent(R.id.sr_widget_empty, openApp)
-
-            val refreshIntent = Intent(context, SeerrRecommendationsWidget::class.java).apply {
-                action = ACTION_REFRESH
-            }
-            val refreshPending = PendingIntent.getBroadcast(
-                context,
-                REQUEST_CODE_REFRESH,
-                refreshIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                },
             )
-            views.setOnClickPendingIntent(R.id.sr_widget_refresh, refreshPending)
-
-            val templateIntent = Intent(context, MainActivity::class.java).apply {
-                action = Intent.ACTION_VIEW
-                addCategory(Intent.CATEGORY_DEFAULT)
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or
-                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
-                    Intent.FLAG_ACTIVITY_SINGLE_TOP
-            }
-            val templatePending = PendingIntent.getActivity(
-                context,
-                REQUEST_CODE_ITEM,
-                templateIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
-            )
-            views.setPendingIntentTemplate(R.id.sr_widget_grid, templatePending)
-
-            val serviceIntent = Intent(context, SeerrRecommendationsWidgetService::class.java).apply {
-                putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
-                data = Uri.parse(toUri(Intent.URI_INTENT_SCHEME))
-            }
-            views.setRemoteAdapter(R.id.sr_widget_grid, serviceIntent)
-            views.setEmptyView(R.id.sr_widget_grid, R.id.sr_widget_empty)
-
-            appWidgetManager.updateAppWidget(appWidgetId, views)
         }
 
         private fun readSourceLabel(context: Context, appWidgetId: Int): String = runCatching {
