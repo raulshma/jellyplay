@@ -399,6 +399,80 @@ class MusicHomeViewModelTest {
     }
 
     @Test
+    fun refresh_cancelledByALaterLoudLoad_doesNotMaskAsFailureOrStrandSpinner() = runTest(mainDispatcher) {
+        stubHomeQueries(favoriteArtists = listOf(item("a1", "Artist")))
+        createViewModel()
+        advanceUntilIdle()
+        assertEquals(1, viewModel.uiState.value.sections.size)
+
+        val gate = CompletableDeferred<Unit>()
+        coEvery { mediaRepository.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) } coAnswers {
+            gate.await()
+            Result.success(SearchResult(listOf(item("a2", "Artist 2")), 1, 0))
+        }
+        // The second loud load cancels the first mid-fetch.
+        viewModel.refresh()
+        viewModel.refresh()
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.isLoading, "the surviving load owns the spinner")
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+
+        // The cancelled load rethrew CancellationException instead of falling
+        // into the fetch-failure handler: no toast, no error state — and the
+        // surviving load resolves the spinner when it publishes.
+        assertFalse(viewModel.uiState.value.isLoading)
+        assertNull(viewModel.uiState.value.error)
+        verify(exactly = 0) { userMessageBus.error(any()) }
+        assertEquals("Artist 2", viewModel.uiState.value.sections.single().items.single().name)
+    }
+
+    @Test
+    fun deferredRefresh_cancelledByALoudLoad_doesNotRearm() = runTest(mainDispatcher) {
+        stubHomeQueries(favoriteArtists = listOf(item("a1", "Artist")))
+        createViewModel()
+        advanceUntilIdle()
+        assertEquals(1, viewModel.uiState.value.sections.size)
+
+        val gate = CompletableDeferred<Unit>()
+        var artistQueries = 0
+        coEvery { mediaRepository.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) } coAnswers {
+            if (++artistQueries == 1) {
+                Result.success(SearchResult(listOf(item("a1", "Artist")), 1, 0))
+            } else {
+                gate.await()
+                Result.success(SearchResult(listOf(item("a2", "Artist 2")), 1, 0))
+            }
+        }
+
+        // Armed while off-screen; re-entry starts the silent regeneration,
+        // which parks mid-fetch. A loud load then cancels it — cancellation
+        // must NOT re-arm (the loud load IS the regeneration), or the next
+        // re-entry would fire a pointless second silent regeneration.
+        viewModel.deferredRefresher.onScreenActiveChanged(false)
+        userDataEvents.emit(UserDataChange("user-1", listOf("t1")))
+        advanceUntilIdle()
+        viewModel.deferredRefresher.onScreenActiveChanged(true)
+        advanceUntilIdle()
+        viewModel.refresh()
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.isLoading)
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertEquals("Artist 2", viewModel.uiState.value.sections.single().items.single().name)
+
+        // The next re-entry fires nothing: the pending flag stayed consumed.
+        viewModel.deferredRefresher.onScreenActiveChanged(false)
+        viewModel.deferredRefresher.onScreenActiveChanged(true)
+        advanceUntilIdle()
+        coVerify(exactly = 3) { mediaRepository.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) }
+        assertFalse(viewModel.uiState.value.isLoading)
+        verify(exactly = 0) { userMessageBus.error(any()) }
+    }
+
+    @Test
     fun surpriseMe_invokesCallbackWithRandomTrackId() = runTest(mainDispatcher) {
         stubHomeQueries()
         coEvery {

@@ -95,7 +95,9 @@ class MusicHomeViewModel(
      * deferred refresh so the next re-entry retries the failed regeneration.
      * A silent load skips itself while any load is active (that load
      * regenerates the same data); a loud load cancels an in-flight silent
-     * one (see [loadJob]).
+     * one (see [loadJob]). A failed loud load re-arms too: the skipped
+     * silent refresh bet on it, and its failure must not strand the
+     * consumed pending flag behind a toast.
      */
     fun loadSections(silent: Boolean = false) {
         if (silent && loadJob?.isActive == true) return
@@ -180,11 +182,17 @@ class MusicHomeViewModel(
                 // loud load would leave its spinner stuck on.
                 throw e
             } catch (e: Exception) {
-                // A silent (deferred) regeneration stays quiet — the user
-                // never asked for this fetch, so the stale sections stay and
-                // no toast fires; the change re-arms for the next re-entry.
+                // The load that failed did not regenerate the user-data change
+                // that armed the deferred refresh — silent because the fetch
+                // failed, loud because a skipped silent refresh bet on this
+                // load and lost. Re-arm either way or no later re-entry
+                // retries. (A loud failure with nothing pending over-arms at
+                // worst: one quiet refetch on the next re-entry.)
+                deferredRefresher.rearm()
                 if (silent) {
-                    deferredRefresher.rearm()
+                    // A silent (deferred) regeneration stays quiet — the user
+                    // never asked for this fetch, so the stale sections stay
+                    // and no toast fires.
                 } else {
                     val message = e.message ?: "Failed to load music"
                     // Keep showing cached sections if we have them; only swap to the full

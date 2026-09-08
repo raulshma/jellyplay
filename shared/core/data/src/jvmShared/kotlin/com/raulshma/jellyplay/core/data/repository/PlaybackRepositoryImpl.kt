@@ -45,10 +45,9 @@ class PlaybackRepositoryImpl(
      */
     private val mediaCacheInvalidation: MediaRepositoryCacheInvalidation,
     /**
-     * Deferred like the other cross-repository edges (the download-stack
-     * pattern): the stop path announces confirmed position writes on the
-     * user-data-change flow so open screens heal even without a WS echo.
-     * Lazy keeps the construction graph acyclic.
+     * Deferred cross-repository edge: the stop path announces confirmed
+     * position writes on the user-data-change flow so open screens heal even
+     * without a WS echo. Lazy keeps the construction graph acyclic.
      */
     private val mediaRepository: Lazy<MediaRepository>,
 ) : PlaybackRepository {

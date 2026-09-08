@@ -36,8 +36,13 @@ import kotlinx.coroutines.launch
  * [scope] — hand it a main-immediate scope (viewModelScope) so all writes to
  * [pendingRefresh] happen on one thread without further synchronization.
  * Nothing consumes [pendingRefresh] until the first
- * [onScreenActiveChanged](true), so an event racing the first composition
- * still refreshes on entry.
+ * [onScreenActiveChanged](true), so an event that lands any time after the
+ * init collector subscribes still refreshes on the next entry even without
+ * an explicit deactivate/reactivate. An event emitted before the collector
+ * subscribes is lost, not deferred — [userDataChanges] is replay-0 and the
+ * VM did not exist to observe it. Hosts that keep their own single-flight
+ * load job beside a refresher rely on the same confinement: unsynchronized
+ * check-and-cancel on those fields is only safe on that main-immediate scope.
  */
 class DeferredUserDataRefresher(
     userDataChanges: Flow<UserDataChange>,
@@ -48,7 +53,7 @@ class DeferredUserDataRefresher(
     /**
      * The pager-generation shape: [onRefresh] bumps a generation counter the
      * pager splices into its key combine, regenerating the PagingSource
-     * without touching any other data. See LibraryViewModel for the pattern.
+     * without touching any other data.
      */
     constructor(
         userDataChanges: Flow<UserDataChange>,
