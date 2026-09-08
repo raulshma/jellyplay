@@ -389,7 +389,7 @@ internal val AudioCacheSearchItems = listOf(
         keywords = listOf("audio", "cache", "caching", "prefetch", "buffer", "plexamp", "music"),
         route = Route.AudioSettings(),
         icon = Tabler.Outline.Database,
-        platforms = platformsFor(settingsCapabilities.supportsAudioCache),
+        platforms = platformsForCapability(settingsCapabilities.supportsAudioCache),
     ),
     SettingsSearchItem(
         id = "audio_cache_size",
@@ -399,7 +399,7 @@ internal val AudioCacheSearchItems = listOf(
         keywords = listOf("audio", "cache", "size", "disk", "storage"),
         route = Route.AudioSettings(),
         icon = Tabler.Outline.DeviceFloppy,
-        platforms = platformsFor(settingsCapabilities.supportsAudioCache),
+        platforms = platformsForCapability(settingsCapabilities.supportsAudioCache),
     ),
     SettingsSearchItem(
         id = "audio_prefetch_lookahead",
@@ -410,7 +410,7 @@ internal val AudioCacheSearchItems = listOf(
         route = Route.AudioSettings(),
         icon = Tabler.Outline.Music,
         isAdvanced = true,
-        platforms = platformsFor(settingsCapabilities.supportsAudioCache),
+        platforms = platformsForCapability(settingsCapabilities.supportsAudioCache),
     ),
     SettingsSearchItem(
         id = "audio_prefetch_backfill",
@@ -421,7 +421,7 @@ internal val AudioCacheSearchItems = listOf(
         route = Route.AudioSettings(),
         icon = Tabler.Outline.Music,
         isAdvanced = true,
-        platforms = platformsFor(settingsCapabilities.supportsAudioCache),
+        platforms = platformsForCapability(settingsCapabilities.supportsAudioCache),
     ),
     SettingsSearchItem(
         id = "audio_cache_clear",
@@ -432,7 +432,7 @@ internal val AudioCacheSearchItems = listOf(
         route = Route.AudioSettings(),
         icon = Tabler.Outline.Trash,
         isAdvanced = true,
-        platforms = platformsFor(settingsCapabilities.supportsAudioCache),
+        platforms = platformsForCapability(settingsCapabilities.supportsAudioCache),
     ),
     SettingsSearchItem(
         id = "audio_cache_network_policy",
@@ -442,6 +442,6 @@ internal val AudioCacheSearchItems = listOf(
         keywords = listOf("audio", "cache", "network", "wifi", "cellular", "metered"),
         route = Route.AudioSettings(),
         icon = Tabler.Outline.Wifi,
-        platforms = platformsFor(settingsCapabilities.supportsAudioCache),
-    )
+        platforms = platformsForCapability(settingsCapabilities.supportsAudioCache),
+    )
 )

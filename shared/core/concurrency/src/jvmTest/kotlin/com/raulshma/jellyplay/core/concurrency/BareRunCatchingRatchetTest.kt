@@ -15,8 +15,10 @@ import java.io.File
  * the converted set converted.
  *
  * Guarded module set: shared/core/data, shared/core/network,
- * shared/feature/home, shared/feature/player-video, the legacy core/data
- * tree, :app, :apps:desktop. Non-suspend bodies (pure JSON/enum/number parses
+ * shared/feature/home, shared/feature/player-video, the suspend-bearing
+ * feature modules added by the 2026-09 folding wave (livetv, settings, shell,
+ * downloads), the legacy core/data tree, core/notification, :app,
+ * :apps:desktop, apps/web. Non-suspend bodies (pure JSON/enum/number parses
  * in mappers, framework glue) are legitimate stdlib `runCatching` territory
  * and simply don't count — the heuristic only counts occurrences inside
  * `suspend fun` bodies.
@@ -36,9 +38,15 @@ class BareRunCatchingRatchetTest {
         "shared/core/network/src",
         "shared/feature/home/src",
         "shared/feature/player-video/src",
+        "shared/feature/livetv/src",
+        "shared/feature/settings/src",
+        "shared/feature/shell/src",
+        "shared/feature/downloads/src",
         "core/data/src/main",
+        "core/notification/src/main",
         "app/src/main",
         "apps/desktop/src/main",
+        "apps/web/src",
     )
 
     private fun repoRoot(): File {

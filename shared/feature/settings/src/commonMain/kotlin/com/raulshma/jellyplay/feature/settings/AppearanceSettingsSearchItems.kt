@@ -212,7 +212,7 @@ internal val AppearanceThemeSearchItems = listOf(
         keywords = listOf("dynamic", "artwork", "colors", "theme", "wallpaper"),
         route = Route.AppearanceSettings(),
         icon = Tabler.Outline.Video,
-        platforms = platformsFor(settingsCapabilities.supportsDynamicColor),
+        platforms = platformsForCapability(settingsCapabilities.supportsDynamicColor),
     ),
     SettingsSearchItem(
         id = "oled_mode",
@@ -400,7 +400,7 @@ internal val AppearanceThemeSearchItems = listOf(
         route = Route.AppearanceSettings(),
         icon = Tabler.Outline.Sunset,
         isAdvanced = true
-    )
+    )
 )
 
 /**
@@ -427,7 +427,7 @@ internal val AppearanceNavigationSearchItems = listOf(
         keywords = listOf("navigation", "hide", "scroll", "auto hide", "bottom bar", "collapsible"),
         route = Route.AppearanceSettings(),
         icon = Tabler.Outline.EyeOff
-    )
+    )
 )
 
 /**
@@ -535,7 +535,7 @@ internal val AppearanceLibrarySearchItems = listOf(
         route = Route.AppearanceSettings(),
         icon = Tabler.Outline.EyeOff,
         isAdvanced = true
-    )
+    )
 )
 
 /**
@@ -571,7 +571,7 @@ internal val AppearanceHomeLayoutSearchItems = listOf(
         keywords = listOf("library", "libraries", "latest", "recently", "added", "home", "row", "shelf", "hide", "show"),
         route = Route.LibraryHomeSections(),
         icon = Tabler.Outline.Folders
-    )
+    )
 )
 
 /**
@@ -600,7 +600,7 @@ internal val AppearancePerformanceSearchItems = listOf(
         route = Route.AppearanceSettings(),
         icon = Tabler.Outline.Activity,
         isAdvanced = true
-    )
+    )
 )
 
 /**
@@ -629,7 +629,7 @@ internal val AppearanceEyeCareSearchItems = listOf(
         route = Route.AppearanceSettings(),
         icon = Tabler.Outline.Adjustments,
         isAdvanced = true
-    )
+    )
 )
 
 /**

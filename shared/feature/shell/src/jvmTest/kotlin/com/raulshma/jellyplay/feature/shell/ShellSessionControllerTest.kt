@@ -104,6 +104,29 @@ class ShellSessionControllerTest {
     }
 
     @Test
+    fun `two same-frame entries fire one refresh`() = runTest {
+        var refreshCalls = 0
+        val controller = controller(
+            scope = testScope(),
+            refreshCurrentUser = {
+                refreshCalls++
+                Result.success(userInfo(isAdmin = false))
+            },
+        )
+
+        // Both calls run before any launched coroutine dispatches (the
+        // two-entries-composing transition): the first must raise the
+        // in-flight flag synchronously or the gate can't see it yet.
+        controller.refreshAdminStatusNow()
+        assertTrue(controller.isRefreshingAdmin.value, "in-flight flag must rise before first dispatch")
+        controller.refreshAdminStatusNow()
+        advanceUntilIdle()
+
+        assertEquals(1, refreshCalls)
+        assertFalse(controller.isRefreshingAdmin.value)
+    }
+
+    @Test
     fun `a failed refresh does not advance the dedupe window`() = runTest {
         val clock = FakeClock()
         var fail = true

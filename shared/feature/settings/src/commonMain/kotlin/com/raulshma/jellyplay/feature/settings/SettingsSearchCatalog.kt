@@ -36,7 +36,7 @@ internal fun List<SettingsSearchItem>.androidOnly(): List<SettingsSearchItem> =
  * (TV-only rows stay hand-tagged — form factor is the runtime `LocalTvMode`
  * axis, not a platform, so no capability flag exists for them.)
  */
-internal fun platformsFor(supported: Boolean): Set<PlatformKind> =
+internal fun platformsForCapability(supported: Boolean): Set<PlatformKind> =
     if (supported) PlatformKind.entries.toSet() else ANDROID_ONLY_PLATFORMS
 
 /**

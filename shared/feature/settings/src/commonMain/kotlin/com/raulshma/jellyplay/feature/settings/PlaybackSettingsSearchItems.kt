@@ -209,7 +209,7 @@ internal val PlaybackSettingsSearchItems = listOf(
         keywords = listOf("orientation", "rotation", "landscape", "portrait", "sensor"),
         route = Route.PlaybackSettings(),
         icon = Tabler.Outline.DeviceMobileRotated,
-        platforms = platformsFor(settingsCapabilities.supportsScreenOrientation),
+        platforms = platformsForCapability(settingsCapabilities.supportsScreenOrientation),
     ),
     SettingsSearchItem(
         id = "gestures",
@@ -219,7 +219,7 @@ internal val PlaybackSettingsSearchItems = listOf(
         keywords = listOf("gestures", "swipe", "brightness", "volume", "seeking"),
         route = Route.PlaybackSettings(),
         icon = Tabler.Outline.HandMove,
-        platforms = platformsFor(settingsCapabilities.supportsTouchGestures),
+        platforms = platformsForCapability(settingsCapabilities.supportsTouchGestures),
     ),
     SettingsSearchItem(
         id = "gesture_indicator_side",
@@ -229,7 +229,7 @@ internal val PlaybackSettingsSearchItems = listOf(
         keywords = listOf("indicator", "brightness", "volume", "bar", "side", "gesture", "opposite"),
         route = Route.PlaybackSettings(),
         icon = Tabler.Outline.ArrowsHorizontal,
-        platforms = platformsFor(settingsCapabilities.supportsTouchGestures),
+        platforms = platformsForCapability(settingsCapabilities.supportsTouchGestures),
     ),
     SettingsSearchItem(
         id = "default_speed",

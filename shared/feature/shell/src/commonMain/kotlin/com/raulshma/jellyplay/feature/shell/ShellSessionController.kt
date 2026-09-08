@@ -150,8 +150,11 @@ class ShellSessionController(
      */
     fun refreshAdminStatusNow() {
         if (!adminRefreshGate.shouldStart()) return
+        // Raised before launch, not inside it: a same-frame second entry runs
+        // before either launched coroutine dispatches, so the flag must already
+        // be up for the gate's isRefreshInFlight read to early it out.
+        _isRefreshingAdmin.value = true
         scope.launch {
-            _isRefreshingAdmin.value = true
             try {
                 val result = refreshCurrentUser()
                 if (result.isSuccess) adminRefreshGate.onRefreshCompleted()

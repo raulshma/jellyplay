@@ -26,8 +26,12 @@ Reverse the per-shell ruling for the *wiring* (not the policy): a commonMain
 `ShellSessionController` lives in `shared/feature/shell` — the recorded shell-policy
 home — owning admin-status state + `AdminRefreshGate` arbitration, homeMode
 collect/persist, logout, and update-check→message mapping, over a
-constructor-injected scope and Koin-resolvable repositories. Both shells build their
-`ShellHostHooks` from it.
+constructor-injected scope with the repository collaborators passed as plain
+flows / suspend lambdas — no Koin binding, the same direct construction
+`AdminRefreshGate` already had, so the module keeps its repository-free
+dependency set. Each shell constructs it directly and serves its
+`ShellHostHooks` from it: desktop wires the hooks straight off the controller;
+Android's `MainViewModel` delegates to it behind its existing public surface.
 
 The desktop auto-update ADR is unaffected: this decision moves wiring, not update
 strategy. The desktop update surface stays inert-per-`999999.0.0`-sentinel until its
