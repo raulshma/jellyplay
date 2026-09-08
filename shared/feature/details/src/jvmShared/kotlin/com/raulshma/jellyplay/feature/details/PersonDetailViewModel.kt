@@ -29,7 +29,14 @@ class PersonDetailViewModel constructor(
     /** The loaded person — the deferred refresh reloads silently. */
     private var currentPersonId: String? = null
 
+    /**
+     * A no-op when this person is already showing: back-stack re-entry re-runs
+     * the screen's `LaunchedEffect`, and a second loud load here would race
+     * the deferred refresh's silent regeneration (and flash Loading over
+     * content the user is returning to). An Error state (or a fresh VM) loads.
+     */
     fun loadPerson(personId: String) {
+        if (currentPersonId == personId && _uiState.value is PersonDetailUiState.Success) return
         currentPersonId = personId
         _uiState.value = PersonDetailUiState.Loading
         launch { fetchPerson(personId, silent = false) }

@@ -150,11 +150,13 @@ class LibraryViewModelTest {
         advanceUntilIdle()
         coVerify(exactly = 1) { mediaRepository.getLibraryFolders(any()) }
 
-        // Re-entry runs the single deferred refresh() (folders + genres
-        // force-reloaded, pager trigger bumped).
+        // Re-entry regenerates the item pager only — watched/favorite flips
+        // never change folders, so the deferred path skips refresh()'s
+        // cache-bypassing folder/genre refetches (those serve manual
+        // pull-to-refresh).
         vm.onScreenActiveChanged(true)
         advanceUntilIdle()
-        coVerify(exactly = 2) { mediaRepository.getLibraryFolders(any()) }
+        coVerify(exactly = 1) { mediaRepository.getLibraryFolders(any()) }
     }
 
     @Test

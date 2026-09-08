@@ -192,6 +192,29 @@ class PersonDetailViewModelTest {
     }
 
     @Test
+    fun `loadPerson on an already-successful person is a no-op`() = runTest(mainDispatcher) {
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        coEvery { mediaRepository.getMediaDetail("p1") } returns Result.success(
+            MediaDetail(item = MediaItem(id = "p1", name = "Person One", mediaType = MediaType.UNKNOWN))
+        )
+        coEvery { mediaRepository.getItemsByPerson("p1") } returns Result.success(emptyList())
+
+        viewModel.loadPerson("p1")
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value is PersonDetailUiState.Success)
+
+        // Back-stack re-entry re-runs the screen's LaunchedEffect; a second
+        // loud load must not refetch (or flash Loading) on top of the deferred
+        // refresh's silent regeneration.
+        viewModel.loadPerson("p1")
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { mediaRepository.getMediaDetail("p1") }
+        coVerify(exactly = 1) { mediaRepository.getItemsByPerson("p1") }
+        assertTrue(viewModel.uiState.value is PersonDetailUiState.Success)
+    }
+
+    @Test
     fun `getImageUrl delegates to ImageUrlProvider`() {
         viewModel.getImageUrl("p1")
         io.mockk.verify(exactly = 1) { imageUrlProvider.getImageUrl("p1") }

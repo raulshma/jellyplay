@@ -58,6 +58,10 @@ class AlbumDetailViewModelTest {
 
     private lateinit var viewModel: AlbumDetailViewModel
 
+    /** Driven by the deferred-refresh tests; collected by the VM for its lifetime. */
+    private val userDataEvents =
+        MutableSharedFlow<com.raulshma.jellyplay.core.model.UserDataChange>(extraBufferCapacity = 16)
+
     private val albumTracks = listOf(
         MediaItem(id = "t1", name = "Track 1", mediaType = MediaType.AUDIO),
         MediaItem(id = "t2", name = "Track 2", mediaType = MediaType.AUDIO),
@@ -68,7 +72,7 @@ class AlbumDetailViewModelTest {
         Dispatchers.setMain(mainDispatcher)
         every { downloadRepository.getDownloadsByMediaItemIdsFlow(any()) } returns flowOf(emptyList())
         // The deferred refresher collects this for the whole VM lifetime.
-        every { mediaRepository.userDataChanges } returns MutableSharedFlow(extraBufferCapacity = 16)
+        every { mediaRepository.userDataChanges } returns userDataEvents
         viewModel = AlbumDetailViewModel(
             mediaRepository = mediaRepository,
             imageUrlProvider = imageUrlProvider,
@@ -243,6 +247,69 @@ class AlbumDetailViewModelTest {
         advanceUntilIdle()
 
         coVerify(exactly = 1) { mediaRepository.getMediaDetail("album1", true) }
+    }
+
+    @Test
+    fun loadAlbum_onAnAlreadyLoadedAlbumIsANoOp() = runTest(mainDispatcher) {
+        loadAlbum()
+        advanceUntilIdle()
+
+        // Back-stack re-entry re-runs the screen's LaunchedEffect; a second
+        // loud load must not refetch on top of the deferred refresh's silent
+        // regeneration.
+        viewModel.loadAlbum("album1")
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { mediaRepository.getMediaDetail("album1") }
+        coVerify(exactly = 1) { mediaRepository.getAlbumTracks("album1") }
+        assertFalse(viewModel.isLoading)
+    }
+
+    @Test
+    fun deferredRefresh_rerunsSilentlyWithoutBlankingContent() = runTest(mainDispatcher) {
+        loadAlbum()
+        advanceUntilIdle()
+        assertFalse(viewModel.isLoading)
+
+        // A write confirmed while the album screen is NOT on screen only
+        // marks the track list stale.
+        viewModel.onScreenActiveChanged(false)
+        coEvery { mediaRepository.getMediaDetail("album1", true) } returns Result.success(
+            MediaDetail(item = MediaItem(id = "album1", name = "Album", mediaType = MediaType.ALBUM)),
+        )
+        userDataEvents.emit(com.raulshma.jellyplay.core.model.UserDataChange("user-1", listOf("t1")))
+        advanceUntilIdle()
+
+        // Re-entry fires the single deferred regeneration — force + silent:
+        // the fetch runs but never drops the content into a loading state.
+        viewModel.onScreenActiveChanged(true)
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { mediaRepository.getMediaDetail("album1", true) }
+        assertFalse(viewModel.isLoading)
+        assertNull(viewModel.error)
+        assertEquals("Album", viewModel.detail?.item?.name)
+    }
+
+    @Test
+    fun deferredRefresh_failureKeepsLastContentInsteadOfFlashingError() = runTest(mainDispatcher) {
+        loadAlbum()
+        advanceUntilIdle()
+
+        viewModel.onScreenActiveChanged(false)
+        coEvery { mediaRepository.getMediaDetail("album1", true) } returns Result.failure(RuntimeException("offline blip"))
+        userDataEvents.emit(com.raulshma.jellyplay.core.model.UserDataChange("user-1", listOf("t1")))
+        advanceUntilIdle()
+        viewModel.onScreenActiveChanged(true)
+        advanceUntilIdle()
+
+        // The silent refetch failed — serve-stale-while-revalidate keeps the
+        // last detail/tracks on screen instead of flashing an error.
+        coVerify(exactly = 1) { mediaRepository.getMediaDetail("album1", true) }
+        assertFalse(viewModel.isLoading)
+        assertNull(viewModel.error)
+        assertEquals("Album", viewModel.detail?.item?.name)
+        assertEquals(albumTracks, viewModel.tracks)
     }
 
     // ── Instant mix event consumption ────────────────────────────────────────

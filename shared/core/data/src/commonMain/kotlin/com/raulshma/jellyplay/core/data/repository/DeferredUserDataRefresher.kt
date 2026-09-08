@@ -24,10 +24,11 @@ import kotlinx.coroutines.launch
  *
  * Main-thread confinement: [onScreenActiveChanged] is called from the host
  * composable's `LifecycleResumeEffect` (main) while the collector runs on
- * [scope] — hand it a main-immediate scope (viewModelScope) so both writes
- * to the two flags happen on one thread without further synchronization.
- * Screen activity defaults to inactive, so an event racing the first
- * composition still refreshes on entry.
+ * [scope] — hand it a main-immediate scope (viewModelScope) so all writes to
+ * [pendingRefresh] happen on one thread without further synchronization.
+ * Nothing consumes [pendingRefresh] until the first
+ * [onScreenActiveChanged](true), so an event racing the first composition
+ * still refreshes on entry.
  */
 class DeferredUserDataRefresher(
     userDataChanges: Flow<UserDataChange>,
@@ -35,7 +36,6 @@ class DeferredUserDataRefresher(
     private val onRefresh: () -> Unit,
 ) {
 
-    private var screenActive = false
     private var pendingRefresh = false
 
     init {
@@ -50,7 +50,6 @@ class DeferredUserDataRefresher(
     }
 
     fun onScreenActiveChanged(active: Boolean) {
-        screenActive = active
         if (active && pendingRefresh) {
             pendingRefresh = false
             onRefresh()

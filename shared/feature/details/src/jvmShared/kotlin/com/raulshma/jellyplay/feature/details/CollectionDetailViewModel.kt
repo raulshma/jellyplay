@@ -29,7 +29,14 @@ class CollectionDetailViewModel constructor(
     /** The loaded collection — the deferred refresh reloads it silently. */
     private var currentCollectionId: String? = null
 
+    /**
+     * A no-op when this collection is already showing: back-stack re-entry
+     * re-runs the screen's `LaunchedEffect`, and a second loud load here would
+     * race the deferred refresh's silent regeneration (and flash Loading over
+     * content the user is returning to). An Error state (or a fresh VM) loads.
+     */
     fun loadCollection(collectionId: String) {
+        if (currentCollectionId == collectionId && _uiState.value is CollectionDetailUiState.Success) return
         currentCollectionId = collectionId
         _uiState.value = CollectionDetailUiState.Loading
         launch { fetchCollection(collectionId, silent = false) }

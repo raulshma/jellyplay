@@ -50,7 +50,7 @@ class AlbumDetailViewModel(
     private val deferredRefresher = DeferredUserDataRefresher(
         userDataChanges = mediaRepository.userDataChanges,
         scope = scope,
-        onRefresh = { currentAlbumId?.let { id -> loadAlbum(id, force = true) } },
+        onRefresh = { currentAlbumId?.let { id -> loadAlbum(id, force = true, silent = true) } },
     )
 
     override fun onScreenActiveChanged(active: Boolean) {
@@ -91,22 +91,37 @@ class AlbumDetailViewModel(
         }
     }
 
-    fun loadAlbum(albumId: String, force: Boolean = false) {
+    /**
+     * Skips an already-loaded album unless [force]: back-stack re-entry re-runs
+     * the screen's `LaunchedEffect`, and a second loud load there would race
+     * the deferred refresh's silent regeneration. An errored album (or a fresh
+     * VM) loads.
+     *
+     * [silent] serves the deferred-refresh path: no loading state, no error
+     * reset — a failed silent refetch keeps the last detail/tracks on screen
+     * (serve-stale-while-revalidate, same philosophy as the detail screens).
+     */
+    fun loadAlbum(albumId: String, force: Boolean = false, silent: Boolean = false) {
+        if (!force && currentAlbumId == albumId && _detail.value != null && _error.value == null) return
         currentAlbumId = albumId
         launch {
-            _isLoading.value = true
-            _error.value = null
+            if (!silent) {
+                _isLoading.value = true
+                _error.value = null
+            }
             coroutineScope {
                 val detailDeferred = async { mediaRepository.getMediaDetail(albumId, force = force) }
                 val tracksDeferred = async { mediaRepository.getAlbumTracks(albumId) }
                 detailDeferred.await()
                     .onSuccess { _detail.value = it }
-                    .onFailure { _error.value = MixErrorMessage.Raw(it.message ?: "Failed to load album") }
+                    .onFailure { if (!silent) _error.value = MixErrorMessage.Raw(it.message ?: "Failed to load album") }
                 tracksDeferred.await()
                     .onSuccess { _tracks.set(it) }
-                    .onFailure { _error.value = MixErrorMessage.Raw(it.message ?: "Failed to load tracks") }
+                    .onFailure { if (!silent) _error.value = MixErrorMessage.Raw(it.message ?: "Failed to load tracks") }
             }
-            _isLoading.value = false
+            if (!silent) {
+                _isLoading.value = false
+            }
         }
     }
 

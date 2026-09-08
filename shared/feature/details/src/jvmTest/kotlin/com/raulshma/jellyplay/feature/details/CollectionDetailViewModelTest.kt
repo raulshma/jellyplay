@@ -136,6 +136,25 @@ class CollectionDetailViewModelTest {
     }
 
     @Test
+    fun `loadCollection on an already-successful collection is a no-op`() = runTest(mainDispatcher) {
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        stubCollectionFetch()
+        viewModel.loadCollection("c1")
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value is CollectionDetailUiState.Success)
+
+        // Back-stack re-entry re-runs the screen's LaunchedEffect; a second
+        // loud load must not refetch (or flash Loading) on top of the deferred
+        // refresh's silent regeneration.
+        viewModel.loadCollection("c1")
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { mediaRepository.getMediaDetail("c1") }
+        coVerify(exactly = 1) { mediaRepository.getCollectionItems("c1", any(), any()) }
+        assertTrue(viewModel.uiState.value is CollectionDetailUiState.Success)
+    }
+
+    @Test
     fun `getImageUrl and getBackdropUrl delegate to ImageUrlProvider`() {
         viewModel.getImageUrl("x")
         viewModel.getBackdropUrl("y")

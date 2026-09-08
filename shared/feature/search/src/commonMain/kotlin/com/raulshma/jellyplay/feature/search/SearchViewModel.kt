@@ -32,7 +32,6 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -136,12 +135,12 @@ class SearchViewModel(
      * restarting the paged query with a fresh generation (the same
      * silent-refresh contract as the library grid).
      */
-    private val _refreshTrigger = MutableStateFlow(0)
+    private val _refreshTrigger = stateFlow(0)
 
     val pagedResults: Flow<PagingData<MediaItem>> = combine(
         debouncedQuery,
         _filters.flow,
-        _refreshTrigger,
+        _refreshTrigger.flow,
     ) { q, f, refresh -> Triple(q, f, refresh) }
         .flatMapLatest { (currentQuery, filters, _) ->
             if (currentQuery.isBlank()) {
@@ -163,7 +162,7 @@ class SearchViewModel(
     private val deferredRefresher = DeferredUserDataRefresher(
         userDataChanges = mediaRepository.userDataChanges,
         scope = scope,
-        onRefresh = { _refreshTrigger.value += 1 },
+        onRefresh = { _refreshTrigger.set(_refreshTrigger.value + 1) },
     )
 
     override fun onScreenActiveChanged(active: Boolean) {

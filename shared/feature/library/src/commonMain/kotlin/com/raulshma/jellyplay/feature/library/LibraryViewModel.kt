@@ -195,17 +195,20 @@ class LibraryViewModel(
         mediaDownloadActions.removeDownload(item)
     }
 
-    private val _refreshTrigger = kotlinx.coroutines.flow.MutableStateFlow(0)
+    private val _refreshTrigger = stateFlow(0)
 
     /**
      * User-data changes while another screen is up only mark the grid stale;
-     * the single [refresh] fires when the library screen is next entered (see
-     * [DeferredUserDataRefresher]) — never mid-scroll.
+     * the single regeneration fires when the library screen is next entered
+     * (see [DeferredUserDataRefresher]) — never mid-scroll. Only the item
+     * pager regenerates: watched/favorite flips never change folders, genres
+     * or tags, so the cache-bypassing refetches [refresh] does (the manual
+     * pull-to-refresh path) are skipped here.
      */
     private val deferredRefresher = DeferredUserDataRefresher(
         userDataChanges = mediaRepository.userDataChanges,
         scope = scope,
-        onRefresh = ::refresh,
+        onRefresh = { _refreshTrigger.set(_refreshTrigger.value + 1) },
     )
 
     override fun onScreenActiveChanged(active: Boolean) {
@@ -228,7 +231,7 @@ class LibraryViewModel(
     @OptIn(ExperimentalCoroutinesApi::class)
     val pagedItems: Flow<PagingData<MediaItem>> = combine(
         _browserState.flow,
-        _refreshTrigger,
+        _refreshTrigger.flow,
         offlineModeManager.offlineMode,
     ) { browser, refreshTrigger, mode ->
         PagedQueryKey(browser.folder, browser.filters, mode != OfflineMode.ONLINE, refreshTrigger)
@@ -571,7 +574,7 @@ class LibraryViewModel(
             // Increment the trigger to force flatMapLatest to create a new Pager,
             // which avoids the duplicate-key crash that occurs when pagedItems.refresh()
             // is called concurrently on a cachedIn flow.
-            _refreshTrigger.value++
+            _refreshTrigger.set(_refreshTrigger.value + 1)
         }
     }
 
