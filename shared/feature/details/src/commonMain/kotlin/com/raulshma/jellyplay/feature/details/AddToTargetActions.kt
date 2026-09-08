@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.details
 
 import androidx.compose.runtime.Immutable
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaType
@@ -249,10 +250,10 @@ internal suspend fun resolveTargetItemIds(
     session: StateFlow<DetailSession?>,
     mediaDetailProvider: MediaDetailProvider,
     detail: MediaDetail,
-): Result<List<String>> = runCatching {
+): Result<List<String>> = runCatchingRethrowingCancellation {
     val item = detail.item
-    if (item.mediaType != MediaType.SERIES) return@runCatching listOf(item.id)
+    if (item.mediaType != MediaType.SERIES) return@runCatchingRethrowingCancellation listOf(item.id)
     val sortedIds = session.value?.sortedEpisodes?.takeIf { it.isNotEmpty() }?.map { it.id }
-    if (!sortedIds.isNullOrEmpty()) return@runCatching sortedIds
+    if (!sortedIds.isNullOrEmpty()) return@runCatchingRethrowingCancellation sortedIds
     mediaDetailProvider.canonicalEpisodeIds(item.id)
 }

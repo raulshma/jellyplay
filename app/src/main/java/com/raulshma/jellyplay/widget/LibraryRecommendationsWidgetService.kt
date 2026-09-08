@@ -12,10 +12,8 @@ import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
 import com.raulshma.jellyplay.core.model.LibraryWidgetItem
 import com.raulshma.jellyplay.core.model.deeplink.DeepLinkGrammar
 import com.raulshma.jellyplay.widget.skeleton.WidgetGridFactory
-import com.raulshma.jellyplay.widget.skeleton.gridCellTextVisible
 import com.raulshma.jellyplay.widget.skeleton.libraryRowSubtitle
 import com.raulshma.jellyplay.widget.skeleton.libraryRowTitle
-import com.raulshma.jellyplay.widget.skeleton.toViewVisibility
 import org.koin.mp.KoinPlatform
 
 /**
@@ -83,29 +81,21 @@ class LibraryRecommendationsWidgetService : RemoteViewsService() {
             view.setTextViewText(R.id.lr_item_subtitle, libraryRowSubtitle(item.year, item.communityRating))
             view.setViewVisibility(R.id.lr_item_subtitle, View.VISIBLE)
 
-            // Apply responsive rules based on widget options
-            view.setViewVisibility(
-                R.id.lr_item_text_container,
-                gridCellTextVisible(widgetDims).toViewVisibility(),
+            // Responsive text-container rule + poster-or-placeholder tail —
+            // the skeleton's bindGridCellTail.
+            bindGridCellTail(
+                view = view,
+                item = item,
+                textContainerViewId = R.id.lr_item_text_container,
+                posterViewId = R.id.lr_item_poster,
             )
-
-            val bitmap = posterFor(item)
-            if (bitmap != null) {
-                view.setImageViewBitmap(R.id.lr_item_poster, bitmap)
-            } else {
-                view.setImageViewResource(R.id.lr_item_poster, R.drawable.widget_backdrop_placeholder)
-            }
         }
 
         override fun loadingView(): RemoteViews =
-            RemoteViews(context.packageName, R.layout.library_recommendations_item)
-                .clearRowTexts()
-                .apply {
-                    setViewVisibility(
-                        R.id.lr_item_text_container,
-                        gridCellTextVisible(widgetDims).toViewVisibility(),
-                    )
-                }
+            gridCellLoadingView(
+                layoutRes = R.layout.library_recommendations_item,
+                textContainerViewId = R.id.lr_item_text_container,
+            )
     }
 
     companion object {

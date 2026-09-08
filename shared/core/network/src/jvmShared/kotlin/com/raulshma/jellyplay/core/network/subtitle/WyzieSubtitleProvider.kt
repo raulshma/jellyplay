@@ -9,7 +9,6 @@ import com.raulshma.jellyplay.core.model.subtitle.SubtitleQuery
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleSearchResult
 import com.raulshma.jellyplay.core.network.NetworkLog
 import com.raulshma.jellyplay.core.network.api.ApiException
-import com.raulshma.jellyplay.core.network.api.fromNetwork
 import com.raulshma.jellyplay.core.network.seerr.SeerrApiClientImpl
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -43,6 +42,20 @@ class WyzieSubtitleProvider @Inject constructor(
 
     private val json = SeerrApiClientImpl.lenientJson
     private val rateLimiter = SubtitleRateLimiter(SubtitleRateLimiter.WYZIE_MIN_INTERVAL_MS)
+
+    /**
+     * Shared subtitle HTTP chassis (execute + wrapNetwork). Declared
+     * Wyzie-only divergences: the API key rides every URL as a query param,
+     * so logged URLs and wrapped messages are redacted; and HTTP failures
+     * capture the error body because [isEmptyMatchesResponse] reads it off
+     * the [ApiException].
+     */
+    private val http = SubtitleHttp(okHttpClient)
+    private val httpOptions = SubtitleHttp.Options(
+        logTag = TAG,
+        redactSecrets = true,
+        captureResponseBody = true,
+    )
 
     /**
      * Search base URL. The production endpoint (`https://sub.wyzie.io`) is fixed
@@ -95,9 +108,7 @@ class WyzieSubtitleProvider @Inject constructor(
                     query.hearingImpaired?.let { urlBuilder.addQueryParameter("hi", it.toString()) }
 
                     val request = Request.Builder().url(urlBuilder.build()).build()
-                    val body = execute(request) { response ->
-                        response.body?.string() ?: throw IOException("Empty Wyzie response")
-                    }
+                    val body = http.executeForString(request, HTTP_SERVICE, httpOptions)
                     val parsed = json.decodeFromString<List<WyzieSubtitleDto>>(body).map { it.toResult() }
                     preferEpisodeMarker(parsed, query.season, query.episode)
                 }
@@ -106,12 +117,13 @@ class WyzieSubtitleProvider @Inject constructor(
                 // {"message":"No subtitles found"} body — not an error. Map that
                 // single case to an empty success so the UI shows no results
                 // instead of a misleading "Wyzie HTTP 400" error chip. Everything
-                // else (network failure, genuine 4xx/5xx) flows through [wrapNetwork].
+                // else (network failure, genuine 4xx/5xx) flows through the
+                // chassis's wrapNetwork.
                 if (isEmptyMatchesResponse(e)) {
                     NetworkLog.d(TAG, "search returned no matches (Wyzie 400 'No subtitles found') → empty success")
                     return@recoverCatching emptyList<SubtitleSearchResult>()
                 }
-                throw wrapNetwork(e)
+                throw http.wrapNetwork(e, DISPLAY_SERVICE, httpOptions)
             }
         }
     }
@@ -128,7 +140,7 @@ class WyzieSubtitleProvider @Inject constructor(
             runCatchingRethrowingCancellation {
                 withContext(Dispatchers.IO) {
                     val request = Request.Builder().url(url.toHttpUrl()).build()
-                    execute(request) { response ->
+                    http.execute(request, HTTP_SERVICE, httpOptions) { response ->
                         val bytes = response.body?.bytes()
                             ?: throw IOException("Empty subtitle response from Wyzie")
                         SubtitleFile(
@@ -140,37 +152,8 @@ class WyzieSubtitleProvider @Inject constructor(
                     }
                 }
             }.recoverCatching { e ->
-                throw wrapNetwork(e)
+                throw http.wrapNetwork(e, DISPLAY_SERVICE, httpOptions)
             }
-        }
-    }
-
-    /**
-     * Shared OkHttp executor. [onResponse] receives the successful response and
-     * produces the typed value; non-2xx responses are mapped to a retryable
-     * [ApiException]. Network throwables are surfaced as-is for [wrapNetwork].
-     */
-    private inline fun <T> execute(request: Request, onResponse: (okhttp3.Response) -> T): T {
-        okHttpClient.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) {
-                // The error body explains *why* (e.g. an unmappable TMDB id), so
-                // log it before discarding. Keep it bounded to avoid spamming
-                // logcat with a huge error page, and redact the key out of the URL.
-                val rawBody = runCatching { response.body?.string() }.getOrNull()
-                val bodyPreview = rawBody?.take(500)
-                NetworkLog.w(
-                    TAG,
-                    "HTTP ${response.code} for ${redactSecrets(request.url.toString())}" +
-                        (bodyPreview?.let { " body=$it" } ?: ""),
-                )
-                throw ApiException.fromHttpResponse(
-                    response.code,
-                    "Wyzie HTTP ${response.code}",
-                    response.header("Retry-After"),
-                    responseBody = rawBody,
-                )
-            }
-            return onResponse(response)
         }
     }
 
@@ -179,8 +162,9 @@ class WyzieSubtitleProvider @Inject constructor(
      * returns this as HTTP 400 with a JSON body containing
      * `"message":"No subtitles found"` — a 400 status misused to mean "empty
      * result" rather than "bad request". Matched on the response body (captured
-     * on the [ApiException]) so a genuinely malformed request still surfaces as
-     * an error.
+     * on the [ApiException] by the shared [SubtitleHttp] chassis, whose
+     * `captureResponseBody` flag Wyzie sets) so a genuinely malformed request
+     * still surfaces as an error.
      */
     private fun isEmptyMatchesResponse(e: Throwable): Boolean {
         if (e !is ApiException || e.httpCode != 400) return false
@@ -220,33 +204,6 @@ class WyzieSubtitleProvider @Inject constructor(
         return matching
     }
 
-    private fun wrapNetwork(e: Throwable): ApiException {
-        if (e is ApiException) return e
-        if (e is kotlinx.coroutines.CancellationException) throw e
-        val friendly = when (e) {
-            is java.net.UnknownHostException -> "Unable to reach Wyzie Subs. Check your connection."
-            is java.net.SocketTimeoutException -> "Wyzie Subs request timed out."
-            else -> redactSecrets(e.message) ?: "Wyzie Subs request failed"
-        }
-        return ApiException.fromNetwork(e, friendly)
-    }
-
-    /**
-     * Strips secrets from a network exception message before it surfaces in the
-     * UI. Wyzie carries the API key as a `key` query param on every request, and
-     * OkHttp `IOException` messages frequently embed the full request URL — so an
-     * unredacted message would leak the key straight into an error chip. Anything
-     * that looks like a `key=`/`api_key=`/`token=` param is replaced with a
-     * placeholder; if the whole message is just a URL, drop it for a generic one.
-     */
-    private fun redactSecrets(message: String?): String? {
-        if (message.isNullOrBlank()) return null
-        val redacted = message
-            .replace(SECRET_PARAM_REGEX, "$1<redacted>")
-            .replace(SECRET_URL_REGEX, "<request url with key redacted>")
-        return redacted.ifBlank { null }
-    }
-
     @Serializable
     private data class WyzieSubtitleDto(
         @SerialName("id") val id: String? = null,
@@ -280,7 +237,13 @@ class WyzieSubtitleProvider @Inject constructor(
         internal const val BASE = "https://sub.wyzie.io"
         private const val TAG = "WyzieSubs"
 
-        private val SECRET_PARAM_REGEX = Regex("(?i)(\\b(?:key|api[_-]?key|token)\\s*=\\s*)[^&\\s]+")
-        private val SECRET_URL_REGEX = Regex("https?://[^\\s]*[?&](?:key|api[_-]?key|token)=[^&\\s]+")
+        /**
+         * Wyzie spells itself differently per surface: "Wyzie" in the wire-level
+         * HTTP/empty-body messages (matching the API's own naming), "Wyzie Subs"
+         * in the user-facing friendly ladder — hence the two [SubtitleHttp]
+         * service-name arguments.
+         */
+        private const val HTTP_SERVICE = "Wyzie"
+        private const val DISPLAY_SERVICE = "Wyzie Subs"
     }
 }

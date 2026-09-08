@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.navigation
 
-import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.ActivityResult
@@ -60,6 +59,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -109,6 +109,7 @@ import com.raulshma.jellyplay.core.model.ExperimentalFeature
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.navigation.components.ExpressiveFloatingNavigationBar
 import com.raulshma.jellyplay.navigation.components.MoreToggleIcon
+import com.raulshma.jellyplay.navigation.playbackhost.ExternalPlayerHost
 import com.raulshma.jellyplay.navigation.playbackhost.HostDecision
 import com.raulshma.jellyplay.navigation.playbackhost.PlaybackHostRouter
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
@@ -358,51 +359,59 @@ private fun MainContent(
     // Shared (commonMain) bus — same instance the root provider supplies to
     // the migrated ViewModels; collected alongside the legacy bus below.
     val sharedUserMessageBus = com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus.current
-    var pendingExternalLaunch by remember { mutableStateOf<com.raulshma.jellyplay.ExternalPlayerLaunch?>(null) }
+    // One home for the external-player launch protocol (ExternalPlayerHost,
+    // beside PlaybackHostRouter): resolve → report-start → stash → chooser →
+    // failure-clears-stash+error, plus the result arm's position parse +
+    // report-stop — the ordering between those steps is pinned there
+    // (ExternalPlayerHostTest). The host owns the pending-launch stash, so it
+    // is remembered (stateful, unlike the stateless NavRequestCollector
+    // constructed inline below); the ActivityResultLauncher arrives as a
+    // per-call seam because the shell constructs the host BEFORE the launcher
+    // (the launcher's result callback feeds host.onResult). The bus rides a
+    // rememberUpdatedState wrapper so the remembered host always posts to the
+    // composition's current bus.
+    val currentMessageBus by rememberUpdatedState(userMessageBus)
+    val externalPlayerHost = remember {
+        ExternalPlayerHost(
+            buildLaunch = viewModel::buildExternalPlayerLaunch,
+            reportStart = viewModel::reportExternalPlaybackStart,
+            reportStopped = viewModel::reportExternalPlaybackStopped,
+            notifyNoPlayerFound = {
+                currentMessageBus.error(
+                    com.raulshma.jellyplay.core.ui.feedback.uiTextOf(
+                        com.raulshma.jellyplay.core.ui.R.string.msg_no_video_player_found,
+                    ),
+                )
+            },
+        )
+    }
     val externalPlayerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult(),
     ) { result: ActivityResult ->
-        val launch = pendingExternalLaunch
-        pendingExternalLaunch = null
-        if (launch != null) {
-            // Pure parse (ExternalPlayerResultPolicy): "position"/"positionMs"
-            // alias, Number coercion, >=0 gate, ms→ticks ×10_000; -1 = none.
-            val finalTicks = result.data?.extras?.let { extras ->
-                externalPlayerPositionTicks(extras.get("position"), extras.get("positionMs"))
-            } ?: -1L
-            viewModel.reportExternalPlaybackStopped(launch, finalTicks)
-        }
+        externalPlayerHost.onResult(
+            position = result.data?.extras?.get("position"),
+            positionMs = result.data?.extras?.get("positionMs"),
+        )
     }
     val navigator = Navigator(navigationState, navigateFilter = { route ->
         // Thin executing adapter for PlaybackHostRouter — the single owner of
         // the "which host mounts playback" decision. ExternalPlayer → the
-        // app-level ActivityResultLauncher below (its returned position is
-        // credited via reportExternalPlaybackStopped, so Continue Watching
-        // advances for regular videos and Live TV channels); DedicatedActivity
-        // → PlayerActivity (system PiP floats over this browse UI; back-stack
+        // host above (its returned position is credited via
+        // reportExternalPlaybackStopped, so Continue Watching advances for
+        // regular videos and Live TV channels); DedicatedActivity →
+        // PlayerActivity (system PiP floats over this browse UI; back-stack
         // choreography: shared taskAffinity, singleTask). Both return false so
         // the route never enters an in-nav back stack. InNav/NotPlayback →
         // true, the Navigator pushes normally.
         when (val decision = PlaybackHostRouter.decide(route, preferences.preferredPlayer)) {
             is HostDecision.ExternalPlayer -> {
                 scope.launch {
-                    val launch = viewModel.buildExternalPlayerLaunch(
+                    externalPlayerHost.launch(
                         itemId = decision.itemId,
                         mediaSourceId = decision.mediaSourceId,
                         startPositionTicks = decision.startPositionTicks,
-                    ) ?: return@launch
-                    viewModel.reportExternalPlaybackStart(launch)
-                    pendingExternalLaunch = launch
-                    val chooser = Intent.createChooser(launch.intent, "Open with…")
-                    runCatching { externalPlayerLauncher.launch(chooser) }
-                        .onFailure {
-                            pendingExternalLaunch = null
-                            userMessageBus.error(
-                                com.raulshma.jellyplay.core.ui.feedback.uiTextOf(
-                                    com.raulshma.jellyplay.core.ui.R.string.msg_no_video_player_found,
-                                ),
-                            )
-                        }
+                        startChooser = { chooser -> externalPlayerLauncher.launch(chooser) },
+                    )
                 }
                 false
             }

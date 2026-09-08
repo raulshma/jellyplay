@@ -77,37 +77,9 @@ class SubtitleProviderRepositoryImpl(
             val externalJobs = externalProviders.keys
                 .filter { it in configured }
                 .map { kind ->
-                    async {
-                        val provider = externalProviders.getValue(kind)
-                        val cred = creds[kind]
-                        if (cred == null) {
-                            Log.d(TAG, "search $kind skipped: no credentials")
-                        }
-                        // A raw throw (anything escaping provider.search()/
-                        // searchExternal) must never cancel sibling jobs — the
-                        // class contract is "one bad key never blanks the rest".
-                        // coroutineScope cancels siblings on a throw, so catch
-                        // here and degrade to an Error outcome instead.
-                        val outcome = runCatchingRethrowingCancellation { searchExternal(provider, query, cred) }
-                            .getOrElse { e ->
-                                Log.e(TAG, "search $kind threw, isolating: ${e.javaClass.simpleName}: ${e.message}", e)
-                                ProviderSearchOutcome.Error(e.message ?: "$kind search failed")
-                            }
-                        kind to outcome
-                    }
+                    async { kind to externalOutcomeFor(externalProviders.getValue(kind), kind, creds[kind], query) }
                 }
-            val outcomes = externalJobs.awaitAll().toMap()
-            outcomes.forEach { (kind, outcome) ->
-                when (outcome) {
-                    is ProviderSearchOutcome.Success ->
-                        Log.d(TAG, "search $kind success: ${outcome.results.size} result(s)")
-                    is ProviderSearchOutcome.Error ->
-                        Log.w(TAG, "search $kind error: ${outcome.message}")
-                    is ProviderSearchOutcome.Skipped ->
-                        Log.d(TAG, "search $kind skipped")
-                }
-            }
-            outcomes
+            externalJobs.awaitAll().toMap()
         }
     }
 
@@ -194,27 +166,8 @@ class SubtitleProviderRepositoryImpl(
         // External providers: TMDB/IMDb/title-keyed fan-out.
         externalProviders.keys.filter { it in configured }.forEach { kind ->
             jobs += launch {
-                val provider = externalProviders.getValue(kind)
-                val cred = creds[kind]
-                if (cred == null) {
-                    Log.d(TAG, "search $kind skipped: no credentials")
-                }
-                // A raw throw escaping provider.search()/searchExternal must
-                // never cancel siblings — degrade to an Error outcome instead.
-                val outcome = runCatchingRethrowingCancellation { searchExternal(provider, query, cred) }
-                    .getOrElse { e ->
-                        Log.e(TAG, "search $kind threw, isolating: ${e.javaClass.simpleName}: ${e.message}", e)
-                        ProviderSearchOutcome.Error(e.message ?: "$kind search failed")
-                    }
+                val outcome = externalOutcomeFor(externalProviders.getValue(kind), kind, creds[kind], query)
                 mutex.withLock { outcomes[kind] = outcome }
-                when (outcome) {
-                    is ProviderSearchOutcome.Success ->
-                        Log.d(TAG, "search $kind success: ${outcome.results.size} result(s)")
-                    is ProviderSearchOutcome.Error ->
-                        Log.w(TAG, "search $kind error: ${outcome.message}")
-                    is ProviderSearchOutcome.Skipped ->
-                        Log.d(TAG, "search $kind skipped")
-                }
                 emitPartial()
             }
         }
@@ -259,6 +212,47 @@ class SubtitleProviderRepositoryImpl(
             ),
         )
         return MergedSubtitleSearch(results = ordered, errors = errors)
+    }
+
+    /**
+     * ONE external-provider outcome, written once for both fan-out shapes
+     * ([search]'s async/awaitAll barrier and [searchAllStreaming]'s
+     * launch/mutex/emitPartial stream — only the concurrency choreography is
+     * per-call-site, the outcome derivation is not): the no-credentials skip
+     * log, the "one bad key never blanks the rest" isolation (a raw throw
+     * escaping [searchExternal] degrades to an [ProviderSearchOutcome.Error]
+     * instead of cancelling siblings through `coroutineScope`), and the
+     * per-arm outcome log ladder.
+     *
+     * Fold note: the log ladder rides the fold, so in [search] the per-arm
+     * line is emitted at each job's completion rather than after the awaitAll
+     * barrier, and in [searchAllStreaming] it fires ahead of the launch
+     * site's mutex store + emitPartial instead of after — same lines, same
+     * content, within-job reordering only.
+     */
+    private suspend fun externalOutcomeFor(
+        provider: SubtitleProvider,
+        kind: SubtitleProviderKind,
+        cred: SubtitleProviderCredentials?,
+        query: SubtitleQuery,
+    ): ProviderSearchOutcome {
+        if (cred == null) {
+            Log.d(TAG, "search $kind skipped: no credentials")
+        }
+        val outcome = runCatchingRethrowingCancellation { searchExternal(provider, query, cred) }
+            .getOrElse { e ->
+                Log.e(TAG, "search $kind threw, isolating: ${e.javaClass.simpleName}: ${e.message}", e)
+                ProviderSearchOutcome.Error(e.message ?: "$kind search failed")
+            }
+        when (outcome) {
+            is ProviderSearchOutcome.Success ->
+                Log.d(TAG, "search $kind success: ${outcome.results.size} result(s)")
+            is ProviderSearchOutcome.Error ->
+                Log.w(TAG, "search $kind error: ${outcome.message}")
+            is ProviderSearchOutcome.Skipped ->
+                Log.d(TAG, "search $kind skipped")
+        }
+        return outcome
     }
 
     private suspend fun searchExternal(

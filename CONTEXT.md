@@ -1277,10 +1277,21 @@ implementation; both engines' `apiResult` (JVM `JellyfinApiEngine` + wasm
 declared parity, no per-platform twin. Non-suspend bodies (JSON/enum parses
 in mappers) keep stdlib `runCatching`. **`BareRunCatchingRatchetTest`**
 (module `jvmTest`) is the source ratchet: bare `runCatching` inside
-`suspend fun` bodies across core:data/network, home, player-video, the
-legacy `core/data` tree, `:app` and `:apps:desktop` never increases —
-lower the baseline when another site converts, never raise it; prefer
-extracting a legitimate parse out of the suspend body over raising it.
+`suspend fun` bodies never increases — the guard is repo-complete since
+the 2026-09-08 third wave (every shared/core and shared/feature source
+root, legacy core/data + core/ui, core/notification, `:app`,
+`:apps:desktop`, apps/web; baseline 22, down from 27 over the smaller
+old surface). Two known deliberate baseline entries are named in the
+test's KDoc (HomeDiscoveryStore's best-effort migration swallow,
+PluginConfigViewModel's asset read); `AddToTargetActions
+.resolveTargetItemIds` — the one live hazard the widened sweep found — is
+converted (a cancelled canonicalEpisodeIds fetch used to settle as the
+couldn't-add message path). The heuristic can't see bare `runCatching`
+inside suspend LAMBDAS; the wave's review pass converted the two found
+that way (AdminDashboardViewModel's and LogsViewModel's `AdminLoad` fetch
+variants — recorded in the test KDoc too). Lower the baseline when another site
+converts, never raise it; prefer extracting a legitimate parse out of
+the suspend body over raising it.
 **`Semaphore.mapConcurrent` / `mapConcurrentCatching`**
 (`MapConcurrent.kt`, same module) is the one bounded-parallel-map surface:
 order-preserving `items.map { async { withPermit { … } } }.awaitAll()` written
@@ -2217,6 +2228,128 @@ crossing modules, and the last dark test lanes opening.
   `:apps:desktop:test` lane, incl. a replay→restore→persist session
   sequence.
 
+- **`SubtitleHttp`** (core/network jvmShared `subtitle/`, beside
+  `SubtitleRateLimiter`) is the one HTTP chassis behind both subtitle
+  providers: `execute`/`executeForString`/`wrapNetwork` over an options
+  record (`redactSecrets`, `captureResponseBody`,
+  `rewordSerializationErrors`). The two providers' formerly hand-copied
+  execute chassis (OkHttp use, bounded body log, Retry-After-aware
+  `ApiException`) and friendly ladder are parameterised divergences now:
+  only OpenSubtitles rewords SerializationException (the JSON-token leak
+  guard), only Wyzie redacts secrets and captures the body (its
+  400-empty detection reads it). Pinned by `SubtitleHttpTest` (MockWebServer,
+  ladder/redaction/retryability table) on top of both provider suites.
+- **`EmptyLibraryFallbackTest`** (core/network commonTest, the
+  `LibraryRequestPolicyTest` neighbour): the fallback ladder both platform
+  clients ride is pinned for the first time — memo short-circuit (zero
+  transport), the three bypasses, `limit <= 0 → 50` coercion,
+  remember-only-genuinely-empty (a FAILED fetch degrades to empty and IS
+  remembered), cancellation propagation, and the
+  `emptyFallbackTotalCount` table. Declared semantics the test now makes
+  explicit: a BLANK search term is an unfiltered browse (the gate is
+  `isNullOrBlank`) and pays the fallback.
+- **`SubtitleProviderRepositoryImpl`** folds its two fan-outs' shared
+  block (no-credentials skip log → isolation
+  `runCatchingRethrowingCancellation` → per-arm outcome log) into one
+  private `externalOutcomeFor`; `search` keeps awaitAll, streaming keeps
+  launch+emitPartial. Declared log-timing delta (KDoc'd): in `search`,
+  the per-arm log now fires at each job's completion instead of after the
+  barrier, and in `searchAllStreaming` ahead of the launch site's mutex
+  store + `emitPartial` (within-job reordering only). Contract still
+  pinned by the Robolectric lane.
+- **`RecommendationWorkerSkeleton`** (app widget/skeleton) owns the
+  recommendation workers' guard → fetch → empty-keep → cap/map/persist →
+  retry-fold chassis over `skipFetch`/`fetchItems`/`mapItem`/`persist`/
+  `logFailure` seams (per-site logging preserved: Library logs every
+  failure, Seerr only permanent). `WidgetGridFactory` gained
+  `bindGridCellTail`/`gridCellLoadingView` — the poster-or-fallback +
+  responsive-text bind-tail the Library/Seerr services re-copied
+  (ContinueWatching keeps its declared diverged tail).
+  `BaseWidgetConfigActivity` owns the config save tail
+  (getInstance → update seam → notify(gridViewId?) → refreshNow seam →
+  finish) — the four `saveAndFinish` hand-copies are gone. The recorded
+  deferred trio (worker chassis, bind-tail, config tails) is closed;
+  behaviour pinned by the existing worker/factory suites.
+- **`PipActionSet`** (app, beside `PipLifecyclePolicy`): the PiP action
+  apparatus's pure halves — `actionSpecs(isPlaying, hasNext)` (the ordered
+  skip-back → play/pause icon+title fork → skip-forward → gated-next
+  fold, resource ids only) and the `idFor`/`actionForId` wire codec plus
+  the protocol constants, moved verbatim (wire-stable across app
+  updates). `PlayerActivity` keeps only RemoteAction/PendingIntent
+  wiring. Pinned by `PipActionSetTest` (14: fork cells, round-trip,
+  unknown-id nulls, protocol strings verbatim).
+- **`ExternalPlayerHost`** (app navigation/playbackhost, the recorded
+  design landed): the six-step launch protocol (resolve → report-start →
+  stash → chooser → failure clears stash + error; result consumes once →
+  ticks fold → report-stop) over constructor lambdas; the shell keeps
+  the remember construction, the ActivityResult wiring, and one-call
+  sites. The launcher arrives per-call (the host must exist before the
+  launcher's callback can reference it — KDoc'd). Ordering pinned by
+  `ExternalPlayerHostTest` (Robolectric, fake-lambda choreography) —
+  the pieces were tested before, the ORDERING was not. Its chooser arm
+  rides `runCatchingRethrowingCancellation`.
+- **Desktop `NowPlayingTracker` adoption**: `DesktopAudioQueueManager`
+  constructs the tracker and re-exposes its six metadata flows by
+  reference (the Android manager's pattern — public property names
+  unchanged, tray/title-bar/shared screens untouched); the three
+  hand-write sites are `publishDetail`/`publishQueueItem`/`clear`.
+  Declared delta: `stopAndRelease` no longer resets `artistId` (the
+  tracker's clear() deliberately keeps it — the Android side already
+  behaved that way). Pinned by 3 new `DesktopAudioQueueManagerTest`
+  cases; the publish contract is now single-pinned
+  (`NowPlayingTrackerTest`) across both platforms.
+- **`CueAccumulator` sharing**: `mergeAccumulatedCues` is public
+  (desktop-engine adapter surface, the `PlaybackVolumePolicy` precedent
+  language); `MpvDesktopEngine`'s ~30-line private mirror is deleted —
+  the desktop keeps only its `sub-start` read divergence at the call
+  site. Merge rules single-pinned by the existing `CueAccumulatorTest`
+  for both platforms.
+- **`MpvErrorTaxonomy`** (player-video commonMain engine/): one
+  errorCode→`EngineError` table (−13 LOADING_FAILED → Network; −14…−19
+  init/format family → Decoder; else Unknown) plus the Android string-code
+  normalization (`fromCodeString`). The two engines' private tables are
+  deleted. Declared divergence parameter: the Unknown arm's diagnostic
+  (`unknownDetail`) — desktop passes `mpv_error_string(code)`, Android
+  the raw handed-over string, each preserving its former behaviour.
+  Pinned by `MpvErrorTaxonomyTest` (9).
+- **`PicoConfigHtml`** (admin commonMain plugins/, beside
+  `PluginBridgeScript`): the pico WebView builders (`colorToHex`,
+  `buildPicoOverrides`, `buildWrappedHtml`) moved out of androidMain
+  where no CI lane could reach them; androidMain keeps WebView wiring.
+  Pinned by `PicoConfigHtmlTest` (11).
+- **Storage-byte vocabulary** (core/model `ByteFormatter`): a
+  `Long.toStorageBytesValue()` band table now backs `formatBytes`; the
+  four drifted UI copies (Logs, PhotoViewer, DetailDownloadDialog,
+  ArrQueue) migrated onto it. Declared deltas: ÷1000 sites (PhotoViewer,
+  DetailDownload) join the ÷1024 house convention; Logs' integer-KB and
+  ArrQueue's `%.0f KB` collapse to the one-decimal band table, as does
+  the ÷1000 pair's sub-KB funnel (500 B showed `0.5 KB`, now `500 B`);
+  Logs gains the GB band. DetailDownload keeps localization via a per-unit
+  `localizedStorageSize` wrapper. `AdminStatisticsRepositoryImpl
+  .formatSize` stays untouched (Room-persisted text — the recorded
+  blocker). Known residue: core/ui's `FormatFileSize.kt` (SI, own test)
+  and PlaybackInfoOverlay's private copy remain — different surface,
+  opportunistic. Pinned by `FormatStorageBytesTest` + `ByteFormatterTest`.
+- **`AdminLoad`** (admin commonMain, the `LiveTvLoad` shape): the admin
+  slice of the load-ladder fold — 10 VMs (Dashboard, Devices, Logs,
+  Plugin Detail, Plugins, Stats, Stats Detail, Scheduled Tasks, Users,
+  androidMain Plugin Config), both ladder shapes. The helper owns
+  start → single suspend fetch → exactly-one-arm dispatch; settles stay
+  per-VM as declared variants (final-update, flavour starts, Dashboard's
+  persisted-error try/catch expressed as a `runCatching{getOrThrow}`
+  fetch, Logs' parallel pair under one catch). Declared timing
+  unification: Plugins/ScheduledTasks' legacy fire-and-forget inner
+  launch now awaits — `isLoading` covers the fetch (per-VM suites assert
+  settle only after `advanceUntilIdle`, unmodified). Pinned by
+  `AdminLoadTest` (8, the `LiveTvLoadTest` pattern).
+- **Cancellation ratchet repo-complete**: `BareRunCatchingRatchetTest`
+  guards every shared/core + shared/feature root, legacy core/data +
+  core/ui, core/notification, both shells and web — baseline 22 (down
+  from 27 on the smaller surface). The widened sweep's one live hazard —
+  `AddToTargetActions.resolveTargetItemIds` — is converted (details now
+  depends on core/concurrency); the two deliberate sites are named in the
+  test KDoc. See the Concurrency section.
+
 ## Rejected designs
 
 Recorded with evidence so future reviews don't re-suggest them.
@@ -2333,9 +2466,11 @@ re-derives the designs nor lands them casually.
   capability-note flow. Deferred: cross-module persistence-edge design
   deserves the grilling loop, not an autonomous batch.
 - **Feature-VM load-ladder fold**: the `isLoading = true, error = null`
-  suspend-guard ladder is hand-copied across admin (7 VMs), requests,
-  calendar, editor, music, syncplay, plugin-config (the livetv slice
-  LANDED 2026-09-08 as `LiveTvLoad` — see that wave). Settle arms are
+  suspend-guard ladder is hand-copied across requests,
+  calendar, editor, music, syncplay (the livetv slice
+  LANDED 2026-09-08 as `LiveTvLoad` and the admin slice — 10 VMs, both
+  ladder shapes — as `AdminLoad` in the same day's third wave; see those
+  waves). Settle arms are
   drifted per copy (final-update vs per-arm vs getOrDefault — a missed arm
   leaves a stuck spinner). Design: one `loadInto`-shaped helper in core:ui
   next to `JellyPlayViewModel` (or a per-module helper like `LiveTvLoad`),
@@ -2369,23 +2504,22 @@ re-derives the designs nor lands them casually.
   engine bind and the write must stay ordered before the first
   `updateConfigWithUiState` — land in two steps, mirror write VM-side
   first.
-- **`ExternalPlayerHost`** (`app`): the six-step external-player launch
-  protocol (resolve → report-start → stash pending launch → chooser →
-  failure clears stash + error message → route veto; result arm folds
-  `externalPlayerPositionTicks` + report-stop) lives composable-inline in
-  `JellyPlayApp`'s navigate-filter; every pure input/output around it is
-  tested but the ORDERING between them is not. Design: one app-local
-  module beside `PlaybackHostRouter` with `launch(...)`/`onResult(...)`
-  and constructor lambdas. Deferred: single copy — the deletion test fails
-  today; land when the shell next churns.
+- **`ExternalPlayerHost`** (`app`): LANDED — see
+  `navigation/playbackhost/ExternalPlayerHost.kt`; the shell-churn trigger
+  had fired (two waves since the record).
 - **`PendingConfirmation<T>`**: the confirm-dialog pending-item machine
-  (hold item → dismiss = null-write → confirm clears + runs + reloads) is
-  hand-copied in 6 places (Devices/Users/Recordings/ManageSeries/ArrQueue
-  VMs + two `remember`-state machines inside `MediaDetailScreen`).
-  Drift-shaped variance: only Recordings has the dismiss-during-in-flight
-  guard; only ArrQueue generalized to a sealed action. Deferred:
-  universalizing the guard changes dismiss behaviour at 5 sites — the
-  decision deserves to be made explicitly.
+  (hold item → dismiss = null-write → confirm clears + runs + reloads)
+  was recorded hand-copied in 6 places (Devices/Users/Recordings/
+  ManageSeries/ArrQueue VMs + two `remember`-state machines inside
+  `MediaDetailScreen`); the 2026-09-08 third-wave census counted ~14
+  (new copies: Downloads' two, ImportPreview, PrivacyData, FactoryReset,
+  SyncPlay's join pair, AdminDashboard's stop-session pair — itself the
+  in-flight-flag variant vocabulary this record warned about — editor's
+  image delete). Drift-shaped variance: only Recordings has the
+  dismiss-during-in-flight guard; only ArrQueue generalized to a sealed
+  action. Deferred: universalizing the guard changes dismiss behaviour at
+  ~13 sites — the decision deserves to be made explicitly, and the
+  leverage grows with every copy.
 - **Settings/Library section hosts**: `SettingsScreen`'s root composable
   holds ~1150 lines (every section inline; the leaves are already
   extracted); `LibraryScreen` similar (~1270-line body). Design: a
@@ -2410,21 +2544,12 @@ re-derives the designs nor lands them casually.
   Albums and calendar guard with "have content". Deferred: pixel-visible
   product decision (the livetv cold-load spinner is probably wrong, but
   that's a call, not a fold).
-- **Widget worker refresh chassis / grid bind-tail**: the two
-  recommendation workers hand-copy the guard → fetch → empty-keep →
-  persist → retry-fold chassis (logging arms differ), and the three grid
-  factories re-copy the poster-or-fallback + responsive-loading-row bind
-  tails. Deferred: hygiene-grade; both copies already test-pinned. Fold
-  opportunistically.
-- **PiP action apparatus** (`:app` `PlayerActivity.kt` ~661–747): the
-  action-set fold (play/pause icon+title fork, `pipHasNext` gate), the
-  `pipRemoteAction` PendingIntent construction and the id↔`PipAction`
-  broadcast round-trip are Activity-inline — two id tables that must stay
-  in sync across ~50 lines with nothing pinning them. Design: a pure
-  `PipActionSet` fold + id codec beside `PipLifecyclePolicy` (the
-  lifecycle half is already deep); the Activity keeps registration only.
-  Deferred: the file is stable and every PiP bugfix lands elsewhere;
-  fold when PiP next churns.
+- **Widget worker refresh chassis / grid bind-tail**: LANDED (2026-09-08
+  third wave) — `RecommendationWorkerSkeleton` + the `WidgetGridFactory`
+  bind-tail; see that wave.
+- **PiP action apparatus** (`:app` `PlayerActivity.kt` ~661–747): LANDED as `PipActionSet` beside `PipLifecyclePolicy` —
+  the PiP-churn trigger had fired (`PipLifecyclePolicy` itself landed in
+  `541cdabee`).
 - **Mood/Smart generated-playlist state idiom** (`shared/feature/music`):
   `MoodPlaylistsViewModel` + `SmartPlaylistsViewModel` hand-sync four
   loose compose states through every generate call, duplicate the
@@ -2444,8 +2569,26 @@ re-derives the designs nor lands them casually.
   Deferred: sequenced deliberately BEHIND the `DetailViewModel` intent
   fold — do not race them.
 - **Widget-config save tails** (`:app` `widget/config/
-  WidgetConfigActivity.kt` ~121–181): four `saveAndFinish` overrides
-  hand-copy getInstance → updateAppWidget → notifyAppWidgetViewDataChanged
-  → refresh<Kind>Now → finish. Only the update+notify half is safely
-  foldable now — the refresh half sits adjacent to the deferred
-  widget-worker refresh chassis above. Deferred: fold both together.
+  WidgetConfigActivity.kt` ~121–181): LANDED with
+  the refresh chassis it was recorded to fold together with —
+  `BaseWidgetConfigActivity` owns the save tail.
+- **User-feedback conveyor completion** (top
+  declined candidate, recorded so the next run designs it instead of
+  re-discovering it): the one-shot message stratum re-derives the shared
+  `UserMessageBus`/`UserMessageHost` pair per feature — 7 expect/actual
+  Messenger trios (library, livetv, settings, calendar, downloads,
+  arrqueue, admin), 10 per-feature message seals (6 with identical
+  `asText()` collapses), 2 private buses (music's, player-video's), plus
+  per-screen SnackbarHostState sites and two direct legacy-bus leaks
+  (PluginConfigScreen, LivePlayerScreen). The shared bus's
+  `UiText.Resource(args)` already covers every seal's shape. The deletion
+  test passes harder than anything in the third wave, BUT presentation is
+  the blocker: web has no message surface (several trios' wasm actuals
+  already no-op), several screens own their SnackbarHostState (SyncPlay,
+  Newsletter, UserDetail, ManageSeries, both players), and moving VM
+  posts onto the shared bus changes what non-Android shells render.
+  Design: land per feature (VM posts `UserMessage` with resolved
+  `UiText`; the trio/seal/screen-collapse deletes), starting with a
+  feature whose screen already defers to `UserMessageHost`; needs a
+  per-shell presentation mapping decision first. Deferred: deserves the
+  grilling loop, not an autonomous batch.

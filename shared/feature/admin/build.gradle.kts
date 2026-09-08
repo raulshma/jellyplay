@@ -46,6 +46,10 @@ kotlin {
             implementation(project(":shared:core:model"))
             implementation(project(":shared:core:designsystem"))
             implementation(project(":shared:core:data"))
+            // runCatchingRethrowingCancellation in the AdminLoad fetch
+            // variants (Dashboard/Logs preserve their historical catch
+            // semantics without masking cancellation).
+            implementation(project(":shared:core:concurrency"))
             implementation(project(":shared:core:ui"))
             // JetBrains CMP distribution (see catalog note): Android targets
             // redirect to the androidx artifacts.

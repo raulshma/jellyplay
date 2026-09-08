@@ -7,6 +7,7 @@ import android.view.View
 import android.widget.RemoteViews
 import android.widget.RemoteViewsService
 import android.widget.RemoteViewsService.RemoteViewsFactory
+import com.raulshma.jellyplay.R
 import com.raulshma.jellyplay.widget.WidgetDimensions
 import com.raulshma.jellyplay.widget.WidgetImageLoader
 import com.raulshma.jellyplay.widget.refreshWidgetDimensions
@@ -132,6 +133,58 @@ abstract class WidgetGridFactory<T>(
         setViewVisibility(titleViewId, View.INVISIBLE)
         setViewVisibility(subtitleViewId, View.INVISIBLE)
     }
+
+    /**
+     * The bind tail the two recommendation grids (Library, Seerr) used to
+     * hand-copy: the responsive text-container rule
+     * (`gridCellTextVisible(widgetDims)`) followed by the poster-or-
+     * placeholder image (bitmap from the poster pipeline, else the shared
+     * `widget_backdrop_placeholder`). The Continue Watching factory is a
+     * declared diverged variant — its poster is gated on the row's own
+     * visibility ladder and falls back to `ic_banner` — so it never calls
+     * this; its `bind` override keeps its own tail.
+     *
+     * @param textContainerViewId the cell's text container (the responsive
+     *   rule's target).
+     * @param posterViewId        the cell's poster image view.
+     */
+    protected fun bindGridCellTail(
+        view: RemoteViews,
+        item: T,
+        textContainerViewId: Int,
+        posterViewId: Int,
+    ) {
+        // Apply responsive rules based on widget options
+        view.setViewVisibility(
+            textContainerViewId,
+            gridCellTextVisible(widgetDims).toViewVisibility(),
+        )
+
+        val bitmap = posterFor(item)
+        if (bitmap != null) {
+            view.setImageViewBitmap(posterViewId, bitmap)
+        } else {
+            view.setImageViewResource(posterViewId, R.drawable.widget_backdrop_placeholder)
+        }
+    }
+
+    /**
+     * The loading row the two recommendation grids share — the inflated cell
+     * with cleared texts plus the same responsive text-container rule
+     * [bindGridCellTail] applies, so a loading cell never flashes its text
+     * container against the ladder. The Continue Watching factory overrides
+     * with a plain clear (declared divergence — no INVISIBLE pass, no
+     * container rule).
+     */
+    protected fun gridCellLoadingView(layoutRes: Int, textContainerViewId: Int): RemoteViews =
+        RemoteViews(context.packageName, layoutRes)
+            .clearRowTexts()
+            .apply {
+                setViewVisibility(
+                    textContainerViewId,
+                    gridCellTextVisible(widgetDims).toViewVisibility(),
+                )
+            }
 
     final override fun onCreate() = Unit
 

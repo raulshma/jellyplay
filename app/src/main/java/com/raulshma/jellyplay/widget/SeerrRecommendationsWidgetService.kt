@@ -12,10 +12,8 @@ import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
 import com.raulshma.jellyplay.core.model.SeerrWidgetItem
 import com.raulshma.jellyplay.core.model.deeplink.DeepLinkGrammar
 import com.raulshma.jellyplay.widget.skeleton.WidgetGridFactory
-import com.raulshma.jellyplay.widget.skeleton.gridCellTextVisible
 import com.raulshma.jellyplay.widget.skeleton.seerrRatingText
 import com.raulshma.jellyplay.widget.skeleton.seerrRowSubtitle
-import com.raulshma.jellyplay.widget.skeleton.toViewVisibility
 import org.koin.mp.KoinPlatform
 
 /**
@@ -90,29 +88,21 @@ class SeerrRecommendationsWidgetService : RemoteViewsService() {
                 view.setViewVisibility(R.id.sr_item_rating, View.GONE)
             }
 
-            // Apply responsive rules based on widget options
-            view.setViewVisibility(
-                R.id.sr_item_text_container,
-                gridCellTextVisible(widgetDims).toViewVisibility(),
+            // Responsive text-container rule + poster-or-placeholder tail —
+            // the skeleton's bindGridCellTail.
+            bindGridCellTail(
+                view = view,
+                item = item,
+                textContainerViewId = R.id.sr_item_text_container,
+                posterViewId = R.id.sr_item_poster,
             )
-
-            val bitmap = posterFor(item)
-            if (bitmap != null) {
-                view.setImageViewBitmap(R.id.sr_item_poster, bitmap)
-            } else {
-                view.setImageViewResource(R.id.sr_item_poster, R.drawable.widget_backdrop_placeholder)
-            }
         }
 
         override fun loadingView(): RemoteViews =
-            RemoteViews(context.packageName, R.layout.seerr_recommendations_item)
-                .clearRowTexts()
-                .apply {
-                    setViewVisibility(
-                        R.id.sr_item_text_container,
-                        gridCellTextVisible(widgetDims).toViewVisibility(),
-                    )
-                }
+            gridCellLoadingView(
+                layoutRes = R.layout.seerr_recommendations_item,
+                textContainerViewId = R.id.sr_item_text_container,
+            )
     }
 
     companion object {

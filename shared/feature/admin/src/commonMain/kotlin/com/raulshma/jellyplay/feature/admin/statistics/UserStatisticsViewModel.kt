@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.model.PlaybackReportingStatus
 import com.raulshma.jellyplay.core.model.UserStatistics
 import com.raulshma.jellyplay.core.model.sortedWithCachedKey
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import com.raulshma.jellyplay.feature.admin.AdminLoad
 import com.raulshma.jellyplay.feature.admin.generated.resources.Res
 import com.raulshma.jellyplay.feature.admin.generated.resources.user_stats_sort_name
 import com.raulshma.jellyplay.feature.admin.generated.resources.user_stats_sort_plays
@@ -68,10 +69,15 @@ class UserStatisticsViewModel(
 
     fun loadStatistics() {
         launch {
-            _state.update { it.copy(isLoading = true, error = null) }
-            repository.refreshPlaybackReportingStatus()
-            repository.getAllUsersWithStatistics()
-                .onSuccess { users ->
+            AdminLoad.load(
+                start = { _state.update { it.copy(isLoading = true, error = null) } },
+                fetch = {
+                    // Status refresh precedes the fetch (its legacy position in
+                    // the ladder); its failure modes stay the fetch's own.
+                    repository.refreshPlaybackReportingStatus()
+                    repository.getAllUsersWithStatistics()
+                },
+                onSuccess = { users ->
                     val activeCount = users.count { it.isCurrentlyActive }
                     val totalPlays = users.sumOf { it.totalPlayCount }
                     _state.update {
@@ -83,15 +89,16 @@ class UserStatisticsViewModel(
                             totalPlays = totalPlays,
                         )
                     }
-                }
-                .onFailure { e ->
+                },
+                onFailure = { e ->
                     _state.update {
                         it.copy(
                             isLoading = false,
                             error = e.message,
                         )
                     }
-                }
+                },
+            )
         }
     }
 

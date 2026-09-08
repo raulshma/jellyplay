@@ -14,14 +14,31 @@ import java.io.File
  * this; the fix is [runCatchingRethrowingCancellation], and this test keeps
  * the converted set converted.
  *
- * Guarded module set: shared/core/data, shared/core/network,
- * shared/feature/home, shared/feature/player-video, the suspend-bearing
- * feature modules added by the 2026-09 folding wave (livetv, settings, shell,
- * downloads), the legacy core/data tree, core/notification, :app,
- * :apps:desktop, apps/web. Non-suspend bodies (pure JSON/enum/number parses
- * in mappers, framework glue) are legitimate stdlib `runCatching` territory
- * and simply don't count — the heuristic only counts occurrences inside
- * `suspend fun` bodies.
+ * Guarded module set: every shared module with suspend-bearing sources —
+ * shared/core/{data,network,datastore,database,ui,model,designsystem,
+ * player-contract} and every shared/feature module — plus the legacy
+ * core/data and core/ui trees, core/notification, :app, :apps:desktop,
+ * apps/web
+ * (2026-09-08: the guard went repo-complete; the formerly unguarded roots
+ * carried one live hazard — AddToTargetActions.resolveTargetItemIds, since
+ * converted — plus the deliberate baseline entries below). Non-suspend
+ * bodies (pure JSON/enum/number parses in mappers, framework glue) are
+ * legitimate stdlib `runCatching` territory and simply don't count — the
+ * heuristic only counts occurrences inside `suspend fun` bodies.
+ *
+ * Known deliberate baseline entries (do not convert without a design note):
+ * HomeDiscoveryStore.ensureNamespacedMigration (best-effort migration
+ * swallow, KDoc'd) and PluginConfigViewModel.prepareBridgeScript's asset
+ * read inside withContext(IO).
+ *
+ * Heuristic limitation, known and accepted: the scan matches literal
+ * `suspend fun` declarations, so a bare `runCatching` inside a suspend
+ * LAMBDA (e.g. a `fetch = { runCatching { … } }` argument) is invisible
+ * to it. The 2026-09-08 third wave's review pass converted the two sites
+ * found this way (AdminDashboardViewModel's and LogsViewModel's AdminLoad
+ * fetch variants) — keep new suspend-lambda fetches on
+ * [runCatchingRethrowingCancellation] by discipline; widening the
+ * heuristic to suspend lambdas would need a fresh baseline census.
  *
  * Lower [maxBareRunCatchingInSuspendFuns] when another site converts; never
  * raise it. A legitimate NEW non-suspend use inside a suspend fun (parse
@@ -30,19 +47,46 @@ import java.io.File
  */
 class BareRunCatchingRatchetTest {
 
-    private val maxBareRunCatchingInSuspendFuns = 27
+    private val maxBareRunCatchingInSuspendFuns = 22
 
     /** Module source roots guarded by the ratchet, relative to the repo root. */
     private val guardedRoots = listOf(
         "shared/core/data/src",
         "shared/core/network/src",
+        "shared/core/datastore/src",
+        "shared/core/database/src",
+        "shared/core/ui/src",
+        "shared/core/model/src",
+        "shared/core/designsystem/src",
+        "shared/core/player-contract/src",
+        "shared/core/concurrency/src",
+        "core/testing/src/main",
         "shared/feature/home/src",
         "shared/feature/player-video/src",
         "shared/feature/livetv/src",
         "shared/feature/settings/src",
         "shared/feature/shell/src",
         "shared/feature/downloads/src",
+        "shared/feature/details/src",
+        "shared/feature/music/src",
+        "shared/feature/admin/src",
+        "shared/feature/editor/src",
+        "shared/feature/search/src",
+        "shared/feature/library/src",
+        "shared/feature/arrqueue/src",
+        "shared/feature/auth/src",
+        "shared/feature/calendar/src",
+        "shared/feature/insights/src",
+        "shared/feature/newsletter/src",
+        "shared/feature/onboarding/src",
+        "shared/feature/player-audio/src",
+        "shared/feature/player-live/src",
+        "shared/feature/requests/src",
+        "shared/feature/shortcuts/src",
+        "shared/feature/subtitle-tester/src",
+        "shared/feature/syncplay/src",
         "core/data/src/main",
+        "core/ui/src/main",
         "core/notification/src/main",
         "app/src/main",
         "apps/desktop/src/main",

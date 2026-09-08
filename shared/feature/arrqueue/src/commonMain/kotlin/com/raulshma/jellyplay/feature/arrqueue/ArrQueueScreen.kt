@@ -69,6 +69,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.StatusColors
 import com.raulshma.jellyplay.core.model.arr.ArrDownloadStatus
 import com.raulshma.jellyplay.core.model.arr.ArrQueueItem
 import com.raulshma.jellyplay.core.model.arr.ArrServiceKind
+import com.raulshma.jellyplay.core.model.formatBytes
 import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.components.JellyPlayCircularProgressIndicator
@@ -375,7 +376,7 @@ private fun QueueRow(
             // Subtitle: percent · size left · time left · quality.
             val subtitle = buildString {
                 if (item.percent in 1..100) append("${item.percent}%")
-                item.sizeLeft?.toReadableBytes()?.let { if (isNotEmpty()) append(" · "); append(it) }
+                item.sizeLeft?.formatBytes()?.let { if (isNotEmpty()) append(" · "); append(it) }
                 item.timeLeft?.takeIf { it.isNotBlank() }?.let { if (isNotEmpty()) append(" · "); append(it) }
                 item.quality?.takeIf { it.isNotBlank() }?.let { if (isNotEmpty()) append(" · "); append(it) }
             }
@@ -691,13 +692,6 @@ private fun DeleteActionDialog(
 private fun serviceName(kind: ArrServiceKind): String = when (kind) {
     ArrServiceKind.RADARR -> stringResource(Res.string.arrqueue_brand_radarr)
     ArrServiceKind.SONARR -> stringResource(Res.string.arrqueue_brand_sonarr)
-}
-
-private fun Long.toReadableBytes(): String = when {
-    this >= 1_073_741_824 -> "%.1f GB".format(this / 1_073_741_824.0)
-    this >= 1_048_576 -> "%.1f MB".format(this / 1_048_576.0)
-    this >= 1024 -> "%.0f KB".format(this / 1024.0)
-    else -> "$this B"
 }
 
 private val ArrQueueItem.rowKey: String

@@ -34,7 +34,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
-import com.raulshma.jellyplay.core.data.playback.PipAction
 import com.raulshma.jellyplay.core.data.playback.PipController
 import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
 import com.raulshma.jellyplay.core.datastore.security.SecurityStore
@@ -68,7 +67,11 @@ import org.koin.mp.KoinPlatform
  * The PiP apparatus (param builder, remote actions, lifecycle coordination) is
  * ported from the former single-Activity implementation so the feature set is
  * preserved: RemoteActions (play/pause/skip/next), auto-enter on home, auto-exit
- * on END/ERROR, source-rect hint, aspect-ratio clamp. Both hosts feed it
+ * on END/ERROR, source-rect hint, aspect-ratio clamp. The pure halves beside
+ * this Activity: [PipLifecyclePolicy] owns the ordering machine and param
+ * folds, [PipActionSet] owns the remote-action decision tables (the action-set
+ * fold and the broadcast id codec); this class keeps only Android wiring.
+ * Both hosts feed it
  * through the same legacy `core:data` PipController singleton — VOD's VM via
  * the wave-8C player-video seam, live's VM via the wave-19C player-live seam
  * (SKIP remote actions map to channel zap for live) — so every collector below
@@ -658,38 +661,20 @@ class PlayerActivity : FragmentActivity() {
             .onFailure { Log.w(TAG, "PiP setPictureInPictureParams failed", it) }
     }
 
-    private fun buildPipActions(): List<RemoteAction> {
-        val isPlaying = pipController.isPlaying.value
-        val hasNext = pipController.pipHasNext
-        val actions = mutableListOf<RemoteAction>()
-
-        actions += pipRemoteAction(
-            id = PIP_ACTION_SKIP_BACK,
-            icon = android.R.drawable.ic_media_rew,
-            title = getString(R.string.pip_rewind),
-        )
-        actions += pipRemoteAction(
-            id = if (isPlaying) PIP_ACTION_PAUSE else PIP_ACTION_PLAY,
-            icon = if (isPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play,
-            title = if (isPlaying) getString(R.string.media_pause) else getString(R.string.media_play),
-        )
-        actions += pipRemoteAction(
-            id = PIP_ACTION_SKIP_FORWARD,
-            icon = android.R.drawable.ic_media_ff,
-            title = getString(R.string.pip_forward),
-        )
-        if (hasNext) {
-            actions += pipRemoteAction(
-                id = PIP_ACTION_NEXT,
-                icon = android.R.drawable.ic_media_next,
-                title = getString(R.string.pip_next),
+    private fun buildPipActions(): List<RemoteAction> =
+        PipActionSet.actionSpecs(
+            isPlaying = pipController.isPlaying.value,
+            hasNext = pipController.pipHasNext,
+        ).map { spec ->
+            pipRemoteAction(
+                id = PipActionSet.idFor(spec.action),
+                icon = spec.iconRes,
+                title = getString(spec.titleRes),
             )
         }
-        return actions
-    }
 
     private fun pipRemoteAction(id: Int, icon: Int, title: String): RemoteAction {
-        val intent = Intent(PIP_ACTION_BROADCAST).putExtra(PIP_ACTION_EXTRA, id)
+        val intent = Intent(PipActionSet.PIP_ACTION_BROADCAST).putExtra(PipActionSet.PIP_ACTION_EXTRA, id)
         val pi = PendingIntent.getBroadcast(
             this,
             id,
@@ -713,16 +698,9 @@ class PlayerActivity : FragmentActivity() {
         if (pipActionReceiver != null) return
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
-                if (intent?.action != PIP_ACTION_BROADCAST) return
-                val id = intent.getIntExtra(PIP_ACTION_EXTRA, -1)
-                val action = when (id) {
-                    PIP_ACTION_PLAY -> PipAction.PLAY
-                    PIP_ACTION_PAUSE -> PipAction.PAUSE
-                    PIP_ACTION_SKIP_FORWARD -> PipAction.SKIP_FORWARD
-                    PIP_ACTION_SKIP_BACK -> PipAction.SKIP_BACKWARD
-                    PIP_ACTION_NEXT -> PipAction.NEXT
-                    else -> return
-                }
+                if (intent?.action != PipActionSet.PIP_ACTION_BROADCAST) return
+                val action = PipActionSet.actionForId(intent.getIntExtra(PipActionSet.PIP_ACTION_EXTRA, -1))
+                    ?: return
                 val transport = pipController.pipTransport
                 if (transport == null) {
                     Log.w(TAG, "PiP action $action dropped: pipTransport is null")
@@ -735,7 +713,7 @@ class PlayerActivity : FragmentActivity() {
         ContextCompat.registerReceiver(
             this,
             receiver,
-            IntentFilter(PIP_ACTION_BROADCAST),
+            IntentFilter(PipActionSet.PIP_ACTION_BROADCAST),
             ContextCompat.RECEIVER_NOT_EXPORTED,
         )
         pipActionReceiver = receiver
@@ -748,13 +726,6 @@ class PlayerActivity : FragmentActivity() {
 
     companion object {
         const val TAG = "PlayerActivity"
-        const val PIP_ACTION_BROADCAST = "com.raulshma.jellyplay.PIP_ACTION"
-        const val PIP_ACTION_EXTRA = "pip_action_id"
-        const val PIP_ACTION_PLAY = 1
-        const val PIP_ACTION_PAUSE = 2
-        const val PIP_ACTION_SKIP_FORWARD = 3
-        const val PIP_ACTION_SKIP_BACK = 4
-        const val PIP_ACTION_NEXT = 5
 
         // Upper bound for the persisted-security-slice read in the lock-gate
         // check (see redirectToLockGateIfNeeded) — a pathological DataStore

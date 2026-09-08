@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.data.repository.AdminRepository
 import com.raulshma.jellyplay.core.model.ScheduledTaskInfo
 import com.raulshma.jellyplay.core.model.TaskState
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import com.raulshma.jellyplay.feature.admin.AdminLoad
 import kotlinx.coroutines.flow.MutableStateFlow
 
 data class ScheduledTasksState(
@@ -30,8 +31,13 @@ class ScheduledTasksViewModel(
 
     fun loadTasks() {
         launch {
-            _state.value = _state.value.copy(isLoading = true, error = null)
-            fetchTasks()
+            loadTasksLadder(
+                start = { _state.value = _state.value.copy(isLoading = true, error = null) },
+            )
+            // Final-update settle, the VM's legacy shape: the arms never touch
+            // the loading flag. Declared timing unification (see AdminLoad):
+            // the old ladder fired the fetch fire-and-forget, so this flag
+            // cleared before the fetch landed; the folded ladder awaits it.
             _state.value = _state.value.copy(isLoading = false)
         }
     }
@@ -46,15 +52,30 @@ class ScheduledTasksViewModel(
 
     private fun fetchTasks() {
         launch {
-            val result = adminRepository.getScheduledTasks(isHidden = false)
-            result.onSuccess { tasks ->
-                _state.value = _state.value.copy(tasks = tasks)
-                hasRunningTasks.value = tasks.any { it.state == TaskState.RUNNING }
-            }.onFailure { e ->
-                Log.e("ScheduledTasks", "Failed to fetch tasks", e)
-                _state.value = _state.value.copy(error = e.message)
-            }
+            // No start flags: refresh raises its own isRefreshing around this
+            // call (and awaits nothing — its legacy fire-and-forget shape).
+            loadTasksLadder(start = { })
         }
+    }
+
+    /** The shared (fetch, arms) pair both task ladders dispatch. */
+    private suspend fun loadTasksLadder(start: () -> Unit) {
+        AdminLoad.load(
+            start = start,
+            fetch = { adminRepository.getScheduledTasks(isHidden = false) },
+            onSuccess = ::applyTasks,
+            onFailure = ::logTasksFailure,
+        )
+    }
+
+    private fun applyTasks(tasks: List<ScheduledTaskInfo>) {
+        _state.value = _state.value.copy(tasks = tasks)
+        hasRunningTasks.value = tasks.any { it.state == TaskState.RUNNING }
+    }
+
+    private fun logTasksFailure(e: Throwable) {
+        Log.e("ScheduledTasks", "Failed to fetch tasks", e)
+        _state.value = _state.value.copy(error = e.message)
     }
 
     /**

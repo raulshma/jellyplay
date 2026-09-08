@@ -9,13 +9,6 @@ import com.raulshma.jellyplay.core.model.TrackType
 import com.raulshma.jellyplay.desktop.player.mpv.MpvLib
 import com.raulshma.jellyplay.desktop.player.mpv.MpvLib.END_FILE_REASON_EOF
 import com.raulshma.jellyplay.desktop.player.mpv.MpvLib.END_FILE_REASON_ERROR
-import com.raulshma.jellyplay.desktop.player.mpv.MpvLib.ERROR_AO_INIT_FAILED
-import com.raulshma.jellyplay.desktop.player.mpv.MpvLib.ERROR_LOADING_FAILED
-import com.raulshma.jellyplay.desktop.player.mpv.MpvLib.ERROR_NOTHING_TO_PLAY
-import com.raulshma.jellyplay.desktop.player.mpv.MpvLib.ERROR_NOT_IMPLEMENTED
-import com.raulshma.jellyplay.desktop.player.mpv.MpvLib.ERROR_UNKNOWN_FORMAT
-import com.raulshma.jellyplay.desktop.player.mpv.MpvLib.ERROR_UNSUPPORTED
-import com.raulshma.jellyplay.desktop.player.mpv.MpvLib.ERROR_VO_INIT_FAILED
 import com.raulshma.jellyplay.desktop.player.mpv.MpvLib.EVENT_END_FILE
 import com.raulshma.jellyplay.desktop.player.mpv.MpvLib.EVENT_FILE_LOADED
 import com.raulshma.jellyplay.desktop.player.mpv.MpvLib.EVENT_IDLE
@@ -40,6 +33,7 @@ import com.raulshma.jellyplay.feature.player.video.engine.EnginePositionTicker
 import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import com.raulshma.jellyplay.feature.player.video.engine.MediaTrack
+import com.raulshma.jellyplay.feature.player.video.engine.MpvErrorTaxonomy
 import com.raulshma.jellyplay.feature.player.video.engine.PlaybackRequest
 import com.raulshma.jellyplay.feature.player.video.engine.SubtitleEvent
 import com.raulshma.jellyplay.feature.player.video.engine.SubtitleSource
@@ -47,6 +41,7 @@ import com.raulshma.jellyplay.feature.player.video.engine.TimedCue
 import com.raulshma.jellyplay.feature.player.video.engine.TrackLabelFormatter
 import com.raulshma.jellyplay.feature.player.video.engine.TrackLabelInfo
 import com.raulshma.jellyplay.feature.player.video.engine.ZoomSafeSubtitleStrategy
+import com.raulshma.jellyplay.feature.player.video.engine.mergeAccumulatedCues
 import com.sun.jna.Memory
 import com.sun.jna.Pointer
 import java.awt.image.BufferedImage
@@ -915,10 +910,10 @@ open class MpvDesktopEngine(
      * the subtitle-sync preview can render prev/active/next for embedded subs
      * without re-fetching bytes. mpv fires `sub-text` only on a line *change*
      * and skips blank clears here; the end time starts open-ended and is
-     * closed when the next line begins. Covers the played range only —
-     * identical semantics to Android's `accumulateMpvSubText`/
-     * `mergeAccumulatedCues` pair (the merge rules are mirrored privately
-     * here because player-video keeps its accumulator module-internal).
+     * closed when the next line begins. Covers the played range only — the
+     * merge itself is player-video's shared [mergeAccumulatedCues] (now
+     * public for this adapter), identical to Android's
+     * `accumulateMpvSubText` call shape.
      *
      * Micro-divergence from Android: the START time is read live from the
      * `sub-start` property instead of Android's event-cached value — this
@@ -935,32 +930,7 @@ open class MpvDesktopEngine(
             ?.takeIf { it >= 0 }
             ?: (currentPositionMs / 1000.0)
         val incoming = TimedCue((startSec * 1_000_000L).toLong(), Long.MAX_VALUE, text)
-        val existing = _currentCues.value
-        if (existing.isEmpty()) {
-            _currentCues.value = listOf(incoming)
-            return
-        }
-        // Close the open-ended span of any cue still "active" at the point
-        // the new line begins.
-        var changed = false
-        val closed = existing.map { cue ->
-            if (cue.endTimeUs == Long.MAX_VALUE && cue.startTimeUs < incoming.startTimeUs) {
-                changed = true
-                cue.copy(endTimeUs = incoming.startTimeUs)
-            } else {
-                cue
-            }
-        }
-        // mpv re-emits the active line on some track/list transitions — an
-        // identical repeat changes nothing (only the closure above applies).
-        val lastText = closed.lastOrNull()?.text
-        if (lastText != null && incoming.text.toString() == lastText.toString()) {
-            if (changed) _currentCues.value = closed
-            return
-        }
-        _currentCues.value = (closed + incoming)
-            .sortedBy { it.startTimeUs }
-            .takeLast(MAX_ACCUMULATED_CUES)
+        _currentCues.value = mergeAccumulatedCues(_currentCues.value, listOf(incoming))
     }
 
     // ── Screenshot capture (wave 17B) ────────────────────────────────────────
@@ -1079,21 +1049,17 @@ open class MpvDesktopEngine(
         return rc >= 0 && mem.getInt(0) != 0
     }
 
-    // ── Error taxonomy (identical mapping to Android MpvPlayerEngine) ──────
+    // ── Error taxonomy (shared MpvErrorTaxonomy — identical mapping to the
+    // ── Android MpvPlayerEngine; the JNA int-code hand-off stays here) ─────
 
-    private fun mapMpvError(errorCode: Int): EngineError = when (errorCode) {
-        ERROR_LOADING_FAILED -> EngineError.Network(null)
-        ERROR_AO_INIT_FAILED,
-        ERROR_VO_INIT_FAILED,
-        ERROR_NOTHING_TO_PLAY,
-        ERROR_UNKNOWN_FORMAT,
-        ERROR_UNSUPPORTED,
-        ERROR_NOT_IMPLEMENTED,
-        -> EngineError.Decoder(codec = null, cause = null)
-        else -> EngineError.Unknown(
-            "Playback error (mpv): ${MpvLib.mpv.mpv_error_string(errorCode)}",
-        )
-    }
+    /**
+     * The int-code edge only: classification comes from the shared
+     * [MpvErrorTaxonomy.fromCode]; the desktop's one kept divergence is the
+     * Unknown arm's diagnostic text — libmpv's `mpv_error_string(code)`
+     * instead of Android's raw code string (see the taxonomy KDoc).
+     */
+    private fun mapMpvError(errorCode: Int): EngineError =
+        MpvErrorTaxonomy.fromCode(errorCode, unknownDetail = MpvLib.mpv.mpv_error_string(errorCode))
 
     private companion object {
         private const val DEFAULT_POLLING_INTERVAL_MS = 1000L
@@ -1102,9 +1068,6 @@ open class MpvDesktopEngine(
         private const val RELEASE_JOIN_ATTEMPTS = 3
         /** mpv's untouched default for `audio-channels`. */
         private const val AUTO_CHANNELS = "auto"
-
-        /** Cue-history cap (player-video's CueAccumulator.MAX_ACCUMULATED_CUES). */
-        private const val MAX_ACCUMULATED_CUES = 500
 
         /** Temp-file prefix for screenshot-to-file captures. */
         private const val TEMP_SHOT_PREFIX = "jellyplay-frame-"

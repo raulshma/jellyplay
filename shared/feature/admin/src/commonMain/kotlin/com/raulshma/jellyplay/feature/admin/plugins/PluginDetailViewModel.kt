@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.core.model.PluginStatus
 import com.raulshma.jellyplay.core.model.PluginVersionInfo
 import com.raulshma.jellyplay.core.data.repository.AdminRepository
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import com.raulshma.jellyplay.feature.admin.AdminLoad
 import kotlinx.coroutines.delay
 
 data class PluginDetailState(
@@ -43,30 +44,36 @@ class PluginDetailViewModel(
 
     private fun loadPlugin(pluginId: String, pluginName: String) {
         launch {
-            _state.value = _state.value.copy(isLoading = true, error = null, isEnabledOverride = null)
-            adminRepository.getInstalledPlugins().onSuccess { plugins ->
-                val plugin = plugins.find { it.id == pluginId }
-                if (plugin != null) {
+            AdminLoad.load(
+                // The start also drops any optimistic enable flip from a
+                // previous toggle (jellyfin-web's isEnabledOverride reset).
+                start = { _state.value = _state.value.copy(isLoading = true, error = null, isEnabledOverride = null) },
+                fetch = { adminRepository.getInstalledPlugins() },
+                onSuccess = { plugins ->
+                    val plugin = plugins.find { it.id == pluginId }
+                    if (plugin != null) {
+                        _state.value = _state.value.copy(
+                            plugin = plugin,
+                            isLoading = false,
+                        )
+                        loadPackageInfoAsync(plugin.name, plugin.id)
+                        checkConfigPage(pluginId)
+                    } else {
+                        _state.value = _state.value.copy(
+                            plugin = PluginInfo(id = pluginId, name = pluginName),
+                            isLoading = false,
+                        )
+                    }
+                },
+                onFailure = { e ->
+                    Log.e("PluginDetail", "Failed to load plugin", e)
                     _state.value = _state.value.copy(
-                        plugin = plugin,
-                        isLoading = false,
-                    )
-                    loadPackageInfoAsync(plugin.name, plugin.id)
-                    checkConfigPage(pluginId)
-                } else {
-                    _state.value = _state.value.copy(
+                        error = e.message,
                         plugin = PluginInfo(id = pluginId, name = pluginName),
                         isLoading = false,
                     )
-                }
-            }.onFailure { e ->
-                Log.e("PluginDetail", "Failed to load plugin", e)
-                _state.value = _state.value.copy(
-                    error = e.message,
-                    plugin = PluginInfo(id = pluginId, name = pluginName),
-                    isLoading = false,
-                )
-            }
+                },
+            )
         }
     }
 

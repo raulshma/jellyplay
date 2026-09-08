@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.model.PluginPackage
 import com.raulshma.jellyplay.core.model.PluginRepository
 import com.raulshma.jellyplay.core.data.repository.AdminRepository
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import com.raulshma.jellyplay.feature.admin.AdminLoad
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collectLatest
@@ -86,8 +87,13 @@ class PluginsViewModel(
 
     fun loadInstalledPlugins() {
         launch {
-            _state.value = _state.value.copy(isLoading = true, error = null)
-            fetchInstalledPlugins()
+            loadInstalledPluginsLadder(
+                start = { _state.value = _state.value.copy(isLoading = true, error = null) },
+            )
+            // Final-update settle, the VM's legacy shape: the arms never touch
+            // the loading flag. Declared timing unification (see AdminLoad):
+            // the old ladder fired the fetch fire-and-forget, so this flag
+            // cleared before the fetch landed; the folded ladder awaits it.
             _state.value = _state.value.copy(isLoading = false)
         }
     }
@@ -106,13 +112,29 @@ class PluginsViewModel(
 
     private fun fetchInstalledPlugins() {
         launch {
-            adminRepository.getInstalledPlugins().onSuccess { plugins ->
-                _state.value = _state.value.copy(installedPlugins = plugins.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name }))
-            }.onFailure { e ->
-                Log.e("Plugins", "Failed to fetch plugins", e)
-                _state.value = _state.value.copy(error = e.message)
-            }
+            // No start flags: the refresh/polling-drain callers raise none (and
+            // refresh raises its own isRefreshing around this call).
+            loadInstalledPluginsLadder(start = { })
         }
+    }
+
+    /** The shared (fetch, arms) triple both installed-plugins ladders dispatch. */
+    private suspend fun loadInstalledPluginsLadder(start: () -> Unit) {
+        AdminLoad.load(
+            start = start,
+            fetch = { adminRepository.getInstalledPlugins() },
+            onSuccess = ::applyInstalledPlugins,
+            onFailure = ::logInstalledPluginsFailure,
+        )
+    }
+
+    private fun applyInstalledPlugins(plugins: List<PluginInfo>) {
+        _state.value = _state.value.copy(installedPlugins = plugins.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name }))
+    }
+
+    private fun logInstalledPluginsFailure(e: Throwable) {
+        Log.e("Plugins", "Failed to fetch plugins", e)
+        _state.value = _state.value.copy(error = e.message)
     }
 
     fun loadCatalog() {

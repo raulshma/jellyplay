@@ -10,7 +10,6 @@ import com.raulshma.jellyplay.core.model.subtitle.SubtitleQuery
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleSearchResult
 import com.raulshma.jellyplay.core.network.NetworkLog
 import com.raulshma.jellyplay.core.network.api.ApiException
-import com.raulshma.jellyplay.core.network.api.fromNetwork
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -33,7 +32,6 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
-import java.io.IOException
 import java.util.Base64
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -83,6 +81,17 @@ class OpenSubtitlesSubtitleProvider @Inject constructor(
     }
     private val rateLimiter = SubtitleRateLimiter(SubtitleRateLimiter.OPENSUBTITLES_MIN_INTERVAL_MS)
     private val loginMutex = Mutex()
+
+    /**
+     * Shared subtitle HTTP chassis (execute + wrapNetwork). Declared
+     * OpenSubtitles-only divergence: raw serialization failures are reworded
+     * so "Unexpected JSON token at offset N" never leaks to the user.
+     */
+    private val http = SubtitleHttp(okHttpClient)
+    private val httpOptions = SubtitleHttp.Options(
+        logTag = TAG,
+        rewordSerializationErrors = true,
+    )
 
     /**
      * Base URL. The production endpoint (`https://api.opensubtitles.com`) is
@@ -149,11 +158,11 @@ class OpenSubtitlesSubtitleProvider @Inject constructor(
                         .header("Accept", "application/json")
                         .apply { if (token != null) header("Authorization", "Bearer $token") }
                         .build()
-                    val body = execute(request)
+                    val body = http.executeForString(request, SERVICE, httpOptions)
                     parseSearchResponse(body, query.season, query.episode)
                 }
             }.recoverCatching { e ->
-                throw wrapNetwork(e)
+                throw http.wrapNetwork(e, SERVICE, httpOptions)
             }
         }
     }
@@ -170,7 +179,8 @@ class OpenSubtitlesSubtitleProvider @Inject constructor(
      * **passed-in** credentials directly: it neither reads nor persists the
      * store, because the Test button runs against unsaved form text. A 401 from
      * `/login` surfaces as a non-retryable "Invalid credentials" [ApiException];
-     * network/parse errors flow through the same [wrapNetwork] path as search.
+     * network/parse errors flow through the same [SubtitleHttp.wrapNetwork]
+     * path as search.
      */
     override suspend fun verifyCredentials(
         credentials: SubtitleProviderCredentials,
@@ -186,13 +196,13 @@ class OpenSubtitlesSubtitleProvider @Inject constructor(
         return rateLimiter.acquire {
             runCatchingRethrowingCancellation {
                 withContext(Dispatchers.IO) {
-                    // doLogin throws on a non-2xx (e.g. 401) via execute(); the
-                    // resulting token is discarded — we only care that login
-                    // succeeded. No store read or write happens here.
+                    // doLogin throws on a non-2xx (e.g. 401) via the shared
+                    // chassis; the resulting token is discarded — we only care
+                    // that login succeeded. No store read or write happens here.
                     doLogin(username, password)
                 }
             }.recoverCatching { e ->
-                throw wrapNetwork(e)
+                throw http.wrapNetwork(e, SERVICE, httpOptions)
             }.map { }
         }
     }
@@ -225,7 +235,7 @@ class OpenSubtitlesSubtitleProvider @Inject constructor(
                         .header("Authorization", "Bearer $token")
                         .post(payload)
                         .build()
-                    val downloadBody = execute(downloadRequest)
+                    val downloadBody = http.executeForString(downloadRequest, SERVICE, httpOptions)
                     val download = parseJsonObject(downloadBody)
                     val fileUrl = download["link"]?.jsonPrimitive?.content
                         ?: throw ApiException(false, message = "OpenSubtitles returned no download link")
@@ -240,7 +250,7 @@ class OpenSubtitlesSubtitleProvider @Inject constructor(
                     }
 
                     val fileRequest = Request.Builder().url(fileUrl.toHttpUrl()).build()
-                    execute(fileRequest).let { body ->
+                    http.executeForString(fileRequest, SERVICE, httpOptions).let { body ->
                         val bytes = body.toByteArray()
                         SubtitleFile(
                             bytes = bytes,
@@ -251,7 +261,7 @@ class OpenSubtitlesSubtitleProvider @Inject constructor(
                     }
                 }
             }.recoverCatching { e ->
-                throw wrapNetwork(e)
+                throw http.wrapNetwork(e, SERVICE, httpOptions)
             }
         }
     }
@@ -329,7 +339,7 @@ class OpenSubtitlesSubtitleProvider @Inject constructor(
             .header("Content-Type", "application/json")
             .post(payload)
             .build()
-        val body = execute(request)
+        val body = http.executeForString(request, SERVICE, httpOptions)
         val dto = parseJsonObject(body)
         return dto["token"]?.jsonPrimitive?.content
             ?: throw ApiException(false, message = "OpenSubtitles login returned no token")
@@ -361,7 +371,8 @@ class OpenSubtitlesSubtitleProvider @Inject constructor(
      *  - A gateway-rendered plain-text error (e.g. "Invalid API key").
      *
      * This only runs on a 2xx response (non-2xx is classified by HTTP status in
-     * [execute] via [ApiException.fromHttpResponse], where 401/403 stay
+     * the shared [SubtitleHttp.execute] chassis via
+     * [ApiException.fromHttpResponse], where 401/403 stay
      * non-retryable). A 2xx body that isn't JSON is definitionally a transient
      * intermediary artifact — an injected block page that returns 200 + HTML is
      * intermittent (a retry usually gets the real JSON), so we mark it
@@ -492,39 +503,6 @@ class OpenSubtitlesSubtitleProvider @Inject constructor(
         return matching
     }
 
-    private fun execute(request: Request): String =
-        okHttpClient.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) {
-                val rawBody = runCatching { response.body?.string() }.getOrNull()
-                NetworkLog.w(
-                    TAG,
-                    "HTTP ${response.code} for ${request.url}" +
-                        (rawBody?.take(500)?.let { " body=$it" } ?: ""),
-                )
-                throw ApiException.fromHttpResponse(
-                    response.code,
-                    "OpenSubtitles HTTP ${response.code}",
-                    response.header("Retry-After"),
-                )
-            }
-            response.body?.string() ?: throw IOException("Empty OpenSubtitles response")
-        }
-
-    private fun wrapNetwork(e: Throwable): ApiException {
-        if (e is ApiException) return e
-        if (e is kotlinx.coroutines.CancellationException) throw e
-        val friendly = when (e) {
-            is java.net.UnknownHostException -> "Unable to reach OpenSubtitles. Check your connection."
-            is java.net.SocketTimeoutException -> "OpenSubtitles request timed out."
-            // Raw serialization failures (e.g. a non-JSON 2xx body) should never
-            // leak "Unexpected JSON token at offset N" to the user — reword them.
-            is kotlinx.serialization.SerializationException ->
-                "OpenSubtitles returned an unexpected response. Verify your API key and credentials."
-            else -> e.message ?: "OpenSubtitles request failed"
-        }
-        return ApiException.fromNetwork(e, friendly)
-    }
-
     private fun inferFormat(fileName: String?): String? {
         val ext = fileName?.substringAfterLast('.', "")?.lowercase()
         return when (ext) {
@@ -543,6 +521,9 @@ class OpenSubtitlesSubtitleProvider @Inject constructor(
     companion object {
         private const val BASE = "https://api.opensubtitles.com"
         private const val USER_AGENT = "JellyPlay"
+
+        /** Service name for the shared [SubtitleHttp] chassis messages. */
+        private const val SERVICE = "OpenSubtitles"
 
         /**
          * Shared application `Api-Key`, sent on every OpenSubtitles request. This

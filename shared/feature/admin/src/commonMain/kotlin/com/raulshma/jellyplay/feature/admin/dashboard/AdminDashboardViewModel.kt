@@ -8,6 +8,8 @@ import com.raulshma.jellyplay.core.model.SessionInfo
 import com.raulshma.jellyplay.core.model.SystemInfo
 import com.raulshma.jellyplay.core.model.TaskState
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
+import com.raulshma.jellyplay.feature.admin.AdminLoad
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
 
@@ -67,33 +69,41 @@ class AdminDashboardViewModel(
         launch {
             // Access control is enforced by AdminRouteContainer before this
             // screen is reached; the server still 403s as a backstop.
-            _uiState.update { it.copy(isLoading = true, error = null) }
-            try {
-                val summary = adminRepository.getDashboardSummary().getOrThrow()
-
-                val running = summary.tasks.running()
-                // Seed the scan state from the initial REST snapshot so the
-                // button reflects an in-progress scan before the first WS
-                // push lands. Subsequent updates come from [observeScanLibraryTask].
-                applyScanTask(summary.tasks.firstOrNull { it.key == KEY_SCAN_LIBRARY })
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        systemInfo = summary.systemInfo,
-                        itemCounts = summary.itemCounts,
-                        // Initial snapshot only: seeds the running-task card
-                        // before the first WS push. While pushes land
-                        // (replay = 1 + 1 Hz cadence) the socket owns this
-                        // field — but a silent socket must not freeze it
-                        // either; see [wsTasksFresh].
-                        runningTasks = if (wsTasksFresh()) it.runningTasks else running,
-                        sessions = summary.sessions,
-                        recentActivity = summary.recentActivity,
-                    )
-                }
-            } catch (e: Exception) {
-                _uiState.update { it.copy(isLoading = false, error = e.message) }
-            }
+            // Declared variant (see AdminLoad): this VM's historical ladder was
+            // try/catch + getOrThrow with a persisted-error settle — expressed
+            // here as a getOrThrow fetch over runCatchingRethrowingCancellation
+            // so a thrown exception lands in the failure arm exactly like the
+            // old catch did, while cancellation propagates instead of settling
+            // as a persisted error.
+            AdminLoad.load(
+                start = { _uiState.update { it.copy(isLoading = true, error = null) } },
+                fetch = { runCatchingRethrowingCancellation { adminRepository.getDashboardSummary().getOrThrow() } },
+                onSuccess = { summary ->
+                    val running = summary.tasks.running()
+                    // Seed the scan state from the initial REST snapshot so the
+                    // button reflects an in-progress scan before the first WS
+                    // push lands. Subsequent updates come from [observeScanLibraryTask].
+                    applyScanTask(summary.tasks.firstOrNull { it.key == KEY_SCAN_LIBRARY })
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            systemInfo = summary.systemInfo,
+                            itemCounts = summary.itemCounts,
+                            // Initial snapshot only: seeds the running-task card
+                            // before the first WS push. While pushes land
+                            // (replay = 1 + 1 Hz cadence) the socket owns this
+                            // field — but a silent socket must not freeze it
+                            // either; see [wsTasksFresh].
+                            runningTasks = if (wsTasksFresh()) it.runningTasks else running,
+                            sessions = summary.sessions,
+                            recentActivity = summary.recentActivity,
+                        )
+                    }
+                },
+                onFailure = { e ->
+                    _uiState.update { it.copy(isLoading = false, error = e.message) }
+                },
+            )
         }
     }
 

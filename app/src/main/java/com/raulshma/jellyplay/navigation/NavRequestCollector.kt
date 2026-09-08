@@ -43,7 +43,9 @@ import kotlinx.coroutines.flow.Flow
  * severity → duration) — that is [UserMessageHost]'s (shared/feature/shell);
  * the adapters at the bottom of this file only construct the host and
  * project the legacy bus's payload. The external-player launch protocol
- * stays composable-inline as recorded (ExternalPlayerHost, deferred).
+ * lives in `ExternalPlayerHost` (navigation/playbackhost, beside
+ * `PlaybackHostRouter`) — it is STATEFUL (the pending-launch stash), so it
+ * is remembered rather than constructed inline like this collector.
  *
  * @param topLevelKeys the shell's registered top-level tab routes
  *   (`ALL_TOP_LEVEL_ROUTE_KEYS`) — the tab-vs-nested fork's vocabulary.

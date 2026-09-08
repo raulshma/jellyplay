@@ -66,6 +66,10 @@ kotlin {
             implementation(project(":shared:core:model"))
             implementation(project(":shared:core:designsystem"))
             implementation(project(":shared:core:data"))
+            // runCatchingRethrowingCancellation in resolveTargetItemIds (the
+            // sanctioned wrapper — a bare runCatching there masked cancellation
+            // of the canonicalEpisodeIds fetch).
+            implementation(project(":shared:core:concurrency"))
             // Preference/state stores + projections (DetailStores bundle) and
             // the per-feature slices (Seerr, Downloads, Library, HomeDiscovery,
             // Experimental, PlayerEngine, AppRuntime).
