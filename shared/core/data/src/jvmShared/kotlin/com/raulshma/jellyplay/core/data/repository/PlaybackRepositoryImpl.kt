@@ -44,6 +44,13 @@ class PlaybackRepositoryImpl(
      * user-data caches through the same seam those writes use.
      */
     private val mediaCacheInvalidation: MediaRepositoryCacheInvalidation,
+    /**
+     * Deferred like the other cross-repository edges (the download-stack
+     * pattern): the stop path announces confirmed position writes on the
+     * user-data-change flow so open screens heal even without a WS echo.
+     * Lazy keeps the construction graph acyclic.
+     */
+    private val mediaRepository: Lazy<MediaRepository>,
 ) : PlaybackRepository {
 
     private val segmentsCache = TtlCache<List<MediaSegment>>(
@@ -123,12 +130,21 @@ class PlaybackRepositoryImpl(
         )
         // The item's resume position changed (or is pending in the outbox, in
         // which case the local mirror already reflects it): purge the caches
-        // that serve it — home sections (Continue Watching), the item's detail
-        // cluster, and its series' episode catalogue — so no surface shows the
-        // pre-playback position until the TTL expires. Deliberately NOT the
-        // per-tick progress reports: those change nothing queryable until the
-        // session ends, and purging on every 10s tick would thrash the caches.
+        // that serve it — the item's detail cluster and its series' episode
+        // catalogue — so no surface shows the pre-playback position until the
+        // TTL expires. Deliberately NOT the per-tick progress reports: those
+        // change nothing queryable until the session ends, and purging on
+        // every 10s tick would thrash the caches. The home sections cache is
+        // also untouched here (scroll/flicker-sensitive; it heals through the
+        // announcement below + the consumer's throttled forced refresh).
         mediaCacheInvalidation.invalidateForUserDataChange(itemId)
+        // A delivered STOP is a confirmed user-data write (the resume point
+        // moved): announce it on the same flow server WS pushes use, so home
+        // heals even when the socket is down. Offline-staged stops announce
+        // through the outbox drain instead (which already does).
+        if (!offlineModeManager.isOffline && result.isSuccess) {
+            mediaRepository.value.notifyUserDataChanged(listOf(itemId))
+        }
         return result
     }
 

@@ -4,14 +4,17 @@ import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import com.raulshma.jellyplay.core.concurrency.mapConcurrent
 import com.raulshma.jellyplay.core.data.download.MediaDownloadActions
+import com.raulshma.jellyplay.core.data.repository.DeferredUserDataRefresher
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.ui.components.DeferredRefreshHost
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.sync.Semaphore
 
@@ -22,18 +25,36 @@ class FavoritesViewModel(
     private val userDataMutator: UserDataMutator,
     private val imageUrlProvider: ImageUrlProvider,
     private val mediaDownloadActions: MediaDownloadActions,
-) : JellyPlayViewModel() {
+) : JellyPlayViewModel(), DeferredRefreshHost {
 
     private val _mediaTypeFilter = stateFlow<MediaType?>(null)
+    private val _refreshTrigger = stateFlow(0)
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    val pagedItems: Flow<PagingData<MediaItem>> = _mediaTypeFilter.flow.flatMapLatest { type ->
-        mediaRepository.getFavoritesPaged(
-            mediaTypes = type?.let { listOf(it) },
-        )
-    }.cachedIn(scope)
+    val pagedItems: Flow<PagingData<MediaItem>> =
+        combine(_mediaTypeFilter.flow, _refreshTrigger.flow) { type, trigger -> type to trigger }
+            .flatMapLatest { (type, _) ->
+                mediaRepository.getFavoritesPaged(
+                    mediaTypes = type?.let { listOf(it) },
+                )
+            }.cachedIn(scope)
 
     val mediaTypeFilter = _mediaTypeFilter.flow
+
+    /**
+     * User-data changes while another screen is up only mark the pager stale;
+     * the single regeneration fires when the favorites screen is next entered
+     * (see [DeferredUserDataRefresher]) — never mid-scroll.
+     */
+    private val deferredRefresher = DeferredUserDataRefresher(
+        userDataChanges = mediaRepository.userDataChanges,
+        scope = scope,
+        onRefresh = { _refreshTrigger.set(_refreshTrigger.value + 1) },
+    )
+
+    override fun onScreenActiveChanged(active: Boolean) {
+        deferredRefresher.onScreenActiveChanged(active)
+    }
 
     private val _photoFolderChildUrls = stateFlow<Map<String, List<String>>>(emptyMap())
     val photoFolderChildUrls = _photoFolderChildUrls.flow

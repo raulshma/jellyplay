@@ -5,10 +5,13 @@ import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.UserDataChange
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.Dispatchers
@@ -30,23 +33,17 @@ class PersonDetailViewModelTest {
     // Legacy :core:testing MainDispatcherRule, inlined (conveyor port pattern).
     private val mainDispatcher = StandardTestDispatcher()
 
-    @BeforeTest
-    fun setUpMainDispatcher() {
-        Dispatchers.setMain(mainDispatcher)
-    }
-
-    @AfterTest
-    fun tearDownMainDispatcher() {
-        Dispatchers.resetMain()
-    }
-
     private lateinit var mediaRepository: MediaRepository
     private lateinit var userDataMutator: FakeUserDataMutator
     private lateinit var imageUrlProvider: ImageUrlProvider
     private lateinit var viewModel: PersonDetailViewModel
 
+    /** Driven by the deferred-refresh tests; collected by the VM for its lifetime. */
+    private val userDataEvents = MutableSharedFlow<UserDataChange>(extraBufferCapacity = 16)
+
     @BeforeTest
     fun setUp() {
+        Dispatchers.setMain(mainDispatcher)
         mediaRepository = mockk(relaxed = true)
         userDataMutator = FakeUserDataMutator()
         imageUrlProvider = mockk(relaxed = true)
@@ -56,6 +53,11 @@ class PersonDetailViewModelTest {
             imageUrlProvider,
             mockk<com.raulshma.jellyplay.core.data.download.MediaDownloadActions>(relaxed = true),
         )
+    }
+
+    @AfterTest
+    fun tearDown() {
+        Dispatchers.resetMain()
     }
 
     @Test
@@ -193,5 +195,44 @@ class PersonDetailViewModelTest {
     fun `getImageUrl delegates to ImageUrlProvider`() {
         viewModel.getImageUrl("p1")
         io.mockk.verify(exactly = 1) { imageUrlProvider.getImageUrl("p1") }
+    }
+
+    // ── Deferred refresh (user-data changes while off-screen) ───────────────
+    //
+    // Builds a LOCAL ViewModel after stubbing `userDataChanges`: the suite's
+    // setUp-built VM starts its refresher collector before this test can stub
+    // the flow, and a relaxed-mock Flow's collect completes immediately —
+    // killing the collector before the first emit.
+
+    @Test
+    fun `userData change while inactive defers a silent reload to the next entry`() = runTest {
+        every { mediaRepository.userDataChanges } returns userDataEvents
+        coEvery { mediaRepository.getMediaDetail("p1") } returns Result.success(
+            MediaDetail(item = MediaItem(id = "p1", name = "Person One", mediaType = MediaType.UNKNOWN))
+        )
+        coEvery { mediaRepository.getItemsByPerson("p1") } returns Result.success(emptyList())
+        val viewModel = PersonDetailViewModel(
+            mediaRepository,
+            userDataMutator,
+            imageUrlProvider,
+            mockk<com.raulshma.jellyplay.core.data.download.MediaDownloadActions>(relaxed = true),
+        )
+
+        viewModel.loadPerson("p1")
+        advanceUntilIdle()
+        coVerify(exactly = 1) { mediaRepository.getItemsByPerson("p1") }
+
+        // A write confirmed while the screen is NOT on screen only marks stale.
+        viewModel.onScreenActiveChanged(false)
+        userDataEvents.emit(UserDataChange("user-1", listOf("m1")))
+        advanceUntilIdle()
+        coVerify(exactly = 1) { mediaRepository.getItemsByPerson("p1") }
+
+        // Re-entry fires the single deferred reload — silently: Success is
+        // never dropped back to Loading on the way.
+        viewModel.onScreenActiveChanged(true)
+        advanceUntilIdle()
+        coVerify(exactly = 2) { mediaRepository.getItemsByPerson("p1") }
+        assertTrue(viewModel.uiState.value is PersonDetailUiState.Success)
     }
 }

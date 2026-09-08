@@ -15,6 +15,7 @@ import com.raulshma.jellyplay.core.model.LibraryFilters
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.SearchResult
+import com.raulshma.jellyplay.core.model.UserDataChange
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
@@ -29,6 +30,7 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
@@ -441,6 +443,65 @@ class SearchViewModelTest {
             advanceUntilIdle()
 
             assertTrue(viewModel.offlineResults.value.isEmpty())
+        } finally {
+            pagedJob.cancel()
+        }
+    }
+
+    // ── Deferred refresh (user-data changes while off-screen) ───────────────
+
+    /** Driven by the deferred-refresh tests; collected by the VM for its lifetime. */
+    private val userDataEvents = MutableSharedFlow<UserDataChange>(extraBufferCapacity = 16)
+
+    @Test
+    fun `userData change while inactive defers the paged refresh to the next entry`() = runTest(mainDispatcher) {
+        every { mediaRepository.userDataChanges } returns userDataEvents
+        coEvery { mediaRepository.searchPaged(any(), any()) } returns
+            flowOf(androidx.paging.PagingData.empty<com.raulshma.jellyplay.core.model.MediaItem>())
+        viewModel = SearchViewModel(
+            mediaRepository, userDataMutator, imageUrlProvider, seerrRepository, seerrRequestDelegate,
+            mediaSearchEngine, offlineRepository, searchFiltersStore, mediaDownloadActions,
+        )
+        val pagedJob = launch { viewModel.pagedResults.collect { } }
+        try {
+            viewModel.search("breaking")
+            advanceUntilIdle()
+            coVerify(exactly = 1) { mediaRepository.searchPaged(any(), any()) }
+
+            // A write confirmed while the screen is NOT on screen only marks stale.
+            viewModel.onScreenActiveChanged(false)
+            userDataEvents.emit(UserDataChange("user-1", listOf("m1")))
+            advanceUntilIdle()
+            coVerify(exactly = 1) { mediaRepository.searchPaged(any(), any()) }
+
+            // Re-entry fires the single deferred regeneration.
+            viewModel.onScreenActiveChanged(true)
+            advanceUntilIdle()
+            coVerify(exactly = 2) { mediaRepository.searchPaged(any(), any()) }
+        } finally {
+            pagedJob.cancel()
+        }
+    }
+
+    @Test
+    fun `userData change while active does not regenerate the pager`() = runTest(mainDispatcher) {
+        every { mediaRepository.userDataChanges } returns userDataEvents
+        coEvery { mediaRepository.searchPaged(any(), any()) } returns
+            flowOf(androidx.paging.PagingData.empty<com.raulshma.jellyplay.core.model.MediaItem>())
+        viewModel = SearchViewModel(
+            mediaRepository, userDataMutator, imageUrlProvider, seerrRepository, seerrRequestDelegate,
+            mediaSearchEngine, offlineRepository, searchFiltersStore, mediaDownloadActions,
+        )
+        val pagedJob = launch { viewModel.pagedResults.collect { } }
+        try {
+            viewModel.search("breaking")
+            advanceUntilIdle()
+
+            // Silent contract: no mid-scroll pager swap for on-screen events.
+            viewModel.onScreenActiveChanged(true)
+            userDataEvents.emit(UserDataChange("user-1", listOf("m1")))
+            advanceUntilIdle()
+            coVerify(exactly = 1) { mediaRepository.searchPaged(any(), any()) }
         } finally {
             pagedJob.cancel()
         }

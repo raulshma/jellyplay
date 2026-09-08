@@ -56,6 +56,7 @@ class MediaRepositoryDetailCacheGroupTest {
     fun setup() {
         every { apiClient.session } returns MutableStateFlow(null)
         coEvery { playedStateSync.flip(any(), any()) } returns Result.success(Unit)
+        coEvery { playedStateSync.flip(any(), any(), any()) } returns Result.success(Unit)
         coEvery { playedStateSync.toggleFavorite(any()) } returns Result.success(true)
         val homeSession = HomeSession(
             apiClient,

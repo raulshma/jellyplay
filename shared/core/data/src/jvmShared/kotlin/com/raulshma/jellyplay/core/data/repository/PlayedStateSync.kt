@@ -36,8 +36,15 @@ interface PlayedStateSync {
      * (or when the online call fails) also stages the flip in the outbox for
      * delivery on reconnect. Always reports success so the caller's optimistic
      * UI flip runs immediately — same contract the previous in-repo paths held.
+     *
+     * [seriesId] names the parent series when the flipped id is not itself the
+     * screen-visible item (a season mark flips the seasonId while series detail
+     * screens are keyed by the seriesId): the confirmed-write announcement
+     * carries BOTH ids so id-matching consumers (an open series detail screen)
+     * heal, not just id-agnostic ones (home). Null for plain item flips — the
+     * single id is the whole story there.
      */
-    suspend fun flip(itemId: String, played: Boolean): Result<Unit>
+    suspend fun flip(itemId: String, played: Boolean, seriesId: String? = null): Result<Unit>
 
     /**
      * User-driven favorite toggle. Resolves the current favorite state (from the

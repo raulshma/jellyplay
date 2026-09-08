@@ -118,6 +118,7 @@ class OfflineWatchSyncContractTest {
         val playbackRepository = PlaybackRepositoryImpl(
             apiClient, outbox, offlineModeManager, homeSession, sessionCacheRegistry,
             mediaCacheInvalidation = mockk(relaxed = true),
+            mediaRepository = lazy { mediaRepository },
         )
         val playedStateSync = PlayedStateSyncImpl(
             apiClient = apiClient,
@@ -238,6 +239,9 @@ class OfflineWatchSyncContractTest {
         // The drain changed server state → home/detail caches must drop now,
         // not on the next TTL tick.
         coVerify(exactly = 1) { cacheInvalidator.invalidateCaches() }
+        // Exactly-once announce contract: the drain-tail announce names the
+        // item a single time — the heal flip inside the reconcile stays
+        // silent (announce=false) precisely so this verify can pin it.
         coVerify(exactly = 1) { mediaRepository.notifyUserDataChanged(listOf(ITEM_ID)) }
         coVerify(exactly = 1) { userDataSyncScheduler.enqueueNow() }
     }

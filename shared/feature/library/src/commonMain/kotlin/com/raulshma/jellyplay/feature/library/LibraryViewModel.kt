@@ -7,6 +7,7 @@ import androidx.paging.cachedIn
 import com.raulshma.jellyplay.core.data.download.DownloadRequestResult
 import com.raulshma.jellyplay.core.data.download.MediaDownloadActions
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
+import com.raulshma.jellyplay.core.data.repository.DeferredUserDataRefresher
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
@@ -26,6 +27,7 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.OfflineMode
 import com.raulshma.jellyplay.core.model.SortOption
 import com.raulshma.jellyplay.core.model.toFilteredLibraryItems
+import com.raulshma.jellyplay.core.ui.components.DeferredRefreshHost
 import com.raulshma.jellyplay.core.ui.message.UiText
 import com.raulshma.jellyplay.core.ui.message.UserMessageBus
 import com.raulshma.jellyplay.feature.library.generated.resources.Res
@@ -70,7 +72,7 @@ class LibraryViewModel(
     private val imageUrlProvider: ImageUrlProvider,
     private val photoFolderPrefetcher: PhotoFolderPrefetcher,
     private val libraryStore: com.raulshma.jellyplay.core.datastore.library.LibraryStore,
-) : JellyPlayViewModel() {
+) : JellyPlayViewModel(), DeferredRefreshHost {
 
     // ---- Browser state: one value type owning {folder, filters, viewMode, ----
     // ---- groupBy, posterSize, sectionContext, title} as a consistent unit. --
@@ -194,6 +196,21 @@ class LibraryViewModel(
     }
 
     private val _refreshTrigger = kotlinx.coroutines.flow.MutableStateFlow(0)
+
+    /**
+     * User-data changes while another screen is up only mark the grid stale;
+     * the single [refresh] fires when the library screen is next entered (see
+     * [DeferredUserDataRefresher]) — never mid-scroll.
+     */
+    private val deferredRefresher = DeferredUserDataRefresher(
+        userDataChanges = mediaRepository.userDataChanges,
+        scope = scope,
+        onRefresh = ::refresh,
+    )
+
+    override fun onScreenActiveChanged(active: Boolean) {
+        deferredRefresher.onScreenActiveChanged(active)
+    }
 
     /**
      * True while the app is offline (manual toggle or auto network loss): the

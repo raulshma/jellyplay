@@ -27,6 +27,7 @@ import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -83,6 +84,8 @@ class MusicHomeViewModelTest {
         every { downloadRepository.getActiveDownloadCount() } returns flowOf(0)
         every { userMessageBus.error(any()) } just Runs
         every { offlineModeManager.toggleManualOffline() } just Runs
+        // The deferred refresher collects this for the whole VM lifetime.
+        every { mediaRepository.userDataChanges } returns MutableSharedFlow(extraBufferCapacity = 16)
     }
 
     @AfterTest

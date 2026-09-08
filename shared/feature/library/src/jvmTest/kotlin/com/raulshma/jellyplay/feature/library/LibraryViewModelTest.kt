@@ -72,6 +72,12 @@ class LibraryViewModelTest {
     private val offlineModeFlow =
         MutableStateFlow(com.raulshma.jellyplay.core.model.OfflineMode.ONLINE)
 
+    /** Driven by the deferred-refresh test; collected by the VM for its lifetime. */
+    private val userDataEvents =
+        kotlinx.coroutines.flow.MutableSharedFlow<com.raulshma.jellyplay.core.model.UserDataChange>(
+            extraBufferCapacity = 16,
+        )
+
     @BeforeTest
     fun setUp() {
         Dispatchers.setMain(mainDispatcher)
@@ -100,6 +106,8 @@ class LibraryViewModelTest {
         coEvery { mediaRepository.getLibraryFolders(any()) } returns Result.success(emptyList<LibraryFolder>())
         coEvery { mediaRepository.getGenres(any(), any()) } returns Result.success(emptyList())
         coEvery { mediaRepository.getTags(any(), any(), any()) } returns Result.success(emptyList())
+        // The deferred refresher collects this for the whole VM lifetime.
+        every { mediaRepository.userDataChanges } returns userDataEvents
     }
 
     @AfterTest
@@ -127,6 +135,27 @@ class LibraryViewModelTest {
 
     /** Browser-state snapshot, the single source of truth post-refactor. */
     private fun LibraryViewModel.state() = browserState.value
+
+    @Test
+    fun `userData change while inactive defers the refresh to the next entry`() = runTest {
+        val vm = createViewModel()
+        advanceUntilIdle()
+        // Only the init-block load so far.
+        coVerify(exactly = 1) { mediaRepository.getLibraryFolders(any()) }
+
+        // A write confirmed while the library screen is NOT resumed only
+        // marks the grid stale.
+        vm.onScreenActiveChanged(false)
+        userDataEvents.emit(com.raulshma.jellyplay.core.model.UserDataChange("user-1", listOf("m1")))
+        advanceUntilIdle()
+        coVerify(exactly = 1) { mediaRepository.getLibraryFolders(any()) }
+
+        // Re-entry runs the single deferred refresh() (folders + genres
+        // force-reloaded, pager trigger bumped).
+        vm.onScreenActiveChanged(true)
+        advanceUntilIdle()
+        coVerify(exactly = 2) { mediaRepository.getLibraryFolders(any()) }
+    }
 
     @Test
     fun `configureSection scopes selectedFolder to parentId and pre-applies Date Added sort`() = runTest {

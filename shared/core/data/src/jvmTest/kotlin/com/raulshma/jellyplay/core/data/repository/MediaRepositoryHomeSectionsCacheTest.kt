@@ -189,44 +189,52 @@ class MediaRepositoryHomeSectionsCacheTest {
         coVerify(exactly = 2) { apiClient.getHomeSections(any(), any()) }
     }
 
+    /**
+     * Lazy home staleness, the #157 contract (see MediaRepositoryImpl's
+     * homeSectionsStale): a confirmed own-write (toggleFavorite / markPlayed /
+     * markUnplayed / delivered STOP / outbox drain) announces through
+     * [MediaRepository.notifyUserDataChanged], which does NOT eagerly clear
+     * the cache — it arms a marker the next read consumes as a one-shot
+     * force. Freshness of the old eager eviction (an unwatched row re-enters
+     * Continue Watching within the TTL window, not after 60s of staleness)
+     * without the blocking refetch while nobody is reading home.
+     */
     @Test
-    fun `toggleFavorite invalidates the home-sections cache`() = runBlocking {
+    fun `a user-data announcement makes the next home read refetch within the TTL window`() = runBlocking {
         val repository = buildRepository()
         signIn("server-1", "user-A")
         coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult("A")
 
         repository.getHomeSections(HomeSectionQuery())
-        repository.toggleFavorite("item-1")
+        repository.notifyUserDataChanged(listOf("item-1"))
         repository.getHomeSections(HomeSectionQuery())
 
         coVerify(exactly = 2) { apiClient.getHomeSections(any(), any()) }
     }
 
     @Test
-    fun `markPlayed invalidates the home-sections cache`() = runBlocking {
+    fun `a home read without an intervening announcement serves the cached result`() = runBlocking {
         val repository = buildRepository()
         signIn("server-1", "user-A")
         coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult("A")
 
-        repository.getHomeSections(HomeSectionQuery())
-        repository.markPlayed("item-1")
-        repository.getHomeSections(HomeSectionQuery())
+        val first = repository.getHomeSections(HomeSectionQuery())
+        val second = repository.getHomeSections(HomeSectionQuery())
 
-        coVerify(exactly = 2) { apiClient.getHomeSections(any(), any()) }
+        coVerify(exactly = 1) { apiClient.getHomeSections(any(), any()) }
+        assertEquals(first.getOrNull(), second.getOrNull())
     }
 
     @Test
-    fun `markUnplayed invalidates the home-sections cache`() = runBlocking {
-        // Symmetry with markPlayed (#157 class): a row the CW filter dropped
-        // (played) must re-enter the row after an unwatch within the TTL
-        // window, not after 60s of staleness.
+    fun `the staleness marker is one-shot - a second read without a new announcement serves cache`() = runBlocking {
         val repository = buildRepository()
         signIn("server-1", "user-A")
         coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult("A")
 
         repository.getHomeSections(HomeSectionQuery())
-        repository.markUnplayed("item-1")
-        repository.getHomeSections(HomeSectionQuery())
+        repository.notifyUserDataChanged(listOf("item-1"))
+        repository.getHomeSections(HomeSectionQuery()) // consumes the marker, refetches
+        repository.getHomeSections(HomeSectionQuery()) // marker gone: cached
 
         coVerify(exactly = 2) { apiClient.getHomeSections(any(), any()) }
     }

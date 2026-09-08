@@ -58,6 +58,7 @@ import com.raulshma.jellyplay.core.ui.components.LocalMediaQuickActionController
 import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.components.QuickActionAdapter
 import com.raulshma.jellyplay.core.ui.components.QuickActionIntakeHost
+import com.raulshma.jellyplay.core.ui.components.DeferredRefreshEffect
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.rememberQuickActionIntake
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
@@ -85,6 +86,8 @@ fun FavoritesScreen(
     val mediaTypeFilter by viewModel.mediaTypeFilter.collectAsStateWithLifecycle()
     val pagingItems = viewModel.pagedItems.collectAsLazyPagingItems()
     val photoFolderChildUrls by viewModel.photoFolderChildUrls.collectAsStateWithLifecycle()
+
+    DeferredRefreshEffect(viewModel)
 
     val snapshot = pagingItems.itemSnapshotList
     LaunchedEffect(snapshot) {

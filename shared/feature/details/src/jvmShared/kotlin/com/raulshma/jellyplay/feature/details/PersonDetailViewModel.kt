@@ -1,11 +1,13 @@
 package com.raulshma.jellyplay.feature.details
 
 import com.raulshma.jellyplay.core.data.download.MediaDownloadActions
+import com.raulshma.jellyplay.core.data.repository.DeferredUserDataRefresher
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataContainer
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.ui.components.DeferredRefreshHost
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -19,38 +21,68 @@ class PersonDetailViewModel constructor(
     private val userDataMutator: UserDataMutator,
     private val imageUrlProvider: ImageUrlProvider,
     private val mediaDownloadActions: MediaDownloadActions,
-) : JellyPlayViewModel() {
+) : JellyPlayViewModel(), DeferredRefreshHost {
 
     private val _uiState = MutableStateFlow<PersonDetailUiState>(PersonDetailUiState.Loading)
     val uiState: StateFlow<PersonDetailUiState> = _uiState.asStateFlow()
 
+    /** The loaded person — the deferred refresh reloads silently. */
+    private var currentPersonId: String? = null
+
     fun loadPerson(personId: String) {
+        currentPersonId = personId
         _uiState.value = PersonDetailUiState.Loading
-        launch {
-            coroutineScope {
-                // No feature-level retry: the repository paths already retry
-                // (and coordinate retry with address failover) in the engine.
-                val detailDeferred = async { mediaRepository.getMediaDetail(personId) }
-                val itemsDeferred = async { mediaRepository.getItemsByPerson(personId) }
+        launch { fetchPerson(personId, silent = false) }
+    }
 
-                val detailResult = detailDeferred.await()
-                val itemsResult = itemsDeferred.await()
+    /**
+     * (Re)fetches the person's detail + filmography. [silent] serves the
+     * deferred-refresh path: a fetch failure keeps the last Success instead of
+     * flashing an Error screen over content the user was just looking at —
+     * serve-stale-while-revalidate, same philosophy as the home refresher.
+     */
+    private suspend fun fetchPerson(personId: String, silent: Boolean) {
+        coroutineScope {
+            // No feature-level retry: the repository paths already retry
+            // (and coordinate retry with address failover) in the engine.
+            val detailDeferred = async { mediaRepository.getMediaDetail(personId) }
+            val itemsDeferred = async { mediaRepository.getItemsByPerson(personId) }
 
-                _uiState.value = if (detailResult.isSuccess && itemsResult.isSuccess) {
-                    val detail = detailResult.getOrThrow().item
-                    PersonDetailUiState.Success(
-                        name = detail.name,
-                        filmography = itemsResult.getOrThrow(),
-                        biography = detail.overview?.takeIf { it.isNotBlank() },
-                        profileImageUrl = imageUrlProvider.getImageUrl(personId).takeIf { it.isNotBlank() },
-                    )
-                } else {
-                    val detailError = detailResult.exceptionOrNull()?.message
-                    val itemsError = itemsResult.exceptionOrNull()?.message
-                    PersonDetailUiState.Error(itemsError ?: detailError ?: "Failed to load")
-                }
+            val detailResult = detailDeferred.await()
+            val itemsResult = itemsDeferred.await()
+
+            if (detailResult.isSuccess && itemsResult.isSuccess) {
+                val detail = detailResult.getOrThrow().item
+                _uiState.value = PersonDetailUiState.Success(
+                    name = detail.name,
+                    filmography = itemsResult.getOrThrow(),
+                    biography = detail.overview?.takeIf { it.isNotBlank() },
+                    profileImageUrl = imageUrlProvider.getImageUrl(personId).takeIf { it.isNotBlank() },
+                )
+            } else if (!silent) {
+                val detailError = detailResult.exceptionOrNull()?.message
+                val itemsError = itemsResult.exceptionOrNull()?.message
+                _uiState.value = PersonDetailUiState.Error(itemsError ?: detailError ?: "Failed to load")
             }
         }
+    }
+
+    /**
+     * User-data changes while another screen is up (watched flip elsewhere,
+     * outbox drain landing) only mark this list stale; the single silent
+     * reload fires when the screen is next entered (see
+     * [DeferredUserDataRefresher]) — never mid-scroll.
+     */
+    private val deferredRefresher = DeferredUserDataRefresher(
+        userDataChanges = mediaRepository.userDataChanges,
+        scope = scope,
+        onRefresh = {
+            currentPersonId?.let { id -> launch { fetchPerson(id, silent = true) } }
+        },
+    )
+
+    override fun onScreenActiveChanged(active: Boolean) {
+        deferredRefresher.onScreenActiveChanged(active)
     }
 
     fun getImageUrl(itemId: String): String =

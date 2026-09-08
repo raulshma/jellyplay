@@ -21,6 +21,7 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -66,6 +67,8 @@ class AlbumDetailViewModelTest {
     fun setUp() {
         Dispatchers.setMain(mainDispatcher)
         every { downloadRepository.getDownloadsByMediaItemIdsFlow(any()) } returns flowOf(emptyList())
+        // The deferred refresher collects this for the whole VM lifetime.
+        every { mediaRepository.userDataChanges } returns MutableSharedFlow(extraBufferCapacity = 16)
         viewModel = AlbumDetailViewModel(
             mediaRepository = mediaRepository,
             imageUrlProvider = imageUrlProvider,

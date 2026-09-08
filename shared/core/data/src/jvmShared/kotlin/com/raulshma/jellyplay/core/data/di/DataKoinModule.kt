@@ -663,6 +663,7 @@ val dataJvmModule: Module = module {
             homeSession = get(),
             sessionCacheRegistry = get(),
             mediaCacheInvalidation = get(),
+            mediaRepository = lazy { get<MediaRepository>() },
         )
     }
     single<PlaybackRepository> { get<PlaybackRepositoryImpl>() }

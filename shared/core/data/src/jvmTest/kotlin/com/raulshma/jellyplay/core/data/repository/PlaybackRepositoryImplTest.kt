@@ -19,6 +19,7 @@ import io.mockk.coVerify
 import io.mockk.coVerifyOrder
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
 import kotlin.test.BeforeTest
@@ -38,6 +39,7 @@ class PlaybackRepositoryImplTest {
     private val outbox: PlaybackOutboxRepository = mockk(relaxed = true)
     private val offlineModeManager: OfflineModeManager = mockk()
     private val mediaCacheInvalidation: MediaRepositoryCacheInvalidation = mockk(relaxed = true)
+    private val mediaRepository: MediaRepository = mockk(relaxed = true)
 
     private lateinit var repository: PlaybackRepositoryImpl
 
@@ -62,6 +64,7 @@ class PlaybackRepositoryImplTest {
         repository = PlaybackRepositoryImpl(
             apiClient, outbox, offlineModeManager, homeSession, sessionCacheRegistry,
             mediaCacheInvalidation = mediaCacheInvalidation,
+            mediaRepository = lazy { mediaRepository },
         )
     }
 
@@ -116,7 +119,27 @@ class PlaybackRepositoryImplTest {
         repository.reportPlaybackStopped("item-1", "session-1", 5000000L)
 
         // Doubly purged: pre-send + post-send, closing the in-flight-fetch race.
-        coVerify(exactly = 2) { mediaCacheInvalidation.invalidateForUserDataChange("item-1", null) }
+        verify(exactly = 2) { mediaCacheInvalidation.invalidateForUserDataChange("item-1", null) }
+    }
+
+    @Test
+    fun `reportPlaybackStopped announces the confirmed position write`() = runTest {
+        coEvery { apiClient.reportPlaybackStopped("item-1", "session-1", 5000000L) } returns
+            Result.success(Unit)
+
+        repository.reportPlaybackStopped("item-1", "session-1", 5000000L)
+
+        verify(exactly = 1) { mediaRepository.notifyUserDataChanged(listOf("item-1")) }
+    }
+
+    @Test
+    fun `reportPlaybackStopped does not announce when the send failed`() = runTest {
+        coEvery { apiClient.reportPlaybackStopped("item-1", "session-1", 5000000L) } returns
+            Result.failure(java.io.IOException("down"))
+
+        repository.reportPlaybackStopped("item-1", "session-1", 5000000L)
+
+        verify(exactly = 0) { mediaRepository.notifyUserDataChanged(any()) }
     }
 
     @Test
@@ -125,8 +148,17 @@ class PlaybackRepositoryImplTest {
 
         repository.reportPlaybackStopped("item-1", "session-1", 5000000L)
 
-        coVerify(exactly = 2) { mediaCacheInvalidation.invalidateForUserDataChange("item-1", null) }
+        verify(exactly = 2) { mediaCacheInvalidation.invalidateForUserDataChange("item-1", null) }
         coVerify(exactly = 0) { apiClient.reportPlaybackStopped(any(), any(), any()) }
+    }
+
+    @Test
+    fun `reportPlaybackStopped offline does not announce (the drain will)`() = runTest {
+        every { offlineModeManager.isOffline } returns true
+
+        repository.reportPlaybackStopped("item-1", "session-1", 5000000L)
+
+        verify(exactly = 0) { mediaRepository.notifyUserDataChanged(any()) }
     }
 
     @Test

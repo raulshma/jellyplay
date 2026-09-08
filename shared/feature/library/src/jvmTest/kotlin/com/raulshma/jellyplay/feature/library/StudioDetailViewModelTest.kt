@@ -16,7 +16,9 @@ import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -49,6 +51,8 @@ class StudioDetailViewModelTest {
 
         every { imageUrlProvider.getImageUrl(any(), any()) } returns "https://example.com/image.jpg"
         every { mediaDownloadActions.downloadedIds } returns MutableStateFlow(emptySet())
+        // The deferred refresher collects this for the whole VM lifetime.
+        every { mediaRepository.userDataChanges } returns MutableSharedFlow(extraBufferCapacity = 16)
     }
 
     @AfterTest
@@ -78,7 +82,11 @@ class StudioDetailViewModelTest {
     @Test
     fun `items flow calls getMediaItemsPaged with correct studioIds`() = runTest {
         val expectedStudioId = "studio-123"
-        createViewModel(studioId = expectedStudioId)
+        val viewModel = createViewModel(studioId = expectedStudioId)
+        // The pager flows through flatMapLatest (deferred-refresh keying), so
+        // getMediaItemsPaged fires on first collection, not at construction.
+        val collector = launch { viewModel.items.collect {} }
+        advanceUntilIdle()
 
         verify {
             mediaRepository.getMediaItemsPaged(
@@ -86,6 +94,7 @@ class StudioDetailViewModelTest {
                 filters = match { it.sortBy == SortOption.SORT_NAME },
             )
         }
+        collector.cancel()
     }
 
     @Test
@@ -100,6 +109,8 @@ class StudioDetailViewModelTest {
     @Test
     fun `viewModel extracts studioId from savedStateHandle`() = runTest {
         val viewModel = createViewModel(studioId = "my-studio-id")
+        val collector = launch { viewModel.items.collect {} }
+        advanceUntilIdle()
 
         verify {
             mediaRepository.getMediaItemsPaged(
@@ -107,11 +118,14 @@ class StudioDetailViewModelTest {
                 filters = any(),
             )
         }
+        collector.cancel()
     }
 
     @Test
     fun `viewModel uses default sort by SortName`() = runTest {
-        createViewModel()
+        val viewModel = createViewModel()
+        val collector = launch { viewModel.items.collect {} }
+        advanceUntilIdle()
 
         verify {
             mediaRepository.getMediaItemsPaged(
@@ -119,6 +133,7 @@ class StudioDetailViewModelTest {
                 filters = match { it.sortBy == SortOption.SORT_NAME },
             )
         }
+        collector.cancel()
     }
 
     /** Delegation one-liner (plan 03): silent grid mutations route through the mutator. */

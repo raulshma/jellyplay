@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
 import com.raulshma.jellyplay.core.data.playback.toInstantMixOutcome
 import com.raulshma.jellyplay.core.data.playback.InstantMixState
 import com.raulshma.jellyplay.core.data.playback.InstantMixStateHolder
+import com.raulshma.jellyplay.core.data.repository.DeferredUserDataRefresher
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
@@ -12,6 +13,7 @@ import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.ui.components.DeferredRefreshHost
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.feature.music.MixErrorMessage
 import com.raulshma.jellyplay.feature.music.toMixErrorMessage
@@ -31,10 +33,29 @@ class AlbumDetailViewModel(
     private val audioQueueFacade: AudioQueueFacade,
     private val downloadRepository: DownloadRepository,
     private val downloadIntake: DownloadIntake,
-) : JellyPlayViewModel() {
+) : JellyPlayViewModel(), DeferredRefreshHost {
 
     private val _detail = composeState<MediaDetail?>(null)
     val detail: MediaDetail? get() = _detail.value
+
+    /** The loaded album — the deferred refresh reloads it silently. */
+    private var currentAlbumId: String? = null
+
+    /**
+     * User-data changes while another screen is up (a track favorite flipped
+     * elsewhere, outbox drain landing) only mark the track list stale; the
+     * single silent forced reload fires when the album screen is next entered
+     * (see [DeferredUserDataRefresher]) — never mid-scroll.
+     */
+    private val deferredRefresher = DeferredUserDataRefresher(
+        userDataChanges = mediaRepository.userDataChanges,
+        scope = scope,
+        onRefresh = { currentAlbumId?.let { id -> loadAlbum(id, force = true) } },
+    )
+
+    override fun onScreenActiveChanged(active: Boolean) {
+        deferredRefresher.onScreenActiveChanged(active)
+    }
 
     // StateFlow (not composeState) so `trackDownloads` below can observe the
     // loaded track ids and scope its downloads query to them.
@@ -71,6 +92,7 @@ class AlbumDetailViewModel(
     }
 
     fun loadAlbum(albumId: String, force: Boolean = false) {
+        currentAlbumId = albumId
         launch {
             _isLoading.value = true
             _error.value = null

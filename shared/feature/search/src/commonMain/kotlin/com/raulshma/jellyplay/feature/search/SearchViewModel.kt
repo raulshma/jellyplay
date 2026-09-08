@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import com.raulshma.jellyplay.core.data.download.MediaDownloadActions
+import com.raulshma.jellyplay.core.data.repository.DeferredUserDataRefresher
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.SearchHistoryItem
@@ -25,11 +26,13 @@ import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.SortOption
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.seerr.buildPosterUrl
+import com.raulshma.jellyplay.core.ui.components.DeferredRefreshHost
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -60,7 +63,7 @@ class SearchViewModel(
     private val offlineRepository: OfflineRepository,
     private val searchFiltersStore: com.raulshma.jellyplay.core.datastore.search.SearchFiltersStore,
     private val mediaDownloadActions: MediaDownloadActions,
-) : JellyPlayViewModel() {
+) : JellyPlayViewModel(), DeferredRefreshHost {
 
     private val _query = composeState("")
     var query: String
@@ -127,11 +130,20 @@ class SearchViewModel(
     // stale rows (plus a wasted duplicate DB scan per keystroke burst).
     private var offlineSearchJob: Job? = null
 
+    /**
+     * Deferred-refresh generation counter for [pagedResults] — bumped by
+     * [deferredRefresher] on screen re-entry after a user-data change,
+     * restarting the paged query with a fresh generation (the same
+     * silent-refresh contract as the library grid).
+     */
+    private val _refreshTrigger = MutableStateFlow(0)
+
     val pagedResults: Flow<PagingData<MediaItem>> = combine(
         debouncedQuery,
         _filters.flow,
-    ) { q, f -> q to f }
-        .flatMapLatest { (currentQuery, filters) ->
+        _refreshTrigger,
+    ) { q, f, refresh -> Triple(q, f, refresh) }
+        .flatMapLatest { (currentQuery, filters, _) ->
             if (currentQuery.isBlank()) {
                 flowOf(PagingData.empty())
             } else {
@@ -142,6 +154,21 @@ class SearchViewModel(
             }
         }
         .cachedIn(scope)
+
+    /**
+     * User-data changes while another screen is up only mark the results
+     * stale; the single regeneration fires when the search screen is next
+     * entered (see [DeferredUserDataRefresher]) — never mid-scroll.
+     */
+    private val deferredRefresher = DeferredUserDataRefresher(
+        userDataChanges = mediaRepository.userDataChanges,
+        scope = scope,
+        onRefresh = { _refreshTrigger.value += 1 },
+    )
+
+    override fun onScreenActiveChanged(active: Boolean) {
+        deferredRefresher.onScreenActiveChanged(active)
+    }
 
     init {
         loadGenres()

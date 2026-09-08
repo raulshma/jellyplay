@@ -25,6 +25,7 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaQuickActionScope
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
+import com.raulshma.jellyplay.core.ui.components.DeferredRefreshEffect
 import com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
@@ -62,6 +63,9 @@ fun StudioDetailScreen(
     val items = viewModel.items.collectAsLazyPagingItems()
     val networkStatus by LocalNetworkStatus.current.collectAsStateWithLifecycle()
     val serverHealth by LocalServerHealth.current.collectAsStateWithLifecycle()
+
+    DeferredRefreshEffect(viewModel)
+
     val headerStatus = resolveHeaderStatus(
         isLoading = items.loadState.refresh is LoadState.Loading,
         hasError = items.loadState.refresh is LoadState.Error,

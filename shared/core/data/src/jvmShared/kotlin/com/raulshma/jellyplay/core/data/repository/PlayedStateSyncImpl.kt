@@ -53,7 +53,17 @@ class PlayedStateSyncImpl(
     private val timeSource: TimeSource,
 ) : PlayedStateSync {
 
-    override suspend fun flip(itemId: String, played: Boolean): Result<Unit> {
+    override suspend fun flip(itemId: String, played: Boolean, seriesId: String?): Result<Unit> =
+        flip(itemId, played, seriesId, announce = true)
+
+    /**
+     * [announce] = false suppresses the confirmed-write announcement for the
+     * one caller that is itself followed by a drain-tail announce of the same
+     * ids ([pushUnsyncedIntent] inside the outbox drain): announcing from both
+     * would double-emit — the drain announces every delivered flip AND every
+     * adopted row exactly once, so the inner flip stays silent.
+     */
+    private suspend fun flip(itemId: String, played: Boolean, seriesId: String?, announce: Boolean): Result<Unit> {
         // Offline: apply locally for immediate UI feedback and stage the flip
         // in the outbox so PlaybackSyncWorker delivers it on reconnect.
         if (offlineModeManager.isOffline) {
@@ -72,6 +82,15 @@ class PlayedStateSyncImpl(
             // a failure here must not surface — the server mutation already
             // succeeded and reconciliation will correct any drift.
             runCatchingRethrowingCancellation { offlineRepository.applyPlayedState(itemId, isPlayed = played) }
+            // Announce the confirmed write on the same flow server WS pushes
+            // use, so open screens heal even when the socket is down (the
+            // consumer debounce/throttle collapses this with any echo). Season
+            // flips carry the seriesId too — id-matching consumers key on the
+            // series, never the season. Drain-context flips stay silent
+            // (see [announce]).
+            if (announce) {
+                mediaRepository.value.notifyUserDataChanged(listOfNotNull(itemId, seriesId))
+            }
             // Auto-delete-after-watch: item was just marked played — if the
             // user opted in and a finished download exists for it, remove it
             // now. The flip already succeeded, so a cleanup failure must never
@@ -104,6 +123,9 @@ class PlayedStateSyncImpl(
             // Mirror into the offline store so downloaded items stay consistent;
             // best-effort like the played mirror above.
             runCatchingRethrowingCancellation { offlineRepository.applyFavoriteState(itemId, target) }
+            // Same synthetic announcement as the played flip: confirmed write
+            // on the user-data-change flow, socket-independent.
+            mediaRepository.value.notifyUserDataChanged(listOf(itemId))
         } else {
             // Online but the call failed — don't lose the user's intent: apply
             // locally and enqueue for retry, resolving target from local state.
@@ -273,7 +295,10 @@ class PlayedStateSyncImpl(
      */
     private suspend fun pushUnsyncedIntent(itemId: String, played: Boolean): ReconcileOutcome {
         runCatchingRethrowingCancellation { playbackOutboxRepository.deletePlayedStateIntents(itemId) }
-        flip(itemId, played)
+        // announce = false: the drain that drives this reconcile announces
+        // every delivered flip in its tail — a second emission here would
+        // double-announce the same id.
+        flip(itemId, played, seriesId = null, announce = false)
         val delivered = runCatchingRethrowingCancellation {
             playbackOutboxRepository.isPlayedStateIntentDelivered(itemId, played)
         }.getOrDefault(false)

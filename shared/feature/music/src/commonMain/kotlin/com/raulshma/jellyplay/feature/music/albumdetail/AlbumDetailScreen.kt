@@ -25,6 +25,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.ExperimentalMaterial3Api
 import com.raulshma.jellyplay.core.ui.components.PullToRefreshBox
+import com.raulshma.jellyplay.core.ui.components.DeferredRefreshEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -98,6 +99,8 @@ fun AlbumDetailScreen(
     LaunchedEffect(albumId) {
         viewModel.loadAlbum(albumId)
     }
+
+    DeferredRefreshEffect(viewModel)
 
     // Stable URL-builder refs (MediaDetailScreen's rememberedGetImageUrl idiom) so
     // AlbumDetailContent can skip recomposition while trackDownloads re-emits a

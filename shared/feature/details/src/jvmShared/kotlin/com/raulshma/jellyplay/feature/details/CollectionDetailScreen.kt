@@ -44,6 +44,7 @@ import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.TopBarStyle
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.DelayedLoadingScreen
+import com.raulshma.jellyplay.core.ui.components.DeferredRefreshEffect
 import com.raulshma.jellyplay.core.model.progressFraction
 import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.components.LocalMediaQuickActionController
@@ -71,6 +72,8 @@ fun CollectionDetailScreen(
     LaunchedEffect(collectionId) {
         viewModel.loadCollection(collectionId)
     }
+
+    DeferredRefreshEffect(viewModel)
 
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val success = state as? CollectionDetailUiState.Success

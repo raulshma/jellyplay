@@ -34,9 +34,9 @@ class PlaybackOutboxDrainerImpl(
     /**
      * The derived watched flips route through [MediaRepository.markPlayed]
      * (not raw PlayedStateSync.flip) so each flip also drops the detail /
-     * home-sections / catalogue caches the repository owns — a drain that
-     * changes server state must not leave in-memory caches serving the
-     * pre-drain view to an open detail screen (#153 home/detail coherence).
+     * catalogue caches the repository owns — a drain that changes server
+     * state must not leave in-memory caches serving the pre-drain view to an
+     * open detail screen (#153 home/detail coherence).
      */
     private val mediaRepository: MediaRepository,
     /**
@@ -86,23 +86,29 @@ class PlaybackOutboxDrainerImpl(
         val derivedWatchedItemIds = deriveWatchedItemIds(pending, playedIntentItemIds)
 
         val reconciledItems = mutableSetOf<String>()
+        // Derived flips that DELIVERED: their markPlayed already announced on
+        // the user-data flow from inside PlayedStateSync.flip — the drain-tail
+        // announce must not name them again (exactly-once contract).
+        val selfAnnouncedItemIds = mutableSetOf<String>()
         var anyFailure = false
         var deadLetteredCount = 0
         if (pending.isNotEmpty()) {
             val entries = drainPendingEntries(pending, playedIntentItemIds, reconciledItems, attempt)
             anyFailure = entries.anyFailure
             deadLetteredCount = entries.deadLetteredCount
-            anyFailure = pushDerivedWatchedFlips(derivedWatchedItemIds, reconciledItems) || anyFailure
+            anyFailure = pushDerivedWatchedFlips(derivedWatchedItemIds, reconciledItems, selfAnnouncedItemIds) || anyFailure
         }
 
         val itemsToReconcile = (reconciledItems + downloadedIds)
             .distinct()
             .take(MAX_RECONCILE_BATCH)
         var reconcileChanged = false
+        var adoptedItemIds: List<String> = emptyList()
         if (itemsToReconcile.isNotEmpty()) {
             val reconcile = reconcileBatch(itemsToReconcile)
             anyFailure = reconcile.undeliveredIntent || anyFailure
-            reconcileChanged = reconcile.anyChanged
+            reconcileChanged = reconcile.changedItemIds.isNotEmpty()
+            adoptedItemIds = reconcile.changedItemIds
         }
 
         // Drain done — dismiss the progress notification regardless of outcome
@@ -130,10 +136,16 @@ class PlaybackOutboxDrainerImpl(
             runCatchingRethrowingCancellation { cacheInvalidator.invalidateCaches() }
             // Synthetic user-data push: open detail sessions and the home
             // refresher listen on the same flow as WS pushes and refresh —
-            // the drain's markPlayedItem calls may never arrive as a
-            // UserDataChanged echo on this socket. Only delivered flips are
-            // named: an undelivered derived flip changed nothing server-side.
-            mediaRepository.notifyUserDataChanged(reconciledItems.toList())
+            // the drain's raw API pushes (replayed entries) may never arrive
+            // as a UserDataChanged echo on this socket. Exactly-once: every
+            // DELIVERED flip or adopted row is named once — replayed entries
+            // and adoptions only here, derived flips only from their own
+            // inner flip (excluded via [selfAnnouncedItemIds]), and heal
+            // flips (pushUnsyncedIntent) stay silent inside reconcile so
+            // this tail is their single announcement.
+            mediaRepository.notifyUserDataChanged(
+                ((reconciledItems + adoptedItemIds) - selfAnnouncedItemIds).distinct(),
+            )
             runCatchingRethrowingCancellation { userDataSyncTrigger.enqueueNow() }
         }
 
@@ -284,11 +296,14 @@ class PlaybackOutboxDrainerImpl(
      * survives for the next drain. Delivery is detected via the outbox probe
      * ([PlaybackOutboxRepository.isPlayedStateIntentDelivered] — candidates
      * have no pre-existing intent rows to confuse the check). Returns whether
-     * any flip did not land.
+     * any flip did not land. A DELIVERED flip's inner PlayedStateSync.flip
+     * announces the id itself, so it is recorded in [selfAnnouncedItemIds] —
+     * the drain-tail announce skips those (exactly-once).
      */
     private suspend fun pushDerivedWatchedFlips(
         derivedWatchedItemIds: Set<String>,
         reconciledItems: MutableSet<String>,
+        selfAnnouncedItemIds: MutableSet<String>,
     ): Boolean {
         var anyFailure = false
         for (itemId in derivedWatchedItemIds) {
@@ -297,6 +312,7 @@ class PlaybackOutboxDrainerImpl(
                 runCatchingRethrowingCancellation { outbox.isPlayedStateIntentDelivered(itemId, played = true) }.getOrDefault(false)
             if (delivered) {
                 reconciledItems.add(itemId)
+                selfAnnouncedItemIds.add(itemId)
             } else {
                 anyFailure = true
             }
@@ -331,15 +347,30 @@ class PlaybackOutboxDrainerImpl(
         val undeliveredIntent = results.any {
             it.getOrNull() == PlayedStateSync.ReconcileOutcome.UndeliveredIntent
         }
-        val anyChanged = results.any { it.getOrNull() is PlayedStateSync.ReconcileOutcome.Changed }
-        return ReconcileBatchOutcome(undeliveredIntent = undeliveredIntent, anyChanged = anyChanged)
+        // mapConcurrent preserves input order, so results zip 1:1 with the ids.
+        val changedItemIds = results.zip(itemsToReconcile)
+            .filter { (result, _) -> result.getOrNull() is PlayedStateSync.ReconcileOutcome.Changed }
+            .map { (_, itemId) -> itemId }
+        return ReconcileBatchOutcome(
+            undeliveredIntent = undeliveredIntent,
+            changedItemIds = changedItemIds,
+        )
     }
 
     /** Outcome of one entry-replay pass: whether the drain must retry, and how many entries died. */
     private data class EntryDrainOutcome(val anyFailure: Boolean, val deadLetteredCount: Int)
 
-    /** Outcome of the bounded reconcile batch: an undelivered intent forces a retry; anyChanged feeds the result. */
-    private data class ReconcileBatchOutcome(val undeliveredIntent: Boolean, val anyChanged: Boolean)
+    /**
+     * Outcome of the bounded reconcile batch: an undelivered intent forces a
+     * retry; changedItemIds feeds both the result (via isNotEmpty) and the
+     * drain-tail announce — it names every adopted row (delivered push or
+     * server-state adoption) so the announce can heal id-matching consumers,
+     * not just id-agnostic ones.
+     */
+    private data class ReconcileBatchOutcome(
+        val undeliveredIntent: Boolean,
+        val changedItemIds: List<String>,
+    )
 
     companion object {
         private const val TAG = "PlaybackOutboxDrainer"

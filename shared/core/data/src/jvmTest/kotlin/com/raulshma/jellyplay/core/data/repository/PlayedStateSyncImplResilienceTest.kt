@@ -78,6 +78,8 @@ class PlayedStateSyncImplResilienceTest {
         )
         every { offlineModeManager.isOffline } returns false
         every { downloadsStore.downloads } returns MutableStateFlow(DownloadsSlice())
+        // The confirmed-write announcement (strict mock otherwise).
+        every { mediaRepository.notifyUserDataChanged(any()) } returns Unit
     }
 
     // ── 1. A confirmed flip survives a failing local mirror ─────────────

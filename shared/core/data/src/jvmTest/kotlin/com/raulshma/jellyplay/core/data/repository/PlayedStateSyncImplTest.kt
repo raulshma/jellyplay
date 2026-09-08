@@ -16,6 +16,7 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
+import io.mockk.verify
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
 import java.time.LocalDate
@@ -79,6 +80,8 @@ class PlayedStateSyncImplTest {
         // Defaults; individual tests override.
         every { offlineModeManager.isOffline } returns false
         every { downloadsStore.downloads } returns MutableStateFlow(DownloadsSlice())
+        // The confirmed-write announcement (strict mock otherwise).
+        every { mediaRepository.notifyUserDataChanged(any()) } returns Unit
     }
 
     // ── flip ─────────────────────────────────────────────────────────────────
@@ -105,6 +108,46 @@ class PlayedStateSyncImplTest {
         assertTrue(result.isSuccess)
         coVerify(exactly = 1) { offlineRepository.applyPlayedState(ITEM_ID, true) }
         coVerify(exactly = 0) { outboxRepository.enqueuePlayedState(any(), any()) }
+    }
+
+    @Test
+    fun `online flip announces the confirmed write on the user-data flow`() = runTest {
+        coEvery { apiClient.markPlayed(ITEM_ID) } returns Result.success(Unit)
+
+        sync.flip(ITEM_ID, played = true)
+
+        // Socket-gap heal: the announcement rides the same flow server WS
+        // pushes use, so open screens refresh even without an echo.
+        verify(exactly = 1) { mediaRepository.notifyUserDataChanged(listOf(ITEM_ID)) }
+    }
+
+    @Test
+    fun `season flip announces the series id alongside the season id`() = runTest {
+        coEvery { apiClient.markPlayed(SEASON_ID) } returns Result.success(Unit)
+
+        sync.flip(SEASON_ID, played = true, seriesId = SERIES_ID)
+
+        // Detail screens are keyed by the series id, never the season id — a
+        // seasonId-only announcement would never match an open series screen.
+        verify(exactly = 1) { mediaRepository.notifyUserDataChanged(listOf(SEASON_ID, SERIES_ID)) }
+    }
+
+    @Test
+    fun `online favorite flip also announces the confirmed write`() = runTest {
+        coEvery { apiClient.toggleFavorite(ITEM_ID, currentIsFavorite = null) } returns Result.success(true)
+
+        sync.toggleFavorite(ITEM_ID)
+
+        verify(exactly = 1) { mediaRepository.notifyUserDataChanged(listOf(ITEM_ID)) }
+    }
+
+    @Test
+    fun `offline flip does not announce (the outbox drain will)`() = runTest {
+        every { offlineModeManager.isOffline } returns true
+
+        sync.flip(ITEM_ID, played = true)
+
+        verify(exactly = 0) { mediaRepository.notifyUserDataChanged(any()) }
     }
 
     @Test
@@ -357,6 +400,9 @@ class PlayedStateSyncImplTest {
         assertEquals(PlayedStateSync.ReconcileOutcome.Changed(PlayedStateSync.ComputeResult.PLAYED), result)
         coVerify(exactly = 1) { apiClient.markPlayed(ITEM_ID) }
         coVerify(exactly = 1) { offlineRepository.updatePlaybackProgress(ITEM_ID, 0L, 100.0, true) }
+        // Exactly-once: the heal flip inside reconcile stays silent — the
+        // driving drain's tail announce names the item exactly once instead.
+        verify(exactly = 0) { mediaRepository.notifyUserDataChanged(any()) }
     }
 
     @Test
@@ -778,6 +824,8 @@ class PlayedStateSyncImplTest {
 
     private companion object {
         const val ITEM_ID = "item-1"
+        const val SEASON_ID = "season-1"
+        const val SERIES_ID = "series-1"
         const val DOWNLOAD_ID = "dl-1"
 
         fun epochMillis(iso: String): Long =

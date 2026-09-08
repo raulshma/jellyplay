@@ -54,6 +54,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.withContext
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 
 // Shared by [MediaRepositoryImpl] (the collection-items cache) and the
@@ -199,7 +200,6 @@ class MediaRepositoryImpl(
     }
 
     override fun invalidateForUserDataChange(itemId: String, seriesIdHint: String?) {
-        invalidateHomeSectionsCache()
         invalidateUserDataCaches(itemId, seriesIdHint)
     }
 
@@ -218,15 +218,17 @@ class MediaRepositoryImpl(
         clock = { timeSource.nowElapsedRealtimeMillis() },
     )
 
-    /**
-     * Drops the in-memory home-sections cache for the current identity. Used by
-     * [toggleFavorite] / [markPlayed] / [markUnplayed] so a user-data change is
-     * reflected on the next home load (the previous hand-rolled slot zeroed the
-     * timestamp to force a TTL miss; this is the identity-aware equivalent).
-     */
-    private fun invalidateHomeSectionsCache() {
-        homeSectionsCache.clear()
-    }
+    // Lazy staleness for the home-sections cache (#157): the eager eviction
+    // this replaces cleared the cache at every user-data mutation, forcing
+    // the NEXT read into a full blocking refetch even when no consumer was
+    // alive to ask for fresh data. The marker inverts the timing without
+    // losing the guarantee — a synthetic [notifyUserDataChanged] (every
+    // confirmed own-write path: flips, delivered STOPs, the outbox drain)
+    // arms it, and the next non-forced getHomeSections consumes it as a
+    // one-shot force. Same freshness as the eager clear, zero refetches
+    // while nobody reads home. Server WS pushes do NOT arm it — same scope
+    // as the eager eviction they replace — HomeRefresher serves those live.
+    private val homeSectionsStale = AtomicBoolean(false)
 
 
     init {
@@ -306,10 +308,17 @@ class MediaRepositoryImpl(
         force: Boolean,
     ): Result<HomeSectionsResult> {
         val cacheKey = query.cacheKey()
+        // Consume the #157 lazy staleness marker as a one-shot force: an
+        // announced user-data write (see [homeSectionsStale]) makes this
+        // read bypass the cached payload — a fresh Continue Watching within
+        // the TTL window, not after it. getAndSet (not a read-then-clear):
+        // an announce racing this fetch re-arms the marker for the NEXT
+        // read instead of being swallowed by this one.
+        val effectiveForce = force || homeSectionsStale.getAndSet(false)
         return homeSectionsCache.getOrFetch(
             { homeSession.cacheIdentity() },
             cacheKey,
-            force = force,
+            force = effectiveForce,
             // SWR persist: the fetch-path-only write hook — persists the
             // snapshot for stale-while-revalidate on cold open (the in-memory
             // cache is lost on process death) after the in-memory put, and
@@ -826,6 +835,11 @@ class MediaRepositoryImpl(
         // No identity → nothing is keyed to a user yet; emitting would only
         // risk refreshing another account's screens on a stale collector.
         val userId = homeSession.currentIdentitySnapshot()?.userId ?: return
+        // The confirmed write also arms the lazy home-sections staleness
+        // marker (#157 — see [homeSectionsStale]): the next home read
+        // refetches even if no HomeRefresher was collecting when this
+        // landed (VM off the back stack / recreated cold within the TTL).
+        homeSectionsStale.set(true)
         syntheticUserDataChanges.tryEmit(UserDataChange(userId, itemIds.distinct()))
     }
 
@@ -858,15 +872,17 @@ class MediaRepositoryImpl(
     override suspend fun markSeasonPlayed(seasonId: String, seriesId: String): Result<Unit> {
         // Season ids are never detail-cached, so the series-resolution inside
         // withUserDataMutationCacheInvalidation cannot discover the parent —
-        // the caller-supplied seriesIdHint is load-bearing here.
+        // the caller-supplied seriesIdHint is load-bearing here. The flip also
+        // announces the seriesId: detail screens are keyed by the series, so a
+        // seasonId-only announcement would never match an open series screen.
         return withUserDataMutationCacheInvalidation(seriesId, seriesIdHint = seriesId) {
-            playedStateSync.flip(seasonId, played = true)
+            playedStateSync.flip(seasonId, played = true, seriesId = seriesId)
         }
     }
 
     override suspend fun markSeasonUnplayed(seasonId: String, seriesId: String): Result<Unit> {
         return withUserDataMutationCacheInvalidation(seriesId, seriesIdHint = seriesId) {
-            playedStateSync.flip(seasonId, played = false)
+            playedStateSync.flip(seasonId, played = false, seriesId = seriesId)
         }
     }
 
@@ -877,6 +893,17 @@ class MediaRepositoryImpl(
      * supplies it directly when the mutated id is not detail-cached at all
      * (e.g. season marks — seasons are never cached, so the caller names the
      * series).
+     *
+     * The home sections cache is deliberately NOT eagerly evicted here
+     * (scroll- and flicker-sensitive: a cleared cache forces the next home
+     * read into a full blocking refetch). Home freshness after a write is
+     * event-driven instead: the online write paths emit a synthetic
+     * [notifyUserDataChanged] whose consumers (HomeRefresher's throttled
+     * silent forced refresh, open screens) heal live, and the announcement
+     * also arms the lazy staleness marker ([homeSectionsStale], #157) so the
+     * next home READ refetches even when no consumer was collecting. The
+     * 60s TTL remains the staleness ceiling for the no-event path, and
+     * [invalidateCaches] still clears the cache wholesale.
      */
     private suspend fun <T> withUserDataMutationCacheInvalidation(
         itemId: String,
@@ -884,13 +911,13 @@ class MediaRepositoryImpl(
         mutation: suspend () -> Result<T>,
     ): Result<T> {
         val seriesId = seriesIdHint ?: cachedSeriesId(itemId)
-        invalidateForUserDataChange(itemId, seriesId)
+        invalidateUserDataCaches(itemId, seriesId)
         return try {
             mutation()
         } finally {
             // The second eviction closes the race where a fetch started after
             // the pre-write eviction observed the old server state.
-            invalidateForUserDataChange(itemId, seriesId)
+            invalidateUserDataCaches(itemId, seriesId)
         }
     }
 

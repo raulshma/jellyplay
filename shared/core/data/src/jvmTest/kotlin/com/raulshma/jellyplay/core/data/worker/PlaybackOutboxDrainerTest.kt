@@ -132,6 +132,21 @@ class PlaybackOutboxDrainerTest {
     }
 
     @Test
+    fun `an adopted reconcile change announces the item id on the user-data flow`() = runTest {
+        coEvery { offlineRepository.getDownloadedItemIds() } returns listOf("d1")
+        coEvery { playedStateSync.reconcileOfflineRow(any()) } returns
+            PlayedStateSync.ReconcileOutcome.Changed(PlayedStateSync.ComputeResult.POSITION_UPDATED)
+
+        drain()
+
+        // Adoption-only drain: no outbox entry landed (reconciledItems is
+        // empty), yet the adopted row's item must still be named so
+        // id-matching consumers (an open detail screen) heal — the previous
+        // announce passed the empty set and was a no-op.
+        verify(exactly = 1) { mediaRepository.notifyUserDataChanged(listOf("d1")) }
+    }
+
+    @Test
     fun `the reconcile batch is capped at fifty items`() = runTest {
         // A very large downloaded library must not monopolise the foreground
         // drain with N serial detail fetches — the excess defers to the

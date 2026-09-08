@@ -32,6 +32,7 @@ import com.raulshma.jellyplay.core.ui.components.ExpandableText
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.TopBarStyle
 import com.raulshma.jellyplay.core.ui.components.DelayedLoadingScreen
+import com.raulshma.jellyplay.core.ui.components.DeferredRefreshEffect
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
 import com.raulshma.jellyplay.core.ui.components.PosterCard
@@ -212,6 +213,8 @@ fun PersonDetailScreen(
     LaunchedEffect(personId) {
         viewModel.loadPerson(personId)
     }
+
+    DeferredRefreshEffect(viewModel)
 
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val title = (state as? PersonDetailUiState.Success)?.name ?: ""

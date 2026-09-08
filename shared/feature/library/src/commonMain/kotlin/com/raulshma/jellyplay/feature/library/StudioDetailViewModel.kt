@@ -4,13 +4,17 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import com.raulshma.jellyplay.core.data.download.MediaDownloadActions
+import com.raulshma.jellyplay.core.data.repository.DeferredUserDataRefresher
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.ui.components.DeferredRefreshHost
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flatMapLatest
 
 class StudioDetailViewModel(
     savedStateHandle: SavedStateHandle,
@@ -18,17 +22,37 @@ class StudioDetailViewModel(
     private val userDataMutator: UserDataMutator,
     private val imageUrlProvider: ImageUrlProvider,
     private val mediaDownloadActions: MediaDownloadActions,
-) : JellyPlayViewModel() {
+) : JellyPlayViewModel(), DeferredRefreshHost {
 
     private val studioId: String = savedStateHandle[Route.StudioDetail::studioId.name] ?: ""
     private val studioName: String = savedStateHandle[Route.StudioDetail::studioName.name] ?: ""
 
-    val items: Flow<PagingData<MediaItem>> = mediaRepository.getMediaItemsPaged(
-        filters = com.raulshma.jellyplay.core.model.LibraryFilters(
-            sortBy = com.raulshma.jellyplay.core.model.SortOption.SORT_NAME,
-        ),
-        studioIds = listOf(studioId),
-    ).cachedIn(scope)
+    private val _refreshTrigger = stateFlow(0)
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val items: Flow<PagingData<MediaItem>> = _refreshTrigger.flow.flatMapLatest {
+        mediaRepository.getMediaItemsPaged(
+            filters = com.raulshma.jellyplay.core.model.LibraryFilters(
+                sortBy = com.raulshma.jellyplay.core.model.SortOption.SORT_NAME,
+            ),
+            studioIds = listOf(studioId),
+        )
+    }.cachedIn(scope)
+
+    /**
+     * User-data changes while another screen is up only mark the grid stale;
+     * the single regeneration fires when the studio screen is next entered
+     * (see [DeferredUserDataRefresher]) — never mid-scroll.
+     */
+    private val deferredRefresher = DeferredUserDataRefresher(
+        userDataChanges = mediaRepository.userDataChanges,
+        scope = scope,
+        onRefresh = { _refreshTrigger.set(_refreshTrigger.value + 1) },
+    )
+
+    override fun onScreenActiveChanged(active: Boolean) {
+        deferredRefresher.onScreenActiveChanged(active)
+    }
 
     fun getImageUrl(itemId: String): String =
         imageUrlProvider.getImageUrl(itemId)

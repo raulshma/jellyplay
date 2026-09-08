@@ -57,6 +57,7 @@ class MediaRepositoryImplTest {
         // only owns cache invalidation around the write) — pin the mock's
         // write results so the invalidation wrappers see a successful write.
         coEvery { playedStateSync.flip(any(), any()) } returns Result.success(Unit)
+        coEvery { playedStateSync.flip(any(), any(), any()) } returns Result.success(Unit)
         coEvery { playedStateSync.toggleFavorite(any()) } returns Result.success(true)
         // The repository delegates getSeasons/getEpisodes/getAllEpisodesGrouped
         // to a real EpisodeCatalogueImpl, which in turn calls back into the

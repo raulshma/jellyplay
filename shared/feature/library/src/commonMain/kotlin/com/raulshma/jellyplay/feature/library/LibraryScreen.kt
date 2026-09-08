@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.library
 
 import com.raulshma.jellyplay.core.ui.components.JellyPlayBackHandler
+import com.raulshma.jellyplay.core.ui.components.DeferredRefreshEffect
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
@@ -216,6 +217,9 @@ fun LibraryScreen(
     val folders by viewModel.folders.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
+
+    DeferredRefreshEffect(viewModel)
+
     // One browser-state object owns {folder, filters, viewMode, groupBy,
     // posterSize, sectionContext, title} — replacing 13 individual
     // collectAsStateWithLifecycle reads that re-derived presentation from

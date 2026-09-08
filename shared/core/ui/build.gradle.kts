@@ -97,6 +97,9 @@ kotlin {
             implementation(libs.navigation3.runtime)
             implementation(libs.navigation3.ui)
             implementation(libs.lifecycle.viewmodel)
+            // DeferredRefreshEffect (the screen side of the deferred
+            // user-data refresh contract) is driven by LifecycleResumeEffect.
+            implementation(libs.lifecycle.runtime.compose)
             implementation(libs.paging.compose)
             implementation(libs.kotlinx.serialization.json)
             // v0.10.6 merge: coreUiMessageModule owns the shared
