@@ -31,4 +31,17 @@ interface MediaRepositoryCacheInvalidation {
      *  - anything else: nothing (the caller-scoped invalidation already ran)
      */
     fun invalidateFor(detail: MediaDetail)
+
+    /**
+     * Composite "user data for [itemId] changed" drop — the same eviction set
+     * the repository runs around its own played/favorite writes: the home
+     * sections cache, the item's detail cluster (detail + similar + themes +
+     * album tracks), the home latest-media rows, and — when the item belongs
+     * to a series (discovered from the cached detail or [seriesIdHint] when
+     * the item itself is not detail-cached, e.g. seasons) — that series'
+     * seasons/episodes catalogue. Also reached for playback-position changes
+     * (playback stop), which mutate the same served fields (resume position,
+     * Continue Watching) without going through a played/favorite flip.
+     */
+    fun invalidateForUserDataChange(itemId: String, seriesIdHint: String? = null)
 }

@@ -109,6 +109,18 @@ internal class HomeSectionsFetcher(
     private val homeLatestMediaCache = TtlCache<List<MediaItem>>(ttlMs = HomeFreshness.NETWORK_SUBCALL_TTL_MS)
     private val homeSimilarCache = TtlCache<List<MediaItem>>(ttlMs = HomeFreshness.NETWORK_SUBCALL_TTL_MS)
 
+    /**
+     * Drops both sub-call caches so the next home fetch re-hits the server for
+     * the latest/similar rows. The rows carry per-item UserData (played badge,
+     * favorite heart, resume bar), so a watched/favorite/progress write must
+     * not let this TTL layer serve the pre-write rows — reached from the data
+     * layer through [com.raulshma.jellyplay.core.network.api.LibraryApiClient.invalidateHomeSubcallCaches].
+     */
+    fun invalidateCaches() {
+        homeLatestMediaCache.clear()
+        homeSimilarCache.clear()
+    }
+
     suspend fun fetch(query: HomeSectionQuery, force: Boolean = false): HomeSectionsResult = coroutineScope {
         // Only enabledSections earns a local (gates every deferred launch
         // below); everything else the query bundles is read at its single

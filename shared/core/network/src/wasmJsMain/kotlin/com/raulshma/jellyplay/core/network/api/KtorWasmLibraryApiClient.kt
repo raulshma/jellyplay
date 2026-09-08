@@ -175,6 +175,10 @@ class KtorWasmLibraryApiClient(
         homeSectionsFetcher.fetch(query, force)
     }
 
+    override fun invalidateHomeSubcallCaches() {
+        homeSectionsFetcher.invalidateCaches()
+    }
+
     // ── Item list endpoints ────────────────────────────────────────────────
 
     override suspend fun getLatestMedia(parentId: String, limit: Int): Result<List<com.raulshma.jellyplay.core.model.MediaItem>> =

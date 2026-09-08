@@ -198,6 +198,11 @@ class MediaRepositoryImpl(
         }
     }
 
+    override fun invalidateForUserDataChange(itemId: String, seriesIdHint: String?) {
+        invalidateHomeSectionsCache()
+        invalidateUserDataCaches(itemId, seriesIdHint)
+    }
+
     // In-memory home-sections cache. Previously a hand-rolled triple of
     // @Volatile fields + a lock (cachedHomeSections / Timestamp / Key + lock);
     // folded into a single-entry TtlCache so the home path shares the same
@@ -879,15 +884,13 @@ class MediaRepositoryImpl(
         mutation: suspend () -> Result<T>,
     ): Result<T> {
         val seriesId = seriesIdHint ?: cachedSeriesId(itemId)
-        invalidateHomeSectionsCache()
-        invalidateUserDataCaches(itemId, seriesId)
+        invalidateForUserDataChange(itemId, seriesId)
         return try {
             mutation()
         } finally {
             // The second eviction closes the race where a fetch started after
             // the pre-write eviction observed the old server state.
-            invalidateHomeSectionsCache()
-            invalidateUserDataCaches(itemId, seriesId)
+            invalidateForUserDataChange(itemId, seriesId)
         }
     }
 
@@ -915,6 +918,10 @@ class MediaRepositoryImpl(
         // home-sections cache is dropped, so home/library rows reflect the write
         // instead of serving stale badges until the TTL expires.
         latestMediaCache.clear()
+        // The network layer's own home hot-path caches (per-folder latest +
+        // per-seed similar) carry the same per-item UserData — drop them too,
+        // or a home fetch within the sub-call TTL serves the pre-write rows.
+        apiClient.invalidateHomeSubcallCaches()
         val seriesId = seriesIdHint
             ?: cached?.item?.seriesId
             ?: cached?.takeIf { it.item.mediaType == MediaType.SERIES }?.item?.id
@@ -1007,8 +1014,10 @@ class MediaRepositoryImpl(
         collectionItemsCache.clear()
         photoFolderChildUrlCache.clear()
         // The network-layer home hot-path caches (per-folder latest + per-seed
-        // similar) are likewise identity-keyed now, so they no longer need a
-        // cross-boundary clear from here.
+        // similar) are likewise identity-keyed; they are dropped here because
+        // their entries carry per-item UserData that a wholesale drop must not
+        // resurrect for the sub-call TTL.
+        apiClient.invalidateHomeSubcallCaches()
         // NOTE: the persistent home-section SWR snapshot is intentionally NOT
         // cleared here. invalidateCaches() doesn't know which (server, user)
         // it's running for — it's called both from the registry's identity action (which

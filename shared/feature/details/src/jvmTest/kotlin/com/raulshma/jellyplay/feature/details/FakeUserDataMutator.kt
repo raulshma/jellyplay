@@ -7,8 +7,9 @@ import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 
 /**
  * Behavior fake for [UserDataMutator], shared by the details tests. Records
- * every call and mimics the real module's success path — container rewrite,
- * provider session rewrite, series-catalogue drop, provider season rewrite —
+ * every call and mimics the real module's success path — container rewrite
+ * (optimistic mode only, like the module), provider session rewrite,
+ * series-catalogue drop, provider season rewrite —
  * so ViewModel-level flip/re-entry assertions keep driving the same observable
  * sequence without re-implementing the protocol per test. Results are
  * stubbable per test; a stubbed failure skips every rewrite, like the module
@@ -39,7 +40,7 @@ internal class FakeUserDataMutator(
     ): Result<AppliedMutation> {
         playedCalls += Triple(itemId, played, seriesId)
         return playedResult(itemId, played)
-            .onSuccess { applied -> applyOptimistically(itemId, applied, mode, containers, seriesId) }
+            .onSuccess { applied -> applyPostSuccessRefresh(itemId, applied, mode, containers, seriesId) }
     }
 
     override suspend fun setFavorite(
@@ -50,7 +51,7 @@ internal class FakeUserDataMutator(
     ): Result<AppliedMutation> {
         favoriteCalls += itemId to seriesId
         return favoriteResult(itemId)
-            .onSuccess { applied -> applyOptimistically(itemId, applied, mode, containers, seriesId) }
+            .onSuccess { applied -> applyPostSuccessRefresh(itemId, applied, mode, containers, seriesId) }
     }
 
     override suspend fun setSeasonPlayed(
@@ -67,15 +68,16 @@ internal class FakeUserDataMutator(
             }
     }
 
-    private suspend fun applyOptimistically(
+    private suspend fun applyPostSuccessRefresh(
         itemId: String,
         applied: AppliedMutation,
         mode: UserDataMutator.FlipMode,
         containers: List<UserDataContainer>,
         seriesId: String?,
     ) {
-        if (mode == UserDataMutator.FlipMode.Silent) return
-        containers.forEach { it.rewrite(itemId, applied::patch) }
+        if (mode == UserDataMutator.FlipMode.Optimistic) {
+            containers.forEach { it.rewrite(itemId, applied::patch) }
+        }
         provider?.applyOptimisticItemState(itemId, applied.favorite, applied.played)
         if (seriesId != null) provider?.invalidate(seriesId)
     }

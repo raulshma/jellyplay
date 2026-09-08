@@ -63,6 +63,7 @@ class WebMediaRepositoryNarrowTest {
         private fun unused(): Nothing = throw UnsupportedOperationException("unused in WebMediaRepositoryNarrowTest")
 
         override suspend fun getHomeSections(query: HomeSectionQuery, force: Boolean): Result<HomeSectionsResult> = unused()
+        override fun invalidateHomeSubcallCaches() = unused()
         override suspend fun getLatestMedia(parentId: String, limit: Int): Result<List<MediaItem>> = unused()
         override suspend fun getNextUp(limit: Int, enableRewatching: Boolean, maxDays: Int): Result<List<MediaItem>> = unused()
         override suspend fun getContinueWatching(limit: Int): Result<List<MediaItem>> = unused()

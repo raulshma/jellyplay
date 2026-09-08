@@ -432,4 +432,23 @@ class HomeSectionsFetcherTest {
         f.fetch(query)                    // hit under UNKNOWN
         assertEquals(3, fake.calls.count { it.startsWith("latest:") })
     }
+
+    @Test
+    fun `invalidateCaches drops the sub-call caches so the next fetch re-hits the server`() = runTest {
+        val fake = FakeHomeSectionSources()
+        repeat(2) { fake.foldersResults += Result.success(listOf(folder("f1"))) }
+        fake.latestResults += Result.success(listOf(item("pre-write-row")))
+        fake.latestResults += Result.success(listOf(item("post-write-row")))
+
+        val f = fetcher(fake)
+        val query = HomeSectionQuery(enabledSections = setOf(HomeSectionType.LATEST_MEDIA))
+        f.fetch(query)
+        f.invalidateCaches()
+        val after = f.fetch(query)
+
+        // The user-data mutation purge path: the cached pre-write row must not
+        // survive invalidateCaches() the way it survives the plain-TTL window.
+        assertEquals(2, fake.calls.count { it.startsWith("latest:") })
+        assertEquals(listOf("post-write-row"), latestRows(after).single().items.map { it.id })
+    }
 }

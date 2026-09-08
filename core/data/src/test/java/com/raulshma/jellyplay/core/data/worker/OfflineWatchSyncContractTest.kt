@@ -117,6 +117,7 @@ class OfflineWatchSyncContractTest {
         val sessionCacheRegistry = SessionCacheRegistry(homeSession, CoroutineScope(SupervisorJob()))
         val playbackRepository = PlaybackRepositoryImpl(
             apiClient, outbox, offlineModeManager, homeSession, sessionCacheRegistry,
+            mediaCacheInvalidation = mockk(relaxed = true),
         )
         val playedStateSync = PlayedStateSyncImpl(
             apiClient = apiClient,

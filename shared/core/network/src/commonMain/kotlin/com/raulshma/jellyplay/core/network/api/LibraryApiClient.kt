@@ -29,6 +29,16 @@ interface LibraryApiClient {
         force: Boolean = false,
     ): Result<HomeSectionsResult>
 
+    /**
+     * Drops the home hot-path sub-call caches (per-folder latest media,
+     * per-seed similar items) so the next [getHomeSections] fetch re-hits the
+     * server for those rows. Their entries carry per-item UserData, so a
+     * watched/favorite/progress write calling this purges the pre-write rows
+     * instead of letting them serve stale badges for the sub-call TTL. Best-
+     * effort and synchronous — a no-op before any home fetch has memoised.
+     */
+    fun invalidateHomeSubcallCaches()
+
     suspend fun getLatestMedia(parentId: String, limit: Int = 16): Result<List<MediaItem>>
     suspend fun getNextUp(limit: Int = 20, enableRewatching: Boolean = false, maxDays: Int = 0): Result<List<MediaItem>>
     suspend fun getContinueWatching(limit: Int = 20): Result<List<MediaItem>>

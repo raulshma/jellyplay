@@ -37,6 +37,13 @@ class PlaybackRepositoryImpl(
     private val homeSession: HomeSession,
     /** Registers the segments cache for wholesale clears on identity change. */
     private val sessionCacheRegistry: SessionCacheRegistry,
+    /**
+     * Playback-position writes (a delivered or staged STOP) mutate the same
+     * served fields as a played/favorite flip (resume position, Continue
+     * Watching, episode rows), so the stop path purges the repository's
+     * user-data caches through the same seam those writes use.
+     */
+    private val mediaCacheInvalidation: MediaRepositoryCacheInvalidation,
 ) : PlaybackRepository {
 
     private val segmentsCache = TtlCache<List<MediaSegment>>(
@@ -96,18 +103,34 @@ class PlaybackRepositoryImpl(
         itemId: String,
         sessionId: String,
         positionTicks: Long,
-    ): Result<Unit> = reportOrStage(
-        stage = { outbox.enqueueStop(itemId, sessionId, positionTicks) },
-        send = {
-            apiClient.reportPlaybackStopped(itemId, sessionId, positionTicks).onSuccess {
-                // A delivered STOP supersedes any pending START/PROGRESS/STOP for
-                // this item — the server now has the authoritative final position.
-                // Scoped to telemetry only: a pending PLAYED/UNPLAYED flip is an
-                // orthogonal user intent and must still drain.
-                outbox.deletePlaybackTelemetryForItem(itemId)
-            }
-        },
-    )
+    ): Result<Unit> {
+        // Pre-send purge pairs with the post-send one below — the same double
+        // eviction the played/favorite wrapper runs around its write: a home
+        // fetch in flight across the send must not repopulate the stale rows
+        // after the post-send purge.
+        mediaCacheInvalidation.invalidateForUserDataChange(itemId)
+        val result = reportOrStage(
+            stage = { outbox.enqueueStop(itemId, sessionId, positionTicks) },
+            send = {
+                apiClient.reportPlaybackStopped(itemId, sessionId, positionTicks).onSuccess {
+                    // A delivered STOP supersedes any pending START/PROGRESS/STOP for
+                    // this item — the server now has the authoritative final position.
+                    // Scoped to telemetry only: a pending PLAYED/UNPLAYED flip is an
+                    // orthogonal user intent and must still drain.
+                    outbox.deletePlaybackTelemetryForItem(itemId)
+                }
+            },
+        )
+        // The item's resume position changed (or is pending in the outbox, in
+        // which case the local mirror already reflects it): purge the caches
+        // that serve it — home sections (Continue Watching), the item's detail
+        // cluster, and its series' episode catalogue — so no surface shows the
+        // pre-playback position until the TTL expires. Deliberately NOT the
+        // per-tick progress reports: those change nothing queryable until the
+        // session ends, and purging on every 10s tick would thrash the caches.
+        mediaCacheInvalidation.invalidateForUserDataChange(itemId)
+        return result
+    }
 
     /**
      * Stage-or-send shared by the three telemetry reports: offline, [stage]

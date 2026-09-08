@@ -147,6 +147,10 @@ class LibraryApiClientImpl @Inject constructor(
         homeSectionsFetcher.fetch(query, force)
     }
 
+    override fun invalidateHomeSubcallCaches() {
+        homeSectionsFetcher.invalidateCaches()
+    }
+
     override suspend fun getLatestMedia(parentId: String, limit: Int): Result<List<MediaItem>> =
         engine.apiResultWithRetry {
             val response = engine.requireApi().userLibraryApi.getLatestMedia(

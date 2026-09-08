@@ -662,6 +662,7 @@ val dataJvmModule: Module = module {
             offlineModeManager = get(),
             homeSession = get(),
             sessionCacheRegistry = get(),
+            mediaCacheInvalidation = get(),
         )
     }
     single<PlaybackRepository> { get<PlaybackRepositoryImpl>() }

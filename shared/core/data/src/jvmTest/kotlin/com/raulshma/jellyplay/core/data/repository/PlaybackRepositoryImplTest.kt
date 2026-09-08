@@ -37,6 +37,7 @@ class PlaybackRepositoryImplTest {
     private val apiClient: JellyfinApiClient = mockk(relaxed = true)
     private val outbox: PlaybackOutboxRepository = mockk(relaxed = true)
     private val offlineModeManager: OfflineModeManager = mockk()
+    private val mediaCacheInvalidation: MediaRepositoryCacheInvalidation = mockk(relaxed = true)
 
     private lateinit var repository: PlaybackRepositoryImpl
 
@@ -58,7 +59,10 @@ class PlaybackRepositoryImplTest {
             homeSession,
             kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob()),
         )
-        repository = PlaybackRepositoryImpl(apiClient, outbox, offlineModeManager, homeSession, sessionCacheRegistry)
+        repository = PlaybackRepositoryImpl(
+            apiClient, outbox, offlineModeManager, homeSession, sessionCacheRegistry,
+            mediaCacheInvalidation = mediaCacheInvalidation,
+        )
     }
 
     @Test
@@ -102,6 +106,46 @@ class PlaybackRepositoryImplTest {
         val result = repository.reportPlaybackStopped("item-1", "session-1", 5000000L)
 
         assertTrue(result.isSuccess)
+    }
+
+    @Test
+    fun `reportPlaybackStopped purges user-data caches for the item`() = runTest {
+        coEvery { apiClient.reportPlaybackStopped("item-1", "session-1", 5000000L) } returns
+            Result.success(Unit)
+
+        repository.reportPlaybackStopped("item-1", "session-1", 5000000L)
+
+        // Doubly purged: pre-send + post-send, closing the in-flight-fetch race.
+        coVerify(exactly = 2) { mediaCacheInvalidation.invalidateForUserDataChange("item-1", null) }
+    }
+
+    @Test
+    fun `reportPlaybackStopped purges user-data caches when offline-staged too`() = runTest {
+        every { offlineModeManager.isOffline } returns true
+
+        repository.reportPlaybackStopped("item-1", "session-1", 5000000L)
+
+        coVerify(exactly = 2) { mediaCacheInvalidation.invalidateForUserDataChange("item-1", null) }
+        coVerify(exactly = 0) { apiClient.reportPlaybackStopped(any(), any(), any()) }
+    }
+
+    @Test
+    fun `reportPlaybackProgress does not purge user-data caches`() = runTest {
+        coEvery {
+            apiClient.reportPlaybackProgress("item-1", "session-1", 10000000L, false, PlayMethod.DIRECT_PLAY)
+        } returns Result.success(Unit)
+
+        repository.reportPlaybackProgress(
+            PlaybackProgress(
+                itemId = "item-1",
+                sessionId = "session-1",
+                positionTicks = 10000000L,
+                isPaused = false,
+                playMethod = PlayMethod.DIRECT_PLAY,
+            )
+        )
+
+        coVerify(exactly = 0) { mediaCacheInvalidation.invalidateForUserDataChange(any(), any()) }
     }
 
     @Test
