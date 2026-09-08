@@ -180,13 +180,37 @@ class PlayedStateSyncImpl(
             if (playbackOutboxRepository.hasUnsyncedUnplayedIntent(itemId)) {
                 return pushUnsyncedIntent(itemId, played = false)
             }
+            // #157 self-heal: /Items/Resume filters on position > 0 only, so a
+            // position report that landed AFTER the item was already played (a
+            // sub-threshold STOP replayed by an older build's offline sync, a
+            // brief re-watch of the finished episode) leaves the server with
+            // Played=true + position>0 — watched, yet permanently resumable in
+            // every client, because nothing server-side ever resets the
+            // position. markPlayedItem's resetPosition zeroes it. The repair
+            // goes through the delete-before-push + flip + delivery-probe
+            // helper: a failed push stages a PLAYED row and reports
+            // UndeliveredIntent so the drain retries promptly instead of
+            // stranding the poison until the periodic backstop. The staged-row
+            // flip keeps auto-delete-after-watch semantics identical to a
+            // user-issued watched flip (pref-gated).
+            val healOutcome = if ((serverItem.playbackPositionTicks ?: 0L) > 0L) {
+                pushUnsyncedIntent(itemId, played = true)
+            } else {
+                null
+            }
+            if (healOutcome is ReconcileOutcome.UndeliveredIntent) return healOutcome
+            // Server watched always wins for the LOCAL row too: zero the stale
+            // local resume point (the heal above may have already zeroed the
+            // server's; the local row must agree either way).
             offlineRepository.updatePlaybackProgress(
                 itemId = itemId,
                 positionTicks = 0L,
                 percentage = 100.0,
                 isPlayed = true,
             )
-            return ReconcileOutcome.Changed(ComputeResult.PLAYED)
+            // A delivered heal already reported Changed(PLAYED); the unhealed
+            // path derives the same outcome here.
+            return healOutcome ?: ReconcileOutcome.Changed(ComputeResult.PLAYED)
         }
 
         // Server unplayed but local played: EITHER the user marked the item

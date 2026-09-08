@@ -40,6 +40,7 @@ import com.raulshma.jellyplay.core.network.library.emptyFallbackTotalCount
 import com.raulshma.jellyplay.core.network.library.filterByParentalRating
 import com.raulshma.jellyplay.core.network.library.libraryExcludeKinds
 import com.raulshma.jellyplay.core.network.library.parseItemSortList
+import com.raulshma.jellyplay.core.network.library.resumableOnly
 import com.raulshma.jellyplay.core.network.library.toCollectionSummary
 import com.raulshma.jellyplay.core.network.library.toGenre
 import com.raulshma.jellyplay.core.network.library.toLibraryFolder
@@ -232,6 +233,9 @@ class KtorWasmLibraryApiClient(
             response.items.map { it.toMediaItem() }
                 .filterByParentalRating(currentMaxParentalRating)
                 .distinctBy { it.id }
+                // #157: same rule the JVM client applies — see resumableOnly()
+                // for the rationale.
+                .resumableOnly()
         }
 
     override suspend fun getLibraryFolders(): Result<List<LibraryFolder>> = apiResultWithRetry {

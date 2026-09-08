@@ -25,7 +25,6 @@ import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
 import java.time.LocalDate
@@ -46,8 +45,8 @@ import kotlin.test.assertNull
  *
  * The headline case is the cross-user leak that motivated refactor C9: a wrong
  * identity must be a guaranteed cache miss by construction. The cache-invalidation
- * observer runs on `Dispatchers.Default`, so tests use [runBlocking] + a short
- * [delay] to let the collector process each flow emission before asserting.
+ * observers run on `Dispatchers.Unconfined` (see [buildRepository]), so each
+ * session assignment has processed the identity chain by the time it returns.
  *
  * Also covers the two freshness policies that had zero expiry coverage before
  * HomeFreshness: the 60s in-memory TTL and the 24h Room SWR staleness ceiling
@@ -75,14 +74,17 @@ class MediaRepositoryHomeSectionsCacheTest {
         val offlineRepository: OfflineRepository = mockk(relaxed = true)
         val homeSession = HomeSession(
             apiClient,
-            CoroutineScope(SupervisorJob() + Dispatchers.Default),
+            // Unconfined (not Dispatchers.Default): the session assignment then
+            // drives the classifier AND the registry reactions synchronously on
+            // the setter's stack, so the identity chain the suite pins (session
+            // emission → transition → cache drop) needs no settle delay.
+            CoroutineScope(SupervisorJob() + Dispatchers.Unconfined),
         )
-        // Real registry on a real dispatcher — the identity chain the suite
-        // pins (session emission → transition → cache drop) runs on
-        // Dispatchers.Default exactly like the per-repo observers it replaced.
+        // Real registry over the real HomeSession — same chain production runs,
+        // minus the cross-thread settle window.
         val sessionCacheRegistry = SessionCacheRegistry(
             homeSession,
-            CoroutineScope(SupervisorJob() + Dispatchers.Default),
+            CoroutineScope(SupervisorJob() + Dispatchers.Unconfined),
         )
         val episodeCatalogue = EpisodeCatalogueImpl(
             apiClient,
@@ -108,10 +110,12 @@ class MediaRepositoryHomeSectionsCacheTest {
 
     private fun homeSection(tag: String) = mockk<HomeSection>(relaxed = true)
 
-    /** Waits long enough for the `Dispatchers.Default` identity chain (HomeSession → repo) to observe the latest emission. */
-    private suspend fun waitForCacheObserver() {
-        delay(150)
-    }
+    /**
+     * Observers run on Dispatchers.Unconfined (see [buildRepository]): the
+     * session assignment processes the identity chain synchronously, so there
+     * is nothing to wait for.
+     */
+    private suspend fun waitForCacheObserver() = Unit
 
     private suspend fun signIn(serverId: String, userId: String) {
         sessionFlow.value = ActiveSession(serverInfo(serverId), userInfo(userId))
@@ -206,6 +210,22 @@ class MediaRepositoryHomeSectionsCacheTest {
 
         repository.getHomeSections(HomeSectionQuery())
         repository.markPlayed("item-1")
+        repository.getHomeSections(HomeSectionQuery())
+
+        coVerify(exactly = 2) { apiClient.getHomeSections(any(), any()) }
+    }
+
+    @Test
+    fun `markUnplayed invalidates the home-sections cache`() = runBlocking {
+        // Symmetry with markPlayed (#157 class): a row the CW filter dropped
+        // (played) must re-enter the row after an unwatch within the TTL
+        // window, not after 60s of staleness.
+        val repository = buildRepository()
+        signIn("server-1", "user-A")
+        coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult("A")
+
+        repository.getHomeSections(HomeSectionQuery())
+        repository.markUnplayed("item-1")
         repository.getHomeSections(HomeSectionQuery())
 
         coVerify(exactly = 2) { apiClient.getHomeSections(any(), any()) }

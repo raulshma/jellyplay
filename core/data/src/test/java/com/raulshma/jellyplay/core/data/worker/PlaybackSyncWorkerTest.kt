@@ -10,13 +10,11 @@ import androidx.work.testing.WorkManagerTestInitHelper
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlayedStateSync
-import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEntry
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEventType
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxRepository
 import com.raulshma.jellyplay.core.data.repository.MediaCacheInvalidator
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
-import com.raulshma.jellyplay.core.model.PlayMethod
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -109,25 +107,6 @@ class PlaybackSyncWorkerTest {
             .setRunAttemptCount(runAttemptCount)
             .build()
 
-    private fun entry(
-        id: String,
-        itemId: String,
-        type: PlaybackOutboxEventType,
-        sessionId: String = "s1",
-        positionTicks: Long = 100L,
-    ) = PlaybackOutboxEntry(
-        id = id,
-        itemId = itemId,
-        eventType = type,
-        sessionId = sessionId,
-        positionTicks = positionTicks,
-        isPaused = false,
-        playMethod = PlayMethod.DIRECT_PLAY,
-        mediaSourceId = null,
-        recordedAt = 1_000L,
-        createdAt = 1_000L,
-    )
-
     // ── Empty / offline gating ────────────────────────────────────────
 
     @Test
@@ -176,6 +155,47 @@ class PlaybackSyncWorkerTest {
 
         coVerify(exactly = 1) { playedStateSync.reconcileOfflineRow("d1") }
         coVerify(exactly = 0) { userDataSyncScheduler.enqueueNow() }
+    }
+
+    @Test
+    fun `the reconcile batch is capped at fifty items`() = runTest {
+        // A very large downloaded library must not monopolise the foreground
+        // worker with N serial detail fetches — the excess defers to the
+        // periodic backstop (take(MAX_RECONCILE_BATCH)).
+        coEvery { offlineRepository.getDownloadedItemIds() } returns (1..60).map { "d%02d".format(it) }
+
+        val result = buildWorker().doWork()
+
+        assertTrue(result is androidx.work.ListenableWorker.Result.Success)
+        coVerify(exactly = 50) { playedStateSync.reconcileOfflineRow(any()) }
+        coVerify(exactly = 1) { playedStateSync.reconcileOfflineRow("d50") }
+        coVerify(exactly = 0) { playedStateSync.reconcileOfflineRow("d51") }
+        coVerify(exactly = 0) { playedStateSync.reconcileOfflineRow("d60") }
+    }
+
+    @Test
+    fun `an item both drained and downloaded reconciles exactly once`() = runTest {
+        coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.PROGRESS))
+        coEvery { offlineRepository.getDownloadedItemIds() } returns listOf("item-1", "d2")
+
+        buildWorker().doWork()
+
+        coVerify(exactly = 1) { playedStateSync.reconcileOfflineRow("item-1") }
+        coVerify(exactly = 1) { playedStateSync.reconcileOfflineRow("d2") }
+    }
+
+    @Test
+    fun `a getDownloadedItemIds failure degrades to an outbox-only run`() = runTest {
+        // The best-effort lookup: a DB read failure must not abort the drain —
+        // the outbox entries still push and the run converges.
+        coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.PROGRESS))
+        coEvery { offlineRepository.getDownloadedItemIds() } throws RuntimeException("db")
+
+        val result = buildWorker().doWork()
+
+        assertTrue(result is androidx.work.ListenableWorker.Result.Success)
+        coVerify(exactly = 1) { playbackRepository.replayOutboxEntry(any()) }
+        coVerify(exactly = 1) { playedStateSync.reconcileOfflineRow("item-1") }
     }
 
     @Test
@@ -307,6 +327,35 @@ class PlaybackSyncWorkerTest {
         coVerify(exactly = 1) { outbox.markDeadLetter("e1") }
     }
 
+    @Test
+    fun `failed FAVORITE intent shares the larger user-intent budget`() = runTest {
+        // Favorites are user intents like PLAYED/UNPLAYED: dead-lettering at
+        // the telemetry budget would silently lose an offline favorite flip.
+        coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.FAVORITE))
+        coEvery { playbackRepository.replayOutboxEntry(any()) } returns false
+
+        val earlyResult = buildWorker(runAttemptCount = 3).doWork()
+
+        assertTrue(earlyResult is androidx.work.ListenableWorker.Result.Retry)
+        coVerify(exactly = 0) { outbox.markDeadLetter("e1") }
+
+        val exhaustedResult = buildWorker(runAttemptCount = 10).doWork()
+
+        assertTrue(exhaustedResult is androidx.work.ListenableWorker.Result.Success)
+        coVerify(exactly = 1) { outbox.markDeadLetter("e1") }
+    }
+
+    @Test
+    fun `failed UNFAVORITE intent shares the larger user-intent budget`() = runTest {
+        coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.UNFAVORITE))
+        coEvery { playbackRepository.replayOutboxEntry(any()) } returns false
+
+        val result = buildWorker(runAttemptCount = 3).doWork()
+
+        assertTrue(result is androidx.work.ListenableWorker.Result.Retry)
+        coVerify(exactly = 0) { outbox.markDeadLetter("e1") }
+    }
+
     // ── markPlayed derivation + telemetry suppression (#153) ──────────
 
     @Test
@@ -389,6 +438,26 @@ class PlaybackSyncWorkerTest {
         buildWorker().doWork()
 
         coVerify(exactly = 0) { mediaRepository.markPlayed(any()) }
+    }
+
+    @Test
+    fun `an undelivered derived flip retries the drain`() = runTest {
+        // markPlayed reports success optimistically (the flip applies locally
+        // + stages the row on failure) — the outbox probe is the real
+        // delivery signal. A flip that did not land must not converge the
+        // drain, or the re-staged PLAYED row waits for the 4h backstop.
+        // (The STOP telemetry itself replayed fine, so the item is still
+        // legitimately named in the post-drain user-data notify.)
+        coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.STOP))
+        coEvery { offlineRepository.getOfflineItem("item-1") } returns offlineItem(isPlayed = true)
+        coEvery { outbox.isPlayedStateIntentDelivered("item-1", played = true) } returns false
+
+        val result = buildWorker().doWork()
+
+        assertTrue(result is androidx.work.ListenableWorker.Result.Retry)
+        coVerify(exactly = 1) { mediaRepository.markPlayed("item-1") }
+        // The telemetry push (not the flip) is what names the item here.
+        verify(exactly = 1) { mediaRepository.notifyUserDataChanged(listOf("item-1")) }
     }
 
     @Test

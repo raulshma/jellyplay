@@ -30,6 +30,7 @@ import com.raulshma.jellyplay.core.network.library.SEARCH_SUGGESTIONS_ITEM_TYPES
 import com.raulshma.jellyplay.core.network.library.SEARCH_SUGGESTIONS_SORT_BY
 import com.raulshma.jellyplay.core.network.library.emptyFallbackTotalCount
 import com.raulshma.jellyplay.core.network.library.libraryExcludeKinds
+import com.raulshma.jellyplay.core.network.library.resumableOnly
 import org.jellyfin.sdk.model.api.BaseItemKind
 import org.jellyfin.sdk.model.api.CreatePlaylistDto
 import org.jellyfin.sdk.model.api.ImageType
@@ -183,6 +184,9 @@ class LibraryApiClientImpl @Inject constructor(
         (response?.items ?: emptyList())
             .toFilteredMediaItems(engine.currentMaxParentalRating)
             .distinctBy { it.id }
+            // #157: drop played rows the resume endpoint still reports —
+            // see resumableOnly() for the full rationale.
+            .resumableOnly()
     }
 
     override suspend fun getLibraryFolders(): Result<List<LibraryFolder>> = engine.apiResultWithRetry {

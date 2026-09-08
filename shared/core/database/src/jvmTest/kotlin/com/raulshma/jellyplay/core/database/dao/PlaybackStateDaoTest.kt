@@ -107,6 +107,27 @@ class PlaybackStateDaoTest {
     }
 
     @Test
+    fun `updatePlaybackProgress never downgrades a watched row to unplayed (#153 sticky-watched)`() = runTest {
+        // A watched row (threshold flip or hierarchy cascade landed) that
+        // later receives a sub-threshold progress tick reporting
+        // isPlayed=false — a tick racing the threshold callback, or an older
+        // build's offline sync replaying a stale STOP — must stay watched:
+        // only the explicit unwatch path (applyPlayedStateToHierarchy) may
+        // clear the flag.
+        seedOfflineMedia("ep-1")
+        playbackStateDao.applyPlayedStateToHierarchy("ep-1", isPlayed = true, lastPlayedDate = "2026-01-01T00:00:00Z")
+
+        playbackStateDao.updatePlaybackProgress("ep-1", 900_000L, 60.0, isPlayed = false, lastPlayedDate = "2026-02-02T00:00:00Z")
+
+        val loaded = playbackStateDao.getById("ep-1")!!
+        assertTrue(loaded.isPlayed)
+        // The progress columns themselves still take the tick's values —
+        // stickiness applies to isPlayed only.
+        assertEquals(900_000L, loaded.playbackPositionTicks)
+        assertEquals(60.0, loaded.playedPercentage)
+    }
+
+    @Test
     fun `applyPlayedStateToHierarchy marks the whole series tree played`() = runTest {
         seedOfflineMedia("series-1", mediaType = "SERIES")
         seedOfflineMedia("season-1", mediaType = "SEASON", parentId = "series-1", seriesId = "series-1")

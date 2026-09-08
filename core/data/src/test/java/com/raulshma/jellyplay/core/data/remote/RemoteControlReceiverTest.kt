@@ -73,7 +73,7 @@ class RemoteControlReceiverTest {
     @Before
     fun setUp() {
         every { webSocketClient.events } returns events
-        every { authRepository.isAuthenticated } returns flowOf(true)
+        every { authRepository.isAuthenticated } returns MutableStateFlow(true)
         every { securityStore.security } returns MutableStateFlow(SecuritySlice(remoteControlEnabled = true))
         coEvery { mediaRepository.getMediaDetail(any(), any()) } returns Result.failure(IOException("down"))
     }
@@ -129,7 +129,7 @@ class RemoteControlReceiverTest {
 
     @Test
     fun `unauthenticated sessions ignore every event`() {
-        every { authRepository.isAuthenticated } returns flowOf(false)
+        every { authRepository.isAuthenticated } returns MutableStateFlow(false)
         val r = receiver()
         startAndAwaitSubscription(r)
 

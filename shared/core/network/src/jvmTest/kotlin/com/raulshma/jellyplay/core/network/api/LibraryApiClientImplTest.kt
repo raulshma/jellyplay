@@ -64,10 +64,17 @@ class LibraryApiClientImplTest {
     /**
      * Minimal recording [ApiClient]: the favorite paths run the REAL
      * `UserLibraryApi` over it (mockk can't proxy the final operations
-     * classes), with every request answered by an empty-object 200 whose
-     * `{}` body decodes to an all-defaults DTO.
+     * classes), with every request answered by a 200 whose body decodes to
+     * the DTO under test. Defaults to the all-defaults UserItemDataDto the
+     * favorite paths need; tests targeting other endpoints pass their own
+     * [responseBody].
      */
-    private class RecordingApiClient : org.jellyfin.sdk.api.client.ApiClient() {
+    private class RecordingApiClient(
+        private val responseBody: String = """
+            {"PlaybackPositionTicks":0,"PlayCount":0,"IsFavorite":false,
+            "Played":false,"Key":"k","ItemId":"$FAVORITE_ITEM_ID"}
+        """.trimIndent(),
+    ) : org.jellyfin.sdk.api.client.ApiClient() {
         val requests = mutableListOf<String>()
         override val baseUrl = "https://test.example.com"
         override val accessToken = "token-123"
@@ -89,13 +96,7 @@ class LibraryApiClientImplTest {
             requestBody: Any?,
         ): org.jellyfin.sdk.api.client.RawResponse {
             requests += "${method.name} $pathTemplate"
-            // UserItemDataDto has six REQUIRED fields, so the body must be
-            // complete (the favorite paths ignore the content anyway).
-            val body = """
-                {"PlaybackPositionTicks":0,"PlayCount":0,"IsFavorite":false,
-                "Played":false,"Key":"k","ItemId":"$FAVORITE_ITEM_ID"}
-            """.trimIndent()
-            return org.jellyfin.sdk.api.client.RawResponse(body.toByteArray(), 200, emptyMap())
+            return org.jellyfin.sdk.api.client.RawResponse(responseBody.toByteArray(), 200, emptyMap())
         }
     }
 
@@ -124,8 +125,65 @@ class LibraryApiClientImplTest {
         )
     }
 
+    @Test
+    fun `getContinueWatching drops played rows the server still reports resumable (#157)`() = runTest {
+        // /Items/Resume filters on PlaybackPositionTicks > 0 only — it does not
+        // exclude played items. A row with Played=true + a stale position is
+        // watched yet permanently resumable server-side; the client must drop
+        // it so a watched episode never occupies Continue Watching.
+        val api = RecordingApiClient(
+            responseBody = """
+                {"Items":[
+                    {"Id":"$POISONED_ITEM_ID","Name":"Poisoned","Type":"Movie",
+                     "UserData":{"PlaybackPositionTicks":5000000,"PlayCount":1,
+                                 "IsFavorite":false,"Played":true,"Key":"k1",
+                                 "ItemId":"$POISONED_ITEM_ID"}},
+                    {"Id":"$RESUMABLE_ITEM_ID","Name":"Resumable","Type":"Movie",
+                     "UserData":{"PlaybackPositionTicks":3000000,"PlayCount":0,
+                                 "IsFavorite":false,"Played":false,"Key":"k2",
+                                 "ItemId":"$RESUMABLE_ITEM_ID"}}
+                ],"TotalRecordCount":2,"StartIndex":0}
+            """.trimIndent(),
+        )
+        engine.updateApi(api)
+
+        val items = client.getContinueWatching(limit = 20).getOrThrow()
+
+        assertEquals(listOf("Resumable"), items.map { it.name })
+    }
+
+    @Test
+    fun `getContinueWatching with every row played yields an empty row, not a failure (#157)`() = runTest {
+        // All-played edge of the same filter: the row must collapse to empty
+        // (rendering "nothing to continue") rather than error or pass rows
+        // through because "everything was dropped".
+        val api = RecordingApiClient(
+            responseBody = """
+                {"Items":[
+                    {"Id":"$POISONED_ITEM_ID","Name":"Poisoned","Type":"Movie",
+                     "UserData":{"PlaybackPositionTicks":5000000,"PlayCount":1,
+                                 "IsFavorite":false,"Played":true,"Key":"k1",
+                                 "ItemId":"$POISONED_ITEM_ID"}},
+                    {"Id":"$RESUMABLE_ITEM_ID","Name":"Also Played","Type":"Episode",
+                     "UserData":{"PlaybackPositionTicks":3000000,"PlayCount":2,
+                                 "IsFavorite":false,"Played":true,"Key":"k2",
+                                 "ItemId":"$RESUMABLE_ITEM_ID"}}
+                ],"TotalRecordCount":2,"StartIndex":0}
+            """.trimIndent(),
+        )
+        engine.updateApi(api)
+
+        val items = client.getContinueWatching(limit = 20).getOrThrow()
+
+        assertEquals(emptyList(), items)
+    }
+
     private companion object {
         /** Real UUID: the favorite paths pass it through String.toUUID(). */
         const val FAVORITE_ITEM_ID = "2a2a2a2a-1111-4222-8222-333333333333"
+
+        /** Real UUIDs: the resume mapper reads Id through the same path. */
+        const val POISONED_ITEM_ID = "3b3b3b3b-1111-4333-8333-444444444444"
+        const val RESUMABLE_ITEM_ID = "4c4c4c4c-1111-4444-8444-555555555555"
     }
 }

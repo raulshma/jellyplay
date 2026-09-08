@@ -105,8 +105,9 @@ class DownloadRepositoryImplResumeTest {
 
         repository().resumeInterruptedDownloads()
 
-        // No progress reset, no enqueue — the user must resume it manually.
-        coVerify(exactly = 0) { downloadDao.updateProgressWithPausedReason(any(), any(), any(), any()) }
+        // No status flip, no enqueue — the user must resume it manually.
+        coVerify(exactly = 0) { downloadDao.updateStatusWithPausedReasonForIds(any(), any(), any()) }
+        coVerify(exactly = 0) { downloadDao.markResumedFromZeroForIds(any(), any(), any()) }
     }
 
     @Test
@@ -117,7 +118,10 @@ class DownloadRepositoryImplResumeTest {
 
         repository().resumeInterruptedDownloads()
 
-        coVerify { downloadDao.updateProgressWithPausedReason("dl-2", 500L, DownloadStatus.PENDING.name, null) }
+        // Paused rows keep their contiguous byte prefix: the batch UPDATE
+        // touches only status + pause reason, leaving downloadedBytes at 500.
+        coVerify { downloadDao.updateStatusWithPausedReasonForIds(listOf("dl-2"), DownloadStatus.PENDING.name, null) }
+        coVerify(exactly = 0) { downloadDao.markResumedFromZeroForIds(any(), any(), any()) }
     }
 
     @Test
@@ -131,8 +135,8 @@ class DownloadRepositoryImplResumeTest {
 
         repository().resumeInterruptedDownloads()
 
-        coVerify { downloadDao.updateProgressWithPausedReason("dl-3", 0L, DownloadStatus.PENDING.name, null) }
-        coVerify(exactly = 0) { downloadDao.updateProgressWithPausedReason("dl-3", 800L, any(), any()) }
+        coVerify { downloadDao.markResumedFromZeroForIds(listOf("dl-3"), DownloadStatus.PENDING.name, null) }
+        coVerify(exactly = 0) { downloadDao.updateStatusWithPausedReasonForIds(any(), any(), any()) }
     }
 
     @Test
@@ -144,23 +148,24 @@ class DownloadRepositoryImplResumeTest {
         repository().resumeInterruptedDownloads()
 
         // Left FAILED for a manual retry — no auto-resume this pass.
-        coVerify(exactly = 0) { downloadDao.updateProgressWithPausedReason(any(), any(), any(), any()) }
+        coVerify(exactly = 0) { downloadDao.updateStatusWithPausedReasonForIds(any(), any(), any()) }
+        coVerify(exactly = 0) { downloadDao.markResumedFromZeroForIds(any(), any(), any()) }
     }
 
     @Test
-    fun `a bad row does not abort the rest of the batch`() = runTest {
+    fun `a failing resume batch does not abort the other batch`() = runTest {
         coEvery { downloadDao.getInterruptedResumeRows(any()) } returns listOf(
-            row("dl-bad", status = DownloadStatus.PAUSED.name, pausedReason = DownloadPauseReason.NETWORK.persistedValue),
+            row("dl-bad", status = DownloadStatus.FAILED.name, pausedReason = null),
             row("dl-good", downloadedBytes = 200L, status = DownloadStatus.PAUSED.name, pausedReason = DownloadPauseReason.NETWORK.persistedValue),
         )
-        // The bad row's reset throws (e.g. a DB transient); the good row must
-        // still be processed so one failure can't strand every interrupted
-        // download until the next reconnect.
-        coEvery { downloadDao.updateProgressWithPausedReason("dl-bad", any(), any(), any()) } throws RuntimeException("db transient")
+        // The from-zero batch UPDATE throws (e.g. a DB transient); the
+        // keep-bytes batch must still flip the paused row so one failure
+        // can't strand every interrupted download until the next reconnect.
+        coEvery { downloadDao.markResumedFromZeroForIds(any(), any(), any()) } throws RuntimeException("db transient")
 
         repository().resumeInterruptedDownloads()
 
-        coVerify { downloadDao.updateProgressWithPausedReason("dl-good", 200L, DownloadStatus.PENDING.name, null) }
+        coVerify { downloadDao.updateStatusWithPausedReasonForIds(listOf("dl-good"), DownloadStatus.PENDING.name, null) }
     }
 
     private fun row(
