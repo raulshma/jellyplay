@@ -77,6 +77,11 @@ jobs:
         # player-contract gained wasm in W.3 when MediaEngine's supertypes
         # (PlayerLifecycleCallbacks, RemotePlayableEngine) moved into it from
         # shared core:data in the same packages.
+        # :apps:web:compileTestKotlinWasmJs compile-gates the web shell's
+        # wasmJsTest suite (6 files incl. the only pins of WebBackStackMirror
+        # and WebConnectFailurePolicy) — previously not even compiled here;
+        # the runnable wasmJsBrowserTest lane stays local (karma/webpack +
+        # headless-Chrome npm graph is too heavy for this 3-OS matrix).
         # Keep this ONE folded scalar: a blank line inside `run: >` is a hard
         # newline that splits the invocation into separate shell commands —
         # blank lines left by the dev/v0.10.7 merge made bash die on an
@@ -168,6 +173,7 @@ jobs:
           :shared:feature:player-video:jvmJar
           :shared:feature:player-video:compileAndroidMain
           :apps:web:compileKotlinWasmJs
+          :apps:web:compileTestKotlinWasmJs
           --stacktrace
           --max-workers=2
           "-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8"
@@ -283,7 +289,14 @@ jobs:
         # (worker suites incl. the OfflineWatchSyncContractTest regression
         # pin); the drain-policy bodies themselves run portable in
         # :shared:core:data:jvmTest above.
-        run: ./gradlew :app:testPhoneDebugUnitTest :app:testTvDebugUnitTest :core:notification:testDebugUnitTest :core:data:testDebugUnitTest --stacktrace
+        # :core:ui:testDebugUnitTest opens the last legacy core module's unit
+        # lane (Robolectric suites incl. RoutePredicatesTest and
+        # TvDrawerFocusWiringTest); :core:ui:assembleDebugAndroidTest
+        # compile-gates its instrumented sources (the dead-by-drift
+        # ConfirmDialogTest was deleted — its ConfirmPanel moved to
+        # :shared:core:ui as internal — same precedent as
+        # :app:assemblePhoneDebugAndroidTest above).
+        run: ./gradlew :app:testPhoneDebugUnitTest :app:testTvDebugUnitTest :core:notification:testDebugUnitTest :core:data:testDebugUnitTest :core:ui:testDebugUnitTest :core:ui:assembleDebugAndroidTest --stacktrace
 
       - name: Compose-resources APK guard (wave-21 P0 regression guard, F1)
         # dependsOn assemblePhoneDebug — the guard opens the built APKs.

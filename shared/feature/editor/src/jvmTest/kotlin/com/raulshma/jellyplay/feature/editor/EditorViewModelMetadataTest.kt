@@ -54,7 +54,9 @@ import kotlin.test.assertTrue
  *  - `deleteImage` / `loadRemoteImages` / `refreshMetadata` repository
  *    forwarding (incl. provider/startIndex pagination and the refresh mode
  *    being reused for both metadata and image refresh).
- *  - `updateField` dirty tracking, `clearError`, and image URL delegation.
+ *  - `updateField` (form-typed) dirty tracking, `clearError`, and image URL
+ *    delegation. The per-field mapping/dirty drift-class pins live beside the
+ *    form in [EditableItemMetadataFormTest].
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class EditorViewModelMetadataTest {
@@ -225,26 +227,27 @@ class EditorViewModelMetadataTest {
         assertEquals(imageInfos, state.imageInfos)
         assertEquals(imageProviders, state.imageProviders)
         // Spot-check the editable field mapping the save path round-trips.
-        assertEquals("Stolen Movie", state.name)
-        assertEquals("Film Volé", state.originalTitle)
-        assertEquals("Movie Stolen", state.sortName)
-        assertEquals("An overview.", state.overview)
-        assertEquals("A tagline", state.tagline)
-        assertEquals("8.5", state.communityRating)
-        assertEquals("7.5", state.criticRating)
-        assertEquals("PG-13", state.officialRating)
-        assertEquals("1999", state.productionYear)
-        assertEquals("1999-07-02", state.premiereDate)
-        assertEquals("90", state.runtimeMinutes)
-        assertEquals("3", state.indexNumber)
-        assertEquals("2", state.parentIndexNumber)
-        assertEquals(listOf("Drama"), state.genres)
-        assertEquals(listOf("award-winner"), state.tags)
-        assertEquals(listOf("Studio A"), state.studios)
-        assertEquals(mapOf("tmdb" to "12345"), state.providerIds)
-        assertTrue(state.lockData)
-        assertEquals(listOf("Overview"), state.lockedFields)
-        assertEquals("eng", state.preferredMetadataLanguage)
+        val form = state.metadata.value
+        assertEquals("Stolen Movie", form.name)
+        assertEquals("Film Volé", form.originalTitle)
+        assertEquals("Movie Stolen", form.sortName)
+        assertEquals("An overview.", form.overview)
+        assertEquals("A tagline", form.tagline)
+        assertEquals("8.5", form.communityRating)
+        assertEquals("7.5", form.criticRating)
+        assertEquals("PG-13", form.officialRating)
+        assertEquals("1999", form.productionYear)
+        assertEquals("1999-07-02", form.premiereDate)
+        assertEquals("90", form.runtimeMinutes)
+        assertEquals("3", form.indexNumber)
+        assertEquals("2", form.parentIndexNumber)
+        assertEquals(listOf("Drama"), form.genres)
+        assertEquals(listOf("award-winner"), form.tags)
+        assertEquals(listOf("Studio A"), form.studios)
+        assertEquals(mapOf("tmdb" to "12345"), form.providerIds)
+        assertTrue(form.lockData)
+        assertEquals(listOf("Overview"), form.lockedFields)
+        assertEquals("eng", form.preferredMetadataLanguage)
         coVerify(exactly = 1) { editorRepository.getMetadataEditorInfo(itemId) }
         coVerify(exactly = 1) { editorRepository.getItemImageInfo(itemId) }
         coVerify(exactly = 1) { editorRepository.getRemoteImageProviders(itemId) }
@@ -466,8 +469,9 @@ class EditorViewModelMetadataTest {
         viewModel.updateField { it.copy(name = "Changed") }
         assertTrue(viewModel.uiState.value.isDirty)
 
-        // The dirty hash is content-based, so undoing the edit returns to clean.
-        viewModel.updateField { it.copy(name = loaded.name) }
+        // Dirty detection is structural equality against the loaded original,
+        // so undoing the edit returns to clean.
+        viewModel.updateField { it.copy(name = loaded.metadata.value.name) }
         assertFalse(viewModel.uiState.value.isDirty)
     }
 

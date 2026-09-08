@@ -22,6 +22,14 @@
     <string name="admin_scanning">Wird gescannt…</string>
     <string name="admin_scan_now">Jetzt scannen</string>
     <string name="admin_select_all">Alle auswählen</string>
+
+    <string name="admin_sort_default">Standard</string>
+    <string name="admin_sort_name_asc">Name (A–Z)</string>
+    <string name="admin_sort_name_desc">Name (Z–A)</string>
+    <string name="admin_sort_largest">Größte</string>
+    <string name="admin_sort_smallest">Kleinste</string>
+    <string name="admin_sort_type">Typ</string>
+    <string name="admin_sort_date">Datum</string>
     <string name="admin_media_types">Medientypen</string>
     <string name="admin_dry_run">Testlauf (nur Vorschau)</string>
 
@@ -394,4 +402,6 @@
     <string name="user_stats_export_shared">Benutzerstatistiken exportiert</string>
 
     <string name="admin_plugin_config_unavailable">Die Plugin-Konfiguration ist auf dieser Plattform nicht verfügbar.</string>
+
+    <string name="admin_no_delete_permission">Ihr Konto hat keine Berechtigung, Inhalte zu löschen. Wenden Sie sich an Ihren Serveradministrator.</string>
 </resources>

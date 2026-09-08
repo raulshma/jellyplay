@@ -1,8 +1,6 @@
 package com.raulshma.jellyplay.feature.editor
 
 import androidx.compose.runtime.Immutable
-import com.raulshma.jellyplay.core.model.EditableItemMetadata
-import com.raulshma.jellyplay.core.model.EditorPerson
 import com.raulshma.jellyplay.core.model.ImageInfo
 import com.raulshma.jellyplay.core.model.ImageProviderInfo
 import com.raulshma.jellyplay.core.model.MediaDetail
@@ -31,7 +29,6 @@ import java.util.Base64
 data class EditorUiState(
     val isLoading: Boolean = true,
     val isSaving: Boolean = false,
-    val isDirty: Boolean = false,
     val mediaDetail: MediaDetail? = null,
     val editorInfo: MetadataEditorInfo? = null,
     val imageInfos: List<ImageInfo> = emptyList(),
@@ -48,38 +45,15 @@ data class EditorUiState(
     val isDownloadingProviderSubtitle: Boolean = false,
     val error: String? = null,
     val isAdmin: Boolean = false,
-
-    val name: String = "",
-    val originalTitle: String = "",
-    val sortName: String = "",
-    val overview: String = "",
-    val tagline: String = "",
-    val communityRating: String = "",
-    val criticRating: String = "",
-    val officialRating: String = "",
-    val customRating: String = "",
-    val productionYear: String = "",
-    val premiereDate: String = "",
-    val endDate: String = "",
-    val runtimeMinutes: String = "",
-    val indexNumber: String = "",
-    val parentIndexNumber: String = "",
-    val displayOrder: String = "",
-    val status: String = "",
-    val airTime: String = "",
-    val airDays: List<String> = emptyList(),
-    val genres: List<String> = emptyList(),
-    val tags: List<String> = emptyList(),
-    val studios: List<String> = emptyList(),
-    val people: List<EditorPerson> = emptyList(),
-    val providerIds: Map<String, String> = emptyMap(),
-    val taglines: List<String> = emptyList(),
-    val productionLocations: List<String> = emptyList(),
-    val lockData: Boolean = false,
-    val lockedFields: List<String> = emptyList(),
-    val preferredMetadataLanguage: String = "",
-    val preferredMetadataCountryCode: String = "",
-)
+    /** The metadata-editing session (live form + loaded original) — the ~30
+     *  flat metadata fields collapsed into one value slice, so the load/save
+     *  maps and the dirty check have a single field declaration to follow. */
+    val metadata: MetadataEditSession = MetadataEditSession(),
+) {
+    /** Derived from the embedded session — no stored dirty flag (or dirty
+     *  hash) to keep in sync with the form fields. */
+    val isDirty: Boolean get() = metadata.isDirty
+}
 
 class EditorViewModel(
     private val editorRepository: MetadataEditorRepository,
@@ -93,8 +67,6 @@ class EditorViewModel(
 
     private val isAdminFlow: StateFlow<com.raulshma.jellyplay.core.model.UserInfo?> = authRepository.currentUser
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), null)
-
-    private var originalHash: Int = 0
 
     init {
         launch {
@@ -134,8 +106,7 @@ class EditorViewModel(
                     providers = providersDeferred.await() ?: emptyList()
                 }
 
-                val item = detail.item
-                val runtimeMinutes = detail.item.runTimeTicks?.let { (it / 600_000_000).toString() } ?: ""
+                val form = EditableItemMetadataForm.fromDetail(detail)
 
                 _uiState.update { state ->
                     state.copy(
@@ -144,58 +115,19 @@ class EditorViewModel(
                         editorInfo = editorInfo,
                         imageInfos = imageInfos,
                         imageProviders = providers,
-                        name = item.name,
-                        originalTitle = item.originalTitle ?: "",
-                        sortName = detail.sortName ?: "",
-                        overview = item.overview ?: "",
-                        tagline = detail.taglines.firstOrNull() ?: "",
-                        communityRating = item.communityRating?.toString() ?: "",
-                        criticRating = detail.criticRating?.toString() ?: "",
-                        officialRating = item.officialRating ?: "",
-                        customRating = detail.customRating ?: "",
-                        productionYear = item.year?.toString() ?: "",
-                        premiereDate = item.premiereDate ?: "",
-                        endDate = "",
-                        runtimeMinutes = runtimeMinutes,
-                        indexNumber = item.indexNumber?.toString() ?: "",
-                        parentIndexNumber = item.seasonNumber?.toString() ?: "",
-                        displayOrder = detail.displayOrder ?: "",
-                        status = detail.status ?: "",
-                        airTime = detail.airTime ?: "",
-                        airDays = detail.airDays,
-                        genres = item.genres,
-                        tags = item.tags,
-                        studios = item.studios,
-                        people = detail.people.map { person ->
-                            EditorPerson(
-                                id = person.id,
-                                name = person.name,
-                                role = person.role,
-                                type = person.type,
-                                primaryImageTag = person.primaryImageTag,
-                            )
-                        },
-                        providerIds = detail.providerIds,
-                        taglines = detail.taglines,
-                        productionLocations = detail.productionLocations,
-                        lockData = detail.lockData,
-                        lockedFields = detail.lockedFields,
-                        preferredMetadataLanguage = detail.preferredMetadataLanguage ?: "",
-                        preferredMetadataCountryCode = detail.preferredMetadataCountryCode ?: "",
+                        metadata = state.metadata.loaded(form),
                     )
                 }
-                originalHash = computeDirtyHash(_uiState.value)
             } catch (e: Exception) {
                 _uiState.update { it.copy(isLoading = false, error = e.message) }
             }
         }
     }
 
-    fun updateField(update: (EditorUiState) -> EditorUiState) {
-        _uiState.update { state ->
-            val newState = update(state)
-            newState.copy(isDirty = computeDirtyHash(newState) != originalHash)
-        }
+    /** Edits the metadata form (typed — the lambda sees only the form, never
+     *  the whole UiState; [EditorUiState.isDirty] derives from the session). */
+    fun updateField(update: (EditableItemMetadataForm) -> EditableItemMetadataForm) {
+        _uiState.update { state -> state.copy(metadata = state.metadata.edit(update)) }
     }
 
     /** Clears the transient [EditorUiState.error] shown by the screen's error banner. */
@@ -214,43 +146,10 @@ class EditorViewModel(
 
                 editorRepository.updateItem(
                     itemId = itemId,
-                    metadata = EditableItemMetadata(
-                        name = state.name,
-                        originalTitle = state.originalTitle.ifBlank { null },
-                        sortName = state.sortName.ifBlank { null },
-                        overview = state.overview.ifBlank { null },
-                        tagline = state.tagline.ifBlank { null },
-                        genres = state.genres,
-                        tags = state.tags,
-                        studios = state.studios,
-                        communityRating = state.communityRating.toFloatOrNull(),
-                        criticRating = state.criticRating.toFloatOrNull(),
-                        officialRating = state.officialRating.ifBlank { null },
-                        customRating = state.customRating.ifBlank { null },
-                        productionYear = state.productionYear.toIntOrNull(),
-                        premiereDate = state.premiereDate.ifBlank { null },
-                        endDate = state.endDate.ifBlank { null },
-                        runtimeTicks = state.runtimeMinutes.toLongOrNull()?.let { it * 600_000_000 },
-                        indexNumber = state.indexNumber.toIntOrNull(),
-                        parentIndexNumber = state.parentIndexNumber.toIntOrNull(),
-                        displayOrder = state.displayOrder.ifBlank { null },
-                        status = state.status.ifBlank { null },
-                        airDays = state.airDays,
-                        airTime = state.airTime.ifBlank { null },
-                        people = state.people,
-                        providerIds = state.providerIds,
-                        lockData = state.lockData,
-                        lockedFields = state.lockedFields,
-                        preferredMetadataLanguage = state.preferredMetadataLanguage.ifBlank { null },
-                        preferredMetadataCountryCode = state.preferredMetadataCountryCode.ifBlank { null },
-                        taglines = if (state.tagline.isNotBlank()) listOf(state.tagline) else emptyList(),
-                        productionLocations = state.productionLocations,
-                        dateCreated = state.mediaDetail?.dateCreated,
-                    ),
+                    metadata = state.metadata.value.toEditable(state.mediaDetail?.dateCreated),
                 ).getOrThrow()
 
-                originalHash = computeDirtyHash(_uiState.value)
-                _uiState.update { it.copy(isSaving = false, isDirty = false) }
+                _uiState.update { it.copy(isSaving = false, metadata = it.metadata.saved()) }
             } catch (e: Exception) {
                 _uiState.update { it.copy(isSaving = false, error = e.message) }
             }
@@ -532,21 +431,5 @@ class EditorViewModel(
     private suspend fun reloadImageInfos(itemId: String) {
         editorRepository.getItemImageInfo(itemId)
             .onSuccess { infos -> _uiState.update { it.copy(imageInfos = infos) } }
-    }
-
-    private fun computeDirtyHash(state: EditorUiState = _uiState.value): Int {
-        val s = state
-        return listOf(
-            s.name, s.originalTitle, s.sortName, s.overview, s.tagline,
-            s.communityRating, s.criticRating, s.officialRating, s.customRating,
-            s.productionYear, s.premiereDate, s.endDate, s.runtimeMinutes,
-            s.indexNumber, s.parentIndexNumber, s.displayOrder, s.status, s.airTime,
-            s.genres.joinToString(), s.tags.joinToString(), s.studios.joinToString(),
-            s.airDays.joinToString(), s.taglines.joinToString(), s.productionLocations.joinToString(),
-            s.lockData.toString(), s.lockedFields.joinToString(),
-            s.preferredMetadataLanguage, s.preferredMetadataCountryCode,
-            s.people.joinToString { "${it.name}:${it.role}:${it.type}" },
-            s.providerIds.entries.joinToString { "${it.key}=${it.value}" },
-        ).hashCode()
     }
 }

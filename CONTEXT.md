@@ -1141,10 +1141,21 @@ to this lane: `PlaybackRepositoryImplTest` (39),
 sidecar options, signature rollback, pending-flag retry legs; complementary
 to the TTL/baseline `OfflineSyncManagerTest`, kept as a sibling file because
 the fixtures conflict). All 95 passed unmodified on their first visible run.
-The remaining ~68 legacy test files still run in NO lane — they cover
-platform-only playback/cast/worker code and are the deliberate Phase-X husk;
-do not port them, and treat a legacy-only assertion as dead when its class
-moves to `androidMain`.
+No legacy unit-test file runs lane-less anymore: kmp-build.yml's android-app
+job executes :core:data:testDebugUnitTest (the 69 Robolectric files — cast,
+worker and playback platform code included),
+:core:notification:testDebugUnitTest (8) and :core:ui:testDebugUnitTest (14,
+incl. RoutePredicatesTest and TvDrawerFocusWiringTest) — the 2026-09-08
+dark-lane rescue opened the last of them, so the former "~68 files in no
+lane" husk is closed (keep the Phase-X rule itself: treat a legacy-only
+assertion as dead when its class moves to `androidMain`). Still dark is
+execution, not compilation: the instrumented androidTest sources are
+compile-gated only — :core:ui via :core:ui:assembleDebugAndroidTest, :app
+via :app:assemblePhoneDebugAndroidTest, no emulator lane — and apps/web's six
+wasmJsTest files are compile-gated (:apps:web:compileTestKotlinWasmJs in the
+shared-targets matrix) but never executed in CI; the runnable
+wasmJsBrowserTest lane (karma/webpack + headless-Chrome npm graph) stays
+local.
 
 The data layer's clock reads go through the injected **`TimeSource`**
 (jvmShared `util/TimeSource.kt`, the Koin-single `SystemTimeSource`): every
@@ -1207,8 +1218,9 @@ the local Google-Cast player rides a manager-owned adapter) —
 `activeTransport` resolver and `cancelJobs()` deduped the teardown
 triplication. `updateCastState`/`toggleTicker` stay hand-folded
 deliberately (per-branch state writes and predicates that map to no
-strategy member); compile-verified only — the legacy Robolectric suite
-runs in no CI lane.
+strategy member); behaviour-pinned by the legacy Robolectric suites
+(CastManagerTest/JellyfinRemotePlayCastStrategyTest/DlnaCastStrategyTest),
+which run in CI via the :core:data:testDebugUnitTest lane.
 
 The 2026-09-07 review wave deepened the auth establishment path and the
 server-address vocabulary. **`AuthRepositoryImpl`** folds the
@@ -2063,6 +2075,148 @@ sync drain leaving the CI-dark legacy lane.
   settle arms. The regression test (two rapid calls → exactly one fetch,
   one appended page) was verified to fail against the old semantics.
 
+## The 2026-09-08 second wave (8 deepenings)
+
+Landed autonomously via parallel workstreams (one repair pass after a
+usage-limit kill mid-batch), each pinned; the exploration pass that
+selected them rendered its candidates in the run's temp HTML report.
+The theme: shell choreography getting homes, the quick-action intake
+crossing modules, and the last dark test lanes opening.
+
+- **`NavRequestCollector`** (`:app` navigation, beside
+  `RemoteNavigationRouting`) is the shell's one home for the five
+  collect-then-dispatch loops `MainContent` hand-rolled composable-inline:
+  pendingRoute (tab-vs-nested fork + consume-once), remote navigation
+  (ClosePlayer multi-stack pop / target routing — reuses the
+  `RemoteNavigationRouting` folds), the remote-control now-playing
+  snackbar (title fallback + template), the dual user-message-bus
+  adaptation (severity projection; presentation POLICY stays in
+  `UserMessageHost`), and SyncPlay auto-open (player-open-anywhere
+  guard). Constructor-lambda controller + pure companion folds
+  (`pendingRouteDispatch` / `syncPlayAutoOpenRoute` /
+  `nowPlayingSnackbarMessage`); the composables keep one-line effects.
+  The external-player launch branch is untouched (the deferred
+  `ExternalPlayerHost`). Pinned by `NavRequestCollectorTest` (20).
+- **`QuickActionIntake`** (shared/core/ui `components/QuickActionIntake.kt`,
+  the `HomeQuickActions` shape generalized): the pure
+  `quickActionEffect(item, action)` fold over sealed `QuickActionEffect`
+  (Play / MarkPlayed / Download / RemoveDownload / OpenDetail /
+  ToggleFavorite) plus `rememberQuickActionIntake` +
+  `QuickActionAdapter` + `QuickActionIntakeHost` owning the sheet
+  controller, TV focus key and remove-download confirm — the ~45-line
+  intake block eight screens hand-copied (Library/Favorites/Studio,
+  Search, Media/Collection/Person detail, OfflineLibrary) is deleted
+  (screens net −164 lines; adapters are navigation lambdas only).
+  Declared delta: `ADD_TO_PLAYLIST` folds onto `OpenDetail` — its only
+  offering host (the library grid) always routed it there; now the table
+  says so once. Home's own fold stays home-shaped and untouched. The
+  default `isDownloaded` resolver is one top-level `notDownloaded`
+  instance, not a per-recomposition lambda (a fresh default churned the
+  remember keys and closed an open sheet). Pinned by
+  `QuickActionIntakeTest` (9, incl. an exhaustiveness guard).
+- **Play On one home**: `PlayOnViewModel` IS the controller now —
+  `JellyfinRemotePlayCastStrategy` is private (the public `val strategy`
+  is gone), the transport surface is the narrow documented set, and the
+  shell resolves the VM exactly ONCE in `MainContent` (hoisted above the
+  TV/phone/full-screen fork, so the companion survives a runtime TV-mode
+  flip) and threads it as an explicit `playOn` parameter through all
+  three hosts — the companion screen's `koinViewModel()`
+  identity-by-convention second resolution is deleted.
+  `flingIfConnected(itemId, startPositionMs)` moved in from the inline
+  Home redirect adapter. Declared deltas: the `canFling` field is
+  DELETED (a `WhileSubscribed` stateIn nothing ever collected —
+  permanently false since it landed; the old test pinned it as a
+  "likely bug", the new suite pins the fling gate the redirect actually
+  reads); the Home Play-On redirect is now armed on every host (was
+  phone-layout-only; observable only with a live remote session, which
+  only the phone sheet initiates); the 5 s status poll is pinned for
+  the first time (seed-in-launch-frame, cadence, silence after
+  disconnect). `PlayOnViewModelTest` grows 10→11 tests, both flavors.
+- **CI lanes — the last dark ones open**: the android-app job now runs
+  `:core:ui:testDebugUnitTest` + `:core:ui:assembleDebugAndroidTest`
+  (compile-gate for instrumented sources, the
+  `:app:assemblePhoneDebugAndroidTest` precedent), and the shared-targets
+  matrix compiles `:apps:web:compileTestKotlinWasmJs` — the sole pins of
+  `Route` classification, TV focus wiring, `WebBackStackMirror` and
+  `WebConnectFailurePolicy` are dead assertions no longer. Dead
+  androidTest triage in the legacy `core/ui`: `ConfirmDialogTest` and
+  `SeerrRequestDialogDefaultsTest` DELETED (both referenced `internal`
+  panels that moved to shared/core/ui — uncompilable for a while;
+  Seerr's assertions were PORTED, see below; ConfirmDialog's surviving
+  value was Compose-render semantics the shared jvm lane has no
+  framework for, and `ConfirmStateTest` already pins the logic);
+  `PlayerModalBottomSheetTest` + `ScreenStateContainerTest` KEPT (public
+  types only — clean compiles) and now compile-gated. Local evidence:
+  the full `:apps:web:wasmJsBrowserTest` runs 60/60 green; CI stays
+  compile-gate-only (karma/Chrome bootstrap ×3 OS is not cheap — a
+  dedicated single-OS web-test lane is the recorded next step if
+  wanted).
+- **`SeerrRequestDefaults`** (shared/core/ui, beside the dialog): the
+  request sheet's preselect decision table — default server index
+  (radarr/sonarr media-type-named, JVM erasure), profile + root-folder
+  defaults (root folders matched by `path`; the "second folder" arm the
+  dark test existed for), anime defaults with regular fallback, default
+  tags (empty anime tags treated as absent), the tags
+  arrival-order APPLICATION KEY (manual tag edits survive list churn,
+  reset only on a (server, anime) transition — the stateful half
+  modelled as an explicit input), and select-all-seasons — extracted
+  pure (`internal object`, no Compose types); `SeerrRequestDialog`
+  shrinks 794→771 and calls the policy instead of inline closures.
+  Verbatim extraction, no deltas. The instrumented pin is ported to
+  `SeerrRequestDefaultsTest` (shared/core/ui `jvmTest`, 11 tests) and
+  the legacy androidTest deleted.
+- **`MediaCleanupScanStateHolder` + `MediaCleanupScreenScaffold`**
+  (`shared/feature/admin/mediacleanup/`): the stale-media /
+  watched-cleanup twins' whole scan lifecycle — startScan → detect →
+  observeScanProgress → COMPLETED → results-JSON decode → selection →
+  confirm → delete, plus the 3-tab scaffold, sort dropdown, select-all
+  row and delete sheet — single-homed over a constructor-lambda
+  repository seam (repository interfaces untouched); the screens shrink
+  to config forms + item cards (production 1903→1692 lines). Declared
+  deltas: the twins' progress re-collect race is FIXED (each scan leaked
+  its progress collector; the chassis cancels single-flight — a late
+  COMPLETED from an abandoned scan can no longer clobber the live one,
+  pinned), `StaleMediaState.selectedTabIndex` dropped (no reader), the
+  delete-button treatment unified (stale's press-scale wins; watched's
+  variant was copy drift), select-all stays an all↔none TOGGLE
+  (not `SelectionState.selectAll`'s unconditional select — documented),
+  and the chassis is fully localized — the twins' hardcoded English
+  permission banner and the sort enum's English label literals are now
+  `Res.string.admin_no_delete_permission` + `Res.string.admin_sort_*`
+  (9 locales; the enum carries no label, the scaffold maps entries to
+  resources).
+  Tests 21→21: chassis 15 (lifecycle, decode failure, re-collect race,
+  sort, selection, delete arms) + 3+3 slim adapter arms.
+- **`EditableItemMetadataForm`** (shared/feature/editor): the editor's
+  ~30 metadata fields were enumerated three times (inbound load map,
+  outbound save map, order-sensitive dirty hash) with no compile-time
+  link — a missed save-map entry silently dropped an edit, a missed
+  hash entry killed the dirty flag. Now ONE form value
+  (`runtimeMinutes` the declared string-edit twin of outbound
+  `runtimeTicks`) plus `MetadataEditSession(value, original)`;
+  `isDirty` is structural equality and `computeDirtyHash` is DELETED;
+  `EditorUiState` embeds the form as one slice; `updateField` is
+  form-typed (MetadataTab call-site syntax unchanged). The drift-class
+  pins the old shape could not express: reflection-enumerated tests
+  (the `ResetCoverageGuard` precedent, no kotlin-reflect) over the
+  form's OWN properties, so a NEW field auto-fails until wired —
+  fromDetail→toEditable round-trips every field, mutating every field
+  individually trips dirty, untouched stays clean. Declared deltas
+  (KDoc'd on `MetadataEditSession`, none UI-reachable): person
+  id/primaryImageTag edits now trip dirty; providerIds compared
+  order-insensitively; pre-load edits no longer dirty.
+- **`DesktopWindowPlacementController`** (apps/desktop): the
+  undecorated-window maximize dance (AWT `MAXIMIZED_BOTH` is broken on
+  `WS_POPUP` frames) — work-area on maximize, saved bounds on restore,
+  replay-once on windowOpened, skip persist in fullscreen, restore-bounds
+  preference — over a two-member `DesktopWindowPlacementHost` seam
+  (`bounds` + `workAreaOrNull()`; the AWT adapter and the test fake are
+  the two adapters that justify it). `DesktopWindowStateStore` is NOT
+  re-absorbed (persistence stays pinned by its own suite); `Main.kt` is
+  wiring-only. All five rules pinned (12 tests) in the existing
+  `:apps:desktop:test` lane, incl. a replay→restore→persist session
+  sequence.
+
 ## Rejected designs
 
 Recorded with evidence so future reviews don't re-suggest them.
@@ -2262,3 +2416,36 @@ re-derives the designs nor lands them casually.
   factories re-copy the poster-or-fallback + responsive-loading-row bind
   tails. Deferred: hygiene-grade; both copies already test-pinned. Fold
   opportunistically.
+- **PiP action apparatus** (`:app` `PlayerActivity.kt` ~661–747): the
+  action-set fold (play/pause icon+title fork, `pipHasNext` gate), the
+  `pipRemoteAction` PendingIntent construction and the id↔`PipAction`
+  broadcast round-trip are Activity-inline — two id tables that must stay
+  in sync across ~50 lines with nothing pinning them. Design: a pure
+  `PipActionSet` fold + id codec beside `PipLifecyclePolicy` (the
+  lifecycle half is already deep); the Activity keeps registration only.
+  Deferred: the file is stable and every PiP bugfix lands elsewhere;
+  fold when PiP next churns.
+- **Mood/Smart generated-playlist state idiom** (`shared/feature/music`):
+  `MoodPlaylistsViewModel` + `SmartPlaylistsViewModel` hand-sync four
+  loose compose states through every generate call, duplicate the
+  `"custom-" + UUID` id convention + delete guard, and use raw compose
+  state fields where the rest of the module uses one `UiState` flow —
+  two state idioms in one module. Design: one `GeneratedPlaylistState`
+  snapshot holder (pipeline + id convention + playAll), per-kind
+  filter/sort functions stay pure adapters. Deferred: no churn pressure;
+  land with the next music-feature change.
+- **`DetailContentBody` section admission** (`shared/feature/details`
+  `MediaDetailBody.kt` ~202–1136): which sections render in what order
+  is an inline mediaType × origin × capabilities decision table inside a
+  ~935-line composable — the last untested decision surface in the
+  details screen tree (`SeasonsSection`'s 24-parameter interface is the
+  same hand-splicing `DetailContentState` was built to avoid). Design: a
+  pure `DetailSectionPolicy` + the state bundle threaded whole.
+  Deferred: sequenced deliberately BEHIND the `DetailViewModel` intent
+  fold — do not race them.
+- **Widget-config save tails** (`:app` `widget/config/
+  WidgetConfigActivity.kt` ~121–181): four `saveAndFinish` overrides
+  hand-copy getInstance → updateAppWidget → notifyAppWidgetViewDataChanged
+  → refresh<Kind>Now → finish. Only the update+notify half is safely
+  foldable now — the refresh half sits adjacent to the deferred
+  widget-worker refresh chassis above. Deferred: fold both together.

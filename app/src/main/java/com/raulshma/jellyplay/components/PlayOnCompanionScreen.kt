@@ -90,17 +90,21 @@ import com.raulshma.jellyplay.core.ui.tv.components.DpadSlider
  * VideoPlayerViewModel / CastManager types and Play On is walled off from
  * CastManager by design.
  *
- * The ViewModel is the activity-scoped singleton the mini bar already holds
- * (both sites resolve through the same LocalViewModelStoreOwner + Koin store
- * key), so state stays in sync with no param threading.
+ * State arrives through the explicit shell seam: [playOn] is the ONE
+ * controller instance MainContent constructs (JellyPlayApp) and threads
+ * through MainNavDisplay's route entry — the same instance the persistent
+ * mini bar and the device sheet read. The former `koinViewModel()` default
+ * resolved a second reference by convention (it held only while both sites
+ * sat under MainActivity's ViewModelStoreOwner); hosting this screen
+ * anywhere else would have silently forked its state.
  */
 @Composable
 fun PlayOnCompanionScreen(
     onBack: () -> Unit,
+    playOn: PlayOnViewModel,
     modifier: Modifier = Modifier,
-    viewModel: PlayOnViewModel = org.koin.compose.viewmodel.koinViewModel(),
 ) {
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val uiState by playOn.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     // Land initial focus on the play/pause transport button so the first D-pad press
@@ -231,36 +235,36 @@ fun PlayOnCompanionScreen(
             CompanionSeekRow(
                 positionMs = uiState.positionMs,
                 durationMs = uiState.durationMs,
-                onSeek = viewModel::castSeekTo,
+                onSeek = playOn::castSeekTo,
             )
 
             CompanionTransportRow(
                 isPlaying = uiState.isPlaying,
                 playFocusRequester = playFocusRequester,
                 onPlayPause = {
-                    if (uiState.isPlaying) viewModel.castPause() else viewModel.castPlay()
+                    if (uiState.isPlaying) playOn.castPause() else playOn.castPlay()
                 },
                 onSeekBack = {
                     val target = (uiState.positionMs - SEEK_BACK_MS).coerceAtLeast(0L)
-                    viewModel.castSeekTo(target)
+                    playOn.castSeekTo(target)
                 },
                 onSeekForward = {
                     val max = uiState.durationMs.coerceAtLeast(0L)
                     val target = (uiState.positionMs + SEEK_FORWARD_MS).coerceAtMost(max)
-                    viewModel.castSeekTo(target)
+                    playOn.castSeekTo(target)
                 },
-                onPrevious = viewModel::castPreviousTrack,
-                onNext = viewModel::castNextTrack,
+                onPrevious = playOn::castPreviousTrack,
+                onNext = playOn::castNextTrack,
             )
 
             CompanionVolumeRow(
                 volume = uiState.volume,
-                onVolume = viewModel::setCastVolume,
+                onVolume = playOn::setCastVolume,
             )
 
             CompanionFooter(
-                onStop = { viewModel.castStop(context) },
-                onDisconnect = { viewModel.disconnect(context) },
+                onStop = { playOn.castStop(context) },
+                onDisconnect = { playOn.disconnect(context) },
             )
         }
     }

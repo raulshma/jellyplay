@@ -114,7 +114,6 @@ import com.raulshma.jellyplay.core.designsystem.theme.defaultEffectsTween
 import com.raulshma.jellyplay.core.ui.components.AppendErrorFooter
 import com.raulshma.jellyplay.core.ui.components.CircleBgBackButton
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
-import com.raulshma.jellyplay.core.ui.components.RemoveDownloadConfirmHost
 import com.raulshma.jellyplay.core.ui.components.GlassDismissTag
 import com.raulshma.jellyplay.core.ui.components.DelayedLoadingScreen
 import com.raulshma.jellyplay.core.ui.components.LoadingScreen
@@ -124,10 +123,9 @@ import com.raulshma.jellyplay.core.ui.components.LocalAnimatedVisibilityScope
 import com.raulshma.jellyplay.core.ui.model.coreClearFiltersLabel
 import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.components.LocalMediaQuickActionController
-import com.raulshma.jellyplay.core.ui.components.MediaQuickActionHost
-import com.raulshma.jellyplay.core.ui.components.QuickAction
-import com.raulshma.jellyplay.core.ui.components.rememberMediaQuickActionController
-import com.raulshma.jellyplay.core.ui.components.rememberRemoveDownloadState
+import com.raulshma.jellyplay.core.ui.components.QuickActionAdapter
+import com.raulshma.jellyplay.core.ui.components.QuickActionIntakeHost
+import com.raulshma.jellyplay.core.ui.components.rememberQuickActionIntake
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.*
 import com.raulshma.jellyplay.core.ui.tv.LocalTvDrawerOpener
@@ -148,7 +146,6 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaQuickActionScope
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PlayedStatus
-import com.raulshma.jellyplay.core.model.quickActions
 import com.raulshma.jellyplay.feature.library.components.LibraryFilterSheet
 import com.raulshma.jellyplay.feature.library.components.GroupedLibraryContent
 import com.raulshma.jellyplay.feature.library.components.LibraryFilterChipRow
@@ -349,55 +346,39 @@ fun LibraryScreen(
     // the title row. Null when neither exists.
     val rowAboveFilterLeaf = if (showFolderRow) firstFolderPillFocus else headerEntryLeaf
 
-    // Item awaiting a remove-download confirm from the quick-action menu.
-    // The shared holder (core/ui — see RemoveDownloadState) hoists the pending
-    // item so the dialog survives the card leaving composition while it's open.
-    val removeDownloadState = rememberRemoveDownloadState()
-
-    // Collected (not read as a .value snapshot inside the resolve lambda) so
-    // the resolver is rebuilt when the downloaded set changes — a download
-    // completing flips the card's Download↔Remove-download action without
-    // waiting for an unrelated recomposition. The set is distinct-collapsed
-    // upstream, so active transfers don't churn it.
+    // Collected (not read as a .value snapshot inside the intake's
+    // isDownloaded lambda) so the resolver is rebuilt when the downloaded set
+    // changes — a download completing flips the card's Download↔Remove-download
+    // action without waiting for an unrelated recomposition. The set is
+    // distinct-collapsed upstream, so active transfers don't churn it.
     val downloadedIds by viewModel.downloadedIds.collectAsStateWithLifecycle()
 
-    val quickActionController = rememberMediaQuickActionController(
-        resolveActions = remember(viewModel, downloadedIds) {
-            { item: MediaItem ->
-                item.quickActions(
-                    MediaQuickActionScope.LIBRARY,
-                    includeDownload = true,
-                    includeAddToPlaylist = true,
-                    // Downloaded items flip the download slot to
-                    // "Remove download" instead of offering both.
-                    isDownloaded = downloadedIds.contains(item.id),
-                )
-            }
+    // Long-press / TV-Menu quick actions for the grid. The shared intake
+    // (core/ui — see QuickActionIntake) owns the sheet controller, the
+    // remove-download confirm and the TV focus key; this screen supplies
+    // only its routing adapter over the shared effect fold.
+    val quickActionIntake = rememberQuickActionIntake(
+        scope = MediaQuickActionScope.LIBRARY,
+        includeDownload = true,
+        includeAddToPlaylist = true,
+        // Downloaded items flip the download slot to "Remove download"
+        // instead of offering both.
+        isDownloaded = remember(downloadedIds) {
+            { item: MediaItem -> downloadedIds.contains(item.id) }
         },
-        executeAction = remember(viewModel, onItemClick, onOpenDownloadDetail) {
-            { item: MediaItem, action: QuickAction ->
-                when (action) {
-                    QuickAction.PLAY -> onItemClick(item.id, item.mediaType, item.parentId, item.name)
-                    QuickAction.MARK_WATCHED -> viewModel.markItemPlayed(item, true)
-                    QuickAction.MARK_UNWATCHED -> viewModel.markItemPlayed(item, false)
-                    // Single-stream items start inline at the default quality;
-                    // series (and other non-inline types) open the detail
-                    // screen — for a series with the download sheet pre-presented.
-                    QuickAction.DOWNLOAD -> viewModel.downloadItem(
-                        item,
-                        onOpenDetail = onOpenDownloadDetail,
-                    )
-                    QuickAction.REMOVE_DOWNLOAD -> removeDownloadState.request(item)
-                    // ADD_TO_PLAYLIST navigates: the playlist picker lives in
-                    // feature/details, which this module doesn't depend on.
-                    QuickAction.ADD_TO_PLAYLIST, QuickAction.DETAILS ->
-                        onItemClick(item.id, item.mediaType, item.parentId, item.name)
-                    else -> Unit
-                }
-            }
+        adapter = remember(viewModel, onItemClick, onOpenDownloadDetail) {
+            QuickActionAdapter(
+                onPlay = { item -> onItemClick(item.id, item.mediaType, item.parentId, item.name) },
+                onOpenDetail = { item -> onItemClick(item.id, item.mediaType, item.parentId, item.name) },
+                onMarkPlayed = viewModel::markItemPlayed,
+                // Single-stream items start inline at the default quality;
+                // series (and other non-inline types) open the detail screen —
+                // for a series with the download sheet pre-presented.
+                onDownload = { item -> viewModel.downloadItem(item, onOpenDetail = onOpenDownloadDetail) },
+                onRemoveDownload = viewModel::removeItemDownload,
+            )
         },
     )
-    var tvFocusedItem by remember { mutableStateOf<MediaItem?>(null) }
 
     val backgroundColor = MaterialTheme.colorScheme.background
     val headerGradientBrush = remember(backgroundColor) {
@@ -453,12 +434,12 @@ fun LibraryScreen(
             .background(backgroundColor)
             .onDpadKey(
                 onMenu = {
-                    tvFocusedItem?.let { quickActionController.show(it) }
+                    quickActionIntake.openFocusedItem()
                     true
                 },
             ),
     ) {
-        CompositionLocalProvider(LocalMediaQuickActionController provides quickActionController) {
+        CompositionLocalProvider(LocalMediaQuickActionController provides quickActionIntake.controller) {
         if (error != null && pagedItems.itemCount == 0) {
             ErrorScreen(
                 message = error!!,
@@ -893,7 +874,7 @@ fun LibraryScreen(
                                                 refreshGeneration = refreshGeneration,
                                                 onItemClick = onItemClick,
                                                 getImageUrl = remember(viewModel) { { id: String -> viewModel.getImageUrl(id) } },
-                                                onFocusedItemChange = { item -> tvFocusedItem = item },
+                                                onFocusedItemChange = { item -> quickActionIntake.tvFocusedItem = item },
                                             )
                                         } else when (activeMode) {
                                     LibraryViewMode.LIST -> {
@@ -911,7 +892,7 @@ fun LibraryScreen(
                                             refreshGeneration = refreshGeneration,
                                             contentType = { "mediaItem" },
                                             onFocusedIndexChange = { index ->
-                                                pagedItems[index]?.let { tvFocusedItem = it }
+                                                pagedItems[index]?.let { quickActionIntake.tvFocusedItem = it }
                                             },
                                         ) { index, itemModifier ->
                                             val item = pagedItems[index]
@@ -958,7 +939,7 @@ fun LibraryScreen(
                                             modifier = Modifier.fillMaxSize(),
                                             refreshGeneration = refreshGeneration,
                                             contentType = { "mediaItem" },
-                                            onFocusedIndexChange = { index -> pagedItems[index]?.let { tvFocusedItem = it } },
+                                            onFocusedIndexChange = { index -> pagedItems[index]?.let { quickActionIntake.tvFocusedItem = it } },
                                         ) { index, itemModifier ->
                                             val item = pagedItems[index]
                                             if (item != null) {
@@ -1003,7 +984,7 @@ fun LibraryScreen(
                                             modifier = Modifier.fillMaxSize(),
                                             refreshGeneration = refreshGeneration,
                                             contentType = { "mediaItem" },
-                                            onFocusedIndexChange = { index -> pagedItems[index]?.let { tvFocusedItem = it } },
+                                            onFocusedIndexChange = { index -> pagedItems[index]?.let { quickActionIntake.tvFocusedItem = it } },
                                         ) { index, itemModifier ->
                                             val item = pagedItems[index]
                                             if (item != null) {
@@ -1111,7 +1092,7 @@ fun LibraryScreen(
                                                             .onFocusChanged {
                                                                 if (it.isFocused || it.hasFocus) {
                                                                     masonryFocusedIndex = index
-                                                                    tvFocusedItem = item
+                                                                    quickActionIntake.tvFocusedItem = item
                                                                 }
                                                             },
                                                     ) {
@@ -1344,14 +1325,10 @@ fun LibraryScreen(
         }
         } // close CompositionLocalProvider
     }
-    MediaQuickActionHost(quickActionController)
-
-    // Remove-download confirm: quick-action removal only ever deletes the
-    // local download — the server copy is untouched.
-    RemoveDownloadConfirmHost(
-        state = removeDownloadState,
-        onConfirmRemove = { viewModel.removeItemDownload(it) },
-    )
+    // Quick-action sheet + remove-download confirm — the shared intake hosts
+    // both (removal only ever deletes the local download; the server copy is
+    // untouched).
+    QuickActionIntakeHost(quickActionIntake)
 
     if (resetDialogVisible) {
         LibraryResetConfirmDialog(

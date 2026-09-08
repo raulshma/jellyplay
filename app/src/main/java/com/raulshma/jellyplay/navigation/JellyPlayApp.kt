@@ -134,7 +134,6 @@ import com.raulshma.jellyplay.core.ui.components.LocalPerformanceMode
 import com.raulshma.jellyplay.core.ui.components.LocalFloatingNavVisibility
 import com.raulshma.jellyplay.core.ui.components.ScrollDirectionVisibility
 import com.raulshma.jellyplay.core.ui.feedback.LocalUserMessageBus
-import com.raulshma.jellyplay.core.ui.feedback.UserMessage
 import com.raulshma.jellyplay.core.ui.feedback.resolve
 import com.raulshma.jellyplay.core.ui.animation.DefaultNavTransitionPolicy
 import com.raulshma.jellyplay.core.ui.animation.NavDirection
@@ -155,16 +154,12 @@ import com.raulshma.jellyplay.core.ui.tv.isTv
 import com.raulshma.jellyplay.feature.auth.navigation.authSection
 import com.raulshma.jellyplay.feature.home.navigation.HomePlayOnRedirect
 import com.raulshma.jellyplay.feature.player.live.navigation.livePlayerSection
-import com.raulshma.jellyplay.feature.shell.UserMessageDuration
-import com.raulshma.jellyplay.feature.shell.UserMessageHost
 import com.raulshma.jellyplay.feature.shell.onboardingGateRoute
-import com.raulshma.jellyplay.feature.shell.resolveUiText
 import com.raulshma.jellyplay.feature.shell.navigation.ShellHostHooks
 import com.raulshma.jellyplay.feature.shell.navigation.shellEntryProvider
 import com.raulshma.jellyplay.feature.subtitle.tester.navigation.subtitleTesterSection
 import com.raulshma.jellyplay.update.AppUpdateSheet
 import com.raulshma.jellyplay.shell.ShellInfra
-import com.raulshma.jellyplay.shell.SyncPlayOpenRequest
 import com.raulshma.jellyplay.shell.UpdateCoordinator
 import kotlinx.coroutines.launch
 import com.composables.icons.tabler.Tabler
@@ -489,53 +484,58 @@ private fun MainContent(
         }
     }
 
+    // One home for the shell's nav-request collectors (NavRequestCollector,
+    // beside RemoteNavigationRouting): every collect-then-dispatch loop that
+    // used to live inline in this body — the policy forks are pure and pinned
+    // there; the effects below are one-line launchers. The controller is
+    // stateless, so no remember: each effect captures the instance current
+    // when it (re)launches, exactly as the former inline collectors captured
+    // `navigator` (whose navigateFilter carries the playback-host decision).
+    val snackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
+    val navRequests = NavRequestCollector(
+        topLevelKeys = ALL_TOP_LEVEL_ROUTE_KEYS,
+        navigate = navigator::navigate,
+        selectTopLevelTab = { route -> navigationState.topLevelRoute.value = route },
+        backStacks = { navigationState.backStacks.values },
+        consumePendingRoute = viewModel::consumePendingRoute,
+        presentSnackbar = { message ->
+            snackbarHostState.showSnackbar(message = message, withDismissAction = true)
+        },
+    )
+
+    // Deep links / launcher shortcuts / shared-text targets
+    // (MainViewModel.pendingRoute). Value-keyed over the lifecycle-aware
+    // state, so dispatch + the consume-once ack land in the frame the state
+    // is seen — the tab-vs-nested fork lives in the collector's pure fold.
     val pendingRoute by viewModel.pendingRoute.collectAsStateWithLifecycle()
     LaunchedEffect(pendingRoute) {
-        pendingRoute?.let { route ->
-            if (ALL_TOP_LEVEL_ROUTE_KEYS.contains(route)) {
-                navigationState.topLevelRoute.value = route
-            } else {
-                navigator.navigate(route)
-            }
-            viewModel.consumePendingRoute()
-        }
+        navRequests.dispatchPendingRoute(pendingRoute)
     }
 
-    // Consume remote "Play" / "Playstate" / "GeneralCommand" navigation requests
-    // emitted by the WebSocket receiver. The target→route mapping and the
+    // Remote "Play" / "Playstate" / "GeneralCommand" navigation requests
+    // emitted by the WebSocket receiver; the target→route mapping and the
     // multi-back-stack player pop live in RemoteNavigationRouting.kt (pure,
     // pinned by RemoteNavigationRoutingTest).
     LaunchedEffect(infra.remoteNavigationBridge) {
-        infra.remoteNavigationBridge.targets.collect { target ->
-            if (target is com.raulshma.jellyplay.core.data.remote.NavigationTarget.ClosePlayer) {
-                // Pop any active player entries from every back stack so the
-                // player UI actually disappears (not just hidden behind a tab
-                // switch). This matches Jellyfin web's "Stop" semantics.
-                popPlayerRoutes(navigationState.backStacks.values)
-            } else {
-                routeForNavigationTarget(target)?.let(navigator::navigate)
-            }
-        }
+        navRequests.collectRemoteNavigation(infra.remoteNavigationBridge.targets)
     }
 
-    // SyncPlay auto-open collector — lives next to the
-    // SyncPlayOpenCoordinator seam that feeds it.
-    SyncPlayAutoOpen(
-        openRequests = viewModel.syncPlayOpenCoordinator.openRequests,
-        navigationState = navigationState,
-        navigator = navigator,
-    )
+    // SyncPlay auto-open: a joined group started playing (or switched items)
+    // while no player is on top of any back stack → open the video player.
+    // When a player IS already open, its SyncPlayBridge drives the item load
+    // in place — the player-open guard lives in the collector's pure fold.
+    LaunchedEffect(viewModel.syncPlayOpenCoordinator) {
+        navRequests.collectSyncPlayOpens(viewModel.syncPlayOpenCoordinator.openRequests)
+    }
 
-    val snackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
+    // Remote-control "now playing" snackbar; the title fallback + template
+    // format live in the collector's pure fold.
     val nowPlayingTemplate = stringResource(R.string.snackbar_now_playing)
     androidx.compose.runtime.LaunchedEffect(infra.remoteControlReceiver) {
-        infra.remoteControlReceiver.playEvents.collect { event ->
-            val title = event.title.ifBlank { event.itemId }
-            snackbarHostState.showSnackbar(
-                message = nowPlayingTemplate.format(title),
-                withDismissAction = true,
-            )
-        }
+        navRequests.collectNowPlayingSnackbars(
+            events = infra.remoteControlReceiver.playEvents,
+            messageTemplate = nowPlayingTemplate,
+        )
     }
 
     val navBarColorState = remember { mutableStateOf<Color?>(null) }
@@ -568,54 +568,27 @@ private fun MainContent(
     val previewBlurModifier =
         if (previewBlur > 0.5f) Modifier.blur(previewBlur.dp) else Modifier
 
-    // Single root collector for app-wide one-shot messages, behind the shared
-    // UserMessageHost seam: the merge→resolve→present choreography (serial
-    // presentation, queue-not-drop, exactly-once, per-source order) lives in
-    // feature/shell; this shell owns only the final surface. Phone renders a
-    // Snackbar (accessible, dismissible, localizable); TV keeps a system Toast
-    // since the TV layout has no root SnackbarHost. The host is rebuilt on
-    // isTv and both collectors key on (bus, isTv), so a TV/phone flip restarts
-    // collection exactly as the former hand-copied collectors did.
+    // Single root collector pair for app-wide one-shot messages, behind the
+    // shared UserMessageHost seam: the merge→resolve→present choreography
+    // (serial presentation, queue-not-drop, exactly-once, per-source order)
+    // lives in feature/shell; the shell-side adaptation (the TV-Toast vs
+    // phone-Snackbar present fork and the legacy bus's severity projection)
+    // is constructed by shellUserMessageHost/legacySeverityOf in
+    // NavRequestCollector.kt. The host is rebuilt on isTv and both
+    // collectors key on (bus, isTv), so a TV/phone flip restarts collection
+    // exactly as the former hand-copied collectors did.
     val userMessageHost = remember(isTv) {
-        UserMessageHost(
-            resolveText = ::resolveUiText,
-            present = { text, duration ->
-                if (isTv) {
-                    android.widget.Toast.makeText(
-                        context,
-                        text,
-                        when (duration) {
-                            UserMessageDuration.Long -> android.widget.Toast.LENGTH_LONG
-                            UserMessageDuration.Short -> android.widget.Toast.LENGTH_SHORT
-                        },
-                    ).show()
-                } else {
-                    snackbarHostState.showSnackbar(
-                        message = text,
-                        withDismissAction = true,
-                        duration = when (duration) {
-                            UserMessageDuration.Long -> androidx.compose.material3.SnackbarDuration.Long
-                            UserMessageDuration.Short -> androidx.compose.material3.SnackbarDuration.Short
-                        },
-                    )
-                }
-            },
-        )
+        shellUserMessageHost(context = context, isTv = isTv, snackbarHostState = snackbarHostState)
     }
 
     // Legacy (:core:ui feedback) bus — its Android payload type stays outside
-    // the seam via hostAdapted: the severity projection and the legacy
-    // UiText.resolve(context) resolution are supplied here, not the shared
-    // compose-resources resolver.
+    // the seam via hostAdapted: the severity projection (legacySeverityOf)
+    // and the legacy UiText.resolve(context) resolution are supplied here,
+    // not the shared compose-resources resolver.
     androidx.compose.runtime.LaunchedEffect(userMessageBus, isTv) {
         userMessageHost.hostAdapted(
             sources = listOf(userMessageBus.messages),
-            severityOf = { message ->
-                when (message) {
-                    is UserMessage.Error -> com.raulshma.jellyplay.core.ui.message.UserMessage.Severity.Error
-                    is UserMessage.Info -> com.raulshma.jellyplay.core.ui.message.UserMessage.Severity.Info
-                }
-            },
+            severityOf = ::legacySeverityOf,
             resolveText = { message -> message.text.resolve(context) },
         )
     }
@@ -733,6 +706,20 @@ private fun MainContent(
                 )
             }
 
+            // Play On (cast-to-Jellyfin-session) controller — the ONE
+            // construction site for the whole Play On surface family, hoisted
+            // above the TV / phone / full-screen branches for the same reason
+            // as the saveable state holder: a runtime TV-mode flip (or
+            // entering/leaving a full-screen route) re-dispatches the branch,
+            // and the mini bar's companion screen must keep rendering the
+            // same controller instead of re-resolving per branch. Activity-
+            // scoped through the ViewModelStore (Koin def in AppKoinModule),
+            // so the instance also survives config changes. Threaded to every
+            // host below as an explicit parameter — no Play On surface
+            // resolves it itself.
+            val playOn: com.raulshma.jellyplay.PlayOnViewModel =
+                org.koin.compose.viewmodel.koinViewModel()
+
             Box(Modifier.fillMaxSize()) {
             // Wrap the live content (TV / Phone / FullScreen) in its own Box so
             // the peek overlay's backdrop blur applies to it only, leaving the
@@ -768,6 +755,7 @@ private fun MainContent(
                     entryDecorator = entryDecorator,
                     onNowPlayingClick = onNowPlayingClick,
                     onAmbientClick = onAmbientClick,
+                    playOn = playOn,
                     tvDrawerState = tvDrawerState,
                     tvDrawerListState = tvDrawerListState,
                     libraryFolders = libraryFolders,
@@ -819,6 +807,7 @@ private fun MainContent(
                         entryDecorator = entryDecorator,
                         onNowPlayingClick = onNowPlayingClick,
                         onAmbientClick = onAmbientClick,
+                        playOn = playOn,
                         isAudioPlayerScreen = isAudioPlayerScreen,
                         isExpanded = isExpanded,
                         bottomNavScrollVisibility = bottomNavScrollVisibility,
@@ -851,7 +840,9 @@ private fun MainContent(
                         saveableStateHolder = saveableStateHolder,
                         entryDecorator = entryDecorator,
                         onNowPlayingClick = onNowPlayingClick,
-                        onAmbientClick = onAmbientClick,                    )
+                        onAmbientClick = onAmbientClick,
+                        playOn = playOn,
+                    )
                 }
                 }
             } // end inner blur Box
@@ -876,38 +867,6 @@ private fun MainContent(
 }
 
 /**
- * SyncPlay auto-open: a joined group started playing (or switched items)
- * while no player is on top of any back stack → open the video player.
- * When a player IS already open, its SyncPlayBridge drives the item load
- * in place — pushing another VideoPlayer route here would stack duplicate
- * player screens. Collector for [SyncPlayOpenCoordinator.openRequests],
- * kept out of [MainContent]'s body so each collector sits next to its
- * coordinator's seam.
- */
-@Composable
-private fun SyncPlayAutoOpen(
-    openRequests: kotlinx.coroutines.flow.Flow<SyncPlayOpenRequest>,
-    navigationState: com.raulshma.jellyplay.core.ui.navigation.NavigationState,
-    navigator: Navigator,
-) {
-    LaunchedEffect(Unit) {
-        openRequests.collect { request ->
-            val playerOpen = navigationState.backStacks.values.any { stack ->
-                stack.lastOrNull() is Route.VideoPlayer
-            }
-            if (!playerOpen) {
-                navigator.navigate(
-                    Route.VideoPlayer(
-                        itemId = request.itemId,
-                        startPositionTicks = request.startPositionTicks,
-                    )
-                )
-            }
-        }
-    }
-}
-
-/**
  * TV form-factor layout:_TV Material3 theme + [TvNavigationDrawer] host wrapping a single
  * [MainNavDisplay]. Extracted from [MainContent] so the per-form-factor scaffolding stays
  * isolated and the orchestrator stays a clean when-branch picker.
@@ -925,6 +884,7 @@ private fun TvContent(
     entryDecorator: NavEntryDecorator<NavKey>,
     onNowPlayingClick: () -> Unit,
     onAmbientClick: () -> Unit,
+    playOn: com.raulshma.jellyplay.PlayOnViewModel,
     tvDrawerState: androidx.tv.material3.DrawerState,
     tvDrawerListState: androidx.compose.foundation.lazy.LazyListState,
     libraryFolders: List<com.raulshma.jellyplay.core.model.LibraryFolder>,
@@ -1008,6 +968,7 @@ private fun TvContent(
                         entryDecorator = entryDecorator,
                         onNowPlayingClick = onNowPlayingClick,
                         onAmbientClick = onAmbientClick,
+                        playOn = playOn,
                     )
                     // TV mini-player transport: the drawer's "Now Playing" row only opens the
                     // full player, so without this overlay backgrounded audio has no D-pad-
@@ -1048,6 +1009,7 @@ private fun PhoneContent(
     entryDecorator: NavEntryDecorator<NavKey>,
     onNowPlayingClick: () -> Unit,
     onAmbientClick: () -> Unit,
+    playOn: com.raulshma.jellyplay.PlayOnViewModel,
     isAudioPlayerScreen: Boolean,
     isExpanded: Boolean,
     bottomNavScrollVisibility: ScrollDirectionVisibility,
@@ -1069,12 +1031,11 @@ private fun PhoneContent(
     val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
 
     // Play On (cast-to-Jellyfin-session) lives at the app shell so the mini
-    // transport persists across tabs. Owned by an activity-scoped VM: both
-    // this site and PlayOnCompanionScreen's default resolve through the same
-    // LocalViewModelStoreOwner (MainActivity) with the same Koin store key,
-    // so they observe one instance.
-    val playOnViewModel: com.raulshma.jellyplay.PlayOnViewModel = org.koin.compose.viewmodel.koinViewModel()
-    val playOnState by playOnViewModel.uiState.collectAsStateWithLifecycle()
+    // transport persists across tabs. The controller is the parameter
+    // threaded from MainContent's single construction site — this wiring
+    // (mini bar + device sheet), MainNavDisplay's companion entry and the
+    // Home redirect all read that one instance; nothing resolves it here.
+    val playOnState by playOn.uiState.collectAsStateWithLifecycle()
     var showPlayOnSheet by remember { mutableStateOf(false) }
     val playOnContext = LocalContext.current
     val onPlayOnClick: () -> Unit = { showPlayOnSheet = true }
@@ -1084,7 +1045,7 @@ private fun PhoneContent(
     val currentRoute = navigationState.backStacks[navigationState.topLevelRoute.value]?.lastOrNull()
     val isPlayOnCompanionOpen = currentRoute is Route.PlayOnCompanion
     androidx.compose.runtime.LaunchedEffect(showPlayOnSheet) {
-        if (showPlayOnSheet) playOnViewModel.startDiscovery(playOnContext)
+        if (showPlayOnSheet) playOn.startDiscovery(playOnContext)
     }
 
     // Global "More" overflow — a DotsVertical toggle docked in the nav bar
@@ -1190,7 +1151,7 @@ private fun PhoneContent(
                         entryDecorator = entryDecorator,
                         onNowPlayingClick = onNowPlayingClick,
                         onAmbientClick = onAmbientClick,
-                        playOnStrategy = playOnViewModel.strategy,
+                        playOn = playOn,
                         surpriseRequests = surpriseRequests,
                     )
                 }
@@ -1236,11 +1197,11 @@ private fun PhoneContent(
                         durationMs = playOnState.durationMs,
                         volume = playOnState.volume,
                         onPlayPause = {
-                            if (playOnState.isPlaying) playOnViewModel.castPause() else playOnViewModel.castPlay()
+                            if (playOnState.isPlaying) playOn.castPause() else playOn.castPlay()
                         },
-                        onSeek = { playOnViewModel.castSeekTo(it) },
-                        onVolume = { playOnViewModel.setCastVolume(it) },
-                        onDisconnect = { playOnViewModel.disconnect(playOnContext) },
+                        onSeek = { playOn.castSeekTo(it) },
+                        onVolume = { playOn.setCastVolume(it) },
+                        onDisconnect = { playOn.disconnect(playOnContext) },
                         onExpand = { navigator.navigate(Route.PlayOnCompanion) },
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
@@ -1251,11 +1212,11 @@ private fun PhoneContent(
                     com.raulshma.jellyplay.components.PlayOnDeviceSheet(
                         devices = playOnState.devices,
                         onSelect = { device ->
-                            playOnViewModel.connectAndFling(playOnContext, device)
+                            playOn.connectAndFling(playOnContext, device)
                             showPlayOnSheet = false
                         },
                         onDismiss = {
-                            playOnViewModel.stopDiscovery()
+                            playOn.stopDiscovery()
                             showPlayOnSheet = false
                         },
                     )
@@ -1398,7 +1359,9 @@ private fun FullScreenContent(
     saveableStateHolder: androidx.compose.runtime.saveable.SaveableStateHolder,
     entryDecorator: NavEntryDecorator<NavKey>,
     onNowPlayingClick: () -> Unit,
-    onAmbientClick: () -> Unit,) {
+    onAmbientClick: () -> Unit,
+    playOn: com.raulshma.jellyplay.PlayOnViewModel,
+) {
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -1414,7 +1377,9 @@ private fun FullScreenContent(
             entryDecorator = entryDecorator,
             onNowPlayingClick = onNowPlayingClick,
             onAmbientClick = onAmbientClick,
-        )    }
+            playOn = playOn,
+        )
+    }
 }
 
 @Composable
@@ -1453,7 +1418,7 @@ private fun MainNavDisplay(
     modifier: Modifier = Modifier,
     onNowPlayingClick: () -> Unit = {},
     onAmbientClick: () -> Unit = {},
-    playOnStrategy: com.raulshma.jellyplay.core.data.cast.remote.JellyfinRemotePlayCastStrategy? = null,
+    playOn: com.raulshma.jellyplay.PlayOnViewModel,
     surpriseRequests: kotlinx.coroutines.flow.Flow<Unit> = kotlinx.coroutines.flow.emptyFlow(),
 ) {
     val currentBackStack = navigationState.backStacks[navigationState.topLevelRoute.value] ?: return
@@ -1545,7 +1510,7 @@ private fun MainNavDisplay(
         onNowPlayingClick,
         onAmbientClick,
         onLogout,
-        playOnStrategy,
+        playOn,
     ) {
         ShellHostHooks(
             homeMode = homeMode,
@@ -1559,18 +1524,15 @@ private fun MainNavDisplay(
             isRefreshingAdmin = { isRefreshingAdminState.value },
             onRefreshAdmin = { mainViewModel.refreshAdminStatus() },
             // The shared home module narrows the Play-On surface to its
-            // HomePlayOnRedirect seam (the concrete cast strategy is
-            // Android-bound); adapt the real strategy here — probe +
-            // fling, exactly the inline shape the legacy homeSection had.
-            playOnRedirect = playOnStrategy?.let { strategy ->
-                HomePlayOnRedirect { itemId, startPositionMs ->
-                    strategy.isConnected.value.also { connected ->
-                        if (connected) {
-                            strategy.loadMedia(itemId = itemId, startPositionMs = startPositionMs)
-                        }
-                    }
-                }
-            },
+            // HomePlayOnRedirect seam (the concrete strategy is Android-
+            // bound); the probe + fling choreography lives on the controller
+            // (flingIfConnected), so the strategy never leaves it. Declared
+            // delta (2026-09-08): the redirect is active on EVERY host now —
+            // it used to be phone-layout-only (the TV and full-screen
+            // MainNavDisplay calls passed no strategy). Only observable when
+            // a remote session is already connected, which itself can only
+            // be initiated from the phone layout's Play On device sheet.
+            playOnRedirect = HomePlayOnRedirect(playOn::flingIfConnected),
             surpriseRequests = surpriseRequests,
         )
     }
@@ -1579,12 +1541,15 @@ private fun MainNavDisplay(
             livePlayerSection(navigator)
             subtitleTesterSection(navigator)
             // Play On companion — full-screen remote-control surface reached by
-            // tapping the persistent PlayOnMiniBar. Reuses the activity-scoped
-            // PlayOnViewModel (same instance the mini bar holds), so state stays
-            // in sync without threading the VM through params.
+            // tapping the persistent PlayOnMiniBar. The controller arrives as
+            // an explicit parameter: the same single instance MainContent
+            // constructs and the mini bar renders. The former koinViewModel()
+            // self-resolution here was identity-by-convention — it held only
+            // while both sites sat under MainActivity's ViewModelStoreOwner.
             entry<Route.PlayOnCompanion> {
                 com.raulshma.jellyplay.components.PlayOnCompanionScreen(
                     onBack = { navigator.goBack() },
+                    playOn = playOn,
                 )
             }
         }

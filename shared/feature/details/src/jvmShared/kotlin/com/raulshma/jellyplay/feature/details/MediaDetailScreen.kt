@@ -34,24 +34,21 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.formatBytes
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.MediaQuickActionScope
-import com.raulshma.jellyplay.core.model.quickActions
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.components.ConfirmState
 import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.components.DeleteDownloadedEpisodesSheet
 import com.raulshma.jellyplay.core.ui.components.LocalMediaQuickActionController
-import com.raulshma.jellyplay.core.ui.components.MediaQuickActionHost
-import com.raulshma.jellyplay.core.ui.components.QuickAction
-import com.raulshma.jellyplay.core.ui.components.RemoveDownloadConfirmHost
+import com.raulshma.jellyplay.core.ui.components.QuickActionAdapter
+import com.raulshma.jellyplay.core.ui.components.QuickActionIntakeHost
 import com.raulshma.jellyplay.core.ui.components.SeerrPrefetchCallback
 import com.raulshma.jellyplay.core.ui.components.SeerrRequestDialog
 import com.raulshma.jellyplay.core.ui.components.SeriesDownloadSheet
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.core.ui.components.downloadedSeasonSlices
 import com.raulshma.jellyplay.core.ui.components.rememberConfirmState
-import com.raulshma.jellyplay.core.ui.components.rememberMediaQuickActionController
-import com.raulshma.jellyplay.core.ui.components.rememberRemoveDownloadState
+import com.raulshma.jellyplay.core.ui.components.rememberQuickActionIntake
 import com.raulshma.jellyplay.core.ui.components.rememberSeerrCardLoadingState
 import com.raulshma.jellyplay.core.ui.components.rememberVideoClickHandler
 import com.raulshma.jellyplay.core.ui.components.LocalSeerrCardLoadingState
@@ -229,48 +226,38 @@ fun MediaDetailScreen(
         }
     }
 
-    // Row item awaiting a remove-download confirm from the quick-action menu.
-    // Hoisted so the dialog survives the card leaving composition while open.
-    val removeDownloadState = rememberRemoveDownloadState()
-
     // Quick actions for row items (related/collection/episode cards) and the
-    // TV Menu key on the focused card. The controller is
-    // provided to every PosterCard/EpisodeCard below via CompositionLocal.
-    // Download / Remove download ride the same intake as the library grid
-    // (#147): a downloaded row card flips the slot to "Remove download".
-    val quickActionController = rememberMediaQuickActionController(
-        resolveActions = remember(viewModel) {
-            { item: MediaItem ->
-                item.quickActions(
-                    MediaQuickActionScope.DETAIL,
-                    includeDownload = true,
-                    isDownloaded = viewModel.quickActionDownloadedIds.value.contains(item.id),
-                )
-            }
+    // TV Menu key on the focused card, on the shared intake (core/ui — see
+    // QuickActionIntake). The controller is provided to every
+    // PosterCard/EpisodeCard below via CompositionLocal. Download / Remove
+    // download ride the same intake as the library grid (#147): a downloaded
+    // row card flips the slot to "Remove download". The downloaded set is
+    // read through the VM flow's .value at resolve time (not collected) —
+    // the sheet re-resolves on every open, so no snapshot churn here.
+    val quickActionIntake = rememberQuickActionIntake(
+        scope = MediaQuickActionScope.DETAIL,
+        includeDownload = true,
+        isDownloaded = remember(viewModel) {
+            { item: MediaItem -> viewModel.quickActionDownloadedIds.value.contains(item.id) }
         },
-        executeAction = remember(viewModel, onPlayClick, onItemClick) {
-            { item: MediaItem, action: QuickAction ->
-                when (action) {
-                    QuickAction.PLAY -> onPlayClick(
+        adapter = remember(viewModel, onPlayClick, onItemClick) {
+            QuickActionAdapter(
+                onPlay = { item ->
+                    onPlayClick(
                         item.id,
                         null,
                         item.playbackPositionTicks ?: 0L,
                         viewModel.selectedSubtitleIndex,
                         viewModel.selectedAudioIndex,
                     )
-                    QuickAction.MARK_WATCHED -> viewModel.markRowItemPlayed(item, played = true)
-                    QuickAction.MARK_UNWATCHED -> viewModel.markRowItemPlayed(item, played = false)
-                    QuickAction.DOWNLOAD -> viewModel.downloadRowItem(item, onOpenDetail = onItemClick)
-                    QuickAction.REMOVE_DOWNLOAD -> removeDownloadState.request(item)
-                    QuickAction.DETAILS -> onItemClick(item.id)
-                    else -> Unit
-                }
-            }
+                },
+                onOpenDetail = { item -> onItemClick(item.id) },
+                onMarkPlayed = viewModel::markRowItemPlayed,
+                onDownload = { item -> viewModel.downloadRowItem(item, onOpenDetail = onItemClick) },
+                onRemoveDownload = viewModel::removeRowItemDownload,
+            )
         },
     )
-    // TV-only: the card currently holding D-pad focus, so the Menu key can open
-    // its quick actions.
-    var tvFocusedItem by remember { mutableStateOf<MediaItem?>(null) }
 
     // Composition state hop for the queued-episodes plural snackbar (see the
     // SeriesDownload branch below): the plural resolves in composition
@@ -355,15 +342,11 @@ fun MediaDetailScreen(
             .onDpadKey(
                 onMenu = {
                     // TV remote Menu button: open the focused card's quick
-                    // actions. The focused card is tracked by the
-                    // rows via onFocusedMediaItem.
-                    val focused = tvFocusedItem
-                    if (focused != null) {
-                        quickActionController.show(focused)
-                        true
-                    } else {
-                        false
-                    }
+                    // actions. The focused card is tracked by the rows via
+                    // onFocusedMediaItem; an unfocused Menu propagates — the
+                    // only host with the non-consuming contract, hence the
+                    // returned flag instead of `true`.
+                    quickActionIntake.openFocusedItem()
                 },
             ),
     ) {
@@ -585,8 +568,8 @@ fun MediaDetailScreen(
                         onAddToCollection = { viewModel.collections.openPicker() },
                         onStartInstantMix = { viewModel.startInstantMix() },
                         onStartWatchParty = { viewModel.watchParty.startScreenItem() },
-                        onMediaQuickActions = { item -> quickActionController.show(item) },
-                        onFocusedMediaItem = { item -> tvFocusedItem = item },
+                        onMediaQuickActions = { item -> quickActionIntake.controller.show(item) },
+                        onFocusedMediaItem = { item -> quickActionIntake.tvFocusedItem = item },
                         onDeleteDownload = {
                             val target = detail?.item
                             val isEpisode = target?.mediaType == MediaType.EPISODE
@@ -625,7 +608,7 @@ fun MediaDetailScreen(
                 }
 
                 CompositionLocalProvider(
-                    LocalMediaQuickActionController provides quickActionController,
+                    LocalMediaQuickActionController provides quickActionIntake.controller,
                 ) {
                     DetailContent(
                         state = state,
@@ -865,8 +848,11 @@ fun MediaDetailScreen(
             }
         }
 
-        // Long-press / TV-Menu quick actions for row cards.
-        MediaQuickActionHost(quickActionController)
+        // Long-press / TV-Menu quick actions for row cards — the shared
+        // intake hosts the sheet AND the remove-download confirm (removal
+        // only ever deletes the local download; the server copy is
+        // untouched).
+        QuickActionIntakeHost(quickActionIntake)
 
         // ── Unified-provider delete confirmation. ──
         // Single item: deletes the current item's attached download. Episode: a
@@ -906,13 +892,6 @@ fun MediaDetailScreen(
                 onDismiss = { pendingDeleteEpisode = null },
             )
         }
-
-        // ── Quick-action remove-download confirm (row cards). Same contract
-        // as the library grid: only the LOCAL download is deleted. ──
-        RemoveDownloadConfirmHost(
-            state = removeDownloadState,
-            onConfirmRemove = { viewModel.removeRowItemDownload(it) },
-        )
 
         // ── Resync bottom sheet. Lists what changed and offers a
         // resync / re-download action with live status. ──

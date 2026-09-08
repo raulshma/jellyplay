@@ -14,8 +14,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
@@ -29,9 +31,11 @@ import org.junit.Test
  * Pins the "Play On" shell entry point: the uiState must prefer the remote
  * session's now-playing metadata and fall back to the locally playing item's
  * (the fling handoff window before the server reflects the new item), the
- * fling path must load the locally playing item and pause local playback,
- * and [PlayOnViewModel.connectAndFling] with nothing playing must connect
- * without flinging.
+ * fling paths must load the locally playing item / probed item and pause or
+ * skip local playback, the 5 s status poll must seed + repeat + stop with
+ * the connection, and the transport commands must reach the strategy exactly
+ * once each (the strategy is the transport home; the controller's members
+ * are the narrow surface).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class PlayOnViewModelTest {
@@ -100,13 +104,12 @@ class PlayOnViewModelTest {
     )
 
     @Test
-    fun `empty state has nothing flingable and no devices`() = runTest(mainDispatcher) {
+    fun `empty state has no devices and is not connected`() = runTest(mainDispatcher) {
         val vm = createVm()
         attach(vm)
         advanceUntilIdle()
 
         val state = vm.uiState.value
-        assertFalse(state.canFling)
         assertFalse(state.isDiscovering)
         assertFalse(state.isConnected)
         assertEquals(emptyList<CastDevice>(), state.devices)
@@ -153,23 +156,23 @@ class PlayOnViewModelTest {
         assertEquals("", vm.uiState.value.artist)
     }
 
+    // Declared delta (2026-09-08): this test replaces
+    // `canFling stays at its initial false because nothing subscribes it
+    // (likely bug)` — the dead WhileSubscribed seam it pinned is deleted
+    // (see PlayOnUiState's KDoc); the fling gate it gestured at is pinned
+    // LIVE here instead, through the probe the Home redirect actually uses.
     @Test
-    fun `canFling stays at its initial false because nothing subscribes it (likely bug)`() = runTest(mainDispatcher) {
+    fun `home redirect probe flings only while a remote session is connected`() = runTest(mainDispatcher) {
         val vm = createVm()
-        attach(vm)
 
-        // QUIRK pinned (likely bug): `canFling` is a WhileSubscribed stateIn
-        // over currentPlayingItemId, but the uiState combine only READS
-        // `canFling.value` — it never collects the flow. With zero collectors
-        // the upstream never starts, so uiState.canFling is permanently the
-        // initial `false` no matter what is playing locally. Actual flinging
-        // still works because connectAndFling reads currentPlayingItemId
-        // directly. If this is ever fixed (observe canFling inside the
-        // combine), flip these assertions to mirror the projection.
-        localItemId.value = "item-1"
-        localTitle.value = "Local Song"
-        advanceUntilIdle()
-        assertFalse(vm.uiState.value.canFling)
+        // Not connected: the probe returns false and issues nothing — the
+        // Home caller falls through to local playback routing.
+        assertFalse(vm.flingIfConnected("item-7", 1_234L))
+        verify(exactly = 0) { strategy.loadMedia(any(), any()) }
+
+        connected.value = true
+        assertTrue(vm.flingIfConnected("item-7", 1_234L))
+        verify(exactly = 1) { strategy.loadMedia(itemId = "item-7", startPositionMs = 1_234L) }
     }
 
     @Test
@@ -258,5 +261,27 @@ class PlayOnViewModelTest {
         advanceUntilIdle()
         verify(exactly = 1) { strategy.stop(context) }
         assertEquals(null, vm.targetDeviceName.value)
+    }
+
+    @Test
+    fun `status poll seeds immediately and repeats every 5 s until disconnect`() = runTest(mainDispatcher) {
+        connected.value = true
+        val vm = createVm()
+        val context = mockk<Context>(relaxed = true)
+
+        vm.connectAndFling(context, device("TV"))
+        runCurrent()
+        // Seed fires in the launch frame, before the first 5 s delay.
+        coVerify(exactly = 1) { strategy.refreshPlaybackState() }
+
+        advanceTimeBy(5_000L)
+        runCurrent()
+        coVerify(exactly = 2) { strategy.refreshPlaybackState() }
+
+        // Disconnect tears the poll down: further ticks must not fire.
+        vm.disconnect(context)
+        advanceTimeBy(20_000L)
+        runCurrent()
+        coVerify(exactly = 2) { strategy.refreshPlaybackState() }
     }
 }

@@ -56,19 +56,16 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaQuickActionScope
 import com.raulshma.jellyplay.core.model.formatBytes
-import com.raulshma.jellyplay.core.model.quickActions
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.LocalMediaQuickActionController
-import com.raulshma.jellyplay.core.ui.components.MediaQuickActionHost
 import com.raulshma.jellyplay.core.ui.components.OfflineMediaCard
-import com.raulshma.jellyplay.core.ui.components.QuickAction
-import com.raulshma.jellyplay.core.ui.components.RemoveDownloadConfirmHost
+import com.raulshma.jellyplay.core.ui.components.QuickActionAdapter
+import com.raulshma.jellyplay.core.ui.components.QuickActionIntakeHost
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
-import com.raulshma.jellyplay.core.ui.components.rememberMediaQuickActionController
-import com.raulshma.jellyplay.core.ui.components.rememberRemoveDownloadState
+import com.raulshma.jellyplay.core.ui.components.rememberQuickActionIntake
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableGrid
@@ -109,43 +106,32 @@ fun OfflineLibraryScreen(
     var sortMenuOpen by remember { mutableStateOf(false) }
     val searchFocus = remember { FocusRequester() }
 
-    // Removal goes through the shared confirm dialog, like every other host.
-    val removeDownloadState = rememberRemoveDownloadState()
-
-    // Long-press quick actions. Everything in this grid is downloaded, so the
+    // Long-press quick actions, on the shared intake (core/ui — see
+    // QuickActionIntake). Removal goes through the shared confirm dialog,
+    // like every other host. Everything in this grid is downloaded, so the
     // sheet offers mark-watched / favorite / delete / view-details and routing
     // always lands on the offline detail screens (never the online page).
-    val quickActionController = rememberMediaQuickActionController(
-        resolveActions = remember {
-            { item: MediaItem ->
-                item.quickActions(
-                    MediaQuickActionScope.LIBRARY,
-                    includeDownload = false,
-                    includeAddToPlaylist = false,
-                    includeRemoveDownload = true,
-                    includeFavorite = true,
-                )
-            }
-        },
-        executeAction = remember(viewModel, onItemClick, onSeriesClick, removeDownloadState) {
-            { item: MediaItem, action: QuickAction ->
-                when (action) {
-                    // PLAY and DETAILS both open the offline detail/series screen,
-                    // which owns the Play button and full offline metadata.
-                    QuickAction.PLAY, QuickAction.DETAILS -> {
-                        if (item.mediaType == com.raulshma.jellyplay.core.model.MediaType.SERIES) {
-                            onSeriesClick(item.id)
-                        } else {
-                            onItemClick(item.id)
-                        }
-                    }
-                    QuickAction.MARK_WATCHED -> viewModel.markItemPlayed(item, played = true)
-                    QuickAction.MARK_UNWATCHED -> viewModel.markItemPlayed(item, played = false)
-                    QuickAction.FAVORITE, QuickAction.UNFAVORITE -> viewModel.toggleFavorite(item)
-                    QuickAction.REMOVE_DOWNLOAD -> removeDownloadState.request(item)
-                    else -> Unit
+    val quickActionIntake = rememberQuickActionIntake(
+        scope = MediaQuickActionScope.LIBRARY,
+        includeRemoveDownload = true,
+        includeFavorite = true,
+        adapter = remember(viewModel, onItemClick, onSeriesClick) {
+            // PLAY and DETAILS both open the offline detail/series screen,
+            // which owns the Play button and full offline metadata.
+            val openOfflineItem: (MediaItem) -> Unit = { item ->
+                if (item.mediaType == com.raulshma.jellyplay.core.model.MediaType.SERIES) {
+                    onSeriesClick(item.id)
+                } else {
+                    onItemClick(item.id)
                 }
             }
+            QuickActionAdapter(
+                onPlay = openOfflineItem,
+                onOpenDetail = openOfflineItem,
+                onMarkPlayed = viewModel::markItemPlayed,
+                onToggleFavorite = viewModel::toggleFavorite,
+                onRemoveDownload = viewModel::delete,
+            )
         },
     )
 
@@ -269,7 +255,7 @@ fun OfflineLibraryScreen(
                         contentType = { "offlineItem" },
                         modifier = Modifier.fillMaxSize(),
                     ) { _, item, itemModifier ->
-                        CompositionLocalProvider(LocalMediaQuickActionController provides quickActionController) {
+                        CompositionLocalProvider(LocalMediaQuickActionController provides quickActionIntake.controller) {
                             OfflineMediaCard(
                                 item = item,
                                 onClick = {
@@ -287,11 +273,10 @@ fun OfflineLibraryScreen(
             }
         }
     }
-    MediaQuickActionHost(quickActionController)
-    RemoveDownloadConfirmHost(
-        state = removeDownloadState,
-        onConfirmRemove = { viewModel.delete(it) },
-    )
+    // Quick-action sheet + remove-download confirm — the shared intake hosts
+    // both (removal only ever deletes the local download; the server copy is
+    // untouched).
+    QuickActionIntakeHost(quickActionIntake)
 }
 
 @Composable

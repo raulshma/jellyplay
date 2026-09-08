@@ -22,6 +22,14 @@
     <string name="admin_scanning">正在扫描…</string>
     <string name="admin_scan_now">立即扫描</string>
     <string name="admin_select_all">全选</string>
+
+    <string name="admin_sort_default">默认</string>
+    <string name="admin_sort_name_asc">名称（A–Z）</string>
+    <string name="admin_sort_name_desc">名称（Z–A）</string>
+    <string name="admin_sort_largest">最大</string>
+    <string name="admin_sort_smallest">最小</string>
+    <string name="admin_sort_type">类型</string>
+    <string name="admin_sort_date">日期</string>
     <string name="admin_media_types">媒体类型</string>
     <string name="admin_dry_run">试运行（仅预览）</string>
 
@@ -394,4 +402,6 @@
     <string name="user_stats_export_shared">已导出</string>
 
     <string name="admin_plugin_config_unavailable">此平台不支持插件配置。</string>
+
+    <string name="admin_no_delete_permission">您的账户没有删除内容的权限。请联系服务器管理员。</string>
 </resources>

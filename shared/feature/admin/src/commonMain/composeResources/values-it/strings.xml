@@ -22,6 +22,14 @@
     <string name="admin_scanning">Scansione…</string>
     <string name="admin_scan_now">Scansiona ora</string>
     <string name="admin_select_all">Seleziona tutto</string>
+
+    <string name="admin_sort_default">Predefinito</string>
+    <string name="admin_sort_name_asc">Nome (A–Z)</string>
+    <string name="admin_sort_name_desc">Nome (Z–A)</string>
+    <string name="admin_sort_largest">Il più grande</string>
+    <string name="admin_sort_smallest">Il più piccolo</string>
+    <string name="admin_sort_type">Tipo</string>
+    <string name="admin_sort_date">Data</string>
     <string name="admin_media_types">Tipi di supporto</string>
     <string name="admin_dry_run">Simulazione (solo anteprima)</string>
 
@@ -394,4 +402,6 @@
     <string name="user_stats_export_shared">Statistiche esportate</string>
 
     <string name="admin_plugin_config_unavailable">La configurazione del plugin non è disponibile su questa piattaforma.</string>
+
+    <string name="admin_no_delete_permission">Il tuo account non ha l\'autorizzazione per eliminare contenuti. Contatta l\'amministratore del server.</string>
 </resources>

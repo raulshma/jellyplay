@@ -13,13 +13,21 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /**
  * State surfaced to the "Play On" sheet + persistent mini bar at the app shell.
+ *
+ * Declared delta (2026-09-08): the `canFling` field is deleted. It was a
+ * `WhileSubscribed` stateIn over the audio manager's current item id whose
+ * value the fold read via `.value` — and because nothing ever collected that
+ * flow, it sat at its initial `false` forever while the fold kept re-stamping
+ * the dead value into every emission. Deleted rather than wired live: no
+ * surface ever rendered it (the fold was its only reader), and both real
+ * fling decisions ([connectAndFling], [flingIfConnected]) read the item id /
+ * the connection directly, so a live projection would still have no consumer.
  */
 @Immutable
 data class PlayOnUiState(
@@ -29,8 +37,6 @@ data class PlayOnUiState(
     val isConnected: Boolean = false,
     /** Display name of the session we are currently controlling, if any. */
     val targetDeviceName: String? = null,
-    /** True when there is a local item id we can fling. */
-    val canFling: Boolean = false,
     // Transport — fed by the connected Jellyfin session's play state.
     val title: String = "",
     val artist: String = "",
@@ -42,7 +48,16 @@ data class PlayOnUiState(
 )
 
 /**
- * Backs the global "Play On" entry point (Home FAB).
+ * The "Play On" controller — the one home for the whole Play On surface
+ * family (the persistent mini bar, the device sheet and the full-screen
+ * companion): device discovery, connect + fling, the 5 s status poll and the
+ * [uiState] metadata-precedence fold all live here. It is constructed ONCE
+ * at the shell (`MainContent` in JellyPlayApp, above the TV / phone /
+ * full-screen fork) and threaded to every surface as an explicit parameter;
+ * no surface resolves it itself. The companion screen used to self-resolve
+ * through `koinViewModel()` — an identity that held only because both call
+ * sites happened to sit under MainActivity's ViewModelStoreOwner, and would
+ * have silently forked state the moment the screen moved to another host.
  *
  * Talks to [JellyfinRemotePlayCastStrategy] **directly** rather than through
  * the shared [com.raulshma.jellyplay.core.data.cast.CastManager]. This is
@@ -53,7 +68,11 @@ data class PlayOnUiState(
  * stops/the active strategy flips. The strategy's own flows
  * ([JellyfinRemotePlayCastStrategy.isConnected], [positionMs], …) are stable,
  * independent references, so Play On stays fully isolated from the player's
- * cast state.
+ * cast state. The strategy is PRIVATE to this controller: the transport
+ * commands below are the narrow surface the screens drive, and the Home nav
+ * graph's probe + fling rides [flingIfConnected] (adapted into its
+ * [com.raulshma.jellyplay.feature.home.navigation.HomePlayOnRedirect] seam
+ * at `MainNavDisplay`) — nothing outside reaches the strategy anymore.
  *
  * The PlayTo call is `JellyfinRemotePlayCastStrategy.loadMedia` →
  * `AdminApiClient.play(sessionId, "PlayNow", [itemId], …)`.
@@ -63,15 +82,8 @@ class PlayOnViewModel(
     private val audioPlaybackManager: AudioPlaybackManager,
 ) : JellyPlayViewModel() {
 
-    /** Shared singleton; exposed so the Home nav graph can short-circuit plays. */
-    val strategy: JellyfinRemotePlayCastStrategy get() = jellyfinStrategy
-
     private val _targetDeviceName = MutableStateFlow<String?>(null)
     val targetDeviceName: StateFlow<String?> = _targetDeviceName.asStateFlow()
-
-    private val canFling: StateFlow<Boolean> = audioPlaybackManager.currentPlayingItemId
-        .map { it != null }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
     val devices: StateFlow<List<CastDevice>> = jellyfinStrategy.discoveredDevices
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
@@ -120,7 +132,6 @@ class PlayOnViewModel(
             isDiscovering = device.devices.isNotEmpty(),
             isConnected = device.connected,
             targetDeviceName = device.target,
-            canFling = canFling.value,
             title = displayTitle,
             artist = displaySubtitle,
             artworkUri = displayArt,
@@ -162,18 +173,44 @@ class PlayOnViewModel(
         }
     }
 
+    /**
+     * The Home nav graph's probe + fling — the body behind its
+     * [com.raulshma.jellyplay.feature.home.navigation.HomePlayOnRedirect]
+     * seam: when a remote session is connected, fling [itemId] to it and
+     * return `true` (the caller skips local playback routing); otherwise
+     * return `false` having issued nothing. `loadMedia` itself no-ops when
+     * the session died between the probe and the call, so collapsing
+     * probe + call into one member changes nothing observable.
+     */
+    fun flingIfConnected(itemId: String, startPositionMs: Long): Boolean =
+        jellyfinStrategy.isConnected.value.also { connected ->
+            if (connected) {
+                jellyfinStrategy.loadMedia(itemId = itemId, startPositionMs = startPositionMs)
+            }
+        }
+
+    // ---- transport ----
+    // The narrow command surface every Play On surface drives (mini bar,
+    // companion). Each is a declared one-line pass-through onto the strategy —
+    // the strategy remains the transport home (it owns the session-id guards
+    // and the admin-API play/pause/seek commands); what is gone is the
+    // facade-era wide escape hatch: the strategy itself is no longer exposed,
+    // so this list is the ONLY way in.
+
     fun castPlay() = jellyfinStrategy.play()
     fun castPause() = jellyfinStrategy.pause()
     fun castSeekTo(positionMs: Long) = jellyfinStrategy.seekTo(positionMs)
     fun setCastVolume(volume: Float) = jellyfinStrategy.setRendererVolume(volume)
     fun castNextTrack() = jellyfinStrategy.nextTrack()
     fun castPreviousTrack() = jellyfinStrategy.previousTrack()
+
     fun castStop(context: Context) {
         jellyfinStrategy.stop(context)
         _targetDeviceName.value = null
         statusPollingJob?.cancel()
         statusPollingJob = null
     }
+
     fun disconnect(context: Context) {
         jellyfinStrategy.disconnect(context)
         _targetDeviceName.value = null

@@ -91,14 +91,6 @@ import com.composables.icons.tabler.outline.*
 private const val TAG = "SeerrRequestDialog"
 
 /**
- * The server's anime-scoped default ([anime]) when requesting an anime series,
- * else its regular default ([regular]) — Jellyseerr's requester falls back the
- * same way for profiles, root folders and tags.
- */
-private fun <T> animeDefault(isAnime: Boolean, anime: T?, regular: T?): T? =
-    if (isAnime) anime ?: regular else regular
-
-/**
  * Snapshot-fold overload — the single home for the
  * [SeerrRequestSnapshot] → dialog-field mapping so every screen folds the
  * holder's state the same way (a new snapshot field lands here once instead
@@ -248,16 +240,12 @@ internal fun SeerrRequestPanel(
 
     // Default server per Jellyseerr: isDefault && !is4k (the app never requests
     // 4K), falling back to the first server — a 4K instance flagged default
-    // must not win over the regular one.
+    // must not win over the regular one. [SeerrRequestDefaults] owns the rule.
     LaunchedEffect(isTv, radarrServers, sonarrServers) {
-        fun <T> defaultIndex(servers: List<T>, isDefaultServer: (T) -> Boolean): Int =
-            if (servers.isEmpty()) 0
-            else (servers.indexOfFirst(isDefaultServer).takeIf { it >= 0 } ?: 0).coerceIn(0, servers.lastIndex)
-
         selectedServerIndex = if (isTv) {
-            defaultIndex(sonarrServers) { s -> (s.isDefault || s.server?.isDefault == true) && !s.is4k }
+            SeerrRequestDefaults.defaultSonarrServerIndex(sonarrServers)
         } else {
-            defaultIndex(radarrServers) { s -> (s.isDefault || s.server?.isDefault == true) && !s.is4k }
+            SeerrRequestDefaults.defaultRadarrServerIndex(radarrServers)
         }
     }
 
@@ -265,55 +253,44 @@ internal fun SeerrRequestPanel(
     // Prefer nested server.defaults (from /service/ endpoint) over top-level fields;
     // anime series use the per-server anime defaults like Jellyseerr's requester
     LaunchedEffect(currentProfiles, isAnime) {
-        val sonarrDefaults = currentSonarrServer?.server
-        val defaultProfileId = if (isTv) {
-            animeDefault(isAnime, sonarrDefaults?.activeAnimeProfileId, sonarrDefaults?.activeProfileId)
-                ?: currentSonarrServer?.activeProfileId
+        selectedProfileIndex = if (isTv) {
+            SeerrRequestDefaults.defaultProfileIndex(currentSonarrServer, currentProfiles, isAnime)
         } else {
-            currentRadarrServer?.server?.activeProfileId ?: currentRadarrServer?.activeProfileId
+            SeerrRequestDefaults.defaultProfileIndex(currentRadarrServer, currentProfiles)
         }
-        val defaultIdx = currentProfiles?.indexOfFirst { it.id == defaultProfileId }?.takeIf { it >= 0 } ?: 0
-        selectedProfileIndex = defaultIdx.coerceAtMost((currentProfiles?.size ?: 1) - 1).coerceAtLeast(0)
     }
 
     LaunchedEffect(currentRootFolders, isAnime) {
-        val sonarrDefaults = currentSonarrServer?.server
-        val defaultDir = if (isTv) {
-            animeDefault(isAnime, sonarrDefaults?.activeAnimeDirectory, sonarrDefaults?.activeDirectory)
-                ?: currentSonarrServer?.activeDirectory
+        selectedRootFolderIndex = if (isTv) {
+            SeerrRequestDefaults.defaultRootFolderIndex(currentSonarrServer, currentRootFolders, isAnime)
         } else {
-            currentRadarrServer?.server?.activeDirectory ?: currentRadarrServer?.activeDirectory
+            SeerrRequestDefaults.defaultRootFolderIndex(currentRadarrServer, currentRootFolders)
         }
-        val defaultIdx = currentRootFolders?.indexOfFirst { it.path == defaultDir }?.takeIf { it >= 0 } ?: 0
-        selectedRootFolderIndex = defaultIdx.coerceAtMost((currentRootFolders?.size ?: 1) - 1).coerceAtLeast(0)
     }
 
     // Auto-select default tags when server or anime-ness changes (Jellyseerr
     // re-applies defaults on those transitions; manual edits within a server
-    // are preserved)
-    var appliedTagsKey by remember(item.id) { mutableStateOf("") }
+    // are preserved) — the appliedTagsKey fold against
+    // [SeerrRequestDefaults.tagsApplicationKey].
+    var appliedTagsKey by remember(item.id) { mutableStateOf<Pair<Int?, Boolean>?>(null) }
     LaunchedEffect(currentTags, isAnime) {
         val serverId = if (isTv) currentSonarrServer?.id else currentRadarrServer?.id
-        val key = "$serverId:$isAnime"
+        val key = SeerrRequestDefaults.tagsApplicationKey(serverId, isAnime)
         if (key == appliedTagsKey) return@LaunchedEffect
         appliedTagsKey = key
-        val sonarrDefaults = currentSonarrServer?.server
-        val defaultTags = if (isTv) {
-            animeDefault(
-                isAnime,
-                sonarrDefaults?.activeAnimeTags?.takeIf { it.isNotEmpty() },
-                sonarrDefaults?.activeTags,
-            )
-        } else {
-            currentRadarrServer?.server?.activeTags
-        }
         selectedTags.clear()
-        if (!defaultTags.isNullOrEmpty()) selectedTags.addAll(defaultTags)
+        selectedTags.addAll(
+            if (isTv) {
+                SeerrRequestDefaults.defaultTags(currentSonarrServer, isAnime)
+            } else {
+                SeerrRequestDefaults.defaultTags(currentRadarrServer)
+            },
+        )
     }
 
     // Select all seasons by default when seasons become available
     LaunchedEffect(effectiveSeasons) {
-        if (effectiveSeasons.isNotEmpty() && selectedSeasonNumbers.isEmpty()) {
+        if (SeerrRequestDefaults.selectAllSeasonsByDefault(effectiveSeasons, selectedSeasonNumbers)) {
             selectAllSeasons = true
         }
     }

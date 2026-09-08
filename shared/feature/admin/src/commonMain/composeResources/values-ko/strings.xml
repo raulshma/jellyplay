@@ -22,6 +22,14 @@
     <string name="admin_scanning">스캔 중…</string>
     <string name="admin_scan_now">지금 스캔</string>
     <string name="admin_select_all">모두 선택</string>
+
+    <string name="admin_sort_default">기본값</string>
+    <string name="admin_sort_name_asc">이름(가나다)</string>
+    <string name="admin_sort_name_desc">이름(가나다 역순)</string>
+    <string name="admin_sort_largest">가장 큼</string>
+    <string name="admin_sort_smallest">가장 작음</string>
+    <string name="admin_sort_type">유형</string>
+    <string name="admin_sort_date">날짜</string>
     <string name="admin_media_types">미디어 유형</string>
     <string name="admin_dry_run">시험 실행(미리보기 전용)</string>
 
@@ -394,4 +402,6 @@
     <string name="user_stats_export_shared">내보냈습니다</string>
 
     <string name="admin_plugin_config_unavailable">이 플랫폼에서는 플러그인 구성을 사용할 수 없습니다.</string>
+
+    <string name="admin_no_delete_permission">계정에 콘텐츠를 삭제할 권한이 없습니다. 서버 관리자에게 문의하세요.</string>
 </resources>
