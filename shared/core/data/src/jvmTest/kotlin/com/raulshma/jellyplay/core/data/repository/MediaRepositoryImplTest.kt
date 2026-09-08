@@ -543,6 +543,22 @@ class MediaRepositoryImplTest {
         coVerify(exactly = 1) { apiClient.getCollectionItems("col-1", 20, 20) }
     }
 
+    @Test
+    fun `getCollectionItems with force re-fetches instead of serving the cached page`() = runTest {
+        coEvery { apiClient.getCollectionItems("col-1", 0, 20) } returns Result.success(
+            SearchResult(items = listOf(mediaItem("c1")), totalRecordCount = 40, startIndex = 0)
+        )
+
+        repository.getCollectionItems("col-1", 0, 20)
+        repository.getCollectionItems("col-1", 0, 20) // cache hit
+        repository.getCollectionItems("col-1", 0, 20, force = true)
+
+        // The deferred silent refresh's freshness lever: a member item's flip
+        // never evicts the collection's page key, so only the explicit force
+        // can bypass it.
+        coVerify(exactly = 2) { apiClient.getCollectionItems("col-1", 0, 20) }
+    }
+
     // ------------------------------------------------------------------
     // Collection write/list paths are uncached passthroughs to the apiClient
     // (the picker refetches on every open so a freshly-created collection is

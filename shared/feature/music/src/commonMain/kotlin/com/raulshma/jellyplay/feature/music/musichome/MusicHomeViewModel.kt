@@ -104,7 +104,9 @@ class MusicHomeViewModel(
         loadJob?.cancel()
         loadJob = launch {
             if (_uiState.value.offlineMode != OfflineMode.ONLINE) {
-                _uiState.update { it.copy(isLoading = false) }
+                if (!silent) {
+                    _uiState.update { it.copy(isLoading = false) }
+                }
                 return@launch
             }
             if (!silent) {
@@ -189,11 +191,10 @@ class MusicHomeViewModel(
                 // retries. (A loud failure with nothing pending over-arms at
                 // worst: one quiet refetch on the next re-entry.)
                 deferredRefresher.rearm()
-                if (silent) {
-                    // A silent (deferred) regeneration stays quiet — the user
-                    // never asked for this fetch, so the stale sections stay
-                    // and no toast fires.
-                } else {
+                // A silent (deferred) regeneration stays quiet — the user
+                // never asked for this fetch, so the stale sections stay and
+                // no toast fires.
+                if (!silent) {
                     val message = e.message ?: "Failed to load music"
                     // Keep showing cached sections if we have them; only swap to the full
                     // ErrorScreen when there's nothing to show. A failed refresh after data

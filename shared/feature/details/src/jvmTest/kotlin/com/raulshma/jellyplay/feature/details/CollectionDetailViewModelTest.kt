@@ -73,7 +73,7 @@ class CollectionDetailViewModelTest {
             MediaItem(id = "m2", name = "Movie 2", mediaType = MediaType.MOVIE),
         )
         coEvery { mediaRepository.getMediaDetail("c1") } returns Result.success(detail)
-        coEvery { mediaRepository.getCollectionItems("c1", any(), any()) } returns Result.success(
+        coEvery { mediaRepository.getCollectionItems("c1", any(), any(), any()) } returns Result.success(
             SearchResult(items = items, totalRecordCount = 2, startIndex = 0),
         )
 
@@ -91,7 +91,7 @@ class CollectionDetailViewModelTest {
     fun `loadCollection detail failure emits Error`() = runTest(mainDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         coEvery { mediaRepository.getMediaDetail("c1") } returns Result.failure(RuntimeException("boom"))
-        coEvery { mediaRepository.getCollectionItems("c1", any(), any()) } returns Result.success(
+        coEvery { mediaRepository.getCollectionItems("c1", any(), any(), any()) } returns Result.success(
             SearchResult(items = emptyList(), totalRecordCount = 0, startIndex = 0),
         )
 
@@ -109,7 +109,7 @@ class CollectionDetailViewModelTest {
         coEvery { mediaRepository.getMediaDetail("c1") } returns Result.success(
             MediaDetail(item = MediaItem(id = "c1", name = "Collection", mediaType = MediaType.COLLECTION)),
         )
-        coEvery { mediaRepository.getCollectionItems("c1", any(), any()) } returns Result.failure(RuntimeException("items boom"))
+        coEvery { mediaRepository.getCollectionItems("c1", any(), any(), any()) } returns Result.failure(RuntimeException("items boom"))
 
         viewModel.loadCollection("c1")
         advanceUntilIdle()
@@ -127,7 +127,7 @@ class CollectionDetailViewModelTest {
         coEvery { mediaRepository.getMediaDetail("c1") } returns Result.success(
             MediaDetail(item = MediaItem(id = "c1", name = "Collection", mediaType = MediaType.COLLECTION)),
         )
-        coEvery { mediaRepository.getCollectionItems("c1", any(), any()) } returns Result.success(
+        coEvery { mediaRepository.getCollectionItems("c1", any(), any(), any()) } returns Result.success(
             SearchResult(items = emptyList(), totalRecordCount = 0, startIndex = 0),
         )
 
@@ -151,7 +151,7 @@ class CollectionDetailViewModelTest {
         advanceUntilIdle()
 
         coVerify(exactly = 1) { mediaRepository.getMediaDetail("c1") }
-        coVerify(exactly = 1) { mediaRepository.getCollectionItems("c1", any(), any()) }
+        coVerify(exactly = 1) { mediaRepository.getCollectionItems("c1", any(), any(), any()) }
         assertTrue(viewModel.uiState.value is CollectionDetailUiState.Success)
     }
 
@@ -187,7 +187,7 @@ class CollectionDetailViewModelTest {
         coEvery { mediaRepository.getMediaDetail("c1") } returns Result.success(
             MediaDetail(item = MediaItem(id = "c1", name = "Collection", mediaType = MediaType.COLLECTION)),
         )
-        coEvery { mediaRepository.getCollectionItems("c1", any(), any()) } returns Result.success(
+        coEvery { mediaRepository.getCollectionItems("c1", any(), any(), any()) } returns Result.success(
             SearchResult(items = listOf(withProgress, untouched), totalRecordCount = 2, startIndex = 0),
         )
         viewModel.loadCollection("c1")
@@ -207,7 +207,7 @@ class CollectionDetailViewModelTest {
     fun `failure with null message falls back to generic error`() = runTest(mainDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         coEvery { mediaRepository.getMediaDetail("c1") } returns Result.failure(RuntimeException())
-        coEvery { mediaRepository.getCollectionItems("c1", any(), any()) } returns Result.success(
+        coEvery { mediaRepository.getCollectionItems("c1", any(), any(), any()) } returns Result.success(
             SearchResult(items = emptyList(), totalRecordCount = 0, startIndex = 0),
         )
 
@@ -233,19 +233,19 @@ class CollectionDetailViewModelTest {
 
         viewModel.loadCollection("c1")
         advanceUntilIdle()
-        coVerify(exactly = 1) { mediaRepository.getCollectionItems("c1", any(), any()) }
+        coVerify(exactly = 1) { mediaRepository.getCollectionItems("c1", any(), any(), any()) }
 
         // A write confirmed while the screen is NOT on screen only marks stale.
         viewModel.deferredRefresher.onScreenActiveChanged(false)
         userDataEvents.emit(UserDataChange("user-1", listOf("m1")))
         advanceUntilIdle()
-        coVerify(exactly = 1) { mediaRepository.getCollectionItems("c1", any(), any()) }
+        coVerify(exactly = 1) { mediaRepository.getCollectionItems("c1", any(), any(), any()) }
 
         // Re-entry fires the single deferred reload — silently: Success is
         // never dropped back to Loading on the way.
         viewModel.deferredRefresher.onScreenActiveChanged(true)
         advanceUntilIdle()
-        coVerify(exactly = 2) { mediaRepository.getCollectionItems("c1", any(), any()) }
+        coVerify(exactly = 2) { mediaRepository.getCollectionItems("c1", any(), any(), any()) }
         assertTrue(viewModel.uiState.value is CollectionDetailUiState.Success)
     }
 
@@ -255,7 +255,7 @@ class CollectionDetailViewModelTest {
         coEvery { mediaRepository.getMediaDetail("c1") } returns Result.success(
             MediaDetail(item = MediaItem(id = "c1", name = "Collection", mediaType = MediaType.COLLECTION))
         ) andThen Result.failure(RuntimeException("offline blip"))
-        coEvery { mediaRepository.getCollectionItems("c1", any(), any()) } returns Result.success(
+        coEvery { mediaRepository.getCollectionItems("c1", any(), any(), any()) } returns Result.success(
             SearchResult(items = emptyList(), totalRecordCount = 0, startIndex = 0),
         )
         val viewModel = collectionViewModel()
@@ -273,7 +273,7 @@ class CollectionDetailViewModelTest {
         // The silent refresh DID run (second fetch) and its detail read
         // failed — yet serve-stale-while-revalidate keeps the last Success
         // instead of flashing an Error screen over the old content.
-        coVerify(exactly = 2) { mediaRepository.getCollectionItems("c1", any(), any()) }
+        coVerify(exactly = 2) { mediaRepository.getCollectionItems("c1", any(), any(), any()) }
         assertTrue(viewModel.uiState.value is CollectionDetailUiState.Success)
     }
 
@@ -293,7 +293,7 @@ class CollectionDetailViewModelTest {
                 Result.success(MediaDetail(item = MediaItem(id = "c1", name = "Collection", mediaType = MediaType.COLLECTION)))
             }
         }
-        coEvery { mediaRepository.getCollectionItems("c1", any(), any()) } returns Result.success(
+        coEvery { mediaRepository.getCollectionItems("c1", any(), any(), any()) } returns Result.success(
             SearchResult(items = emptyList(), totalRecordCount = 0, startIndex = 0),
         )
         val viewModel = collectionViewModel()
@@ -316,14 +316,35 @@ class CollectionDetailViewModelTest {
         advanceUntilIdle()
 
         // Two fetches total (initial + in-flight loud), not three.
-        coVerify(exactly = 2) { mediaRepository.getCollectionItems("c1", any(), any()) }
+        coVerify(exactly = 2) { mediaRepository.getCollectionItems("c1", any(), any(), any()) }
+    }
+
+    @Test
+    fun `deferred silent reload forces the collection items read`() = runTest {
+        every { mediaRepository.userDataChanges } returns userDataEvents
+        stubCollectionFetch()
+        val viewModel = collectionViewModel()
+
+        viewModel.loadCollection("c1")
+        advanceUntilIdle()
+        viewModel.deferredRefresher.onScreenActiveChanged(false)
+        userDataEvents.emit(UserDataChange("user-1", listOf("m1")))
+        advanceUntilIdle()
+        viewModel.deferredRefresher.onScreenActiveChanged(true)
+        advanceUntilIdle()
+
+        // The loud load goes through the cache; the silent regeneration must
+        // bypass it — a member flip never evicts the collection's page key,
+        // so a non-forced reload would re-serve the pre-flip badges.
+        coVerify(exactly = 1) { mediaRepository.getCollectionItems("c1", any(), any(), force = false) }
+        coVerify(exactly = 1) { mediaRepository.getCollectionItems("c1", any(), any(), force = true) }
     }
 
     private fun stubCollectionFetch() {
         coEvery { mediaRepository.getMediaDetail("c1") } returns Result.success(
             MediaDetail(item = MediaItem(id = "c1", name = "Collection", mediaType = MediaType.COLLECTION))
         )
-        coEvery { mediaRepository.getCollectionItems("c1", any(), any()) } returns Result.success(
+        coEvery { mediaRepository.getCollectionItems("c1", any(), any(), any()) } returns Result.success(
             SearchResult(items = emptyList(), totalRecordCount = 0, startIndex = 0),
         )
     }

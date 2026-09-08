@@ -179,10 +179,18 @@ interface MediaRepository {
      */
     suspend fun getAllEpisodesGrouped(seriesId: String): Result<Map<String, List<MediaItem>>>
 
+    /**
+     * [force] drops the cached page first (the freshness lever the collection
+     * detail's deferred silent refresh needs: a member item's user-data flip
+     * evicts `detail_<itemId>`, never the collection's
+     * `collection_<collectionId>_<startIndex>_<limit>` page key, so the
+     * post-flip rows can only be served by an explicit force).
+     */
     suspend fun getCollectionItems(
         collectionId: String,
         startIndex: Int = 0,
         limit: Int = 50,
+        force: Boolean = false,
     ): Result<SearchResult>
 
     /**

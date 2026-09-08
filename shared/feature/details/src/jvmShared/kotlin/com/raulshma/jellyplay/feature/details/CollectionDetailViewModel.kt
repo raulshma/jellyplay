@@ -61,7 +61,13 @@ class CollectionDetailViewModel constructor(
     private suspend fun fetchCollection(collectionId: String, silent: Boolean) {
         coroutineScope {
             val detailDeferred = async { mediaRepository.getMediaDetail(collectionId) }
-            val itemsDeferred = async { mediaRepository.getCollectionItems(collectionId, limit = 100) }
+            // Silent = the deferred regeneration: force so a member flip's
+            // badges heal now instead of re-serving the pre-flip cached page
+            // (the flip evicts the member's detail, never this collection's
+            // page key) — same lever the album detail's refresh uses.
+            val itemsDeferred = async {
+                mediaRepository.getCollectionItems(collectionId, limit = 100, force = silent)
+            }
 
             val detailResult = detailDeferred.await()
             val itemsResult = itemsDeferred.await()

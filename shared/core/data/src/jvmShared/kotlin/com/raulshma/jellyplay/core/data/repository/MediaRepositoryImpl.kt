@@ -175,9 +175,13 @@ class MediaRepositoryImpl(
     // Plan 08: private funnel — collection edits self-invalidate, so no
     // external caller needs this knob anymore.
     private fun invalidateCollectionItemsCache(collectionId: String) {
-        // Keys are `collection_${id}_${startIndex}_${limit}`, so evict by prefix.
+        // Prefix of [collectionItemsKey] for every page — one evict drops all
+        // of a collection's cached pages.
         collectionItemsCache.removeByKeyPrefix(homeSession.cacheIdentitySnapshot(), "collection_$collectionId")
     }
+
+    private fun collectionItemsKey(collectionId: String, startIndex: Int, limit: Int) =
+        "collection_${collectionId}_$startIndex" + "_$limit"
 
     /**
      * Single owner of the "what did this detail's type affect" mapping (plan
@@ -666,13 +670,24 @@ class MediaRepositoryImpl(
         collectionId: String,
         startIndex: Int,
         limit: Int,
-    ): Result<SearchResult> =
-        collectionItemsCache.getOrFetch(
+        force: Boolean,
+    ): Result<SearchResult> {
+        // force drops the cached page first (the deferred silent refresh's
+        // freshness lever — a member item's flip evicts detail_<itemId>, never
+        // the collection's page key).
+        if (force) {
+            collectionItemsCache.remove(
+                homeSession.cacheIdentitySnapshot(),
+                collectionItemsKey(collectionId, startIndex, limit),
+            )
+        }
+        return collectionItemsCache.getOrFetch(
             { homeSession.cacheIdentity() },
-            "collection_${collectionId}_$startIndex" + "_$limit",
+            collectionItemsKey(collectionId, startIndex, limit),
         ) {
             apiClient.getCollectionItems(collectionId, startIndex, limit)
         }
+    }
 
     override suspend fun getCollections(limit: Int): Result<List<CollectionSummary>> =
         // Not cached: the picker refetches on every open so a freshly-created
