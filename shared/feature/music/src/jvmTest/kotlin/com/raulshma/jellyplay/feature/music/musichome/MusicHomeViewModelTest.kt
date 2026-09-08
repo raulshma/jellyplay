@@ -26,6 +26,7 @@ import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -350,6 +351,51 @@ class MusicHomeViewModelTest {
         assertNull(viewModel.uiState.value.error)
         assertFalse(viewModel.uiState.value.isLoading)
         verify(exactly = 0) { userMessageBus.error(any()) }
+
+        // The failed silent regeneration re-arms the deferred refresh: the
+        // next re-entry retries instead of trusting the consumed flag (which
+        // would pin the pre-change rows until the next user-data event).
+        viewModel.deferredRefresher.onScreenActiveChanged(false)
+        viewModel.deferredRefresher.onScreenActiveChanged(true)
+        advanceUntilIdle()
+        coVerify(exactly = 3) { mediaRepository.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) }
+        assertEquals(1, viewModel.uiState.value.sections.size)
+    }
+
+    @Test
+    fun deferredRefresh_doesNotStackSilentLoadOnAnInFlightLoudLoad() = runTest(mainDispatcher) {
+        stubHomeQueries(favoriteArtists = listOf(item("a1", "Artist")))
+        createViewModel()
+        advanceUntilIdle()
+        assertEquals(1, viewModel.uiState.value.sections.size)
+
+        // Armed while off-screen...
+        viewModel.deferredRefresher.onScreenActiveChanged(false)
+        userDataEvents.emit(UserDataChange("user-1", listOf("t1")))
+        advanceUntilIdle()
+
+        // ...then a loud refresh parks mid-fetch when the deferred effect
+        // consumes the flag: the loud load is the regeneration, so no silent
+        // twin may stack on top of it (last-writer-wins would let the slower
+        // fetch overwrite fresher results, and its bare isLoading write would
+        // kill the loud load's pull-to-refresh spinner).
+        val gate = CompletableDeferred<Unit>()
+        coEvery { mediaRepository.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) } coAnswers {
+            gate.await()
+            Result.success(SearchResult(listOf(item("a2", "Artist 2")), 1, 0))
+        }
+        viewModel.refresh()
+        viewModel.deferredRefresher.onScreenActiveChanged(true)
+        advanceUntilIdle()
+
+        coVerify(exactly = 2) { mediaRepository.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) }
+        assertTrue(viewModel.uiState.value.isLoading, "the loud load's spinner survives the deferred activation")
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertFalse(viewModel.uiState.value.isLoading)
+        assertEquals(1, viewModel.uiState.value.sections.size)
+        assertEquals("Artist 2", viewModel.uiState.value.sections.single().items.single().name)
     }
 
     @Test

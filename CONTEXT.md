@@ -1262,6 +1262,57 @@ desync offline staging from failure staging); STOP's
 local 900s (`SeenMediaRepositoryImpl`, `OfflineSyncManager`,
 `OfflineRepositoryImpl`).
 
+## Deferred user-data freshness
+
+**`DeferredUserDataRefresher`** (`shared/core/ui/.../viewmodel/DeferredUserDataRefresher.kt`)
+is the read-side twin of the silent flip contract: a user-data change landing
+while a screen is NOT shown only MARKS it stale (boolean `pendingRefresh` — a
+WS burst collapses to one refresh), and the single regeneration fires on the
+next `onScreenActiveChanged(true)`. A change landing while the screen IS
+active arms the flag but never regenerates mid-scroll — the pager-generation
+swap the contract exists to prevent only ever happens on re-entry, when the
+grid rebuilds from the top anyway (a trigger bump restarts the
+key-combined `flatMapLatest` pager from its INITIAL key; `getRefreshKey`
+anchors within one generation, it does not carry the anchor across). It is
+itself a `DeferredRefreshHost` (`DeferredRefreshEffect(viewModel.deferredRefresher)`
+is the whole screen wiring), with a secondary constructor taking the pager's
+`StateFlowHandle<Int>` trigger and owning the bump lambda. Main-thread
+confinement: the collector and the `LifecycleResumeEffect` caller both run
+main-immediate, so the flag needs no synchronization. **Silent-failure
+re-arming**: a host whose regeneration failed WITHOUT surfacing an error
+(the stale-while-revalidate paths) calls `rearm()` so the next re-entry
+retries — a consumed flag after a failed silent fetch would otherwise pin
+the pre-change data until the next WS event. Cancellation never re-arms
+(the cancelling loud load is the regeneration).
+
+The host choreography (collection/person/album detail + music home) is one
+shape: a `currentXId` + one `fetchJob`/`loadJob` for loud AND silent loads —
+a loud load cancels an in-flight silent one, the deferred refresh skips
+itself while any load is active, back-stack re-entry's loud load no-ops when
+the same item already shows (Success, no error) — and silent fetches publish
+stale-while-revalidate: no loading state, no error reset, no toast, all-or-
+nothing (album detail keeps the last detail+tracks PAIR on a half failure —
+never one fresh half beside one stale half), `rearm()` on failure. Music
+home's silent path additionally never touches `isLoading` (the
+pull-to-refresh spinner keys off it) and rethrows `CancellationException` so
+a cancelled loud load can't mask as a fetch failure and strand its spinner.
+Pinned by `DeferredUserDataRefresherTest` (core/ui) plus the four hosts'
+deferred-refresh suites.
+
+Data side: **`MediaRepositoryImpl.getAlbumTracks(albumId, force)`** grew the
+freshness lever `detail(itemId, force)` already had (`DetailCacheGroup.albumTracks`
+drops the cached list + epoch-bumps before the read) because a TRACK flip
+evicts `tracks_<trackId>` and never the album's `tracks_<albumId>` key — the
+album deferred refresh's forced silent regeneration is the only way its
+track rows heal before the 2-minute TTL. The album's `getMediaDetail(force)`
+half was already forced. **`homeSectionsStale`** (`AtomicBoolean` marker on
+`MediaRepositoryImpl`) inverts the home-sections cache's eager eviction: a
+synthetic `notifyUserDataChanged` (every confirmed own-write path — flips,
+delivered STOPs, the outbox drain) arms it and the next non-forced
+`getHomeSections` consumes it as a one-shot force, so zero refetches happen
+while nobody reads home (server WS pushes do NOT arm it — `HomeRefresher`
+serves those live).
+
 ## Concurrency (`shared/core/concurrency`)
 
 **`:shared:core:concurrency`** (commonMain, zero-dependency leaf below

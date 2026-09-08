@@ -54,7 +54,9 @@ class PersonDetailViewModel constructor(
      * (Re)fetches the person's detail + filmography. [silent] serves the
      * deferred-refresh path: a fetch failure keeps the last Success instead of
      * flashing an Error screen over content the user was just looking at —
-     * serve-stale-while-revalidate, same philosophy as the home refresher.
+     * serve-stale-while-revalidate, same philosophy as the home refresher —
+     * and re-arms the deferred refresh, since the change that triggered the
+     * regeneration was not applied and the next re-entry must retry.
      */
     private suspend fun fetchPerson(personId: String, silent: Boolean) {
         coroutineScope {
@@ -74,7 +76,9 @@ class PersonDetailViewModel constructor(
                     biography = detail.overview?.takeIf { it.isNotBlank() },
                     profileImageUrl = imageUrlProvider.getImageUrl(personId).takeIf { it.isNotBlank() },
                 )
-            } else if (!silent) {
+            } else if (silent) {
+                deferredRefresher.rearm()
+            } else {
                 val detailError = detailResult.exceptionOrNull()?.message
                 val itemsError = itemsResult.exceptionOrNull()?.message
                 _uiState.value = PersonDetailUiState.Error(itemsError ?: detailError ?: "Failed to load")

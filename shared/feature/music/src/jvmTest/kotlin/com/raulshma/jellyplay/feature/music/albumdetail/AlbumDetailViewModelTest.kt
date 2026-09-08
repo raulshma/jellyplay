@@ -242,7 +242,7 @@ class AlbumDetailViewModelTest {
         coEvery { mediaRepository.getMediaDetail("album1", true) } returns Result.success(
             MediaDetail(item = MediaItem(id = "album1", name = "Album", mediaType = MediaType.ALBUM)),
         )
-        coEvery { mediaRepository.getAlbumTracks("album1") } returns Result.success(albumTracks)
+        coEvery { mediaRepository.getAlbumTracks("album1", true) } returns Result.success(albumTracks)
 
         viewModel.refreshAlbum("album1")
         advanceUntilIdle()
@@ -278,6 +278,7 @@ class AlbumDetailViewModelTest {
         coEvery { mediaRepository.getMediaDetail("album1", true) } returns Result.success(
             MediaDetail(item = MediaItem(id = "album1", name = "Album", mediaType = MediaType.ALBUM)),
         )
+        coEvery { mediaRepository.getAlbumTracks("album1", true) } returns Result.success(albumTracks)
         userDataEvents.emit(com.raulshma.jellyplay.core.model.UserDataChange("user-1", listOf("t1")))
         advanceUntilIdle()
 
@@ -299,6 +300,7 @@ class AlbumDetailViewModelTest {
 
         viewModel.deferredRefresher.onScreenActiveChanged(false)
         coEvery { mediaRepository.getMediaDetail("album1", true) } returns Result.failure(RuntimeException("offline blip"))
+        coEvery { mediaRepository.getAlbumTracks("album1", true) } returns Result.success(albumTracks)
         userDataEvents.emit(com.raulshma.jellyplay.core.model.UserDataChange("user-1", listOf("t1")))
         advanceUntilIdle()
         viewModel.deferredRefresher.onScreenActiveChanged(true)
@@ -310,6 +312,39 @@ class AlbumDetailViewModelTest {
         assertFalse(viewModel.isLoading)
         assertNull(viewModel.error)
         assertEquals("Album", viewModel.detail?.item?.name)
+        assertEquals(albumTracks, viewModel.tracks)
+
+        // The failed silent half re-arms the deferred refresh: the next
+        // re-entry retries the regeneration instead of trusting the consumed
+        // flag (which would pin the pre-change data forever).
+        coEvery { mediaRepository.getMediaDetail("album1", true) } returns Result.success(
+            MediaDetail(item = MediaItem(id = "album1", name = "Album 2", mediaType = MediaType.ALBUM)),
+        )
+        viewModel.deferredRefresher.onScreenActiveChanged(false)
+        viewModel.deferredRefresher.onScreenActiveChanged(true)
+        advanceUntilIdle()
+        assertEquals("Album 2", viewModel.detail?.item?.name)
+    }
+
+    @Test
+    fun deferredRefresh_failedHalfKeepsTheWholeStalePairInsteadOfMixing() = runTest(mainDispatcher) {
+        loadAlbum()
+        advanceUntilIdle()
+
+        // Detail re-fetches fine, the track list fails: publishing only the
+        // fresh half would show new detail beside the pre-change track rows.
+        viewModel.deferredRefresher.onScreenActiveChanged(false)
+        coEvery { mediaRepository.getMediaDetail("album1", true) } returns Result.success(
+            MediaDetail(item = MediaItem(id = "album1", name = "Album 2", mediaType = MediaType.ALBUM)),
+        )
+        coEvery { mediaRepository.getAlbumTracks("album1", true) } returns Result.failure(RuntimeException("tracks blip"))
+        userDataEvents.emit(com.raulshma.jellyplay.core.model.UserDataChange("user-1", listOf("t1")))
+        advanceUntilIdle()
+        viewModel.deferredRefresher.onScreenActiveChanged(true)
+        advanceUntilIdle()
+
+        assertNull(viewModel.error)
+        assertEquals("Album", viewModel.detail?.item?.name, "the stale pair stays whole — no fresh/stale mix")
         assertEquals(albumTracks, viewModel.tracks)
     }
 
@@ -331,12 +366,13 @@ class AlbumDetailViewModelTest {
             gate.await()
             Result.success(MediaDetail(item = MediaItem(id = "album1", name = "Album", mediaType = MediaType.ALBUM)))
         }
+        coEvery { mediaRepository.getAlbumTracks("album1", true) } returns Result.success(albumTracks)
         viewModel.refreshAlbum("album1")
         viewModel.deferredRefresher.onScreenActiveChanged(true)
         advanceUntilIdle()
 
         // Two track fetches total (initial + in-flight loud), not three.
-        coVerify(exactly = 2) { mediaRepository.getAlbumTracks("album1") }
+        coVerify(exactly = 2) { mediaRepository.getAlbumTracks("album1", any()) }
 
         gate.complete(Unit)
         advanceUntilIdle()

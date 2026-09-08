@@ -149,7 +149,13 @@ interface MediaRepository {
 
     suspend fun getArtistAlbums(artistId: String, limit: Int = 50): Result<List<MediaItem>>
 
-    suspend fun getAlbumTracks(albumId: String): Result<List<MediaItem>>
+    /**
+     * [force] drops the cached track list first (the freshness lever the
+     * album detail's deferred silent refresh needs: a track user-data flip
+     * evicts `tracks_<trackId>`, never `tracks_<albumId>`, so the album's
+     * cached list can only be superseded by an explicit force).
+     */
+    suspend fun getAlbumTracks(albumId: String, force: Boolean = false): Result<List<MediaItem>>
 
     suspend fun getMusicVideos(parentId: String, limit: Int = 50): Result<List<MediaItem>>
 

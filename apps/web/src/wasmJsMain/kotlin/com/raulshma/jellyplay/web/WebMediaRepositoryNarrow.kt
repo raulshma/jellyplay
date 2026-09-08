@@ -112,7 +112,7 @@ internal class WebMediaRepositoryNarrow(
 
     override suspend fun getArtistAlbums(artistId: String, limit: Int): Result<List<MediaItem>> = offWeb("getArtistAlbums")
 
-    override suspend fun getAlbumTracks(albumId: String): Result<List<MediaItem>> = offWeb("getAlbumTracks")
+    override suspend fun getAlbumTracks(albumId: String, force: Boolean): Result<List<MediaItem>> = offWeb("getAlbumTracks")
 
     override suspend fun getMusicVideos(parentId: String, limit: Int): Result<List<MediaItem>> = offWeb("getMusicVideos")
 

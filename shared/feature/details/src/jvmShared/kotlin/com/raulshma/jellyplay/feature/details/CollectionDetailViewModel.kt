@@ -54,7 +54,9 @@ class CollectionDetailViewModel constructor(
      * (Re)fetches the collection's detail + items. [silent] serves the
      * deferred-refresh path: a fetch failure keeps the last Success instead of
      * flashing an Error screen over content the user was just looking at —
-     * serve-stale-while-revalidate, same philosophy as the home refresher.
+     * serve-stale-while-revalidate, same philosophy as the home refresher —
+     * and re-arms the deferred refresh, since the change that triggered the
+     * regeneration was not applied and the next re-entry must retry.
      */
     private suspend fun fetchCollection(collectionId: String, silent: Boolean) {
         coroutineScope {
@@ -70,7 +72,9 @@ class CollectionDetailViewModel constructor(
                     detail = detailResult.getOrThrow(),
                     items = itemsResult.getOrThrow().items,
                 )
-            } else if (!silent) {
+            } else if (silent) {
+                deferredRefresher.rearm()
+            } else {
                 _uiState.value = CollectionDetailUiState.Error(failure.message ?: "Failed to load collection")
             }
         }

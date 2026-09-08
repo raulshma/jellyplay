@@ -611,9 +611,12 @@ class MediaRepositoryImpl(
     override suspend fun getArtistAlbums(artistId: String, limit: Int): Result<List<MediaItem>> =
         apiClient.getArtistAlbums(artistId, limit)
 
-    override suspend fun getAlbumTracks(albumId: String): Result<List<MediaItem>> =
-        // Epoch-guarded write — see DetailCacheGroup's key grammar/KDoc.
-        detailCaches.albumTracks(albumId)
+    override suspend fun getAlbumTracks(albumId: String, force: Boolean): Result<List<MediaItem>> =
+        // Epoch-guarded write — see DetailCacheGroup's key grammar/KDoc;
+        // force drops the cached list first (the deferred silent refresh's
+        // freshness lever — a track flip evicts tracks_<trackId>, never the
+        // album's tracks_<albumId> key).
+        detailCaches.albumTracks(albumId, force)
 
     override suspend fun getMusicVideos(parentId: String, limit: Int): Result<List<MediaItem>> =
         apiClient.getMediaItems(
@@ -1207,15 +1210,28 @@ private class DetailCacheGroup(
             apiClient.getSimilarItems(itemId, limit)
         }
 
-    /** Album tracks — epoch-guarded write. */
-    suspend fun albumTracks(albumId: String): Result<List<MediaItem>> =
-        albumTracksCache.getOrFetchGuarded(
+    /**
+     * Album tracks — epoch-guarded write. [force] mirrors [detail]'s
+     * freshness lever: drop the cached list (plus the epoch bump that
+     * stall-guards in-flight writers) before the cache-through read. Needed
+     * because [invalidateUserData] can only evict `tracks_<itemId>` — a
+     * flip on a TRACK never touches the album's `tracks_<albumId>` entry,
+     * so a deferred silent refresh that must show the post-flip rows cannot
+     * get them without the explicit force.
+     */
+    suspend fun albumTracks(albumId: String, force: Boolean): Result<List<MediaItem>> {
+        if (force) {
+            epoch.incrementAndGet()
+            albumTracksCache.remove(homeSession.cacheIdentitySnapshot(), tracksKey(albumId))
+        }
+        return albumTracksCache.getOrFetchGuarded(
             { homeSession.cacheIdentity() },
             tracksKey(albumId),
             currentEpoch = epoch::get,
         ) {
             apiClient.getAlbumTracks(albumId)
         }
+    }
 
     /** Theme songs — epoch-guarded write. */
     suspend fun themeSongs(itemId: String): Result<List<MediaItem>> =

@@ -17,6 +17,8 @@ import com.raulshma.jellyplay.core.model.SortOption
 import com.raulshma.jellyplay.core.ui.viewmodel.DeferredUserDataRefresher
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.feature.music.feedback.MusicMessageBus
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -37,6 +39,14 @@ class MusicHomeViewModel(
 
     private val _uiState = stateFlow(MusicHomeUiState())
     val uiState = _uiState.flow
+
+    /**
+     * The one load in flight, loud or silent — a loud load cancels a silent
+     * one (it regenerates the same data loudly), and the deferred refresh
+     * skips itself while one is active, so two fetches never race into a
+     * last-writer-wins swap.
+     */
+    private var loadJob: Job? = null
 
     /**
      * User-data changes while another screen is up (a favorite track flipped
@@ -81,10 +91,16 @@ class MusicHomeViewModel(
      * [silent] serves the deferred-refresh path: no loading state (the
      * pull-to-refresh spinner keys off [MusicHomeUiState.isLoading]), and a
      * failed fetch keeps the last sections on screen — serve-stale-while-
-     * revalidate, same philosophy as the detail screens.
+     * revalidate, same philosophy as the detail screens — and re-arms the
+     * deferred refresh so the next re-entry retries the failed regeneration.
+     * A silent load skips itself while any load is active (that load
+     * regenerates the same data); a loud load cancels an in-flight silent
+     * one (see [loadJob]).
      */
     fun loadSections(silent: Boolean = false) {
-        launch {
+        if (silent && loadJob?.isActive == true) return
+        loadJob?.cancel()
+        loadJob = launch {
             if (_uiState.value.offlineMode != OfflineMode.ONLINE) {
                 _uiState.update { it.copy(isLoading = false) }
                 return@launch
@@ -149,16 +165,27 @@ class MusicHomeViewModel(
 
                     // A silent refresh publishes only complete results: any
                     // failed fetch keeps the last sections on screen instead
-                    // of silently dropping the rows that failed to re-fetch.
+                    // of silently dropping the rows that failed to re-fetch —
+                    // and re-arms the deferred refresh, since the change that
+                    // triggered it was not regenerated.
                     if (!silent || results.all { it != null }) {
                         _uiState.update { it.copy(sections = sectionsList) }
+                    } else {
+                        deferredRefresher.rearm()
                     }
                 }
+            } catch (e: CancellationException) {
+                // Superseded by the loud load that cancelled this one (or VM
+                // teardown) — never masked as a fetch failure, or a cancelled
+                // loud load would leave its spinner stuck on.
+                throw e
             } catch (e: Exception) {
                 // A silent (deferred) regeneration stays quiet — the user
                 // never asked for this fetch, so the stale sections stay and
-                // no toast fires.
-                if (!silent) {
+                // no toast fires; the change re-arms for the next re-entry.
+                if (silent) {
+                    deferredRefresher.rearm()
+                } else {
                     val message = e.message ?: "Failed to load music"
                     // Keep showing cached sections if we have them; only swap to the full
                     // ErrorScreen when there's nothing to show. A failed refresh after data
@@ -170,7 +197,9 @@ class MusicHomeViewModel(
                     }
                 }
             }
-            _uiState.update { it.copy(isLoading = false) }
+            if (!silent) {
+                _uiState.update { it.copy(isLoading = false) }
+            }
         }
     }
 
