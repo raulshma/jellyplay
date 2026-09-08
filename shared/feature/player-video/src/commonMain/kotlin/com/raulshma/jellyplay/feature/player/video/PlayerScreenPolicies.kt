@@ -38,6 +38,21 @@ internal fun seekForwardTargetMs(currentPositionMs: Long, stepMs: Long, duration
     }
 
 /**
+ * Resume-skip target behind the ViewModel's `applyResumeSkip` funnel — the
+ * `videoSkipBackOnResumeMs` rewind shared by the audio-focus regain path and
+ * `resumePlayback`. A non-positive [skipMs] means the preference is disabled
+ * and the position passes through unchanged; otherwise the target is the
+ * position rewound by [skipMs], floored at zero (no upper clamp — the seek
+ * always lands at or before the current position).
+ */
+internal fun resumeSkipTargetMs(currentPositionMs: Long, skipMs: Long): Long =
+    if (skipMs <= 0L) {
+        currentPositionMs
+    } else {
+        (currentPositionMs - skipMs).coerceAtLeast(0L)
+    }
+
+/**
  * Direction-folded step target behind the ViewModel's `seekByStep` funnel —
  * the single owner of the discrete skip-step path shared by the screen's
  * skip buttons / keyboard / D-pad commits and the PiP transport's SKIP

@@ -670,6 +670,117 @@ class SubtitleManagerTest {
             assertTrue(m.state.value.downloadingSubtitles.isEmpty())
         }
 
+    // ─── Hub-open cascade (openSubtitleHub) ────────────────────────────────────
+    // The single command behind the sheet's open: (resetFirst → reset) then
+    // the three loads in the screen's historical order. The router's
+    // LaunchedEffect is the sheet's only production trigger — the former
+    // hand-copied click cascades double-fetched the server-default list.
+
+    @Test
+    fun openSubtitleHub_withReset_cancelsStaleWorkClearsSliceThenLoads() =
+        runTest(UnconfinedTestDispatcher()) {
+            // Stale in-flight/completed work from a previous hub session: a
+            // failed search (inline error), a failed download (status entry),
+            // populated cultures — plus a provider emission the reset must
+            // clear before the cascade's provider load re-populates it.
+            coEvery { playbackRepository.searchRemoteSubtitles("item-1", "eng") } returns Result.failure(RuntimeException("err"))
+            coEvery { playbackRepository.downloadSubtitle("item-1", "s1") } returns Result.failure(RuntimeException("network"))
+            coEvery { playbackRepository.getSubtitleCultures("item-1") } returns Result.success(listOf(CultureInfo(name = "deu")))
+            coEvery { playbackRepository.getRemoteSubtitles("item-1") } returns Result.success(
+                listOf(RemoteSubtitleInfo(id = "s1", name = "English")),
+            )
+            every { subtitleProviderRepository.configuredProviders() } returns flowOf(
+                setOf(SubtitleProviderKind.JELLYFIN)
+            )
+            val m = managerInScope(this)
+            m.searchRemoteSubtitles("eng")
+            m.downloadSubtitle(RemoteSubtitleInfo(id = "s1", threeLetterISOLanguageName = "eng"))
+            m.loadSubtitleCultures()
+            m.loadConfiguredProviders()
+            advanceUntilIdle()
+            assertEquals("err", m.state.value.subtitleSearchError)
+            assertTrue(m.state.value.downloadingSubtitles.isNotEmpty())
+
+            m.openSubtitleHub(resetFirst = true)
+
+            // The reset cleared the stale slice (cancelled jobs included — a
+            // cancelled job cannot write its status back after the clear).
+            assertNull(m.state.value.subtitleSearchError)
+            assertFalse(m.state.value.hasSearchedSubtitles)
+            assertTrue(m.state.value.searchedSubtitles.isEmpty())
+            assertTrue(m.state.value.downloadingSubtitles.isEmpty())
+            // …and the cascade then ran the three loads in order: the
+            // server-default list fetched, cultures RE-fetched (exactly
+            // because the reset emptied them first), providers re-populated.
+            assertEquals(listOf(RemoteSubtitleInfo(id = "s1", name = "English")), m.state.value.remoteSubtitles)
+            assertEquals(listOf(CultureInfo(name = "deu")), m.state.value.subtitleCultures)
+            coVerify(exactly = 2) { playbackRepository.getSubtitleCultures("item-1") }
+            assertEquals(setOf(SubtitleProviderKind.JELLYFIN), m.state.value.configuredSubtitleProviders)
+        }
+
+    @Test
+    fun openSubtitleHub_withoutReset_leavesSearchStateIntact() =
+        runTest(UnconfinedTestDispatcher()) {
+            // The Tracks-tab / router entries' no-reset contract: prior
+            // search results survive the open while the three loads still run.
+            val results = listOf(RemoteSubtitleInfo(id = "os1", name = "OpenSub en"))
+            coEvery { playbackRepository.searchRemoteSubtitles("item-1", "eng") } returns Result.success(results)
+            coEvery { playbackRepository.getRemoteSubtitles("item-1") } returns Result.success(
+                listOf(RemoteSubtitleInfo(id = "s1", name = "English")),
+            )
+            coEvery { playbackRepository.getSubtitleCultures("item-1") } returns Result.success(listOf(CultureInfo(name = "deu")))
+            every { subtitleProviderRepository.configuredProviders() } returns flowOf(emptySet())
+            val m = managerInScope(this)
+            m.searchRemoteSubtitles("eng")
+            advanceUntilIdle()
+            assertEquals(results, m.state.value.searchedSubtitles)
+
+            m.openSubtitleHub(resetFirst = false)
+
+            assertEquals(results, m.state.value.searchedSubtitles)
+            assertEquals(listOf(RemoteSubtitleInfo(id = "s1", name = "English")), m.state.value.remoteSubtitles)
+            assertEquals(listOf(CultureInfo(name = "deu")), m.state.value.subtitleCultures)
+        }
+
+    @Test
+    fun openSubtitleHub_withoutReset_culturesLoadIsANoOpWhenPopulated() =
+        runTest(UnconfinedTestDispatcher()) {
+            // Reopening the hub on the same item: the populated-cultures
+            // guard makes the cascade's cultures load a no-op — one fetch
+            // across both opens.
+            coEvery { playbackRepository.getSubtitleCultures("item-1") } returns Result.success(listOf(CultureInfo(name = "deu")))
+            coEvery { playbackRepository.getRemoteSubtitles("item-1") } returns Result.success(emptyList())
+            every { subtitleProviderRepository.configuredProviders() } returns flowOf(emptySet())
+            val m = managerInScope(this)
+
+            m.openSubtitleHub(resetFirst = false)
+            m.openSubtitleHub(resetFirst = false)
+
+            coVerify(exactly = 1) { playbackRepository.getSubtitleCultures("item-1") }
+            assertEquals(listOf(CultureInfo(name = "deu")), m.state.value.subtitleCultures)
+        }
+
+    @Test
+    fun openSubtitleHub_offline_skipsRemoteFetchSilently() {
+        // The offline skip rides through the cascade unchanged: no server
+        // read, empty Get tab, no error toast — while cultures and providers
+        // still load (resetFirst = false keeps any prior slice too).
+        manager = managerWithItemId("item-1", isOffline = { true })
+        coEvery { playbackRepository.getRemoteSubtitles(any()) } returns Result.success(
+            listOf(RemoteSubtitleInfo(id = "s1")),
+        )
+        coEvery { playbackRepository.getSubtitleCultures("item-1") } returns Result.success(listOf(CultureInfo(name = "deu")))
+        every { subtitleProviderRepository.configuredProviders() } returns flowOf(emptySet())
+
+        manager.openSubtitleHub(resetFirst = false)
+
+        coVerify(exactly = 0) { playbackRepository.getRemoteSubtitles(any()) }
+        assertTrue(manager.state.value.remoteSubtitles.isEmpty())
+        assertFalse(manager.state.value.isLoadingRemoteSubtitles)
+        assertNull(manager.state.value.remoteSubtitlesError)
+        assertEquals(listOf(CultureInfo(name = "deu")), manager.state.value.subtitleCultures)
+    }
+
     // ─── Item-switch semantics ─────────────────────────────────────────────────
 
     /**

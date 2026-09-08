@@ -46,7 +46,7 @@ import java.time.ZoneId
 
 /**
  * Cross-layer contract tests for the offline→online watch-state pipeline
- * (#153 / #157 regression class). Unlike [PlaybackSyncWorkerTest] — which
+ * (#153 / #157 regression class). Unlike [PlaybackOutboxDrainerTest] — which
  * stubs the repositories to pin the drain loop in isolation — this suite
  * wires the REAL [PlayedStateSyncImpl] (flip + reconcile + the #157 heal) and
  * the REAL [PlaybackRepositoryImpl] (outbox-entry → API-call mapping) into
@@ -137,14 +137,21 @@ class OfflineWatchSyncContractTest {
                 ): PlaybackSyncWorker = PlaybackSyncWorker(
                     appContext,
                     workerParameters,
-                    outbox,
-                    playbackRepository,
-                    offlineModeManager,
-                    playedStateSync,
-                    offlineRepository,
-                    userDataSyncScheduler,
-                    mediaRepository,
-                    cacheInvalidator,
+                    createDrainer = { notifier ->
+                        PlaybackOutboxDrainerImpl(
+                            outbox = outbox,
+                            playbackRepository = playbackRepository,
+                            offlineModeManager = offlineModeManager,
+                            playedStateSync = playedStateSync,
+                            offlineRepository = offlineRepository,
+                            mediaRepository = mediaRepository,
+                            cacheInvalidator = cacheInvalidator,
+                            userDataSyncTrigger = PlaybackOutboxDrainer.UserDataSyncTrigger {
+                                userDataSyncScheduler.enqueueNow()
+                            },
+                            notifier = notifier,
+                        )
+                    },
                 )
             })
             .setRunAttemptCount(runAttemptCount)

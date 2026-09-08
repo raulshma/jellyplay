@@ -1934,6 +1934,135 @@ green across every touched module.
   signed-out auth shell, factory-reset field enumeration, settings row-twin
   rendering, `ss_*`/`settings_*` string merge.
 
+## The 2026-09-08 wave (11 deepenings)
+
+Landed autonomously via parallel workstreams, each with pinned tests; the
+exploration pass that selected them is summarized in the run's temp report.
+The dominant theme: multi-copy choreography folding onto one home, and the
+sync drain leaving the CI-dark legacy lane.
+
+- **`PlaybackOutboxDrainer`** (shared/core/data jvmShared,
+  `worker/PlaybackOutboxDrainer.kt`) is the ONE drain choreography behind
+  `suspend drainOnce(attempt: Int): DrainResult`: offline gate, staged-intent
+  collection, derived-watched flips, the retry-budget ladder
+  (`MAX_RETRIES = 3` / `MAX_INTENT_RETRIES = 10`), dead-letter policy,
+  superseded-telemetry skip, bounded reconcile batch (cap 50, via
+  `Semaphore.mapConcurrent`), and the cache-invalidate +
+  `notifyUserDataChanged` + `enqueueNow` tail. `PlaybackSyncWorker`
+  (legacy `core:data`) shrinks to a thin adapter implementing the drainer's
+  `Notifier` (foreground promotion / mid-drain update / dismissal) and
+  mapping `DrainResult.retriesPending` → `Result.retry()`; `attempt` is the
+  only seam the old `runAttemptCount` coupling needed. Deliberate deltas:
+  desktop's `DesktopPlaybackSyncScheduler` is now REAL (startup,
+  Offline→Online transitions via `DesktopNetworkMonitor.networkStatus`,
+  manual-sync `enqueueNow`; Mutex-serialized; `attempt = 0` fresh budget per
+  pass; no periodic backstop — a row staged while continuously online waits
+  for the next transition/restart), so the no-op-binding "staged rows sit"
+  era is over. The 33-test worker suite moved from the legacy
+  `core/data/src/test` lane — which NO CI job ran, i.e. dead assertions per
+  this file's own rule — into `:shared:core:data:jvmTest` (CI-gated), plus
+  7 new drainer/Notifier-protocol tests; the Android lane keeps the trimmed
+  WorkManager-specific resilience cases and
+  `OfflineWatchSyncContractTest`, and `kmp-build.yml` now runs
+  `:core:data:testDebugUnitTest` beside the `:core:notification` precedent.
+  Pinned by `PlaybackOutboxDrainerTest` (33) +
+  `PlaybackOutboxDrainerResilienceTest`.
+- **`LiveTvLoad`** (livetv commonMain, `internal object` beside
+  `LiveTvTimeFormat`) owns the load ladder (start → fetch → dispatch to
+  exactly one arm; returned `Result` is the continuation gate) folded across
+  Channels/Series/Recordings/ChannelDetail/Programs ViewModels. This is the
+  load-ladder fold's FIRST module slice per the recorded landing condition.
+  Site-specific drift stays at the call sites as declared arms: Recordings'
+  legacy unconditional `getOrDefault(emptyList())` settle is preserved
+  verbatim (failure clears the list — commented), Programs' `fullRender`
+  variant rides the `start` closure (no flavour parameter needed),
+  ChannelDetail leg-gates on the returned Result, and ScheduleViewModel is
+  deliberately NOT folded (two independent fetches with per-call
+  `getOrDefault` settle — a single-Result dispatch would lose the surviving
+  half on partial failure). Pinned by `LiveTvLoadTest` (6) with the six
+  per-VM suites unmodified.
+- **`SelectionState<T>`** (core/model commonMain, beside
+  `LibraryFilters`) is the one list-selection algebra: `ids` + derived
+  `active`, pure `toggled`/`cleared`/`selectAll` — the
+  `selectionMode = next.isNotEmpty()` derivation lives once. ArrQueue
+  (`String`), Downloads (`String`) and Requests (`Int`) ViewModels store one
+  `SelectionState` in their uiState with `selectedIds`/`selectionMode` as
+  derived properties, so screens are untouched. Declared delta:
+  `selectAll(empty)` now stays inactive (the old VMs flipped
+  `selectionMode = true`, showing a 0-count bar with every action disabled).
+  The three screens' `SelectionActionBar` composables remain deliberately
+  separate (their visual drift is a product decision; recorded below).
+  Pinned by `SelectionStateTest` (9, commonTest algebra style).
+- **`PlayerKeyPolicy`** (beside `PlayerScreenPolicies`) lifts the media-key
+  decision table out of the `VideoPlayerScreen` composable:
+  `mediaKeyAction(keyCode, controlsVisible): PlayerKeyAction?` (sealed arms
+  TogglePlayPause…HideControls/Exit, media-key aliases, both ESC arms,
+  unknown → null); the screen keeps a one-line effect shell, both delivery
+  paths (focused-chain `.onKeyEvent`, desktop key sink) now provably
+  identical. The TV D-pad handler stays out (stateful by design). Pinned by
+  `PlayerKeyPolicyTest` (10).
+- **`SubtitleManager.openSubtitleHub(resetFirst)`** is the one hub-open
+  command (optional reset → `loadRemoteSubtitles` →
+  `loadSubtitleCultures` → `loadConfiguredProviders`, historical order).
+  The screen's three hand-copied cascades are gone: the click sites route
+  only (overflow sets `resetFirst = true` via a screen-local single-shot
+  pending flag), the sheet router's `LaunchedEffect` is the SINGLE trigger.
+  Declared deltas: the Tracks-tab double-fetch is gone (one remote-subtitle
+  request per open, was two), and sheet-open loading starts at composition
+  rather than at click (sub-frame; the hub spinner covers it). Pinned by 4
+  new `SubtitleManagerTest` cases (28 pre-existing untouched).
+- **Player VM drive-by folds**: `PlayerScreenPolicies.resumeSkipTargetMs`
+  (skip ≤ 0 → unchanged; else 0-floor) is the one resume-skip-back math,
+  with the `isPlaying` guard divergence DECLARED — `onRegain` applies it
+  unguarded (focus regain follows a transient loss), `resumePlayback` keeps
+  the guard (the play toggle must not scrub a playing stream) — and the two
+  byte-identical cinema-advance-else-close end-of-media bodies are one
+  private `onEndedWithNoNext()`. Pinned in
+  `PlayerScreenPoliciesTest` (`ResumeSkipTargetTest`, 4).
+- **MainActivity adopts `JellyPlayPreferenceTheme`** — the wrapper's own
+  KDoc said it was extracted FROM MainActivity, which had never adopted it
+  (PlayerActivity and desktop had). The byte-identical ~98-line hand copy
+  (17 theme args, motion/performance locals, filter chain) is deleted;
+  divergence check found none beyond the wrapper's existing `isTv` param.
+- **Auto-lock joins the lock family**: `AppLockRedirect.shouldRelock(gate,
+  timerMs, backgroundedAtMs, nowMs)` (the `backgroundedAt > 0` "never
+  backgrounded" arm preserved) + `AppLockState.onBackgrounded/onResumed`
+  move the timer decision out of MainActivity's lifecycle callbacks — the
+  third lock decision, previously the only untested one beside
+  `PinGateController`/`AppLockRedirect`. Truth-table pinned (11 new tests
+  incl. exact-equal and one-ms-short boundary arms).
+- **`Semaphore.mapConcurrent` adoptions**: NewMediaCheckWorker's folder
+  fan-out, FavoritesViewModel photo-folder prefetch, MusicHomeViewModel
+  album tracks, DreamImageProvider (wrapped in `withContext(Dispatchers.IO)`
+  — mapConcurrent inherits the caller context), and (inside the drainer
+  move) `reconcileBatch`. Four explorer-nominated sites were verified NOT
+  ladders and left alone: UpcomingCalendar/Requests enrichment and
+  AlbumDetail downloads are fire-and-forget `launch`-per-item with
+  incremental merges (no awaited list — mapConcurrent would block the
+  collector and change failure propagation), and ArrSettings'
+  `testAllServers` keeps its permit INSIDE the shared `probeServer`
+  (a 1:1 conversion double-acquires → deadlock; removing it moves a
+  pre-permit status flip — the "Testing" UI timing — across the gate).
+- **Watch-state vocabulary**: `OfflineMediaItem.isWatchedOffline`
+  (`isPlayed || isFinishedOffline` — the derived-flip predicate, now
+  greppable) and `OfflineMediaItem.hasPlaybackPosition` join
+  `OfflineShelf.kt`; the `hasWatchProgress` hand copies in
+  `MediaDetailSeasons` (×4) and `EpisodePickerSheet` re-point onto the
+  core/model extensions, as does OfflineHomeSections' private
+  `hasResumePosition`. Declined as different predicates, not drift:
+  `DownloadInfoCard`'s `isPlayed || positionTicks > 0` means "has any watch
+  activity" (hasWatchProgress requires `!isPlayed`), and
+  `MediaDetailBody`'s position read is `target.startPositionTicks` (a
+  resume/chapter-start field, not the saved playback position).
+- **Logs pagination guard fix (defect)**: `LogsScreen` fed the
+  infinite-list guard a hardcoded `isLoadingMore = false`, so
+  `loadMoreActivity` could fire re-entrantly with the same
+  `startIndex = currentSize` and double-append a server page. Now:
+  `LogsState.isLoadingMoreActivity` (live guard + footer spinner),
+  synchronous early-return in `loadMoreActivity`, flag cleared on both
+  settle arms. The regression test (two rapid calls → exactly one fetch,
+  one appended page) was verified to fail against the old semantics.
+
 ## Rejected designs
 
 Recorded with evidence so future reviews don't re-suggest them.
@@ -2050,15 +2179,15 @@ re-derives the designs nor lands them casually.
   capability-note flow. Deferred: cross-module persistence-edge design
   deserves the grilling loop, not an autonomous batch.
 - **Feature-VM load-ladder fold**: the `isLoading = true, error = null`
-  suspend-guard ladder is hand-copied in ~23 ViewModels across 10
-  feature modules (all livetv tabs, 7 admin VMs, requests, calendar,
-  editor, music, syncplay, plugin-config), with drifted settle arms
-  (final-update vs per-arm vs getOrDefault — a missed arm leaves a
-  stuck spinner). Design: one `loadInto`-shaped helper in core:ui next
-  to `JellyPlayViewModel`, VMs map Success payloads into their own
-  state. Deferred: each of the 23 conversions is a per-VM behaviour
-  decision (settle timing); land module-by-module with pinned tests,
-  not as one mechanical sweep.
+  suspend-guard ladder is hand-copied across admin (7 VMs), requests,
+  calendar, editor, music, syncplay, plugin-config (the livetv slice
+  LANDED 2026-09-08 as `LiveTvLoad` — see that wave). Settle arms are
+  drifted per copy (final-update vs per-arm vs getOrDefault — a missed arm
+  leaves a stuck spinner). Design: one `loadInto`-shaped helper in core:ui
+  next to `JellyPlayViewModel` (or a per-module helper like `LiveTvLoad`),
+  VMs map Success payloads into their own state. Deferred: each conversion
+  is a per-VM behaviour decision (settle timing); land module-by-module
+  with pinned tests, not as one mechanical sweep.
 - **`DetailViewModel` intent fold**: ~29 public funs force the 160-line
   hand-built `DetailContentCallbacks` adapter in `MediaDetailScreen`
   (keyed on 15 values). Design: sealed `DetailIntent` + `onEvent` (the
@@ -2066,3 +2195,70 @@ re-derives the designs nor lands them casually.
   the load-bearing pure decisions so the fold inherits tested arms.
   Deferred: 1742-line existing suite + screen wiring deserve their own
   session.
+- **`TrickplayPreviewSource`** (player-video): "fetch a trickplay thumbnail
+  for this position?" is a 3-way split — seek-lane gate, gesture-lane gate
+  (info-null check inside the collect body), and the VM prefs double-check —
+  with the 4-step fetch choreography hand-copied in two `snapshotFlow`
+  collectors. Design: a constructor-lambda controller owning ONE gate
+  predicate, the fetch, and per-lane clear/linger (seek clears immediate,
+  gesture lingers 1 s — keep the lanes as declared variants over one core).
+  Deferred: overlay-timing regressions are visual-only; needs device eyes.
+- **`SubtitleStyleController`** (player-video): the subtitle style/delay
+  write path is ~7 pockets inside the unconstructable 2704-line
+  `VideoPlayerViewModel`, protecting the load-bearing invariant "the
+  in-memory offsetMs is the per-item resolved delay and must never persist
+  into the global store" by KDoc discipline across three write paths.
+  Design: a `SubtitlePreviewController`-style controller (style flow,
+  `setStyle`/`setDelay`/`installFont`/`resolveForItem`, constructor
+  lambdas so the god-count ratchet stays at 3). Deferred: the engineFlow
+  collector seeds `uiState.subtitleStyle` with the resolved style on every
+  engine bind and the write must stay ordered before the first
+  `updateConfigWithUiState` — land in two steps, mirror write VM-side
+  first.
+- **`ExternalPlayerHost`** (`app`): the six-step external-player launch
+  protocol (resolve → report-start → stash pending launch → chooser →
+  failure clears stash + error message → route veto; result arm folds
+  `externalPlayerPositionTicks` + report-stop) lives composable-inline in
+  `JellyPlayApp`'s navigate-filter; every pure input/output around it is
+  tested but the ORDERING between them is not. Design: one app-local
+  module beside `PlaybackHostRouter` with `launch(...)`/`onResult(...)`
+  and constructor lambdas. Deferred: single copy — the deletion test fails
+  today; land when the shell next churns.
+- **`PendingConfirmation<T>`**: the confirm-dialog pending-item machine
+  (hold item → dismiss = null-write → confirm clears + runs + reloads) is
+  hand-copied in 6 places (Devices/Users/Recordings/ManageSeries/ArrQueue
+  VMs + two `remember`-state machines inside `MediaDetailScreen`).
+  Drift-shaped variance: only Recordings has the dismiss-during-in-flight
+  guard; only ArrQueue generalized to a sealed action. Deferred:
+  universalizing the guard changes dismiss behaviour at 5 sites — the
+  decision deserves to be made explicitly.
+- **Settings/Library section hosts**: `SettingsScreen`'s root composable
+  holds ~1150 lines (every section inline; the leaves are already
+  extracted); `LibraryScreen` similar (~1270-line body). Design: a
+  section-list seam matching `SETTINGS_ENTRANCE_SECTIONS`, one private
+  composable per section. Deferred: composition-shape only, zero
+  behaviour — do settings + library together, never bundled with
+  behaviour changes.
+- **`PageAppender`**: three append-page ladders with drifted re-entrancy
+  vocabularies (Requests guards on `isLoading`, StatsDetail on
+  `!isLoadingMore && hasMoreItems`; the Logs defect is FIXED —
+  2026-09-08 wave). Design: one small appender owning the in-flight guard,
+  `hasMore`, and index math. Deferred: each site's interleaving semantics
+  deserve their own pinned interleaved-completion tests.
+- **SelectionActionBar unification**: three per-screen bars
+  (arrqueue/downloads/requests) share anatomy but have drifted visually
+  (corner radius, container color, icon-vs-text buttons, approve/decline
+  placement); downloads adds `has*` enable flags computed in-screen.
+  Deferred: pixel changes are a product call — screenshots first.
+- **Pull-to-refresh spinner policy**: `PullToRefreshBox` is shared
+  (good) but "when does the spinner show" is re-decided per call site —
+  livetv Series spins on cold load (full-screen blank + spinner), music
+  Albums and calendar guard with "have content". Deferred: pixel-visible
+  product decision (the livetv cold-load spinner is probably wrong, but
+  that's a call, not a fold).
+- **Widget worker refresh chassis / grid bind-tail**: the two
+  recommendation workers hand-copy the guard → fetch → empty-keep →
+  persist → retry-fold chassis (logging arms differ), and the three grid
+  factories re-copy the poster-or-fallback + responsive-loading-row bind
+  tails. Deferred: hygiene-grade; both copies already test-pinned. Fold
+  opportunistically.

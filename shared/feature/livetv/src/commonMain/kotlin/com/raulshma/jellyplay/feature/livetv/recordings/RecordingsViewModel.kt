@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.LiveTvRecording
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import com.raulshma.jellyplay.feature.livetv.LiveTvLoad
 
 @Immutable
 data class RecordingsUiState(
@@ -33,15 +34,19 @@ class RecordingsViewModel(
 
     fun load() {
         launch {
-            _uiState.update { it.copy(isLoading = true, error = null) }
-            val recordingsResult = mediaRepository.getRecordings(limit = LATEST_LIMIT)
-            recordingsResult.onFailure { _uiState.update { s -> s.copy(error = it.message) } }
-            _uiState.update { s ->
-                s.copy(
-                    recordings = recordingsResult.getOrDefault(emptyList()),
-                    isLoading = false,
-                )
-            }
+            LiveTvLoad.load(
+                start = { _uiState.update { it.copy(isLoading = true, error = null) } },
+                fetch = { mediaRepository.getRecordings(limit = LATEST_LIMIT) },
+                onSuccess = { recordings ->
+                    _uiState.update { s -> s.copy(recordings = recordings, isLoading = false) }
+                },
+                onFailure = { e ->
+                    // The legacy ladder settled unconditionally with
+                    // getOrDefault(emptyList()) — a failure still clears the
+                    // previous list, it does not preserve it.
+                    _uiState.update { s -> s.copy(recordings = emptyList(), error = e.message, isLoading = false) }
+                },
+            )
         }
     }
 

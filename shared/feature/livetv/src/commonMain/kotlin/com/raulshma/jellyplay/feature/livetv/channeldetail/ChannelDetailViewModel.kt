@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import com.raulshma.jellyplay.feature.livetv.LiveTvLoad
 import com.raulshma.jellyplay.feature.livetv.components.RecordAction
 import com.raulshma.jellyplay.feature.livetv.components.RecordActions
 import com.raulshma.jellyplay.feature.livetv.components.RecordOutcome
@@ -40,12 +41,17 @@ class ChannelDetailViewModel(
     val messages: Flow<LiveTvUserMessage> = messageChannel.receiveAsFlow()
 
     fun loadChannel(channelId: String, channelName: String) {
-        _uiState.update { it.copy(channelId = channelId, channelName = channelName, isLoading = true, error = null) }
         launch {
             // 1. Channel meta (name/number/logo + currentProgram). limit matches
             //    ChannelsViewModel so channels beyond rank 50 are still found.
-            mediaRepository.getLiveTvChannels(limit = 100, addCurrentProgram = true)
-                .onSuccess { channels ->
+            //    A meta failure settles the error here and — via the returned
+            //    Result — skips leg 2 entirely.
+            val meta = LiveTvLoad.load(
+                start = {
+                    _uiState.update { it.copy(channelId = channelId, channelName = channelName, isLoading = true, error = null) }
+                },
+                fetch = { mediaRepository.getLiveTvChannels(limit = 100, addCurrentProgram = true) },
+                onSuccess = { channels ->
                     val channel = channels.firstOrNull { it.id == channelId }
                     if (channel != null) {
                         _uiState.update {
@@ -58,11 +64,12 @@ class ChannelDetailViewModel(
                             )
                         }
                     }
-                }
-                .onFailure { e ->
+                },
+                onFailure = { e ->
                     _uiState.update { it.copy(isLoading = false, error = e.message ?: "Failed to load channel") }
-                    return@launch
-                }
+                },
+            )
+            if (meta.isFailure) return@launch
 
             // 2. Today's programs: now → end of day (local midnight).
             refreshPrograms(channelId, isInitialLoad = true)

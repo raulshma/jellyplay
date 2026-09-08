@@ -226,7 +226,7 @@ fun LogsScreen(
                         entries = filteredEntries,
                         isLiveActive = state.isLiveStreamActive,
                         liveEntryIds = state.liveEntryIds,
-                        isLoadingMore = false,
+                        isLoadingMore = state.isLoadingMoreActivity,
                         onLoadMore = { viewModel.loadMoreActivity() },
                         bottomPadding = adaptiveInfo.bottomPadding(isTv),
                         listFocusRequester = listFocusRequester,

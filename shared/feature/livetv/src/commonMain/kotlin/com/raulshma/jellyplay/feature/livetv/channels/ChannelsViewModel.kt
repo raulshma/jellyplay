@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import com.raulshma.jellyplay.feature.livetv.LiveTvLoad
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -49,9 +50,10 @@ class ChannelsViewModel(
 
     fun loadChannels() {
         launch {
-            _uiState.update { it.copy(isLoading = true, error = null) }
-            mediaRepository.getLiveTvChannels(limit = 100)
-                .onSuccess { channels ->
+            LiveTvLoad.load(
+                start = { _uiState.update { it.copy(isLoading = true, error = null) } },
+                fetch = { mediaRepository.getLiveTvChannels(limit = 100) },
+                onSuccess = { channels ->
                     val favorites = appRuntimeStateStore.state.value.favoriteChannels
                     val sorted = if (favorites.isEmpty()) {
                         channels
@@ -59,8 +61,9 @@ class ChannelsViewModel(
                         channels.sortedByDescending { it.id in favorites }
                     }
                     _uiState.update { it.copy(channels = sorted, isLoading = false) }
-                }
-                .onFailure { e -> _uiState.update { it.copy(error = e.message, isLoading = false) } }
+                },
+                onFailure = { e -> _uiState.update { it.copy(error = e.message, isLoading = false) } },
+            )
         }
     }
 

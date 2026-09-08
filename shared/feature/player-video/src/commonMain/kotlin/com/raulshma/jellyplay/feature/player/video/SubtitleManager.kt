@@ -597,6 +597,30 @@ internal class SubtitleManager(
     }
 
     /**
+     * The single subtitle-hub open cascade: optionally reset the
+     * search/cultures slice first ([resetFirst] — the overflow "Subtitles"
+     * entry's "stale results don't leak across items" reset), then run the
+     * three loads in the screen's historical order — [loadRemoteSubtitles],
+     * [loadSubtitleCultures], [loadConfiguredProviders].
+     *
+     * Formerly hand-copied at three `VideoPlayerScreen` sites (the Tracks-tab
+     * click, the overflow click, and the sheet router's LaunchedEffect),
+     * which double-fetched the server-default list on every open: the click
+     * cascade ran, then the router effect cancelled and re-fetched. The
+     * router's LaunchedEffect is now the sheet's SINGLE load trigger — the
+     * click sites only route — so one open costs one remote request.
+     * Declared timing delta: the fetch starts at sheet COMPOSITION rather
+     * than at click (a sub-frame delta; the hub's loading spinner already
+     * covers the in-flight window).
+     */
+    fun openSubtitleHub(resetFirst: Boolean) {
+        if (resetFirst) resetSubtitleManagerState()
+        loadRemoteSubtitles()
+        loadSubtitleCultures()
+        loadConfiguredProviders()
+    }
+
+    /**
      * Loads the language cultures the server understands for subtitle
      * upload/search selection. Idempotent: a no-op once cultures are already
      * populated for the current item (e.g. across tab switches / reopens).

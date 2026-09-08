@@ -133,6 +133,33 @@ class StepSeekTargetTest {
     }
 }
 
+class ResumeSkipTargetTest {
+
+    @Test
+    fun activeSkip_rewindsBySkipMs() {
+        assertEquals(40_000L, resumeSkipTargetMs(currentPositionMs = 50_000L, skipMs = 10_000L))
+    }
+
+    @Test
+    fun floorsAtZero_neverNegative() {
+        assertEquals(0L, resumeSkipTargetMs(currentPositionMs = 5_000L, skipMs = 10_000L))
+        assertEquals(0L, resumeSkipTargetMs(currentPositionMs = 0L, skipMs = 10_000L))
+    }
+
+    @Test
+    fun disabledSkip_leavesPositionUnchanged() {
+        // skipMs <= 0 means the videoSkipBackOnResumeMs preference is off —
+        // the position must pass through untouched (no seek, no floor).
+        assertEquals(50_000L, resumeSkipTargetMs(currentPositionMs = 50_000L, skipMs = 0L))
+        assertEquals(50_000L, resumeSkipTargetMs(currentPositionMs = 50_000L, skipMs = -1L))
+    }
+
+    @Test
+    fun activeSkip_atOrNearZero_landsAtZero() {
+        assertEquals(0L, resumeSkipTargetMs(currentPositionMs = 10_000L, skipMs = 10_000L))
+    }
+}
+
 class OrientationLockDecisionTest {
 
     @Test

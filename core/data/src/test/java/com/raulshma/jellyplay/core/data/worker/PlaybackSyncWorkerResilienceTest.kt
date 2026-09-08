@@ -15,8 +15,6 @@ import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxRepository
 import com.raulshma.jellyplay.core.data.repository.MediaCacheInvalidator
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
-import com.raulshma.jellyplay.core.model.MediaType
-import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -33,24 +31,24 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * Drain-loop resilience companions to [PlaybackSyncWorkerTest]: the seams the
- * happy-path suite leaves open — every one of them a way a real device has of
- * breaking an offline→online sync:
+ * Worker-adapter resilience companions to [OfflineWatchSyncContractTest] —
+ * the WorkManager-shaped seams of [PlaybackSyncWorker], which is now a thin
+ * adapter over the shared [PlaybackOutboxDrainer] (the drain-policy suites
+ * moved with the body to :shared:core:data's jvmTest lane):
  *
- *  1. suppression is ORDER-INDEPENDENT — a STOP captured before the watched
- *     flip must still be dropped when a PLAYED intent is staged for the item
- *     (a trailing near-end STOP replayed after markPlayedItem is the #153
- *     "watched online again" poison producer);
- *  2. a Room read failure during derived-flip derivation (getOfflineItem
- *     throws) must degrade to "no derivation", never crash the drain — the
- *     telemetry itself is still replayed;
- *  3. a failing played-intent probe must fall back to REPLAYING telemetry
- *     (getOrDefault(false) — suppression requires a confirmed intent, not an
- *     unknown), so a transient DB error cannot silently delete position
- *     reports;
- *  4. notification plumbing (foreground promotion, mid-drain count update,
+ *  1. notification plumbing (foreground promotion, mid-drain count update,
  *     dismissal) is best-effort: an OEM-restricted or otherwise throwing
- *     notification path must never fail the drain itself.
+ *     notification path must never fail the drain itself;
+ *  2. the adapter's one decision — mapping the drain's `retriesPending` onto
+ *     WorkManager's Result.retry() — pins so a failing replay cannot be
+ *     reported as success.
+ *
+ * The worker is built via [TestListenableWorkerBuilder], which wires the
+ * WorkManager foreground-notification infrastructure that `setForeground`
+ * depends on (constructing the worker directly makes `setForeground` hang on
+ * its internal ListenableFuture). The drainer here is the REAL shared impl
+ * over the same mocked repositories, with the worker itself serving as its
+ * Notifier — exactly the production wiring.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -101,103 +99,27 @@ class PlaybackSyncWorkerResilienceTest {
                 ): PlaybackSyncWorker = PlaybackSyncWorker(
                     appContext,
                     workerParameters,
-                    outbox,
-                    playbackRepository,
-                    offlineModeManager,
-                    playedStateSync,
-                    offlineRepository,
-                    userDataSyncScheduler,
-                    mediaRepository,
-                    cacheInvalidator,
+                    createDrainer = { notifier ->
+                        PlaybackOutboxDrainerImpl(
+                            outbox = outbox,
+                            playbackRepository = playbackRepository,
+                            offlineModeManager = offlineModeManager,
+                            playedStateSync = playedStateSync,
+                            offlineRepository = offlineRepository,
+                            mediaRepository = mediaRepository,
+                            cacheInvalidator = cacheInvalidator,
+                            userDataSyncTrigger = PlaybackOutboxDrainer.UserDataSyncTrigger {
+                                userDataSyncScheduler.enqueueNow()
+                            },
+                            notifier = notifier,
+                        )
+                    },
                 )
             })
             .setRunAttemptCount(runAttemptCount)
             .build()
 
-
-    private fun mirrorRow(
-        isPlayed: Boolean = false,
-        playedPercentage: Double = 50.0,
-    ) = OfflineMediaItem(
-        id = ITEM_ID,
-        name = "Episode",
-        mediaType = MediaType.EPISODE,
-        isPlayed = isPlayed,
-        playedPercentage = playedPercentage,
-        runTimeTicks = 60_000_000L,
-        playbackPositionTicks = ((playedPercentage / 100.0) * 60_000_000L).toLong(),
-    )
-
-    // ── 1. Suppression is order-independent (#153) ──────────────────────
-
-    @Test
-    fun `telemetry captured before the watched flip is still suppressed`() = runTest {
-        // Drain order is oldest-first by createdAt; a STOP recorded at t=5
-        // with the PLAYED intent staged at t=6 still precedes it in the list.
-        coEvery { outbox.drain() } returns listOf(
-            entry("e1", ITEM_ID, PlaybackOutboxEventType.STOP, positionTicks = 58_000_000L),
-            entry("e2", ITEM_ID, PlaybackOutboxEventType.PROGRESS, positionTicks = 30_000_000L),
-            entry("e3", ITEM_ID, PlaybackOutboxEventType.PLAYED),
-        )
-        coEvery { outbox.hasUnsyncedPlayedIntent(ITEM_ID) } returns true
-
-        val result = buildWorker().doWork()
-
-        assertTrue(result is androidx.work.ListenableWorker.Result.Success)
-        // Only the PLAYED intent is replayed; both telemetry rows are dropped
-        // in place — replaying either would re-poison the server row.
-        coVerify(exactly = 1) {
-            playbackRepository.replayOutboxEntry(match { it.eventType == PlaybackOutboxEventType.PLAYED })
-        }
-        coVerify(exactly = 0) {
-            playbackRepository.replayOutboxEntry(match { it.eventType == PlaybackOutboxEventType.STOP })
-            playbackRepository.replayOutboxEntry(match { it.eventType == PlaybackOutboxEventType.PROGRESS })
-        }
-        coVerify(exactly = 3) { outbox.delete(any()) }
-    }
-
-    // ── 2. Mirror-row read failure degrades, never crashes ──────────────
-
-    @Test
-    fun `a failing mirror-row read replays telemetry and skips the derived flip`() = runTest {
-        coEvery { outbox.drain() } returns listOf(
-            entry("e1", ITEM_ID, PlaybackOutboxEventType.STOP, positionTicks = 58_000_000L),
-        )
-        coEvery { offlineRepository.getOfflineItem(ITEM_ID) } throws
-            android.database.SQLException("room read failed")
-
-        val result = buildWorker().doWork()
-
-        assertTrue(result is androidx.work.ListenableWorker.Result.Success)
-        coVerify(exactly = 1) { playbackRepository.replayOutboxEntry(any()) }
-        coVerify(exactly = 1) { outbox.delete("e1") }
-        // No mirror row → no derivation; markPlayed must not fire blind.
-        coVerify(exactly = 0) { mediaRepository.markPlayed(any()) }
-    }
-
-    // ── 3. A failing intent probe replays instead of suppressing ────────
-
-    @Test
-    fun `a failing played-intent probe replays telemetry instead of deleting it`() = runTest {
-        coEvery { outbox.drain() } returns listOf(
-            entry("e1", ITEM_ID, PlaybackOutboxEventType.STOP, positionTicks = 58_000_000L),
-        )
-        // Unknown ≠ staged: suppression needs a confirmed intent, so a DB
-        // failure must fall back to replaying the position report.
-        coEvery { outbox.hasUnsyncedPlayedIntent(ITEM_ID) } throws
-            android.database.SQLException("room read failed")
-        // Mirror row mid-watch: nothing to derive even if it were readable.
-        coEvery { offlineRepository.getOfflineItem(ITEM_ID) } returns mirrorRow(playedPercentage = 40.0)
-
-        val result = buildWorker().doWork()
-
-        assertTrue(result is androidx.work.ListenableWorker.Result.Success)
-        coVerify(exactly = 1) { playbackRepository.replayOutboxEntry(any()) }
-        coVerify(exactly = 1) { outbox.delete("e1") }
-        coVerify(exactly = 0) { mediaRepository.markPlayed(any()) }
-    }
-
-    // ── 4. Notification plumbing is best-effort ─────────────────────────
+    // ── 1. Notification plumbing is best-effort ─────────────────────────
 
     @Test
     fun `a failing foreground promotion does not fail the drain`() = runTest {
@@ -245,6 +167,18 @@ class PlaybackSyncWorkerResilienceTest {
 
         assertTrue(result is androidx.work.ListenableWorker.Result.Success)
         coVerify(exactly = 1) { outbox.delete("e1") }
+    }
+
+    // ── 2. The adapter's retry() mapping ─────────────────────────────────
+
+    @Test
+    fun `a retries-pending drain maps to WorkManager retry`() = runTest {
+        coEvery { outbox.drain() } returns listOf(entry("e1", ITEM_ID, PlaybackOutboxEventType.PLAYED))
+        coEvery { playbackRepository.replayOutboxEntry(any()) } returns false
+
+        val result = buildWorker().doWork()
+
+        assertTrue(result is androidx.work.ListenableWorker.Result.Retry)
     }
 
     private companion object {

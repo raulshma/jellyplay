@@ -45,6 +45,7 @@ import com.raulshma.jellyplay.feature.player.video.generated.resources.player_vi
 import com.raulshma.jellyplay.feature.player.video.engine.AspectRatio
 import com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState
 import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
+import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import com.raulshma.jellyplay.feature.player.video.engine.SegmentCalculator
 import com.raulshma.jellyplay.feature.player.video.engine.SegmentCalculatorInput
 import com.raulshma.jellyplay.feature.player.video.engine.SubtitleSource
@@ -401,18 +402,23 @@ class VideoPlayerViewModel(
      * the live TV VM to eliminate the prior copy-paste. [control] reads the
      * current engine on every callback so engine swaps (retry/fallback) and
      * teardown stay correct. [onRegain] applies the `videoSkipBackOnResumeMs`
-     * resume-skip the VOD path needs (live has no equivalent).
+     * resume-skip the VOD path needs (live has no equivalent) — the same
+     * [applyResumeSkip] math [resumePlayback] uses, but WITHOUT its
+     * is-playing guard; that divergence is deliberate, see [resumePlayback].
      */
     private val playerAudioLifecycle = platform.createAudioLifecycle(
         getEngine = { playerSessionManager.engine },
         isMuted = { _uiState.value.isMuted },
         onRegain = {
-            val skipMs = aggregateStore.aggregate.value.videoPlayer.videoSkipBackOnResumeMs
-            if (skipMs > 0L) {
-                val target = ((playerSessionManager.engine?.currentPositionMs ?: 0L) - skipMs)
-                    .coerceAtLeast(0L)
-                seekTo(target)
-            }
+            // No is-playing guard (deliberate divergence from
+            // [resumePlayback], which keeps one): focus REGAIN follows a
+            // transient loss (duck/pause), where the skip is always wanted
+            // regardless of the engine's current play flag. Shared clamp
+            // math via [applyResumeSkip] / [resumeSkipTargetMs].
+            // Declared delta vs the pre-fold body: a NULL engine is a no-op
+            // (the old body issued a degenerate seekTo(0) through the full
+            // dispatcher — no local playback exists to skip back).
+            playerSessionManager.engine?.let { applyResumeSkip(it) }
         },
     )
 
@@ -486,12 +492,34 @@ class VideoPlayerViewModel(
 
     fun resumePlayback() {
         val engine = playerSessionManager.engine ?: return
-        val skipMs = aggregateStore.aggregate.value.videoPlayer.videoSkipBackOnResumeMs
-        if (skipMs > 0L && !engine.isPlaying.value) {
-            val target = (engine.currentPositionMs - skipMs).coerceAtLeast(0L)
-            seekTo(target)
+        // The is-playing guard here is DELIBERATE and its absence from the
+        // audio-focus regain path ([playerAudioLifecycle.onRegain], which
+        // applies the same skip unguarded) is equally deliberate: resume is
+        // the play/pause toggle's play arm, so it can fire while already
+        // playing — re-seeking then would scrub an active stream — whereas a
+        // focus regain only follows a transient loss, where the skip is
+        // always wanted. The clamp math itself is shared via
+        // [applyResumeSkip] / [resumeSkipTargetMs] (PlaybackVolumePolicy
+        // style: math shared, per-site divergence declared).
+        if (!engine.isPlaying.value) {
+            applyResumeSkip(engine)
         }
         engine.play()
+    }
+
+    /**
+     * The `videoSkipBackOnResumeMs` resume-skip funnel: rewinds the engine's
+     * current position by the configured skip through
+     * [resumeSkipTargetMs] (floor at zero; a non-positive skip disables the
+     * feature and seeks nothing). Shared by the audio-focus regain path
+     * ([playerAudioLifecycle.onRegain]) and [resumePlayback] — the two former
+     * hand-copied bodies. Each call site keeps its OWN guard; the divergence
+     * is declared at both (see [resumePlayback]).
+     */
+    private fun applyResumeSkip(engine: MediaEngine) {
+        val skipMs = aggregateStore.aggregate.value.videoPlayer.videoSkipBackOnResumeMs
+        if (skipMs <= 0L) return
+        seekTo(resumeSkipTargetMs(currentPositionMs = engine.currentPositionMs, skipMs = skipMs))
     }
 
     // getReportPositionMs moved into PlaybackSession at B3 (seek latches +
@@ -511,13 +539,7 @@ class VideoPlayerViewModel(
         getMediaEngine = { playerSessionManager.engine },
         getIncognitoModeEnabled = { cachedAggregate.videoPlayer.incognitoModeEnabled },
         onAutoSkip = { segment -> skipSegment(segment) },
-        onPlaybackEndedNoNext = {
-            if (playbackSession.cinemaIntroContext != null) {
-                playbackSession.advanceCinemaIntro()
-            } else {
-                _closePlayer.trySend(Unit)
-            }
-        },
+        onPlaybackEndedNoNext = { onEndedWithNoNext() },
         onWatchedThresholdReached = { itemId ->
             handleSmartDownloadCleanup(itemId)
             // Closes the gap where playback crossed the watched threshold but no
@@ -2172,11 +2194,22 @@ class VideoPlayerViewModel(
         if (autoplayController.shouldAutoPlayNext(next)) {
             playNextEpisode()
         } else {
-            if (playbackSession.cinemaIntroContext != null) {
-                playbackSession.advanceCinemaIntro()
-            } else {
-                _closePlayer.trySend(Unit)
-            }
+            onEndedWithNoNext()
+        }
+    }
+
+    /**
+     * End-of-stream with nothing queued next: a cinema-intro chain advances to
+     * its next item, anything else closes the player. The byte-identical
+     * bodies of the progress reporter's `onPlaybackEndedNoNext` callback and
+     * [handlePlaybackEnded]'s no-autoplay branch, folded so the two can never
+     * drift.
+     */
+    private fun onEndedWithNoNext() {
+        if (playbackSession.cinemaIntroContext != null) {
+            playbackSession.advanceCinemaIntro()
+        } else {
+            _closePlayer.trySend(Unit)
         }
     }
 

@@ -279,7 +279,11 @@ jobs:
         # its 8 Robolectric suites (67 tests) gate nothing — the exact
         # no-CI-lane failure mode that stranded the legacy core/data suites
         # (CONTEXT.md); notification is living code, not the Phase-X husk.
-        run: ./gradlew :app:testPhoneDebugUnitTest :app:testTvDebugUnitTest :core:notification:testDebugUnitTest --stacktrace
+        # :core:data:testDebugUnitTest closes the same dark lane for core:data
+        # (worker suites incl. the OfflineWatchSyncContractTest regression
+        # pin); the drain-policy bodies themselves run portable in
+        # :shared:core:data:jvmTest above.
+        run: ./gradlew :app:testPhoneDebugUnitTest :app:testTvDebugUnitTest :core:notification:testDebugUnitTest :core:data:testDebugUnitTest --stacktrace
 
       - name: Compose-resources APK guard (wave-21 P0 regression guard, F1)
         # dependsOn assemblePhoneDebug — the guard opens the built APKs.

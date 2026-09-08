@@ -354,6 +354,7 @@ dependencies {
     implementation(libs.libmpv)
     
     implementation(project(":shared:core:model"))
+    implementation(project(":shared:core:concurrency"))
     implementation(project(":shared:core:designsystem"))
     implementation(project(":shared:core:network"))
     implementation(project(":shared:core:database"))

@@ -16,6 +16,7 @@ import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMediaTypeGroup
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
+import com.raulshma.jellyplay.core.model.hasPlaybackPosition
 import com.raulshma.jellyplay.core.model.isFinishedOffline
 import com.raulshma.jellyplay.core.model.sortedWithCachedKey
 import com.raulshma.jellyplay.core.model.toMediaItem
@@ -265,7 +266,7 @@ internal fun buildOfflineHomeSections(
     // seconds scrubbed into a file is not a resume point).
     val continueWatching = if (prefs.continueWatchingEnabled) {
         (library.asSequence().filter { it.mediaType != MediaType.SERIES } + episodes.asSequence())
-            .filter { it.hasResumePosition() }
+            .filter { it.hasPlaybackPosition }
             .filter { it.playedPercentage >= 1.0 && !it.isPlayed && !it.isFinishedOffline }
             .filter { it.id !in prefs.hiddenCwItemIds }
             .toList()
@@ -594,7 +595,7 @@ private fun computeOfflineNextUp(
         val unplayed = ordered.asSequence().filter { !it.isPlayed }
         val regularCandidate =
             (if (anchor != null) unplayed.filter { isAfter(it, anchor) } else unplayed)
-                .filter { !it.hasResumePosition() }
+                .filter { !it.hasPlaybackPosition }
                 .firstOrNull()
         if (regularCandidate != null) {
             entries += NextUpEntry(regularCandidate, lastActivityMillis, seriesId)
@@ -609,7 +610,7 @@ private fun computeOfflineNextUp(
             if (dateAnchor != null) {
                 val rewatchCandidate = played
                     .filter { isAfter(it, dateAnchor) }
-                    .filter { !it.hasResumePosition() }
+                    .filter { !it.hasPlaybackPosition }
                     .minWithOrNull(seasonEpisodeOrder)
                 if (rewatchCandidate != null) {
                     entries += NextUpEntry(rewatchCandidate, lastActivityMillis, seriesId)
@@ -638,9 +639,6 @@ private fun isAfter(
     episode: OfflineMediaItem,
     anchor: OfflineMediaItem?,
 ): Boolean = anchor == null || seasonEpisodeOrder.compare(episode, anchor) > 0
-
-/** True when the item carries a playback position — the server's `IsResumable` position rule. */
-private fun OfflineMediaItem.hasResumePosition(): Boolean = (playbackPositionTicks ?: 0L) > 0L
 
 /** Milliseconds in one day — the `nextUpMaxDays` cutoff unit. */
 private const val MILLIS_PER_DAY = 86_400_000L

@@ -290,6 +290,16 @@ fun VideoPlayerScreen(
     var currentSheet by rememberSaveable(stateSaver = PlayerSheetSaver) {
         mutableStateOf(PlayerSheet.None)
     }
+    // Reset-first intent for the NEXT SubtitleHub open. The overflow
+    // "Subtitles" entry opens the hub with a cleared search/cultures slice
+    // ("stale results don't leak across items"); the Tracks-tab entry
+    // deliberately keeps prior state. The router's LaunchedEffect is the
+    // sheet's single load trigger (openSubtitleHub — the double-fetch
+    // removal), so the entry's decision rides in this flag from click to
+    // composition and is consumed there. Not saveable: a config-change
+    // restore of the sheet re-opens with resetFirst = false, the same
+    // no-reset re-load the former router effect performed.
+    var subtitleHubResetFirst by remember { mutableStateOf(false) }
     // Transparent subtitle-delay overlay (VLC-style). Not saveable: dismissed on
     // recreation, same as the gesture-driven seek/brightness pills.
     var showDelayOverlay by remember { mutableStateOf(false) }
@@ -777,81 +787,71 @@ fun VideoPlayerScreen(
         }
     }
 
-    // Wave 14E: the hardware-keyboard layer's media-key interpretation,
-    // extracted VERBATIM from the Box's onKeyEvent below so both delivery
-    // paths run this exact when-block: (a) the normal focused dispatch chain
-    // (the Box's onKeyEvent, when the layer or a descendant holds Compose
+    // Wave 14E: the hardware-keyboard layer's media-key interpretation, so
+    // both delivery paths run the same table: (a) the normal focused dispatch
+    // chain (the Box's onKeyEvent, when the layer or a descendant holds Compose
     // focus) and (b) the desktop shell's deterministic forward (the sink
     // installed below, called from DesktopNavScaffold.onPreviewKeyEvent when
     // Route.VideoPlayer is current and the layer holds no focus — the AWT
     // focus flap leaves focus-less gaps in which the null-focus fallback
     // dispatch dies at the shell's Row). The screen stays the single
     // interpreter of media-key semantics; the shell forwards raw events.
+    // The key→action decision table itself lives in PlayerKeyPolicy.mediaKeyAction
+    // (pure, JVM-tested); this shell keeps only the effects — the lambdas,
+    // haptics, controls visibility — plus the interaction bookkeeping, which
+    // fires for every KeyDown before the policy lookup (matched or not),
+    // exactly as the pre-extraction closure did.
     val handleMediaKeyDown: (KeyEvent) -> Boolean = { keyEvent ->
-        val keyCode = keyEvent.playerKeyCode
         userInteractionCount++
         viewModel.onUserInteraction()
-        when (keyCode) {
-            PlayerKeyCodes.KEYCODE_SPACE,
-            PlayerKeyCodes.KEYCODE_MEDIA_PLAY,
-            PlayerKeyCodes.KEYCODE_MEDIA_PAUSE,
-            PlayerKeyCodes.KEYCODE_MEDIA_PLAY_PAUSE -> {
+        when (mediaKeyAction(keyCode = keyEvent.playerKeyCode, controlsVisible = showControls)) {
+            PlayerKeyAction.TogglePlayPause -> {
                 doTogglePlayPause()
                 performConfirmHaptic()
                 showControls = true
                 true
             }
-            PlayerKeyCodes.KEYCODE_DPAD_RIGHT,
-            PlayerKeyCodes.KEYCODE_MEDIA_FAST_FORWARD,
-            PlayerKeyCodes.KEYCODE_L -> {
+            PlayerKeyAction.SeekForward -> {
                 doSeekForward()
                 performConfirmHaptic()
                 showControls = true
                 true
             }
-            PlayerKeyCodes.KEYCODE_DPAD_LEFT,
-            PlayerKeyCodes.KEYCODE_MEDIA_REWIND,
-            PlayerKeyCodes.KEYCODE_J -> {
+            PlayerKeyAction.SeekBack -> {
                 doSeekBack()
                 performConfirmHaptic()
                 showControls = true
                 true
             }
-            PlayerKeyCodes.KEYCODE_DPAD_UP,
-            PlayerKeyCodes.KEYCODE_VOLUME_UP -> {
+            PlayerKeyAction.VolumeUp -> {
                 streamVolumeAdjuster(true)
                 showControls = true
                 true
             }
-            PlayerKeyCodes.KEYCODE_DPAD_DOWN,
-            PlayerKeyCodes.KEYCODE_VOLUME_DOWN -> {
+            PlayerKeyAction.VolumeDown -> {
                 streamVolumeAdjuster(false)
                 showControls = true
                 true
             }
-            PlayerKeyCodes.KEYCODE_F,
-            PlayerKeyCodes.KEYCODE_F1, PlayerKeyCodes.KEYCODE_F2,
-            PlayerKeyCodes.KEYCODE_F3, PlayerKeyCodes.KEYCODE_F4 -> {
+            PlayerKeyAction.ToggleOrientation -> {
                 toggleOrientation()
                 showControls = true
                 true
             }
-            PlayerKeyCodes.KEYCODE_M -> {
+            PlayerKeyAction.ToggleMute -> {
                 viewModel.toggleMute()
                 showControls = true
                 true
             }
-            PlayerKeyCodes.KEYCODE_ESCAPE,
-            PlayerKeyCodes.KEYCODE_BACK -> {
-                if (showControls) {
-                    showControls = false
-                    true
-                } else {
-                    onBack()
-                    true
-                }
+            PlayerKeyAction.HideControls -> {
+                showControls = false
+                true
             }
-            else -> false
+            PlayerKeyAction.Exit -> {
+                onBack()
+                true
+            }
+            null -> false
         }
     }
 
@@ -1583,22 +1583,25 @@ fun VideoPlayerScreen(
             val onSeekPositionChange by remember { mutableStateOf({ positionMs: Long -> seekPositionMs = positionMs }) }
             val onSpeedClick by remember { mutableStateOf({ currentSheet = PlayerSheet.Speed }) }
             val onAudioClick by remember { mutableStateOf({ currentSheet = PlayerSheet.Audio }) }
-            // Primary subtitle button opens the hub on the Tracks tab.
+            // Primary subtitle button opens the hub on the Tracks tab. No
+            // reset (deliberate — reopening on the same item keeps prior
+            // search state) and no loads here: the router's LaunchedEffect
+            // is the sheet's single openSubtitleHub trigger, so the hub no
+            // longer double-fetches the server-default list (fetch starts at
+            // composition rather than at click; the hub's loading spinner
+            // already covers the in-flight window).
             val onSubtitleClick by remember { mutableStateOf({
-                viewModel.subtitles.loadRemoteSubtitles()
-                viewModel.subtitles.loadSubtitleCultures()
-                viewModel.subtitles.loadConfiguredProviders()
+                subtitleHubResetFirst = false
                 currentSheet = PlayerSheet.SubtitleHub
             }) }
             // Overflow "Subtitles" entry opens the hub on the Get tab (the
             // former "Get Subtitles" entry point's most useful landing spot).
             val onSubtitleHubClick by remember { mutableStateOf({
                 // Reset search/cultures state from any previous item before
-                // loading fresh data, so stale results don't leak across items.
-                viewModel.subtitles.resetSubtitleManagerState()
-                viewModel.subtitles.loadRemoteSubtitles()
-                viewModel.subtitles.loadSubtitleCultures()
-                viewModel.subtitles.loadConfiguredProviders()
+                // loading fresh data, so stale results don't leak across
+                // items. The reset rides to the router's single load trigger
+                // as the flag below — no loads at click (see onSubtitleClick).
+                subtitleHubResetFirst = true
                 currentSheet = PlayerSheet.SubtitleHub
             }) }
             val onChapterClick by remember { mutableStateOf({ currentSheet = PlayerSheet.Chapter }) }
@@ -1972,6 +1975,8 @@ fun VideoPlayerScreen(
             currentSheet = PlayerSheet.None
             showDelayOverlay = true
         },
+        subtitleHubResetFirst = subtitleHubResetFirst,
+        onSubtitleHubResetConsumed = { subtitleHubResetFirst = false },
     )
 
     val playerError = uiState.playerError
@@ -2149,6 +2154,10 @@ private fun PlayerSheetRouter(
     onPickFont: () -> Unit,
     onOpenSubtitleTester: () -> Unit,
     onOpenSubtitleDelayOverlay: () -> Unit,
+    /** The pending reset-first intent for this SubtitleHub open — see [onSubtitleHubResetConsumed]. */
+    subtitleHubResetFirst: Boolean,
+    /** Clears the consumed [subtitleHubResetFirst] flag so it stays single-shot. */
+    onSubtitleHubResetConsumed: () -> Unit,
 ) {
     when (val sheet = currentSheet) {
         is PlayerSheet.Speed -> {
@@ -2187,10 +2196,22 @@ private fun PlayerSheetRouter(
             )
         }
         is PlayerSheet.SubtitleHub -> {
+            // The sheet's SINGLE hub-open load trigger ([SubtitleManager.openSubtitleHub]):
+            // both entry clicks (Tracks tab / overflow) only route here, so an
+            // open costs one remote-subtitles request — the former hand-copied
+            // click cascades double-fetched (click loads, then this effect
+            // cancelled and re-fetched). Declared timing delta: the fetch
+            // starts at sheet composition rather than at click (the hub's
+            // loading spinner already covers the in-flight window). The reset
+            // intent is per-entry: the overflow entry opens with a cleared
+            // search/cultures slice (stale results must not leak across
+            // items), the Tracks tab deliberately keeps prior state — the
+            // flag rides from the click and is consumed single-shot. A
+            // config-change sheet restore re-enters with the flag reset to
+            // false, i.e. the same no-reset re-load this effect always did.
             LaunchedEffect(Unit) {
-                viewModel.subtitles.loadRemoteSubtitles()
-                viewModel.subtitles.loadSubtitleCultures()
-                viewModel.subtitles.loadConfiguredProviders()
+                viewModel.subtitles.openSubtitleHub(resetFirst = subtitleHubResetFirst)
+                onSubtitleHubResetConsumed()
             }
             // Track + subtitle-workflow slices: collected inside the
             // branch — only this hub consumes them while the sheet is open.

@@ -5,12 +5,11 @@ import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEventType
 import com.raulshma.jellyplay.core.model.PlayMethod
 
 /**
- * The outbox entry shape the worker suites (`PlaybackSyncWorkerResilienceTest`,
- * `OfflineWatchSyncContractTest`) build identically — one definition so the
- * fixture defaults cannot drift apart. Package-level on purpose: call sites
- * resolve to it after their private copies were removed. The drain-policy
- * lane's twin lives in :shared:core:data's jvmTest (same package/name) —
- * keep the two in sync.
+ * The outbox entry shape the drain suites (`PlaybackOutboxDrainerTest`,
+ * `PlaybackOutboxDrainerResilienceTest`) build identically — one definition
+ * so the fixture defaults cannot drift apart. Copy of the legacy
+ * :core:data test fixture (same package/name) so both lanes stay in sync;
+ * the Android lane's copy still serves its worker suites.
  */
 internal fun entry(
     id: String,

@@ -6,17 +6,14 @@ import coil3.SingletonImageLoader
 import coil3.request.ImageRequest
 import coil3.request.allowHardware
 import coil3.size.Size
+import com.raulshma.jellyplay.core.concurrency.mapConcurrentCatching
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.DreamImage
 import com.raulshma.jellyplay.core.model.DreamImageCategory
 import com.raulshma.jellyplay.core.model.MediaType
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import kotlin.random.Random
 
@@ -72,23 +69,21 @@ class DreamImageProvider(
      */
     suspend fun prefetchImages(urls: List<String>) {
         if (urls.isEmpty()) return
-        val gate = Semaphore(MAX_PREFETCH_CONCURRENCY)
-        coroutineScope {
-            urls.map { url ->
-                async(Dispatchers.IO) {
-                    gate.withPermit {
-                        val request = ImageRequest.Builder(context)
-                            .data(url)
-                            .size(Size(1920, 1080))
-                            .allowHardware(true)
-                            .build()
-                        // execute() suspends until decode completes (or fails),
-                        // unlike enqueue() which fires-and-forgets — so the
-                        // semaphore actually bounds in-flight decodes.
-                        runCatching { imageLoader.execute(request) }
-                    }
-                }
-            }.awaitAll()
+        withContext(Dispatchers.IO) {
+            // mapConcurrentCatching = the documented drop-failed-item policy:
+            // a failed decode is dropped from the prefetch, while a cancelling
+            // one propagates (never masked as a drop). execute() suspends
+            // until decode completes (or fails), unlike enqueue() which
+            // fires-and-forgets — so the semaphore actually bounds in-flight
+            // decodes.
+            Semaphore(MAX_PREFETCH_CONCURRENCY).mapConcurrentCatching(urls) { url ->
+                val request = ImageRequest.Builder(context)
+                    .data(url)
+                    .size(Size(1920, 1080))
+                    .allowHardware(true)
+                    .build()
+                imageLoader.execute(request)
+            }
         }
     }
 

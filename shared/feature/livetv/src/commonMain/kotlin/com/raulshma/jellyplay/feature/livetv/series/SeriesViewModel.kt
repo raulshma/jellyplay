@@ -4,6 +4,7 @@ import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
 import com.raulshma.jellyplay.core.model.DvrSeriesTimer
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import com.raulshma.jellyplay.feature.livetv.LiveTvLoad
 import com.raulshma.jellyplay.feature.livetv.components.RecordActions
 import com.raulshma.jellyplay.feature.livetv.components.RecordOutcome
 
@@ -47,10 +48,12 @@ class SeriesViewModel(
 
     fun load() {
         launch {
-            _uiState.update { it.copy(isLoading = true, error = null) }
-            mediaRepository.getSeriesTimers(sortBy = "SortName")
-                .onSuccess { _uiState.update { s -> s.copy(seriesTimers = it, isLoading = false) } }
-                .onFailure { e -> _uiState.update { s -> s.copy(error = e.message, isLoading = false) } }
+            LiveTvLoad.load(
+                start = { _uiState.update { it.copy(isLoading = true, error = null) } },
+                fetch = { mediaRepository.getSeriesTimers(sortBy = "SortName") },
+                onSuccess = { timers -> _uiState.update { s -> s.copy(seriesTimers = timers, isLoading = false) } },
+                onFailure = { e -> _uiState.update { s -> s.copy(error = e.message, isLoading = false) } },
+            )
         }
     }
 

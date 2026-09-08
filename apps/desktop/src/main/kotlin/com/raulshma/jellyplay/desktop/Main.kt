@@ -38,6 +38,7 @@ import com.raulshma.jellyplay.core.data.di.dataJvmModule
 import com.raulshma.jellyplay.core.data.di.desktopDataModule
 import com.raulshma.jellyplay.core.data.worker.DesktopAutoDownloadScheduler
 import com.raulshma.jellyplay.core.data.worker.DesktopDownloadManager
+import com.raulshma.jellyplay.core.data.worker.DesktopPlaybackSyncScheduler
 import com.raulshma.jellyplay.core.database.di.databaseDaosModule
 import com.raulshma.jellyplay.core.database.di.desktopDatabaseModule
 import com.raulshma.jellyplay.core.datastore.di.datastoreCommonModule
@@ -419,6 +420,12 @@ fun main() {
             koinApp.koin.get<DesktopAutoDownloadScheduler>().start()
             koinApp.koin.get<com.raulshma.jellyplay.desktop.player.DesktopAudioQueueManager>()
                 .start()
+            // Playback-outbox drain (startup pass + Offline→Online
+            // transition observer): the desktop actual of Android's
+            // PlaybackSyncWorker pair, now that the drainer lives in
+            // shared jvmShared — previously desktop staged outbox rows
+            // that nothing ever drained.
+            koinApp.koin.get<DesktopPlaybackSyncScheduler>().start()
         }
 
     // Wave 12A runtime icon (title bar + tray), decoded OFF the pre-window

@@ -43,14 +43,11 @@ import com.raulshma.jellyplay.core.data.remote.RemoteControlReceiver
 import com.raulshma.jellyplay.core.data.remote.RemoteNavigationBridge
 import com.raulshma.jellyplay.core.datastore.security.PinRateLimiter
 import com.raulshma.jellyplay.core.datastore.security.SecurityStore
-import com.raulshma.jellyplay.core.designsystem.theme.JellyPlayTheme
 import com.raulshma.jellyplay.core.ui.components.AuthChallengeScreen
 import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.core.ui.util.LocalNetworkAccess
-import com.raulshma.jellyplay.core.ui.components.BlueLightFilterBox
-import com.raulshma.jellyplay.core.ui.components.HandModeProvider
+import com.raulshma.jellyplay.core.ui.components.JellyPlayPreferenceTheme
 import com.raulshma.jellyplay.core.ui.components.rememberPreferenceDarkTheme
-import com.raulshma.jellyplay.core.ui.components.colorBlindFilter
 import com.raulshma.jellyplay.core.ui.tv.isTv
 import com.raulshma.jellyplay.di.KoinViewModelFactory
 import com.raulshma.jellyplay.navigation.JellyPlayApp
@@ -101,8 +98,6 @@ class MainActivity : FragmentActivity() {
             verifyPin = { pin -> securityStore.verifyPinOffMainThread(pin) },
         )
     }
-
-    private var backgroundedAt = 0L
 
     // Flipped by the cast-init coroutine kicked off in onCreate just before
     // setContent (STA-6): whether the one-time CastContext initialization
@@ -318,103 +313,67 @@ class MainActivity : FragmentActivity() {
                 )
             }
 
-            JellyPlayTheme(
+            JellyPlayPreferenceTheme(
+                preferences = preferences,
                 darkTheme = darkTheme,
-                dynamicColor = preferences.theme.dynamicTheming,
-                oledMode = preferences.theme.oledMode,
-                contrastLevel = preferences.contrastLevel,
                 isTv = isTv(),
-                performanceMode = preferences.performanceMode,
-                reduceMotion = preferences.reduceMotionEnabled,
-                accentColorSwatch = preferences.theme.accentColorSwatch,
-                colorStyle = preferences.theme.colorStyle,
-                themeVariant = preferences.themeVariant,
-                synthwaveAccent = preferences.synthwaveAccent,
-                soothingAccent = preferences.soothingAccent,
-                vividAccent = preferences.vividAccent,
-                auroraAccent = preferences.auroraAccent,
-                sakuraAccent = preferences.sakuraAccent,
-                vectorPopAccent = preferences.vectorPopAccent,
-                appFontScale = preferences.appFontScale,
             ) {
-                // Provide the motion/performance flags to the whole UI subtree in one place.
-                // JellyPlayTheme already uses these to pick its MotionScheme; providing them as
-                // CompositionLocals lets non-scheme animations (infinite loops, bespoke effects)
-                // honor both "Performance Mode" and "Reduce Motion" via LocalReducedMotion.
-                androidx.compose.runtime.CompositionLocalProvider(
-                    com.raulshma.jellyplay.core.ui.components.LocalPerformanceMode provides preferences.performanceMode,
-                    com.raulshma.jellyplay.core.ui.components.LocalReduceMotionEnabled provides preferences.reduceMotionEnabled,
-                    com.raulshma.jellyplay.core.ui.components.LocalReducedMotion provides
-                        (preferences.performanceMode || preferences.reduceMotionEnabled),
-                ) {
-                HandModeProvider(mode = preferences.handMode) {
-                    BlueLightFilterBox(
-                        enabled = preferences.blueLightFilterEnabled,
-                        strength = preferences.blueLightFilterStrength,
-                    ) {
-                        Box(
-                            modifier = Modifier.colorBlindFilter(preferences.colorBlindMode),
-                        ) {
-                            if (showLockScreen) {
-                                // Surface the rate-limit lockout to the user when present.
-                                val context = LocalContext.current
-                                val lockoutState = remember(preferences.pinLockoutUntilEpochMs) {
-                                    pinRateLimiter.getPinLockoutState()
-                                }
-                                val now = remember { System.currentTimeMillis() }
-                                val lockoutActive = lockoutState.isLockedOut && lockoutState.lockoutUntilEpochMs > now
-                                AuthChallengeScreen(
-                                    title = if (preferences.biometricLockEnabled && preferences.pinHash == null) stringResource(R.string.auth_title_biometric) else stringResource(R.string.auth_title_pin),
-                                    subtitle = stringResource(R.string.auth_subtitle),
-                                    pinHash = preferences.pinHash,
-                                    biometricEnabled = preferences.biometricLockEnabled,
-                                    enabled = !lockoutActive && !pinVerifying,
-                                    verifying = pinVerifying,
-                                    onPinEntered = { pin ->
-                                        // Both paths fold through the controller — it owns
-                                        // the click-time lockout re-check and the
-                                        // failure/success accounting.
-                                        if (pin.isEmpty()) {
-                                            // The empty-PIN shortcut shows no spinner (the old
-                                            // inline path unlocked synchronously);
-                                            // lifecycleScope's Main.immediate dispatch runs it
-                                            // in this frame.
-                                            lifecycleScope.launch {
-                                                pinGateController.submit(pin, onUnlocked = { pinError = null })
-                                            }
-                                        } else if (preferences.pinHash != null && !pinVerifying) {
-                                            pinVerifying = true
-                                            lifecycleScope.launch {
-                                                when (val outcome = pinGateController.submit(pin, onUnlocked = { pinError = null })) {
-                                                    PinGateController.PinSubmitOutcome.Unlocked -> Unit
-                                                    PinGateController.PinSubmitOutcome.Incorrect ->
-                                                        pinError = context.getString(R.string.pin_incorrect)
-                                                    is PinGateController.PinSubmitOutcome.LockedOut ->
-                                                        pinError = PinGateController
-                                                            .lockoutMessage(outcome.remainingMs)
-                                                            .resolve(context)
-                                                }
-                                                pinVerifying = false
-                                            }
-                                        }
-                                    },
-                                    onErrorClear = { pinError = null },
-                                    errorMessage = if (lockoutActive) {
-                                        PinGateController.lockoutMessage(lockoutState.lockoutUntilEpochMs - now)
-                                            .resolve(context)
-                                    } else {
-                                        pinError
-                                    },
-                                )
-                            } else {
-                                JellyPlayApp(
-                                    viewModel = viewModel,
-                                    infra = shellInfra,
-                                )
-                            }
-                        }
+                if (showLockScreen) {
+                    // Surface the rate-limit lockout to the user when present.
+                    val context = LocalContext.current
+                    val lockoutState = remember(preferences.pinLockoutUntilEpochMs) {
+                        pinRateLimiter.getPinLockoutState()
                     }
-                }
+                    val now = remember { System.currentTimeMillis() }
+                    val lockoutActive = lockoutState.isLockedOut && lockoutState.lockoutUntilEpochMs > now
+                    AuthChallengeScreen(
+                        title = if (preferences.biometricLockEnabled && preferences.pinHash == null) stringResource(R.string.auth_title_biometric) else stringResource(R.string.auth_title_pin),
+                        subtitle = stringResource(R.string.auth_subtitle),
+                        pinHash = preferences.pinHash,
+                        biometricEnabled = preferences.biometricLockEnabled,
+                        enabled = !lockoutActive && !pinVerifying,
+                        verifying = pinVerifying,
+                        onPinEntered = { pin ->
+                            // Both paths fold through the controller — it owns
+                            // the click-time lockout re-check and the
+                            // failure/success accounting.
+                            if (pin.isEmpty()) {
+                                // The empty-PIN shortcut shows no spinner (the old
+                                // inline path unlocked synchronously);
+                                // lifecycleScope's Main.immediate dispatch runs it
+                                // in this frame.
+                                lifecycleScope.launch {
+                                    pinGateController.submit(pin, onUnlocked = { pinError = null })
+                                }
+                            } else if (preferences.pinHash != null && !pinVerifying) {
+                                pinVerifying = true
+                                lifecycleScope.launch {
+                                    when (val outcome = pinGateController.submit(pin, onUnlocked = { pinError = null })) {
+                                        PinGateController.PinSubmitOutcome.Unlocked -> Unit
+                                        PinGateController.PinSubmitOutcome.Incorrect ->
+                                            pinError = context.getString(R.string.pin_incorrect)
+                                        is PinGateController.PinSubmitOutcome.LockedOut ->
+                                            pinError = PinGateController
+                                                .lockoutMessage(outcome.remainingMs)
+                                                .resolve(context)
+                                    }
+                                    pinVerifying = false
+                                }
+                            }
+                        },
+                        onErrorClear = { pinError = null },
+                        errorMessage = if (lockoutActive) {
+                            PinGateController.lockoutMessage(lockoutState.lockoutUntilEpochMs - now)
+                                .resolve(context)
+                        } else {
+                            pinError
+                        },
+                    )
+                } else {
+                    JellyPlayApp(
+                        viewModel = viewModel,
+                        infra = shellInfra,
+                    )
                 }
             }
         }
@@ -465,27 +424,29 @@ class MainActivity : FragmentActivity() {
         // (the shared singleton's activeCallbacks is PlayerActivity's engine, so
         // a pause here reached across Activities). LiveTV does not use it either
         // (it manages its own engine lifecycle), so there is nothing to pause.
-        // Only record backgrounding for the PIN auto-lock timer.
-        backgroundedAt = System.currentTimeMillis()
+        // Only record backgrounding for the PIN auto-lock timer — the stamp
+        // itself now lives in AppLockState (the lock family), not on this field.
+        appLockState.onBackgrounded(System.currentTimeMillis())
     }
 
     override fun onResume() {
         super.onResume()
 
-        if (backgroundedAt > 0L) {
-            val prefs = viewModel.preferences.value
-            if (AppLockRedirect.isGateConfigured(
-                    pinLockEnabled = prefs.pinLockEnabled,
-                    biometricLockEnabled = prefs.biometricLockEnabled,
-                ) && prefs.autoLockTimerMs > 0L
-            ) {
-                val elapsed = System.currentTimeMillis() - backgroundedAt
-                if (elapsed >= prefs.autoLockTimerMs) {
-                    appLockState.lock()
-                }
-            }
-            backgroundedAt = 0L
-        }
+        // The auto-lock-on-resume policy (gate configured + timer elapsed while
+        // backgrounded → relock) is folded into AppLockState.onResumed via
+        // AppLockRedirect.shouldRelock; this adapter only feeds it the same
+        // signals it always read at this point (current preferences + the
+        // resume-moment wall clock). onResumed consumes the background stamp
+        // unconditionally, exactly like the former `backgroundedAt = 0L` did.
+        val prefs = viewModel.preferences.value
+        appLockState.onResumed(
+            nowMs = System.currentTimeMillis(),
+            gateConfigured = AppLockRedirect.isGateConfigured(
+                pinLockEnabled = prefs.pinLockEnabled,
+                biometricLockEnabled = prefs.biometricLockEnabled,
+            ),
+            autoLockTimerMs = prefs.autoLockTimerMs,
+        )
     }
 
     override fun onStop() {

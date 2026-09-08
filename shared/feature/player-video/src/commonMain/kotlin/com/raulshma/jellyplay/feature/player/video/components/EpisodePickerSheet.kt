@@ -45,6 +45,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.hasWatchProgress
 import com.raulshma.jellyplay.core.model.progressFraction
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet
@@ -358,8 +359,7 @@ private fun EpisodeRow(
 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 val runTime = episode.runTimeTicks
-                val hasWatchProgress = episode.playbackPositionTicks != null && episode.playbackPositionTicks!! > 0 && !episode.isPlayed
-                val remainingTime = if (hasWatchProgress && runTime != null) {
+                val remainingTime = if (episode.hasWatchProgress && runTime != null) {
                     formatRemainingTimeFromTicks(runTime, episode.playbackPositionTicks!!)
                 } else null
                 val totalTime = if (runTime != null) {

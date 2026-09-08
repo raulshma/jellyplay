@@ -5,6 +5,7 @@ import androidx.compose.runtime.State
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
 import com.raulshma.jellyplay.core.model.ExperimentalFeature
+import com.raulshma.jellyplay.core.model.SelectionState
 import com.raulshma.jellyplay.core.model.arr.ArrQueueDeleteOptions
 import com.raulshma.jellyplay.core.model.arr.ArrQueueItem
 import com.raulshma.jellyplay.core.model.arr.ArrServiceKind
@@ -42,12 +43,18 @@ data class ArrQueueUiState(
     val isLoading: Boolean = false,
     val error: String? = null,
     /** Stable row keys currently in selection mode. */
-    val selectedIds: Set<String> = emptySet(),
-    val selectionMode: Boolean = false,
+    val selection: SelectionState<String> = SelectionState(),
     val actionInProgress: Boolean = false,
     /** Inline action dialog to show, if any. */
     val pendingAction: ArrQueueAction? = null,
-)
+) {
+    /** Selection reads, delegated from the shared [SelectionState] algebra. */
+    val selectedIds: Set<String>
+        get() = selection.ids
+
+    val selectionMode: Boolean
+        get() = selection.active
+}
 
 class ArrQueueViewModel(
     private val arrRepository: ArrRepository,
@@ -110,23 +117,16 @@ class ArrQueueViewModel(
     // ── Selection ────────────────────────────────────────────────────────
 
     fun toggleSelection(item: ArrQueueItem) {
-        val key = item.rowKey
-        val current = _state.value.selectedIds
-        val next = if (key in current) current - key else current + key
-        _state.value = _state.value.copy(
-            selectedIds = next,
-            selectionMode = next.isNotEmpty(),
-        )
+        _state.value = _state.value.copy(selection = _state.value.selection.toggled(item.rowKey))
     }
 
     fun clearSelection() {
-        _state.value = _state.value.copy(selectedIds = emptySet(), selectionMode = false)
+        _state.value = _state.value.copy(selection = _state.value.selection.cleared())
     }
 
     fun selectAll() {
         _state.value = _state.value.copy(
-            selectedIds = _state.value.queue.map { it.rowKey }.toSet(),
-            selectionMode = true,
+            selection = _state.value.selection.selectAll(_state.value.queue.map { it.rowKey }),
         )
     }
 

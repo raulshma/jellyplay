@@ -22,6 +22,7 @@ android {
 
 dependencies {
     implementation(project(":shared:core:model"))
+    implementation(project(":shared:core:concurrency"))
     implementation(project(":core:data"))
     // core:database intentionally NOT declared — the notification module
     // consumes SeenMediaRepository from core:data and must not reach into

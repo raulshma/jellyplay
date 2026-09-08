@@ -1,12 +1,5 @@
 package com.raulshma.jellyplay.core.data.worker
 
-import android.content.Context
-import androidx.test.core.app.ApplicationProvider
-import androidx.work.Configuration
-import androidx.work.WorkerFactory
-import androidx.work.WorkerParameters
-import androidx.work.testing.TestListenableWorkerBuilder
-import androidx.work.testing.WorkManagerTestInitHelper
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlayedStateSync
@@ -18,61 +11,47 @@ import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
-import io.mockk.verify
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.test.runTest
-import org.junit.Assert.assertTrue
-import org.junit.Before
-import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
+import kotlin.test.BeforeTest
 
 /**
- * Tests [PlaybackSyncWorker] — the offline outbox drain + reconciliation.
- *
- * The worker is built via [TestListenableWorkerBuilder], which wires the
- * WorkManager foreground-notification infrastructure that `setForeground`
- * depends on. Constructing the worker directly makes `setForeground` hang on
- * its internal ListenableFuture. The builder's `WorkerFactory` injects the
- * mocked repository deps; assertions cover drain order, delete-on-success,
+ * Tests [PlaybackOutboxDrainerImpl] — the offline outbox drain + reconciliation
+ * (ported case-for-case from the legacy `PlaybackSyncWorkerTest`, which moved
+ * here with the drain body; `attempt` is now a plain parameter, no
+ * Robolectric/WorkManager rig). Assertions cover drain order, delete-on-success,
  * retry/failure policy, reconciliation branches, and the post-drain
- * `enqueueNow` trigger.
+ * `enqueueNow` trigger; the WorkManager result mapping and the notification
+ * plumbing stay covered by the Android-side worker suites, and the
+ * Notifier protocol itself is pinned in [PlaybackOutboxDrainerResilienceTest].
  *
  * The entry-type → API-call mapping itself is exercised in
- * `PlaybackRepositoryImplTest` (the repository owns it now); these tests stub
+ * `PlaybackRepositoryImplTest` (the repository owns it); these tests stub
  * [PlaybackRepository.replayOutboxEntry] and assert the drain-loop behaviour.
  */
-@RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
-class PlaybackSyncWorkerTest {
+class PlaybackOutboxDrainerTest {
 
-    private lateinit var context: Context
     private val outbox: PlaybackOutboxRepository = mockk(relaxed = true)
     private val playbackRepository: PlaybackRepository = mockk(relaxed = true)
     private val offlineModeManager: OfflineModeManager = mockk()
     private val playedStateSync: PlayedStateSync = mockk(relaxed = true)
     private val offlineRepository: OfflineRepository = mockk(relaxed = true)
-    private val userDataSyncScheduler: UserDataSyncScheduler = mockk(relaxed = true)
+    private val userDataSyncTrigger: PlaybackOutboxDrainer.UserDataSyncTrigger = mockk(relaxed = true)
     private val mediaRepository: MediaRepository = mockk(relaxed = true)
     private val cacheInvalidator: MediaCacheInvalidator = mockk(relaxed = true)
 
-    @Before
+    @BeforeTest
     fun setup() {
-        context = ApplicationProvider.getApplicationContext()
-        WorkManagerTestInitHelper.initializeTestWorkManager(
-            context,
-            Configuration.Builder().setMinimumLoggingLevel(android.util.Log.DEBUG).build(),
-        )
+        // Defaults mirroring the legacy worker-suite setup; tests override per
+        // entry/item to model failure.
         every { offlineModeManager.isOffline } returns false
-        // Default: every replay lands. Tests override per entry/item to model failure.
         coEvery { playbackRepository.replayOutboxEntry(any()) } returns true
-        // Default: empty outbox; tests override via coEvery { outbox.drain() }.
         coEvery { outbox.drain() } returns emptyList()
-        coEvery { outbox.count() } returns 0
-        // Default: no downloaded items, so the reconcile batch is just the
-        // outbox items (preserves the pre-Gap-A behaviour). Tests that exercise
-        // the downloaded-item reconcile override this.
         coEvery { offlineRepository.getDownloadedItemIds() } returns emptyList()
         // Derived watched flips route through the repository (cache
         // invalidation included); relaxed mocks cannot synthesize Result.
@@ -84,48 +63,41 @@ class PlaybackSyncWorkerTest {
         coEvery { outbox.isPlayedStateIntentDelivered(any(), any()) } returns true
     }
 
-    private fun buildWorker(runAttemptCount: Int = 0): PlaybackSyncWorker =
-        TestListenableWorkerBuilder<PlaybackSyncWorker>(context)
-            .setWorkerFactory(object : WorkerFactory() {
-                override fun createWorker(
-                    appContext: Context,
-                    workerClassName: String,
-                    workerParameters: WorkerParameters,
-                ): PlaybackSyncWorker = PlaybackSyncWorker(
-                    appContext,
-                    workerParameters,
-                    outbox,
-                    playbackRepository,
-                    offlineModeManager,
-                    playedStateSync,
-                    offlineRepository,
-                    userDataSyncScheduler,
-                    mediaRepository,
-                    cacheInvalidator,
-                )
-            })
-            .setRunAttemptCount(runAttemptCount)
-            .build()
+    private fun drainer(): PlaybackOutboxDrainer =
+        PlaybackOutboxDrainerImpl(
+            outbox = outbox,
+            playbackRepository = playbackRepository,
+            offlineModeManager = offlineModeManager,
+            playedStateSync = playedStateSync,
+            offlineRepository = offlineRepository,
+            mediaRepository = mediaRepository,
+            cacheInvalidator = cacheInvalidator,
+            userDataSyncTrigger = userDataSyncTrigger,
+        )
+
+    private suspend fun drain(attempt: Int = 0): PlaybackOutboxDrainer.DrainResult = drainer().drainOnce(attempt)
 
     // ── Empty / offline gating ────────────────────────────────────────
 
     @Test
-    fun `empty outbox returns success without replaying`() = runTest {
-        val result = buildWorker().doWork()
+    fun `empty outbox succeeds without replaying`() = runTest {
+        val result = drain()
 
-        assertTrue(result is androidx.work.ListenableWorker.Result.Success)
+        assertFalse(result.retriesPending)
+        assertEquals(0, result.pendingCount)
         coVerify(exactly = 0) { playbackRepository.replayOutboxEntry(any()) }
-        coVerify(exactly = 0) { userDataSyncScheduler.enqueueNow() }
+        verify(exactly = 0) { userDataSyncTrigger.enqueueNow() }
     }
 
     @Test
-    fun `offline completes without draining so manual reconnect can enqueue immediately`() = runTest {
+    fun `offline completes without draining so manual reconnect can trigger immediately`() = runTest {
         every { offlineModeManager.isOffline } returns true
         coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.PROGRESS))
 
-        val result = buildWorker().doWork()
+        val result = drain()
 
-        assertTrue(result is androidx.work.ListenableWorker.Result.Success)
+        assertFalse(result.retriesPending)
+        coVerify(exactly = 0) { outbox.drain() }
         coVerify(exactly = 0) { playbackRepository.replayOutboxEntry(any()) }
     }
 
@@ -137,13 +109,14 @@ class PlaybackSyncWorkerTest {
         coEvery { playedStateSync.reconcileOfflineRow(any()) } returns
             PlayedStateSync.ReconcileOutcome.Changed(PlayedStateSync.ComputeResult.PLAYED)
 
-        val result = buildWorker().doWork()
+        val result = drain()
 
-        assertTrue(result is androidx.work.ListenableWorker.Result.Success)
+        assertFalse(result.retriesPending)
+        assertTrue(result.reconcileChanged)
         coVerify(exactly = 1) { playedStateSync.reconcileOfflineRow("d1") }
         coVerify(exactly = 1) { playedStateSync.reconcileOfflineRow("d2") }
         // reconcile changed (PLAYED) → refresh online caches.
-        coVerify(exactly = 1) { userDataSyncScheduler.enqueueNow() }
+        verify(exactly = 1) { userDataSyncTrigger.enqueueNow() }
     }
 
     @Test
@@ -151,22 +124,23 @@ class PlaybackSyncWorkerTest {
         coEvery { offlineRepository.getDownloadedItemIds() } returns listOf("d1")
         coEvery { playedStateSync.reconcileOfflineRow(any()) } returns PlayedStateSync.ReconcileOutcome.NoChange
 
-        buildWorker().doWork()
+        val result = drain()
 
         coVerify(exactly = 1) { playedStateSync.reconcileOfflineRow("d1") }
-        coVerify(exactly = 0) { userDataSyncScheduler.enqueueNow() }
+        assertFalse(result.reconcileChanged)
+        verify(exactly = 0) { userDataSyncTrigger.enqueueNow() }
     }
 
     @Test
     fun `the reconcile batch is capped at fifty items`() = runTest {
         // A very large downloaded library must not monopolise the foreground
-        // worker with N serial detail fetches — the excess defers to the
+        // drain with N serial detail fetches — the excess defers to the
         // periodic backstop (take(MAX_RECONCILE_BATCH)).
         coEvery { offlineRepository.getDownloadedItemIds() } returns (1..60).map { "d%02d".format(it) }
 
-        val result = buildWorker().doWork()
+        val result = drain()
 
-        assertTrue(result is androidx.work.ListenableWorker.Result.Success)
+        assertFalse(result.retriesPending)
         coVerify(exactly = 50) { playedStateSync.reconcileOfflineRow(any()) }
         coVerify(exactly = 1) { playedStateSync.reconcileOfflineRow("d50") }
         coVerify(exactly = 0) { playedStateSync.reconcileOfflineRow("d51") }
@@ -178,7 +152,7 @@ class PlaybackSyncWorkerTest {
         coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.PROGRESS))
         coEvery { offlineRepository.getDownloadedItemIds() } returns listOf("item-1", "d2")
 
-        buildWorker().doWork()
+        drain()
 
         coVerify(exactly = 1) { playedStateSync.reconcileOfflineRow("item-1") }
         coVerify(exactly = 1) { playedStateSync.reconcileOfflineRow("d2") }
@@ -191,20 +165,20 @@ class PlaybackSyncWorkerTest {
         coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.PROGRESS))
         coEvery { offlineRepository.getDownloadedItemIds() } throws RuntimeException("db")
 
-        val result = buildWorker().doWork()
+        val result = drain()
 
-        assertTrue(result is androidx.work.ListenableWorker.Result.Success)
+        assertFalse(result.retriesPending)
         coVerify(exactly = 1) { playbackRepository.replayOutboxEntry(any()) }
         coVerify(exactly = 1) { playedStateSync.reconcileOfflineRow("item-1") }
     }
 
     @Test
-    fun `empty outbox and no downloads returns success without reconcile`() = runTest {
-        val result = buildWorker().doWork()
+    fun `empty outbox and no downloads succeeds without reconcile`() = runTest {
+        val result = drain()
 
-        assertTrue(result is androidx.work.ListenableWorker.Result.Success)
+        assertFalse(result.retriesPending)
         coVerify(exactly = 0) { playedStateSync.reconcileOfflineRow(any()) }
-        coVerify(exactly = 0) { userDataSyncScheduler.enqueueNow() }
+        verify(exactly = 0) { userDataSyncTrigger.enqueueNow() }
     }
 
     // ── Happy path: all entries succeed ───────────────────────────────
@@ -218,30 +192,31 @@ class PlaybackSyncWorkerTest {
         )
         coEvery { outbox.drain() } returns entries
 
-        val result = buildWorker().doWork()
+        val result = drain()
 
-        assertTrue(result is androidx.work.ListenableWorker.Result.Success)
+        assertFalse(result.retriesPending)
+        assertEquals(listOf("item-1"), result.reconciledItemIds)
         coVerify(exactly = 3) { playbackRepository.replayOutboxEntry(any()) }
         coVerify(exactly = 3) { outbox.delete(any()) }
-        coVerify(exactly = 1) { userDataSyncScheduler.enqueueNow() }
+        verify(exactly = 1) { userDataSyncTrigger.enqueueNow() }
     }
 
     @Test
     fun `successful drain triggers userDataSync enqueueNow exactly once`() = runTest {
         coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.PROGRESS))
 
-        buildWorker().doWork()
+        drain()
 
-        coVerify(exactly = 1) { userDataSyncScheduler.enqueueNow() }
+        verify(exactly = 1) { userDataSyncTrigger.enqueueNow() }
     }
 
     @Test
     fun `PLAYED entry is replayed and deleted on success`() = runTest {
         coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.PLAYED))
 
-        val result = buildWorker().doWork()
+        val result = drain()
 
-        assertTrue(result is androidx.work.ListenableWorker.Result.Success)
+        assertFalse(result.retriesPending)
         coVerify(exactly = 1) { playbackRepository.replayOutboxEntry(any()) }
         coVerify(exactly = 1) { outbox.delete("e1") }
     }
@@ -250,9 +225,9 @@ class PlaybackSyncWorkerTest {
     fun `UNPLAYED entry is replayed and deleted on success`() = runTest {
         coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.UNPLAYED))
 
-        val result = buildWorker().doWork()
+        val result = drain()
 
-        assertTrue(result is androidx.work.ListenableWorker.Result.Success)
+        assertFalse(result.retriesPending)
         coVerify(exactly = 1) { playbackRepository.replayOutboxEntry(any()) }
         coVerify(exactly = 1) { outbox.delete("e1") }
     }
@@ -262,37 +237,38 @@ class PlaybackSyncWorkerTest {
         coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.PLAYED))
         coEvery { playbackRepository.replayOutboxEntry(any()) } returns false
 
-        val result = buildWorker().doWork()
+        val result = drain()
 
-        assertTrue(result is androidx.work.ListenableWorker.Result.Retry)
+        assertTrue(result.retriesPending)
         coVerify(exactly = 0) { outbox.delete(any()) }
     }
 
     // ── Failure / retry policy ────────────────────────────────────────
 
     @Test
-    fun `early attempt on a failed entry returns retry and retains the entry`() = runTest {
+    fun `early attempt on a failed entry reports retries-pending and retains the entry`() = runTest {
         coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.PROGRESS))
         coEvery { playbackRepository.replayOutboxEntry(any()) } returns false
 
-        val result = buildWorker().doWork()
+        val result = drain()
 
-        assertTrue(result is androidx.work.ListenableWorker.Result.Retry)
+        assertTrue(result.retriesPending)
         coVerify(exactly = 0) { outbox.delete(any()) }
     }
 
     @Test
-    fun `exhausted retries dead-letter a failing telemetry entry and returns success`() = runTest {
+    fun `exhausted retries dead-letter a failing telemetry entry and converge`() = runTest {
         coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.PROGRESS))
         coEvery { playbackRepository.replayOutboxEntry(any()) } returns false
 
-        // runAttemptCount >= MAX_RETRIES (3) triggers the dead-letter path.
-        val result = buildWorker(runAttemptCount = 3).doWork()
+        // attempt >= MAX_RETRIES (3) triggers the dead-letter path.
+        val result = drain(attempt = 3)
 
         // Dead-lettered: the entry is flagged (not hard-deleted) so the row is
         // retained for audit but skipped by future drains — countFlow() still
         // reaches 0 and the sync indicator clears. The drain converges.
-        assertTrue(result is androidx.work.ListenableWorker.Result.Success)
+        assertFalse(result.retriesPending)
+        assertEquals(1, result.deadLetteredCount)
         coVerify(exactly = 0) { outbox.delete("e1") }
         coVerify(exactly = 1) { outbox.markDeadLetter("e1") }
         // Nothing was reconciled — the report never landed on the server.
@@ -310,9 +286,9 @@ class PlaybackSyncWorkerTest {
         coEvery { playbackRepository.replayOutboxEntry(any()) } returns false
 
         // Past MAX_RETRIES (3) — a telemetry entry would dead-letter here.
-        val result = buildWorker(runAttemptCount = 3).doWork()
+        val result = drain(attempt = 3)
 
-        assertTrue(result is androidx.work.ListenableWorker.Result.Retry)
+        assertTrue(result.retriesPending)
         coVerify(exactly = 0) { outbox.markDeadLetter("e1") }
     }
 
@@ -321,9 +297,9 @@ class PlaybackSyncWorkerTest {
         coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.PLAYED))
         coEvery { playbackRepository.replayOutboxEntry(any()) } returns false
 
-        val result = buildWorker(runAttemptCount = 10).doWork()
+        val result = drain(attempt = 10)
 
-        assertTrue(result is androidx.work.ListenableWorker.Result.Success)
+        assertFalse(result.retriesPending)
         coVerify(exactly = 1) { outbox.markDeadLetter("e1") }
     }
 
@@ -334,14 +310,14 @@ class PlaybackSyncWorkerTest {
         coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.FAVORITE))
         coEvery { playbackRepository.replayOutboxEntry(any()) } returns false
 
-        val earlyResult = buildWorker(runAttemptCount = 3).doWork()
+        val earlyResult = drain(attempt = 3)
 
-        assertTrue(earlyResult is androidx.work.ListenableWorker.Result.Retry)
+        assertTrue(earlyResult.retriesPending)
         coVerify(exactly = 0) { outbox.markDeadLetter("e1") }
 
-        val exhaustedResult = buildWorker(runAttemptCount = 10).doWork()
+        val exhaustedResult = drain(attempt = 10)
 
-        assertTrue(exhaustedResult is androidx.work.ListenableWorker.Result.Success)
+        assertFalse(exhaustedResult.retriesPending)
         coVerify(exactly = 1) { outbox.markDeadLetter("e1") }
     }
 
@@ -350,9 +326,9 @@ class PlaybackSyncWorkerTest {
         coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.UNFAVORITE))
         coEvery { playbackRepository.replayOutboxEntry(any()) } returns false
 
-        val result = buildWorker(runAttemptCount = 3).doWork()
+        val result = drain(attempt = 3)
 
-        assertTrue(result is androidx.work.ListenableWorker.Result.Retry)
+        assertTrue(result.retriesPending)
         coVerify(exactly = 0) { outbox.markDeadLetter("e1") }
     }
 
@@ -369,9 +345,9 @@ class PlaybackSyncWorkerTest {
         // the drain snapshot — model the staged PLAYED row.
         coEvery { outbox.hasUnsyncedPlayedIntent("item-1") } returns true
 
-        val result = buildWorker().doWork()
+        val result = drain()
 
-        assertTrue(result is androidx.work.ListenableWorker.Result.Success)
+        assertFalse(result.retriesPending)
         // Only the PLAYED flip reaches the API; the trailing telemetry would
         // otherwise re-write a near-end position over the played state.
         coVerify(exactly = 1) { playbackRepository.replayOutboxEntry(any()) }
@@ -389,9 +365,9 @@ class PlaybackSyncWorkerTest {
         // in the snapshot, but it still authorizes dropping the telemetry.
         coEvery { outbox.hasUnsyncedPlayedIntent("item-1") } returns true
 
-        val result = buildWorker().doWork()
+        val result = drain()
 
-        assertTrue(result is androidx.work.ListenableWorker.Result.Success)
+        assertFalse(result.retriesPending)
         coVerify(exactly = 0) { playbackRepository.replayOutboxEntry(any()) }
         coVerify(exactly = 2) { outbox.delete(any()) }
     }
@@ -403,7 +379,7 @@ class PlaybackSyncWorkerTest {
             entry("e2", "item-2", PlaybackOutboxEventType.PLAYED),
         )
 
-        buildWorker().doWork()
+        drain()
 
         coVerify(exactly = 2) { playbackRepository.replayOutboxEntry(any()) }
     }
@@ -415,7 +391,7 @@ class PlaybackSyncWorkerTest {
         // local mirror is the only remaining evidence of the watched fact.
         coEvery { offlineRepository.getOfflineItem("item-1") } returns offlineItem(playedPercentage = 97.0)
 
-        buildWorker().doWork()
+        drain()
 
         coVerify(exactly = 1) { mediaRepository.markPlayed("item-1") }
     }
@@ -425,7 +401,7 @@ class PlaybackSyncWorkerTest {
         coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.PROGRESS))
         coEvery { offlineRepository.getOfflineItem("item-1") } returns offlineItem(isPlayed = true, playedPercentage = 30.0)
 
-        buildWorker().doWork()
+        drain()
 
         coVerify(exactly = 1) { mediaRepository.markPlayed("item-1") }
     }
@@ -435,7 +411,7 @@ class PlaybackSyncWorkerTest {
         coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.STOP))
         coEvery { offlineRepository.getOfflineItem("item-1") } returns offlineItem(playedPercentage = 50.0)
 
-        buildWorker().doWork()
+        drain()
 
         coVerify(exactly = 0) { mediaRepository.markPlayed(any()) }
     }
@@ -452,9 +428,9 @@ class PlaybackSyncWorkerTest {
         coEvery { offlineRepository.getOfflineItem("item-1") } returns offlineItem(isPlayed = true)
         coEvery { outbox.isPlayedStateIntentDelivered("item-1", played = true) } returns false
 
-        val result = buildWorker().doWork()
+        val result = drain()
 
-        assertTrue(result is androidx.work.ListenableWorker.Result.Retry)
+        assertTrue(result.retriesPending)
         coVerify(exactly = 1) { mediaRepository.markPlayed("item-1") }
         // The telemetry push (not the flip) is what names the item here.
         verify(exactly = 1) { mediaRepository.notifyUserDataChanged(listOf("item-1")) }
@@ -464,14 +440,15 @@ class PlaybackSyncWorkerTest {
     fun `a changed drain invalidates repo caches and notifies user-data consumers`() = runTest {
         coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.PROGRESS))
 
-        buildWorker().doWork()
+        val result = drain()
 
+        assertFalse(result.retriesPending)
         // Post-drain coherence (#153): server state moved, so the in-memory
         // caches must drop synchronously and the synthetic user-data push must
         // reach home/detail listeners without waiting for the WS echo.
         coVerify(exactly = 1) { cacheInvalidator.invalidateCaches() }
         verify(exactly = 1) { mediaRepository.notifyUserDataChanged(listOf("item-1")) }
-        coVerify(exactly = 1) { userDataSyncScheduler.enqueueNow() }
+        verify(exactly = 1) { userDataSyncTrigger.enqueueNow() }
     }
 
     @Test
@@ -481,7 +458,7 @@ class PlaybackSyncWorkerTest {
         coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.PROGRESS))
         coEvery { playbackRepository.replayOutboxEntry(any()) } returns false
 
-        buildWorker(runAttemptCount = 10).doWork()
+        val result = drain(attempt = 10)
 
         coVerify(exactly = 0) { cacheInvalidator.invalidateCaches() }
         verify(exactly = 0) { mediaRepository.notifyUserDataChanged(any()) }
@@ -492,7 +469,7 @@ class PlaybackSyncWorkerTest {
         coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.UNPLAYED))
         coEvery { offlineRepository.getOfflineItem("item-1") } returns offlineItem(isPlayed = true, playedPercentage = 97.0)
 
-        buildWorker().doWork()
+        drain()
 
         // The UNPLAYED intent is the authority; deriving a watched flip here
         // would immediately undo the user's unwatch.
@@ -509,9 +486,9 @@ class PlaybackSyncWorkerTest {
         coEvery { playbackRepository.replayOutboxEntry(match { it.itemId == "item-2" }) } returns false
         // Success-side reconciliation early-returns (no offline row).
 
-        val result = buildWorker(runAttemptCount = 3).doWork()
+        val result = drain(attempt = 3)
 
-        assertTrue(result is androidx.work.ListenableWorker.Result.Success)
+        assertFalse(result.retriesPending)
         coVerify(exactly = 1) { outbox.delete("e1") }
         coVerify(exactly = 0) { outbox.delete("e2") }
         coVerify(exactly = 1) { outbox.markDeadLetter("e2") }
@@ -529,28 +506,28 @@ class PlaybackSyncWorkerTest {
         coEvery { playbackRepository.replayOutboxEntry(match { it.itemId == "item-1" }) } returns true
         coEvery { playbackRepository.replayOutboxEntry(match { it.itemId == "item-2" }) } returns false
 
-        val result = buildWorker().doWork()
+        val result = drain()
 
-        assertTrue(result is androidx.work.ListenableWorker.Result.Retry)
+        assertTrue(result.retriesPending)
         // Only the successful entry is deleted; the failed one is retained.
         coVerify(exactly = 1) { outbox.delete("e1") }
         coVerify(exactly = 0) { outbox.delete("e2") }
     }
 
     // ── Reconcile branches ────────────────────────────────────────────
-    // Reconcile behaviour is verified in PlayedStateSyncImplTest — the worker
-    // now delegates the merge to PlayedStateSync, so the worker test only
-    // asserts that the worker *calls* reconcile for each drained item.
+    // Reconcile behaviour is verified in PlayedStateSyncImplTest — the
+    // drainer delegates the merge to PlayedStateSync, so these tests only
+    // assert that the drain *calls* reconcile for each drained item.
 
     @Test
-    fun `reconcile failure during drain does not fail the worker`() = runTest {
+    fun `reconcile failure during drain does not fail the drain`() = runTest {
         coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.PROGRESS))
         coEvery { playedStateSync.reconcileOfflineRow("item-1") } throws RuntimeException("reconcile failed")
 
-        val result = buildWorker().doWork()
+        val result = drain()
 
         // Reconcile is best-effort (wrapped in runCatching); the push still succeeded.
-        assertTrue(result is androidx.work.ListenableWorker.Result.Success)
+        assertFalse(result.retriesPending)
     }
 
     @Test
@@ -561,11 +538,11 @@ class PlaybackSyncWorkerTest {
         coEvery { playedStateSync.reconcileOfflineRow("item-1") } returns
             PlayedStateSync.ReconcileOutcome.UndeliveredIntent
 
-        val result = buildWorker().doWork()
+        val result = drain()
 
         // Returning success here would strand the freshly re-enqueued intent
         // row until the 4h periodic backstop — the drain must retry instead.
-        assertTrue(result is androidx.work.ListenableWorker.Result.Retry)
+        assertTrue(result.retriesPending)
     }
 
     // ── Helpers ───────────────────────────────────────────────────────

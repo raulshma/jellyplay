@@ -8,6 +8,7 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -37,7 +38,10 @@ import kotlin.test.assertTrue
  *    startLiveStream resets the tail;
  *  - the selected-file poll skips the multi-MB content re-download when the
  *    file's size/dateModified metadata is unchanged, marks appended lines
- *    `isNew`, and clearSelectedLogFile cancels the poll and resets state.
+ *    `isNew`, and clearSelectedLogFile cancels the poll and resets state;
+ *  - loadMoreActivity is re-entry safe: a second call while an older-page
+ *    fetch is still in flight is dropped, so a fast fling cannot re-fetch and
+ *    double-append the same server page (startIndex = currentSize).
  *
  * The 5s file poll runs on the test scheduler, so only explicit
  * advanceTimeBy/runCurrent steps drive it — a bare advanceUntilIdle while a
@@ -293,4 +297,60 @@ class LogsViewModelTest {
         advanceUntilIdle()
         coVerify(exactly = 1) { adminRepository.getLogFileContent("server.log") }
     }
+
+    // ── paginated more-load re-entry guard ──
+
+    @Test
+    fun `loadMoreActivity while a page is in flight fetches and appends exactly one page`() =
+        runTest(mainDispatcher) {
+            val initial = (0L until 50L).map { entry(it) }
+            val vm = loadedViewModel(initial = initial)
+
+            // The older-page fetch suspends until released, so the second
+            // call lands while the first is genuinely in flight — the old
+            // unguarded code re-read the unchanged currentSize (50), fetched
+            // the same page twice, and double-appended it.
+            val gate = CompletableDeferred<Unit>()
+            var moreFetches = 0
+            coEvery { adminRepository.getActivityLogEntries(startIndex = 50, limit = 50) } coAnswers {
+                moreFetches += 1
+                gate.await()
+                Result.success((50L until 100L).map { entry(it) })
+            }
+
+            vm.loadMoreActivity()
+            vm.loadMoreActivity() // rapid re-entry before the first completes
+            advanceUntilIdle()
+
+            assertEquals(1, moreFetches)
+            assertTrue(vm.state.isLoadingMoreActivity)
+            assertEquals(50, vm.state.activityEntries.size)
+
+            gate.complete(Unit)
+            advanceUntilIdle()
+
+            assertEquals(1, moreFetches)
+            assertFalse(vm.state.isLoadingMoreActivity)
+            assertEquals((0L until 100L).toList(), vm.state.activityEntries.map { it.id })
+            coVerify(exactly = 1) { adminRepository.getActivityLogEntries(startIndex = 50, limit = 50) }
+        }
+
+    @Test
+    fun `loadMoreActivity releases the in-flight flag so the next page can load`() =
+        runTest(mainDispatcher) {
+            val vm = loadedViewModel(initial = (0L until 50L).map { entry(it) })
+            coEvery { adminRepository.getActivityLogEntries(startIndex = 50, limit = 50) } returns
+                Result.success((50L until 100L).map { entry(it) })
+            coEvery { adminRepository.getActivityLogEntries(startIndex = 100, limit = 50) } returns
+                Result.success(emptyList())
+
+            vm.loadMoreActivity()
+            advanceUntilIdle()
+            assertFalse(vm.state.isLoadingMoreActivity)
+
+            vm.loadMoreActivity()
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) { adminRepository.getActivityLogEntries(startIndex = 100, limit = 50) }
+        }
 }

@@ -44,6 +44,7 @@ kotlin {
     sourceSets {
         getByName("commonMain").dependencies {
             implementation(project(":shared:core:model"))
+            implementation(project(":shared:core:concurrency"))
             implementation(project(":shared:core:designsystem"))
             implementation(project(":shared:core:data"))
             // HomeDiscoveryStore (music home discovery prefs).

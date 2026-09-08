@@ -27,6 +27,8 @@ data class LogsState(
     val selectedLogFileLines: List<LogLine> = emptyList(),
     val isLogPollingActive: Boolean = true,
     val isLoadingLogContent: Boolean = false,
+    /** True while a paginated activity fetch (an older page) is in flight. */
+    val isLoadingMoreActivity: Boolean = false,
     val selectedTabIndex: Int = 0,
     val isLiveStreamActive: Boolean = false,
     val liveEntries: List<ActivityLogEntry> = emptyList(),
@@ -266,7 +268,18 @@ class LogsViewModel(
         _state.value = _state.value.copy(isLiveStreamActive = false)
     }
 
+    /**
+     * Fetches the next activity page at `startIndex = currentSize`. Re-entry
+     * safe: a fast fling used to fire this re-entrantly with the same
+     * startIndex before the buffer grew, double-appending the same server
+     * page (the screen's `!isLoadingMore` guard was fed a hardcoded `false`).
+     * The in-flight flag is raised synchronously (before the coroutine) and
+     * mirrored into [LogsState.isLoadingMoreActivity] so both this guard and
+     * the screen's infinite-list guard see it.
+     */
     fun loadMoreActivity() {
+        if (_state.value.isLoadingMoreActivity) return
+        _state.value = _state.value.copy(isLoadingMoreActivity = true)
         launch {
             val currentSize = _state.value.activityEntries.size
             val result = adminRepository.getActivityLogEntries(startIndex = currentSize, limit = 50)
@@ -276,6 +289,7 @@ class LogsViewModel(
                     activityEntries = activityEntriesBuffer.toList(),
                 )
             }
+            _state.value = _state.value.copy(isLoadingMoreActivity = false)
         }
     }
 

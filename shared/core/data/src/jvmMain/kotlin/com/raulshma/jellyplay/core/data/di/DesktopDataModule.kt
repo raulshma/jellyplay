@@ -30,6 +30,9 @@ import com.raulshma.jellyplay.core.data.widget.ContinueWatchingBroadcaster
 import com.raulshma.jellyplay.core.data.widget.LibrarySyncHook
 import com.raulshma.jellyplay.core.data.worker.DesktopAutoDownloadScheduler
 import com.raulshma.jellyplay.core.data.worker.DesktopDownloadManager
+import com.raulshma.jellyplay.core.data.worker.DesktopPlaybackSyncScheduler
+import com.raulshma.jellyplay.core.data.worker.PlaybackOutboxDrainer
+import com.raulshma.jellyplay.core.data.worker.PlaybackOutboxDrainerImpl
 import com.raulshma.jellyplay.core.data.worker.PlaybackSyncScheduler
 import com.raulshma.jellyplay.core.data.worker.TvWatchNextScheduler
 import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
@@ -172,30 +175,57 @@ fun desktopDataModule(dataDir: Path): Module {
         }
 
         // ── Home conveyor desktop actuals (wave 8B): the four WorkManager/ ──
-        // widget-backed HomeViewModel ctor deps have no desktop machinery
-        // behind them, so these are honest no-ops mirroring the Android impls'
-        // shapes (Android: PlaybackSyncScheduler/TvWatchNextScheduler live in
-        // androidCoreDataModule, ContinueWatchingBroadcaster/LibrarySyncHook
-        // in the app's androidAppModule).
-        //  - PlaybackSyncScheduler: Android drains the playback-progress
-        //    offline outbox via WorkManager; desktop stages rows into the
-        //    same outbox (manual offline toggle or a transient HTTP
-        //    failure) but ships no drain machinery — the WorkManager
-        //    worker is Android-side per plan §Phase C4 — so staged rows
-        //    sit. 17C's real network probe changes nothing here: staging
-        //    keys off the manual offline mode, never the network seam.
+        // widget-backed HomeViewModel ctor deps have their desktop actuals
+        // here (Android: PlaybackSyncScheduler lives in
+        // androidCoreDataModule, TvWatchNextScheduler too,
+        // ContinueWatchingBroadcaster/LibrarySyncHook in the app's
+        // androidAppModule).
+        //  - PlaybackSyncScheduler: REAL since the playback-outbox drainer
+        //    moved into shared jvmShared — DesktopPlaybackSyncScheduler runs
+        //    drainer.drainOnce(0) at startup, on every Offline→Online
+        //    transition, and on SyncStatusStateHolder's manual "sync now"
+        //    (see its class KDoc for the declared behaviour delta: desktop
+        //    staged outbox rows now actually drain; no periodic backstop).
+        //    Android overrides the interface with the WorkManager-backed
+        //    PlaybackSyncSchedulerImpl in androidCoreDataModule — the two
+        //    platform modules never load together, and Android constructs its
+        //    worker-scoped drainer per worker (no Koin single here would fit;
+        //    setForeground lives on the running CoroutineWorker).
         //  - TvWatchNextScheduler: the Android TV "Watch Next" OS row has no
         //    desktop equivalent.
         //  - ContinueWatchingBroadcaster: refreshes the Android app widget's
         //    RemoteViews service; no widgets on desktop.
         //  - LibrarySyncHook: fans a library scan out to Android's
         //    auto-download drain + widget refresh; both are no-ops here.
-        single<PlaybackSyncScheduler> {
-            object : PlaybackSyncScheduler {
-                override fun enqueuePeriodic() {}
-                override fun enqueueNow() {}
-            }
+        single<PlaybackOutboxDrainer.UserDataSyncTrigger> {
+            // No WorkManager user-data worker on desktop: the drain tail's
+            // synchronous cache-invalidate + notifyUserDataChanged fan-out
+            // already refreshes the open UI; the 12h async warm-refetch stays
+            // Android-only.
+            PlaybackOutboxDrainer.UserDataSyncTrigger { }
         }
+        single<PlaybackOutboxDrainer> {
+            PlaybackOutboxDrainerImpl(
+                outbox = get(),
+                playbackRepository = get(),
+                offlineModeManager = get(),
+                playedStateSync = get(),
+                offlineRepository = get(),
+                mediaRepository = get(),
+                cacheInvalidator = get(),
+                userDataSyncTrigger = get(),
+                // Desktop has no notification surface for a headless drain.
+                notifier = PlaybackOutboxDrainer.Notifier.NONE,
+            )
+        }
+        single {
+            DesktopPlaybackSyncScheduler(
+                drainer = get(),
+                networkMonitor = get(),
+                scope = get(DatastoreQualifiers.applicationScope),
+            )
+        }
+        single<PlaybackSyncScheduler> { get<DesktopPlaybackSyncScheduler>() }
         single<TvWatchNextScheduler> {
             object : TvWatchNextScheduler {
                 override fun scheduleRefresh() {}

@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.OfflineSyncUpdate
 import com.raulshma.jellyplay.core.model.ResyncBatchProgress
 import com.raulshma.jellyplay.core.model.ResyncOptions
+import com.raulshma.jellyplay.core.model.SelectionState
 import com.raulshma.jellyplay.core.model.formatBytes
 import com.raulshma.jellyplay.core.model.formatEta
 import com.raulshma.jellyplay.core.model.formatSpeed
@@ -35,9 +36,15 @@ data class DownloadsUiState(
     val isLoading: Boolean = true,
     val error: String? = null,
     /** Stable ids currently in selection mode. */
-    val selectedIds: Set<String> = emptySet(),
-    val selectionMode: Boolean = false,
-)
+    val selection: SelectionState<String> = SelectionState(),
+) {
+    /** Selection reads, delegated from the shared [SelectionState] algebra. */
+    val selectedIds: Set<String>
+        get() = selection.ids
+
+    val selectionMode: Boolean
+        get() = selection.active
+}
 
 /**
  * A downloaded item eligible for a force resync (completed, or stalled after
@@ -173,20 +180,15 @@ class DownloadsViewModel(
     // ── Selection ────────────────────────────────────────────────────────
 
     fun toggleSelection(item: DownloadItem) {
-        _uiState.update {
-            val next = if (item.id in it.selectedIds) it.selectedIds - item.id else it.selectedIds + item.id
-            it.copy(selectedIds = next, selectionMode = next.isNotEmpty())
-        }
+        _uiState.update { it.copy(selection = it.selection.toggled(item.id)) }
     }
 
     fun clearSelection() {
-        _uiState.update { it.copy(selectedIds = emptySet(), selectionMode = false) }
+        _uiState.update { it.copy(selection = it.selection.cleared()) }
     }
 
     fun selectAll() {
-        _uiState.update {
-            it.copy(selectedIds = it.downloads.map { item -> item.id }.toSet(), selectionMode = true)
-        }
+        _uiState.update { it.copy(selection = it.selection.selectAll(it.downloads.map { item -> item.id })) }
     }
 
     // ── Bulk actions ─────────────────────────────────────────────────────

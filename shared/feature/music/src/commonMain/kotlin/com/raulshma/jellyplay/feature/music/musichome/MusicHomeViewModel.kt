@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.music.musichome
 
+import com.raulshma.jellyplay.core.concurrency.mapConcurrent
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
 import com.raulshma.jellyplay.core.data.playback.TrackWithAlbumFallback
@@ -19,7 +20,6 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -223,17 +223,11 @@ class MusicHomeViewModel(
      * per-album naming before concatenation — plan 04 risk 2.
      */
     private suspend fun fetchAlbumTracksParallel(albums: List<MediaItem>): List<TrackWithAlbumFallback> {
-        return coroutineScope {
-            albums.map { album ->
-                async {
-                    fetchSemaphore.withPermit {
-                        mediaRepository.getAlbumTracks(album.id)
-                        .getOrNull()
-                        .orEmpty()
-                        .map { track -> TrackWithAlbumFallback(track, album.name) }
-                    }
-                }
-            }.awaitAll().flatten()
-        }
+        return fetchSemaphore.mapConcurrent(albums) { album ->
+            mediaRepository.getAlbumTracks(album.id)
+                .getOrNull()
+                .orEmpty()
+                .map { track -> TrackWithAlbumFallback(track, album.name) }
+        }.flatten()
     }
 }

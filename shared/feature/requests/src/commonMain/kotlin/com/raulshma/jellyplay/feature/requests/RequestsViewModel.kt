@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
 import com.raulshma.jellyplay.core.model.ExperimentalFeature
+import com.raulshma.jellyplay.core.model.SelectionState
 import com.raulshma.jellyplay.core.model.arr.ArrDownloadSummary
 import com.raulshma.jellyplay.core.model.arr.ArrQueueDeleteOptions
 import com.raulshma.jellyplay.core.model.arr.ArrQueueItem
@@ -57,10 +58,16 @@ data class RequestsUiState(
     val searchQuery: String = "",
     val actionInProgress: Boolean = false,
     /** Selection-mode state for bulk approve/decline. */
-    val selectionMode: Boolean = false,
-    val selectedRequestIds: Set<Int> = emptySet(),
+    val selection: SelectionState<Int> = SelectionState(),
     val actionError: String? = null,
 ) {
+    /** Selection reads, delegated from the shared [SelectionState] algebra. */
+    val selectedRequestIds: Set<Int>
+        get() = selection.ids
+
+    val selectionMode: Boolean
+        get() = selection.active
+
     /** The filter-axis fields, bundled for hand-off to [RequestsFilterBar]. */
     val filters: RequestsFilterState
         get() = RequestsFilterState(
@@ -372,23 +379,17 @@ class RequestsViewModel(
 
     /** Toggles [request]'s membership in the selection; enters selection mode on first pick. */
     fun toggleSelection(request: SeerrRequestItem) {
-        val current = _state.value.selectedRequestIds
-        val next = if (request.id in current) current - request.id else current + request.id
-        _state.value = _state.value.copy(
-            selectedRequestIds = next,
-            selectionMode = next.isNotEmpty(),
-        )
+        _state.value = _state.value.copy(selection = _state.value.selection.toggled(request.id))
     }
 
     fun selectAll() {
         _state.value = _state.value.copy(
-            selectedRequestIds = _state.value.requests.map { it.id }.toSet(),
-            selectionMode = true,
+            selection = _state.value.selection.selectAll(_state.value.requests.map { it.id }),
         )
     }
 
     fun clearSelection() {
-        _state.value = _state.value.copy(selectedRequestIds = emptySet(), selectionMode = false)
+        _state.value = _state.value.copy(selection = _state.value.selection.cleared())
     }
 
     /** Approves every selected request; clears selection + refreshes on completion. */
@@ -409,7 +410,10 @@ class RequestsViewModel(
         launch {
             _state.value = _state.value.copy(actionInProgress = true, actionError = null)
             ids.forEach { id -> action(id) }
-            _state.value = _state.value.copy(actionInProgress = false, selectedRequestIds = emptySet(), selectionMode = false)
+            _state.value = _state.value.copy(
+                actionInProgress = false,
+                selection = _state.value.selection.cleared(),
+            )
             loadRequests(refresh = true)
         }
     }

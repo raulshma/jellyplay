@@ -6,9 +6,12 @@ import androidx.work.WorkerFactory
 import androidx.work.WorkerParameters
 import com.raulshma.jellyplay.core.data.worker.AutoDownloadWorker
 import com.raulshma.jellyplay.core.data.worker.DownloadWorker
+import com.raulshma.jellyplay.core.data.worker.PlaybackOutboxDrainer
+import com.raulshma.jellyplay.core.data.worker.PlaybackOutboxDrainerImpl
 import com.raulshma.jellyplay.core.data.worker.PlaybackSyncWorker
 import com.raulshma.jellyplay.core.data.worker.StaleMediaScanWorker
 import com.raulshma.jellyplay.core.data.worker.TvWatchNextWorker
+import com.raulshma.jellyplay.core.data.worker.UserDataSyncScheduler
 import com.raulshma.jellyplay.core.data.worker.UserDataSyncWorker
 import com.raulshma.jellyplay.core.data.worker.WatchedMediaScanWorker
 
@@ -64,14 +67,26 @@ class CoreDataWorkerFactory : WorkerFactory() {
             )
             PlaybackSyncWorker::class.simpleName -> PlaybackSyncWorker(
                 context, workerParameters,
-                outbox = koin().get(),
-                playbackRepository = koin().get(),
-                offlineModeManager = koin().get(),
-                playedStateSync = koin().get(),
-                offlineRepository = koin().get(),
-                userDataSyncScheduler = koin().get(),
-                mediaRepository = koin().get(),
-                cacheInvalidator = koin().get(),
+                // The drainer's notifier is worker-instance-scoped (the worker
+                // IS the notifier: setForeground lives on the running
+                // CoroutineWorker), so the drainer is constructed per worker
+                // over the singleton repositories instead of being a Koin
+                // single (desktop binds its own plain single).
+                createDrainer = { notifier ->
+                    PlaybackOutboxDrainerImpl(
+                        outbox = koin().get(),
+                        playbackRepository = koin().get(),
+                        offlineModeManager = koin().get(),
+                        playedStateSync = koin().get(),
+                        offlineRepository = koin().get(),
+                        mediaRepository = koin().get(),
+                        cacheInvalidator = koin().get(),
+                        userDataSyncTrigger = PlaybackOutboxDrainer.UserDataSyncTrigger {
+                            koin().get<UserDataSyncScheduler>().enqueueNow()
+                        },
+                        notifier = notifier,
+                    )
+                },
             )
             DownloadWorker::class.simpleName -> DownloadWorker(
                 context, workerParameters,
