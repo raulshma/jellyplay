@@ -17,6 +17,7 @@ import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.feature.music.MixErrorMessage
 import com.raulshma.jellyplay.feature.music.toMixErrorMessage
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.SharingStarted
@@ -41,6 +42,13 @@ class AlbumDetailViewModel(
     private var currentAlbumId: String? = null
 
     /**
+     * The one load in flight, loud or silent — a loud load cancels a silent
+     * one (it regenerates the same data loudly), and the deferred refresh
+     * skips itself while one is active, so two fetches never race.
+     */
+    private var loadJob: Job? = null
+
+    /**
      * User-data changes while another screen is up (a track favorite flipped
      * elsewhere, outbox drain landing) only mark the track list stale; the
      * single silent forced reload fires when the album screen is next entered
@@ -49,7 +57,15 @@ class AlbumDetailViewModel(
     val deferredRefresher = DeferredUserDataRefresher(
         userDataChanges = mediaRepository.userDataChanges,
         scope = scope,
-        onRefresh = { currentAlbumId?.let { id -> loadAlbum(id, force = true, silent = true) } },
+        onRefresh = {
+            currentAlbumId?.let { id ->
+                // A load already in flight regenerates the album — a silent
+                // twin would only duplicate the fetch (see [loadJob]).
+                if (loadJob?.isActive != true) {
+                    loadAlbum(id, force = true, silent = true)
+                }
+            }
+        },
     )
 
     // StateFlow (not composeState) so `trackDownloads` below can observe the
@@ -99,7 +115,8 @@ class AlbumDetailViewModel(
     fun loadAlbum(albumId: String, force: Boolean = false, silent: Boolean = false) {
         if (!force && currentAlbumId == albumId && _detail.value != null && _error.value == null) return
         currentAlbumId = albumId
-        launch {
+        loadJob?.cancel()
+        loadJob = launch {
             if (!silent) {
                 _isLoading.value = true
                 _error.value = null

@@ -42,12 +42,14 @@ class MusicHomeViewModel(
      * User-data changes while another screen is up (a favorite track flipped
      * elsewhere, outbox drain landing) only mark the sections stale — the
      * favorite artists/tracks rows re-load when the music home is next
-     * entered (see [DeferredUserDataRefresher]) — never mid-scroll.
+     * entered (see [DeferredUserDataRefresher]) — never mid-scroll. The
+     * deferred regeneration runs [loadSections] silently: no loading spinner,
+     * no toast.
      */
     val deferredRefresher = DeferredUserDataRefresher(
         userDataChanges = mediaRepository.userDataChanges,
         scope = scope,
-        onRefresh = ::loadSections,
+        onRefresh = { loadSections(silent = true) },
     )
 
     val activeDownloadCount = downloadRepository.getActiveDownloadCount()
@@ -75,13 +77,21 @@ class MusicHomeViewModel(
         offlineModeManager.toggleManualOffline()
     }
 
-    fun loadSections() {
+    /**
+     * [silent] serves the deferred-refresh path: no loading state (the
+     * pull-to-refresh spinner keys off [MusicHomeUiState.isLoading]), and a
+     * failed fetch keeps the last sections on screen — serve-stale-while-
+     * revalidate, same philosophy as the detail screens.
+     */
+    fun loadSections(silent: Boolean = false) {
         launch {
             if (_uiState.value.offlineMode != OfflineMode.ONLINE) {
                 _uiState.update { it.copy(isLoading = false) }
                 return@launch
             }
-            _uiState.update { it.copy(isLoading = true, error = null) }
+            if (!silent) {
+                _uiState.update { it.copy(isLoading = true, error = null) }
+            }
             try {
                 val sectionsList = mutableListOf<MusicHomeSection>()
 
@@ -136,18 +146,28 @@ class MusicHomeViewModel(
                     section(MusicHomeSectionType.RECENTLY_PLAYED, results[2])?.let(sectionsList::add)
                     section(MusicHomeSectionType.TOP_RATED_ALBUMS, results[3])?.let(sectionsList::add)
                     section(MusicHomeSectionType.FAVORITE_TRACKS, results[4])?.let(sectionsList::add)
-                }
 
-                _uiState.update { it.copy(sections = sectionsList) }
+                    // A silent refresh publishes only complete results: any
+                    // failed fetch keeps the last sections on screen instead
+                    // of silently dropping the rows that failed to re-fetch.
+                    if (!silent || results.all { it != null }) {
+                        _uiState.update { it.copy(sections = sectionsList) }
+                    }
+                }
             } catch (e: Exception) {
-                val message = e.message ?: "Failed to load music"
-                // Keep showing cached sections if we have them; only swap to the full
-                // ErrorScreen when there's nothing to show. A failed refresh after data
-                // has loaded surfaces as a transient toast instead of wiping the screen.
-                if (_uiState.value.sections.isEmpty()) {
-                    _uiState.update { it.copy(error = message) }
-                } else {
-                    userMessageBus.error(message)
+                // A silent (deferred) regeneration stays quiet — the user
+                // never asked for this fetch, so the stale sections stay and
+                // no toast fires.
+                if (!silent) {
+                    val message = e.message ?: "Failed to load music"
+                    // Keep showing cached sections if we have them; only swap to the full
+                    // ErrorScreen when there's nothing to show. A failed refresh after data
+                    // has loaded surfaces as a transient toast instead of wiping the screen.
+                    if (_uiState.value.sections.isEmpty()) {
+                        _uiState.update { it.copy(error = message) }
+                    } else {
+                        userMessageBus.error(message)
+                    }
                 }
             }
             _uiState.update { it.copy(isLoading = false) }

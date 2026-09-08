@@ -19,9 +19,12 @@ import kotlinx.coroutines.launch
  *
  * The regeneration is one [onRefresh] call per stale-period — the pending
  * flag is boolean, so a WS burst collapses into a single refresh on re-entry.
- * The paging source's `getRefreshKey` anchors the new generation around the
- * previous anchor position, so the restored list loads around where the user
- * was instead of snapping to the top.
+ * For the pager-trigger shape a bump restarts the key-combined
+ * `flatMapLatest` pager as a fresh generation, which loads from its initial
+ * key — `getRefreshKey` only anchors refreshes *within* one generation, it
+ * does not carry the previous generation's anchor over. That is invisible in
+ * practice: bumps fire on re-entry, when the grid is rebuilt from the top
+ * anyway — never mid-scroll.
  *
  * It is itself a [DeferredRefreshHost], so the owning ViewModel exposes it
  * and the screen wires it with a single

@@ -11,6 +11,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
@@ -274,6 +275,48 @@ class CollectionDetailViewModelTest {
         // instead of flashing an Error screen over the old content.
         coVerify(exactly = 2) { mediaRepository.getCollectionItems("c1", any(), any()) }
         assertTrue(viewModel.uiState.value is CollectionDetailUiState.Success)
+    }
+
+    @Test
+    fun `deferred refresh does not stack a silent twin on an in-flight loud load`() = runTest {
+        every { mediaRepository.userDataChanges } returns userDataEvents
+        // The first loud load fails (Error state → re-entry loud-loads again);
+        // every later detail read parks on [gate] so a load can be held
+        // IN FLIGHT across the next step.
+        val gate = CompletableDeferred<Unit>()
+        var detailCalls = 0
+        coEvery { mediaRepository.getMediaDetail("c1") } coAnswers {
+            if (++detailCalls == 1) {
+                Result.failure(RuntimeException("offline"))
+            } else {
+                gate.await()
+                Result.success(MediaDetail(item = MediaItem(id = "c1", name = "Collection", mediaType = MediaType.COLLECTION)))
+            }
+        }
+        coEvery { mediaRepository.getCollectionItems("c1", any(), any()) } returns Result.success(
+            SearchResult(items = emptyList(), totalRecordCount = 0, startIndex = 0),
+        )
+        val viewModel = collectionViewModel()
+
+        viewModel.loadCollection("c1")
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value is CollectionDetailUiState.Error)
+
+        // Armed while off-screen...
+        viewModel.deferredRefresher.onScreenActiveChanged(false)
+        userDataEvents.emit(UserDataChange("user-1", listOf("m1")))
+        advanceUntilIdle()
+
+        // ...then re-entry: the loud load starts (Error does not no-op) and
+        // parks mid-fetch; the deferred effect consumes the flag while that
+        // load is in flight and must NOT launch a silent twin on top of it —
+        // the loud load is already the regeneration.
+        viewModel.loadCollection("c1")
+        viewModel.deferredRefresher.onScreenActiveChanged(true)
+        advanceUntilIdle()
+
+        // Two fetches total (initial + in-flight loud), not three.
+        coVerify(exactly = 2) { mediaRepository.getCollectionItems("c1", any(), any()) }
     }
 
     private fun stubCollectionFetch() {

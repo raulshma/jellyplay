@@ -17,6 +17,7 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMode
 import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.SortOption
+import com.raulshma.jellyplay.core.model.UserDataChange
 import com.raulshma.jellyplay.feature.music.feedback.MusicMessageBus
 import io.mockk.Runs
 import io.mockk.coEvery
@@ -74,6 +75,9 @@ class MusicHomeViewModelTest {
     private val homeModeFlow = MutableStateFlow(HomeDiscoverySlice())
     private val offlineModeFlow = MutableStateFlow(OfflineMode.ONLINE)
 
+    /** Driven by the deferred-refresh tests; collected by the VM for its lifetime. */
+    private val userDataEvents = MutableSharedFlow<UserDataChange>(extraBufferCapacity = 16)
+
     private lateinit var viewModel: MusicHomeViewModel
 
     @BeforeTest
@@ -85,7 +89,7 @@ class MusicHomeViewModelTest {
         every { userMessageBus.error(any()) } just Runs
         every { offlineModeManager.toggleManualOffline() } just Runs
         // The deferred refresher collects this for the whole VM lifetime.
-        every { mediaRepository.userDataChanges } returns MutableSharedFlow(extraBufferCapacity = 16)
+        every { mediaRepository.userDataChanges } returns userDataEvents
     }
 
     @AfterTest
@@ -285,6 +289,67 @@ class MusicHomeViewModelTest {
         advanceUntilIdle()
 
         verify(exactly = 1) { offlineModeManager.toggleManualOffline() }
+    }
+
+    // ── Deferred refresh (user-data changes while off-screen) ───────────────
+
+    @Test
+    fun deferredRefresh_reloadsSectionsSilently() = runTest(mainDispatcher) {
+        stubHomeQueries(favoriteArtists = listOf(item("a1", "Artist")))
+        createViewModel()
+        advanceUntilIdle()
+        assertEquals(1, viewModel.uiState.value.sections.size)
+        coVerify(exactly = 1) { mediaRepository.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) }
+
+        // A write confirmed while the screen is off-screen marks stale only.
+        viewModel.deferredRefresher.onScreenActiveChanged(false)
+        userDataEvents.emit(UserDataChange("user-1", listOf("t1")))
+        advanceUntilIdle()
+        coVerify(exactly = 1) { mediaRepository.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) }
+
+        // Re-entry regenerates — silently: no isLoading flip (the
+        // pull-to-refresh spinner keys off it), no error reset, no toast.
+        viewModel.deferredRefresher.onScreenActiveChanged(true)
+        advanceUntilIdle()
+
+        coVerify(exactly = 2) { mediaRepository.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) }
+        assertEquals(1, viewModel.uiState.value.sections.size)
+        assertFalse(viewModel.uiState.value.isLoading)
+        assertNull(viewModel.uiState.value.error)
+        verify(exactly = 0) { userMessageBus.error(any()) }
+    }
+
+    @Test
+    fun deferredRefresh_failureKeepsSectionsAndStaysQuiet() = runTest(mainDispatcher) {
+        stubHomeQueries(favoriteArtists = listOf(item("a1", "Artist")))
+        // One answer per matcher: the artist query succeeds on the initial
+        // load and fails on the silent regeneration (no stub re-recording).
+        var artistQueries = 0
+        coEvery { mediaRepository.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) } answers {
+            if (++artistQueries == 1) {
+                Result.success(SearchResult(listOf(item("a1", "Artist")), 1, 0))
+            } else {
+                Result.failure(RuntimeException("refresh boom"))
+            }
+        }
+        createViewModel()
+        advanceUntilIdle()
+        assertEquals(1, viewModel.uiState.value.sections.size)
+
+        viewModel.deferredRefresher.onScreenActiveChanged(false)
+        userDataEvents.emit(UserDataChange("user-1", listOf("t1")))
+        advanceUntilIdle()
+        viewModel.deferredRefresher.onScreenActiveChanged(true)
+        advanceUntilIdle()
+
+        // The regeneration ran, its favorite-artists read failed, and nothing
+        // was published: the stale sections stay (serve-stale-while-revalidate)
+        // — no dropped rows, no toast, no error, no spinner.
+        coVerify(exactly = 2) { mediaRepository.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) }
+        assertEquals(1, viewModel.uiState.value.sections.size)
+        assertNull(viewModel.uiState.value.error)
+        assertFalse(viewModel.uiState.value.isLoading)
+        verify(exactly = 0) { userMessageBus.error(any()) }
     }
 
     @Test

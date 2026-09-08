@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.ui.viewmodel.DeferredUserDataRefresher
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -29,6 +30,13 @@ class PersonDetailViewModel constructor(
     private var currentPersonId: String? = null
 
     /**
+     * The one fetch in flight, loud or silent — a loud load cancels a silent
+     * one (it regenerates the same data loudly), and the deferred refresh
+     * skips itself while one is active, so two fetches never race.
+     */
+    private var fetchJob: Job? = null
+
+    /**
      * A no-op when this person is already showing: back-stack re-entry re-runs
      * the screen's `LaunchedEffect`, and a second loud load here would race
      * the deferred refresh's silent regeneration (and flash Loading over
@@ -38,7 +46,8 @@ class PersonDetailViewModel constructor(
         if (currentPersonId == personId && _uiState.value is PersonDetailUiState.Success) return
         currentPersonId = personId
         _uiState.value = PersonDetailUiState.Loading
-        launch { fetchPerson(personId, silent = false) }
+        fetchJob?.cancel()
+        fetchJob = launch { fetchPerson(personId, silent = false) }
     }
 
     /**
@@ -83,7 +92,13 @@ class PersonDetailViewModel constructor(
         userDataChanges = mediaRepository.userDataChanges,
         scope = scope,
         onRefresh = {
-            currentPersonId?.let { id -> launch { fetchPerson(id, silent = true) } }
+            currentPersonId?.let { id ->
+                // A load already in flight regenerates this data — a silent
+                // twin would only duplicate the fetch (see [fetchJob]).
+                if (fetchJob?.isActive != true) {
+                    fetchJob = launch { fetchPerson(id, silent = true) }
+                }
+            }
         },
     )
 

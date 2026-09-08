@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.ui.viewmodel.DeferredUserDataRefresher
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -29,6 +30,13 @@ class CollectionDetailViewModel constructor(
     private var currentCollectionId: String? = null
 
     /**
+     * The one fetch in flight, loud or silent — a loud load cancels a silent
+     * one (it regenerates the same data loudly), and the deferred refresh
+     * skips itself while one is active, so two fetches never race.
+     */
+    private var fetchJob: Job? = null
+
+    /**
      * A no-op when this collection is already showing: back-stack re-entry
      * re-runs the screen's `LaunchedEffect`, and a second loud load here would
      * race the deferred refresh's silent regeneration (and flash Loading over
@@ -38,7 +46,8 @@ class CollectionDetailViewModel constructor(
         if (currentCollectionId == collectionId && _uiState.value is CollectionDetailUiState.Success) return
         currentCollectionId = collectionId
         _uiState.value = CollectionDetailUiState.Loading
-        launch { fetchCollection(collectionId, silent = false) }
+        fetchJob?.cancel()
+        fetchJob = launch { fetchCollection(collectionId, silent = false) }
     }
 
     /**
@@ -77,7 +86,13 @@ class CollectionDetailViewModel constructor(
         userDataChanges = mediaRepository.userDataChanges,
         scope = scope,
         onRefresh = {
-            currentCollectionId?.let { id -> launch { fetchCollection(id, silent = true) } }
+            currentCollectionId?.let { id ->
+                // A load already in flight regenerates this data — a silent
+                // twin would only duplicate the fetch (see [fetchJob]).
+                if (fetchJob?.isActive != true) {
+                    fetchJob = launch { fetchCollection(id, silent = true) }
+                }
+            }
         },
     )
 

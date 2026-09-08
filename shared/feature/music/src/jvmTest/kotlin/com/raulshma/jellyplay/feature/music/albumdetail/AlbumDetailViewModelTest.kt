@@ -19,6 +19,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -310,6 +311,37 @@ class AlbumDetailViewModelTest {
         assertNull(viewModel.error)
         assertEquals("Album", viewModel.detail?.item?.name)
         assertEquals(albumTracks, viewModel.tracks)
+    }
+
+    @Test
+    fun deferredRefresh_doesNotStackSilentTwinOnInFlightLoudLoad() = runTest(mainDispatcher) {
+        loadAlbum()
+        advanceUntilIdle()
+
+        // Armed while off-screen...
+        viewModel.deferredRefresher.onScreenActiveChanged(false)
+        userDataEvents.emit(com.raulshma.jellyplay.core.model.UserDataChange("user-1", listOf("t1")))
+        advanceUntilIdle()
+
+        // ...then a loud refresh starts and parks mid-fetch when the deferred
+        // effect consumes the flag: the loud load is the regeneration, so no
+        // silent twin may stack on top of it.
+        val gate = CompletableDeferred<Unit>()
+        coEvery { mediaRepository.getMediaDetail("album1", any()) } coAnswers {
+            gate.await()
+            Result.success(MediaDetail(item = MediaItem(id = "album1", name = "Album", mediaType = MediaType.ALBUM)))
+        }
+        viewModel.refreshAlbum("album1")
+        viewModel.deferredRefresher.onScreenActiveChanged(true)
+        advanceUntilIdle()
+
+        // Two track fetches total (initial + in-flight loud), not three.
+        coVerify(exactly = 2) { mediaRepository.getAlbumTracks("album1") }
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertEquals("Album", viewModel.detail?.item?.name)
+        assertFalse(viewModel.isLoading)
     }
 
     // ── Instant mix event consumption ────────────────────────────────────────
