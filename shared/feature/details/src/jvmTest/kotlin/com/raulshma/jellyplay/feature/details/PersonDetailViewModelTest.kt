@@ -246,14 +246,14 @@ class PersonDetailViewModelTest {
         coVerify(exactly = 1) { mediaRepository.getItemsByPerson("p1") }
 
         // A write confirmed while the screen is NOT on screen only marks stale.
-        viewModel.onScreenActiveChanged(false)
+        viewModel.deferredRefresher.onScreenActiveChanged(false)
         userDataEvents.emit(UserDataChange("user-1", listOf("m1")))
         advanceUntilIdle()
         coVerify(exactly = 1) { mediaRepository.getItemsByPerson("p1") }
 
         // Re-entry fires the single deferred reload — silently: Success is
         // never dropped back to Loading on the way.
-        viewModel.onScreenActiveChanged(true)
+        viewModel.deferredRefresher.onScreenActiveChanged(true)
         advanceUntilIdle()
         coVerify(exactly = 2) { mediaRepository.getItemsByPerson("p1") }
         assertTrue(viewModel.uiState.value is PersonDetailUiState.Success)

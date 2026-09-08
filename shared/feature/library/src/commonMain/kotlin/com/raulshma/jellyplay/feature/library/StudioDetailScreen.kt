@@ -64,7 +64,7 @@ fun StudioDetailScreen(
     val networkStatus by LocalNetworkStatus.current.collectAsStateWithLifecycle()
     val serverHealth by LocalServerHealth.current.collectAsStateWithLifecycle()
 
-    DeferredRefreshEffect(viewModel)
+    DeferredRefreshEffect(viewModel.deferredRefresher)
 
     val headerStatus = resolveHeaderStatus(
         isLoading = items.loadState.refresh is LoadState.Loading,

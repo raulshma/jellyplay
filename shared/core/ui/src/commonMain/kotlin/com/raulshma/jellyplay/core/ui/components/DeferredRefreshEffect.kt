@@ -8,9 +8,9 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
  * twin of the silent flip contract): a user-data change that landed while
  * this screen was in the back stack only marked its data stale — the silent
  * reload/regeneration fires here, on re-entry, never mid-scroll. ViewModels
- * implement [DeferredRefreshHost] by delegating to their
- * `DeferredUserDataRefresher`; this effect is the single wiring every host
- * screen needs, replacing the per-screen `LifecycleResumeEffect` copy.
+ * own a [DeferredUserDataRefresher] (which is a [DeferredRefreshHost]) and
+ * expose it; this effect is the single wiring every host screen needs,
+ * replacing the per-screen `LifecycleResumeEffect` copy.
  */
 fun interface DeferredRefreshHost {
     /** Called with true when the host screen resumes, false when it pauses or leaves composition. */

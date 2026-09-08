@@ -100,7 +100,7 @@ fun AlbumDetailScreen(
         viewModel.loadAlbum(albumId)
     }
 
-    DeferredRefreshEffect(viewModel)
+    DeferredRefreshEffect(viewModel.deferredRefresher)
 
     // Stable URL-builder refs (MediaDetailScreen's rememberedGetImageUrl idiom) so
     // AlbumDetailContent can skip recomposition while trackDownloads re-emits a

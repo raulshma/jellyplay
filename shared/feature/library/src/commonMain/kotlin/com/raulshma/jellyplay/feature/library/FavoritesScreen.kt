@@ -87,7 +87,7 @@ fun FavoritesScreen(
     val pagingItems = viewModel.pagedItems.collectAsLazyPagingItems()
     val photoFolderChildUrls by viewModel.photoFolderChildUrls.collectAsStateWithLifecycle()
 
-    DeferredRefreshEffect(viewModel)
+    DeferredRefreshEffect(viewModel.deferredRefresher)
 
     val snapshot = pagingItems.itemSnapshotList
     LaunchedEffect(snapshot) {

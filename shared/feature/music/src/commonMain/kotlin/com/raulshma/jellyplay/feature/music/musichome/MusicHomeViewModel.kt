@@ -4,7 +4,6 @@ import com.raulshma.jellyplay.core.concurrency.mapConcurrent
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
 import com.raulshma.jellyplay.core.data.playback.TrackWithAlbumFallback
-import com.raulshma.jellyplay.core.data.repository.DeferredUserDataRefresher
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
@@ -15,7 +14,7 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMode
 import com.raulshma.jellyplay.core.model.SortOption
-import com.raulshma.jellyplay.core.ui.components.DeferredRefreshHost
+import com.raulshma.jellyplay.core.ui.viewmodel.DeferredUserDataRefresher
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.feature.music.feedback.MusicMessageBus
 import kotlinx.coroutines.async
@@ -34,7 +33,7 @@ class MusicHomeViewModel(
     private val homeDiscoveryStore: com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore,
     private val offlineModeManager: OfflineModeManager,
     private val userMessageBus: MusicMessageBus,
-) : JellyPlayViewModel(), DeferredRefreshHost {
+) : JellyPlayViewModel() {
 
     private val _uiState = stateFlow(MusicHomeUiState())
     val uiState = _uiState.flow
@@ -45,15 +44,11 @@ class MusicHomeViewModel(
      * favorite artists/tracks rows re-load when the music home is next
      * entered (see [DeferredUserDataRefresher]) — never mid-scroll.
      */
-    private val deferredRefresher = DeferredUserDataRefresher(
+    val deferredRefresher = DeferredUserDataRefresher(
         userDataChanges = mediaRepository.userDataChanges,
         scope = scope,
         onRefresh = ::loadSections,
     )
-
-    override fun onScreenActiveChanged(active: Boolean) {
-        deferredRefresher.onScreenActiveChanged(active)
-    }
 
     val activeDownloadCount = downloadRepository.getActiveDownloadCount()
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), 0)

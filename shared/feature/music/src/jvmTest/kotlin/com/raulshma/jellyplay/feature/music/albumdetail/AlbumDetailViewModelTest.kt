@@ -273,7 +273,7 @@ class AlbumDetailViewModelTest {
 
         // A write confirmed while the album screen is NOT on screen only
         // marks the track list stale.
-        viewModel.onScreenActiveChanged(false)
+        viewModel.deferredRefresher.onScreenActiveChanged(false)
         coEvery { mediaRepository.getMediaDetail("album1", true) } returns Result.success(
             MediaDetail(item = MediaItem(id = "album1", name = "Album", mediaType = MediaType.ALBUM)),
         )
@@ -282,7 +282,7 @@ class AlbumDetailViewModelTest {
 
         // Re-entry fires the single deferred regeneration — force + silent:
         // the fetch runs but never drops the content into a loading state.
-        viewModel.onScreenActiveChanged(true)
+        viewModel.deferredRefresher.onScreenActiveChanged(true)
         advanceUntilIdle()
 
         coVerify(exactly = 1) { mediaRepository.getMediaDetail("album1", true) }
@@ -296,11 +296,11 @@ class AlbumDetailViewModelTest {
         loadAlbum()
         advanceUntilIdle()
 
-        viewModel.onScreenActiveChanged(false)
+        viewModel.deferredRefresher.onScreenActiveChanged(false)
         coEvery { mediaRepository.getMediaDetail("album1", true) } returns Result.failure(RuntimeException("offline blip"))
         userDataEvents.emit(com.raulshma.jellyplay.core.model.UserDataChange("user-1", listOf("t1")))
         advanceUntilIdle()
-        viewModel.onScreenActiveChanged(true)
+        viewModel.deferredRefresher.onScreenActiveChanged(true)
         advanceUntilIdle()
 
         // The silent refetch failed — serve-stale-while-revalidate keeps the

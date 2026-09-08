@@ -5,7 +5,6 @@ import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import com.raulshma.jellyplay.core.data.download.MediaDownloadActions
-import com.raulshma.jellyplay.core.data.repository.DeferredUserDataRefresher
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.SearchHistoryItem
@@ -26,7 +25,7 @@ import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.SortOption
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.seerr.buildPosterUrl
-import com.raulshma.jellyplay.core.ui.components.DeferredRefreshHost
+import com.raulshma.jellyplay.core.ui.viewmodel.DeferredUserDataRefresher
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
@@ -62,7 +61,7 @@ class SearchViewModel(
     private val offlineRepository: OfflineRepository,
     private val searchFiltersStore: com.raulshma.jellyplay.core.datastore.search.SearchFiltersStore,
     private val mediaDownloadActions: MediaDownloadActions,
-) : JellyPlayViewModel(), DeferredRefreshHost {
+) : JellyPlayViewModel() {
 
     private val _query = composeState("")
     var query: String
@@ -159,15 +158,11 @@ class SearchViewModel(
      * stale; the single regeneration fires when the search screen is next
      * entered (see [DeferredUserDataRefresher]) — never mid-scroll.
      */
-    private val deferredRefresher = DeferredUserDataRefresher(
+    val deferredRefresher = DeferredUserDataRefresher(
         userDataChanges = mediaRepository.userDataChanges,
         scope = scope,
-        onRefresh = { _refreshTrigger.set(_refreshTrigger.value + 1) },
+        trigger = _refreshTrigger,
     )
-
-    override fun onScreenActiveChanged(active: Boolean) {
-        deferredRefresher.onScreenActiveChanged(active)
-    }
 
     init {
         loadGenres()

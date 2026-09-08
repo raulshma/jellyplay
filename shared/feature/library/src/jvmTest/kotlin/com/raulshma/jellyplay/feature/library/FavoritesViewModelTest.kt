@@ -165,13 +165,13 @@ class FavoritesViewModelTest {
         coVerify(exactly = 1) { mediaRepository.getFavoritesPaged(any()) }
 
         // A write confirmed while the grid is NOT on screen only marks stale.
-        viewModel.onScreenActiveChanged(false)
+        viewModel.deferredRefresher.onScreenActiveChanged(false)
         userDataEvents.emit(com.raulshma.jellyplay.core.model.UserDataChange("user-1", listOf("m1")))
         advanceUntilIdle()
         coVerify(exactly = 1) { mediaRepository.getFavoritesPaged(any()) }
 
         // Re-entry fires the single deferred regeneration.
-        viewModel.onScreenActiveChanged(true)
+        viewModel.deferredRefresher.onScreenActiveChanged(true)
         advanceUntilIdle()
         coVerify(exactly = 2) { mediaRepository.getFavoritesPaged(any()) }
         collector.cancel()
@@ -183,7 +183,7 @@ class FavoritesViewModelTest {
         val collector = launch { viewModel.pagedItems.collect {} }
         advanceUntilIdle()
 
-        viewModel.onScreenActiveChanged(true)
+        viewModel.deferredRefresher.onScreenActiveChanged(true)
         userDataEvents.emit(com.raulshma.jellyplay.core.model.UserDataChange("user-1", listOf("m1")))
         advanceUntilIdle()
 
@@ -202,13 +202,13 @@ class FavoritesViewModelTest {
         // but the pending flag is armed — the change must not be lost to the
         // TTL (an external write, e.g. an outbox adoption, has no in-place
         // patch to heal it).
-        viewModel.onScreenActiveChanged(true)
+        viewModel.deferredRefresher.onScreenActiveChanged(true)
         userDataEvents.emit(com.raulshma.jellyplay.core.model.UserDataChange("user-1", listOf("m1")))
         advanceUntilIdle()
         coVerify(exactly = 1) { mediaRepository.getFavoritesPaged(any()) }
 
-        viewModel.onScreenActiveChanged(false)
-        viewModel.onScreenActiveChanged(true)
+        viewModel.deferredRefresher.onScreenActiveChanged(false)
+        viewModel.deferredRefresher.onScreenActiveChanged(true)
         advanceUntilIdle()
 
         coVerify(exactly = 2) { mediaRepository.getFavoritesPaged(any()) }
@@ -221,9 +221,9 @@ class FavoritesViewModelTest {
         val collector = launch { viewModel.pagedItems.collect {} }
         advanceUntilIdle()
 
-        viewModel.onScreenActiveChanged(true)
-        viewModel.onScreenActiveChanged(false)
-        viewModel.onScreenActiveChanged(true)
+        viewModel.deferredRefresher.onScreenActiveChanged(true)
+        viewModel.deferredRefresher.onScreenActiveChanged(false)
+        viewModel.deferredRefresher.onScreenActiveChanged(true)
         advanceUntilIdle()
 
         coVerify(exactly = 1) { mediaRepository.getFavoritesPaged(any()) }

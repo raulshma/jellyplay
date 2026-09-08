@@ -58,7 +58,7 @@ fun MusicHomeScreen(
     val isLoading = uiState.isLoading
     val error = uiState.error
 
-    DeferredRefreshEffect(viewModel)
+    DeferredRefreshEffect(viewModel.deferredRefresher)
     val backgroundColorState = rememberScreenBackgroundColorState()
     val scope = rememberCoroutineScope()
 

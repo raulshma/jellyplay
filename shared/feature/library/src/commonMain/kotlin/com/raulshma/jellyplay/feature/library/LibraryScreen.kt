@@ -218,7 +218,7 @@ fun LibraryScreen(
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
 
-    DeferredRefreshEffect(viewModel)
+    DeferredRefreshEffect(viewModel.deferredRefresher)
 
     // One browser-state object owns {folder, filters, viewMode, groupBy,
     // posterSize, sectionContext, title} — replacing 13 individual

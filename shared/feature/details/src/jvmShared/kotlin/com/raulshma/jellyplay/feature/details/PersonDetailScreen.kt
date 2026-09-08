@@ -214,7 +214,7 @@ fun PersonDetailScreen(
         viewModel.loadPerson(personId)
     }
 
-    DeferredRefreshEffect(viewModel)
+    DeferredRefreshEffect(viewModel.deferredRefresher)
 
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val title = (state as? PersonDetailUiState.Success)?.name ?: ""

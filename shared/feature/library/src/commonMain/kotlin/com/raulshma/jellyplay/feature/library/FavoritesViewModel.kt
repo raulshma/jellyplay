@@ -4,13 +4,12 @@ import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import com.raulshma.jellyplay.core.concurrency.mapConcurrent
 import com.raulshma.jellyplay.core.data.download.MediaDownloadActions
-import com.raulshma.jellyplay.core.data.repository.DeferredUserDataRefresher
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
-import com.raulshma.jellyplay.core.ui.components.DeferredRefreshHost
+import com.raulshma.jellyplay.core.ui.viewmodel.DeferredUserDataRefresher
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -25,7 +24,7 @@ class FavoritesViewModel(
     private val userDataMutator: UserDataMutator,
     private val imageUrlProvider: ImageUrlProvider,
     private val mediaDownloadActions: MediaDownloadActions,
-) : JellyPlayViewModel(), DeferredRefreshHost {
+) : JellyPlayViewModel() {
 
     private val _mediaTypeFilter = stateFlow<MediaType?>(null)
     private val _refreshTrigger = stateFlow(0)
@@ -46,15 +45,11 @@ class FavoritesViewModel(
      * the single regeneration fires when the favorites screen is next entered
      * (see [DeferredUserDataRefresher]) — never mid-scroll.
      */
-    private val deferredRefresher = DeferredUserDataRefresher(
+    val deferredRefresher = DeferredUserDataRefresher(
         userDataChanges = mediaRepository.userDataChanges,
         scope = scope,
-        onRefresh = { _refreshTrigger.set(_refreshTrigger.value + 1) },
+        trigger = _refreshTrigger,
     )
-
-    override fun onScreenActiveChanged(active: Boolean) {
-        deferredRefresher.onScreenActiveChanged(active)
-    }
 
     private val _photoFolderChildUrls = stateFlow<Map<String, List<String>>>(emptyMap())
     val photoFolderChildUrls = _photoFolderChildUrls.flow

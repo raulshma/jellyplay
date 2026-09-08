@@ -175,7 +175,7 @@ fun SearchScreen(
         }
     }
 
-    DeferredRefreshEffect(viewModel)
+    DeferredRefreshEffect(viewModel.deferredRefresher)
 
     val seerrSnapshot by viewModel.seerrSnapshot.collectAsStateWithLifecycle()
     val seerrLoadingState = rememberSeerrCardLoadingState()

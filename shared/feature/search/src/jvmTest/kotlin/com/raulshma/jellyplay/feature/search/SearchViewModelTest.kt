@@ -469,13 +469,13 @@ class SearchViewModelTest {
             coVerify(exactly = 1) { mediaRepository.searchPaged(any(), any()) }
 
             // A write confirmed while the screen is NOT on screen only marks stale.
-            viewModel.onScreenActiveChanged(false)
+            viewModel.deferredRefresher.onScreenActiveChanged(false)
             userDataEvents.emit(UserDataChange("user-1", listOf("m1")))
             advanceUntilIdle()
             coVerify(exactly = 1) { mediaRepository.searchPaged(any(), any()) }
 
             // Re-entry fires the single deferred regeneration.
-            viewModel.onScreenActiveChanged(true)
+            viewModel.deferredRefresher.onScreenActiveChanged(true)
             advanceUntilIdle()
             coVerify(exactly = 2) { mediaRepository.searchPaged(any(), any()) }
         } finally {
@@ -498,7 +498,7 @@ class SearchViewModelTest {
             advanceUntilIdle()
 
             // Silent contract: no mid-scroll pager swap for on-screen events.
-            viewModel.onScreenActiveChanged(true)
+            viewModel.deferredRefresher.onScreenActiveChanged(true)
             userDataEvents.emit(UserDataChange("user-1", listOf("m1")))
             advanceUntilIdle()
             coVerify(exactly = 1) { mediaRepository.searchPaged(any(), any()) }

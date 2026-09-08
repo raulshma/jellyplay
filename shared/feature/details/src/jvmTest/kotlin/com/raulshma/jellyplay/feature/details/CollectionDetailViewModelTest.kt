@@ -235,14 +235,14 @@ class CollectionDetailViewModelTest {
         coVerify(exactly = 1) { mediaRepository.getCollectionItems("c1", any(), any()) }
 
         // A write confirmed while the screen is NOT on screen only marks stale.
-        viewModel.onScreenActiveChanged(false)
+        viewModel.deferredRefresher.onScreenActiveChanged(false)
         userDataEvents.emit(UserDataChange("user-1", listOf("m1")))
         advanceUntilIdle()
         coVerify(exactly = 1) { mediaRepository.getCollectionItems("c1", any(), any()) }
 
         // Re-entry fires the single deferred reload — silently: Success is
         // never dropped back to Loading on the way.
-        viewModel.onScreenActiveChanged(true)
+        viewModel.deferredRefresher.onScreenActiveChanged(true)
         advanceUntilIdle()
         coVerify(exactly = 2) { mediaRepository.getCollectionItems("c1", any(), any()) }
         assertTrue(viewModel.uiState.value is CollectionDetailUiState.Success)
@@ -263,10 +263,10 @@ class CollectionDetailViewModelTest {
         advanceUntilIdle()
         assertTrue(viewModel.uiState.value is CollectionDetailUiState.Success)
 
-        viewModel.onScreenActiveChanged(false)
+        viewModel.deferredRefresher.onScreenActiveChanged(false)
         userDataEvents.emit(UserDataChange("user-1", listOf("m1")))
         advanceUntilIdle()
-        viewModel.onScreenActiveChanged(true)
+        viewModel.deferredRefresher.onScreenActiveChanged(true)
         advanceUntilIdle()
 
         // The silent refresh DID run (second fetch) and its detail read

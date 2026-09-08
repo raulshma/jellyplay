@@ -1,6 +1,7 @@
-package com.raulshma.jellyplay.core.data.repository
+package com.raulshma.jellyplay.core.ui.viewmodel
 
 import com.raulshma.jellyplay.core.model.UserDataChange
+import com.raulshma.jellyplay.core.ui.components.DeferredRefreshHost
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
@@ -22,6 +23,11 @@ import kotlinx.coroutines.launch
  * previous anchor position, so the restored list loads around where the user
  * was instead of snapping to the top.
  *
+ * It is itself a [DeferredRefreshHost], so the owning ViewModel exposes it
+ * and the screen wires it with a single
+ * `DeferredRefreshEffect(viewModel.deferredRefresher)` — no per-ViewModel
+ * delegation to maintain.
+ *
  * Main-thread confinement: [onScreenActiveChanged] is called from the host
  * composable's `LifecycleResumeEffect` (main) while the collector runs on
  * [scope] — hand it a main-immediate scope (viewModelScope) so all writes to
@@ -34,7 +40,18 @@ class DeferredUserDataRefresher(
     userDataChanges: Flow<UserDataChange>,
     scope: CoroutineScope,
     private val onRefresh: () -> Unit,
-) {
+) : DeferredRefreshHost {
+
+    /**
+     * The pager-generation shape: [onRefresh] bumps a generation counter the
+     * pager splices into its key combine, regenerating the PagingSource
+     * without touching any other data. See LibraryViewModel for the pattern.
+     */
+    constructor(
+        userDataChanges: Flow<UserDataChange>,
+        scope: CoroutineScope,
+        trigger: StateFlowHandle<Int>,
+    ) : this(userDataChanges, scope, { trigger.set(trigger.value + 1) })
 
     private var pendingRefresh = false
 
@@ -49,7 +66,7 @@ class DeferredUserDataRefresher(
         }
     }
 
-    fun onScreenActiveChanged(active: Boolean) {
+    override fun onScreenActiveChanged(active: Boolean) {
         if (active && pendingRefresh) {
             pendingRefresh = false
             onRefresh()

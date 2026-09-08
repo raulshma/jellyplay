@@ -7,7 +7,6 @@ import androidx.paging.cachedIn
 import com.raulshma.jellyplay.core.data.download.DownloadRequestResult
 import com.raulshma.jellyplay.core.data.download.MediaDownloadActions
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
-import com.raulshma.jellyplay.core.data.repository.DeferredUserDataRefresher
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
@@ -27,12 +26,12 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.OfflineMode
 import com.raulshma.jellyplay.core.model.SortOption
 import com.raulshma.jellyplay.core.model.toFilteredLibraryItems
-import com.raulshma.jellyplay.core.ui.components.DeferredRefreshHost
 import com.raulshma.jellyplay.core.ui.message.UiText
 import com.raulshma.jellyplay.core.ui.message.UserMessageBus
 import com.raulshma.jellyplay.feature.library.generated.resources.Res
 import com.raulshma.jellyplay.feature.library.generated.resources.data_download_start_failed
 import com.raulshma.jellyplay.feature.library.generated.resources.data_download_started
+import com.raulshma.jellyplay.core.ui.viewmodel.DeferredUserDataRefresher
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -72,7 +71,7 @@ class LibraryViewModel(
     private val imageUrlProvider: ImageUrlProvider,
     private val photoFolderPrefetcher: PhotoFolderPrefetcher,
     private val libraryStore: com.raulshma.jellyplay.core.datastore.library.LibraryStore,
-) : JellyPlayViewModel(), DeferredRefreshHost {
+) : JellyPlayViewModel() {
 
     // ---- Browser state: one value type owning {folder, filters, viewMode, ----
     // ---- groupBy, posterSize, sectionContext, title} as a consistent unit. --
@@ -205,15 +204,11 @@ class LibraryViewModel(
      * or tags, so the cache-bypassing refetches [refresh] does (the manual
      * pull-to-refresh path) are skipped here.
      */
-    private val deferredRefresher = DeferredUserDataRefresher(
+    val deferredRefresher = DeferredUserDataRefresher(
         userDataChanges = mediaRepository.userDataChanges,
         scope = scope,
-        onRefresh = { _refreshTrigger.set(_refreshTrigger.value + 1) },
+        trigger = _refreshTrigger,
     )
-
-    override fun onScreenActiveChanged(active: Boolean) {
-        deferredRefresher.onScreenActiveChanged(active)
-    }
 
     /**
      * True while the app is offline (manual toggle or auto network loss): the

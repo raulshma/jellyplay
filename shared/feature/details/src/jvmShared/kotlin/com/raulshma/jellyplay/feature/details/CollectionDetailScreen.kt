@@ -73,7 +73,7 @@ fun CollectionDetailScreen(
         viewModel.loadCollection(collectionId)
     }
 
-    DeferredRefreshEffect(viewModel)
+    DeferredRefreshEffect(viewModel.deferredRefresher)
 
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val success = state as? CollectionDetailUiState.Success

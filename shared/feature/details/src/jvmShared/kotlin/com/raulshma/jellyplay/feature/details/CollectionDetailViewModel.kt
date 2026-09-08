@@ -1,13 +1,12 @@
 package com.raulshma.jellyplay.feature.details
 
 import com.raulshma.jellyplay.core.data.download.MediaDownloadActions
-import com.raulshma.jellyplay.core.data.repository.DeferredUserDataRefresher
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataContainer
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaItem
-import com.raulshma.jellyplay.core.ui.components.DeferredRefreshHost
+import com.raulshma.jellyplay.core.ui.viewmodel.DeferredUserDataRefresher
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -21,7 +20,7 @@ class CollectionDetailViewModel constructor(
     private val userDataMutator: UserDataMutator,
     private val imageUrlProvider: ImageUrlProvider,
     private val mediaDownloadActions: MediaDownloadActions,
-) : JellyPlayViewModel(), DeferredRefreshHost {
+) : JellyPlayViewModel() {
 
     private val _uiState = MutableStateFlow<CollectionDetailUiState>(CollectionDetailUiState.Loading)
     val uiState: StateFlow<CollectionDetailUiState> = _uiState.asStateFlow()
@@ -74,17 +73,13 @@ class CollectionDetailViewModel constructor(
      * reload fires when the screen is next entered (see
      * [DeferredUserDataRefresher]) — never mid-scroll.
      */
-    private val deferredRefresher = DeferredUserDataRefresher(
+    val deferredRefresher = DeferredUserDataRefresher(
         userDataChanges = mediaRepository.userDataChanges,
         scope = scope,
         onRefresh = {
             currentCollectionId?.let { id -> launch { fetchCollection(id, silent = true) } }
         },
     )
-
-    override fun onScreenActiveChanged(active: Boolean) {
-        deferredRefresher.onScreenActiveChanged(active)
-    }
 
     fun getImageUrl(itemId: String): String =
         imageUrlProvider.getImageUrl(itemId)

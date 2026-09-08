@@ -145,7 +145,7 @@ class LibraryViewModelTest {
 
         // A write confirmed while the library screen is NOT resumed only
         // marks the grid stale.
-        vm.onScreenActiveChanged(false)
+        vm.deferredRefresher.onScreenActiveChanged(false)
         userDataEvents.emit(com.raulshma.jellyplay.core.model.UserDataChange("user-1", listOf("m1")))
         advanceUntilIdle()
         coVerify(exactly = 1) { mediaRepository.getLibraryFolders(any()) }
@@ -154,7 +154,7 @@ class LibraryViewModelTest {
         // never change folders, so the deferred path skips refresh()'s
         // cache-bypassing folder/genre refetches (those serve manual
         // pull-to-refresh).
-        vm.onScreenActiveChanged(true)
+        vm.deferredRefresher.onScreenActiveChanged(true)
         advanceUntilIdle()
         coVerify(exactly = 1) { mediaRepository.getLibraryFolders(any()) }
     }
