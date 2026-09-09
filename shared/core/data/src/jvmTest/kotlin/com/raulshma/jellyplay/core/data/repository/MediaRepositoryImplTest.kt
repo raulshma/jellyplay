@@ -581,6 +581,29 @@ class MediaRepositoryImplTest {
     }
 
     @Test
+    fun `collection prefix evict never drops another collection whose id extends it`() = runTest {
+        // "12" vs "123": without the trailing underscore in
+        // [MediaRepositoryImpl.collectionItemsKey]'s evict prefix,
+        // "collection_12" is a prefix of "collection_123_0_20" too, so
+        // force-healing collection 12 would silently drop collection 123's
+        // cached pages.
+        coEvery { apiClient.getCollectionItems("12", 0, 20) } returns Result.success(
+            SearchResult(items = listOf(mediaItem("c12")), totalRecordCount = 1, startIndex = 0)
+        )
+        coEvery { apiClient.getCollectionItems("123", 0, 20) } returns Result.success(
+            SearchResult(items = listOf(mediaItem("c123")), totalRecordCount = 1, startIndex = 0)
+        )
+
+        repository.getCollectionItems("12", 0, 20)
+        repository.getCollectionItems("123", 0, 20)
+        repository.getCollectionItems("12", 0, 20, force = true)
+        repository.getCollectionItems("123", 0, 20) // must still be a cache hit
+
+        coVerify(exactly = 2) { apiClient.getCollectionItems("12", 0, 20) }
+        coVerify(exactly = 1) { apiClient.getCollectionItems("123", 0, 20) }
+    }
+
+    @Test
     fun `getAlbumTracks with force re-fetches instead of serving the cached list`() = runTest {
         coEvery { apiClient.getAlbumTracks("album-1") } returns Result.success(listOf(mediaItem("t1")))
 

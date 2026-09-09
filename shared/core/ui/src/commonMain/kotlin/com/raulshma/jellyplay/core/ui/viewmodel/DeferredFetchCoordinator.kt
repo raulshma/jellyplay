@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.ui.viewmodel
 
 import com.raulshma.jellyplay.core.model.UserDataChange
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
@@ -20,8 +21,17 @@ import kotlinx.coroutines.launch
  * (offline gating) — re-arms, so the next screen re-entry retries instead
  * of trusting the consumed pending flag. A loud failure with nothing
  * pending over-arms at worst: one quiet refetch on the next re-entry.
- * Cancellation never re-arms (the cancelling load is itself the
+ * A fetch that throws a non-cancellation exception counts as failure the
+ * same way (and never escapes to the scope's uncaught handler), while
+ * cancellation never re-arms (the cancelling load is itself the
  * regeneration) — fetch bodies must rethrow `CancellationException`.
+ *
+ * The loud-cancels-silent rule assumes the loud load regenerates the data
+ * the silent pass was regenerating; when that may not hold (a VM reused
+ * for a new id), the cancelled silent pass's consumed pending flag would
+ * strand — so [load] re-arms before cancelling an in-flight silent fetch.
+ * When both loads target the same data that re-arm over-arms at worst:
+ * one redundant quiet refetch on the next re-entry.
  *
  * The host keeps its own id/re-entry guard and Loading publish:
  * [load] receives the loud fetch so per-call parameters (id, force) stay
@@ -43,6 +53,9 @@ class DeferredFetchCoordinator(
      */
     private var fetchJob: Job? = null
 
+    /** Whether [fetchJob] is the silent regeneration — see [load]. */
+    private var fetchJobIsSilent = false
+
     /** The screen wires this with a single `DeferredRefreshEffect(...)`. */
     val deferredRefresher = DeferredUserDataRefresher(
         userDataChanges = userDataChanges,
@@ -52,9 +65,17 @@ class DeferredFetchCoordinator(
 
     /** Starts (or restarts) the loud load, cancelling any in-flight fetch. */
     fun load(loudFetch: suspend () -> Boolean) {
+        if (fetchJob?.isActive == true && fetchJobIsSilent) {
+            // The in-flight silent regeneration consumed the pending flag
+            // for data this loud load only regenerates when it targets the
+            // same subject — if it doesn't (a VM reused for a new id), only
+            // the re-armed flag can heal that data on a later re-entry.
+            deferredRefresher.rearm()
+        }
         fetchJob?.cancel()
+        fetchJobIsSilent = false
         fetchJob = scope.launch {
-            if (!loudFetch()) {
+            if (!runFetch(loudFetch)) {
                 deferredRefresher.rearm()
             }
         }
@@ -69,11 +90,26 @@ class DeferredFetchCoordinator(
         if (fetchJob?.isActive == true) {
             deferredRefresher.rearm()
         } else {
+            fetchJobIsSilent = true
             fetchJob = scope.launch {
-                if (!silentFetch()) {
+                if (!runFetch(silentFetch)) {
                     deferredRefresher.rearm()
                 }
             }
         }
+    }
+
+    /**
+     * Host fetch bodies report failure as `false`; one that throws a
+     * non-cancellation exception (a repo path that blew up before building
+     * its Result) must count as failure too — otherwise it would skip the
+     * re-arm and escape to the scope's uncaught handler.
+     */
+    private suspend fun runFetch(fetch: suspend () -> Boolean): Boolean = try {
+        fetch()
+    } catch (e: CancellationException) {
+        throw e
+    } catch (_: Exception) {
+        false
     }
 }

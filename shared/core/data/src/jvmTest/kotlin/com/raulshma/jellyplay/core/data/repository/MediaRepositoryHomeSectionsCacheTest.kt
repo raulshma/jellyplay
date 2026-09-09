@@ -240,6 +240,32 @@ class MediaRepositoryHomeSectionsCacheTest {
     }
 
     @Test
+    fun `identity switch clears the armed staleness marker - the next user's first read is not forced`() = runBlocking {
+        // The marker is armed by the PREVIOUS user's confirmed writes; the
+        // media-identity-clear action must reset it, or it survives the
+        // switch and burns the next user's first read as a force —
+        // redundant work: the identity switch already dropped the cache, and
+        // force also bypasses the network layer's sub-call caches. The
+        // refetch itself still happens (identity-keyed miss); the flag
+        // handed to the api is what distinguishes reset from stranded.
+        val repository = buildRepository()
+        signIn("server-1", "user-A")
+        val forcedFlags = mutableListOf<Boolean>()
+        coEvery { apiClient.getHomeSections(any(), any()) } answers {
+            forcedFlags.add(secondArg())
+            homeResult("A")
+        }
+
+        repository.getHomeSections(HomeSectionQuery()) // populate, force = false
+        repository.notifyUserDataChanged(listOf("item-1")) // arm the marker
+        switchUser("user-B")
+        repository.getHomeSections(HomeSectionQuery()) // identity miss refetches anyway
+
+        coVerify(exactly = 2) { apiClient.getHomeSections(any(), any()) }
+        assertEquals(listOf(false, false), forcedFlags)
+    }
+
+    @Test
     fun `getHomeSections re-fetches once the 60s memory TTL expires`() = runBlocking {
         // The TTL expiry itself had zero coverage: walk the shared fake clock
         // (the TtlCache reads the injected [TimeSource], same as the SWR
