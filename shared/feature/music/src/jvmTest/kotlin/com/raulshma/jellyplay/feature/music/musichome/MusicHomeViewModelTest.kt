@@ -429,27 +429,25 @@ class MusicHomeViewModelTest {
     }
 
     @Test
-    fun deferredRefresh_cancelledByALoudLoad_doesNotRearm() = runTest(mainDispatcher) {
+    fun deferredRefresh_cancelledByALoudLoad_rearmsConservatively() = runTest(mainDispatcher) {
         stubHomeQueries(favoriteArtists = listOf(item("a1", "Artist")))
         createViewModel()
         advanceUntilIdle()
         assertEquals(1, viewModel.uiState.value.sections.size)
 
         val gate = CompletableDeferred<Unit>()
-        var artistQueries = 0
         coEvery { mediaRepository.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) } coAnswers {
-            if (++artistQueries == 1) {
-                Result.success(SearchResult(listOf(item("a1", "Artist")), 1, 0))
-            } else {
-                gate.await()
-                Result.success(SearchResult(listOf(item("a2", "Artist 2")), 1, 0))
-            }
+            gate.await()
+            Result.success(SearchResult(listOf(item("a2", "Artist 2")), 1, 0))
         }
 
         // Armed while off-screen; re-entry starts the silent regeneration,
-        // which parks mid-fetch. A loud load then cancels it — cancellation
-        // must NOT re-arm (the loud load IS the regeneration), or the next
-        // re-entry would fire a pointless second silent regeneration.
+        // which parks mid-fetch. A loud load then cancels it — the cancel
+        // must re-arm conservatively: the VM could have been reused for a
+        // new subject the loud load never regenerates, and only the re-armed
+        // flag can heal that data on a later re-entry. When both loads
+        // target the same data (as here) the re-arm over-arms at worst: one
+        // redundant quiet refetch on the next re-entry.
         viewModel.deferredRefresher.onScreenActiveChanged(false)
         userDataEvents.emit(UserDataChange("user-1", listOf("t1")))
         advanceUntilIdle()
@@ -457,18 +455,22 @@ class MusicHomeViewModelTest {
         advanceUntilIdle()
         viewModel.refresh()
         advanceUntilIdle()
-        assertTrue(viewModel.uiState.value.isLoading)
+        assertTrue(viewModel.uiState.value.isLoading, "the loud load owns the spinner")
 
         gate.complete(Unit)
         advanceUntilIdle()
         assertEquals("Artist 2", viewModel.uiState.value.sections.single().items.single().name)
+        assertFalse(viewModel.uiState.value.isLoading)
+        verify(exactly = 0) { userMessageBus.error(any()) }
 
-        // The next re-entry fires nothing: the pending flag stayed consumed.
+        // The conservative re-arm made visible: the next re-entry fires one
+        // more quiet silent regeneration (a fourth fetch) instead of
+        // trusting the pending flag the cancelled silent pass consumed.
         viewModel.deferredRefresher.onScreenActiveChanged(false)
         viewModel.deferredRefresher.onScreenActiveChanged(true)
         advanceUntilIdle()
-        coVerify(exactly = 3) { mediaRepository.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) }
-        assertFalse(viewModel.uiState.value.isLoading)
+        coVerify(exactly = 4) { mediaRepository.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) }
+        assertFalse(viewModel.uiState.value.isLoading, "the redundant silent pass stays quiet")
         verify(exactly = 0) { userMessageBus.error(any()) }
     }
 
