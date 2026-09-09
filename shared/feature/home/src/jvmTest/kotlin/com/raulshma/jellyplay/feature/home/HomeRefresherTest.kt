@@ -117,7 +117,7 @@ class HomeRefresherTest {
     /**
      * Fake for the refresher's `awaitOutboxDrained` seam: counts invocations
      * and (while [drainGate] is set) parks, so GoingOnline tests can observe
-     * the handshake mid-flight — flag up, loader up, fetch not yet started.
+     * the handshake mid-flight — loader up, fetch not yet started.
      */
     private var drainCalls = 0
     private var drainGate: CompletableDeferred<Unit>? = null
@@ -427,7 +427,11 @@ class HomeRefresherTest {
     }
 
     @Test
-    fun goingOnline_drainsOutboxBeforeCappedFetch_thenClearsFlags() = runTest {
+    fun goingOnline_drainsOutboxBeforeCappedFetch_thenClearsLoader() = runTest {
+        // The going-online busy flag itself is OfflineModeManager's now
+        // (armed on the toggle, cleared at the ONLINE emission — pinned by
+        // GoingOnlineFlagTest); what this suite pins is the handshake the
+        // ONLINE emission triggers: full-screen loader, drain, capped fetch.
         coEvery { mediaRepository.getHomeSections(any(), any()) } returns Result.success(
             HomeSectionsResult(
                 sections = listOf(section(HomeSectionType.CONTINUE_WATCHING, items = listOf(item("cw1")))),
@@ -442,12 +446,11 @@ class HomeRefresherTest {
         every { offlineModeManager.toggleManualOffline() } answers { offlineModeFlow.value = OfflineMode.ONLINE }
 
         refresher.request(RefreshTrigger.GoingOnline)
-        runCurrent() // flag raised → manager toggled → ONLINE emission starts the handshake
+        runCurrent() // manager toggled → ONLINE emission starts the handshake
 
-        // Mid-handshake: busy flag + full-screen loader up, drain in flight,
-        // and the fetch strictly NOT started (it must wait for the drain so
-        // Continue Watching reflects the server's post-sync state).
-        assertTrue(refresher.state.value.isGoingOnline)
+        // Mid-handshake: full-screen loader up, drain in flight, and the
+        // fetch strictly NOT started (it must wait for the drain so Continue
+        // Watching reflects the server's post-sync state).
         assertTrue(refresher.state.value.isLoading)
         assertEquals(1, drainCalls)
         coVerify(exactly = 0) { mediaRepository.getHomeSections(any(), any()) }
@@ -455,7 +458,6 @@ class HomeRefresherTest {
         drainGate!!.complete(Unit)
         runCurrent()
 
-        assertFalse(refresher.state.value.isGoingOnline)
         assertFalse(refresher.state.value.isLoading)
         coVerify(exactly = 1) { mediaRepository.getHomeSections(any(), any()) }
         assertTrue(refresher.state.value.sections.isNotEmpty())
@@ -463,9 +465,11 @@ class HomeRefresherTest {
     }
 
     @Test
-    fun goingOnline_fetchTimeout_clearsFlagsInsteadOfHanging() = runTest {
+    fun goingOnline_fetchTimeout_clearsLoaderInsteadOfHanging() = runTest {
         // Regression pin: a hung getHomeSections call previously parked the
-        // handshake forever, leaving isGoingOnline (and the loader) stuck on.
+        // handshake forever, leaving the full-screen loader stuck on. (The
+        // busy flag no longer depends on this cap — the manager clears it at
+        // the ONLINE emission, before the fetch starts.)
         coEvery { mediaRepository.getHomeSections(any(), any()) } coAnswers {
             CompletableDeferred<Result<HomeSectionsResult>>().await() // never completes
         }
@@ -478,39 +482,12 @@ class HomeRefresherTest {
 
         refresher.request(RefreshTrigger.GoingOnline)
         runCurrent()
-        assertTrue(refresher.state.value.isGoingOnline, "isGoingOnline must be observable while the fetch hangs")
+        assertTrue(refresher.state.value.isLoading, "the loader must be up while the fetch hangs")
 
         advanceTimeBy(31_000) // past GOING_ONLINE_TIMEOUT_MS
         runCurrent()
 
-        assertFalse(refresher.state.value.isGoingOnline)
         assertFalse(refresher.state.value.isLoading)
-        refresher.stop()
-    }
-
-    @Test
-    fun goingOnline_toggleNeverLands_fallbackClearsFlag() = runTest {
-        // Regression pin: toggleManualOffline() is a fire-and-forget
-        // preference write on the manager's own scope — if that write is
-        // lost, the mode flow never emits ONLINE and the observer's
-        // handshake (whose finally clears the flag) never runs. The
-        // request's own fallback must clear the busy flag instead of
-        // leaving the Go Online spinner on until restart. The relaxed mock
-        // leaves toggleManualOffline() as a no-op — exactly that scenario.
-        val refresher = buildRefresher()
-        runCurrent()
-
-        offlineModeFlow.value = OfflineMode.OFFLINE_MANUAL
-        runCurrent()
-
-        refresher.request(RefreshTrigger.GoingOnline)
-        runCurrent()
-        assertTrue(refresher.state.value.isGoingOnline)
-
-        advanceTimeBy(31_000) // past GOING_ONLINE_TIMEOUT_MS
-        runCurrent()
-
-        assertFalse(refresher.state.value.isGoingOnline)
         refresher.stop()
     }
 
@@ -551,7 +528,6 @@ class HomeRefresherTest {
         runCurrent()
 
         assertFalse(refresher.state.value.isLoading)
-        assertFalse(refresher.state.value.isGoingOnline)
         coVerify(exactly = 1) { mediaRepository.getHomeSections(any(), any()) }
         assertTrue(refresher.state.value.sections.isNotEmpty())
         refresher.stop()
@@ -580,16 +556,15 @@ class HomeRefresherTest {
 
         // Production path: the manager flips the mode and the refresher's own
         // observer reacts — cached online sections + discover rows + the *arr
-        // row dropped, going-online spinner (if any) cleared. The
-        // offline→online side of this transition (including the spontaneous
-        // flavour) is pinned by
+        // row dropped. The going-online flag is the manager's and never
+        // crosses this seam. The offline→online side of this transition
+        // (including the spontaneous flavour) is pinned by
         // wentOnlineSpontaneously_drainsOutboxBeforeFetch_andRepopulatesSections.
         offlineModeFlow.value = OfflineMode.OFFLINE_MANUAL
         runCurrent()
         assertTrue(refresher.state.value.sections.isEmpty())
         assertTrue(refresher.state.value.discoverSections.isEmpty())
         assertTrue(refresher.state.value.recentlyGrabbed.isEmpty())
-        assertFalse(refresher.state.value.isGoingOnline)
         refresher.stop()
     }
 

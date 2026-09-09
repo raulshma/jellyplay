@@ -562,9 +562,9 @@ internal class HomeViewModel(
         // Fold the refresher's state slice into HomeUiState (same fold
         // pattern as the SeerrRequestStateHolder collector above) so the UI
         // observes a single state object. The refresher is the SOLE writer of
-        // these nine fields — including `sections` (in-place item patches go
+        // these eight fields — including `sections` (in-place item patches go
         // through HomeRefresher.patchItems, never a direct _uiState write),
-        // the going-online flag/loader, and the offline-mode mirror with its
+        // the full-screen loader, and the offline-mode mirror with its
         // transition policy. The VM only folds emissions.
         launch {
             refresher.state.collect { refresh ->
@@ -577,10 +577,20 @@ internal class HomeViewModel(
                         partialLoadError = refresh.partialLoadError,
                         discoverSections = refresh.discoverSections,
                         recentlyGrabbed = refresh.recentlyGrabbed,
-                        isGoingOnline = refresh.isGoingOnline,
                         offlineMode = refresh.offlineMode,
                     )
                 }
+            }
+        }
+
+        // The going-online busy flag, folded from its single owner —
+        // [OfflineModeManager] (armed by the manual toggle when its
+        // direction is going online, cleared at the ONLINE emission or by
+        // the manager's lost-write watchdog). The VM only mirrors it into
+        // UiState; neither this fold nor the refresher may write it.
+        launch {
+            offlineModeManager.goingOnline.collect { goingOnline ->
+                _uiState.update { it.copy(isGoingOnline = goingOnline) }
             }
         }
     }
@@ -805,11 +815,12 @@ internal class HomeViewModel(
     private fun toggleOfflineMode() {
         // Going online is async (preference write → mode flip → drain +
         // fetch) and gives no feedback without help. The whole choreography —
-        // busy flag, mode toggle, full-screen loader, outbox drain, capped
-        // fetch — lives behind [RefreshTrigger.GoingOnline] in the refresher
-        // now. Going offline is instantaneous and needs no indicator: toggle
-        // the manager directly and let the refresher's offline-mode observer
-        // drop the online content.
+        // mode toggle (which arms the manager-owned
+        // [OfflineModeManager.goingOnline] flag), full-screen loader, outbox
+        // drain, capped fetch — lives behind [RefreshTrigger.GoingOnline] in
+        // the refresher now. Going offline is instantaneous and needs no
+        // indicator: toggle the manager directly and let the refresher's
+        // offline-mode observer drop the online content.
         if (refresher.state.value.offlineMode != OfflineMode.ONLINE) {
             refresher.request(RefreshTrigger.GoingOnline)
         } else {

@@ -127,6 +127,8 @@ import com.raulshma.jellyplay.core.ui.components.ExpressiveChipContainer
 import androidx.compose.ui.graphics.Brush
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
+import org.jetbrains.compose.resources.PluralStringResource
+import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
@@ -1534,7 +1536,7 @@ fun SettingsScreen(
                             SettingListItem(
                                 icon = Tabler.Outline.Palette,
                                 title = stringResource(Res.string.settings_appearance),
-                                subtitle = buildAppearanceSummary(preferences),
+                                subtitle = appearanceSummarySubtitle(preferences),
                                 index = 0, count = 1,
                                 onClick = { openSetting("appearance") { Route.AppearanceSettings(it) } },
                             )
@@ -1749,7 +1751,7 @@ fun SettingsScreen(
                             SettingListItem(
                                 icon = Tabler.Outline.Flask,
                                 title = stringResource(Res.string.settings_experimental),
-                                subtitle = buildExperimentalSummary(preferences),
+                                subtitle = experimentalSummarySubtitle(preferences),
                                 index = 0, count = 1,
                                 onClick = { openSetting("experimental") { Route.ExperimentalSettings(it) } },
                             )
@@ -1806,23 +1808,85 @@ fun SettingsScreen(
     }
 }
 
+// ---------------------------------------------------------------------------
+// Landing-page summary builders — string-assembly policy freed from
+// composition so SettingsSummariesTest (jvmTest) can pin which prefs appear,
+// in what order, the separator, and the contrast-suffix casing without a
+// composer. The builders emit renderable PARTS (resource identity + args,
+// never resolved text): the Compose compiler forbids `stringResource` calls
+// inside non-inline lambdas, so resolution cannot ride a plain resolver
+// lambda — instead the screen resolves each part at composition through the
+// inline `map` below ([SettingsSummaryPart.resolveAtComposition]) and hands
+// the rendered tokens to the pure [joinSummaryTokens] join. Recomposition
+// stays correct: every resource read happens at composition time.
+// ---------------------------------------------------------------------------
+
+/** One renderable piece of a landing-page summary row subtitle. */
+internal sealed interface SettingsSummaryPart {
+    /** Pre-composed literal text (the Title-cased theme-mode name). */
+    data class Literal(val text: String) : SettingsSummaryPart
+
+    /** A plain string-resource token. */
+    data class Token(val resource: StringResource) : SettingsSummaryPart
+
+    /** A formatted string-resource token (the contrast suffix with its cased label). */
+    data class Formatted(val resource: StringResource, val arg: String) : SettingsSummaryPart
+
+    /** A plural resource carrying its own count (features-enabled). */
+    data class Plural(val resource: PluralStringResource, val count: Int) : SettingsSummaryPart
+}
+
+/**
+ * Appearance row subtitle parts: theme mode first (Title-cased enum name),
+ * then the Dynamic / OLED / contrast / Performance tokens for the enabled
+ * prefs. The contrast token suffixes the Title-cased enum name (`Medium
+ * contrast`, `High contrast`) and only appears off-DEFAULT.
+ */
+internal fun appearanceSummaryParts(preferences: SettingsScreenPreferences): List<SettingsSummaryPart> = buildList {
+    add(SettingsSummaryPart.Literal(preferences.themeMode.name.lowercase().replaceFirstChar { it.uppercase() }))
+    if (preferences.dynamicTheming) add(SettingsSummaryPart.Token(Res.string.settings_dynamic_token))
+    if (preferences.oledMode) add(SettingsSummaryPart.Token(Res.string.settings_oled_token))
+    if (preferences.contrastLevel != ContrastLevel.DEFAULT) add(
+        SettingsSummaryPart.Formatted(
+            Res.string.settings_contrast_suffix,
+            preferences.contrastLevel.name.lowercase().replaceFirstChar { it.uppercase() },
+        ),
+    )
+    if (preferences.performanceMode) add(SettingsSummaryPart.Token(Res.string.settings_performance_token))
+}
+
+/**
+ * Experimental row subtitle parts: the early-access placeholder token when
+ * nothing is enabled, otherwise the "%d feature(s) enabled" plural over the
+ * count.
+ */
+internal fun experimentalSummaryParts(preferences: SettingsScreenPreferences): List<SettingsSummaryPart> {
+    val count = preferences.enabledExperimentalFeatures.size
+    return listOf(
+        if (count == 0) SettingsSummaryPart.Token(Res.string.settings_early_access_features)
+        else SettingsSummaryPart.Plural(Res.plurals.settings_features_enabled, count),
+    )
+}
+
+/** Joins rendered summary tokens with the summary separator policy (", "). */
+internal fun joinSummaryTokens(rendered: List<String>): String = rendered.joinToString(", ")
+
+/** Resolves a summary part at composition; called from the inline `map` lambdas below. */
 @Composable
-private fun buildAppearanceSummary(preferences: SettingsScreenPreferences): String {
-    val parts = mutableListOf<String>()
-    parts.add(preferences.themeMode.name.lowercase().replaceFirstChar { it.uppercase() })
-    if (preferences.dynamicTheming) parts.add(stringResource(Res.string.settings_dynamic_token))
-    if (preferences.oledMode) parts.add(stringResource(Res.string.settings_oled_token))
-    if (preferences.contrastLevel != ContrastLevel.DEFAULT) parts.add(stringResource(Res.string.settings_contrast_suffix, preferences.contrastLevel.name.lowercase().replaceFirstChar { it.uppercase() }))
-    if (preferences.performanceMode) parts.add(stringResource(Res.string.settings_performance_token))
-    return parts.joinToString(", ")
+private fun SettingsSummaryPart.resolveAtComposition(): String = when (this) {
+    is SettingsSummaryPart.Literal -> text
+    is SettingsSummaryPart.Token -> stringResource(resource)
+    is SettingsSummaryPart.Formatted -> stringResource(resource, arg)
+    is SettingsSummaryPart.Plural -> pluralStringResource(resource, count, count)
 }
 
 @Composable
-private fun buildExperimentalSummary(preferences: SettingsScreenPreferences): String {
-    val count = preferences.enabledExperimentalFeatures.size
-    return if (count == 0) stringResource(Res.string.settings_early_access_features)
-    else pluralStringResource(Res.plurals.settings_features_enabled, count, count)
-}
+private fun appearanceSummarySubtitle(preferences: SettingsScreenPreferences): String =
+    joinSummaryTokens(appearanceSummaryParts(preferences).map { it.resolveAtComposition() })
+
+@Composable
+private fun experimentalSummarySubtitle(preferences: SettingsScreenPreferences): String =
+    joinSummaryTokens(experimentalSummaryParts(preferences).map { it.resolveAtComposition() })
 
 @Composable
 private fun SettingsProfileBanner(

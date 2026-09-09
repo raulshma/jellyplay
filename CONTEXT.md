@@ -532,12 +532,30 @@ policy), the foreground/background-jittered cadence loop, the discover TTL
 gate, the user-data-push debounce/throttle/deferral chain, and every
 offline-shaped field of `HomeRefreshState` — the offline-mode mirror, the
 online→offline content drop, and the user-initiated going-online handshake
-(busy flag, full-screen loader, playback-outbox drain through the injected
+(full-screen loader, playback-outbox drain through the injected
 `awaitOutboxDrained` seam, 30 s-capped fetch; the timeout `finally`
-force-clears both flags so a hung fetch can never park the Go Online
-spinners — plus a same-cap watchdog in `request(GoingOnline)` that clears
-the busy flag if the preference write is lost and the mode flow never
-emits ONLINE). `RefreshTrigger` is the folded entry table: the fetch-flavour
+force-clears the loader so a hung fetch can never park the handshake —
+the Go Online spinner cannot hang the same way, the flag clears at the
+ONLINE emission before any fetch starts). The going-online BUSY flag itself is NOT the refresher's — its
+one owner is `OfflineModeManager.goingOnline: StateFlow<Boolean>`
+(`GoingOnlineFlag`, core/data `offline/`): `toggleManualOffline()` arms it
+on the store-snapshot direction (an OFFLINE_AUTO toggle goes further
+offline and never arms), the flag's own collector clears on any ONLINE
+emission (before any fetch starts, so a hung fetch structurally cannot
+park it), and a 30 s watchdog force-clears any flag still up at the
+deadline — the production case being a lost preference write whose ONLINE
+emission never lands, and the deadline being unconditional is what lets
+`arm` raise without a mode-value refusal (the managers derive the
+persisted mode asynchronously over an ONLINE-initialized flow, so a
+refusal keyed on the live value would misread that cold-start default as
+"already online" and silently skip the Go Online spinner on the very
+first toggle) — covering the nav-⋮ toggle even when Home's
+refresher is not alive. `HomeViewModel` folds the manager's flow into
+`HomeUiState.isGoingOnline`; the refresher's `request(GoingOnline)` is the
+manager toggle plus the refresher's emission-driven handshake (the
+drain+fetch choreography itself runs in the offline-mode observer on the
+ONLINE emission, not inside `request`).
+`RefreshTrigger` is the folded entry table: the fetch-flavour
 triggers (`Manual`, `PullToRefresh`, `PrefsChanged`, `UserDataChanged`), the
 going-online kick and the identity triggers (`refreshForUserSwitch`-,
 `onSignedOut`-, `fetchDiscover`-shaped) are enum values routed through
@@ -545,10 +563,12 @@ going-online kick and the identity triggers (`refreshForUserSwitch`-,
 private method the offline-mode observer calls directly. The refresher
 reacts to ALL offline-mode emissions (app-start and external/auto flips
 included) and runs the drain+fetch handshake on EVERY offline→online
-transition — a `GoingOnline` request additionally raises the busy flag the
-Go Online spinners render from; external flips (the nav ⋮ toggle, which
-writes the preference straight from `MainViewModel`) and auto-detect
-reconnects run the same handshake without it. It is the SOLE writer of
+transition — every user-initiated toggle (Home's Go Online button, the
+nav ⋮ toggle, which route through the same
+`OfflineModeManager.toggleManualOffline`) additionally raises the busy
+flag the Go Online spinners render from, via the manager's snapshot-gated
+arm; only auto/external transitions (network restoration, auto-detect
+reconnects) run the handshake without it. It is the SOLE writer of
 `sections`: the VM's optimistic played/unplayed container forwards through
 `patchItems`, which maps the patch over every section (the same item can
 appear in several, and every visible card must flip together).
@@ -572,7 +592,7 @@ per-item `photoFolderChildUrlsFor(itemId)` photo-folder slice each
 photo card leaf-collects), `onStart`/`onStop`/`onCleared`, and one command
 funnel: `onEvent(HomeUiEvent)`. Every user intent — quick actions (mark
 played/unplayed, delete download, inline download via `DownloadItem`, the
-series delete-episodes sheet), search-history edits, settings-result
+series download/delete sheets), search-history edits, settings-result
 clicks, section-config sheet writes, user switching and the offline
 toggle — arrives as a `HomeUiEvent` (`HomeUiEvent.kt`) and is routed once:
 pure-forwarding events go straight to their holder in the `when` (the
@@ -580,9 +600,9 @@ series download/delete sheets, search query/history edits, sync — no
 one-line delegate stratum survives), anything with VM-side logic keeps a
 private handler; there is no per-action command method to keep in sync
 with the screen. The VM's remaining orchestration is folding
-`HomeRefresher.state` and `OfflineHomeGate.state` into `HomeUiState` (the
-refresher fold covers nine fields including `sections`, `isGoingOnline`
-and `offlineMode` — single writer, VM only folds), the preference mirrors
+`HomeRefresher.state`, `OfflineHomeGate.state` and the manager's
+`goingOnline` flow into `HomeUiState` (the refresher fold covers
+`sections` and `offlineMode` — single writer, VM only folds), the preference mirrors
 the refresher re-reads through read-only providers (`sectionPrefs`,
 `seerrPreferences`, `discoverEnabled`, `directArrEnabled`,
 `androidTvWatchNextEnabled` — ALL private mirrors owned by the prefs
@@ -705,6 +725,24 @@ under `CacheIdentity.UNKNOWN` pre-login (the wasm twin previously skipped
 caching there), and the wasm-only `WasmTtlCache` was deleted — the
 favorite-flag cache migrated to the shared commonMain `TtlCache`
 (access-order LRU eviction, vs the old twin's insertion order).
+
+**`LibraryItemsQuerySpec`** (commonMain `library/`, 2026-09-10) is the
+request-SHAPE half of the twin convergence: the five non-trivial read
+endpoints of the library client pair (`getMediaItems`, `getSearchHints`,
+`getFavorites`, `getItemsByGenre`, `getItemsByStudio`) build ONE pure spec
+(include/exclude kinds, filters, sort tokens + descending flag,
+paging, fields — the path stays adapter-side: both clients hit `/Items`
+with their own per-client defaults) via `build*QuerySpec` beside the
+assembler/fetcher — the
+JVM client resolves spec → Jellyfin SDK typed args
+(`LibraryItemsQueryResolvers`, jvmShared) and the wasm client renders
+spec → raw query strings, so a filter decision (played-status,
+resumable, sortOrder normalization, `libraryExcludeKinds` pruning,
+empty-gating) is written once and pinned once by
+`LibraryItemsQuerySpecTest` (commonTest — runs on both lanes' JVM
+runner; the wasmJs node lane never executes in CI, mirror-contract +
+spec pins cover it). Trivial fixed-path endpoints deliberately keep
+their per-client one-liners.
 
 **`HomeSectionPrefs`** (`shared/core/model/src/commonMain/kotlin/.../HomeSectionPrefs.kt`,
 beside `HomeSectionType`) is the section-prefs write algebra: the prefs
@@ -1314,73 +1352,95 @@ retries — a consumed flag after a failed silent fetch would otherwise pin
 the pre-change data until the next WS event. Cancellation never re-arms
 (the cancelling loud load is the regeneration).
 
-The host choreography (collection/person/album detail + music home) is one
-shape, owned by **`DeferredFetchCoordinator`**
-(`shared/core/ui/.../viewmodel/DeferredFetchCoordinator.kt`) — hosts adapt,
-they no longer choreograph. `load(id, force = false)` is the loud entry; the
-coordinator tracks what that id's last completed fetch did, which IS the
-back-stack re-entry guard the hosts used to hand-roll (`currentXId` + the
-`state is Success` checks + `needsLoudReloadOnReentry`): a loud load for the
-id already showing whose last fetch succeeded is a no-op, a previously
-failed one re-arms so re-entry reloads, and a silent success heals the guard
-through the `onSilentHeal` hook (so the album detail clears its LOAD error
-without ever touching a mix error that shares the field). `force`
-(pull-to-refresh, retry) bypasses the guard and reaches the fetch body as
-the repository cache-bypass flag, exactly as the silent regeneration's
-always-forced reads do; music home has no identity to guard and
-instantiates with `Unit`, forcing every loud entry. The fetch body receives
-a `FetchMode` (LOUD/SILENT) plus the force flag — the hand-threaded
-`silent: Boolean` is gone — and owns only how to publish per mode: silent
-serves stale-while-revalidate (no loading state, no error reset, no toast,
-all-or-nothing — album detail keeps the last detail+tracks PAIR on a half
-failure, never one fresh half beside one stale half; music home reports
-failure while offline so the consumed flag cannot strand, and its silent
-path never touches `isLoading`, which the pull-to-refresh spinner keys
-off). The loud UI lifecycle is module-owned through constructor hooks:
-`onLoudStart` publishes the Loading state synchronously when a loud load is
-accepted (one ordering where hosts used to drift between
-publish-inside-the-fetch and publish-before-the-coordinator), and
-`onLoudError` is the thrown-fetch twin of the `false` path — a repo
-exception clears the Loading it would strand and surfaces the error, loud
-only. The single-flight/re-arm table is unchanged: one fetch-job slot for
-loud AND silent loads — a loud load cancels an in-flight silent one
-(re-arming first), the deferred refresh skips itself while any load is
-active (the skip re-arms), any fetch reporting failure re-arms (a loud
-failure with nothing pending over-arms one quiet refetch), and cancellation
-never re-arms. The fetch invocation is wrapped in
-`runCatchingRethrowingCancellation` (core/ui depends on
+The host choreography (collection/person/album detail) is one shape, owned
+by **`DeferredFetchCoordinator<K, T>`**
+(`shared/core/ui/.../viewmodel/DeferredFetchCoordinator.kt`) — a
+state-container owner, not just a job-slot owner. The host hands ONE
+aggregate-returning fetch — `suspend (id: K, force: Boolean) -> T`, the
+whole content pair/value, throwing on failure — and the coordinator owns
+`state: StateFlow<DeferredFetchState<T>>` (`value`/`isLoading`/`error`)
+plus the entire loud/silent publish policy: loud accepted publishes Loading
+synchronously — synchronously on the COORDINATOR's state; the hosts'
+screen-facing state is a projection that trails one hop (an eager
+`stateIn` fold on collection/person, a collector-mirrored Compose-state
+trio on album — each host's KDoc declares it), so a uiState read in the
+same dispatch as `load` still sees the previous frame, loud failure
+publishes Error while KEEPING the last value
+(all-or-nothing on the loud path — a half-failed album load no longer
+publishes one fresh half), silent success serves stale-while-revalidate
+without ever touching `isLoading` (the pull-to-refresh spinner keys off
+it), and silent success over a failed loud load HEALS the error with no
+Loading flash. `FetchMode`, the old `Boolean` protocol, and the
+`onLoudStart`/`onLoudError`/`onSilentHeal` hooks are gone from the
+interface — the album host's old shared load/mix error field became a
+projection (`mixError ?: loadError`), not a constructor hook. `load(id,
+force = false)` is the loud entry; the coordinator tracks what that id's
+last completed fetch did, which IS the back-stack re-entry guard the hosts
+used to hand-roll (`currentXId` + `state is Success` checks): a loud load
+for the id already showing whose last fetch succeeded is a no-op, a
+previously failed one re-arms so re-entry reloads. `updateValue(transform)`
+is the host-side optimistic-patch seam (the `UserDataContainer` flips); it
+patches whatever value is kept — including one behind an in-flight loud
+reload's spinner, where the completing load's aggregate overwrites it (the
+next fetch reconciles server truth either way).
+`force` (pull-to-refresh, retry) bypasses the guard and reaches the fetch
+body as the repository cache-bypass flag, exactly as the silent
+regeneration's always-forced reads do. The single-flight/re-arm table is
+unchanged: one fetch-job slot for loud AND silent loads — a loud load
+cancels an in-flight silent one (re-arming first), the deferred refresh
+skips itself while any load is active (the skip re-arms), any fetch
+reporting failure re-arms (a loud failure with nothing pending over-arms
+one quiet refetch), and cancellation never re-arms. The fetch invocation
+is wrapped in `runCatchingRethrowingCancellation` (core/ui depends on
 :shared:core:concurrency for it), so the old "fetch bodies must rethrow
 `CancellationException`" rule is enforced at the module boundary — a
 cancelled loud load cannot mask as a fetch failure and strand its spinner.
 Throwables that are not `Exception`s (an `Error`) are not fetch failures
 either: `runFetch` rethrows them and they surface through the scope as they
 always did.
-`DeferredFetchCoordinatorTest` (core/ui) pins that whole
-single-flight/re-arm/identity table once; the four hosts' suites pin only
-their adapter surfaces (pair publish, offline reporting, spinner/Loading
-clears, loud-failure over-arm and re-entry reload-after-failure expressed
-through each host's public interface, same-id no-op).
+`DeferredFetchCoordinatorTest` (core/ui) pins the
+single-flight/re-arm/identity table AND the publish policy (serve-stale,
+loud-error-keeps-value, heal-without-flash, synchronous loud start); the
+migrated hosts' suites pin only their projection surfaces (pair publish,
+spinner clears, re-entry reload-after-failure, same-id no-op). The
+whole-screen hosts' Loading → Error → content precedence is one shared
+fold, `DeferredFetchState.wholeScreenPhase` — each host supplies only its
+own uiState constructors.
+**`MusicHomeViewModel` deliberately does NOT ride it** — its loud fetch
+publishes PARTIAL sections (sub-fetch failures drop rows while the load
+still reports failure for the re-arm), needs quiet failures (offline gate,
+swallowed partials), and clears its error only past the offline gate: all
+three need the mode inside the fetch body, which the state-container
+interface deliberately removed. It stays on
+**`LegacyDeferredFetchCoordinator`** (same package, frozen copy — bodies
+verbatim, KDocs rewritten —
+with `FetchMode`, single-consumer KDoc, its own 21-test unit owner; its
+deletion condition — music home's partial/quiet semantics dissolving into
+the generic container — is stated in that KDoc).
 
-Data side: the #157 lazy-staleness rule lives in **`AnnouncedStaleness`**
-(`shared/core/data` jvmShared `concurrency/`, beside `SingleFlightFetcher`):
-arm on announce → consume as a one-shot force on the next read (forced
-reads consume it too — such a read is at least as fresh as the announce, so
-leaving the marker armed would only buy one redundant forced read later)
-→ a failed/cancelled consuming read re-arms → reset on identity switch (the
-KDoc cites the two fixed bug classes: a consumed marker dying with a failed
-read, 1ba22d962; a consumed marker not propagating its force into the
-network layer's nested sub-call caches, 53b90d228). `MediaRepositoryImpl`
-holds one marker per announced-stale read group — `homeSectionsStale`,
-`albumTracksStale`, `collectionItemsStale` — and one private choreography,
-`staleAwareRead(marker, force) { effectiveForce -> … }`, that computes
-`effectiveForce = force || marker.consume()`, hands it to the read (so a
-consumed marker propagates past the repository boundary) and re-arms on
-both failure shapes (returned `Result.failure` and thrown, cancellation
-included). Arming: the synthetic `notifyUserDataChanged` (every confirmed
-own-write path — flips, delivered STOPs, the outbox drain) arms ALL THREE;
-the two gap groups are additionally armed by the USER-DATA callers of the
-composite eviction (`withUserDataMutationCacheInvalidation` and the
-`invalidateForUserDataChange` seam the STOP path uses) — NOT inside
+Data side: the #157 lazy-staleness rule lives in **`StaleReadGroup`** +
+**`StaleReadGroups`** (`shared/core/data` jvmShared `concurrency/`, beside
+`SingleFlightFetcher`; they absorbed and deleted the old
+`AnnouncedStaleness` marker type). One `StaleReadGroup` owns the whole
+ladder for one read group: arm on announce → `staleAwareRead(force) {
+effectiveForce -> … }` consumes the marker as a one-shot force (forced
+reads consume it too — such a read is at least as fresh as the announce,
+so leaving the marker armed would only buy one redundant forced read
+later) and re-arms on BOTH failure shapes (returned `Result.failure` and
+thrown, cancellation included — the two fixed bug classes: a consumed
+marker dying with a failed read, 1ba22d962; a consumed marker not
+propagating its force into the network layer's nested sub-call caches,
+53b90d228). `MediaRepositoryImpl` holds a registry of three —
+`homeSectionsStale`, `albumTracksStale`, `collectionItemsStale` — declared
+at construction via `register(ridesUserDataWrite = …)`; the reads are
+`group.staleAwareRead(force) { … }` one-liners. Arming fan-out is
+registry-owned, not copy-pasted: `announceConfirmedWrite()` (every
+confirmed own-write path — flips, delivered STOPs, the outbox drain, via
+the synthetic `notifyUserDataChanged`) arms ALL THREE;
+`announceUserDataWrite()` (the USER-DATA callers of the composite
+eviction — `withUserDataMutationCacheInvalidation` and the
+`invalidateForUserDataChange` seam the STOP path uses) arms only the two
+gap groups (registered `ridesUserDataWrite = true`) — NOT inside
 `invalidateUserDataCaches` itself, because that eviction also serves
 `invalidateFor(ALBUM)` from every FORCED album-detail read, and a
 pull-to-refresh must not arm markers (one redundant forced read of
@@ -1400,16 +1460,20 @@ collection MEMBER flip evicts
 rows and the collection's pages now heal on their next non-forced read
 without a caller-side force (the markers are coarse — one per group, so a
 flip costs at most one forced read of whichever album/collection is read
-next; identity switch resets all three in the `media-identity-clear`
-action). `getMediaDetail` deliberately has NO marker: its announce path
-already eagerly evicts the item's detail entry (`DetailCacheGroup.invalidateUserData`
-→ `invalidateItem`), so the next read is a guaranteed fresh miss — a marker
-would only double-evict. `PlaybackRepositoryImpl`'s segments cache follows
-the same registry doctrine as `DetailCacheGroup`: its identity reaction is
-the registry's plain wholesale clear PLUS a registered action that bumps
-`segmentsEpoch`, so an in-flight previous-identity fetch cannot write back
-into the just-cleared cache. Server WS pushes arm none of these —
-`HomeRefresher` serves those live.
+next; identity switch resets all via `resetAll()` in the
+`media-identity-clear` action). `getMediaDetail` deliberately has NO
+group: its announce path already eagerly evicts the item's detail entry
+(`DetailCacheGroup.invalidateUserData` → `invalidateItem`), so the next
+read is a guaranteed fresh miss — a marker would only double-evict.
+Adding a fourth group is one `register` call.
+`StaleReadGroupTest` pins the ladder directly (announce-forces-fetch,
+failed/thrown/cancelled reads re-arm, success consumes, force
+bypasses-but-consumes, both fan-out channels). `PlaybackRepositoryImpl`'s
+segments cache follows the same registry doctrine as `DetailCacheGroup`:
+its identity reaction is the registry's plain wholesale clear PLUS a
+registered action that bumps `segmentsEpoch`, so an in-flight
+previous-identity fetch cannot write back into the just-cleared cache.
+Server WS pushes arm none of these — `HomeRefresher` serves those live.
 
 ## Concurrency (`shared/core/concurrency`)
 
@@ -1427,10 +1491,14 @@ declared parity, no per-platform twin. Non-suspend bodies (JSON/enum parses
 in mappers) keep stdlib `runCatching`. **`BareRunCatchingRatchetTest`**
 (module `jvmTest`) is the source ratchet: bare `runCatching` inside
 `suspend fun` bodies never increases — the guard is repo-complete since
-the 2026-09-08 third wave (every shared/core and shared/feature source
-root, legacy core/data + core/ui, core/notification, `:app`,
-`:apps:desktop`, apps/web; baseline 22, down from 27 over the smaller
-old surface). Two known deliberate baseline entries are named in the
+the 2026-09-08 third wave, and its guarded-root set is DISCOVERED, not
+hand-listed (since 2026-09-09): the test parses every `include(...)` in
+`settings.gradle.kts` and walks `shared/` + `apps/` for
+`build.gradle.kts` dirs (pruning build output), unioning both — a new
+module is guarded the moment it exists, and a canary assertion checks
+discovery ⊇ the retired 40-path hand list (the single widening found,
+`baselineprofile`, contained no `runCatching`; baseline 22 unchanged).
+Two known deliberate baseline entries are named in the
 test's KDoc (HomeDiscoveryStore's best-effort migration swallow,
 PluginConfigViewModel's asset read); `AddToTargetActions
 .resolveTargetItemIds` — the one live hazard the widened sweep found — is
@@ -1688,6 +1756,16 @@ the route (`onNavigate(Route.AppearanceSettings(lastClickedSettingId))`,
 are the sign-out dialogs (`ACTION_ONLY_IDS`), the on-screen screensaver
 group (`Route.Settings` targets) and the host-indirected setup wizard.
 `AppearanceSettingsScreen`'s drill-ins go through the same facade.
+
+`SettingsScreen`'s row summaries are pure policy, not composition:
+`appearanceSummaryParts` / `experimentalSummaryParts` emit a
+`List<SettingsSummaryPart>` (sealed `Literal`/`Token`/`Formatted`/`Plural`)
+joined by the pure `joinSummaryTokens`; the two `@Composable` subtitle
+helpers resolve each part at composition (`resolveAtComposition()`), so
+locale changes still recompose while the which-prefs/order/casing
+decisions are jvmTest-pinned by `SettingsSummariesTest` (the
+resolver-lambda shape was unimplementable — this Compose compiler
+rejects `stringResource` inside non-inline lambdas).
 
 Adding a settings screen touches: the route (NavKey.kt in shared/core/ui —
 unchanged persistence contract), the screen itself, and its items in the

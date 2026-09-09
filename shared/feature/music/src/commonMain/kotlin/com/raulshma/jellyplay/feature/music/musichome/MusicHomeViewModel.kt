@@ -14,9 +14,9 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMode
 import com.raulshma.jellyplay.core.model.SortOption
-import com.raulshma.jellyplay.core.ui.viewmodel.DeferredFetchCoordinator
 import com.raulshma.jellyplay.core.ui.viewmodel.DeferredUserDataRefresher
 import com.raulshma.jellyplay.core.ui.viewmodel.FetchMode
+import com.raulshma.jellyplay.core.ui.viewmodel.LegacyDeferredFetchCoordinator
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.feature.music.feedback.MusicMessageBus
 import kotlinx.coroutines.async
@@ -45,11 +45,18 @@ class MusicHomeViewModel(
      * elsewhere, outbox drain landing) only mark the sections stale — the
      * favorite artists/tracks rows re-load when the music home is next
      * entered (see [DeferredUserDataRefresher]) — never mid-scroll. The
-     * whole load lifecycle lives in [DeferredFetchCoordinator]; this screen
-     * adapts it with `Unit` (no subject id) and forces every loud entry —
-     * its loud path is a plain refresh, so there is no identity to guard.
+     * whole load lifecycle lives in [LegacyDeferredFetchCoordinator]; this
+     * screen adapts it with `Unit` (no subject id) and forces every loud
+     * entry — its loud path is a plain refresh, so there is no identity to
+     * guard.
+     *
+     * The legacy (mode-aware, Boolean-protocol) coordinator rather than the
+     * state-container one: this screen's loud fetch publishes PARTIAL
+     * sections (a dropped sub-fetch fails the load for the re-arm while
+     * publishing what it got), and that partial-publish decision needs the
+     * mode inside the fetch — see LegacyDeferredFetchCoordinator's class doc.
      */
-    private val fetchCoordinator = DeferredFetchCoordinator<Unit>(
+    private val fetchCoordinator = LegacyDeferredFetchCoordinator<Unit>(
         userDataChanges = mediaRepository.userDataChanges,
         scope = scope,
         fetch = { _, mode, _ -> fetchSections(mode) },
@@ -107,7 +114,7 @@ class MusicHomeViewModel(
      * The loud load — pull-to-refresh, retry and the offline-mode
      * collector's return-online regeneration all land here, always forced
      * (see [fetchCoordinator]). Everything else about the load lifecycle
-     * lives in [DeferredFetchCoordinator].
+     * lives in [LegacyDeferredFetchCoordinator].
      */
     fun loadSections() {
         fetchCoordinator.load(Unit, force = true)
@@ -115,8 +122,8 @@ class MusicHomeViewModel(
 
     /**
      * The fetch behind both load paths, keyed on the coordinator's mode and
-     * reporting plain success so [DeferredFetchCoordinator] owns the failure
-     * re-arm.
+     * reporting plain success so [LegacyDeferredFetchCoordinator] owns the
+     * failure re-arm.
      *
      * [FetchMode.SILENT] serves the deferred-refresh path: no loading state
      * (the pull-to-refresh spinner keys off [MusicHomeUiState.isLoading]),
@@ -206,7 +213,7 @@ class MusicHomeViewModel(
             complete
         }
         // A thrown repo path never strands the loud spinner: the exception
-        // escapes to [DeferredFetchCoordinator]'s error hook, which
+        // escapes to [LegacyDeferredFetchCoordinator]'s error hook, which
         // publishes the loud failure (see the coordinator construction).
         if (mode == FetchMode.LOUD) {
             _uiState.update { it.copy(isLoading = false) }

@@ -28,14 +28,17 @@ import com.raulshma.jellyplay.core.network.library.HomeSectionsFetcher
 import com.raulshma.jellyplay.core.network.library.SEARCH_SUGGESTIONS_FIELDS
 import com.raulshma.jellyplay.core.network.library.SEARCH_SUGGESTIONS_ITEM_TYPES
 import com.raulshma.jellyplay.core.network.library.SEARCH_SUGGESTIONS_SORT_BY
+import com.raulshma.jellyplay.core.network.library.buildFavoritesQuerySpec
+import com.raulshma.jellyplay.core.network.library.buildItemsByGenreQuerySpec
+import com.raulshma.jellyplay.core.network.library.buildItemsByStudioQuerySpec
+import com.raulshma.jellyplay.core.network.library.buildMediaItemsQuerySpec
+import com.raulshma.jellyplay.core.network.library.buildSearchHintsQuerySpec
 import com.raulshma.jellyplay.core.network.library.emptyFallbackTotalCount
-import com.raulshma.jellyplay.core.network.library.libraryExcludeKinds
 import com.raulshma.jellyplay.core.network.library.resumableOnly
 import org.jellyfin.sdk.model.api.BaseItemKind
 import org.jellyfin.sdk.model.api.CreatePlaylistDto
 import org.jellyfin.sdk.model.api.ImageType
 import org.jellyfin.sdk.model.api.ItemFields
-import org.jellyfin.sdk.model.api.ItemFilter
 import org.jellyfin.sdk.model.api.ItemSortBy
 import org.jellyfin.sdk.model.api.MediaType as SdkMediaType
 import org.jellyfin.sdk.model.api.SortOrder
@@ -222,54 +225,36 @@ class LibraryApiClientImpl @Inject constructor(
         searchTerm: String?,
         kindFilter: com.raulshma.jellyplay.core.model.ItemKindFilter,
     ): Result<SearchResult> = engine.apiResultWithRetry {
-        val sortByEnums = parseItemSortList(filters.sortBy.apiValue)
-        val sortOrderEnum = SortOrder.entries
-            .find { it.serialName.equals(filters.sortBy.sortOrder, ignoreCase = true) }
-            ?: SortOrder.ASCENDING
-        // Played-status maps onto Jellyfin's ItemFilter (IsPlayed/IsUnplayed).
-        // Previously these chips toggled + persisted but never reached the query,
-        // so the grid silently ignored them (analysis F1).
-        val itemFilters = buildList {
-            when (filters.playedStatus.takeIf { it != com.raulshma.jellyplay.core.model.PlayedStatus.ALL }) {
-                com.raulshma.jellyplay.core.model.PlayedStatus.PLAYED -> add(ItemFilter.IS_PLAYED)
-                com.raulshma.jellyplay.core.model.PlayedStatus.UNPLAYED -> add(ItemFilter.IS_UNPLAYED)
-                else -> {}
-            }
-            // IsResumable restricts to items with a playback position
-            // (UserData.PlaybackPositionTicks > 0). Composes with played-status
-            // and powers the "In Progress" library filter / sort.
-            if (filters.isResumable == true) add(ItemFilter.IS_RESUMABLE)
-        }
-        // includeItemTypes / excludeItemTypes: resolve the requested kinds once,
-        // then drop SEASON/EPISODE from the exclude list when they were
-        // explicitly included (the shared [libraryExcludeKinds] policy —
-        // Jellyfin would otherwise receive contradictory include+exclude for
-        // the same kind and return an empty result).
-        val mediaTypes = filters.mediaTypes.takeIf { it.isNotEmpty() }
-        val includeKinds = mediaTypes?.mapNotNull { it.toBaseItemKind() }.orEmpty()
-        val excludeKinds = libraryExcludeKinds(
-            seasonKind = BaseItemKind.SEASON,
-            episodeKind = BaseItemKind.EPISODE,
-            includeKinds = includeKinds,
-            includeEpisodes = kindFilter.includeEpisodes,
-        )
-        val response = engine.requireApi().itemsApi.getItems(
-            parentId = parentId?.let { it.toUUID() },
-            includeItemTypes = includeKinds.takeIf { it.isNotEmpty() },
-            excludeItemTypes = excludeKinds,
-            genres = filters.genres.takeIf { it.isNotEmpty() },
-            years = filters.years.takeIf { it.isNotEmpty() },
-            studioIds = studioIds?.mapNotNull { it.toUUID() },
-            tags = filters.tags.takeIf { it.isNotEmpty() },
-            sortBy = sortByEnums.takeIf { it.isNotEmpty() },
-            sortOrder = listOf(sortOrderEnum),
+        // The filter/sort/kind/projection decisions live in the shared
+        // commonMain builder ([buildMediaItemsQuerySpec]); this adapter only
+        // resolves the spec's wire serial names against the SDK enums
+        // ([LibraryItemsQueryResolvers]).
+        val spec = buildMediaItemsQuerySpec(
+            parentId = parentId,
+            filters = filters,
+            studioIds = studioIds,
             startIndex = startIndex,
             limit = limit,
-            recursive = true,
-            searchTerm = searchTerm?.takeIf { it.isNotBlank() },
-            filters = itemFilters.takeIf { it.isNotEmpty() },
-            minCommunityRating = filters.minRating.takeIf { it > 0f }?.toDouble(),
-            fields = LIST_ITEM_FIELDS_WITH_GENRES,
+            searchTerm = searchTerm,
+            kindFilter = kindFilter,
+        )
+        val response = engine.requireApi().itemsApi.getItems(
+            parentId = spec.parentId?.toUUID(),
+            includeItemTypes = spec.includeKinds.toBaseItemKinds(),
+            excludeItemTypes = spec.excludeKinds.toBaseItemKinds(),
+            genres = spec.genres,
+            years = spec.years,
+            studioIds = spec.studioIds?.map { it.toUUID() },
+            tags = spec.tags,
+            sortBy = spec.sortBy.toItemSortBys(),
+            sortOrder = spec.sortOrderDescending.toSortOrderList(),
+            startIndex = spec.startIndex,
+            limit = spec.limit,
+            recursive = spec.recursive,
+            searchTerm = spec.searchTerm,
+            filters = spec.itemFilters.toItemFilters(),
+            minCommunityRating = spec.minCommunityRating,
+            fields = spec.fields.toItemFieldsList(),
         ).content
         val rawItems = emptyLibraryFallback.resolve(
             primaryItems = response.items,
@@ -406,13 +391,14 @@ class LibraryApiClientImpl @Inject constructor(
         limit: Int,
         startIndex: Int,
     ): Result<SearchResult> = engine.apiResultWithRetry {
+        val spec = buildSearchHintsQuerySpec(query, mediaTypes, limit, startIndex)
         val response = engine.requireApi().itemsApi.getItems(
-            searchTerm = query,
-            includeItemTypes = mediaTypes?.mapNotNull { it.toBaseItemKind() },
-            limit = limit,
-            startIndex = startIndex,
-            recursive = true,
-            fields = LIST_ITEM_FIELDS,
+            searchTerm = spec.searchTerm,
+            includeItemTypes = spec.includeKinds.toBaseItemKinds(),
+            limit = spec.limit,
+            startIndex = spec.startIndex,
+            recursive = spec.recursive,
+            fields = spec.fields.toItemFieldsList(),
         ).content
         SearchResult(
             items = response.items.toFilteredMediaItems(engine.currentMaxParentalRating),
@@ -478,12 +464,13 @@ class LibraryApiClientImpl @Inject constructor(
         startIndex: Int,
         limit: Int,
     ): Result<SearchResult> = engine.apiResultWithRetry {
+        val spec = buildItemsByGenreQuerySpec(genreId, mediaTypes, startIndex, limit)
         val response = engine.requireApi().itemsApi.getItems(
-            genreIds = listOf(genreId.toUUID()),
-            includeItemTypes = mediaTypes?.mapNotNull { it.toBaseItemKind() },
-            startIndex = startIndex,
-            limit = limit,
-            recursive = true,
+            genreIds = spec.genreIds?.map { it.toUUID() },
+            includeItemTypes = spec.includeKinds.toBaseItemKinds(),
+            startIndex = spec.startIndex,
+            limit = spec.limit,
+            recursive = spec.recursive,
         ).content
         SearchResult(
             items = response.items.toFilteredMediaItems(engine.currentMaxParentalRating),
@@ -515,13 +502,14 @@ class LibraryApiClientImpl @Inject constructor(
         startIndex: Int,
         limit: Int,
     ): Result<SearchResult> = engine.apiResultWithRetry {
+        val spec = buildItemsByStudioQuerySpec(studioId, mediaTypes, startIndex, limit)
         val response = engine.requireApi().itemsApi.getItems(
-            studioIds = listOf(studioId.toUUID()),
-            includeItemTypes = mediaTypes?.mapNotNull { it.toBaseItemKind() },
-            startIndex = startIndex,
-            limit = limit,
-            recursive = true,
-            fields = LIST_ITEM_FIELDS,
+            studioIds = spec.studioIds?.map { it.toUUID() },
+            includeItemTypes = spec.includeKinds.toBaseItemKinds(),
+            startIndex = spec.startIndex,
+            limit = spec.limit,
+            recursive = spec.recursive,
+            fields = spec.fields.toItemFieldsList(),
         ).content
         SearchResult(
             items = response.items.toFilteredMediaItems(engine.currentMaxParentalRating),
@@ -695,13 +683,14 @@ class LibraryApiClientImpl @Inject constructor(
         limit: Int,
         startIndex: Int,
     ): Result<SearchResult> = engine.apiResultWithRetry {
+        val spec = buildFavoritesQuerySpec(mediaTypes, limit, startIndex)
         val response = engine.requireApi().itemsApi.getItems(
-            includeItemTypes = mediaTypes?.mapNotNull { it.toBaseItemKind() },
-            filters = listOf(ItemFilter.IS_FAVORITE),
-            limit = limit,
-            startIndex = startIndex,
-            recursive = true,
-            fields = LIST_ITEM_FIELDS,
+            includeItemTypes = spec.includeKinds.toBaseItemKinds(),
+            filters = spec.itemFilters.toItemFilters(),
+            limit = spec.limit,
+            startIndex = spec.startIndex,
+            recursive = spec.recursive,
+            fields = spec.fields.toItemFieldsList(),
         ).content
         SearchResult(
             items = response.items.toFilteredMediaItems(engine.currentMaxParentalRating),

@@ -14,6 +14,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
@@ -133,6 +134,53 @@ class DesktopOfflineModeManagerTest {
         manager.toggleManualOffline() // snapshot: manual=true
         withTimeout(5_000) { while (written.isEmpty()) delay(25) }
         assertEquals(listOf(false), written)
+    }
+
+    // ── goingOnline flag: set-on-arm + clear-on-ONLINE ──────────────────
+
+    @Test
+    fun `going-online toggle arms the flag synchronously and the ONLINE derivation clears it`() = runBlocking {
+        sliceFlow.value = NetworkOfflineSlice(manualOfflineEnabled = true)
+        // The write lands: the slice flips, the collector derives ONLINE, and
+        // the flag's clear rides the same emission.
+        io.mockk.coEvery { store.setManualOffline(any()) } answers {
+            sliceFlow.value = NetworkOfflineSlice(manualOfflineEnabled = firstArg())
+        }
+        val manager = manager()
+        awaitMode(manager, OfflineMode.OFFLINE_MANUAL)
+
+        manager.toggleManualOffline() // snapshot: manual=true → going online
+        assertTrue(manager.goingOnline.value, "the flag must arm on the toggle, before the write lands")
+
+        withTimeout(5_000) { manager.goingOnline.first { !it } }
+        assertFalse(manager.goingOnline.value)
+    }
+
+    @Test
+    fun `going-online toggle with a lost write holds the flag until the watchdog`() = runBlocking {
+        sliceFlow.value = NetworkOfflineSlice(manualOfflineEnabled = true)
+        // Relaxed-free mock: the write is swallowed — the lost-write scenario.
+        io.mockk.coEvery { store.setManualOffline(any()) } returns Unit
+        val manager = manager()
+        awaitMode(manager, OfflineMode.OFFLINE_MANUAL)
+
+        manager.toggleManualOffline()
+        assertTrue(manager.goingOnline.value)
+        // The watchdog clear itself is pinned on virtual time by
+        // GoingOnlineFlagTest; here just verify the flag does NOT clear
+        // spuriously without an ONLINE emission (settle briefly).
+        delay(250)
+        assertTrue(manager.goingOnline.value)
+    }
+
+    @Test
+    fun `going-offline toggle never arms the flag`() = runBlocking {
+        io.mockk.coEvery { store.setManualOffline(any()) } returns Unit
+        val manager = manager()
+
+        manager.toggleManualOffline() // snapshot: manual=false → going OFFLINE
+
+        assertFalse(manager.goingOnline.value)
     }
 
     // ── checkNetworkAndAutoDetect: synchronous re-derivation ───────────

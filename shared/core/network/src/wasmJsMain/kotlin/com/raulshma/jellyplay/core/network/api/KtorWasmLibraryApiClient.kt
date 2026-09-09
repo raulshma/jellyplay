@@ -13,7 +13,6 @@ import com.raulshma.jellyplay.core.model.LyricsResult
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.Playlist
 import com.raulshma.jellyplay.core.model.PlaylistItem
-import com.raulshma.jellyplay.core.model.PlayedStatus
 import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.Studio
 import com.raulshma.jellyplay.core.model.isAudioType
@@ -35,11 +34,14 @@ import com.raulshma.jellyplay.core.network.library.SEARCH_SUGGESTIONS_SORT_BY
 import com.raulshma.jellyplay.core.network.library.ThemeMediaResultDtoWire
 import com.raulshma.jellyplay.core.network.library.UpdatePlaylistRequestDtoWire
 import com.raulshma.jellyplay.core.network.library.WasmClock
+import com.raulshma.jellyplay.core.network.library.buildFavoritesQuerySpec
 import com.raulshma.jellyplay.core.network.library.buildItemImageUrl
+import com.raulshma.jellyplay.core.network.library.buildItemsByGenreQuerySpec
+import com.raulshma.jellyplay.core.network.library.buildItemsByStudioQuerySpec
+import com.raulshma.jellyplay.core.network.library.buildMediaItemsQuerySpec
+import com.raulshma.jellyplay.core.network.library.buildSearchHintsQuerySpec
 import com.raulshma.jellyplay.core.network.library.emptyFallbackTotalCount
 import com.raulshma.jellyplay.core.network.library.filterByParentalRating
-import com.raulshma.jellyplay.core.network.library.libraryExcludeKinds
-import com.raulshma.jellyplay.core.network.library.parseItemSortList
 import com.raulshma.jellyplay.core.network.library.resumableOnly
 import com.raulshma.jellyplay.core.network.library.toCollectionSummary
 import com.raulshma.jellyplay.core.network.library.toGenre
@@ -51,7 +53,6 @@ import com.raulshma.jellyplay.core.network.library.toMediaType
 import com.raulshma.jellyplay.core.network.library.toPlaylist
 import com.raulshma.jellyplay.core.network.library.toPlaylistItem
 import com.raulshma.jellyplay.core.network.library.toStudio
-import com.raulshma.jellyplay.core.network.library.toWireItemKind
 import io.ktor.client.HttpClient
 
 /**
@@ -60,11 +61,15 @@ import io.ktor.client.HttpClient
  * OkHttp). Endpoint paths, query parameters (including the SDK's non-null
  * `enableTotalRecordCount=true`/`enableImages=true` defaults on `/Items`)
  * and DTO mapping semantics mirror the JVM implementation request-for-
- * request, field-for-field; the home-sections fetch choreography (fan-out,
- * semaphore bounds, TTL sub-caches, recommendations chain) is shared with it
- * via the commonMain `HomeSectionsFetcher` — this class only satisfies
- * [HomeSectionSources] (for free, via the common [LibraryApiClient]
- * supertype) and supplies the atomic-session cache identity.
+ * request, field-for-field. The per-endpoint request ASSEMBLY (filters, sort
+ * field+order, kind include/exclude, paging, field projection) is decided
+ * once in the commonMain query-spec builders (`buildMediaItemsQuerySpec` &
+ * siblings); this client and its JVM twin are the two adapters over that one
+ * spec — this side renders the wire serial names as query strings. The
+ * home-sections fetch choreography is likewise shared via the commonMain
+ * `HomeSectionsFetcher` — this class only satisfies [HomeSectionSources]
+ * (for free, via the common [LibraryApiClient] supertype) and supplies the
+ * atomic-session cache identity.
  *
  * wasm v1 deltas vs the JVM impl (documented, none affect JVM):
  *  - No failover router: every request derives its base URL from the shared
@@ -270,48 +275,35 @@ class KtorWasmLibraryApiClient(
         kindFilter: ItemKindFilter,
     ): Result<SearchResult> = apiResultWithRetry {
         val server = requireConnectedServer()
-        val sortByTokens = parseItemSortList(filters.sortBy.apiValue)
-        val sortOrder = filters.sortBy.sortOrder.equals("Descending", ignoreCase = true)
-            .let { if (it) "Descending" else "Ascending" }
-        // Played-status maps onto Jellyfin's ItemFilter (IsPlayed/IsUnplayed)
-        // and composes with the IsResumable position filter.
-        val itemFilters = buildList {
-            when (filters.playedStatus.takeIf { it != PlayedStatus.ALL }) {
-                PlayedStatus.PLAYED -> add("IsPlayed")
-                PlayedStatus.UNPLAYED -> add("IsUnplayed")
-                else -> {}
-            }
-            if (filters.isResumable == true) add("IsResumable")
-        }
-        // includeItemTypes / excludeItemTypes: drop SEASON/EPISODE from the
-        // exclude list when they were explicitly included (the shared
-        // [libraryExcludeKinds] policy — contradictory include+exclude would
-        // make Jellyfin return nothing).
-        val includeKinds = filters.mediaTypes.mapNotNull { it.toWireItemKind() }
-        val excludeKinds = libraryExcludeKinds(
-            seasonKind = "Season",
-            episodeKind = "Episode",
-            includeKinds = includeKinds,
-            includeEpisodes = kindFilter.includeEpisodes,
+        // The filter/sort/kind/projection decisions live in the shared
+        // commonMain builder ([buildMediaItemsQuerySpec]); this adapter only
+        // renders the spec's wire serial names as query strings.
+        val spec = buildMediaItemsQuerySpec(
+            parentId = parentId,
+            filters = filters,
+            studioIds = studioIds,
+            startIndex = startIndex,
+            limit = limit,
+            searchTerm = searchTerm,
+            kindFilter = kindFilter,
         )
-
         val baseQuery = q(
-            "parentId" to parentId,
-            "includeItemTypes" to includeKinds.takeIf { it.isNotEmpty() }?.joined(),
-            "excludeItemTypes" to excludeKinds.takeIf { it.isNotEmpty() }?.joined(),
-            "genres" to filters.genres.takeIf { it.isNotEmpty() }?.joined(),
-            "years" to filters.years.takeIf { it.isNotEmpty() }?.joinToString(","),
-            "studioIds" to studioIds?.takeIf { it.isNotEmpty() }?.joined(),
-            "tags" to filters.tags.takeIf { it.isNotEmpty() }?.joined(),
-            "sortBy" to sortByTokens.takeIf { it.isNotEmpty() }?.joined(),
-            "sortOrder" to sortOrder,
-            "startIndex" to startIndex.toString(),
-            "limit" to limit.toString(),
-            "recursive" to "true",
-            "searchTerm" to searchTerm?.takeIf { it.isNotBlank() },
-            "filters" to itemFilters.takeIf { it.isNotEmpty() }?.joined(),
-            "minCommunityRating" to filters.minRating.takeIf { it > 0f }?.toDouble()?.toString(),
-            "fields" to (LIST_PROJECTION_FIELDS + "Genres").joined(),
+            "parentId" to spec.parentId,
+            "includeItemTypes" to spec.includeKinds?.joined(),
+            "excludeItemTypes" to spec.excludeKinds?.joined(),
+            "genres" to spec.genres?.joined(),
+            "years" to spec.years?.joinToString(","),
+            "studioIds" to spec.studioIds?.joined(),
+            "tags" to spec.tags?.joined(),
+            "sortBy" to spec.sortBy?.joined(),
+            "sortOrder" to spec.sortOrderDescending?.let { if (it) "Descending" else "Ascending" },
+            "startIndex" to spec.startIndex?.toString(),
+            "limit" to spec.limit?.toString(),
+            "recursive" to spec.recursive.toString(),
+            "searchTerm" to spec.searchTerm,
+            "filters" to spec.itemFilters?.joined(),
+            "minCommunityRating" to spec.minCommunityRating?.toString(),
+            "fields" to spec.fields?.joined(),
         ) + itemsEndpointDefaults
 
         val response = getJson<BaseItemQueryResultDtoWire>(
@@ -394,16 +386,17 @@ class KtorWasmLibraryApiClient(
         startIndex: Int,
     ): Result<SearchResult> = apiResultWithRetry {
         val server = requireConnectedServer()
+        val spec = buildSearchHintsQuerySpec(query, mediaTypes, limit, startIndex)
         val response = getJson<BaseItemQueryResultDtoWire>(
             url = apiUrl(server.address, "/Items"),
             accessToken = currentToken(),
             query = q(
-                "searchTerm" to query,
-                "includeItemTypes" to mediaTypes?.mapNotNull { it.toWireItemKind() }?.takeIf { it.isNotEmpty() }?.joined(),
-                "limit" to limit.toString(),
-                "startIndex" to startIndex.toString(),
-                "recursive" to "true",
-                "fields" to LIST_PROJECTION_FIELDS.joined(),
+                "searchTerm" to spec.searchTerm,
+                "includeItemTypes" to spec.includeKinds?.joined(),
+                "limit" to spec.limit?.toString(),
+                "startIndex" to spec.startIndex?.toString(),
+                "recursive" to spec.recursive.toString(),
+                "fields" to spec.fields?.joined(),
             ) + itemsEndpointDefaults,
         )
         SearchResult(
@@ -478,15 +471,16 @@ class KtorWasmLibraryApiClient(
         limit: Int,
     ): Result<SearchResult> = apiResultWithRetry {
         val server = requireConnectedServer()
+        val spec = buildItemsByGenreQuerySpec(genreId, mediaTypes, startIndex, limit)
         val response = getJson<BaseItemQueryResultDtoWire>(
             url = apiUrl(server.address, "/Items"),
             accessToken = currentToken(),
             query = q(
-                "genreIds" to genreId,
-                "includeItemTypes" to mediaTypes?.mapNotNull { it.toWireItemKind() }?.takeIf { it.isNotEmpty() }?.joined(),
-                "startIndex" to startIndex.toString(),
-                "limit" to limit.toString(),
-                "recursive" to "true",
+                "genreIds" to spec.genreIds?.joined(),
+                "includeItemTypes" to spec.includeKinds?.joined(),
+                "startIndex" to spec.startIndex?.toString(),
+                "limit" to spec.limit?.toString(),
+                "recursive" to spec.recursive.toString(),
             ) + itemsEndpointDefaults,
         )
         SearchResult(
@@ -521,16 +515,17 @@ class KtorWasmLibraryApiClient(
         limit: Int,
     ): Result<SearchResult> = apiResultWithRetry {
         val server = requireConnectedServer()
+        val spec = buildItemsByStudioQuerySpec(studioId, mediaTypes, startIndex, limit)
         val response = getJson<BaseItemQueryResultDtoWire>(
             url = apiUrl(server.address, "/Items"),
             accessToken = currentToken(),
             query = q(
-                "studioIds" to studioId,
-                "includeItemTypes" to mediaTypes?.mapNotNull { it.toWireItemKind() }?.takeIf { it.isNotEmpty() }?.joined(),
-                "startIndex" to startIndex.toString(),
-                "limit" to limit.toString(),
-                "recursive" to "true",
-                "fields" to LIST_PROJECTION_FIELDS.joined(),
+                "studioIds" to spec.studioIds?.joined(),
+                "includeItemTypes" to spec.includeKinds?.joined(),
+                "startIndex" to spec.startIndex?.toString(),
+                "limit" to spec.limit?.toString(),
+                "recursive" to spec.recursive.toString(),
+                "fields" to spec.fields?.joined(),
             ) + itemsEndpointDefaults,
         )
         SearchResult(
@@ -757,16 +752,17 @@ class KtorWasmLibraryApiClient(
         startIndex: Int,
     ): Result<SearchResult> = apiResultWithRetry {
         val server = requireConnectedServer()
+        val spec = buildFavoritesQuerySpec(mediaTypes, limit, startIndex)
         val response = getJson<BaseItemQueryResultDtoWire>(
             url = apiUrl(server.address, "/Items"),
             accessToken = currentToken(),
             query = q(
-                "includeItemTypes" to mediaTypes?.mapNotNull { it.toWireItemKind() }?.takeIf { it.isNotEmpty() }?.joined(),
-                "filters" to "IsFavorite",
-                "limit" to limit.toString(),
-                "startIndex" to startIndex.toString(),
-                "recursive" to "true",
-                "fields" to LIST_PROJECTION_FIELDS.joined(),
+                "includeItemTypes" to spec.includeKinds?.joined(),
+                "filters" to spec.itemFilters?.joined(),
+                "limit" to spec.limit?.toString(),
+                "startIndex" to spec.startIndex?.toString(),
+                "recursive" to spec.recursive.toString(),
+                "fields" to spec.fields?.joined(),
             ) + itemsEndpointDefaults,
         )
         SearchResult(

@@ -84,19 +84,18 @@ class MainViewModel(
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), 0)
 
     /**
-     * Mirrors Home's offline→online in-flight flag at the app shell so the
-     * global nav overflow can show a spinner on "Go Online" (see #115). Cleared
-     * by observing [offlineMode] settling back to ONLINE below.
+     * True while a user-initiated offline→online transition is in flight, so
+     * the global nav overflow can show a spinner on "Go Online" (see #115).
+     * Pass-through of [OfflineModeManager.goingOnline] — the flag's single
+     * owner, beside the transition that raises it: the manager's manual
+     * toggle arms it when the direction is going online, and the mode flow's
+     * ONLINE emission (or the manager's lost-write watchdog) clears it. This
+     * shell used to keep a hand-synced mirror with its own clear collector;
+     * that second owner is exactly what stuck-spinner bugs bred on.
      */
-    private val _isGoingOnline = stateFlow(false)
-    val isGoingOnline = _isGoingOnline.flow
+    val isGoingOnline: StateFlow<Boolean> = offlineModeManager.goingOnline
 
     init {
-        // Clear the going-online busy flag once we're actually back online.
-        scope.launch {
-            offlineMode.collect { if (it == com.raulshma.jellyplay.core.model.OfflineMode.ONLINE) _isGoingOnline.set(false) }
-        }
-
         // Shell coordinators: session restore completes → run the launch-time
         // update check; the session, update, and SyncPlay-open collectors each
         // live inside their coordinator.
@@ -120,13 +119,15 @@ class MainViewModel(
     }
 
     /**
-     * App-shell offline toggle for the global nav overflow (#115). Going online
-     * is async (preference write → mode flip → network fetch); flip the busy
-     * flag so the UI can show a spinner, mirroring [HomeViewModel]'s logic.
+     * App-shell offline toggle for the global nav overflow (#115). Going
+     * online is async (preference write → mode flip → network fetch), but
+     * the busy flag's lifecycle is not this shell's problem anymore:
+     * [OfflineModeManager.toggleManualOffline] arms
+     * [OfflineModeManager.goingOnline] when the toggle's direction is going
+     * online, and the mode flow clears it — [isGoingOnline] is the
+     * pass-through the UI collects.
      */
     fun toggleOfflineMode() {
-        val goingOnline = offlineMode.value != com.raulshma.jellyplay.core.model.OfflineMode.ONLINE
-        if (goingOnline) _isGoingOnline.set(true)
         offlineModeManager.toggleManualOffline()
     }
 

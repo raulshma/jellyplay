@@ -14,14 +14,19 @@ import java.io.File
  * this; the fix is [runCatchingRethrowingCancellation], and this test keeps
  * the converted set converted.
  *
- * Guarded module set: every shared module with suspend-bearing sources —
- * shared/core/{data,network,datastore,database,ui,model,designsystem,
- * player-contract} and every shared/feature module — plus the legacy
- * core/data and core/ui trees, core/notification, :app, :apps:desktop,
- * apps/web
- * (2026-09-08: the guard went repo-complete; the formerly unguarded roots
- * carried one live hazard — AddToTargetActions.resolveTargetItemIds, since
- * converted — plus the deliberate baseline entries below). Non-suspend
+ * Guarded module set: DISCOVERED from the build itself (2026-09-09 — before
+ * that, ~40 hand-listed roots that a new module would silently escape):
+ * every `include(":…")` module declared in settings.gradle.kts, plus every
+ * directory under shared/ and apps/ that carries its own build.gradle.kts
+ * (catches a module mid-wiring before its settings include lands), each
+ * mapped to its source root — the whole `src` tree for KMP modules,
+ * `src/main` for legacy single-variant modules (app, the legacy core tree,
+ * :baselineprofile, apps/desktop). The hand list this discovery replaced is
+ * kept as [legacyHandMaintainedRoots]; a canary test pins that discovery
+ * still covers all of its on-disk roots. (2026-09-08: the guard went
+ * repo-complete; the formerly unguarded roots carried one live hazard —
+ * AddToTargetActions.resolveTargetItemIds, since converted — plus the
+ * deliberate baseline entries below). Non-suspend
  * bodies (pure JSON/enum/number parses in mappers, framework glue) are
  * legitimate stdlib `runCatching` territory and simply don't count — the
  * heuristic only counts occurrences inside `suspend fun` bodies.
@@ -49,8 +54,14 @@ class BareRunCatchingRatchetTest {
 
     private val maxBareRunCatchingInSuspendFuns = 22
 
-    /** Module source roots guarded by the ratchet, relative to the repo root. */
-    private val guardedRoots = listOf(
+    /**
+     * The hand-maintained guard list this test used until 2026-09-09, kept as
+     * a canary: root discovery must cover every one of these paths that still
+     * exists on disk (see the `discovered guard roots cover the hand list
+     * they replaced` test). Roots whose module has since been deleted are
+     * naturally absent and therefore exempt.
+     */
+    private val legacyHandMaintainedRoots = listOf(
         "shared/core/data/src",
         "shared/core/network/src",
         "shared/core/datastore/src",
@@ -100,12 +111,67 @@ class BareRunCatchingRatchetTest {
         return dir!!
     }
 
+    /**
+     * Discovers the module source roots to guard, straight from the build:
+     * (1) every `include(":a:b")` module path declared in settings.gradle.kts,
+     * and (2) every directory under shared/ or apps/ that carries its own
+     * build.gradle.kts (a module mid-wiring whose settings include has not
+     * landed yet). The legacy core tree + app is intentionally
+     * settings-only — its dead sibling dirs (core/database, core/model, …)
+     * are not modules and must stay unscanned. Each module directory maps to
+     * its source root: `src/main` for legacy single-variant modules, the
+     * whole `src` tree for KMP modules (which fold their test sources in, as
+     * the hand list always did).
+     */
+    private fun discoverGuardedRoots(root: File): Set<File> {
+        val moduleDirs = linkedSetOf<File>()
+
+        // (1) the settings-declared module graph
+        val settings = File(root, "settings.gradle.kts")
+        if (settings.isFile) {
+            val includeCall = Regex("""include\s*\(([^)]*)\)""")
+            val quoted = Regex("\"([^\"]+)\"")
+            settings.readText().lineSequence()
+                .map { it.substringBefore("//") } // ignore commented-out includes
+                .forEach { line ->
+                    includeCall.findAll(line).forEach { call ->
+                        quoted.findAll(call.groupValues[1])
+                            .map { it.groupValues[1] }
+                            .filter { it.startsWith(":") }
+                            .forEach { modulePath ->
+                                val dir = File(root, modulePath.removePrefix(":").replace(':', '/'))
+                                if (dir.isDirectory) moduleDirs += dir
+                            }
+                    }
+                }
+        }
+
+        // (2) modules on disk under shared/ or apps/ regardless of settings
+        val pending = ArrayDeque<File>()
+        listOf("shared", "apps").forEach { top ->
+            val topDir = File(root, top)
+            if (topDir.isDirectory) pending += topDir
+        }
+        while (pending.isNotEmpty()) {
+            val dir = pending.removeFirst()
+            val children = dir.listFiles() ?: continue
+            if (children.any { it.isFile && it.name == "build.gradle.kts" }) moduleDirs += dir
+            children.filter { it.isDirectory && it.name != "build" }.forEach { pending += it }
+        }
+
+        return moduleDirs.mapNotNullTo(linkedSetOf()) { module ->
+            when {
+                File(module, "src/main").isDirectory -> File(module, "src/main")
+                File(module, "src").isDirectory -> File(module, "src")
+                else -> null // module with no sources yet — nothing to guard
+            }
+        }
+    }
+
     private fun guardedSources(): List<File> {
-        val root = repoRoot()
-        return guardedRoots
-            .map { File(root, it) }
-            .filter { it.isDirectory }
-            .flatMap { it.walkTopDown().filter { f -> f.isFile && f.extension == "kt" } }
+        val roots = discoverGuardedRoots(repoRoot())
+        assertTrue(roots.isNotEmpty(), "guard-root discovery found no module source roots — ratchet would be vacuous")
+        return roots.flatMap { it.walkTopDown().filter { f -> f.isFile && f.extension == "kt" } }
     }
 
     /** Strips line/block comments and string/char literals so the scan reads code, not prose. */
@@ -213,6 +279,23 @@ class BareRunCatchingRatchetTest {
             "bare runCatching inside suspend funs: ${hits.size} (baseline $maxBareRunCatchingInSuspendFuns). " +
                 "Convert to runCatchingRethrowingCancellation (com.raulshma.jellyplay.core.concurrency), " +
                 "or extract the non-suspend work out of the suspend body:\n$report",
+        )
+    }
+
+    @Test
+    fun `discovered guard roots cover the hand list they replaced`() {
+        val root = repoRoot()
+        val discovered = discoverGuardedRoots(root).map { it.canonicalFile }
+        val uncovered = legacyHandMaintainedRoots
+            .map { File(root, it) }
+            .filter { it.isDirectory } // deleted modules are naturally exempt
+            .filter { legacy ->
+                discovered.none { rootDir -> legacy.canonicalFile == rootDir || legacy.toPath().startsWith(rootDir.toPath()) }
+            }
+        assertTrue(
+            uncovered.isEmpty(),
+            "guard-root discovery no longer covers ${uncovered.map { it.path }} — a module the ratchet " +
+                "used to guard has escaped; fix discoverGuardedRoots, do not just re-add the path",
         )
     }
 }

@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -220,6 +221,36 @@ class AndroidOfflineModeManagerTest {
         manager.toggleManualOffline() // snapshot: manual=false
         withTimeout(5_000) { while (written.isEmpty()) delay(25) }
         assertEquals(listOf(true), written)
+    }
+
+    // ── goingOnline flag: set-on-arm + clear-on-ONLINE ──────────────────
+
+    @Test
+    fun `going-online toggle arms the flag synchronously and the ONLINE derivation clears it`() = runBlocking {
+        sliceFlow.value = NetworkOfflineSlice(manualOfflineEnabled = true)
+        // The write lands: the slice flips, the collector derives ONLINE, and
+        // the flag's clear rides the same emission.
+        coEvery { store.setManualOffline(any()) } answers {
+            sliceFlow.value = NetworkOfflineSlice(manualOfflineEnabled = firstArg<Boolean>())
+        }
+        val manager = manager()
+        awaitMode(manager, OfflineMode.OFFLINE_MANUAL)
+
+        manager.toggleManualOffline() // snapshot: manual=true → going online
+        assertTrue("the flag must arm on the toggle, before the write lands", manager.goingOnline.value)
+
+        withTimeout(5_000) { manager.goingOnline.first { !it } }
+        assertFalse(manager.goingOnline.value)
+    }
+
+    @Test
+    fun `going-offline toggle never arms the flag`() = runBlocking {
+        coEvery { store.setManualOffline(any()) } returns Unit
+        val manager = manager()
+
+        manager.toggleManualOffline() // snapshot: manual=false → going OFFLINE
+
+        assertFalse(manager.goingOnline.value)
     }
 
     // ── checkNetworkAndAutoDetect: the foreground re-derivation ────────

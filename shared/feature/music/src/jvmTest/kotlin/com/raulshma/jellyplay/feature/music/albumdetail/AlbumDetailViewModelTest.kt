@@ -206,7 +206,7 @@ class AlbumDetailViewModelTest {
     }
 
     @Test
-    fun loadAlbum_detailFailure_setsRawErrorButKeepsTracks() = runTest(mainDispatcher) {
+    fun loadAlbum_detailFailure_setsRawErrorOverNoContent() = runTest(mainDispatcher) {
         coEvery { mediaRepository.getMediaDetail("album1", any()) } returns
             Result.failure(RuntimeException("no album"))
         coEvery { mediaRepository.getAlbumTracks("album1") } returns Result.success(albumTracks)
@@ -214,13 +214,18 @@ class AlbumDetailViewModelTest {
         viewModel.loadAlbum("album1")
         advanceUntilIdle()
 
+        // All-or-nothing on the loud path too: the failed detail half fails
+        // the whole fetch, so the error owns the screen (the screen renders
+        // ErrorScreen whenever error != null — the fresh tracks half was
+        // never visible there) and no half-pair is published.
         assertEquals("no album", (viewModel.error as MixErrorMessage.Raw).message)
-        assertEquals(albumTracks, viewModel.tracks)
+        assertNull(viewModel.detail)
+        assertEquals(emptyList(), viewModel.tracks)
         assertFalse(viewModel.isLoading)
     }
 
     @Test
-    fun loadAlbum_tracksFailure_setsRawErrorButKeepsDetail() = runTest(mainDispatcher) {
+    fun loadAlbum_tracksFailure_setsRawErrorOverNoContent() = runTest(mainDispatcher) {
         coEvery { mediaRepository.getMediaDetail("album1", any()) } returns Result.success(
             MediaDetail(item = MediaItem(id = "album1", name = "Album", mediaType = MediaType.ALBUM)),
         )
@@ -229,8 +234,10 @@ class AlbumDetailViewModelTest {
         viewModel.loadAlbum("album1")
         advanceUntilIdle()
 
+        // The tracks error wins (the half whose failure surfaces); the fresh
+        // detail half stays unpublished — all-or-nothing, as above.
         assertEquals("no tracks", (viewModel.error as MixErrorMessage.Raw).message)
-        assertEquals("Album", viewModel.detail?.item?.name)
+        assertNull(viewModel.detail)
         assertFalse(viewModel.isLoading)
     }
 
@@ -316,9 +323,10 @@ class AlbumDetailViewModelTest {
 
     @Test
     fun loadAlbum_afterAFailedLoudLoadReloads() = runTest(mainDispatcher) {
-        // Detail half succeeds, tracks half fails: the detail is on screen
-        // but the loud load FAILED, so the re-entry guard must not skip —
-        // this is the flag's positive case beyond the null-detail guard.
+        // Detail half succeeds, tracks half fails: the loud load FAILED (the
+        // all-or-nothing publish leaves nothing on screen behind the error),
+        // so the re-entry guard must not skip — this is the flag's positive
+        // case beyond the null-detail guard.
         coEvery { mediaRepository.getMediaDetail("album1") } returns Result.success(
             MediaDetail(item = MediaItem(id = "album1", name = "Album", mediaType = MediaType.ALBUM)),
         )
@@ -326,7 +334,7 @@ class AlbumDetailViewModelTest {
         viewModel.loadAlbum("album1")
         advanceUntilIdle()
         assertEquals("no tracks", (viewModel.error as MixErrorMessage.Raw).message)
-        assertEquals("Album", viewModel.detail?.item?.name)
+        assertNull(viewModel.detail)
 
         // Re-entry retries the loud load and heals the failed half.
         coEvery { mediaRepository.getAlbumTracks("album1") } returns Result.success(albumTracks)

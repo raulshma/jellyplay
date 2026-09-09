@@ -71,8 +71,10 @@ import java.time.ZoneOffset
  *    still count as fresh), job choreography, cadence + jitter, discover
  *    TTL, the user-data-push debounce/throttle/deferral chain, and the
  *    offline transitions (the offline-mode mirror plus the offline→online
- *    reconnect handshake: busy flag, full-screen loader, outbox drain,
- *    capped fetch).
+ *    reconnect handshake: full-screen loader, outbox drain, capped fetch.
+ *    The going-online busy flag itself is NOT here —
+ *    [OfflineModeManager.goingOnline] owns it beside the transition that
+ *    raises it).
  *  * [HomeViewModel] is a flows + `onEvent` facade: it folds [state] into
  *    its single UiState object, resets the scroll anchor on identity
  *    changes and manual refresh (pure VM state the refresher cannot see),
@@ -127,9 +129,11 @@ internal class HomeRefresher(
          * anywhere down the getHomeSections / fetchDiscoverSections /
          * fetchRecentlyGrabbed chain — only OkHttp's per-call read timeout
          * (which a half-open socket or a hung Seerr await can defeat). Without
-         * this cap a stuck fetch parks on refreshMutex forever and
-         * isGoingOnline never clears, leaving the Go Online button + app bar
-         * spinners spinning until the app is restarted.
+         * this cap a stuck fetch parks on refreshMutex forever and the
+         * handshake's full-screen loader never clears, leaving the home
+         * stuck until the app is restarted. (The going-online busy flag is
+         * not at risk anymore: [OfflineModeManager.goingOnline] clears at
+         * the ONLINE emission, before this fetch even starts.)
          */
         private const val GOING_ONLINE_TIMEOUT_MS = 30_000L
     }
@@ -150,9 +154,6 @@ internal class HomeRefresher(
     // in-flight full refresh — but they are still tracked so [stop] and the
     // identity transitions can cancel an abandoned fan-out.
     private var discoverJob: Job? = null
-    // Fallback timer for a [RefreshTrigger.GoingOnline] request whose
-    // preference write never lands — see the GoingOnline branch in [request].
-    private var goingOnlineWatchdogJob: Job? = null
     private var lastRefreshTime = 0L
     private var isAppInForeground = true
     // Set when a user-data change lands while backgrounded; consumed by [start].
@@ -331,9 +332,9 @@ internal class HomeRefresher(
             // cold-launch "No Content Available" flash. A fetch that merely
             // raced a CONCURRENT fetch on the mutex still completes under
             // its own power and keeps clearing.
-            // (isGoingOnline — the third flag this clear used to drop — is
-            // owned by the going-online handshake below, including its
-            // finally.)
+            // (The going-online busy flag is not the fetch's to clear —
+            // [OfflineModeManager] owns it and clears it at the ONLINE
+            // emission, before this handshake's fetch even starts.)
             // On cancellation the CW side-effect below is intentionally
             // skipped: a fetch cancelled mid-flight may have stale CW data.
             if (currentCoroutineContext().isActive) {
@@ -368,9 +369,10 @@ internal class HomeRefresher(
      *    the SWR snapshot paint + outside-the-job fetch below, and the
      *    sign-out reset respectively.
      *  * [DiscoverEnabled]: standalone discover-only fetch — see [fetchDiscover].
-     *  * [GoingOnline]: user-initiated offline→online transition — raises
-     *    the busy flag and toggles manual offline; the drain+fetch handshake
-     *    itself runs in [observeOfflineMode] when the ONLINE emission lands.
+     *  * [GoingOnline]: user-initiated offline→online transition — toggles
+     *    manual offline (arming [OfflineModeManager.goingOnline]); the
+     *    drain+fetch handshake itself runs in [observeOfflineMode] when the
+     *    ONLINE emission lands.
      */
     fun request(trigger: RefreshTrigger) {
         when (trigger) {
@@ -403,31 +405,16 @@ internal class HomeRefresher(
             RefreshTrigger.DiscoverEnabled -> fetchDiscover()
             RefreshTrigger.GoingOnline -> {
                 // Going online is async (preference write → mode flip →
-                // drain + fetch) and previously gave zero feedback. Flip the
-                // busy flag the UI can show a spinner on BEFORE the toggle,
-                // so [observeOfflineMode]'s reconnect handshake clears it
-                // when the ONLINE emission lands (external/auto flips never
-                // raise it — their handshake just doesn't touch spinners).
-                // The flag also tells [observeOfflineMode] to clear it if
-                // the mode flips back offline first.
-                _state.update { it.copy(isGoingOnline = true) }
+                // drain + fetch) and previously gave zero feedback. The busy
+                // flag's whole lifecycle lives in the manager now: the
+                // toggle below arms it (direction: going online), and the
+                // mode flow's ONLINE emission — or the manager's own
+                // watchdog, if the preference write is lost — clears it.
+                // External/auto flips never raise it. This branch only
+                // toggles; [observeOfflineMode]'s reconnect handshake
+                // (loader, drain, capped fetch) runs when the ONLINE
+                // emission lands.
                 offlineModeManager.toggleManualOffline()
-                // Fallback: the toggle is a preference write on the
-                // manager's own scope. If that write is lost, the mode flow
-                // never emits ONLINE and no observer path runs — clear the
-                // flag ourselves after the same cap the handshake uses.
-                // When the ONLINE emission does land, the handshake's
-                // finally owns the flag and this watchdog's mode check
-                // no-ops.
-                goingOnlineWatchdogJob?.cancel()
-                goingOnlineWatchdogJob = scope.launch {
-                    delay(GOING_ONLINE_TIMEOUT_MS)
-                    if (_state.value.isGoingOnline &&
-                        offlineModeManager.offlineMode.value != OfflineMode.ONLINE
-                    ) {
-                        _state.update { it.copy(isGoingOnline = false) }
-                    }
-                }
             }
         }
     }
@@ -607,17 +594,19 @@ internal class HomeRefresher(
      * writer. Reacts to ALL [OfflineModeManager.offlineMode] emissions
      * (app-start and external/auto changes included):
      *  * ONLINE → offline (any flavour): drop the cached online sections —
-     *    the offline home renders the offline library instead — and clear
-     *    any pending going-online spinner (the user or an auto-detect flip
-     *    took us back offline while the prior online fetch was still parked
-     *    on the refresh mutex).
+     *    the offline home renders the offline library instead. (The
+     *    going-online busy flag is not this observer's to clear:
+     *    [OfflineModeManager.goingOnline] cleared it at the ONLINE emission
+     *    that preceded the flip, so there is nothing left to drop here even
+     *    if the prior online fetch is still parked on the refresh mutex.)
      *  * offline → ONLINE (any flavour): run the reconnect handshake —
      *    full-screen loader, outbox drain, capped fetch. The user-initiated
-     *    [RefreshTrigger.GoingOnline] path additionally has the busy flag up
-     *    (its spinners clear here); external flips (nav ⋮ toggle from the
-     *    app shell) and auto-detect reconnects used to mirror the field only,
-     *    which left the home sitting on dropped-empty sections until a manual
-     *    refresh or the next periodic tick.
+     *    [RefreshTrigger.GoingOnline] path raised the manager-owned busy
+     *    flag on its toggle, and the manager cleared it at this very ONLINE
+     *    emission; external flips (nav ⋮ toggle from the app shell) and
+     *    auto-detect reconnects used to mirror the field only, which left
+     *    the home sitting on dropped-empty sections until a manual refresh
+     *    or the next periodic tick.
      */
     private fun observeOfflineMode() {
         scope.launch {
@@ -630,18 +619,17 @@ internal class HomeRefresher(
                 when {
                     previousMode == OfflineMode.ONLINE && mode != OfflineMode.ONLINE -> {
                         dropOnlineContent()
-                        _state.update { it.copy(isGoingOnline = false) }
                     }
                     previousMode != OfflineMode.ONLINE && mode == OfflineMode.ONLINE -> {
                         // Offline → online: show the full-screen loader
                         // during the post-toggle fetch so the online branch
                         // doesn't flash blank between the mode flip and
-                        // sections arriving. isGoingOnline MUST clear in
+                        // sections arriving. The loader MUST clear in
                         // finally — a bare after-the-fetch clear would leave
                         // it stuck on forever (and the user restarting the
                         // app to recover) whenever the handshake throws or is
-                        // cancelled. The write is a no-op for external/auto
-                        // reconnects, which never raised it.
+                        // cancelled. (The busy flag needs no such rescue:
+                        // the manager already cleared it at this emission.)
                         showFullScreenLoader()
                         try {
                             // Let the playback outbox drain before fetching so
@@ -660,19 +648,18 @@ internal class HomeRefresher(
                             // watched/unwatched offline. force bypasses both
                             // the repo cache and the network-layer latest/
                             // similar caches.
-                            // Capped so a hung network call cannot leave
-                            // isGoingOnline (and the loader) stuck on — the
-                            // symptom was the Go Online button + app bar
-                            // spinners never clearing. On timeout we drop the
-                            // result; a normal refresh/pull-to-refresh can
-                            // still repopulate sections once the network
-                            // recovers. The loader is force-cleared below.
+                            // Capped so a hung network call cannot leave the
+                            // full-screen loader stuck on — the symptom was
+                            // the Go Online button + app bar spinners never
+                            // clearing. On timeout we drop the result; a
+                            // normal refresh/pull-to-refresh can still
+                            // repopulate sections once the network recovers.
+                            // The loader is force-cleared below.
                             withTimeoutOrNull(GOING_ONLINE_TIMEOUT_MS) {
                                 fetchOnce(force = true)
                             }
                         } finally {
                             clearFullScreenLoader()
-                            _state.update { it.copy(isGoingOnline = false) }
                         }
                     }
                 }
@@ -917,8 +904,8 @@ internal enum class RefreshTrigger {
     DiscoverEnabled,
     /**
      * User-initiated offline → online transition (the Go Online button):
-     * raises the going-online flag and toggles manual offline; the
-     * drain+fetch handshake runs in the offline-mode observer when the
+     * toggles manual offline (arming [OfflineModeManager.goingOnline]);
+     * the drain+fetch handshake runs in the offline-mode observer when the
      * ONLINE emission lands.
      */
     GoingOnline,
@@ -942,14 +929,6 @@ internal data class HomeRefreshState(
     val discoverSections: Map<DiscoverSectionType, List<SeerrSearchItem>> = emptyMap(),
     /** Direct *arr "Recently Grabbed / Coming Soon" calendar row. */
     val recentlyGrabbed: List<SeerrSearchItem> = emptyList(),
-    /**
-     * True while a user-initiated offline→online transition is in progress,
-     * so the Go-online affordances can show an inline spinner instead of
-     * being silent. Set by [RefreshTrigger.GoingOnline], cleared by the
-     * offline-mode observer when the transition resolves (or is superseded
-     * by a flip back offline).
-     */
-    val isGoingOnline: Boolean = false,
     /** Mirror of [OfflineModeManager.offlineMode]; transitions drive the policy in [HomeRefresher.observeOfflineMode]. */
     val offlineMode: OfflineMode = OfflineMode.ONLINE,
 ) {

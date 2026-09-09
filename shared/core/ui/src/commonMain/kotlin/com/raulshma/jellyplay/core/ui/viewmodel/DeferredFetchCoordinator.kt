@@ -5,100 +5,145 @@ import com.raulshma.jellyplay.core.model.UserDataChange
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
- * The mode a [DeferredFetchCoordinator] fetch runs in — the one bit of
- * context every host fetch body needs and used to thread by hand as a
- * `silent: Boolean`.
+ * The load-lifecycle value a [DeferredFetchCoordinator] owns: the content
+ * aggregate [value] plus the loud phase around it. A flat trio, not a sealed
+ * Loading/Error/Success, because the phase and the content are orthogonal
+ * under serve-stale: a loud load in flight keeps the last [value] behind its
+ * spinner, and a loud failure keeps it behind the error — a host whose loud
+ * phase is a whole Loading/Error screen (collection/person detail) collapses
+ * the trio in its uiState projection and never reads [value] while
+ * [isLoading] or [error] is set; a host with a spinner-plus-content layout
+ * (album detail) reads all three slots.
+ *
+ * Hosts project [DeferredFetchCoordinator.state] into their uiState; the only
+ * host-side write is the in-place optimistic patch
+ * ([DeferredFetchCoordinator.updateValue]).
  */
-enum class FetchMode {
+data class DeferredFetchState<T>(
     /**
-     * The user asked for this load (screen entry, retry, pull-to-refresh):
-     * [DeferredFetchCoordinator.onLoudStart] has already published the loud
-     * UI (Loading state / spinner), and a failure surfaces its error.
+     * The last all-or-nothing content: null until the first successful
+     * fetch, never cleared by a failure (that is serve-stale).
      */
-    LOUD,
+    val value: T? = null,
 
-    /**
-     * The deferred regeneration, fired by screen re-entry after a user-data
-     * change landed off-screen: quiet — no loading state, no error reset —
-     * and a failure keeps the last published content
-     * (serve-stale-while-revalidate) instead of flashing an error over it.
-     */
-    SILENT,
+    /** True exactly while an accepted loud load's fetch is in flight. */
+    val isLoading: Boolean = true,
+
+    /** The last LOUD failure; a silent failure never touches it. */
+    val error: Exception? = null,
+)
+
+/**
+ * The whole-screen host's projection precedence over a [DeferredFetchState]:
+ * Loading while a loud load is in flight, then the loud error, then the
+ * content. A whole-screen host (collection/person detail) never reads the
+ * last content mid-load or mid-failure — its loud phase is a whole
+ * Loading/Error screen — so serve-stale collapses to "the Error screen
+ * replaces the Success"; each host supplies only its own uiState
+ * constructors. The trailing [loading] arm is the boolean `when`'s
+ * defensive exhaustive default, not a reachable phase.
+ */
+fun <T, U> DeferredFetchState<T>.wholeScreenPhase(
+    loading: () -> U,
+    error: (Exception) -> U,
+    content: (T) -> U,
+): U {
+    val failure = this.error
+    val loaded = this.value
+    return when {
+        isLoading -> loading()
+        failure != null -> error(failure)
+        loaded != null -> content(loaded)
+        else -> loading()
+    }
 }
 
 /**
- * The single-flight fetch lifecycle around a [DeferredUserDataRefresher]:
- * one fetch-job slot shared by loud and silent loads — a loud load cancels
- * an in-flight silent one (it regenerates the same data loudly), and the
- * deferred refresh skips itself while any load is active, so two fetches
- * never race into a last-writer-wins swap.
+ * The deferred-fetch state container: the single-flight job slot around a
+ * [DeferredUserDataRefresher] AND the load state it publishes — hosts hand
+ * over a [fetch] that returns their whole content aggregate and read
+ * [state]; the loud/silent publish policy lives here, not in per-host fetch
+ * bodies.
  *
- * Hosts adapt, they do not choreograph. [load] is the loud entry and
- * carries the subject's id; the coordinator tracks what that id's last
- * completed fetch did, which IS the back-stack re-entry guard the detail
- * hosts used to hand-roll (the `currentXId` + `state is Success` checks and
- * `needsLoudReloadOnReentry`): a loud load for the id already showing
- * whose last fetch succeeded is a no-op — re-entry from the back stack
- * re-runs the screen's `LaunchedEffect`, and a second loud load there
- * would only race the deferred refresh's silent regeneration — while a
- * previously-FAILED loud load re-arms the guard so re-entry reloads.
- * [force] bypasses the guard (pull-to-refresh, retry) and reaches [fetch]
- * as the repository cache-bypass flag. A host without an id (music home)
- * instantiates with `Unit` and forces every loud entry: its loud path is a
- * plain refresh, so there is no identity to guard.
+ * The policy, as [state] transitions:
  *
- * [fetch] receives the mode so hosts stop threading a `silent: Boolean`
- * they manage themselves: it publishes per mode (a SILENT fetch serves
- * stale-while-revalidate — no loading state, and a failed half keeps the
- * last whole result) and reports plain success, `false` meaning "failed
- * without surfacing anything" (a failed silent regeneration, offline
- * gating). This class owns the re-arm decision
- * ([DeferredUserDataRefresher.rearm]): any failed fetch re-arms, so the
- * next screen re-entry retries instead of trusting the consumed pending
- * flag. A loud failure with nothing pending over-arms at worst: one quiet
- * refetch on the next re-entry. The silent regeneration always runs forced
- * (the announced change it heals must bypass the caches the announce may
- * not have evicted) and targets whatever [load] last accepted; before the
- * first load there is nothing showing, and the silent regeneration
- * completes without fetching or consuming anything.
+ *  - A loud load accepted ([load]) synchronously sets [DeferredFetchState.isLoading]
+ *    and clears [DeferredFetchState.error] — this [state] reads Loading the
+ *    moment `load` returns (and the previous error is gone — a retry from
+ *    an error screen drops the stale error immediately). A host's
+ *    screen-facing projection of [state] trails by its own hop (an eager
+ *    `stateIn` fold, or a collector mirroring into Compose state — see the
+ *    hosts' KDocs), so a uiState read in the same dispatch as `load` may
+ *    still see the previous frame. The last [DeferredFetchState.value] stays
+ *    behind the spinner (a pull-to-refresh host keeps rendering its stale
+ *    aggregate).
+ *  - A loud fetch that returns publishes the value and clears the phase.
+ *  - A loud fetch that fails publishes its exception and KEEPS the last
+ *    value — the host decides in its projection whether the error replaces
+ *    the content (whole-screen hosts) or shows beside/over it.
+ *  - A silent regeneration (the deferred refresh fired by screen re-entry
+ *    after a user-data change landed off-screen) never touches the loading
+ *    phase: a success publishes the value and clears the error (a silent
+ *    success over a failed loud load heals it, with no Loading flash on the
+ *    way), and a failure publishes NOTHING — serve-stale-while-revalidate.
  *
- * The loud UI choreography is module-owned so its orderings cannot drift
- * per host: [onLoudStart] publishes the Loading state synchronously when a
- * loud load is accepted, and [onLoudError] is the thrown-fetch twin of the
- * `false` path — a repo path that blew up before building its Result must
- * clear that Loading UI and surface the error exactly as a `false` return
- * would (a SILENT throw stays fully quiet: it counts as failure and
- * re-arms, nothing more). The fetch invocation is wrapped in
- * [runCatchingRethrowingCancellation], so a cancellation always propagates
- * — a cancelled loud load cannot mask as a fetch failure and strand the
- * spinner it published — and cancellation never re-arms (the cancelling
- * load is itself the regeneration). A silent success landing over a FAILED
- * loud load heals the re-entry guard, and [onSilentHeal] lets the host
- * clear that loud failure's error surface with it (the album detail's load
- * error shares a field with mix errors, so the clear must be told apart
- * from a mix failure).
+ * [fetch] returns the whole content aggregate `T` (all-or-nothing: a
+ * multi-part fetch that can only half-succeed must throw rather than return
+ * a half) and throws on failure. The coordinator decides loud-vs-silent
+ * internally — [load] is the loud entry, the re-entry-triggered regeneration
+ * is silent and always forced (the announced change it heals must bypass the
+ * caches the announce may not have evicted). A thrown [Exception] is a fetch
+ * failure per the transitions above; cancellation always propagates (a
+ * cancelled load must not mask as failure and strand the spinner it
+ * published); a non-[Exception] throwable is not a fetch failure — it
+ * rethrows and surfaces as it always did.
  *
- * The loud-cancels-silent rule assumes the loud load regenerates the data
- * the silent pass was regenerating; when that may not hold (a VM reused
- * for a new id), the cancelled silent pass's consumed pending flag would
- * strand — so [load] re-arms before cancelling an in-flight silent fetch.
- * When both loads target the same data that re-arm over-arms at worst:
- * one redundant quiet refetch on the next re-entry.
+ * Single-flight: one fetch-job slot shared by loud and silent loads — a loud
+ * load cancels an in-flight silent one (it regenerates the same data
+ * loudly), and the deferred refresh skips itself while any load is active,
+ * so two fetches never race into a last-writer-wins swap. The re-arm table:
+ * any failed fetch re-arms [DeferredUserDataRefresher.rearm] (the next
+ * screen re-entry retries instead of trusting the consumed pending flag —
+ * over-arming costs one redundant quiet refetch), a skipped refresh behind
+ * an in-flight load re-arms (that load's fetches may predate the change),
+ * and a CANCELLED fetch never re-arms (the cancelling load is itself the
+ * regeneration) — except that [load] re-arms before cancelling an in-flight
+ * silent fetch whose consumed flag would otherwise strand when the loud load
+ * targets a different subject (a VM reused for a new id).
+ *
+ * The identity guard the detail hosts used to hand-roll: [load] for the id
+ * already showing whose last completed fetch succeeded is a no-op —
+ * re-entry from the back stack re-runs the screen's `LaunchedEffect`, and a
+ * second loud load there would only race the deferred refresh's silent
+ * regeneration — while a previously-FAILED load re-arms the guard so
+ * re-entry reloads. [force] bypasses the guard (pull-to-refresh, retry) and
+ * reaches [fetch] as the repository cache-bypass flag. In-flight loads never
+ * decide the guard: until the current fetch completes, the guard must not
+ * read the previous id's success. A host without an id instantiates with
+ * `Unit` and forces every loud entry: its loud path is a plain refresh, so
+ * there is no identity to guard.
  *
  * Main-thread confinement as [DeferredUserDataRefresher]: construct with
- * the ViewModel's main-immediate scope and only touch it from that scope.
+ * the ViewModel's main-immediate scope and only touch it (and
+ * [updateValue]) from that scope.
  */
-class DeferredFetchCoordinator<K>(
+class DeferredFetchCoordinator<K, T>(
     userDataChanges: Flow<UserDataChange>,
     private val scope: CoroutineScope,
-    private val fetch: suspend (id: K, mode: FetchMode, force: Boolean) -> Boolean,
-    private val onLoudStart: () -> Unit = {},
-    private val onLoudError: (exception: Exception) -> Unit = { _ -> },
-    private val onSilentHeal: () -> Unit = {},
+    private val fetch: suspend (id: K, force: Boolean) -> T,
 ) {
+
+    private val _state = MutableStateFlow(DeferredFetchState<T>())
+
+    /** The load lifecycle — see the class doc for the transition table. */
+    val state: StateFlow<DeferredFetchState<T>> = _state.asStateFlow()
 
     /**
      * The one fetch in flight, loud or silent — see the class doc for the
@@ -156,16 +201,37 @@ class DeferredFetchCoordinator<K>(
         }
         fetchJob?.cancel()
         fetchJobIsSilent = false
-        // Synchronous, before the launch: hosts whose loud state is a whole
-        // Loading screen state publish it here, and the screen must read
-        // Loading the moment it calls load — not after the scope dispatches.
-        onLoudStart()
+        // Synchronous, before the launch: the loading phase must be visible
+        // the moment load returns (and the previous error gone), not after
+        // the scope dispatches. The last value stays behind the spinner.
+        _state.update { it.copy(isLoading = true, error = null) }
         fetchJob = scope.launch {
-            val ok = runFetch(id, FetchMode.LOUD, force)
-            loadedSuccessfully = ok
-            if (!ok) {
+            val result = runFetch(id, force)
+            loadedSuccessfully = result.isSuccess
+            if (result.isSuccess) {
+                _state.update {
+                    it.copy(value = result.getOrThrow(), isLoading = false, error = null)
+                }
+            } else {
+                _state.update { it.copy(isLoading = false, error = result.exceptionOrNull() as Exception) }
                 deferredRefresher.rearm()
             }
+        }
+    }
+
+    /**
+     * Patches the shown content aggregate in place — the optimistic
+     * user-data flip a host applies to the value already on screen while
+     * the server truth reconciles on the next fetch. A no-op before the
+     * first successful fetch (there is nothing showing to patch) and
+     * orthogonal to the load phase: it never touches [isLoading] or
+     * [error]. It patches the KEPT value — including one behind an
+     * in-flight loud reload's spinner, where the completing load's
+     * aggregate overwrites the patch.
+     */
+    fun updateValue(transform: (T) -> T) {
+        _state.update { current ->
+            current.value?.let { value -> current.copy(value = transform(value)) } ?: current
         }
     }
 
@@ -181,14 +247,12 @@ class DeferredFetchCoordinator<K>(
         } else {
             fetchJobIsSilent = true
             fetchJob = scope.launch {
-                if (runFetch(id, FetchMode.SILENT, force = true)) {
-                    // A silent success over a failed loud load heals the
-                    // re-entry guard — and tells the host, so the loud
-                    // failure's error surface goes with it (a mix error
-                    // must survive).
-                    if (!loadedSuccessfully) {
-                        onSilentHeal()
-                    }
+                val result = runFetch(id, force = true)
+                if (result.isSuccess) {
+                    // Quiet publish: value + heal, and isLoading stays false —
+                    // a silent fetch only ever starts with no loud load in
+                    // flight, and every completed loud load cleared it.
+                    _state.update { it.copy(value = result.getOrThrow(), error = null) }
                     loadedSuccessfully = true
                 } else {
                     deferredRefresher.rearm()
@@ -198,25 +262,19 @@ class DeferredFetchCoordinator<K>(
     }
 
     /**
-     * Host fetch bodies report failure as `false`; one that throws a
-     * non-cancellation exception (a repo path that blew up before building
-     * its Result) must count as failure too — otherwise it would skip the
-     * re-arm and escape to the scope's uncaught handler.
-     * [runCatchingRethrowingCancellation] keeps cancellation propagating
-     * (a cancelled load must not mask as failure); [onLoudError] carries a
-     * LOUD exception back so the host can clear its loud UI exactly as it
-     * would for a `false` return, while a SILENT exception stays quiet.
-     * Throwables that are not [Exception]s are not fetch failures — they
-     * rethrow and surface as they always did.
+     * A fetch failure is a thrown [Exception]; anything else must not count
+     * as one — a cancellation that masked as failure would strand the
+     * spinner it published, and an [Error] belongs to the caller, not the
+     * load lifecycle. [runCatchingRethrowingCancellation] keeps cancellation
+     * propagating; the non-[Exception] rethrow skips the failure re-arm.
      */
-    private suspend fun runFetch(id: K, mode: FetchMode, force: Boolean): Boolean =
-        runCatchingRethrowingCancellation { fetch(id, mode, force) }
+    private suspend fun runFetch(id: K, force: Boolean): Result<T> =
+        runCatchingRethrowingCancellation { fetch(id, force) }
             .fold(
-                onSuccess = { it },
+                onSuccess = { Result.success(it) },
                 onFailure = { e ->
                     if (e !is Exception) throw e
-                    if (mode == FetchMode.LOUD) onLoudError(e)
-                    false
+                    Result.failure(e)
                 },
             )
 }
