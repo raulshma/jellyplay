@@ -83,11 +83,12 @@ import org.jetbrains.compose.resources.pluralStringResource
  * download-quality chip row and an external-subtitle multi-select list.
  *
  * Driven by [DetailContentState.downloadPicker] (visibility / quality /
- * [SubtitleSelection]); the confirm action hands off to
- * [DetailContentCallbacks.onDownloadClick] (→ [DetailViewModel.startDownload]),
- * which reads the pending values and runs the cellular-size gate before the
- * transfer. Quality maps to `maxBitrate` via `qualityToMaxBitrate`; subtitle
- * selection narrows the external subtitles bundled offline
+ * [SubtitleSelection]); the confirm action hands off to the
+ * [DetailContentCallbacks.download] bundle's `onDownloadClick` (→
+ * [DetailViewModel.startDownload]), which reads the pending values and runs
+ * the cellular-size gate before the transfer. Quality maps to `maxBitrate`
+ * via `qualityToMaxBitrate`; subtitle selection narrows the external
+ * subtitles bundled offline
  * ([SubtitleSelection.All] = every deliverable subtitle).
  *
  * Cellular-warning flow is unchanged: if the cellular threshold is hit, this

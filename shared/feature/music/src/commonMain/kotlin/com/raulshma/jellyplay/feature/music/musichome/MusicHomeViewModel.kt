@@ -16,6 +16,7 @@ import com.raulshma.jellyplay.core.model.OfflineMode
 import com.raulshma.jellyplay.core.model.SortOption
 import com.raulshma.jellyplay.core.ui.viewmodel.DeferredFetchCoordinator
 import com.raulshma.jellyplay.core.ui.viewmodel.DeferredUserDataRefresher
+import com.raulshma.jellyplay.core.ui.viewmodel.FetchMode
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.feature.music.feedback.MusicMessageBus
 import kotlinx.coroutines.async
@@ -44,30 +45,34 @@ class MusicHomeViewModel(
      * elsewhere, outbox drain landing) only mark the sections stale — the
      * favorite artists/tracks rows re-load when the music home is next
      * entered (see [DeferredUserDataRefresher]) — never mid-scroll. The
-     * deferred regeneration runs [fetchSections] silently: no loading
-     * spinner, no toast. The single-flight load slot and the skip/re-arm
-     * choreography live in [DeferredFetchCoordinator].
+     * whole load lifecycle lives in [DeferredFetchCoordinator]; this screen
+     * adapts it with `Unit` (no subject id) and forces every loud entry —
+     * its loud path is a plain refresh, so there is no identity to guard.
      */
-    private val fetchCoordinator = DeferredFetchCoordinator(
+    private val fetchCoordinator = DeferredFetchCoordinator<Unit>(
         userDataChanges = mediaRepository.userDataChanges,
         scope = scope,
-        silentFetch = { fetchSections(silent = true) },
-        onFetchError = { e, silent ->
-            // A silent (deferred) regeneration stays quiet — the user never
-            // asked for this fetch, so the stale sections stay and no toast
-            // fires. Loud: keep showing cached sections if we have them; only
+        fetch = { _, mode, _ -> fetchSections(mode) },
+        onLoudStart = {
+            // The pull-to-refresh spinner keys off isLoading; the loud
+            // error reset happens inside the fetch (past the offline gate,
+            // so an offline retry keeps the error screen it retries from).
+            _uiState.update { it.copy(isLoading = true) }
+        },
+        onLoudError = { e ->
+            // A thrown repo path on a loud load (the deferred regeneration
+            // never reaches this hook — it stays quiet, the user never asked
+            // for it): keep showing cached sections if we have them; only
             // swap to the full ErrorScreen when there's nothing to show. A
             // failed refresh after data has loaded surfaces as a transient
             // toast instead of wiping the screen.
-            if (!silent) {
-                val message = e.message ?: "Failed to load music"
-                if (_uiState.value.sections.isEmpty()) {
-                    _uiState.update { it.copy(error = message) }
-                } else {
-                    userMessageBus.error(message)
-                }
-                _uiState.update { it.copy(isLoading = false) }
+            val message = e.message ?: "Failed to load music"
+            if (_uiState.value.sections.isEmpty()) {
+                _uiState.update { it.copy(error = message) }
+            } else {
+                userMessageBus.error(message)
             }
+            _uiState.update { it.copy(isLoading = false) }
         },
     )
 
@@ -100,36 +105,37 @@ class MusicHomeViewModel(
 
     /**
      * The loud load — pull-to-refresh, retry and the offline-mode
-     * collector's return-online regeneration all land here. The
-     * single-flight/re-arm choreography (including the deferred refresh's
-     * silent twin) lives in [DeferredFetchCoordinator]/[fetchSections].
+     * collector's return-online regeneration all land here, always forced
+     * (see [fetchCoordinator]). Everything else about the load lifecycle
+     * lives in [DeferredFetchCoordinator].
      */
     fun loadSections() {
-        fetchCoordinator.load { fetchSections(silent = false) }
+        fetchCoordinator.load(Unit, force = true)
     }
 
     /**
-     * The fetch behind both load paths, reporting plain success so
-     * [DeferredFetchCoordinator] owns the failure re-arm.
+     * The fetch behind both load paths, keyed on the coordinator's mode and
+     * reporting plain success so [DeferredFetchCoordinator] owns the failure
+     * re-arm.
      *
-     * [silent] serves the deferred-refresh path: no loading state (the
-     * pull-to-refresh spinner keys off [MusicHomeUiState.isLoading]), and a
-     * failed fetch keeps the last sections on screen — serve-stale-while-
-     * revalidate, same philosophy as the detail screens.
+     * [FetchMode.SILENT] serves the deferred-refresh path: no loading state
+     * (the pull-to-refresh spinner keys off [MusicHomeUiState.isLoading]),
+     * and a failed fetch keeps the last sections on screen — serve-stale-
+     * while-revalidate, same philosophy as the detail screens.
      */
-    private suspend fun fetchSections(silent: Boolean): Boolean {
+    private suspend fun fetchSections(mode: FetchMode): Boolean {
         // Offline can't regenerate — report failure so the coordinator
         // re-arms (returning online fires a loud loadSections anyway, but
         // while the app stays offline the consumed flag must not strand the
         // change the refresh was armed for).
         if (_uiState.value.offlineMode != OfflineMode.ONLINE) {
-            if (!silent) {
+            if (mode == FetchMode.LOUD) {
                 _uiState.update { it.copy(isLoading = false) }
             }
             return false
         }
-        if (!silent) {
-            _uiState.update { it.copy(isLoading = true, error = null) }
+        if (mode == FetchMode.LOUD) {
+            _uiState.update { it.copy(error = null) }
         }
         val sectionsList = mutableListOf<MusicHomeSection>()
 
@@ -194,15 +200,15 @@ class MusicHomeViewModel(
             // dropped rows the next re-entry's silent refetch must
             // heal.
             val complete = results.all { it != null }
-            if (!silent || complete) {
+            if (mode != FetchMode.SILENT || complete) {
                 _uiState.update { it.copy(sections = sectionsList) }
             }
             complete
         }
         // A thrown repo path never strands the loud spinner: the exception
-        // escapes to [DeferredFetchCoordinator.runFetch], whose error hook
+        // escapes to [DeferredFetchCoordinator]'s error hook, which
         // publishes the loud failure (see the coordinator construction).
-        if (!silent) {
+        if (mode == FetchMode.LOUD) {
             _uiState.update { it.copy(isLoading = false) }
         }
         return ok

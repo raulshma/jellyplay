@@ -74,6 +74,10 @@ kotlin {
         getByName("commonMain").dependencies {
             implementation(project(":shared:core:model"))
             implementation(project(":shared:core:designsystem"))
+            // DeferredFetchCoordinator wraps fetch invocations in
+            // runCatchingRethrowingCancellation — the repo's one
+            // cancellation-safety seam (zero-dependency leaf, no cycle).
+            implementation(project(":shared:core:concurrency"))
             // JetBrains CMP distribution (see catalog note): Android targets
             // redirect to the androidx artifacts.
             implementation(libs.jb.compose.runtime)

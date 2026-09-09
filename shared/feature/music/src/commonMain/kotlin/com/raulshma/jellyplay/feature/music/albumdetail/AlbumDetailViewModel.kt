@@ -14,6 +14,7 @@ import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.ui.viewmodel.DeferredFetchCoordinator
 import com.raulshma.jellyplay.core.ui.viewmodel.DeferredUserDataRefresher
+import com.raulshma.jellyplay.core.ui.viewmodel.FetchMode
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.feature.music.MixErrorMessage
 import com.raulshma.jellyplay.feature.music.toMixErrorMessage
@@ -38,33 +39,35 @@ class AlbumDetailViewModel(
     private val _detail = composeState<MediaDetail?>(null)
     val detail: MediaDetail? get() = _detail.value
 
-    /** The loaded album — the deferred refresh reloads it silently. */
-    private var currentAlbumId: String? = null
-
     /**
      * User-data changes while another screen is up (a track favorite flipped
      * elsewhere, outbox drain landing) only mark the track list stale; the
      * single silent forced reload fires when the album screen is next entered
-     * (see [DeferredUserDataRefresher]) — never mid-scroll. The single-flight
-     * load slot and the skip/re-arm choreography live in
-     * [DeferredFetchCoordinator].
+     * (see [DeferredUserDataRefresher]) — never mid-scroll. The whole load
+     * lifecycle — including the back-stack re-entry guard and its
+     * reload-after-failure re-arm — lives in [DeferredFetchCoordinator].
      */
-    private val fetchCoordinator = DeferredFetchCoordinator(
+    private val fetchCoordinator = DeferredFetchCoordinator<String>(
         userDataChanges = mediaRepository.userDataChanges,
         scope = scope,
-        silentFetch = {
-            currentAlbumId?.let { fetchAlbumData(it, force = true, silent = true) } ?: true
+        fetch = ::fetchAlbumData,
+        onLoudStart = {
+            _isLoading.value = true
+            _error.value = null
         },
-        onFetchError = { e, silent ->
+        onLoudError = { e ->
             // Same contract as a `false` from a loud [fetchAlbumData]: a
-            // thrown repo path must not strand the spinner published there —
-            // clear it, surface the error, and arm the re-entry reload
-            // (loud only; silent keeps the last detail+tracks pair).
-            if (!silent) {
-                _error.value = MixErrorMessage.Raw(e.message ?: "Failed to load album")
-                needsLoudReloadOnReentry = true
-                _isLoading.value = false
-            }
+            // thrown repo path must not strand the spinner published above —
+            // clear it, surface the error (silent keeps the last
+            // detail+tracks pair; the re-arm is the coordinator's).
+            _error.value = MixErrorMessage.Raw(e.message ?: "Failed to load album")
+            _isLoading.value = false
+        },
+        onSilentHeal = {
+            // A silent success heals a failed loud load: clear its error —
+            // never a mix error, which cannot be on screen while the load
+            // failed (the mix button is unreachable from the error screen).
+            _error.value = null
         },
     )
 
@@ -81,10 +84,10 @@ class AlbumDetailViewModel(
     private val _error = composeState<MixErrorMessage?>(null)
     val error: MixErrorMessage? get() = _error.value
 
-    // _error is shared with instant-mix failures, but the re-entry guard
-    // below must only react to LOAD failures — a failed mix must not make
-    // re-entering the album flash a loud reload over loaded content.
-    private var needsLoudReloadOnReentry = false
+    // _error is shared with instant-mix failures; the loud-load re-entry
+    // guard inside [DeferredFetchCoordinator] only reacts to LOAD failures —
+    // a failed mix must not make re-entering the album flash a loud reload
+    // over loaded content.
 
     // Instant-mix choreography (isStarting flag + first-track one-shot +
     // outcome → error mapping) lives in the shared holder; the VM only adapts
@@ -110,16 +113,13 @@ class AlbumDetailViewModel(
     }
 
     /**
-     * Skips an already-loaded album unless [force]: back-stack re-entry re-runs
-     * the screen's `LaunchedEffect`, and a second loud load there would race
-     * the deferred refresh's silent regeneration. An album whose loud load
-     * failed (or a fresh VM) loads; a failed instant mix does not count —
-     * its error shares [_error] but the content stays loaded.
+     * The loud entry — the screen's `LaunchedEffect`, the error screen's
+     * retry. The back-stack re-entry guard (an already-loaded album with no
+     * failed loud load behind it no-ops; a failed one re-arms) lives in
+     * [DeferredFetchCoordinator.load]; [force] is pull-to-refresh.
      */
     fun loadAlbum(albumId: String, force: Boolean = false) {
-        if (!force && currentAlbumId == albumId && _detail.value != null && !needsLoudReloadOnReentry) return
-        currentAlbumId = albumId
-        fetchCoordinator.load { fetchAlbumData(albumId, force = force, silent = false) }
+        fetchCoordinator.load(albumId, force)
     }
 
     fun refreshAlbum(albumId: String) {
@@ -127,37 +127,26 @@ class AlbumDetailViewModel(
     }
 
     /**
-     * The fetch behind both load paths, reporting plain success so
-     * [DeferredFetchCoordinator] owns the failure re-arm. [silent] serves
-     * the deferred-refresh path: no loading state, no error reset, and an
-     * all-or-nothing publish — a failed half keeps the LAST detail+tracks
-     * PAIR on screen (never one fresh half beside one stale half)
-     * (serve-stale-while-revalidate, same philosophy as the detail screens).
+     * The fetch behind both load paths, keyed on the coordinator's mode and
+     * force and reporting plain success so [DeferredFetchCoordinator] owns
+     * the failure re-arm. [FetchMode.SILENT] serves the deferred-refresh
+     * path: no loading state, no error reset, and an all-or-nothing publish
+     * — a failed half keeps the LAST detail+tracks PAIR on screen (never one
+     * fresh half beside one stale half) (serve-stale-while-revalidate, same
+     * philosophy as the detail screens).
      */
-    private suspend fun fetchAlbumData(albumId: String, force: Boolean, silent: Boolean): Boolean {
-        if (!silent) {
-            _isLoading.value = true
-            _error.value = null
-        }
+    private suspend fun fetchAlbumData(albumId: String, mode: FetchMode, force: Boolean): Boolean {
         val ok = coroutineScope {
             val detailDeferred = async { mediaRepository.getMediaDetail(albumId, force = force) }
             val tracksDeferred = async { mediaRepository.getAlbumTracks(albumId, force = force) }
             val detailResult = detailDeferred.await()
             val tracksResult = tracksDeferred.await()
-            if (silent) {
+            if (mode == FetchMode.SILENT) {
                 val detail = detailResult.getOrNull()
                 val tracks = tracksResult.getOrNull()
                 if (detail != null && tracks != null) {
                     _detail.value = detail
                     _tracks.set(tracks)
-                    // A silent success heals a failed loud load: clear its error
-                    // (never a mix error — the mix button is unreachable from
-                    // the error screen) and the guard flag, or re-entry would
-                    // flash-reload healed content.
-                    if (needsLoudReloadOnReentry) {
-                        needsLoudReloadOnReentry = false
-                        _error.value = null
-                    }
                     true
                 } else {
                     false
@@ -169,11 +158,10 @@ class AlbumDetailViewModel(
                 tracksResult
                     .onSuccess { _tracks.set(it) }
                     .onFailure { _error.value = MixErrorMessage.Raw(it.message ?: "Failed to load tracks") }
-                needsLoudReloadOnReentry = !(detailResult.isSuccess && tracksResult.isSuccess)
                 detailResult.isSuccess && tracksResult.isSuccess
             }
         }
-        if (!silent) {
+        if (mode == FetchMode.LOUD) {
             _isLoading.value = false
         }
         return ok

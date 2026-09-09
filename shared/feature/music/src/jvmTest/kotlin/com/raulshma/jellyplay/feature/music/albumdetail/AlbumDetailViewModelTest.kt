@@ -19,7 +19,6 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -458,79 +457,10 @@ class AlbumDetailViewModelTest {
         assertEquals(albumTracks, viewModel.tracks)
     }
 
-    @Test
-    fun deferredRefresh_doesNotStackSilentTwinOnInFlightLoudLoad() = runTest(mainDispatcher) {
-        loadAlbum()
-        advanceUntilIdle()
-
-        // Armed while off-screen...
-        viewModel.deferredRefresher.onScreenActiveChanged(false)
-        userDataEvents.emit(com.raulshma.jellyplay.core.model.UserDataChange("user-1", listOf("t1")))
-        advanceUntilIdle()
-
-        // ...then a loud refresh starts and parks mid-fetch when the deferred
-        // effect consumes the flag: the loud load is the regeneration, so no
-        // silent twin may stack on top of it.
-        val gate = CompletableDeferred<Unit>()
-        coEvery { mediaRepository.getMediaDetail("album1", any()) } coAnswers {
-            gate.await()
-            Result.success(MediaDetail(item = MediaItem(id = "album1", name = "Album", mediaType = MediaType.ALBUM)))
-        }
-        coEvery { mediaRepository.getAlbumTracks("album1", true) } returns Result.success(albumTracks)
-        viewModel.refreshAlbum("album1")
-        viewModel.deferredRefresher.onScreenActiveChanged(true)
-        advanceUntilIdle()
-
-        // Two track fetches total (initial + in-flight loud), not three.
-        coVerify(exactly = 2) { mediaRepository.getAlbumTracks("album1", any()) }
-
-        gate.complete(Unit)
-        advanceUntilIdle()
-        assertEquals("Album", viewModel.detail?.item?.name)
-        assertFalse(viewModel.isLoading)
-    }
-
-    @Test
-    fun deferredRefresh_skippedByInFlightLoudLoad_rearmsForTheNextReentry() = runTest(mainDispatcher) {
-        loadAlbum()
-        advanceUntilIdle()
-
-        // Armed while off-screen...
-        viewModel.deferredRefresher.onScreenActiveChanged(false)
-        userDataEvents.emit(com.raulshma.jellyplay.core.model.UserDataChange("user-1", listOf("t1")))
-        advanceUntilIdle()
-
-        // ...then a loud refresh parks mid-fetch when the deferred effect
-        // consumes the flag: the silent twin skips (two fetches, not three) —
-        // but the skip must re-arm, or the parked loud load's pre-change
-        // result strands the change until the next WS event.
-        val gate = CompletableDeferred<Unit>()
-        coEvery { mediaRepository.getMediaDetail("album1", any()) } coAnswers {
-            gate.await()
-            Result.success(MediaDetail(item = MediaItem(id = "album1", name = "Album", mediaType = MediaType.ALBUM)))
-        }
-        coEvery { mediaRepository.getAlbumTracks("album1", any()) } returns Result.success(albumTracks)
-        viewModel.refreshAlbum("album1")
-        advanceUntilIdle()
-        // The loud load is now PARKED mid-detail-fetch when the deferred
-        // effect consumes the flag: the silent twin skips itself, and the
-        // skip must re-arm — the parked load dispatched before the change
-        // landed, so its result is pre-change data.
-        viewModel.deferredRefresher.onScreenActiveChanged(true)
-        gate.complete(Unit)
-        advanceUntilIdle()
-        assertEquals("Album", viewModel.detail?.item?.name)
-        coVerify(exactly = 2) { mediaRepository.getAlbumTracks("album1", any()) }
-
-        // The next re-entry fires the quiet forced regeneration the skip
-        // promised — still silent: no loading state.
-        viewModel.deferredRefresher.onScreenActiveChanged(false)
-        viewModel.deferredRefresher.onScreenActiveChanged(true)
-        advanceUntilIdle()
-        coVerify(exactly = 3) { mediaRepository.getAlbumTracks("album1", any()) }
-        assertFalse(viewModel.isLoading)
-        assertNull(viewModel.error)
-    }
+    // The no-stack/skip-re-arm choreography pair this suite used to re-pin is
+    // module behaviour now — DeferredFetchCoordinatorTest owns that table;
+    // this suite pins the host adapter's own surfaces (pair publish, heal,
+    // guard, spinner).
 
     // ── Instant mix event consumption ────────────────────────────────────────
 

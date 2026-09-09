@@ -47,6 +47,7 @@ import com.raulshma.jellyplay.core.network.realtime.UserDataRealtimeChannel
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.cache.getOrFetch
 import com.raulshma.jellyplay.core.data.cache.getOrFetchGuarded
+import com.raulshma.jellyplay.core.data.concurrency.AnnouncedStaleness
 import com.raulshma.jellyplay.core.data.concurrency.SingleFlightFetcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.BufferOverflow
@@ -54,7 +55,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.withContext
-import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 
 // Shared by [MediaRepositoryImpl] (the collection-items cache) and the
@@ -205,6 +205,11 @@ class MediaRepositoryImpl(
     }
 
     override fun invalidateForUserDataChange(itemId: String, seriesIdHint: String?) {
+        // The two gap groups this user-data change cannot evict by key (see
+        // [albumTracksStale] / [collectionItemsStale]): arm them alongside
+        // the eviction below so the next read of either group heals itself.
+        albumTracksStale.arm()
+        collectionItemsStale.arm()
         invalidateUserDataCaches(itemId, seriesIdHint)
     }
 
@@ -223,17 +228,29 @@ class MediaRepositoryImpl(
         clock = { timeSource.nowElapsedRealtimeMillis() },
     )
 
-    // Lazy staleness for the home-sections cache (#157): the eager eviction
-    // this replaces cleared the cache at every user-data mutation, forcing
-    // the NEXT read into a full blocking refetch even when no consumer was
-    // alive to ask for fresh data. The marker inverts the timing without
-    // losing the guarantee — a synthetic [notifyUserDataChanged] (every
-    // confirmed own-write path: flips, delivered STOPs, the outbox drain)
-    // arms it, and the next non-forced getHomeSections consumes it as a
-    // one-shot force. Same freshness as the eager clear, zero refetches
-    // while nobody reads home. Server WS pushes do NOT arm it — same scope
-    // as the eager eviction they replace — HomeRefresher serves those live.
-    private val homeSectionsStale = AtomicBoolean(false)
+    // Lazy staleness for the announced-user-data read groups (#157): the
+    // eager eviction this replaces cleared caches at every user-data
+    // mutation, forcing the NEXT read into a full blocking refetch even when
+    // no consumer was alive to ask for fresh data. Each marker inverts the
+    // timing without losing the guarantee — a confirmed own-write arms it,
+    // and the next non-forced read of the group consumes it as a one-shot
+    // force ([staleAwareRead] below owns that choreography). Same freshness
+    // as the eager clear, zero refetches while nobody reads the group.
+    // Server WS pushes do NOT arm them — same scope as the eager eviction
+    // they replace — HomeRefresher serves those live.
+    private val homeSectionsStale = AnnouncedStaleness()
+    // The two "gap" groups the composite user-data eviction cannot reach by
+    // key: a TRACK flip evicts `tracks_<trackId>` but never the album's
+    // `tracks_<albumId>` entry, and a collection MEMBER flip evicts
+    // `detail_<itemId>` but never the collection's page keys — the flipped
+    // item's own ids are all the eviction has, and the owning album's /
+    // collection's identity is not cached anywhere in the reverse direction.
+    // Their markers are armed alongside that eviction (and by the synthetic
+    // announce), so the next non-forced read of either group heals itself
+    // instead of waiting for the manual force lever the detail hosts used to
+    // hand-thread.
+    private val albumTracksStale = AnnouncedStaleness()
+    private val collectionItemsStale = AnnouncedStaleness()
 
 
     init {
@@ -278,11 +295,13 @@ class MediaRepositoryImpl(
         // twice and double-bump the catalogue's epoch on each transition.
         sessionCacheRegistry.registerAction("media-identity-clear") { transition ->
             detailCaches.invalidateAll()
-            // The #157 staleness marker is identity-scoped state in spirit (it
-            // is armed by the PREVIOUS user's confirmed writes); without this
-            // reset it survives the switch and forces the next user's first
-            // home read into one redundant refetch.
-            homeSectionsStale.set(false)
+            // The #157 staleness markers are identity-scoped state in spirit
+            // (they are armed by the PREVIOUS user's confirmed writes);
+            // without this reset they survive the switch and force the next
+            // user's first read of each group into one redundant refetch.
+            homeSectionsStale.reset()
+            albumTracksStale.reset()
+            collectionItemsStale.reset()
             // Clear the PREVIOUS identity's persisted home-section SWR
             // rows — scoped, not wholesale, so a multi-account server
             // keeps the other users' snapshots for their next cold
@@ -318,15 +337,13 @@ class MediaRepositoryImpl(
         force: Boolean,
     ): Result<HomeSectionsResult> {
         val cacheKey = query.cacheKey()
-        // Consume the #157 lazy staleness marker as a one-shot force: an
-        // announced user-data write (see [homeSectionsStale]) makes this
-        // read bypass the cached payload — a fresh Continue Watching within
-        // the TTL window, not after it. getAndSet (not a read-then-clear):
-        // an announce racing this fetch re-arms the marker for the NEXT
-        // read instead of being swallowed by this one.
-        val stalenessConsumed = homeSectionsStale.getAndSet(false)
-        val effectiveForce = force || stalenessConsumed
-        return try {
+        // Consume the #157 lazy staleness marker as a one-shot force (see
+        // [homeSectionsStale]): an announced user-data write makes this read
+        // bypass the cached payload — a fresh Continue Watching within the
+        // TTL window, not after it. The consume/re-arm choreography (an
+        // announce racing the fetch re-arms for the NEXT read; a failed or
+        // cancelled consuming read re-arms) lives in [staleAwareRead].
+        return staleAwareRead(homeSectionsStale, force) { effectiveForce ->
             homeSectionsCache.getOrFetch(
                 { homeSession.cacheIdentity() },
                 cacheKey,
@@ -343,19 +360,37 @@ class MediaRepositoryImpl(
                 // bypasses the network layer's sub-call caches too, not just
                 // the in-memory one.
                 apiClient.getHomeSections(query, effectiveForce)
-            }.also { result ->
-                // A consumed marker must not die with the read that spent it:
-                // on failure the fetch produced nothing, and the pre-announce
-                // cached payload would serve until the next announce or the
-                // TTL — exactly the window #157 exists to close. Re-arm on
-                // every non-success (the thrown path below covers this
-                // caller's own cancellation). set (not compareAndSet): an
-                // announce that raced this fetch already re-armed it, and
-                // the write is idempotent either way.
-                if (stalenessConsumed && result.isFailure) homeSectionsStale.set(true)
+            }
+        }
+    }
+
+    /**
+     * The one choreography for an announced-staleness read group (see
+     * [AnnouncedStaleness]): [read] receives the EFFECTIVE force — the
+     * caller's manual lever OR the consumed one-shot marker — so a consumed
+     * marker propagates into the read's own eviction and any nested fetch
+     * flag (the api client's sub-call caches), not just the in-memory cache.
+     * The marker is consumed even by a manually forced read (that read is at
+     * least as fresh as the announce, so leaving the marker armed would only
+     * buy one redundant forced read later) and re-armed on BOTH failure
+     * shapes: a returned [Result.failure] and a thrown failure, which covers
+     * this caller's own cancellation — a consumed marker must not die with
+     * the read that spent it, or the pre-announce cached payload would serve
+     * until the next announce or the TTL.
+     */
+    private suspend fun <T> staleAwareRead(
+        marker: AnnouncedStaleness,
+        force: Boolean,
+        read: suspend (effectiveForce: Boolean) -> Result<T>,
+    ): Result<T> {
+        val stalenessConsumed = marker.consume()
+        val effectiveForce = force || stalenessConsumed
+        return try {
+            read(effectiveForce).also { result ->
+                if (stalenessConsumed && result.isFailure) marker.rearm()
             }
         } catch (t: Throwable) {
-            if (stalenessConsumed) homeSectionsStale.set(true)
+            if (stalenessConsumed) marker.rearm()
             throw t
         }
     }
@@ -640,11 +675,16 @@ class MediaRepositoryImpl(
         apiClient.getArtistAlbums(artistId, limit)
 
     override suspend fun getAlbumTracks(albumId: String, force: Boolean): Result<List<MediaItem>> =
-        // Epoch-guarded write — see DetailCacheGroup's key grammar/KDoc;
-        // force drops the cached list first (the deferred silent refresh's
-        // freshness lever — a track flip evicts tracks_<trackId>, never the
-        // album's tracks_<albumId> key).
-        detailCaches.albumTracks(albumId, force)
+        // Announced-staleness read (see [albumTracksStale]): a track flip
+        // arms the marker because the composite user-data eviction only
+        // drops the flipped item's OWN `tracks_<trackId>` key, never the
+        // album's `tracks_<albumId>` entry — the next non-forced read
+        // consumes the marker as the force that drops it, so the album's
+        // track rows heal without a caller-side force. Epoch-guarded write —
+        // see DetailCacheGroup's key grammar/KDoc.
+        staleAwareRead(albumTracksStale, force) { effectiveForce ->
+            detailCaches.albumTracks(albumId, effectiveForce)
+        }
 
     override suspend fun getMusicVideos(parentId: String, limit: Int): Result<List<MediaItem>> =
         apiClient.getMediaItems(
@@ -695,20 +735,23 @@ class MediaRepositoryImpl(
         startIndex: Int,
         limit: Int,
         force: Boolean,
-    ): Result<SearchResult> {
-        // force drops the collection's cached pages first — the prefix evict
-        // drops every page, so a future paginated caller forcing page 2 also
-        // heals the earlier pages (the deferred silent refresh's freshness
-        // lever — a member item's flip evicts detail_<itemId>, never the
-        // collection's page key).
-        if (force) invalidateCollectionItemsCache(collectionId)
-        return collectionItemsCache.getOrFetch(
-            { homeSession.cacheIdentity() },
-            collectionItemsKey(collectionId, startIndex, limit),
-        ) {
-            apiClient.getCollectionItems(collectionId, startIndex, limit)
+    ): Result<SearchResult> =
+        // Announced-staleness read (see [collectionItemsStale]): a member
+        // item's flip arms the marker because the composite user-data
+        // eviction drops `detail_<itemId>` but never the collection's page
+        // key — the next non-forced read consumes the marker as the force
+        // that drops the collection's whole page family (the prefix evict
+        // drops every page, so a future paginated caller healing page 2 also
+        // heals the earlier pages).
+        staleAwareRead(collectionItemsStale, force) { effectiveForce ->
+            if (effectiveForce) invalidateCollectionItemsCache(collectionId)
+            collectionItemsCache.getOrFetch(
+                { homeSession.cacheIdentity() },
+                collectionItemsKey(collectionId, startIndex, limit),
+            ) {
+                apiClient.getCollectionItems(collectionId, startIndex, limit)
+            }
         }
-    }
 
     override suspend fun getCollections(limit: Int): Result<List<CollectionSummary>> =
         // Not cached: the picker refetches on every open so a freshly-created
@@ -874,11 +917,16 @@ class MediaRepositoryImpl(
         // No identity → nothing is keyed to a user yet; emitting would only
         // risk refreshing another account's screens on a stale collector.
         val userId = homeSession.currentIdentitySnapshot()?.userId ?: return
-        // The confirmed write also arms the lazy home-sections staleness
-        // marker (#157 — see [homeSectionsStale]): the next home read
-        // refetches even if no HomeRefresher was collecting when this
-        // landed (VM off the back stack / recreated cold within the TTL).
-        homeSectionsStale.set(true)
+        // The confirmed write also arms the lazy staleness markers (#157 —
+        // see [homeSectionsStale] and its siblings): the next read of each
+        // announced-stale group refetches even if no consumer was collecting
+        // when this landed (VM off the back stack / recreated cold within
+        // the TTL). The announce names only item ids, so the gap groups
+        // (album tracks, collection pages) arm coarsely — one marker per
+        // group, never per item.
+        homeSectionsStale.arm()
+        albumTracksStale.arm()
+        collectionItemsStale.arm()
         syntheticUserDataChanges.tryEmit(UserDataChange(userId, itemIds.distinct()))
     }
 
@@ -941,7 +989,13 @@ class MediaRepositoryImpl(
      * silent forced refresh, open screens) heal live, and the announcement
      * also arms the lazy staleness marker ([homeSectionsStale], #157) so the
      * next home READ refetches even when no consumer was collecting. The
-     * 60s TTL remains the staleness ceiling for the no-event path, and
+     * gap groups that cannot be evicted by key (album tracks, collection
+     * pages — see [albumTracksStale] / [collectionItemsStale]) arm their
+     * markers here, alongside the first eviction — arming is a user-data
+     * statement, so it stays with this wrapper (and
+     * [invalidateForUserDataChange]), not inside the eviction itself (which
+     * [invalidateFor]'s ALBUM branch also reaches from forced detail reads).
+     * The 60s TTL remains the staleness ceiling for the no-event path, and
      * [invalidateCaches] still clears the cache wholesale.
      */
     private suspend fun <T> withUserDataMutationCacheInvalidation(
@@ -950,6 +1004,12 @@ class MediaRepositoryImpl(
         mutation: suspend () -> Result<T>,
     ): Result<T> {
         val seriesId = seriesIdHint ?: cachedSeriesId(itemId)
+        // Arm the gap-group markers BEFORE the mutation, matching the
+        // pre-eviction this wrapper already runs: the marker records "a
+        // user-data write is in flight", which is true even if the write
+        // then fails (the pre-eviction already dropped the item's own keys).
+        albumTracksStale.arm()
+        collectionItemsStale.arm()
         invalidateUserDataCaches(itemId, seriesId)
         return try {
             mutation()
@@ -988,6 +1048,19 @@ class MediaRepositoryImpl(
         // per-seed similar) carry the same per-item UserData — drop them too,
         // or a home fetch within the sub-call TTL serves the pre-write rows.
         apiClient.invalidateHomeSubcallCaches()
+        // The gap groups the per-item eviction above cannot reach (see
+        // [albumTracksStale] / [collectionItemsStale]): a track's or a
+        // collection member's flip carries per-item UserData into the rows
+        // its album/collection serves, but the eviction only knows the
+        // flipped item's own keys. Arming lives with the USER-DATA callers
+        // (the mutation wrapper and [invalidateForUserDataChange]), not here:
+        // this eviction also serves [invalidateFor]'s ALBUM branch — a forced
+        // detail read, no user-data write behind it — and a pull-to-refresh
+        // must not arm markers (one redundant forced read of whichever
+        // album/collection is read next, healing nothing). Coarse by design
+        // (one marker per group, like the home marker): a flip on an
+        // unrelated item costs at most one forced read of whichever
+        // album/collection is read next.
         val seriesId = seriesIdHint
             ?: cached?.item?.seriesId
             ?: cached?.takeIf { it.item.mediaType == MediaType.SERIES }?.item?.id

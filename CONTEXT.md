@@ -470,6 +470,35 @@ cleared seasons/episodes/fetchedSeasonIds but leaked the sorted mirror
 across navigation into smart-play resolution — the drift the builder
 kills). Pinned in `DetailViewModelTest`.
 
+**`DetailContentCallbacks`** (beside `DetailContentState`) is bundled,
+not flat: nine `@Immutable` per-concern bundles — `ArtworkCallbacks` (3
+URL getters), `PlaybackCallbacks` (10: play dispatches incl. chapters/
+extras/album tracks, stream + local-subtitle selection, instant mix,
+watch party), `DownloadCallbacks` (11: picker, per-series download,
+delete family, resync + download-details entry points), `SeasonsCallbacks`
+(6: season select/pin, ordering + compact toggles, season-level
+mark-played), `UserDataCallbacks` (9: favorite + played toggles, the
+hide/show next-up + continue-watching + detail-up-next trio), plus
+`SeerrCallbacks`, `AddToCallbacks`, `NavigationCallbacks`,
+`ScreenCallbacks` — each defaulting to its own no-op instance, so a
+section capability edits its bundle + its section instead of the former
+5-file keystroke (DetailUiState → DetailContentState → screen wiring →
+callbacks → section). The grouping rule is "the section it serves":
+season-level mark-played rides `SeasonsCallbacks` while the item-level
+toggle rides `UserDataCallbacks` (the shared dispatch is not the
+grouping unit), and the download-lifecycle deletes ride
+`DownloadCallbacks` even though the seasons section consumes them.
+`MediaDetailScreen`'s container `remember` keys on the nine bundles
+(was 17 flat keys whose wiring had already drifted once at 22); each
+bundle's own keys are exactly the locals its lambdas capture, so no
+bundle can go stale now that the others are stable. Four dead lambdas
+died with the fold (`getSeerrPosterUrl` — Seerr cards read
+`seerrItem.posterUrl` — plus `onResync`/`onRedownloadMedia`/
+`onClearResync`, whose sheet calls `viewModel.resync.*` directly), and
+`DetailViewModel.getSeerrPosterUrl` with them. The ~35-field
+`DetailContentState` projection stays flat deliberately (Compose
+skippability, not behaviour-hiding).
+
 **`AddToTargetActions<T>`** (`shared/feature/details/src/commonMain/kotlin/.../AddToTargetActions.kt`)
 is the add-to-container concern for ONE generic target type:
 `openPicker` / `dismissPicker` / `openCreateDialog` / `dismissCreateDialog` /
@@ -1287,36 +1316,100 @@ the pre-change data until the next WS event. Cancellation never re-arms
 
 The host choreography (collection/person/album detail + music home) is one
 shape, owned by **`DeferredFetchCoordinator`**
-(`shared/core/ui/.../viewmodel/DeferredFetchCoordinator.kt`): one fetch-job
-slot for loud AND silent loads — a loud load cancels an in-flight silent one,
-the deferred refresh skips itself while any load is active (the skip re-arms),
-and any fetch reporting failure re-arms (a loud failure with nothing pending
-over-arms one quiet refetch). Hosts keep their own `currentXId` + back-stack
-re-entry guard (the loud load no-ops when the same item already shows:
-Success, no error) and report plain success from the fetch body; silent
-fetches publish stale-while-revalidate: no loading state, no error reset, no
-toast, all-or-nothing (album detail keeps the last detail+tracks PAIR on a
-half failure — never one fresh half beside one stale half). Music home's
-silent path additionally never touches `isLoading` (the pull-to-refresh
-spinner keys off it), reports failure while offline (re-arm instead of
-stranding the flag) and rethrows `CancellationException` so a cancelled loud
-load can't mask as a fetch failure and strand its spinner. Pinned by
-`DeferredUserDataRefresherTest` (core/ui) plus the four hosts'
-deferred-refresh suites.
+(`shared/core/ui/.../viewmodel/DeferredFetchCoordinator.kt`) — hosts adapt,
+they no longer choreograph. `load(id, force = false)` is the loud entry; the
+coordinator tracks what that id's last completed fetch did, which IS the
+back-stack re-entry guard the hosts used to hand-roll (`currentXId` + the
+`state is Success` checks + `needsLoudReloadOnReentry`): a loud load for the
+id already showing whose last fetch succeeded is a no-op, a previously
+failed one re-arms so re-entry reloads, and a silent success heals the guard
+through the `onSilentHeal` hook (so the album detail clears its LOAD error
+without ever touching a mix error that shares the field). `force`
+(pull-to-refresh, retry) bypasses the guard and reaches the fetch body as
+the repository cache-bypass flag, exactly as the silent regeneration's
+always-forced reads do; music home has no identity to guard and
+instantiates with `Unit`, forcing every loud entry. The fetch body receives
+a `FetchMode` (LOUD/SILENT) plus the force flag — the hand-threaded
+`silent: Boolean` is gone — and owns only how to publish per mode: silent
+serves stale-while-revalidate (no loading state, no error reset, no toast,
+all-or-nothing — album detail keeps the last detail+tracks PAIR on a half
+failure, never one fresh half beside one stale half; music home reports
+failure while offline so the consumed flag cannot strand, and its silent
+path never touches `isLoading`, which the pull-to-refresh spinner keys
+off). The loud UI lifecycle is module-owned through constructor hooks:
+`onLoudStart` publishes the Loading state synchronously when a loud load is
+accepted (one ordering where hosts used to drift between
+publish-inside-the-fetch and publish-before-the-coordinator), and
+`onLoudError` is the thrown-fetch twin of the `false` path — a repo
+exception clears the Loading it would strand and surfaces the error, loud
+only. The single-flight/re-arm table is unchanged: one fetch-job slot for
+loud AND silent loads — a loud load cancels an in-flight silent one
+(re-arming first), the deferred refresh skips itself while any load is
+active (the skip re-arms), any fetch reporting failure re-arms (a loud
+failure with nothing pending over-arms one quiet refetch), and cancellation
+never re-arms. The fetch invocation is wrapped in
+`runCatchingRethrowingCancellation` (core/ui depends on
+:shared:core:concurrency for it), so the old "fetch bodies must rethrow
+`CancellationException`" rule is enforced at the module boundary — a
+cancelled loud load cannot mask as a fetch failure and strand its spinner.
+Throwables that are not `Exception`s (an `Error`) are not fetch failures
+either: `runFetch` rethrows them and they surface through the scope as they
+always did.
+`DeferredFetchCoordinatorTest` (core/ui) pins that whole
+single-flight/re-arm/identity table once; the four hosts' suites pin only
+their adapter surfaces (pair publish, offline reporting, spinner/Loading
+clears, loud-failure over-arm and re-entry reload-after-failure expressed
+through each host's public interface, same-id no-op).
 
-Data side: **`MediaRepositoryImpl.getAlbumTracks(albumId, force)`** grew the
-freshness lever `detail(itemId, force)` already had (`DetailCacheGroup.albumTracks`
-drops the cached list + epoch-bumps before the read) because a TRACK flip
-evicts `tracks_<trackId>` and never the album's `tracks_<albumId>` key — the
-album deferred refresh's forced silent regeneration is the only way its
-track rows heal before the 2-minute TTL. The album's `getMediaDetail(force)`
-half was already forced. **`homeSectionsStale`** (`AtomicBoolean` marker on
-`MediaRepositoryImpl`) inverts the home-sections cache's eager eviction: a
-synthetic `notifyUserDataChanged` (every confirmed own-write path — flips,
-delivered STOPs, the outbox drain) arms it and the next non-forced
-`getHomeSections` consumes it as a one-shot force, so zero refetches happen
-while nobody reads home (server WS pushes do NOT arm it — `HomeRefresher`
-serves those live).
+Data side: the #157 lazy-staleness rule lives in **`AnnouncedStaleness`**
+(`shared/core/data` jvmShared `concurrency/`, beside `SingleFlightFetcher`):
+arm on announce → consume as a one-shot force on the next read (forced
+reads consume it too — such a read is at least as fresh as the announce, so
+leaving the marker armed would only buy one redundant forced read later)
+→ a failed/cancelled consuming read re-arms → reset on identity switch (the
+KDoc cites the two fixed bug classes: a consumed marker dying with a failed
+read, 1ba22d962; a consumed marker not propagating its force into the
+network layer's nested sub-call caches, 53b90d228). `MediaRepositoryImpl`
+holds one marker per announced-stale read group — `homeSectionsStale`,
+`albumTracksStale`, `collectionItemsStale` — and one private choreography,
+`staleAwareRead(marker, force) { effectiveForce -> … }`, that computes
+`effectiveForce = force || marker.consume()`, hands it to the read (so a
+consumed marker propagates past the repository boundary) and re-arms on
+both failure shapes (returned `Result.failure` and thrown, cancellation
+included). Arming: the synthetic `notifyUserDataChanged` (every confirmed
+own-write path — flips, delivered STOPs, the outbox drain) arms ALL THREE;
+the two gap groups are additionally armed by the USER-DATA callers of the
+composite eviction (`withUserDataMutationCacheInvalidation` and the
+`invalidateForUserDataChange` seam the STOP path uses) — NOT inside
+`invalidateUserDataCaches` itself, because that eviction also serves
+`invalidateFor(ALBUM)` from every FORCED album-detail read, and a
+pull-to-refresh must not arm markers (one redundant forced read of
+whichever album/collection is read next, healing nothing). That
+gap-group arming is deliberately UNCONDITIONAL — it rides the eviction,
+not the write's confirmation: the flip wrapper arms before the mutation
+runs, in step with its pre-eviction (which drops the item's own keys
+even when the write then fails), and the STOP path's pre-send purge
+arms even when the STOP then stages offline (the local mirror already
+reflects the staged position, so the group IS stale as locally visible;
+the outbox drain's later announce is the confirmed half). Both
+divergences cost at most one redundant forced read — the coarse-marker
+budget the group already accepts. A TRACK flip
+evicts `tracks_<trackId>` and never the album's `tracks_<albumId>` key, a
+collection MEMBER flip evicts
+`detail_<itemId>` and never the collection's page keys, so the album's track
+rows and the collection's pages now heal on their next non-forced read
+without a caller-side force (the markers are coarse — one per group, so a
+flip costs at most one forced read of whichever album/collection is read
+next; identity switch resets all three in the `media-identity-clear`
+action). `getMediaDetail` deliberately has NO marker: its announce path
+already eagerly evicts the item's detail entry (`DetailCacheGroup.invalidateUserData`
+→ `invalidateItem`), so the next read is a guaranteed fresh miss — a marker
+would only double-evict. `PlaybackRepositoryImpl`'s segments cache follows
+the same registry doctrine as `DetailCacheGroup`: its identity reaction is
+the registry's plain wholesale clear PLUS a registered action that bumps
+`segmentsEpoch`, so an in-flight previous-identity fetch cannot write back
+into the just-cleared cache. Server WS pushes arm none of these —
+`HomeRefresher` serves those live.
 
 ## Concurrency (`shared/core/concurrency`)
 
@@ -1398,6 +1491,22 @@ tables (`parentalRatingAge` / the sort-token parser) instead of carrying
 is invisible to commonMain). Both clients compile against the single policy
 in `:shared:core:network:jvmTest`; the wasm client has no test lane of its
 own, which is exactly why the policies must not live there.
+**`WasmMirrorContractTest`** (network `jvmTest`, the
+`SettingsCatalogScreenContractTest` pattern) is the mirror's source
+contract: it reads `KtorWasmLibraryApiClient` and `LibraryApiClientImpl`
+at test runtime, extracts per endpoint the verb, path template and
+query-parameter names (the JVM side resolved through an explicit
+`sdkEndpoints` table verified against the jellyfin-api 1.8.12 sources),
+and asserts per-method parity — method-set parity both directions plus
+per-method wire-shape equality, with declared-divergence exception slots
+(currently empty; one documented placeholder alias: wasm's `entryId`
+names the SDK's `{itemId}` segment in `movePlaylistItem`). The same
+machinery covers the user-client pair (`KtorWasmUserApiClient` ↔
+`UserApiClientImpl`); the auth and playback wasm clients are noted
+follow-ups, and the ARR/Seerr/Tmdb wasm mirrors use a different
+URL-builder idiom on both sides so they would need different extraction.
+Its first run caught a real drift — the wasm `emptyLibraryFallback`'s
+latest-media probe omitted the SDK's always-sent `groupItems=true`.
 `JellyfinApiEngine.requireUserId()` / `currentUserId()` (internal, beside
 `requireApi()`) are the named user-id contract replacing the 15+
 hand-rolled `currentUser.value?.id` guards across the jvmShared clients —

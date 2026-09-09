@@ -316,6 +316,11 @@ class MediaRepositoryHomeSectionsCacheTest {
         assertEquals(listOf(false, false), forcedFlags)
     }
 
+    // The album-tracks / collection-items gap-group arming (the #157 rule
+    // generalized) is pinned by MediaRepositoryImplTest's marker block —
+    // same arming path (a flip funnels into notifyUserDataChanged), so
+    // re-pinning it through the direct announce here would only duplicate.
+
     @Test
     fun `getHomeSections re-fetches once the 60s memory TTL expires`() = runBlocking {
         // The TTL expiry itself had zero coverage: walk the shared fake clock

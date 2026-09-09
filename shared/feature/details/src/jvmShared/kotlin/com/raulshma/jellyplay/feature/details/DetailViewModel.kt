@@ -29,7 +29,6 @@ import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
 import com.raulshma.jellyplay.core.data.playback.InstantMixError
 import com.raulshma.jellyplay.core.data.playback.InstantMixStateHolder
 import com.raulshma.jellyplay.core.data.playback.toInstantMixOutcome
-import com.raulshma.jellyplay.core.model.seerr.buildPosterUrl
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.isAudioType
@@ -1278,9 +1277,6 @@ class DetailViewModel internal constructor(
         val generation = ++seerrDataGeneration
         loadSeerrData(detail, generation)
     }
-
-    fun getSeerrPosterUrl(posterPath: String?): String? =
-        posterPath?.let { buildPosterUrl(it) }
 
     // ── Offline / download-lifecycle management ──────────────────────────
     // Ports the operations previously owned by OfflineDetailViewModel and

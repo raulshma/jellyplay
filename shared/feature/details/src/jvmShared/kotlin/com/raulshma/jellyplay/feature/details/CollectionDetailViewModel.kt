@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.ui.viewmodel.DeferredFetchCoordinator
 import com.raulshma.jellyplay.core.ui.viewmodel.DeferredUserDataRefresher
+import com.raulshma.jellyplay.core.ui.viewmodel.FetchMode
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -26,23 +27,16 @@ class CollectionDetailViewModel constructor(
     private val _uiState = MutableStateFlow<CollectionDetailUiState>(CollectionDetailUiState.Loading)
     val uiState: StateFlow<CollectionDetailUiState> = _uiState.asStateFlow()
 
-    /** The loaded collection — the deferred refresh reloads it silently. */
-    private var currentCollectionId: String? = null
-
-    private val fetchCoordinator = DeferredFetchCoordinator(
+    private val fetchCoordinator = DeferredFetchCoordinator<String>(
         userDataChanges = mediaRepository.userDataChanges,
         scope = scope,
-        silentFetch = {
-            currentCollectionId?.let { fetchCollection(it, silent = true) } ?: true
-        },
-        onFetchError = { e, silent ->
+        fetch = ::fetchCollection,
+        onLoudStart = { _uiState.value = CollectionDetailUiState.Loading },
+        onLoudError = { e ->
             // Same contract as a `false` from a loud [fetchCollection]: a
             // thrown repo path must not strand the Loading state published
-            // in [loadCollection] — swap to Error (loud only; silent keeps
-            // the last Success).
-            if (!silent) {
-                _uiState.value = CollectionDetailUiState.Error(e.message ?: "Failed to load collection")
-            }
+            // above — swap to Error (silent keeps the last Success).
+            _uiState.value = CollectionDetailUiState.Error(e.message ?: "Failed to load collection")
         },
     )
 
@@ -50,30 +44,28 @@ class CollectionDetailViewModel constructor(
      * User-data changes while another screen is up (watched flip elsewhere,
      * outbox drain landing) only mark this list stale; the single silent
      * reload fires when the screen is next entered (see
-     * [DeferredUserDataRefresher]) — never mid-scroll.
+     * [DeferredUserDataRefresher]) — never mid-scroll. The whole load
+     * lifecycle — including the back-stack re-entry guard (an
+     * already-showing Success no-ops; an Error re-arms) — lives in
+     * [DeferredFetchCoordinator].
      */
     val deferredRefresher: DeferredUserDataRefresher get() = fetchCoordinator.deferredRefresher
 
+    /** The loud entry — the screen's `LaunchedEffect` and the error screen's retry. */
     fun loadCollection(collectionId: String) {
-        // Back-stack re-entry re-runs the screen's LaunchedEffect; a second
-        // loud load over an already-showing Success would race the deferred
-        // refresh's silent regeneration (and flash Loading over content the
-        // user was returning to). An Error state (or a fresh VM) loads.
-        if (currentCollectionId == collectionId && _uiState.value is CollectionDetailUiState.Success) return
-        currentCollectionId = collectionId
-        _uiState.value = CollectionDetailUiState.Loading
-        fetchCoordinator.load { fetchCollection(collectionId, silent = false) }
+        fetchCoordinator.load(collectionId)
     }
 
     /**
-     * (Re)fetches the collection's detail + items, reporting plain success so
-     * [DeferredFetchCoordinator] owns the failure re-arm. [silent] serves
-     * the deferred-refresh path: a fetch failure keeps the last Success
-     * instead of flashing an Error screen over content the user was just
-     * looking at — serve-stale-while-revalidate, same philosophy as the home
-     * refresher.
+     * (Re)fetches the collection's detail + items, keyed on the
+     * coordinator's mode and force and reporting plain success so
+     * [DeferredFetchCoordinator] owns the failure re-arm.
+     * [FetchMode.SILENT] serves the deferred-refresh path: a fetch failure
+     * keeps the last Success instead of flashing an Error screen over
+     * content the user was just looking at — serve-stale-while-revalidate,
+     * same philosophy as the home refresher.
      */
-    private suspend fun fetchCollection(collectionId: String, silent: Boolean): Boolean {
+    private suspend fun fetchCollection(collectionId: String, mode: FetchMode, force: Boolean): Boolean {
         return coroutineScope {
             // Silent = the deferred regeneration, armed by an announced
             // user-data write: force BOTH halves so the announce heals now —
@@ -82,9 +74,9 @@ class CollectionDetailViewModel constructor(
             // write touching the collection item itself (favorite from
             // elsewhere) via the detail read. Same two levers the album
             // detail's silent refresh uses.
-            val detailDeferred = async { mediaRepository.getMediaDetail(collectionId, force = silent) }
+            val detailDeferred = async { mediaRepository.getMediaDetail(collectionId, force = force) }
             val itemsDeferred = async {
-                mediaRepository.getCollectionItems(collectionId, limit = 100, force = silent)
+                mediaRepository.getCollectionItems(collectionId, limit = 100, force = force)
             }
 
             val detailResult = detailDeferred.await()
@@ -98,7 +90,7 @@ class CollectionDetailViewModel constructor(
                 )
                 true
             } else {
-                if (!silent) {
+                if (mode == FetchMode.LOUD) {
                     _uiState.value = CollectionDetailUiState.Error(failure.message ?: "Failed to load collection")
                 }
                 false

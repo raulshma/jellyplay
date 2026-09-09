@@ -214,6 +214,27 @@ class MusicHomeViewModelTest {
     }
 
     @Test
+    fun loadSections_secondEntryAfterSuccess_stillFetches() = runTest(mainDispatcher) {
+        // The coordinator adapts with Unit and forces every loud entry —
+        // no identity to guard, unlike the detail hosts' same-id re-entry
+        // no-op. A second loadSections after a SUCCESSFUL first load must
+        // still hit the repository, or pull-to-refresh/retry would strand
+        // the screen on the first payload.
+        stubHomeQueries(favoriteArtists = listOf(item("a1", "Artist")))
+        createViewModel()
+
+        advanceUntilIdle()
+        coVerify(exactly = 1) { mediaRepository.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) }
+
+        viewModel.loadSections()
+        advanceUntilIdle()
+
+        coVerify(exactly = 2) { mediaRepository.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) }
+        assertEquals(1, viewModel.uiState.value.sections.size)
+        assertFalse(viewModel.uiState.value.isLoading)
+    }
+
+    @Test
     fun offlineMode_clearsSectionsAndUpdatesState() = runTest(mainDispatcher) {
         stubHomeQueries(favoriteArtists = listOf(item("a1", "Artist")))
         createViewModel()
@@ -362,41 +383,9 @@ class MusicHomeViewModelTest {
         assertEquals(1, viewModel.uiState.value.sections.size)
     }
 
-    @Test
-    fun deferredRefresh_doesNotStackSilentLoadOnAnInFlightLoudLoad() = runTest(mainDispatcher) {
-        stubHomeQueries(favoriteArtists = listOf(item("a1", "Artist")))
-        createViewModel()
-        advanceUntilIdle()
-        assertEquals(1, viewModel.uiState.value.sections.size)
-
-        // Armed while off-screen...
-        viewModel.deferredRefresher.onScreenActiveChanged(false)
-        userDataEvents.emit(UserDataChange("user-1", listOf("t1")))
-        advanceUntilIdle()
-
-        // ...then a loud refresh parks mid-fetch when the deferred effect
-        // consumes the flag: the loud load is the regeneration, so no silent
-        // twin may stack on top of it (last-writer-wins would let the slower
-        // fetch overwrite fresher results, and its bare isLoading write would
-        // kill the loud load's pull-to-refresh spinner).
-        val gate = CompletableDeferred<Unit>()
-        coEvery { mediaRepository.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) } coAnswers {
-            gate.await()
-            Result.success(SearchResult(listOf(item("a2", "Artist 2")), 1, 0))
-        }
-        viewModel.refresh()
-        viewModel.deferredRefresher.onScreenActiveChanged(true)
-        advanceUntilIdle()
-
-        coVerify(exactly = 2) { mediaRepository.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) }
-        assertTrue(viewModel.uiState.value.isLoading, "the loud load's spinner survives the deferred activation")
-
-        gate.complete(Unit)
-        advanceUntilIdle()
-        assertFalse(viewModel.uiState.value.isLoading)
-        assertEquals(1, viewModel.uiState.value.sections.size)
-        assertEquals("Artist 2", viewModel.uiState.value.sections.single().items.single().name)
-    }
+    // The no-stack/skip-re-arm/cancel-re-arm choreography triple this suite
+    // used to re-pin is module behaviour now — DeferredFetchCoordinatorTest
+    // owns that table; these suites pin the host adapters' own surfaces.
 
     @Test
     fun refresh_cancelledByALaterLoudLoad_doesNotMaskAsFailureOrStrandSpinner() = runTest(mainDispatcher) {
@@ -426,94 +415,6 @@ class MusicHomeViewModelTest {
         assertNull(viewModel.uiState.value.error)
         verify(exactly = 0) { userMessageBus.error(any()) }
         assertEquals("Artist 2", viewModel.uiState.value.sections.single().items.single().name)
-    }
-
-    @Test
-    fun deferredRefresh_cancelledByALoudLoad_rearmsConservatively() = runTest(mainDispatcher) {
-        stubHomeQueries(favoriteArtists = listOf(item("a1", "Artist")))
-        createViewModel()
-        advanceUntilIdle()
-        assertEquals(1, viewModel.uiState.value.sections.size)
-
-        val gate = CompletableDeferred<Unit>()
-        coEvery { mediaRepository.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) } coAnswers {
-            gate.await()
-            Result.success(SearchResult(listOf(item("a2", "Artist 2")), 1, 0))
-        }
-
-        // Armed while off-screen; re-entry starts the silent regeneration,
-        // which parks mid-fetch. A loud load then cancels it — the cancel
-        // must re-arm conservatively: the VM could have been reused for a
-        // new subject the loud load never regenerates, and only the re-armed
-        // flag can heal that data on a later re-entry. When both loads
-        // target the same data (as here) the re-arm over-arms at worst: one
-        // redundant quiet refetch on the next re-entry.
-        viewModel.deferredRefresher.onScreenActiveChanged(false)
-        userDataEvents.emit(UserDataChange("user-1", listOf("t1")))
-        advanceUntilIdle()
-        viewModel.deferredRefresher.onScreenActiveChanged(true)
-        advanceUntilIdle()
-        viewModel.refresh()
-        advanceUntilIdle()
-        assertTrue(viewModel.uiState.value.isLoading, "the loud load owns the spinner")
-
-        gate.complete(Unit)
-        advanceUntilIdle()
-        assertEquals("Artist 2", viewModel.uiState.value.sections.single().items.single().name)
-        assertFalse(viewModel.uiState.value.isLoading)
-        verify(exactly = 0) { userMessageBus.error(any()) }
-
-        // The conservative re-arm made visible: the next re-entry fires one
-        // more quiet silent regeneration (a fourth fetch) instead of
-        // trusting the pending flag the cancelled silent pass consumed.
-        viewModel.deferredRefresher.onScreenActiveChanged(false)
-        viewModel.deferredRefresher.onScreenActiveChanged(true)
-        advanceUntilIdle()
-        coVerify(exactly = 4) { mediaRepository.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) }
-        assertFalse(viewModel.uiState.value.isLoading, "the redundant silent pass stays quiet")
-        verify(exactly = 0) { userMessageBus.error(any()) }
-    }
-
-    @Test
-    fun deferredRefresh_skippedByAnInFlightLoudLoad_rearmsForTheNextReentry() = runTest(mainDispatcher) {
-        stubHomeQueries(favoriteArtists = listOf(item("a1", "Artist")))
-        createViewModel()
-        advanceUntilIdle()
-        assertEquals(1, viewModel.uiState.value.sections.size)
-
-        // Armed while off-screen; the activation's silent regeneration then
-        // skips itself because a loud load (dispatched BEFORE the change
-        // landed) is in flight — the skip must re-arm, or the loud load's
-        // pre-change result strands the consumed flag until the next WS event.
-        val gate = CompletableDeferred<Unit>()
-        coEvery { mediaRepository.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) } coAnswers {
-            gate.await()
-            Result.success(SearchResult(listOf(item("a2", "Artist 2")), 1, 0))
-        }
-        viewModel.deferredRefresher.onScreenActiveChanged(false)
-        userDataEvents.emit(UserDataChange("user-1", listOf("t1")))
-        advanceUntilIdle()
-        viewModel.refresh()
-        advanceUntilIdle()
-        // The loud load is now PARKED mid-fetch (its artist query awaits the
-        // gate) when the deferred effect consumes the flag: the silent twin
-        // skips itself, and the skip must re-arm — the parked load dispatched
-        // before the change landed, so its result is pre-change data.
-        viewModel.deferredRefresher.onScreenActiveChanged(true)
-        coVerify(exactly = 2) { mediaRepository.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) }
-
-        gate.complete(Unit)
-        advanceUntilIdle()
-        assertEquals("Artist 2", viewModel.uiState.value.sections.single().items.single().name)
-
-        // The next re-entry fires the quiet regeneration the skip promised —
-        // silently: no spinner, no toast.
-        viewModel.deferredRefresher.onScreenActiveChanged(false)
-        viewModel.deferredRefresher.onScreenActiveChanged(true)
-        advanceUntilIdle()
-        coVerify(exactly = 3) { mediaRepository.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) }
-        assertFalse(viewModel.uiState.value.isLoading)
-        verify(exactly = 0) { userMessageBus.error(any()) }
     }
 
     @Test

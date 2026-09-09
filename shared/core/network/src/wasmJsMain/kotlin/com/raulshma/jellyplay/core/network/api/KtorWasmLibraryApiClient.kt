@@ -130,6 +130,11 @@ class KtorWasmLibraryApiClient(
                 query = q(
                     "parentId" to parentId,
                     "limit" to limit.toString(),
+                    // The SDK getLatestMedia's non-null `groupItems = true`
+                    // default is always on the JVM wire — pin it here too so
+                    // the fallback fetch mirrors the SDK byte-for-byte (same
+                    // pin the [getLatestMedia] override below already makes).
+                    "groupItems" to "true",
                     "fields" to (LIST_PROJECTION_FIELDS + "Genres").joined(),
                 ),
             )

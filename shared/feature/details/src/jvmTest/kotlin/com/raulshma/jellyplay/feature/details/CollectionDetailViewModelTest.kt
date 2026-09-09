@@ -11,7 +11,6 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
@@ -324,22 +323,17 @@ class CollectionDetailViewModelTest {
         assertTrue(viewModel.uiState.value is CollectionDetailUiState.Success)
     }
 
+    // The no-stack/skip-re-arm choreography pair this suite used to re-pin
+    // (in-flight loud loads holding a gated repo read) is module behaviour
+    // now — DeferredFetchCoordinatorTest owns that table. What stays here is
+    // the host surface: the guard's failure half, expressed through
+    // loadCollection's public state.
+
     @Test
-    fun `deferred refresh does not stack a silent twin on an in-flight loud load`() = runTest {
+    fun `loadCollection after an Error reloads instead of no-oping`() = runTest {
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         every { mediaRepository.userDataChanges } returns userDataEvents
-        // The first loud load fails (Error state → re-entry loud-loads again);
-        // every later detail read parks on [gate] so a load can be held
-        // IN FLIGHT across the next step.
-        val gate = CompletableDeferred<Unit>()
-        var detailCalls = 0
-        coEvery { mediaRepository.getMediaDetail("c1", any()) } coAnswers {
-            if (++detailCalls == 1) {
-                Result.failure(RuntimeException("offline"))
-            } else {
-                gate.await()
-                Result.success(MediaDetail(item = MediaItem(id = "c1", name = "Collection", mediaType = MediaType.COLLECTION)))
-            }
-        }
+        coEvery { mediaRepository.getMediaDetail("c1") } returns Result.failure(RuntimeException("offline"))
         coEvery { mediaRepository.getCollectionItems("c1", any(), any(), any()) } returns Result.success(
             SearchResult(items = emptyList(), totalRecordCount = 0, startIndex = 0),
         )
@@ -349,68 +343,16 @@ class CollectionDetailViewModelTest {
         advanceUntilIdle()
         assertTrue(viewModel.uiState.value is CollectionDetailUiState.Error)
 
-        // Armed while off-screen...
-        viewModel.deferredRefresher.onScreenActiveChanged(false)
-        userDataEvents.emit(UserDataChange("user-1", listOf("m1")))
-        advanceUntilIdle()
-
-        // ...then re-entry: the loud load starts (Error does not no-op) and
-        // parks mid-fetch; the deferred effect consumes the flag while that
-        // load is in flight and must NOT launch a silent twin on top of it —
-        // the loud load is already the regeneration.
-        viewModel.loadCollection("c1")
-        viewModel.deferredRefresher.onScreenActiveChanged(true)
-        advanceUntilIdle()
-
-        // Two fetches total (initial + in-flight loud), not three.
-        coVerify(exactly = 2) { mediaRepository.getCollectionItems("c1", any(), any(), any()) }
-    }
-
-    @Test
-    fun `a silent reload skipped by an in-flight loud load re-arms for the next re-entry`() = runTest {
-        every { mediaRepository.userDataChanges } returns userDataEvents
-        // The first loud load fails (Error state → re-entry loud-loads again);
-        // every later detail read parks on [gate] so a load can be held
-        // IN FLIGHT across the next step.
-        val gate = CompletableDeferred<Unit>()
-        var detailCalls = 0
-        coEvery { mediaRepository.getMediaDetail("c1", any()) } coAnswers {
-            if (++detailCalls == 1) {
-                Result.failure(RuntimeException("offline"))
-            } else {
-                gate.await()
-                Result.success(MediaDetail(item = MediaItem(id = "c1", name = "Collection", mediaType = MediaType.COLLECTION)))
-            }
-        }
-        coEvery { mediaRepository.getCollectionItems("c1", any(), any(), any()) } returns Result.success(
-            SearchResult(items = emptyList(), totalRecordCount = 0, startIndex = 0),
+        // Back-stack re-entry re-runs the screen's LaunchedEffect: a failed
+        // loud load re-arms the guard, so re-entry reloads and heals.
+        coEvery { mediaRepository.getMediaDetail("c1") } returns Result.success(
+            MediaDetail(item = MediaItem(id = "c1", name = "Collection", mediaType = MediaType.COLLECTION))
         )
-        val viewModel = collectionViewModel()
-
         viewModel.loadCollection("c1")
         advanceUntilIdle()
-        assertTrue(viewModel.uiState.value is CollectionDetailUiState.Error)
 
-        // Armed while off-screen; the parked loud load dispatched BEFORE the
-        // change landed, so when the deferred effect consumes the flag and
-        // skips itself, the consumed flag must survive the skip.
-        viewModel.deferredRefresher.onScreenActiveChanged(false)
-        userDataEvents.emit(UserDataChange("user-1", listOf("m1")))
-        advanceUntilIdle()
-        viewModel.loadCollection("c1")
-        viewModel.deferredRefresher.onScreenActiveChanged(true)
-        advanceUntilIdle()
-        coVerify(exactly = 2) { mediaRepository.getCollectionItems("c1", any(), any(), any()) }
-
-        gate.complete(Unit)
-        advanceUntilIdle()
-
-        // The next re-entry fires the silent reload the skip promised.
-        viewModel.deferredRefresher.onScreenActiveChanged(false)
-        viewModel.deferredRefresher.onScreenActiveChanged(true)
-        advanceUntilIdle()
-        coVerify(exactly = 3) { mediaRepository.getCollectionItems("c1", any(), any(), any()) }
         assertTrue(viewModel.uiState.value is CollectionDetailUiState.Success)
+        coVerify(exactly = 2) { mediaRepository.getMediaDetail("c1") }
     }
 
     @Test

@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.ui.viewmodel.DeferredFetchCoordinator
 import com.raulshma.jellyplay.core.ui.viewmodel.DeferredUserDataRefresher
+import com.raulshma.jellyplay.core.ui.viewmodel.FetchMode
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -26,23 +27,16 @@ class PersonDetailViewModel constructor(
     private val _uiState = MutableStateFlow<PersonDetailUiState>(PersonDetailUiState.Loading)
     val uiState: StateFlow<PersonDetailUiState> = _uiState.asStateFlow()
 
-    /** The loaded person — the deferred refresh reloads them silently. */
-    private var currentPersonId: String? = null
-
-    private val fetchCoordinator = DeferredFetchCoordinator(
+    private val fetchCoordinator = DeferredFetchCoordinator<String>(
         userDataChanges = mediaRepository.userDataChanges,
         scope = scope,
-        silentFetch = {
-            currentPersonId?.let { fetchPerson(it, silent = true) } ?: true
-        },
-        onFetchError = { e, silent ->
+        fetch = ::fetchPerson,
+        onLoudStart = { _uiState.value = PersonDetailUiState.Loading },
+        onLoudError = { e ->
             // Same contract as a `false` from a loud [fetchPerson]: a thrown
-            // repo path must not strand the Loading state published in
-            // [loadPerson] — swap to Error (loud only; silent keeps the last
-            // Success).
-            if (!silent) {
-                _uiState.value = PersonDetailUiState.Error(e.message ?: "Failed to load")
-            }
+            // repo path must not strand the Loading state published above —
+            // swap to Error (silent keeps the last Success).
+            _uiState.value = PersonDetailUiState.Error(e.message ?: "Failed to load")
         },
     )
 
@@ -50,34 +44,35 @@ class PersonDetailViewModel constructor(
      * User-data changes while another screen is up (watched flip elsewhere,
      * outbox drain landing) only mark this list stale; the single silent
      * reload fires when the screen is next entered (see
-     * [DeferredUserDataRefresher]) — never mid-scroll.
+     * [DeferredUserDataRefresher]) — never mid-scroll. The whole load
+     * lifecycle — including the back-stack re-entry guard (an
+     * already-showing Success no-ops; an Error re-arms) — lives in
+     * [DeferredFetchCoordinator].
      */
     val deferredRefresher: DeferredUserDataRefresher get() = fetchCoordinator.deferredRefresher
 
+    /** The loud entry — the screen's `LaunchedEffect` and the error screen's retry. */
     fun loadPerson(personId: String) {
-        // Back-stack re-entry re-runs the screen's LaunchedEffect; a second
-        // loud load over an already-showing Success would race the deferred
-        // refresh's silent regeneration (and flash Loading over content the
-        // user was returning to). An Error state (or a fresh VM) loads.
-        if (currentPersonId == personId && _uiState.value is PersonDetailUiState.Success) return
-        currentPersonId = personId
-        _uiState.value = PersonDetailUiState.Loading
-        fetchCoordinator.load { fetchPerson(personId, silent = false) }
+        fetchCoordinator.load(personId)
     }
 
     /**
-     * (Re)fetches the person's detail + filmography, reporting plain success
-     * so [DeferredFetchCoordinator] owns the failure re-arm. [silent] serves
-     * the deferred-refresh path: a fetch failure keeps the last Success
-     * instead of flashing an Error screen over content the user was just
-     * looking at — serve-stale-while-revalidate, same philosophy as the home
-     * refresher.
+     * (Re)fetches the person's detail + filmography, keyed on the
+     * coordinator's mode and reporting plain success so
+     * [DeferredFetchCoordinator] owns the failure re-arm. [force] reaches
+     * the detail read as the repository cache-bypass flag — the silent
+     * regeneration always runs forced, the loud entry on pull-to-refresh.
+     * [FetchMode.SILENT] serves the deferred-refresh path: a fetch failure
+     * keeps the last Success instead of flashing an Error screen over
+     * content the user was just looking at — serve-stale-while-revalidate,
+     * same philosophy as the home refresher.
      */
-    private suspend fun fetchPerson(personId: String, silent: Boolean): Boolean {
+    private suspend fun fetchPerson(personId: String, mode: FetchMode, force: Boolean): Boolean {
         return coroutineScope {
             // No feature-level retry: the repository paths already retry
             // (and coordinate retry with address failover) in the engine.
-            val detailDeferred = async { mediaRepository.getMediaDetail(personId) }
+            // getItemsByPerson is uncached, so force has no bearing on it.
+            val detailDeferred = async { mediaRepository.getMediaDetail(personId, force = force) }
             val itemsDeferred = async { mediaRepository.getItemsByPerson(personId) }
 
             val detailResult = detailDeferred.await()
@@ -93,7 +88,7 @@ class PersonDetailViewModel constructor(
                 )
                 true
             } else {
-                if (!silent) {
+                if (mode == FetchMode.LOUD) {
                     val detailError = detailResult.exceptionOrNull()?.message
                     val itemsError = itemsResult.exceptionOrNull()?.message
                     _uiState.value = PersonDetailUiState.Error(itemsError ?: detailError ?: "Failed to load")

@@ -151,18 +151,18 @@ internal fun DetailActionButtons(
         {
             if (!canPlayPrimary) return@remember
             if (isAlbum && state.albumTracks.isNotEmpty()) {
-                callbacks.onPlayAlbumTrack(0)
+                callbacks.playback.onPlayAlbumTrack(0)
                 state.albumTracks.firstOrNull()?.let { track ->
-                    callbacks.onNavigate(Route.AudioPlayer(track.id))
+                    callbacks.navigation.onNavigate(Route.AudioPlayer(track.id))
                 }
             } else if (isAudio) {
-                callbacks.onAudioClick()
+                callbacks.playback.onAudioClick()
             } else if (target != null) {
-                callbacks.onPlayClick(target.episode.id, null, target.startPositionTicks)
+                callbacks.playback.onPlayClick(target.episode.id, null, target.startPositionTicks)
             } else {
                 val sourceId = detail.mediaSources.firstOrNull()?.id
                 val startPos = item.playbackPositionTicks ?: 0L
-                callbacks.onPlayClick(item.id, sourceId, startPos)
+                callbacks.playback.onPlayClick(item.id, sourceId, startPos)
             }
         }
     }
@@ -198,7 +198,7 @@ internal fun DetailActionButtons(
                         scale = markScale,
                         interactionSource = markInteractionSource,
                         focusState = markTvFocusState,
-                        onClick = { if (item.isPlayed) callbacks.onMarkUnplayed() else callbacks.onMarkPlayed() },
+                        onClick = { if (item.isPlayed) callbacks.userData.onMarkUnplayed() else callbacks.userData.onMarkPlayed() },
                     )
                 }
                 FadingItem(modifier = Modifier.weight(1f)) {
@@ -208,7 +208,7 @@ internal fun DetailActionButtons(
                         scale = favoriteScale,
                         interactionSource = favoriteInteractionSource,
                         focusState = favoriteTvFocusState,
-                        onClick = callbacks.onToggleFavorite,
+                        onClick = callbacks.userData.onToggleFavorite,
                     )
                 }
             }
@@ -244,7 +244,7 @@ internal fun DetailActionButtons(
                     scale = markScale,
                     interactionSource = markInteractionSource,
                     focusState = markHFocusState,
-                    onClick = { if (item.isPlayed) callbacks.onMarkUnplayed() else callbacks.onMarkPlayed() },
+                    onClick = { if (item.isPlayed) callbacks.userData.onMarkUnplayed() else callbacks.userData.onMarkPlayed() },
                 )
             }
 
@@ -255,7 +255,7 @@ internal fun DetailActionButtons(
                     scale = favoriteScale,
                     interactionSource = favoriteInteractionSource,
                     focusState = favoriteHFocusState,
-                    onClick = callbacks.onToggleFavorite,
+                    onClick = callbacks.userData.onToggleFavorite,
                 )
             }
         }

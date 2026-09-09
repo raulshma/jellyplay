@@ -618,6 +618,108 @@ class MediaRepositoryImplTest {
     }
 
     // ------------------------------------------------------------------
+    // Announced staleness for the gap groups (#157 generalized): a user-data
+    // flip evicts only the flipped item's OWN keys — `tracks_<trackId>` and
+    // `detail_<itemId>` — never the album's `tracks_<albumId>` entry or the
+    // collection's page keys, because the owning album's/collection's
+    // identity is not recorded anywhere in the reverse direction. The
+    // composite eviction arms one marker per group; the next NON-forced read
+    // consumes it as a one-shot force, so the detail hosts no longer need to
+    // hand-thread force for exactly this healing.
+    // ------------------------------------------------------------------
+
+    @Test
+    fun `a track flip arms the album-tracks marker - the next non-forced read refetches once`() = runTest {
+        coEvery { apiClient.getAlbumTracks("album-1") } returns Result.success(listOf(mediaItem("t1")))
+
+        repository.getAlbumTracks("album-1") // populate the album's tracks entry
+        // Flip a MEMBER (not the album): the eviction drops `tracks_track-1`
+        // and `detail_track-1`, never `tracks_album-1` — only the armed
+        // marker can make the album's next read bypass it.
+        repository.markUnplayed("track-1")
+        repository.getAlbumTracks("album-1") // consumes the marker as a force
+        repository.getAlbumTracks("album-1") // marker gone: cached
+
+        coVerify(exactly = 2) { apiClient.getAlbumTracks("album-1") }
+    }
+
+    @Test
+    fun `a failed album-tracks read re-arms the marker for the next read`() = runTest {
+        var fetchCalls = 0
+        coEvery { apiClient.getAlbumTracks("album-1") } coAnswers {
+            if (++fetchCalls == 2) Result.failure(RuntimeException("offline blip"))
+            else Result.success(listOf(mediaItem("t1")))
+        }
+
+        repository.getAlbumTracks("album-1") // populate
+        repository.markUnplayed("track-1") // arm the marker
+        val failed = repository.getAlbumTracks("album-1") // consumes, fetch fails
+        repository.getAlbumTracks("album-1") // re-armed: refetches
+
+        assertTrue(failed.isFailure)
+        coVerify(exactly = 3) { apiClient.getAlbumTracks("album-1") }
+    }
+
+    @Test
+    fun `a member flip arms the collection-items marker - the next non-forced page read refetches`() = runTest {
+        coEvery { apiClient.getCollectionItems("col-1", 0, 20) } returns Result.success(
+            SearchResult(items = listOf(mediaItem("c1")), totalRecordCount = 1, startIndex = 0)
+        )
+
+        repository.getCollectionItems("col-1", 0, 20) // populate the page entry
+        // Flip a MEMBER (not the collection): the eviction drops
+        // `detail_member-1`, never the collection's page key.
+        repository.markUnplayed("member-1")
+        repository.getCollectionItems("col-1", 0, 20) // consumes the marker
+        repository.getCollectionItems("col-1", 0, 20) // marker gone: cached
+
+        coVerify(exactly = 2) { apiClient.getCollectionItems("col-1", 0, 20) }
+    }
+
+    @Test
+    fun `a failed collection-items read re-arms the marker for the next read`() = runTest {
+        var fetchCalls = 0
+        coEvery { apiClient.getCollectionItems("col-1", 0, 20) } coAnswers {
+            if (++fetchCalls == 2) Result.failure(RuntimeException("offline blip"))
+            else Result.success(SearchResult(items = listOf(mediaItem("c1")), totalRecordCount = 1, startIndex = 0))
+        }
+
+        repository.getCollectionItems("col-1", 0, 20) // populate
+        repository.markUnplayed("member-1") // arm the marker
+        val failed = repository.getCollectionItems("col-1", 0, 20) // consumes, fetch fails
+        repository.getCollectionItems("col-1", 0, 20) // re-armed: refetches
+
+        assertTrue(failed.isFailure)
+        coVerify(exactly = 3) { apiClient.getCollectionItems("col-1", 0, 20) }
+    }
+
+    @Test
+    fun `a forced album-detail read does not arm the gap markers`() = runTest {
+        // The provider's forced album-detail read ends in
+        // cacheInvalidation.invalidateFor(detail) (UnifiedMediaDetailProviderImpl),
+        // whose ALBUM branch rides the composite eviction — no user-data
+        // change behind it, so it must not arm the gap markers: an armed
+        // collectionItemsStale would force the next non-forced collection
+        // read with nothing to heal. Arming is a user-data statement and
+        // lives with the user-data callers (the mutation wrapper,
+        // invalidateForUserDataChange). The seam is called directly because
+        // getMediaDetail(force) itself never reaches it — the provider owns
+        // that call.
+        val albumDetail = MediaDetail(
+            item = MediaItem(id = "album-1", name = "Album", mediaType = MediaType.ALBUM),
+        )
+        coEvery { apiClient.getCollectionItems("col-1", 0, 20) } returns Result.success(
+            SearchResult(items = listOf(mediaItem("c1")), totalRecordCount = 1, startIndex = 0)
+        )
+
+        repository.getCollectionItems("col-1", 0, 20) // populate the page entry
+        repository.invalidateFor(albumDetail) // evicts; must NOT arm
+        repository.getCollectionItems("col-1", 0, 20) // marker not armed: cached
+
+        coVerify(exactly = 1) { apiClient.getCollectionItems("col-1", 0, 20) }
+    }
+
+    // ------------------------------------------------------------------
     // Collection write/list paths are uncached passthroughs to the apiClient
     // (the picker refetches on every open so a freshly-created collection is
     // immediately selectable). Pin the delegation here.

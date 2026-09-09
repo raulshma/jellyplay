@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.data.repository
 
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
+import com.raulshma.jellyplay.core.model.ActiveSession
 import com.raulshma.jellyplay.core.model.CreditTimestamps
 import com.raulshma.jellyplay.core.model.IntroTimestamps
 import com.raulshma.jellyplay.core.model.MediaSegment
@@ -13,6 +14,8 @@ import com.raulshma.jellyplay.core.model.PlaybackStartInfo
 import com.raulshma.jellyplay.core.model.PlayMethod
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.ResolvedPlayback
+import com.raulshma.jellyplay.core.model.ServerInfo
+import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -20,6 +23,11 @@ import io.mockk.coVerifyOrder
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
 import kotlin.test.BeforeTest
@@ -311,6 +319,81 @@ class PlaybackRepositoryImplTest {
         // Not cached on failure: the API is hit again on the second call.
         coVerify(exactly = 2) { apiClient.getMediaSegments("item-1") }
     }
+
+    @Test
+    fun `identity switch bumps the segments epoch so a racing fetch cannot write back into the cleared cache`() = runTest {
+        // The registry doctrine fix (mirrors MediaRepositoryImpl's
+        // DetailCacheGroup): the segments cache's identity reaction is not
+        // just the registry's plain wholesale clear — the epoch must bump
+        // too, or a fetch that started under the previous identity and
+        // completed after the switch writes its pre-switch snapshot back
+        // into the just-cleared cache, pinning it for the TTL if the user
+        // switches back to that identity.
+        val sessionFlow = MutableStateFlow<ActiveSession?>(null)
+        every { apiClient.session } returns sessionFlow
+        // Unconfined observers (see MediaRepositoryHomeSectionsCacheTest's
+        // buildRepository): each session assignment drives the classifier
+        // AND the registry reactions synchronously on the setter's stack, so
+        // the mid-flight switch below lands deterministically.
+        val homeSession = com.raulshma.jellyplay.core.data.session.HomeSession(
+            apiClient,
+            CoroutineScope(SupervisorJob() + Dispatchers.Unconfined),
+        )
+        val sessionCacheRegistry = com.raulshma.jellyplay.core.data.session.SessionCacheRegistry(
+            homeSession,
+            CoroutineScope(SupervisorJob() + Dispatchers.Unconfined),
+        )
+        val repo = PlaybackRepositoryImpl(
+            apiClient, outbox, offlineModeManager, homeSession, sessionCacheRegistry,
+            mediaCacheInvalidation = mediaCacheInvalidation,
+            mediaRepository = lazy { mediaRepository },
+        )
+        sessionFlow.value = ActiveSession(serverInfo("server-1"), userInfo("user-A"))
+
+        val fetchStarted = CompletableDeferred<Unit>()
+        val releaseFetch = CompletableDeferred<Unit>()
+        coEvery { apiClient.getMediaSegments("item-1") } coAnswers {
+            fetchStarted.complete(Unit)
+            releaseFetch.await()
+            Result.success(listOf(MediaSegment("seg-1", "item-1", MediaSegmentType.INTRO, 1000L, 5000L)))
+        }
+
+        val racingFlight = async { repo.getMediaSegments("item-1") }
+        fetchStarted.await()
+        // Identity switch lands mid-flight: wholesale clear + the epoch bump.
+        sessionFlow.value = ActiveSession(serverInfo("server-1"), userInfo("user-B"))
+        releaseFetch.complete(Unit)
+        assertTrue(racingFlight.await().isSuccess, "the racing fetch's result is still returned to its caller")
+
+        // Switch back to user A: the racing flight's write-back was vetoed
+        // by the epoch bump, so the read must refetch — not serve the stale
+        // snapshot the flight tried to pin under identity A.
+        sessionFlow.value = ActiveSession(serverInfo("server-1"), userInfo("user-A"))
+        val afterSwitchBack = repo.getMediaSegments("item-1")
+
+        assertTrue(afterSwitchBack.isSuccess)
+        coVerify(exactly = 2) { apiClient.getMediaSegments("item-1") }
+    }
+
+    private fun userInfo(id: String) = UserInfo(
+        id = id,
+        name = id,
+        serverAddress = "https://example.com",
+        accessToken = "token",
+        serverId = "server-1",
+        isAdmin = false,
+        maxParentalAgeRating = null,
+        primaryImageTag = null,
+        enabledFolderIds = emptyList(),
+    )
+
+    private fun serverInfo(id: String) = ServerInfo(
+        id = id,
+        name = "server-$id",
+        address = "https://example.com",
+        userId = null,
+        accessToken = null,
+    )
 
     @Test
     fun `getServerUrl delegates to apiClient`() {

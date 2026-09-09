@@ -40,9 +40,11 @@ import kotlinx.coroutines.launch
  * init collector subscribes still refreshes on the next entry even without
  * an explicit deactivate/reactivate. An event emitted before the collector
  * subscribes is lost, not deferred — [userDataChanges] is replay-0 and the
- * VM did not exist to observe it. Hosts that keep their own single-flight
- * load job beside a refresher rely on the same confinement: unsynchronized
- * check-and-cancel on those fields is only safe on that main-immediate scope.
+ * VM did not exist to observe it. Hosts that run fetches beside a
+ * refresher ([DeferredFetchCoordinator]'s single-flight slot, or a
+ * hand-rolled `Job?` var) rely on the same confinement: unsynchronized
+ * check-and-cancel on those fields is only safe on that main-immediate
+ * scope.
  */
 class DeferredUserDataRefresher(
     userDataChanges: Flow<UserDataChange>,

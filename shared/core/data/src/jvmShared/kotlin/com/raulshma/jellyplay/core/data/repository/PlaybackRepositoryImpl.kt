@@ -69,6 +69,16 @@ class PlaybackRepositoryImpl(
 
     init {
         sessionCacheRegistry.registerCaches("playback", segmentsCache)
+        // Doctrine parity with MediaRepositoryImpl's DetailCacheGroup (see its
+        // registryCaches KDoc): the registry's plain wholesale clear reclaims
+        // the previous identity's segments entries, but only the epoch bump
+        // expressed here can stop an in-flight previous-identity fetch from
+        // writing its (now stale) result back into the just-cleared cache —
+        // where it would sit pinned for the full TTL if the user switches
+        // back to that identity.
+        sessionCacheRegistry.registerAction("playback-identity-clear") {
+            segmentsEpoch.incrementAndGet()
+        }
     }
 
     override suspend fun reportPlaybackStart(info: PlaybackStartInfo): Result<Unit> = reportOrStage(

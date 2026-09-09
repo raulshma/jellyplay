@@ -10,7 +10,6 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
@@ -276,22 +275,16 @@ class PersonDetailViewModelTest {
         assertTrue(viewModel.uiState.value is PersonDetailUiState.Success)
     }
 
+    // The no-stack/skip-re-arm choreography this suite used to re-pin
+    // (in-flight loud loads holding a gated repo read) is module behaviour
+    // now — DeferredFetchCoordinatorTest owns that table. What stays here is
+    // the host surface: the guard's failure half, expressed through
+    // loadPerson's public state.
+
     @Test
-    fun `deferred refresh does not stack a silent twin on an in-flight loud load`() = runTest {
+    fun `loadPerson after an Error reloads instead of no-oping`() = runTest {
         every { mediaRepository.userDataChanges } returns userDataEvents
-        // The first loud load fails (Error state → re-entry loud-loads again);
-        // every later detail read parks on [gate] so a load can be held
-        // IN FLIGHT across the next step.
-        val gate = CompletableDeferred<Unit>()
-        var detailCalls = 0
-        coEvery { mediaRepository.getMediaDetail("p1") } coAnswers {
-            if (++detailCalls == 1) {
-                Result.failure(RuntimeException("offline"))
-            } else {
-                gate.await()
-                Result.success(MediaDetail(item = MediaItem(id = "p1", name = "Person One", mediaType = MediaType.UNKNOWN)))
-            }
-        }
+        coEvery { mediaRepository.getMediaDetail("p1") } returns Result.failure(RuntimeException("offline"))
         coEvery { mediaRepository.getItemsByPerson("p1") } returns Result.success(emptyList())
         val viewModel = PersonDetailViewModel(
             mediaRepository,
@@ -304,20 +297,16 @@ class PersonDetailViewModelTest {
         advanceUntilIdle()
         assertTrue(viewModel.uiState.value is PersonDetailUiState.Error)
 
-        // Armed while off-screen...
-        viewModel.deferredRefresher.onScreenActiveChanged(false)
-        userDataEvents.emit(UserDataChange("user-1", listOf("m1")))
-        advanceUntilIdle()
-
-        // ...then re-entry: the loud load starts (Error does not no-op) and
-        // parks mid-fetch; the deferred effect consumes the flag while that
-        // load is in flight and must NOT launch a silent twin on top of it.
+        // Back-stack re-entry re-runs the screen's LaunchedEffect: a failed
+        // loud load re-arms the guard, so re-entry reloads and heals.
+        coEvery { mediaRepository.getMediaDetail("p1") } returns Result.success(
+            MediaDetail(item = MediaItem(id = "p1", name = "Person One", mediaType = MediaType.UNKNOWN))
+        )
         viewModel.loadPerson("p1")
-        viewModel.deferredRefresher.onScreenActiveChanged(true)
         advanceUntilIdle()
 
-        // Two fetches total (initial + in-flight loud), not three.
-        coVerify(exactly = 2) { mediaRepository.getItemsByPerson("p1") }
+        assertTrue(viewModel.uiState.value is PersonDetailUiState.Success)
+        coVerify(exactly = 2) { mediaRepository.getMediaDetail("p1") }
     }
 
     @Test

@@ -384,7 +384,6 @@ fun MediaDetailScreen(
             ) {
                 val rememberedGetImageUrl = remember(viewModel) { { id: String -> viewModel.getImageUrl(id) } }
                 val rememberedGetBackdropUrl = remember(viewModel) { { id: String -> viewModel.getBackdropUrl(id) } }
-                val rememberedGetSeerrPosterUrl = remember(viewModel) { { path: String? -> viewModel.getSeerrPosterUrl(path) } }
                 val rememberedGetChapterImageUrl = remember(viewModel) {
                     { id: String, index: Int, tag: String? -> viewModel.getChapterImageUrl(id, index, tag) }
                 }
@@ -454,20 +453,30 @@ fun MediaDetailScreen(
                     onPlayYouTube = { key -> activeTrailerKey = key },
                 )
 
-                val callbacks = remember(
-                    rememberedGetImageUrl, rememberedGetBackdropUrl, rememberedGetSeerrPosterUrl,
+                // ── Per-concern callback bundles. Each bundle is remembered on
+                // exactly the inputs its lambdas capture, so a new capability
+                // edits its bundle here + its section file — not a growing flat
+                // constructor. Two bundles additionally key on plain local vals
+                // their lambdas capture (`detail`, `seriesIdForSeasons`): the
+                // former single remember was effectively refreshed every
+                // recomposition (its `onVideoClick` key is unstable), and these
+                // captures must not go stale now that the other bundles' keys
+                // are stable. Delegated reads (`uiState`, `var … by remember`)
+                // resolve at invocation time and need no keys. ──
+                val artworkCallbacks = remember(
+                    rememberedGetImageUrl,
+                    rememberedGetBackdropUrl,
                     rememberedGetChapterImageUrl,
-                    viewModel, onPlayClick, onAudioClick, itemId, onItemClick, onPersonClick,
-                    onNavigateToSeries, onNavigate, onEditClick, onManageSeries, onBack, onVideoClick,
-                    dispatchMarkPlayedAction,
                 ) {
-                    DetailContentCallbacks(
+                    ArtworkCallbacks(
                         getImageUrl = rememberedGetImageUrl,
                         getBackdropUrl = rememberedGetBackdropUrl,
-                        getSeerrPosterUrl = rememberedGetSeerrPosterUrl,
                         getChapterImageUrl = rememberedGetChapterImageUrl,
-                        onRetry = { viewModel.loadItem(itemId) },
-                        onRefresh = { viewModel.forceRefresh() },
+                    )
+                }
+
+                val playbackCallbacks = remember(viewModel, onPlayClick, onAudioClick, itemId) {
+                    PlaybackCallbacks(
                         onPlayClick = { playItemId: String, sourceId: String?, start: Long ->
                             // Stream selection (local-origin subtitle index when offline)
                             // is the shared [DetailPlayPolicies.resolveDetailPlayDispatch]
@@ -513,6 +522,17 @@ fun MediaDetailScreen(
                             onPlayClick(extra.id, null, 0L, null, null)
                         },
                         onAudioClick = { onAudioClick(itemId) },
+                        onPlayAlbumTrack = { index: Int -> viewModel.playAlbum(index) },
+                        onSubtitleSelect = { idx: Int? -> viewModel.selectSubtitle(idx) },
+                        onAudioSelect = { idx: Int? -> viewModel.selectAudio(idx) },
+                        onSelectLocalSubtitle = { index -> viewModel.selectLocalSubtitle(index) },
+                        onStartInstantMix = { viewModel.startInstantMix() },
+                        onStartWatchParty = { viewModel.watchParty.startScreenItem() },
+                    )
+                }
+
+                val downloadCallbacks = remember(viewModel, itemId, detail) {
+                    DownloadCallbacks(
                         onDownloadClick = { viewModel.downloads.startDownload() },
                         onOpenDownloadPicker = { viewModel.downloads.openDownloadPicker() },
                         onDismissDownloadPicker = { viewModel.downloads.dismissDownloadPicker() },
@@ -523,53 +543,6 @@ fun MediaDetailScreen(
                             viewModel.downloads.loadDownloadedEpisodeIds()
                             viewModel.downloads.prepareDownloadSheetEpisodes()
                         },
-                        onToggleFavorite = { viewModel.toggleFavorite() },
-                        // dispatchMarkPlayedAction(isSeasonAction, toWatched, seasonId)
-                        onMarkPlayed = { dispatchMarkPlayedAction(false, true, null) },
-                        onMarkUnplayed = { dispatchMarkPlayedAction(false, false, null) },
-                        onMarkSeasonPlayed = { seasonId -> dispatchMarkPlayedAction(true, true, seasonId) },
-                        onMarkSeasonUnplayed = { seasonId -> dispatchMarkPlayedAction(true, false, seasonId) },
-                        onSubtitleSelect = { idx: Int? -> viewModel.selectSubtitle(idx) },
-                        onAudioSelect = { idx: Int? -> viewModel.selectAudio(idx) },
-                        onItemClick = onItemClick,
-                        onPersonClick = onPersonClick,
-                        onSeeAllCast = {
-                            onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.CastAndCrew(itemId))
-                        },
-                        onNavigateToSeries = onNavigateToSeries,
-                        onSeasonSelected = { seasonId: String ->
-                            viewModel.loadEpisodesForSeason(seriesIdForSeasons, seasonId)
-                        },
-                        onSeasonPinned = { seasonId: String ->
-                            viewModel.setLastViewedSeason(seriesIdForSeasons, seasonId)
-                        },
-                        onEpisodesDescendingChange = { descending: Boolean ->
-                            viewModel.setEpisodesDescending(descending)
-                        },
-                        onCompactEpisodeListChange = { enabled: Boolean ->
-                            viewModel.setCompactEpisodeList(enabled)
-                        },
-                        onBack = onBack,
-                        onSeerrRequest = { item: SeerrSearchItem ->
-                            viewModel.seerrRequests.openRequestDialog(item)
-                        },
-                        onNavigate = onNavigate,
-                        onEditClick = { onEditClick(itemId) },
-                        onPlayAlbumTrack = { index: Int -> viewModel.playAlbum(index) },
-                        onVideoClick = onVideoClick,
-                        onHideFromNextUp = { viewModel.hideFromNextUp() },
-                        onShowFromNextUp = { viewModel.showFromNextUp() },
-                        onHideFromContinueWatching = { viewModel.hideFromContinueWatching() },
-                        onShowFromContinueWatching = { viewModel.showFromContinueWatching() },
-                        onShowDetailUpNext = { viewModel.setShowDetailUpNext(true) },
-                        onHideDetailUpNext = { viewModel.setShowDetailUpNext(false) },
-                        onManageSeries = { onManageSeries(itemId) },
-                        onAddToPlaylist = { viewModel.playlists.openPicker() },
-                        onAddToCollection = { viewModel.collections.openPicker() },
-                        onStartInstantMix = { viewModel.startInstantMix() },
-                        onStartWatchParty = { viewModel.watchParty.startScreenItem() },
-                        onMediaQuickActions = { item -> quickActionIntake.controller.show(item) },
-                        onFocusedMediaItem = { item -> quickActionIntake.tvFocusedItem = item },
                         onDeleteDownload = {
                             val target = detail?.item
                             val isEpisode = target?.mediaType == MediaType.EPISODE
@@ -589,16 +562,113 @@ fun MediaDetailScreen(
                             )
                         },
                         onOpenResync = { showResyncSheet = true },
-                        onResync = { viewModel.resync.resync() },
-                        onRedownloadMedia = { viewModel.resync.redownloadMedia() },
-                        onClearResync = { viewModel.resync.clearResyncState() },
                         onOpenDownloadDetails = {
                             // Load the on-disk inventory (media + sidecars) before showing
                             // the sheet so sizes are fresh; it re-reads on every open.
                             viewModel.downloads.loadDownloadFileInventory()
                             showDownloadDetailsSheet = true
                         },
-                        onSelectLocalSubtitle = { index -> viewModel.selectLocalSubtitle(index) },
+                    )
+                }
+
+                val seasonsCallbacks = remember(viewModel, seriesIdForSeasons, dispatchMarkPlayedAction) {
+                    SeasonsCallbacks(
+                        onSeasonSelected = { seasonId: String ->
+                            viewModel.loadEpisodesForSeason(seriesIdForSeasons, seasonId)
+                        },
+                        onSeasonPinned = { seasonId: String ->
+                            viewModel.setLastViewedSeason(seriesIdForSeasons, seasonId)
+                        },
+                        onEpisodesDescendingChange = { descending: Boolean ->
+                            viewModel.setEpisodesDescending(descending)
+                        },
+                        onCompactEpisodeListChange = { enabled: Boolean ->
+                            viewModel.setCompactEpisodeList(enabled)
+                        },
+                        onMarkSeasonPlayed = { seasonId -> dispatchMarkPlayedAction(true, true, seasonId) },
+                        onMarkSeasonUnplayed = { seasonId -> dispatchMarkPlayedAction(true, false, seasonId) },
+                    )
+                }
+
+                val userDataCallbacks = remember(viewModel, dispatchMarkPlayedAction) {
+                    UserDataCallbacks(
+                        onToggleFavorite = { viewModel.toggleFavorite() },
+                        // dispatchMarkPlayedAction(isSeasonAction, toWatched, seasonId)
+                        onMarkPlayed = { dispatchMarkPlayedAction(false, true, null) },
+                        onMarkUnplayed = { dispatchMarkPlayedAction(false, false, null) },
+                        onHideFromNextUp = { viewModel.hideFromNextUp() },
+                        onShowFromNextUp = { viewModel.showFromNextUp() },
+                        onHideFromContinueWatching = { viewModel.hideFromContinueWatching() },
+                        onShowFromContinueWatching = { viewModel.showFromContinueWatching() },
+                        onShowDetailUpNext = { viewModel.setShowDetailUpNext(true) },
+                        onHideDetailUpNext = { viewModel.setShowDetailUpNext(false) },
+                    )
+                }
+
+                val seerrCallbacks = remember(viewModel, onVideoClick) {
+                    SeerrCallbacks(
+                        onSeerrRequest = { item: SeerrSearchItem ->
+                            viewModel.seerrRequests.openRequestDialog(item)
+                        },
+                        onVideoClick = onVideoClick,
+                    )
+                }
+
+                val addToCallbacks = remember(viewModel) {
+                    AddToCallbacks(
+                        onAddToPlaylist = { viewModel.playlists.openPicker() },
+                        onAddToCollection = { viewModel.collections.openPicker() },
+                    )
+                }
+
+                val navigationCallbacks = remember(
+                    onItemClick, onPersonClick, onNavigateToSeries, onNavigate, onEditClick,
+                    onManageSeries, onBack, itemId,
+                ) {
+                    NavigationCallbacks(
+                        onBack = onBack,
+                        onNavigate = onNavigate,
+                        onItemClick = onItemClick,
+                        onPersonClick = onPersonClick,
+                        onSeeAllCast = {
+                            onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.CastAndCrew(itemId))
+                        },
+                        onNavigateToSeries = onNavigateToSeries,
+                        onManageSeries = { onManageSeries(itemId) },
+                        onEditClick = { onEditClick(itemId) },
+                    )
+                }
+
+                val screenCallbacks = remember(viewModel, itemId, quickActionIntake) {
+                    ScreenCallbacks(
+                        onRetry = { viewModel.loadItem(itemId) },
+                        onRefresh = { viewModel.forceRefresh() },
+                        onMediaQuickActions = { item -> quickActionIntake.controller.show(item) },
+                        onFocusedMediaItem = { item -> quickActionIntake.tvFocusedItem = item },
+                    )
+                }
+
+                val callbacks = remember(
+                    artworkCallbacks,
+                    playbackCallbacks,
+                    downloadCallbacks,
+                    seasonsCallbacks,
+                    userDataCallbacks,
+                    seerrCallbacks,
+                    addToCallbacks,
+                    navigationCallbacks,
+                    screenCallbacks,
+                ) {
+                    DetailContentCallbacks(
+                        artwork = artworkCallbacks,
+                        playback = playbackCallbacks,
+                        download = downloadCallbacks,
+                        seasons = seasonsCallbacks,
+                        userData = userDataCallbacks,
+                        seerr = seerrCallbacks,
+                        addTo = addToCallbacks,
+                        navigation = navigationCallbacks,
+                        screen = screenCallbacks,
                     )
                 }
 
