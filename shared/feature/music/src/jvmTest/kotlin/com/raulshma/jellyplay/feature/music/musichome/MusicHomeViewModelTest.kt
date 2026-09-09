@@ -581,6 +581,45 @@ class MusicHomeViewModelTest {
     }
 
     @Test
+    fun refresh_partialLoudFailurePublishesWhatItGotAndRearmsToHeal() = runTest(mainDispatcher) {
+        stubHomeQueries(favoriteArtists = listOf(item("a1", "Artist")))
+        // Query 1 (initial load) succeeds; query 2 (loud refresh) returns a
+        // failure RESULT — swallowed by getOrNull, so the loud load finishes
+        // "successfully" minus the artist row; query 3 (the re-armed silent
+        // twin) heals it.
+        var artistQueries = 0
+        coEvery { mediaRepository.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) } answers {
+            if (++artistQueries == 2) {
+                Result.failure(RuntimeException("artists blip"))
+            } else {
+                Result.success(SearchResult(listOf(item("a1", "Artist")), 1, 0))
+            }
+        }
+        createViewModel()
+        advanceUntilIdle()
+        assertEquals(1, viewModel.uiState.value.sections.size)
+
+        viewModel.refresh()
+        advanceUntilIdle()
+
+        // The loud partial failure publishes what it got (here: nothing —
+        // every other section is empty) and stays quiet: the sub-fetch
+        // failures were swallowed, so no toast fires.
+        assertTrue(viewModel.uiState.value.sections.isEmpty())
+        assertFalse(viewModel.uiState.value.isLoading)
+        verify(exactly = 0) { userMessageBus.error(any()) }
+
+        // It reported failure, so the coordinator re-armed: the next re-entry
+        // silently regenerates and the dropped row heals.
+        viewModel.deferredRefresher.onScreenActiveChanged(false)
+        viewModel.deferredRefresher.onScreenActiveChanged(true)
+        advanceUntilIdle()
+
+        coVerify(exactly = 3) { mediaRepository.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) }
+        assertEquals(1, viewModel.uiState.value.sections.size)
+    }
+
+    @Test
     fun surpriseMe_invokesCallbackWithRandomTrackId() = runTest(mainDispatcher) {
         stubHomeQueries()
         coEvery {

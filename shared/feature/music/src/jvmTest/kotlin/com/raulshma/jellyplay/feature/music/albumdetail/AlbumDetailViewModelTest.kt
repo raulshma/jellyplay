@@ -267,6 +267,53 @@ class AlbumDetailViewModelTest {
     }
 
     @Test
+    fun loadAlbum_afterAFailedInstantMixIsStillANoOp() = runTest(mainDispatcher) {
+        loadAlbum()
+        advanceUntilIdle()
+        // A failed mix shares the screen's `error` field; the re-entry guard
+        // must key on LOAD failures only, or every re-entry after a failed
+        // mix would flash a loud reload over loaded content.
+        coEvery { audioQueueFacade.startInstantMix(any(), any(), any()) } returns
+            AudioQueueOutcome.Failed(RuntimeException("mix boom"))
+        viewModel.startInstantMix("album1")
+        advanceUntilIdle()
+        assertEquals("mix boom", (viewModel.error as MixErrorMessage.Raw).message)
+
+        viewModel.loadAlbum("album1")
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { mediaRepository.getMediaDetail("album1") }
+        coVerify(exactly = 1) { mediaRepository.getAlbumTracks("album1") }
+        assertFalse(viewModel.isLoading)
+        // The mix error survives the skipped re-entry.
+        assertEquals("mix boom", (viewModel.error as MixErrorMessage.Raw).message)
+    }
+
+    @Test
+    fun loadAlbum_afterAFailedLoudLoadReloads() = runTest(mainDispatcher) {
+        // Detail half succeeds, tracks half fails: the detail is on screen
+        // but the loud load FAILED, so the re-entry guard must not skip —
+        // this is the flag's positive case beyond the null-detail guard.
+        coEvery { mediaRepository.getMediaDetail("album1") } returns Result.success(
+            MediaDetail(item = MediaItem(id = "album1", name = "Album", mediaType = MediaType.ALBUM)),
+        )
+        coEvery { mediaRepository.getAlbumTracks("album1") } returns Result.failure(RuntimeException("no tracks"))
+        viewModel.loadAlbum("album1")
+        advanceUntilIdle()
+        assertEquals("no tracks", (viewModel.error as MixErrorMessage.Raw).message)
+        assertEquals("Album", viewModel.detail?.item?.name)
+
+        // Re-entry retries the loud load and heals the failed half.
+        coEvery { mediaRepository.getAlbumTracks("album1") } returns Result.success(albumTracks)
+        viewModel.loadAlbum("album1")
+        advanceUntilIdle()
+
+        coVerify(exactly = 2) { mediaRepository.getMediaDetail("album1") }
+        coVerify(exactly = 2) { mediaRepository.getAlbumTracks("album1") }
+        assertNull(viewModel.error)
+    }
+
+    @Test
     fun deferredRefresh_rerunsSilentlyWithoutBlankingContent() = runTest(mainDispatcher) {
         loadAlbum()
         advanceUntilIdle()

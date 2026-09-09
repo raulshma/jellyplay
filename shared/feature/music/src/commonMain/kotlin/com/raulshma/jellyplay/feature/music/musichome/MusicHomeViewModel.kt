@@ -32,7 +32,7 @@ class MusicHomeViewModel(
     private val imageUrlProvider: ImageUrlProvider,
     private val audioQueueFacade: AudioQueueFacade,
     private val downloadRepository: DownloadRepository,
-    private val homeDiscoveryStore: com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore,
+    private val homeDiscoveryStore: HomeDiscoveryStore,
     private val offlineModeManager: OfflineModeManager,
     private val userMessageBus: MusicMessageBus,
 ) : JellyPlayViewModel() {
@@ -173,14 +173,16 @@ class MusicHomeViewModel(
                 // A silent refresh publishes only complete results: any
                 // failed fetch keeps the last sections on screen instead of
                 // silently dropping the rows that failed to re-fetch (a
-                // loud load publishes what it got). A silent partial result
-                // reports failure so the coordinator re-arms — the change
-                // that triggered it was not regenerated.
+                // loud load publishes what it got). A partial result
+                // reports failure either way so the coordinator re-arms —
+                // loud included, since the swallowed sub-fetch failures
+                // dropped rows the next re-entry's silent refetch must
+                // heal.
                 val complete = results.all { it != null }
                 if (!silent || complete) {
                     _uiState.update { it.copy(sections = sectionsList) }
                 }
-                !silent || complete
+                complete
             }
             if (!silent) {
                 _uiState.update { it.copy(isLoading = false) }

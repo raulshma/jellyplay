@@ -176,8 +176,9 @@ class MediaRepositoryImpl(
     // external caller needs this knob anymore.
     private fun invalidateCollectionItemsCache(collectionId: String) {
         // Prefix of [collectionItemsKey] for every page — one evict drops all
-        // of a collection's cached pages.
-        collectionItemsCache.removeByKeyPrefix(homeSession.cacheIdentitySnapshot(), "collection_$collectionId")
+        // of a collection's cached pages. Trailing underscore so one id is
+        // never a prefix of another's keys (collection_12 vs collection_123).
+        collectionItemsCache.removeByKeyPrefix(homeSession.cacheIdentitySnapshot(), "collection_${collectionId}_")
     }
 
     private fun collectionItemsKey(collectionId: String, startIndex: Int, limit: Int) =
@@ -672,13 +673,15 @@ class MediaRepositoryImpl(
         limit: Int,
         force: Boolean,
     ): Result<SearchResult> {
-        // force drops the cached page first (the deferred silent refresh's
-        // freshness lever — a member item's flip evicts detail_<itemId>, never
-        // the collection's page key).
+        // force drops the collection's cached pages first — prefix evict, the
+        // same shape as [invalidateCollectionItemsCache], so a future paginated
+        // caller forcing page 2 also heals the earlier pages (the deferred
+        // silent refresh's freshness lever — a member item's flip evicts
+        // detail_<itemId>, never the collection's page key).
         if (force) {
-            collectionItemsCache.remove(
+            collectionItemsCache.removeByKeyPrefix(
                 homeSession.cacheIdentitySnapshot(),
-                collectionItemsKey(collectionId, startIndex, limit),
+                "collection_${collectionId}_",
             )
         }
         return collectionItemsCache.getOrFetch(

@@ -59,7 +59,7 @@ class DeferredUserDataRefresher(
         userDataChanges: Flow<UserDataChange>,
         scope: CoroutineScope,
         trigger: StateFlowHandle<Int>,
-    ) : this(userDataChanges, scope, { trigger.set(trigger.value + 1) })
+    ) : this(userDataChanges, scope, { trigger.update { it + 1 } })
 
     private var pendingRefresh = false
 

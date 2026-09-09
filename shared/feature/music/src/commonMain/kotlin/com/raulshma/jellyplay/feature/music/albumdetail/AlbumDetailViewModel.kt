@@ -70,6 +70,11 @@ class AlbumDetailViewModel(
     private val _error = composeState<MixErrorMessage?>(null)
     val error: MixErrorMessage? get() = _error.value
 
+    // _error is shared with instant-mix failures, but the re-entry guard
+    // below must only react to LOAD failures — a failed mix must not make
+    // re-entering the album flash a loud reload over loaded content.
+    private var lastLoudLoadFailed = false
+
     // Instant-mix choreography (isStarting flag + first-track one-shot +
     // outcome → error mapping) lives in the shared holder; the VM only adapts
     // the facade call to the holder's pure outcome shape and folds holder
@@ -96,11 +101,12 @@ class AlbumDetailViewModel(
     /**
      * Skips an already-loaded album unless [force]: back-stack re-entry re-runs
      * the screen's `LaunchedEffect`, and a second loud load there would race
-     * the deferred refresh's silent regeneration. An errored album (or a fresh
-     * VM) loads.
+     * the deferred refresh's silent regeneration. An album whose loud load
+     * failed (or a fresh VM) loads; a failed instant mix does not count —
+     * its error shares [_error] but the content stays loaded.
      */
     fun loadAlbum(albumId: String, force: Boolean = false) {
-        if (!force && currentAlbumId == albumId && _detail.value != null && _error.value == null) return
+        if (!force && currentAlbumId == albumId && _detail.value != null && !lastLoudLoadFailed) return
         currentAlbumId = albumId
         fetchCoordinator.load { fetchAlbumData(albumId, force = force, silent = false) }
     }
@@ -144,6 +150,7 @@ class AlbumDetailViewModel(
                 tracksResult
                     .onSuccess { _tracks.set(it) }
                     .onFailure { _error.value = MixErrorMessage.Raw(it.message ?: "Failed to load tracks") }
+                lastLoudLoadFailed = !(detailResult.isSuccess && tracksResult.isSuccess)
                 detailResult.isSuccess && tracksResult.isSuccess
             }
         }

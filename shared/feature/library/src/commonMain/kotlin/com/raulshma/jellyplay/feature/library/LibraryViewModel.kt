@@ -569,7 +569,7 @@ class LibraryViewModel(
             // Increment the trigger to force flatMapLatest to create a new Pager,
             // which avoids the duplicate-key crash that occurs when pagedItems.refresh()
             // is called concurrently on a cachedIn flow.
-            _refreshTrigger.set(_refreshTrigger.value + 1)
+            _refreshTrigger.update { it + 1 }
         }
     }
 

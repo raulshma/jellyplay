@@ -560,6 +560,27 @@ class MediaRepositoryImplTest {
     }
 
     @Test
+    fun `getCollectionItems with force evicts every cached page of the collection`() = runTest {
+        coEvery { apiClient.getCollectionItems("col-1", 0, 20) } returns Result.success(
+            SearchResult(items = listOf(mediaItem("c1")), totalRecordCount = 40, startIndex = 0)
+        )
+        coEvery { apiClient.getCollectionItems("col-1", 20, 20) } returns Result.success(
+            SearchResult(items = listOf(mediaItem("c2")), totalRecordCount = 40, startIndex = 20)
+        )
+
+        repository.getCollectionItems("col-1", 0, 20)
+        repository.getCollectionItems("col-1", 20, 20)
+        // Forcing one page drops the collection's whole page family — same
+        // prefix evict as invalidateCollectionItemsCache — so a paginated
+        // caller's force-heal never leaves stale sibling pages behind.
+        repository.getCollectionItems("col-1", 0, 20, force = true)
+        repository.getCollectionItems("col-1", 20, 20)
+
+        coVerify(exactly = 2) { apiClient.getCollectionItems("col-1", 0, 20) }
+        coVerify(exactly = 2) { apiClient.getCollectionItems("col-1", 20, 20) }
+    }
+
+    @Test
     fun `getAlbumTracks with force re-fetches instead of serving the cached list`() = runTest {
         coEvery { apiClient.getAlbumTracks("album-1") } returns Result.success(listOf(mediaItem("t1")))
 
