@@ -324,21 +324,37 @@ class MediaRepositoryImpl(
         // the TTL window, not after it. getAndSet (not a read-then-clear):
         // an announce racing this fetch re-arms the marker for the NEXT
         // read instead of being swallowed by this one.
-        val effectiveForce = force || homeSectionsStale.getAndSet(false)
-        return homeSectionsCache.getOrFetch(
-            { homeSession.cacheIdentity() },
-            cacheKey,
-            force = effectiveForce,
-            // SWR persist: the fetch-path-only write hook — persists the
-            // snapshot for stale-while-revalidate on cold open (the in-memory
-            // cache is lost on process death) after the in-memory put, and
-            // never on a cache hit, so a hit cannot slide the persisted row's
-            // fetchedAt forward and defeat the 24h SWR staleness ceiling below.
-            onFetched = { persistHomeSectionsSnapshot(cacheKey, it) },
-        ) {
-            // The query value object crosses the repo → network seam intact; force
-            // propagates so the network layer's sub-call caches are bypassed too.
-            apiClient.getHomeSections(query, force)
+        val stalenessConsumed = homeSectionsStale.getAndSet(false)
+        val effectiveForce = force || stalenessConsumed
+        return try {
+            homeSectionsCache.getOrFetch(
+                { homeSession.cacheIdentity() },
+                cacheKey,
+                force = effectiveForce,
+                // SWR persist: the fetch-path-only write hook — persists the
+                // snapshot for stale-while-revalidate on cold open (the in-memory
+                // cache is lost on process death) after the in-memory put, and
+                // never on a cache hit, so a hit cannot slide the persisted row's
+                // fetchedAt forward and defeat the 24h SWR staleness ceiling below.
+                onFetched = { persistHomeSectionsSnapshot(cacheKey, it) },
+            ) {
+                // The query value object crosses the repo → network seam intact; force
+                // propagates so the network layer's sub-call caches are bypassed too.
+                apiClient.getHomeSections(query, force)
+            }.also { result ->
+                // A consumed marker must not die with the read that spent it:
+                // on failure the fetch produced nothing, and the pre-announce
+                // cached payload would serve until the next announce or the
+                // TTL — exactly the window #157 exists to close. Re-arm on
+                // every non-success (the thrown path below covers this
+                // caller's own cancellation). set (not compareAndSet): an
+                // announce that raced this fetch already re-armed it, and
+                // the write is idempotent either way.
+                if (stalenessConsumed && result.isFailure) homeSectionsStale.set(true)
+            }
+        } catch (t: Throwable) {
+            if (stalenessConsumed) homeSectionsStale.set(true)
+            throw t
         }
     }
 

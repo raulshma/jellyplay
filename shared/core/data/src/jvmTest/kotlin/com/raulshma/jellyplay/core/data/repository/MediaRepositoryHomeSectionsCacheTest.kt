@@ -33,6 +33,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 /**
  * Covers the in-memory home-sections cache in [MediaRepositoryImpl], which was
@@ -210,6 +211,33 @@ class MediaRepositoryHomeSectionsCacheTest {
         repository.getHomeSections(HomeSectionQuery())
 
         coVerify(exactly = 2) { apiClient.getHomeSections(any(), any()) }
+    }
+
+    @Test
+    fun `a failed forced read re-arms the staleness marker for the next read`() = runBlocking {
+        // The one-shot force is consumed BEFORE the fetch; if that fetch
+        // fails (offline blip) the read produced nothing, and the marker
+        // must come back — or the pre-announce cached payload would serve
+        // until the next announce or the 60s TTL, exactly the window #157
+        // exists to close.
+        val repository = buildRepository()
+        signIn("server-1", "user-A")
+        var fetchCalls = 0
+        coEvery { apiClient.getHomeSections(any(), any()) } coAnswers {
+            if (++fetchCalls == 1) {
+                homeResult("A")
+            } else {
+                Result.failure(RuntimeException("offline blip"))
+            }
+        }
+
+        repository.getHomeSections(HomeSectionQuery()) // populate the cache
+        repository.notifyUserDataChanged(listOf("item-1")) // arm the marker
+        val failed = repository.getHomeSections(HomeSectionQuery()) // consumes, fetch fails
+        assertTrue(failed.isFailure)
+        repository.getHomeSections(HomeSectionQuery()) // re-armed: refetches
+
+        coVerify(exactly = 3) { apiClient.getHomeSections(any(), any()) }
     }
 
     @Test

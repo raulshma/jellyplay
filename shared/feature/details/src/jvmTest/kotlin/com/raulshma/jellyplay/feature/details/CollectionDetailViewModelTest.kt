@@ -241,7 +241,7 @@ class CollectionDetailViewModelTest {
         every { mediaRepository.userDataChanges } returns userDataEvents
         val detail = MediaDetail(item = MediaItem(id = "c1", name = "Collection", mediaType = MediaType.COLLECTION))
         var detailCalls = 0
-        coEvery { mediaRepository.getMediaDetail("c1") } coAnswers {
+        coEvery { mediaRepository.getMediaDetail("c1", any()) } coAnswers {
             if (++detailCalls == 1) Result.success(detail) else throw IllegalStateException("engine blew up")
         }
         coEvery { mediaRepository.getCollectionItems("c1", any(), any(), any()) } returns Result.success(
@@ -261,7 +261,7 @@ class CollectionDetailViewModelTest {
 
         // The silent regeneration threw — serve-stale-while-revalidate keeps
         // the last Success instead of flashing an Error over it.
-        coVerify(exactly = 2) { mediaRepository.getMediaDetail("c1") }
+        coVerify(exactly = 2) { mediaRepository.getMediaDetail("c1", any()) }
         assertTrue(viewModel.uiState.value is CollectionDetailUiState.Success)
     }
 
@@ -299,7 +299,7 @@ class CollectionDetailViewModelTest {
     @Test
     fun `a silent reload failure keeps the last success instead of flashing error`() = runTest {
         every { mediaRepository.userDataChanges } returns userDataEvents
-        coEvery { mediaRepository.getMediaDetail("c1") } returns Result.success(
+        coEvery { mediaRepository.getMediaDetail("c1", any()) } returns Result.success(
             MediaDetail(item = MediaItem(id = "c1", name = "Collection", mediaType = MediaType.COLLECTION))
         ) andThen Result.failure(RuntimeException("offline blip"))
         coEvery { mediaRepository.getCollectionItems("c1", any(), any(), any()) } returns Result.success(
@@ -332,7 +332,7 @@ class CollectionDetailViewModelTest {
         // IN FLIGHT across the next step.
         val gate = CompletableDeferred<Unit>()
         var detailCalls = 0
-        coEvery { mediaRepository.getMediaDetail("c1") } coAnswers {
+        coEvery { mediaRepository.getMediaDetail("c1", any()) } coAnswers {
             if (++detailCalls == 1) {
                 Result.failure(RuntimeException("offline"))
             } else {
@@ -374,7 +374,7 @@ class CollectionDetailViewModelTest {
         // IN FLIGHT across the next step.
         val gate = CompletableDeferred<Unit>()
         var detailCalls = 0
-        coEvery { mediaRepository.getMediaDetail("c1") } coAnswers {
+        coEvery { mediaRepository.getMediaDetail("c1", any()) } coAnswers {
             if (++detailCalls == 1) {
                 Result.failure(RuntimeException("offline"))
             } else {
@@ -414,7 +414,7 @@ class CollectionDetailViewModelTest {
     }
 
     @Test
-    fun `deferred silent reload forces the collection items read`() = runTest {
+    fun `deferred silent reload forces both the detail and the items read`() = runTest {
         every { mediaRepository.userDataChanges } returns userDataEvents
         stubCollectionFetch()
         val viewModel = collectionViewModel()
@@ -428,14 +428,18 @@ class CollectionDetailViewModelTest {
         advanceUntilIdle()
 
         // The loud load goes through the cache; the silent regeneration must
-        // bypass it — a member flip never evicts the collection's page key,
-        // so a non-forced reload would re-serve the pre-flip badges.
+        // bypass BOTH halves — a member flip never evicts the collection's
+        // page key (items), and a write touching the collection item itself
+        // (favorite from elsewhere) never evicts the detail key. Same two
+        // levers the album detail's silent refresh uses.
+        coVerify(exactly = 1) { mediaRepository.getMediaDetail("c1", force = false) }
+        coVerify(exactly = 1) { mediaRepository.getMediaDetail("c1", force = true) }
         coVerify(exactly = 1) { mediaRepository.getCollectionItems("c1", any(), any(), force = false) }
         coVerify(exactly = 1) { mediaRepository.getCollectionItems("c1", any(), any(), force = true) }
     }
 
     private fun stubCollectionFetch() {
-        coEvery { mediaRepository.getMediaDetail("c1") } returns Result.success(
+        coEvery { mediaRepository.getMediaDetail("c1", any()) } returns Result.success(
             MediaDetail(item = MediaItem(id = "c1", name = "Collection", mediaType = MediaType.COLLECTION))
         )
         coEvery { mediaRepository.getCollectionItems("c1", any(), any(), any()) } returns Result.success(
