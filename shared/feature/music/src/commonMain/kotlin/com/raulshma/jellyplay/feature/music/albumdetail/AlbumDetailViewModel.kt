@@ -12,12 +12,12 @@ import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.ui.viewmodel.DeferredFetchCoordinator
 import com.raulshma.jellyplay.core.ui.viewmodel.DeferredUserDataRefresher
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.feature.music.MixErrorMessage
 import com.raulshma.jellyplay.feature.music.toMixErrorMessage
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.SharingStarted
@@ -42,37 +42,22 @@ class AlbumDetailViewModel(
     private var currentAlbumId: String? = null
 
     /**
-     * The one load in flight, loud or silent — a loud load cancels a silent
-     * one (it regenerates the same data loudly), and the deferred refresh
-     * skips itself while one is active, so two fetches never race.
-     */
-    private var loadJob: Job? = null
-
-    /**
      * User-data changes while another screen is up (a track favorite flipped
      * elsewhere, outbox drain landing) only mark the track list stale; the
      * single silent forced reload fires when the album screen is next entered
-     * (see [DeferredUserDataRefresher]) — never mid-scroll.
+     * (see [DeferredUserDataRefresher]) — never mid-scroll. The single-flight
+     * load slot and the skip/re-arm choreography live in
+     * [DeferredFetchCoordinator].
      */
-    val deferredRefresher: DeferredUserDataRefresher = DeferredUserDataRefresher(
+    private val fetchCoordinator = DeferredFetchCoordinator(
         userDataChanges = mediaRepository.userDataChanges,
         scope = scope,
-        onRefresh = {
-            currentAlbumId?.let { id ->
-                // A load already in flight regenerates the album — a silent
-                // twin would only duplicate the fetch (see [loadJob]). The
-                // skip still re-arms: if the in-flight load dispatched before
-                // this change landed, its result is pre-change data and the
-                // next re-entry must retry (over-arming costs one redundant
-                // quiet refetch at worst).
-                if (loadJob?.isActive != true) {
-                    loadAlbum(id, force = true, silent = true)
-                } else {
-                    deferredRefresher.rearm()
-                }
-            }
+        silentFetch = {
+            currentAlbumId?.let { fetchAlbumData(it, force = true, silent = true) } ?: true
         },
     )
+
+    val deferredRefresher: DeferredUserDataRefresher get() = fetchCoordinator.deferredRefresher
 
     // StateFlow (not composeState) so `trackDownloads` below can observe the
     // loaded track ids and scope its downloads query to them.
@@ -113,55 +98,59 @@ class AlbumDetailViewModel(
      * the screen's `LaunchedEffect`, and a second loud load there would race
      * the deferred refresh's silent regeneration. An errored album (or a fresh
      * VM) loads.
-     *
-     * [silent] serves the deferred-refresh path: no loading state, no error
-     * reset, and an all-or-nothing publish — a failed half keeps the LAST
-     * detail+tracks PAIR on screen (never one fresh half beside one stale
-     * half), re-arming the deferred refresh so the next re-entry retries
-     * (serve-stale-while-revalidate, same philosophy as the detail screens).
      */
-    fun loadAlbum(albumId: String, force: Boolean = false, silent: Boolean = false) {
+    fun loadAlbum(albumId: String, force: Boolean = false) {
         if (!force && currentAlbumId == albumId && _detail.value != null && _error.value == null) return
         currentAlbumId = albumId
-        loadJob?.cancel()
-        loadJob = launch {
-            if (!silent) {
-                _isLoading.value = true
-                _error.value = null
-            }
-            coroutineScope {
-                val detailDeferred = async { mediaRepository.getMediaDetail(albumId, force = force) }
-                val tracksDeferred = async { mediaRepository.getAlbumTracks(albumId, force = force) }
-                val detailResult = detailDeferred.await()
-                val tracksResult = tracksDeferred.await()
-                if (silent) {
-                    val detail = detailResult.getOrNull()
-                    val tracks = tracksResult.getOrNull()
-                    if (detail != null && tracks != null) {
-                        _detail.value = detail
-                        _tracks.set(tracks)
-                    } else {
-                        deferredRefresher.rearm()
-                    }
-                } else {
-                    detailResult
-                        .onSuccess { _detail.value = it }
-                        .onFailure { _error.value = MixErrorMessage.Raw(it.message ?: "Failed to load album") }
-                    tracksResult
-                        .onSuccess { _tracks.set(it) }
-                        .onFailure { _error.value = MixErrorMessage.Raw(it.message ?: "Failed to load tracks") }
-                }
-            }
-            if (!silent) {
-                _isLoading.value = false
-            }
-        }
+        fetchCoordinator.load { fetchAlbumData(albumId, force = force, silent = false) }
     }
 
     fun refreshAlbum(albumId: String) {
-        launch {
-            loadAlbum(albumId, force = true)
+        loadAlbum(albumId, force = true)
+    }
+
+    /**
+     * The fetch behind both load paths, reporting plain success so
+     * [DeferredFetchCoordinator] owns the failure re-arm. [silent] serves
+     * the deferred-refresh path: no loading state, no error reset, and an
+     * all-or-nothing publish — a failed half keeps the LAST detail+tracks
+     * PAIR on screen (never one fresh half beside one stale half)
+     * (serve-stale-while-revalidate, same philosophy as the detail screens).
+     */
+    private suspend fun fetchAlbumData(albumId: String, force: Boolean, silent: Boolean): Boolean {
+        if (!silent) {
+            _isLoading.value = true
+            _error.value = null
         }
+        val ok = coroutineScope {
+            val detailDeferred = async { mediaRepository.getMediaDetail(albumId, force = force) }
+            val tracksDeferred = async { mediaRepository.getAlbumTracks(albumId, force = force) }
+            val detailResult = detailDeferred.await()
+            val tracksResult = tracksDeferred.await()
+            if (silent) {
+                val detail = detailResult.getOrNull()
+                val tracks = tracksResult.getOrNull()
+                if (detail != null && tracks != null) {
+                    _detail.value = detail
+                    _tracks.set(tracks)
+                    true
+                } else {
+                    false
+                }
+            } else {
+                detailResult
+                    .onSuccess { _detail.value = it }
+                    .onFailure { _error.value = MixErrorMessage.Raw(it.message ?: "Failed to load album") }
+                tracksResult
+                    .onSuccess { _tracks.set(it) }
+                    .onFailure { _error.value = MixErrorMessage.Raw(it.message ?: "Failed to load tracks") }
+                detailResult.isSuccess && tracksResult.isSuccess
+            }
+        }
+        if (!silent) {
+            _isLoading.value = false
+        }
+        return ok
     }
 
     fun playAlbum(tracks: List<MediaItem>, startIndex: Int = 0) {

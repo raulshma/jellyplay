@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.data.repository.UserDataContainer
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.ui.viewmodel.DeferredFetchCoordinator
 import com.raulshma.jellyplay.core.ui.viewmodel.DeferredUserDataRefresher
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import kotlinx.coroutines.async
@@ -25,10 +26,15 @@ class PersonDetailViewModel constructor(
     private val _uiState = MutableStateFlow<PersonDetailUiState>(PersonDetailUiState.Loading)
     val uiState: StateFlow<PersonDetailUiState> = _uiState.asStateFlow()
 
-    private val fetches = DetailFetchCoordinator(
+    /** The loaded person — the deferred refresh reloads them silently. */
+    private var currentPersonId: String? = null
+
+    private val fetchCoordinator = DeferredFetchCoordinator(
         userDataChanges = mediaRepository.userDataChanges,
         scope = scope,
-        fetch = { personId, silent -> fetchPerson(personId, silent) },
+        silentFetch = {
+            currentPersonId?.let { fetchPerson(it, silent = true) } ?: true
+        },
     )
 
     /**
@@ -37,20 +43,23 @@ class PersonDetailViewModel constructor(
      * reload fires when the screen is next entered (see
      * [DeferredUserDataRefresher]) — never mid-scroll.
      */
-    val deferredRefresher: DeferredUserDataRefresher get() = fetches.deferredRefresher
+    val deferredRefresher: DeferredUserDataRefresher get() = fetchCoordinator.deferredRefresher
 
     fun loadPerson(personId: String) {
-        fetches.load(
-            id = personId,
-            isShowing = { _uiState.value is PersonDetailUiState.Success },
-            begin = { _uiState.value = PersonDetailUiState.Loading },
-        )
+        // Back-stack re-entry re-runs the screen's LaunchedEffect; a second
+        // loud load over an already-showing Success would race the deferred
+        // refresh's silent regeneration (and flash Loading over content the
+        // user was returning to). An Error state (or a fresh VM) loads.
+        if (currentPersonId == personId && _uiState.value is PersonDetailUiState.Success) return
+        currentPersonId = personId
+        _uiState.value = PersonDetailUiState.Loading
+        fetchCoordinator.load { fetchPerson(personId, silent = false) }
     }
 
     /**
      * (Re)fetches the person's detail + filmography, reporting plain success
-     * so [DetailFetchCoordinator] owns the silent-failure re-arm. [silent]
-     * serves the deferred-refresh path: a fetch failure keeps the last Success
+     * so [DeferredFetchCoordinator] owns the failure re-arm. [silent] serves
+     * the deferred-refresh path: a fetch failure keeps the last Success
      * instead of flashing an Error screen over content the user was just
      * looking at — serve-stale-while-revalidate, same philosophy as the home
      * refresher.

@@ -1286,17 +1286,22 @@ the pre-change data until the next WS event. Cancellation never re-arms
 (the cancelling loud load is the regeneration).
 
 The host choreography (collection/person/album detail + music home) is one
-shape: a `currentXId` + one `fetchJob`/`loadJob` for loud AND silent loads —
-a loud load cancels an in-flight silent one, the deferred refresh skips
-itself while any load is active, back-stack re-entry's loud load no-ops when
-the same item already shows (Success, no error) — and silent fetches publish
-stale-while-revalidate: no loading state, no error reset, no toast, all-or-
-nothing (album detail keeps the last detail+tracks PAIR on a half failure —
-never one fresh half beside one stale half), `rearm()` on failure. Music
-home's silent path additionally never touches `isLoading` (the
-pull-to-refresh spinner keys off it) and rethrows `CancellationException` so
-a cancelled loud load can't mask as a fetch failure and strand its spinner.
-Pinned by `DeferredUserDataRefresherTest` (core/ui) plus the four hosts'
+shape, owned by **`DeferredFetchCoordinator`**
+(`shared/core/ui/.../viewmodel/DeferredFetchCoordinator.kt`): one fetch-job
+slot for loud AND silent loads — a loud load cancels an in-flight silent one,
+the deferred refresh skips itself while any load is active (the skip re-arms),
+and any fetch reporting failure re-arms (a loud failure with nothing pending
+over-arms one quiet refetch). Hosts keep their own `currentXId` + back-stack
+re-entry guard (the loud load no-ops when the same item already shows:
+Success, no error) and report plain success from the fetch body; silent
+fetches publish stale-while-revalidate: no loading state, no error reset, no
+toast, all-or-nothing (album detail keeps the last detail+tracks PAIR on a
+half failure — never one fresh half beside one stale half). Music home's
+silent path additionally never touches `isLoading` (the pull-to-refresh
+spinner keys off it), reports failure while offline (re-arm instead of
+stranding the flag) and rethrows `CancellationException` so a cancelled loud
+load can't mask as a fetch failure and strand its spinner. Pinned by
+`DeferredUserDataRefresherTest` (core/ui) plus the four hosts'
 deferred-refresh suites.
 
 Data side: **`MediaRepositoryImpl.getAlbumTracks(albumId, force)`** grew the

@@ -515,6 +515,35 @@ class MusicHomeViewModelTest {
     }
 
     @Test
+    fun deferredRefresh_whileOffline_rearmsInsteadOfStrandingThePendingFlag() = runTest(mainDispatcher) {
+        stubHomeQueries(favoriteArtists = listOf(item("a1", "Artist")))
+        createViewModel()
+        advanceUntilIdle()
+        assertEquals(1, viewModel.uiState.value.sections.size)
+
+        offlineModeFlow.value = OfflineMode.OFFLINE_MANUAL
+        advanceUntilIdle()
+
+        // Armed while off-screen AND offline: the activation's silent
+        // regeneration cannot fetch, so it must report failure (re-arm)
+        // rather than strand the consumed flag — while the app stays
+        // offline, no later re-entry would otherwise retry.
+        viewModel.deferredRefresher.onScreenActiveChanged(false)
+        userDataEvents.emit(UserDataChange("user-1", listOf("t1")))
+        advanceUntilIdle()
+        viewModel.deferredRefresher.onScreenActiveChanged(true)
+        advanceUntilIdle()
+        coVerify(exactly = 1) { mediaRepository.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) }
+
+        // Returning online regenerates loudly via the offline-mode
+        // collector — the change heals even though the silent path could
+        // not run while offline.
+        offlineModeFlow.value = OfflineMode.ONLINE
+        advanceUntilIdle()
+        coVerify(exactly = 2) { mediaRepository.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) }
+    }
+
+    @Test
     fun refresh_loudFailureOverArmsTheDeferredRefreshForTheNextReentry() = runTest(mainDispatcher) {
         stubHomeQueries(favoriteArtists = listOf(item("a1", "Artist")))
         // One answer per matcher: the artist query succeeds on the initial
