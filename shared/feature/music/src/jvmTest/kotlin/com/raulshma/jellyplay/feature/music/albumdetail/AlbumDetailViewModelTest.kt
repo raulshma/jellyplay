@@ -236,6 +236,32 @@ class AlbumDetailViewModelTest {
     }
 
     @Test
+    fun loadAlbum_thrownRepoFailure_clearsSpinnerSetsErrorAndReloadsOnReEntry() = runTest(mainDispatcher) {
+        coEvery { mediaRepository.getMediaDetail("album1", any()) } throws IllegalStateException("engine blew up")
+        coEvery { mediaRepository.getAlbumTracks("album1") } returns Result.success(albumTracks)
+
+        viewModel.loadAlbum("album1")
+        advanceUntilIdle()
+
+        // The coordinator swallows the throw (re-arm + no uncaught handler);
+        // without the error hook the spinner would stay up with no error UI.
+        assertEquals("engine blew up", (viewModel.error as MixErrorMessage.Raw).message)
+        assertFalse(viewModel.isLoading)
+
+        // The throw must count as a failed loud load: re-entry reloads
+        // (no no-op guard) and succeeds.
+        coEvery { mediaRepository.getMediaDetail("album1", any()) } returns Result.success(
+            MediaDetail(item = MediaItem(id = "album1", name = "Album", mediaType = MediaType.ALBUM)),
+        )
+        viewModel.loadAlbum("album1")
+        advanceUntilIdle()
+
+        assertEquals("Album", viewModel.detail?.item?.name)
+        assertFalse(viewModel.isLoading)
+        assertNull(viewModel.error)
+    }
+
+    @Test
     fun refreshAlbum_bypassesTheDetailCache() = runTest(mainDispatcher) {
         loadAlbum()
         advanceUntilIdle()

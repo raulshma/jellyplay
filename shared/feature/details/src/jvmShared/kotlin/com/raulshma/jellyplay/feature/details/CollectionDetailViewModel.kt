@@ -35,6 +35,15 @@ class CollectionDetailViewModel constructor(
         silentFetch = {
             currentCollectionId?.let { fetchCollection(it, silent = true) } ?: true
         },
+        onFetchError = { e, silent ->
+            // Same contract as a `false` from a loud [fetchCollection]: a
+            // thrown repo path must not strand the Loading state published
+            // in [loadCollection] — swap to Error (loud only; silent keeps
+            // the last Success).
+            if (!silent) {
+                _uiState.value = CollectionDetailUiState.Error(e.message ?: "Failed to load collection")
+            }
+        },
     )
 
     /**

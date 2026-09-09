@@ -218,6 +218,53 @@ class CollectionDetailViewModelTest {
         assertEquals("Failed to load collection", state.message)
     }
 
+    @Test
+    fun `a thrown repo failure on the loud load surfaces Error instead of stranding Loading`() = runTest(mainDispatcher) {
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        coEvery { mediaRepository.getMediaDetail("c1") } throws IllegalStateException("engine blew up")
+        coEvery { mediaRepository.getCollectionItems("c1", any(), any(), any()) } returns Result.success(
+            SearchResult(items = emptyList(), totalRecordCount = 0, startIndex = 0),
+        )
+
+        viewModel.loadCollection("c1")
+        advanceUntilIdle()
+
+        // The coordinator swallows the throw (re-arm + no uncaught handler);
+        // without the error hook this screen would sit on Loading forever.
+        val state = viewModel.uiState.value
+        assertTrue(state is CollectionDetailUiState.Error)
+        assertEquals("engine blew up", (state as CollectionDetailUiState.Error).message)
+    }
+
+    @Test
+    fun `a thrown repo failure on the silent reload keeps the last success`() = runTest {
+        every { mediaRepository.userDataChanges } returns userDataEvents
+        val detail = MediaDetail(item = MediaItem(id = "c1", name = "Collection", mediaType = MediaType.COLLECTION))
+        var detailCalls = 0
+        coEvery { mediaRepository.getMediaDetail("c1") } coAnswers {
+            if (++detailCalls == 1) Result.success(detail) else throw IllegalStateException("engine blew up")
+        }
+        coEvery { mediaRepository.getCollectionItems("c1", any(), any(), any()) } returns Result.success(
+            SearchResult(items = emptyList(), totalRecordCount = 0, startIndex = 0),
+        )
+        val viewModel = collectionViewModel()
+
+        viewModel.loadCollection("c1")
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value is CollectionDetailUiState.Success)
+
+        viewModel.deferredRefresher.onScreenActiveChanged(false)
+        userDataEvents.emit(UserDataChange("user-1", listOf("m1")))
+        advanceUntilIdle()
+        viewModel.deferredRefresher.onScreenActiveChanged(true)
+        advanceUntilIdle()
+
+        // The silent regeneration threw — serve-stale-while-revalidate keeps
+        // the last Success instead of flashing an Error over it.
+        coVerify(exactly = 2) { mediaRepository.getMediaDetail("c1") }
+        assertTrue(viewModel.uiState.value is CollectionDetailUiState.Success)
+    }
+
     // ── Deferred refresh (user-data changes while off-screen) ───────────────
     //
     // These build a LOCAL ViewModel after stubbing `userDataChanges`: the

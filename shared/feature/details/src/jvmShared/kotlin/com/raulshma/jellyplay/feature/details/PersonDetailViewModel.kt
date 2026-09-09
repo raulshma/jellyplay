@@ -35,6 +35,15 @@ class PersonDetailViewModel constructor(
         silentFetch = {
             currentPersonId?.let { fetchPerson(it, silent = true) } ?: true
         },
+        onFetchError = { e, silent ->
+            // Same contract as a `false` from a loud [fetchPerson]: a thrown
+            // repo path must not strand the Loading state published in
+            // [loadPerson] — swap to Error (loud only; silent keeps the last
+            // Success).
+            if (!silent) {
+                _uiState.value = PersonDetailUiState.Error(e.message ?: "Failed to load")
+            }
+        },
     )
 
     /**

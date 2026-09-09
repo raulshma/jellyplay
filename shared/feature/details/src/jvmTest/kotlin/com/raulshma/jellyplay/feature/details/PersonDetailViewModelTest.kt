@@ -193,6 +193,22 @@ class PersonDetailViewModelTest {
     }
 
     @Test
+    fun `a thrown repo failure on the loud load surfaces Error instead of stranding Loading`() = runTest(mainDispatcher) {
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        coEvery { mediaRepository.getMediaDetail("p1") } throws IllegalStateException("engine blew up")
+        coEvery { mediaRepository.getItemsByPerson("p1") } returns Result.success(emptyList())
+
+        viewModel.loadPerson("p1")
+        advanceUntilIdle()
+
+        // The coordinator swallows the throw (re-arm + no uncaught handler);
+        // without the error hook this screen would sit on Loading forever.
+        val state = viewModel.uiState.value
+        assertTrue(state is PersonDetailUiState.Error)
+        assertEquals("engine blew up", (state as PersonDetailUiState.Error).message)
+    }
+
+    @Test
     fun `loadPerson on an already-successful person is a no-op`() = runTest(mainDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         coEvery { mediaRepository.getMediaDetail("p1") } returns Result.success(

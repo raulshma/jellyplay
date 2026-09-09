@@ -25,6 +25,10 @@ import kotlinx.coroutines.launch
  * same way (and never escapes to the scope's uncaught handler), while
  * cancellation never re-arms (the cancelling load is itself the
  * regeneration) — fetch bodies must rethrow `CancellationException`.
+ * A thrown fetch would otherwise strand whatever loud UI the host published
+ * before it (a Loading state, a spinner) — [onFetchError] is the host's
+ * chance to surface that failure the same way it surfaces a `false` return;
+ * it is told whether the fetch was silent so stale content stays untouched.
  *
  * The loud-cancels-silent rule assumes the loud load regenerates the data
  * the silent pass was regenerating; when that may not hold (a VM reused
@@ -45,6 +49,7 @@ class DeferredFetchCoordinator(
     userDataChanges: Flow<UserDataChange>,
     private val scope: CoroutineScope,
     private val silentFetch: suspend () -> Boolean,
+    private val onFetchError: (exception: Exception, silent: Boolean) -> Unit = { _, _ -> },
 ) {
 
     /**
@@ -75,7 +80,7 @@ class DeferredFetchCoordinator(
         fetchJob?.cancel()
         fetchJobIsSilent = false
         fetchJob = scope.launch {
-            if (!runFetch(loudFetch)) {
+            if (!runFetch(loudFetch, silent = false)) {
                 deferredRefresher.rearm()
             }
         }
@@ -92,7 +97,7 @@ class DeferredFetchCoordinator(
         } else {
             fetchJobIsSilent = true
             fetchJob = scope.launch {
-                if (!runFetch(silentFetch)) {
+                if (!runFetch(silentFetch, silent = true)) {
                     deferredRefresher.rearm()
                 }
             }
@@ -103,13 +108,16 @@ class DeferredFetchCoordinator(
      * Host fetch bodies report failure as `false`; one that throws a
      * non-cancellation exception (a repo path that blew up before building
      * its Result) must count as failure too — otherwise it would skip the
-     * re-arm and escape to the scope's uncaught handler.
+     * re-arm and escape to the scope's uncaught handler. [onFetchError]
+     * carries the exception back so the host can clear its loud UI (spinner,
+     * Loading) exactly as it would for a `false` return.
      */
-    private suspend fun runFetch(fetch: suspend () -> Boolean): Boolean = try {
+    private suspend fun runFetch(fetch: suspend () -> Boolean, silent: Boolean): Boolean = try {
         fetch()
     } catch (e: CancellationException) {
         throw e
-    } catch (_: Exception) {
+    } catch (e: Exception) {
+        onFetchError(e, silent)
         false
     }
 }

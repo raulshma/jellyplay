@@ -103,6 +103,52 @@ class DeferredFetchCoordinatorTest {
     }
 
     @Test
+    fun `a throwing fetch reports the exception to the host with its loud or silent mode`() = runTest {
+        val changes = MutableSharedFlow<UserDataChange>(extraBufferCapacity = 16)
+        val reported = mutableListOf<Pair<String, Boolean>>()
+        var silentCalls = 0
+        val coordinator = DeferredFetchCoordinator(
+            userDataChanges = changes,
+            scope = coordinatorScope(),
+            silentFetch = {
+                silentCalls++
+                if (silentCalls == 1) throw IllegalStateException("silent boom") else true
+            },
+            onFetchError = { e, silent -> reported += (e.message ?: "") to silent },
+        )
+
+        coordinator.load { throw IllegalStateException("loud boom") }
+        coordinator.deferredRefresher.onScreenActiveChanged(true)
+
+        assertEquals(
+            listOf("loud boom" to false, "silent boom" to true),
+            reported,
+            "the host must learn which mode threw so it can strand no loud UI and stay quiet on silent",
+        )
+    }
+
+    @Test
+    fun `a cancelled fetch never reaches onFetchError`() = runTest {
+        val changes = MutableSharedFlow<UserDataChange>(extraBufferCapacity = 16)
+        var hookCalls = 0
+        val never = CompletableDeferred<Boolean>()
+        val coordinator = DeferredFetchCoordinator(
+            userDataChanges = changes,
+            scope = coordinatorScope(),
+            silentFetch = { never.await() },
+            onFetchError = { _, _ -> hookCalls++ },
+        )
+
+        changes.tryEmit(change("item-1"))
+        coordinator.deferredRefresher.onScreenActiveChanged(true)
+        // The loud load cancels the suspended silent pass mid-flight; the
+        // cancellation is the regeneration itself, never a failure to report.
+        coordinator.load { true }
+
+        assertEquals(0, hookCalls, "cancellation must stay masked from the error hook")
+    }
+
+    @Test
     fun `cancelling an in-flight loud load never re-arms`() = runTest {
         val changes = MutableSharedFlow<UserDataChange>(extraBufferCapacity = 16)
         var silentCalls = 0

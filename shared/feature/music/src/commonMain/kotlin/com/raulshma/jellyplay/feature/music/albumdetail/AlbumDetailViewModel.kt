@@ -55,6 +55,17 @@ class AlbumDetailViewModel(
         silentFetch = {
             currentAlbumId?.let { fetchAlbumData(it, force = true, silent = true) } ?: true
         },
+        onFetchError = { e, silent ->
+            // Same contract as a `false` from a loud [fetchAlbumData]: a
+            // thrown repo path must not strand the spinner published there —
+            // clear it, surface the error, and arm the re-entry reload
+            // (loud only; silent keeps the last detail+tracks pair).
+            if (!silent) {
+                _error.value = MixErrorMessage.Raw(e.message ?: "Failed to load album")
+                lastLoudLoadFailed = true
+                _isLoading.value = false
+            }
+        },
     )
 
     val deferredRefresher: DeferredUserDataRefresher get() = fetchCoordinator.deferredRefresher
