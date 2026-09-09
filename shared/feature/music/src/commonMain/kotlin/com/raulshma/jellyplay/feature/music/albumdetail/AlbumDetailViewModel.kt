@@ -62,7 +62,7 @@ class AlbumDetailViewModel(
             // (loud only; silent keeps the last detail+tracks pair).
             if (!silent) {
                 _error.value = MixErrorMessage.Raw(e.message ?: "Failed to load album")
-                lastLoudLoadFailed = true
+                needsLoudReloadOnReentry = true
                 _isLoading.value = false
             }
         },
@@ -84,7 +84,7 @@ class AlbumDetailViewModel(
     // _error is shared with instant-mix failures, but the re-entry guard
     // below must only react to LOAD failures — a failed mix must not make
     // re-entering the album flash a loud reload over loaded content.
-    private var lastLoudLoadFailed = false
+    private var needsLoudReloadOnReentry = false
 
     // Instant-mix choreography (isStarting flag + first-track one-shot +
     // outcome → error mapping) lives in the shared holder; the VM only adapts
@@ -117,7 +117,7 @@ class AlbumDetailViewModel(
      * its error shares [_error] but the content stays loaded.
      */
     fun loadAlbum(albumId: String, force: Boolean = false) {
-        if (!force && currentAlbumId == albumId && _detail.value != null && !lastLoudLoadFailed) return
+        if (!force && currentAlbumId == albumId && _detail.value != null && !needsLoudReloadOnReentry) return
         currentAlbumId = albumId
         fetchCoordinator.load { fetchAlbumData(albumId, force = force, silent = false) }
     }
@@ -154,8 +154,8 @@ class AlbumDetailViewModel(
                     // (never a mix error — the mix button is unreachable from
                     // the error screen) and the guard flag, or re-entry would
                     // flash-reload healed content.
-                    if (lastLoudLoadFailed) {
-                        lastLoudLoadFailed = false
+                    if (needsLoudReloadOnReentry) {
+                        needsLoudReloadOnReentry = false
                         _error.value = null
                     }
                     true
@@ -169,7 +169,7 @@ class AlbumDetailViewModel(
                 tracksResult
                     .onSuccess { _tracks.set(it) }
                     .onFailure { _error.value = MixErrorMessage.Raw(it.message ?: "Failed to load tracks") }
-                lastLoudLoadFailed = !(detailResult.isSuccess && tracksResult.isSuccess)
+                needsLoudReloadOnReentry = !(detailResult.isSuccess && tracksResult.isSuccess)
                 detailResult.isSuccess && tracksResult.isSuccess
             }
         }

@@ -241,6 +241,29 @@ class MediaRepositoryHomeSectionsCacheTest {
     }
 
     @Test
+    fun `a staleness-consumed read passes force to the network layer`() = runBlocking {
+        // The one-shot marker must propagate past the in-memory cache: the
+        // fetch lambda hands its flag to the api client, whose sub-call
+        // memo caches (Latest Media / Recommendations) only bypass on
+        // force. A staleness read that refetched but passed force=false
+        // would re-serve the pre-announce sub-call rows.
+        val repository = buildRepository()
+        signIn("server-1", "user-A")
+        val forcedFlags = mutableListOf<Boolean>()
+        coEvery { apiClient.getHomeSections(any(), any()) } answers {
+            forcedFlags.add(secondArg())
+            homeResult("A")
+        }
+
+        repository.getHomeSections(HomeSectionQuery()) // populate, force = false
+        repository.notifyUserDataChanged(listOf("item-1")) // arm the marker
+        repository.getHomeSections(HomeSectionQuery()) // consumes the marker
+
+        coVerify(exactly = 2) { apiClient.getHomeSections(any(), any()) }
+        assertEquals(listOf(false, true), forcedFlags)
+    }
+
+    @Test
     fun `a home read without an intervening announcement serves the cached result`() = runBlocking {
         val repository = buildRepository()
         signIn("server-1", "user-A")

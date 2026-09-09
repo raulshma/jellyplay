@@ -338,9 +338,11 @@ class MediaRepositoryImpl(
                 // fetchedAt forward and defeat the 24h SWR staleness ceiling below.
                 onFetched = { persistHomeSectionsSnapshot(cacheKey, it) },
             ) {
-                // The query value object crosses the repo → network seam intact; force
-                // propagates so the network layer's sub-call caches are bypassed too.
-                apiClient.getHomeSections(query, force)
+                // The query value object crosses the repo → network seam intact;
+                // effectiveForce (not force) so a consumed staleness marker
+                // bypasses the network layer's sub-call caches too, not just
+                // the in-memory one.
+                apiClient.getHomeSections(query, effectiveForce)
             }.also { result ->
                 // A consumed marker must not die with the read that spent it:
                 // on failure the fetch produced nothing, and the pre-announce
