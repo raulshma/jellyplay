@@ -134,6 +134,7 @@ internal class WebMediaRepositoryNarrow(
         collectionId: String,
         startIndex: Int,
         limit: Int,
+        force: Boolean,
     ): Result<SearchResult> = offWeb("getCollectionItems")
 
     override suspend fun getCollections(limit: Int): Result<List<CollectionSummary>> = offWeb("getCollections")

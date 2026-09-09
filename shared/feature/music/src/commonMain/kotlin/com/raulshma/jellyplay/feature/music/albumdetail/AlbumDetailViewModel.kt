@@ -139,6 +139,14 @@ class AlbumDetailViewModel(
                 if (detail != null && tracks != null) {
                     _detail.value = detail
                     _tracks.set(tracks)
+                    // A silent success heals a failed loud load: clear its error
+                    // (never a mix error — the mix button is unreachable from
+                    // the error screen) and the guard flag, or re-entry would
+                    // flash-reload healed content.
+                    if (lastLoudLoadFailed) {
+                        lastLoudLoadFailed = false
+                        _error.value = null
+                    }
                     true
                 } else {
                     false

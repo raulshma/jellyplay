@@ -314,6 +314,43 @@ class AlbumDetailViewModelTest {
     }
 
     @Test
+    fun deferredRefresh_successHealsAFailedLoudLoadForReEntry() = runTest(mainDispatcher) {
+        // Loud partial failure: detail on screen, tracks failed, load error
+        // set — the re-entry guard is armed by the failed loud load.
+        coEvery { mediaRepository.getMediaDetail("album1") } returns Result.success(
+            MediaDetail(item = MediaItem(id = "album1", name = "Album", mediaType = MediaType.ALBUM)),
+        )
+        coEvery { mediaRepository.getAlbumTracks("album1") } returns Result.failure(RuntimeException("no tracks"))
+        viewModel.loadAlbum("album1")
+        advanceUntilIdle()
+        assertEquals("no tracks", (viewModel.error as MixErrorMessage.Raw).message)
+
+        // The deferred silent regeneration succeeds and heals the screen.
+        viewModel.deferredRefresher.onScreenActiveChanged(false)
+        coEvery { mediaRepository.getMediaDetail("album1", true) } returns Result.success(
+            MediaDetail(item = MediaItem(id = "album1", name = "Album", mediaType = MediaType.ALBUM)),
+        )
+        coEvery { mediaRepository.getAlbumTracks("album1", true) } returns Result.success(albumTracks)
+        userDataEvents.emit(com.raulshma.jellyplay.core.model.UserDataChange("user-1", listOf("t1")))
+        advanceUntilIdle()
+        viewModel.deferredRefresher.onScreenActiveChanged(true)
+        advanceUntilIdle()
+
+        // Healed: the load error cleared with the fresh pair published —
+        // a stranded error would pin the error screen over fresh content.
+        assertNull(viewModel.error)
+        assertEquals(albumTracks, viewModel.tracks)
+
+        // ...and the healed album is an already-loaded album again: re-entry
+        // no-ops instead of flash-reloading over the healed content.
+        viewModel.loadAlbum("album1")
+        advanceUntilIdle()
+        coVerify(exactly = 1) { mediaRepository.getMediaDetail("album1") }
+        coVerify(exactly = 1) { mediaRepository.getMediaDetail("album1", true) }
+        assertFalse(viewModel.isLoading)
+    }
+
+    @Test
     fun deferredRefresh_rerunsSilentlyWithoutBlankingContent() = runTest(mainDispatcher) {
         loadAlbum()
         advanceUntilIdle()

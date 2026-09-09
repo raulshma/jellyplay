@@ -278,6 +278,11 @@ class MediaRepositoryImpl(
         // twice and double-bump the catalogue's epoch on each transition.
         sessionCacheRegistry.registerAction("media-identity-clear") { transition ->
             detailCaches.invalidateAll()
+            // The #157 staleness marker is identity-scoped state in spirit (it
+            // is armed by the PREVIOUS user's confirmed writes); without this
+            // reset it survives the switch and forces the next user's first
+            // home read into one redundant refetch.
+            homeSectionsStale.set(false)
             // Clear the PREVIOUS identity's persisted home-section SWR
             // rows — scoped, not wholesale, so a multi-account server
             // keeps the other users' snapshots for their next cold
