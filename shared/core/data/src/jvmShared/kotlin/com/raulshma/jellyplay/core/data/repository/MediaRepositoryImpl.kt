@@ -678,17 +678,12 @@ class MediaRepositoryImpl(
         limit: Int,
         force: Boolean,
     ): Result<SearchResult> {
-        // force drops the collection's cached pages first — prefix evict, the
-        // same shape as [invalidateCollectionItemsCache], so a future paginated
-        // caller forcing page 2 also heals the earlier pages (the deferred
-        // silent refresh's freshness lever — a member item's flip evicts
-        // detail_<itemId>, never the collection's page key).
-        if (force) {
-            collectionItemsCache.removeByKeyPrefix(
-                homeSession.cacheIdentitySnapshot(),
-                "collection_${collectionId}_",
-            )
-        }
+        // force drops the collection's cached pages first — the prefix evict
+        // drops every page, so a future paginated caller forcing page 2 also
+        // heals the earlier pages (the deferred silent refresh's freshness
+        // lever — a member item's flip evicts detail_<itemId>, never the
+        // collection's page key).
+        if (force) invalidateCollectionItemsCache(collectionId)
         return collectionItemsCache.getOrFetch(
             { homeSession.cacheIdentity() },
             collectionItemsKey(collectionId, startIndex, limit),
@@ -1243,10 +1238,7 @@ private class DetailCacheGroup(
      * get them without the explicit force.
      */
     suspend fun albumTracks(albumId: String, force: Boolean): Result<List<MediaItem>> {
-        if (force) {
-            epoch.incrementAndGet()
-            albumTracksCache.remove(homeSession.cacheIdentitySnapshot(), tracksKey(albumId))
-        }
+        if (force) invalidateAlbumTracks(albumId)
         return albumTracksCache.getOrFetchGuarded(
             { homeSession.cacheIdentity() },
             tracksKey(albumId),
@@ -1283,6 +1275,18 @@ private class DetailCacheGroup(
         detailCache.remove(identity, itemId)
         similarCache.removeByKeyPrefix(identity, similarEvictAllLimitsPrefix(itemId))
         themeSongsCache.removeByKeyPrefix(identity, themesKey(itemId))
+    }
+
+    /**
+     * Drops the album's cached track list plus the epoch bump that
+     * stall-guards in-flight writers — [albumTracks]'s force lever, the
+     * same shape [invalidateItem] gives [detail]. ([invalidateUserData]
+     * keeps its direct, bump-less remove: it follows up with
+     * [invalidateItem], which bumps.)
+     */
+    fun invalidateAlbumTracks(albumId: String) {
+        epoch.incrementAndGet()
+        albumTracksCache.remove(homeSession.cacheIdentitySnapshot(), tracksKey(albumId))
     }
 
     /**
