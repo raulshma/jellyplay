@@ -94,13 +94,19 @@ class MusicHomeViewModel(
      * revalidate, same philosophy as the detail screens — and re-arms the
      * deferred refresh so the next re-entry retries the failed regeneration.
      * A silent load skips itself while any load is active (that load
-     * regenerates the same data); a loud load cancels an in-flight silent
+     * regenerates the same data) — but the skip re-arms: if the active load
+     * dispatched before this change landed, its result is pre-change data
+     * and the next re-entry must retry (over-arming costs one redundant
+     * quiet refetch at worst). A loud load cancels an in-flight silent
      * one (see [loadJob]). A failed loud load re-arms too: the skipped
      * silent refresh bet on it, and its failure must not strand the
      * consumed pending flag behind a toast.
      */
     fun loadSections(silent: Boolean = false) {
-        if (silent && loadJob?.isActive == true) return
+        if (silent && loadJob?.isActive == true) {
+            deferredRefresher.rearm()
+            return
+        }
         loadJob?.cancel()
         loadJob = launch {
             if (_uiState.value.offlineMode != OfflineMode.ONLINE) {

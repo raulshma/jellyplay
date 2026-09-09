@@ -559,6 +559,20 @@ class MediaRepositoryImplTest {
         coVerify(exactly = 2) { apiClient.getCollectionItems("col-1", 0, 20) }
     }
 
+    @Test
+    fun `getAlbumTracks with force re-fetches instead of serving the cached list`() = runTest {
+        coEvery { apiClient.getAlbumTracks("album-1") } returns Result.success(listOf(mediaItem("t1")))
+
+        repository.getAlbumTracks("album-1")
+        repository.getAlbumTracks("album-1") // cache hit
+        repository.getAlbumTracks("album-1", force = true)
+
+        // The deferred silent refresh's freshness lever (mirrors the
+        // collection page lever above): a track flip never evicts the
+        // album's tracks key, so only the explicit force can bypass it.
+        coVerify(exactly = 2) { apiClient.getAlbumTracks("album-1") }
+    }
+
     // ------------------------------------------------------------------
     // Collection write/list paths are uncached passthroughs to the apiClient
     // (the picker refetches on every open so a freshly-created collection is

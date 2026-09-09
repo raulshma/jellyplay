@@ -54,15 +54,21 @@ class AlbumDetailViewModel(
      * single silent forced reload fires when the album screen is next entered
      * (see [DeferredUserDataRefresher]) — never mid-scroll.
      */
-    val deferredRefresher = DeferredUserDataRefresher(
+    val deferredRefresher: DeferredUserDataRefresher = DeferredUserDataRefresher(
         userDataChanges = mediaRepository.userDataChanges,
         scope = scope,
         onRefresh = {
             currentAlbumId?.let { id ->
                 // A load already in flight regenerates the album — a silent
-                // twin would only duplicate the fetch (see [loadJob]).
+                // twin would only duplicate the fetch (see [loadJob]). The
+                // skip still re-arms: if the in-flight load dispatched before
+                // this change landed, its result is pre-change data and the
+                // next re-entry must retry (over-arming costs one redundant
+                // quiet refetch at worst).
                 if (loadJob?.isActive != true) {
                     loadAlbum(id, force = true, silent = true)
+                } else {
+                    deferredRefresher.rearm()
                 }
             }
         },

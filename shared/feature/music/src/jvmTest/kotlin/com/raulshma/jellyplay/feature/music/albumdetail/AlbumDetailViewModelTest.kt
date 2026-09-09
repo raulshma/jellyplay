@@ -380,6 +380,48 @@ class AlbumDetailViewModelTest {
         assertFalse(viewModel.isLoading)
     }
 
+    @Test
+    fun deferredRefresh_skippedByInFlightLoudLoad_rearmsForTheNextReentry() = runTest(mainDispatcher) {
+        loadAlbum()
+        advanceUntilIdle()
+
+        // Armed while off-screen...
+        viewModel.deferredRefresher.onScreenActiveChanged(false)
+        userDataEvents.emit(com.raulshma.jellyplay.core.model.UserDataChange("user-1", listOf("t1")))
+        advanceUntilIdle()
+
+        // ...then a loud refresh parks mid-fetch when the deferred effect
+        // consumes the flag: the silent twin skips (two fetches, not three) —
+        // but the skip must re-arm, or the parked loud load's pre-change
+        // result strands the change until the next WS event.
+        val gate = CompletableDeferred<Unit>()
+        coEvery { mediaRepository.getMediaDetail("album1", any()) } coAnswers {
+            gate.await()
+            Result.success(MediaDetail(item = MediaItem(id = "album1", name = "Album", mediaType = MediaType.ALBUM)))
+        }
+        coEvery { mediaRepository.getAlbumTracks("album1", any()) } returns Result.success(albumTracks)
+        viewModel.refreshAlbum("album1")
+        advanceUntilIdle()
+        // The loud load is now PARKED mid-detail-fetch when the deferred
+        // effect consumes the flag: the silent twin skips itself, and the
+        // skip must re-arm — the parked load dispatched before the change
+        // landed, so its result is pre-change data.
+        viewModel.deferredRefresher.onScreenActiveChanged(true)
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertEquals("Album", viewModel.detail?.item?.name)
+        coVerify(exactly = 2) { mediaRepository.getAlbumTracks("album1", any()) }
+
+        // The next re-entry fires the quiet forced regeneration the skip
+        // promised — still silent: no loading state.
+        viewModel.deferredRefresher.onScreenActiveChanged(false)
+        viewModel.deferredRefresher.onScreenActiveChanged(true)
+        advanceUntilIdle()
+        coVerify(exactly = 3) { mediaRepository.getAlbumTracks("album1", any()) }
+        assertFalse(viewModel.isLoading)
+        assertNull(viewModel.error)
+    }
+
     // ── Instant mix event consumption ────────────────────────────────────────
 
     @Test

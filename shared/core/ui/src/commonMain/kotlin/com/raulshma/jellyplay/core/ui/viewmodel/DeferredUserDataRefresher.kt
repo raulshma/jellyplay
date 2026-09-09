@@ -84,13 +84,14 @@ class DeferredUserDataRefresher(
     /**
      * Re-arms the pending flag without waiting for a user-data event: the
      * host calls this when a regeneration it started failed WITHOUT
-     * surfacing an error (the silent/stale-while-revalidate paths) — the
-     * consumed flag would otherwise report the change healed while the
-     * screen still shows the pre-change data, and no later activation would
-     * ever retry. Re-arming costs nothing while the screen stays open (the
-     * flag is only consumed by the next activation). Cancellation does NOT
-     * re-arm: a cancelled regeneration was superseded by the loud load that
-     * cancelled it.
+     * surfacing an error, or when the refresh skipped itself because a load
+     * was already in flight (whose fetches may predate the change — its
+     * result would strand the consumed flag on pre-change data) — no later
+     * activation would otherwise ever retry. Re-arming costs nothing while
+     * the screen stays open (the flag is only consumed by the next
+     * activation; over-arming costs one redundant quiet refetch). An
+     * in-flight regeneration that is CANCELLED does not re-arm here: the
+     * cancelling loud load is itself the regeneration.
      *
      * Main-thread confinement as above — call from the ViewModel's
      * main-immediate scope.

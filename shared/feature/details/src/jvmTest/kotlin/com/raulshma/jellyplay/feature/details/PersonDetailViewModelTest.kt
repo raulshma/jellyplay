@@ -303,4 +303,42 @@ class PersonDetailViewModelTest {
         // Two fetches total (initial + in-flight loud), not three.
         coVerify(exactly = 2) { mediaRepository.getItemsByPerson("p1") }
     }
+
+    @Test
+    fun `a silent reload failure keeps the last success and re-arms for the next re-entry`() = runTest {
+        every { mediaRepository.userDataChanges } returns userDataEvents
+        coEvery { mediaRepository.getMediaDetail("p1") } returns Result.success(
+            MediaDetail(item = MediaItem(id = "p1", name = "Person One", mediaType = MediaType.UNKNOWN))
+        ) andThen Result.failure(RuntimeException("offline blip"))
+        coEvery { mediaRepository.getItemsByPerson("p1") } returns Result.success(emptyList())
+        val viewModel = PersonDetailViewModel(
+            mediaRepository,
+            userDataMutator,
+            imageUrlProvider,
+            mockk<com.raulshma.jellyplay.core.data.download.MediaDownloadActions>(relaxed = true),
+        )
+
+        viewModel.loadPerson("p1")
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value is PersonDetailUiState.Success)
+
+        viewModel.deferredRefresher.onScreenActiveChanged(false)
+        userDataEvents.emit(UserDataChange("user-1", listOf("m1")))
+        advanceUntilIdle()
+        viewModel.deferredRefresher.onScreenActiveChanged(true)
+        advanceUntilIdle()
+
+        // The silent reload DID run (second fetch) and its detail read
+        // failed — serve-stale-while-revalidate keeps the last Success.
+        coVerify(exactly = 2) { mediaRepository.getItemsByPerson("p1") }
+        assertTrue(viewModel.uiState.value is PersonDetailUiState.Success)
+
+        // The failed silent fetch re-arms the deferred refresh: the next
+        // re-entry retries instead of trusting the consumed flag.
+        viewModel.deferredRefresher.onScreenActiveChanged(false)
+        viewModel.deferredRefresher.onScreenActiveChanged(true)
+        advanceUntilIdle()
+        coVerify(exactly = 3) { mediaRepository.getItemsByPerson("p1") }
+        assertTrue(viewModel.uiState.value is PersonDetailUiState.Success)
+    }
 }

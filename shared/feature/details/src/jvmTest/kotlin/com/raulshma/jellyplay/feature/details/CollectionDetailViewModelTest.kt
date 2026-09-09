@@ -320,6 +320,53 @@ class CollectionDetailViewModelTest {
     }
 
     @Test
+    fun `a silent reload skipped by an in-flight loud load re-arms for the next re-entry`() = runTest {
+        every { mediaRepository.userDataChanges } returns userDataEvents
+        // The first loud load fails (Error state → re-entry loud-loads again);
+        // every later detail read parks on [gate] so a load can be held
+        // IN FLIGHT across the next step.
+        val gate = CompletableDeferred<Unit>()
+        var detailCalls = 0
+        coEvery { mediaRepository.getMediaDetail("c1") } coAnswers {
+            if (++detailCalls == 1) {
+                Result.failure(RuntimeException("offline"))
+            } else {
+                gate.await()
+                Result.success(MediaDetail(item = MediaItem(id = "c1", name = "Collection", mediaType = MediaType.COLLECTION)))
+            }
+        }
+        coEvery { mediaRepository.getCollectionItems("c1", any(), any(), any()) } returns Result.success(
+            SearchResult(items = emptyList(), totalRecordCount = 0, startIndex = 0),
+        )
+        val viewModel = collectionViewModel()
+
+        viewModel.loadCollection("c1")
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value is CollectionDetailUiState.Error)
+
+        // Armed while off-screen; the parked loud load dispatched BEFORE the
+        // change landed, so when the deferred effect consumes the flag and
+        // skips itself, the consumed flag must survive the skip.
+        viewModel.deferredRefresher.onScreenActiveChanged(false)
+        userDataEvents.emit(UserDataChange("user-1", listOf("m1")))
+        advanceUntilIdle()
+        viewModel.loadCollection("c1")
+        viewModel.deferredRefresher.onScreenActiveChanged(true)
+        advanceUntilIdle()
+        coVerify(exactly = 2) { mediaRepository.getCollectionItems("c1", any(), any(), any()) }
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+
+        // The next re-entry fires the silent reload the skip promised.
+        viewModel.deferredRefresher.onScreenActiveChanged(false)
+        viewModel.deferredRefresher.onScreenActiveChanged(true)
+        advanceUntilIdle()
+        coVerify(exactly = 3) { mediaRepository.getCollectionItems("c1", any(), any(), any()) }
+        assertTrue(viewModel.uiState.value is CollectionDetailUiState.Success)
+    }
+
+    @Test
     fun `deferred silent reload forces the collection items read`() = runTest {
         every { mediaRepository.userDataChanges } returns userDataEvents
         stubCollectionFetch()

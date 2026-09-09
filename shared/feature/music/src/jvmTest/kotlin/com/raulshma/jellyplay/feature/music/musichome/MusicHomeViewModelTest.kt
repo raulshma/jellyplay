@@ -473,6 +473,85 @@ class MusicHomeViewModelTest {
     }
 
     @Test
+    fun deferredRefresh_skippedByAnInFlightLoudLoad_rearmsForTheNextReentry() = runTest(mainDispatcher) {
+        stubHomeQueries(favoriteArtists = listOf(item("a1", "Artist")))
+        createViewModel()
+        advanceUntilIdle()
+        assertEquals(1, viewModel.uiState.value.sections.size)
+
+        // Armed while off-screen; the activation's silent regeneration then
+        // skips itself because a loud load (dispatched BEFORE the change
+        // landed) is in flight — the skip must re-arm, or the loud load's
+        // pre-change result strands the consumed flag until the next WS event.
+        val gate = CompletableDeferred<Unit>()
+        coEvery { mediaRepository.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) } coAnswers {
+            gate.await()
+            Result.success(SearchResult(listOf(item("a2", "Artist 2")), 1, 0))
+        }
+        viewModel.deferredRefresher.onScreenActiveChanged(false)
+        userDataEvents.emit(UserDataChange("user-1", listOf("t1")))
+        advanceUntilIdle()
+        viewModel.refresh()
+        advanceUntilIdle()
+        // The loud load is now PARKED mid-fetch (its artist query awaits the
+        // gate) when the deferred effect consumes the flag: the silent twin
+        // skips itself, and the skip must re-arm — the parked load dispatched
+        // before the change landed, so its result is pre-change data.
+        viewModel.deferredRefresher.onScreenActiveChanged(true)
+        coVerify(exactly = 2) { mediaRepository.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) }
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertEquals("Artist 2", viewModel.uiState.value.sections.single().items.single().name)
+
+        // The next re-entry fires the quiet regeneration the skip promised —
+        // silently: no spinner, no toast.
+        viewModel.deferredRefresher.onScreenActiveChanged(false)
+        viewModel.deferredRefresher.onScreenActiveChanged(true)
+        advanceUntilIdle()
+        coVerify(exactly = 3) { mediaRepository.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) }
+        assertFalse(viewModel.uiState.value.isLoading)
+        verify(exactly = 0) { userMessageBus.error(any()) }
+    }
+
+    @Test
+    fun refresh_loudFailureOverArmsTheDeferredRefreshForTheNextReentry() = runTest(mainDispatcher) {
+        stubHomeQueries(favoriteArtists = listOf(item("a1", "Artist")))
+        // One answer per matcher: the artist query succeeds on the initial
+        // load and throws on every later one (the loud refresh and the
+        // over-armed silent retry it promises).
+        var artistQueries = 0
+        coEvery { mediaRepository.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) } answers {
+            if (++artistQueries == 1) {
+                Result.success(SearchResult(listOf(item("a1", "Artist")), 1, 0))
+            } else {
+                throw RuntimeException("refresh boom")
+            }
+        }
+        createViewModel()
+        advanceUntilIdle()
+        assertEquals(1, viewModel.uiState.value.sections.size)
+
+        // A loud failure with nothing pending just over-arms one quiet
+        // refetch; the toast fires for the loud failure only.
+        viewModel.refresh()
+        advanceUntilIdle()
+        verify(exactly = 1) { userMessageBus.error("refresh boom") }
+        assertEquals(1, viewModel.uiState.value.sections.size)
+
+        viewModel.deferredRefresher.onScreenActiveChanged(false)
+        viewModel.deferredRefresher.onScreenActiveChanged(true)
+        advanceUntilIdle()
+
+        // The over-armed regeneration ran and stayed silent: the retry's own
+        // failure keeps the stale sections and raises no second toast.
+        coVerify(exactly = 3) { mediaRepository.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) }
+        assertEquals(1, viewModel.uiState.value.sections.size)
+        assertFalse(viewModel.uiState.value.isLoading)
+        verify(exactly = 1) { userMessageBus.error(any()) }
+    }
+
+    @Test
     fun surpriseMe_invokesCallbackWithRandomTrackId() = runTest(mainDispatcher) {
         stubHomeQueries()
         coEvery {

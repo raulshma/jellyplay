@@ -8,7 +8,6 @@ import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.ui.viewmodel.DeferredUserDataRefresher
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -26,40 +25,38 @@ class CollectionDetailViewModel constructor(
     private val _uiState = MutableStateFlow<CollectionDetailUiState>(CollectionDetailUiState.Loading)
     val uiState: StateFlow<CollectionDetailUiState> = _uiState.asStateFlow()
 
-    /** The loaded collection — the deferred refresh reloads it silently. */
-    private var currentCollectionId: String? = null
+    private val fetches = DetailFetchCoordinator(
+        userDataChanges = mediaRepository.userDataChanges,
+        scope = scope,
+        fetch = { collectionId, silent -> fetchCollection(collectionId, silent) },
+    )
 
     /**
-     * The one fetch in flight, loud or silent — a loud load cancels a silent
-     * one (it regenerates the same data loudly), and the deferred refresh
-     * skips itself while one is active, so two fetches never race.
+     * User-data changes while another screen is up (watched flip elsewhere,
+     * outbox drain landing) only mark this list stale; the single silent
+     * reload fires when the screen is next entered (see
+     * [DeferredUserDataRefresher]) — never mid-scroll.
      */
-    private var fetchJob: Job? = null
+    val deferredRefresher: DeferredUserDataRefresher get() = fetches.deferredRefresher
 
-    /**
-     * A no-op when this collection is already showing: back-stack re-entry
-     * re-runs the screen's `LaunchedEffect`, and a second loud load here would
-     * race the deferred refresh's silent regeneration (and flash Loading over
-     * content the user is returning to). An Error state (or a fresh VM) loads.
-     */
     fun loadCollection(collectionId: String) {
-        if (currentCollectionId == collectionId && _uiState.value is CollectionDetailUiState.Success) return
-        currentCollectionId = collectionId
-        _uiState.value = CollectionDetailUiState.Loading
-        fetchJob?.cancel()
-        fetchJob = launch { fetchCollection(collectionId, silent = false) }
+        fetches.load(
+            id = collectionId,
+            isShowing = { _uiState.value is CollectionDetailUiState.Success },
+            begin = { _uiState.value = CollectionDetailUiState.Loading },
+        )
     }
 
     /**
-     * (Re)fetches the collection's detail + items. [silent] serves the
-     * deferred-refresh path: a fetch failure keeps the last Success instead of
-     * flashing an Error screen over content the user was just looking at —
-     * serve-stale-while-revalidate, same philosophy as the home refresher —
-     * and re-arms the deferred refresh, since the change that triggered the
-     * regeneration was not applied and the next re-entry must retry.
+     * (Re)fetches the collection's detail + items, reporting plain success so
+     * [DetailFetchCoordinator] owns the silent-failure re-arm. [silent] serves
+     * the deferred-refresh path: a fetch failure keeps the last Success
+     * instead of flashing an Error screen over content the user was just
+     * looking at — serve-stale-while-revalidate, same philosophy as the home
+     * refresher.
      */
-    private suspend fun fetchCollection(collectionId: String, silent: Boolean) {
-        coroutineScope {
+    private suspend fun fetchCollection(collectionId: String, silent: Boolean): Boolean {
+        return coroutineScope {
             val detailDeferred = async { mediaRepository.getMediaDetail(collectionId) }
             // Silent = the deferred regeneration: force so a member flip's
             // badges heal now instead of re-serving the pre-flip cached page
@@ -78,33 +75,15 @@ class CollectionDetailViewModel constructor(
                     detail = detailResult.getOrThrow(),
                     items = itemsResult.getOrThrow().items,
                 )
-            } else if (silent) {
-                deferredRefresher.rearm()
+                true
             } else {
-                _uiState.value = CollectionDetailUiState.Error(failure.message ?: "Failed to load collection")
+                if (!silent) {
+                    _uiState.value = CollectionDetailUiState.Error(failure.message ?: "Failed to load collection")
+                }
+                false
             }
         }
     }
-
-    /**
-     * User-data changes while another screen is up (watched flip elsewhere,
-     * outbox drain landing) only mark this list stale; the single silent
-     * reload fires when the screen is next entered (see
-     * [DeferredUserDataRefresher]) — never mid-scroll.
-     */
-    val deferredRefresher = DeferredUserDataRefresher(
-        userDataChanges = mediaRepository.userDataChanges,
-        scope = scope,
-        onRefresh = {
-            currentCollectionId?.let { id ->
-                // A load already in flight regenerates this data — a silent
-                // twin would only duplicate the fetch (see [fetchJob]).
-                if (fetchJob?.isActive != true) {
-                    fetchJob = launch { fetchCollection(id, silent = true) }
-                }
-            }
-        },
-    )
 
     fun getImageUrl(itemId: String): String =
         imageUrlProvider.getImageUrl(itemId)
