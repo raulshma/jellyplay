@@ -65,8 +65,13 @@ class SyncStatusStateHolder(
          * near-instant on reconnect, so this is a short cap — on timeout we
          * fetch anyway (the next periodic refresh or pull-to-refresh
          * re-syncs).
+         *
+         * Public rather than an implementation detail: the home refresher's
+         * race handling is a function of this cap, so collaborators mirroring
+         * the drain gate in tests pin against the real value instead of
+         * copying it.
          */
-        private const val OUTBOX_DRAIN_WAIT_MS = 8_000L
+        const val OUTBOX_DRAIN_WAIT_MS = 8_000L
     }
 
     /**
@@ -164,16 +169,19 @@ class SyncStatusStateHolder(
      * Waits for the playback outbox to drain (count reaches 0) so the server
      * has processed offline watched/unwatched marks before a home-section fetch
      * reads Continue Watching / Next Up. Returns immediately when nothing is
-     * pending; on [OUTBOX_DRAIN_WAIT_MS] timeout it returns regardless so the
-     * fetch proceeds (a later periodic refresh re-syncs). Dead-lettered entries
-     * are excluded from the count, so a persistently-undeliverable mark won't
-     * stall the wait indefinitely.
+     * pending; on [OUTBOX_DRAIN_WAIT_MS] timeout it returns `false` — the
+     * caller proceeds anyway (a later periodic refresh or pull-to-refresh
+     * re-syncs) AND knows its fetch raced a still-pending sync. Dead-lettered
+     * entries are excluded from the count, so a persistently-undeliverable
+     * mark won't stall the wait indefinitely. What a caller does with the
+     * `false` (retry, throttle bypass, messaging) is the caller's policy,
+     * not this holder's.
      */
-    suspend fun awaitOutboxDrained() {
-        if (playbackOutboxRepository.count() == 0) return
-        withTimeoutOrNull(OUTBOX_DRAIN_WAIT_MS) {
+    suspend fun awaitOutboxDrained(): Boolean {
+        if (playbackOutboxRepository.count() == 0) return true
+        return withTimeoutOrNull(OUTBOX_DRAIN_WAIT_MS) {
             playbackOutboxRepository.countFlow().first { it == 0 }
-        }
+        } != null
     }
 }
 

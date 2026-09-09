@@ -122,7 +122,7 @@ class HomeRefresherFactoryTest {
         return factory.create(
             scope = scope,
             offlineModeManager = offlineModeManager,
-            awaitOutboxDrained = {},
+            awaitOutboxDrained = { true },
             sectionPrefsProvider = {
                 HomeSectionPrefs(
                     query = HomeSectionQuery(),

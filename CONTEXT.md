@@ -527,13 +527,28 @@ mutex-protected `fetchOnce(force)` suspend core that the internal identity
 transitions and going-online handshake call directly (their fetch must
 survive a mid-flight `stop`). It owns WHAT and WHEN of the home screen:
 exclusive mutex ownership, the job choreography (`refreshJob`,
-`transitionJob`, `discoverJob`, each with its own replacement/cancellation
-policy), the foreground/background-jittered cadence loop, the discover TTL
-gate, the user-data-push debounce/throttle/deferral chain, and every
-offline-shaped field of `HomeRefreshState` — the offline-mode mirror, the
+`transitionJob`, `discoverJob`, `userDataRefreshJob` — the user-data
+deferral timer on its own job, so an echo arriving mid-fetch only re-arms
+the delay instead of cancelling the in-flight fetch — each with its own
+replacement/cancellation policy), the foreground/background-jittered cadence
+loop, the discover TTL gate, the user-data-push
+debounce/throttle/deferral chain (an echo landing inside the 60 s throttle
+window is DEFERRED to expiry on a trailing-edge timer, not dropped, and the
+`start()` flush of a pending change bypasses the throttle — the user is
+back on the screen looking at it), and every offline-shaped field of
+`HomeRefreshState` — the offline-mode mirror, the
 online→offline content drop, and the user-initiated going-online handshake
 (full-screen loader, playback-outbox drain through the injected
-`awaitOutboxDrained` seam, 30 s-capped fetch; the timeout `finally`
+`awaitOutboxDrained` seam — a `suspend () -> Boolean` whose `false` says
+the fetch raced a still-pending sync — 30 s-capped forced fetch, drain
+re-await, and, if the drain completed under the loader, a second 30 s-capped
+refetch; the `lastFetchRacedPendingSync` flag keeps the drain's late
+completion echo out of the user-data throttle until a post-sync fetch runs
+(the handshake's refetch or the user-data flush — a cancelled fetch leaves
+it armed), and is reset by the identity transitions and the offline drop
+that stop showing the raced sections (the handshake captures an identity
+epoch before arming, so a transition landing mid-handshake cannot re-arm
+the flag for the next identity); the timeout `finally`
 force-clears the loader so a hung fetch can never park the handshake —
 the Go Online spinner cannot hang the same way, the flag clears at the
 ONLINE emission before any fetch starts). The going-online BUSY flag itself is NOT the refresher's — its
@@ -858,7 +873,10 @@ ratio).
 
 Test surfaces (all kotlin.test on the module's `jvmTest`, ported with the
 feature): `HomeRefresherTest` pins cadence, throttles, the offline
-transitions, the going-online sequence and its timeout, and `patchItems`;
+transitions, the going-online sequence and its timeout (slow-sync drain
+races included: the under-the-loader refetch, and the late drain echo's
+throttle bypass when the re-await gives up), the user-data deferral to
+throttle expiry and the start-flush bypass, and `patchItems`;
 `HomeViewModelTest` (no Robolectric; the refresher's and sync holder's
 collaborators are folded into the two injected factories, so those
 sub-module dependencies no longer surface on the VM) pins the UiState folds,

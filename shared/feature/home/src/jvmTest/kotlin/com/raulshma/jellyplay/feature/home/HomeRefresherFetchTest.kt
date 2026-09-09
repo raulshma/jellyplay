@@ -141,7 +141,7 @@ class HomeRefresherFetchTest {
             tvWatchNextScheduler = tvWatchNextScheduler,
             librarySyncHook = librarySyncHook,
             offlineModeManager = offlineModeManager,
-            awaitOutboxDrained = {},
+            awaitOutboxDrained = { true },
             sectionPrefsProvider = {
                 HomeSectionPrefs(
                     query = HomeSectionQuery(),
