@@ -62,6 +62,7 @@ import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.formatBytes
+import com.raulshma.jellyplay.core.model.formatFixed
 import com.raulshma.jellyplay.core.model.legacy.UserPreferences
 import com.raulshma.jellyplay.core.model.isAudioType
 import com.raulshma.jellyplay.core.model.progressFraction
@@ -1458,7 +1459,7 @@ private fun ReviewsSection(
                                 )
                                 review.authorDetails.rating?.let { rating ->
                                     Text(
-                                        text = stringResource(Res.string.detail_review_rating, rating),
+                                        text = stringResource(Res.string.detail_review_rating, formatFixed(rating, 1)),
                                         style = MaterialTheme.typography.labelMedium,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )

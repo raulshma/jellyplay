@@ -58,7 +58,7 @@
     <string name="player_video_ass_force_hint">Substituir o estilo incorporado pelas suas cores, letra e bordas</string>
     <string name="player_video_font_color">Cor da letra</string>
     <string name="player_video_background_color">Cor de fundo</string>
-    <string name="player_video_background_opacity">Opacidade do fundo: %1$d%%</string>
+    <string name="player_video_background_opacity">Opacidade do fundo: %1$d%</string>
     <string name="player_video_edge_type">Tipo de contorno</string>
     <string name="player_video_edge_none">Nenhum</string>
     <string name="player_video_edge_outline">Contorno</string>
@@ -73,7 +73,7 @@
     <string name="player_video_border_width">Largura da borda: %1$s</string>
     <string name="player_video_shadow_offset">Deslocamento da sombra: %1$s</string>
     <string name="player_video_subtitle_offset">Desvio das legendas: %1$s</string>
-    <string name="player_video_vertical_position">Posição vertical: %1$d%%</string>
+    <string name="player_video_vertical_position">Posição vertical: %1$d%</string>
 
     <!-- Sleep timer sheet -->
     <string name="player_video_sleep_timer">Temporizador</string>

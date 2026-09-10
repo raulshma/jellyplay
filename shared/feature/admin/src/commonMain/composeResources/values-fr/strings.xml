@@ -139,8 +139,8 @@
 
     <!-- Statistics -->
     <string name="admin_user_statistics_title">Statistiques utilisateur</string>
-    <string name="admin_watched_more">Vous avez regardé %1$s%% de plus ce mois-ci</string>
-    <string name="admin_watched_less">Vous avez regardé %1$s%% de moins ce mois-ci</string>
+    <string name="admin_watched_more">Vous avez regardé %1$s% de plus ce mois-ci</string>
+    <string name="admin_watched_less">Vous avez regardé %1$s% de moins ce mois-ci</string>
     <string name="admin_duration_vs_last">%1$s contre %2$s le mois dernier</string>
     <string name="admin_content_breakdown">Répartition du contenu</string>
     <string name="admin_by_genre">Par genre</string>
@@ -311,7 +311,7 @@
     <string name="admin_n_items">%1$d éléments</string>
     <string name="admin_n_lines">%1$d lignes</string>
     <string name="admin_scanning_library">Analyse de la bibliothèque</string>
-    <string name="admin_scan_progress_pct">Analyse %1$d%%</string>
+    <string name="admin_scan_progress_pct">Analyse %1$d%</string>
 
     <!-- Misc UI batch3 -->
     <string name="admin_quick_access">Accès rapide</string>

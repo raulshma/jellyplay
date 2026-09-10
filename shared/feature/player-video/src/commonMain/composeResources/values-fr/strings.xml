@@ -58,7 +58,7 @@
     <string name="player_video_ass_force_hint">Remplacer le style intégré par vos couleurs, police et bordures</string>
     <string name="player_video_font_color">Couleur de police</string>
     <string name="player_video_background_color">Couleur de fond</string>
-    <string name="player_video_background_opacity">Opacité du fond : %1$d%%</string>
+    <string name="player_video_background_opacity">Opacité du fond : %1$d%</string>
     <string name="player_video_edge_type">Type de contour</string>
     <string name="player_video_edge_none">Aucun</string>
     <string name="player_video_edge_outline">Contour</string>
@@ -73,7 +73,7 @@
     <string name="player_video_border_width">Largeur de bordure : %1$s</string>
     <string name="player_video_shadow_offset">Décalage d\'ombre : %1$s</string>
     <string name="player_video_subtitle_offset">Décalage des sous-titres : %1$s</string>
-    <string name="player_video_vertical_position">Position verticale : %1$d%%</string>
+    <string name="player_video_vertical_position">Position verticale : %1$d%</string>
 
     <!-- Sleep timer sheet -->
     <string name="player_video_sleep_timer">Minuteur</string>

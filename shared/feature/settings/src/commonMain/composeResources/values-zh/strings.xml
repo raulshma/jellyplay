@@ -850,7 +850,7 @@
     <string name="settings_reduce_motion">减少动态</string>
     <string name="settings_reduce_motion_subtitle">禁用重型视差和卡片动画</string>
     <string name="settings_comfort_eye_care">舒适与护眼</string>
-    <string name="settings_blue_light_filter_summary">蓝光过滤器 · %1$d%%</string>
+    <string name="settings_blue_light_filter_summary">蓝光过滤器 · %1$d%</string>
     <string name="settings_blue_light_filter">蓝光过滤器</string>
     <string name="settings_blue_light_filter_subtitle">将屏幕调为琥珀色以减轻夜间用眼疲劳</string>
     <string name="settings_blue_light_filter_strength">蓝光过滤器强度</string>
@@ -910,7 +910,7 @@
     <string name="settings_tv_zoom_mode">电视缩放模式</string>
     <string name="settings_tv_zoom_mode_subtitle">裁剪/缩放视频以填满屏幕（0% = 关闭）</string>
     <string name="settings_tv_zoom_none">不缩放（原始宽高比）</string>
-    <string name="settings_tv_zoom_percent">裁剪并缩放视频 %1$d%% 以填满屏幕</string>
+    <string name="settings_tv_zoom_percent">裁剪并缩放视频 %1$d% 以填满屏幕</string>
     <string name="settings_episode_browser">剧集浏览器</string>
     <string name="settings_episode_browser_on">播放时显示剧集列表</string>
     <string name="settings_episode_browser_off">隐藏剧集列表</string>

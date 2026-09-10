@@ -850,7 +850,7 @@
     <string name="settings_reduce_motion">Riduci movimento</string>
     <string name="settings_reduce_motion_subtitle">Disattiva parallassi pesanti e animazioni delle card</string>
     <string name="settings_comfort_eye_care">Comfort e cura degli occhi</string>
-    <string name="settings_blue_light_filter_summary">Filtro luce blu · %1$d%%</string>
+    <string name="settings_blue_light_filter_summary">Filtro luce blu · %1$d%</string>
     <string name="settings_blue_light_filter">Filtro luce blu</string>
     <string name="settings_blue_light_filter_subtitle">Tinta ambra per ridurre l\'affaticamento notturno</string>
     <string name="settings_blue_light_filter_strength">Intensità filtro luce blu</string>
@@ -910,7 +910,7 @@
     <string name="settings_tv_zoom_mode">Modalità zoom TV</string>
     <string name="settings_tv_zoom_mode_subtitle">Ritaglia/zooma il video per riempire lo schermo (0% = off)</string>
     <string name="settings_tv_zoom_none">Nessuno zoom (proporzione originale)</string>
-    <string name="settings_tv_zoom_percent">Ritaglia e zooma il video del %1$d%% per riempire lo schermo</string>
+    <string name="settings_tv_zoom_percent">Ritaglia e zooma il video del %1$d% per riempire lo schermo</string>
     <string name="settings_episode_browser">Browser episodi</string>
     <string name="settings_episode_browser_on">Mostra la lista episodi durante la riproduzione</string>
     <string name="settings_episode_browser_off">Nascondi la lista episodi</string>

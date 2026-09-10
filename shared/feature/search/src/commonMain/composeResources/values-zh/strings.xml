@@ -46,7 +46,7 @@
     <string name="search_filter_tags">标签</string>
     <string name="search_filter_minimum_rating">最低评分</string>
     <string name="search_filter_any">任意</string>
-    <string name="search_filter_rating_plus">%1$.1f+</string>
+    <string name="search_filter_rating_plus">%1$s+</string>
     <string name="search_apply_filters">应用筛选</string>
 
     <!-- Sort (parity with Library's sort options) -->

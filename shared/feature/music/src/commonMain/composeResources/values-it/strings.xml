@@ -56,10 +56,10 @@
     <string name="music_open">Apri</string>
 
     <!-- Counts -->
-    <string name="music_items_count">%d elementi</string>
-    <string name="music_tracks_count">%d brani</string>
+    <string name="music_items_count">%1$d elementi</string>
+    <string name="music_tracks_count">%1$d brani</string>
     <string name="music_one_track">1 brano</string>
-    <string name="music_playlist_tracks_count">%d brani</string>
+    <string name="music_playlist_tracks_count">%1$d brani</string>
 
     <!-- Home sections -->
     <string name="music_player_screens">Schermate del lettore</string>

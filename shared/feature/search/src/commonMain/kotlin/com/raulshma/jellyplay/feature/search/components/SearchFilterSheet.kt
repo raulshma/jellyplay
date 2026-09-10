@@ -52,6 +52,7 @@ import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PlayedStatus
 import com.raulshma.jellyplay.core.model.SortOption
+import com.raulshma.jellyplay.core.model.formatFixed
 import com.raulshma.jellyplay.core.ui.model.mediaTypeDisplayNamePlural
 import com.raulshma.jellyplay.core.ui.components.GlassFilterChip
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
@@ -328,7 +329,7 @@ private fun ColumnScope.SearchFilterSheetBody(
             ) {
                 ratingOptions.forEach { rating ->
                     GlassFilterChip(
-                        label = if (rating == 0f) stringResource(Res.string.search_filter_any) else stringResource(Res.string.search_filter_rating_plus, rating),
+                        label = if (rating == 0f) stringResource(Res.string.search_filter_any) else stringResource(Res.string.search_filter_rating_plus, formatFixed(rating.toDouble(), 1)),
                         selected = selectedMinRating == rating,
                         onClick = { onSelectMinRating(rating) },
                     )

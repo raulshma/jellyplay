@@ -58,7 +58,7 @@
     <string name="player_video_ass_force_hint">使用您的颜色、字体和边框覆盖嵌入样式</string>
     <string name="player_video_font_color">字体颜色</string>
     <string name="player_video_background_color">背景色</string>
-    <string name="player_video_background_opacity">背景不透明度：%1$d%%</string>
+    <string name="player_video_background_opacity">背景不透明度：%1$d%</string>
     <string name="player_video_edge_type">边缘类型</string>
     <string name="player_video_edge_none">无</string>
     <string name="player_video_edge_outline">轮廓</string>
@@ -73,7 +73,7 @@
     <string name="player_video_border_width">边框宽度：%1$s</string>
     <string name="player_video_shadow_offset">阴影偏移：%1$s</string>
     <string name="player_video_subtitle_offset">字幕偏移：%1$s</string>
-    <string name="player_video_vertical_position">垂直位置：%1$d%%</string>
+    <string name="player_video_vertical_position">垂直位置：%1$d%</string>
 
     <!-- Sleep timer sheet -->
     <string name="player_video_sleep_timer">睡眠定时器</string>

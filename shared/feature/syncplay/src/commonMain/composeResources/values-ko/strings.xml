@@ -33,6 +33,6 @@
     <string name="syncplay_error_create_group">그룹을 만들지 못했습니다</string>
 
     <plurals name="syncplay_participants_count">
-        <item quantity="other">참가자 %d명</item>
+        <item quantity="other">참가자 %1$d명</item>
     </plurals>
 </resources>

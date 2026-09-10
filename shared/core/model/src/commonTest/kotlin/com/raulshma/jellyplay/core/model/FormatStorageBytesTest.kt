@@ -75,4 +75,30 @@ class FormatStorageBytesTest {
             assertEquals("$number ${unit.suffix}", bytes.formatBytes())
         }
     }
+
+    // ── The house "%.Nf" replacements (string-resource call sites feed these) ──
+
+    @Test
+    fun `format one decimal matches house convention`() {
+        // compose-resources' stringResource only substitutes %n$s/%n$d, so
+        // callers pre-format floats with formatFixed — pin its rendering:
+        // always one digit after the '.', '.' separator, half-rounded.
+        assertEquals("5.2", formatFixed(5.234, 1))
+        assertEquals("0.0", formatFixed(0.0, 1))
+        assertEquals("1.0", formatFixed(1.0, 1))
+        assertEquals("0.3", formatFixed(0.25, 1))
+        assertEquals("1024.0", formatFixed(1024.0, 1))
+        assertEquals("0.1", formatFixed(0.05, 1))
+    }
+
+    @Test
+    fun `format two decimals pads the fraction`() {
+        // The playback-speed slider needs the second digit — including the
+        // zero-padded ones ("1.05", not "1.5").
+        assertEquals("0.25", formatFixed(0.25, 2))
+        assertEquals("1.00", formatFixed(1.0, 2))
+        assertEquals("1.05", formatFixed(1.05, 2))
+        assertEquals("2.00", formatFixed(2.0, 2))
+        assertEquals("0.30", formatFixed(0.299, 2))
+    }
 }

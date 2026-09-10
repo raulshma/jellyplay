@@ -139,8 +139,8 @@
 
     <!-- Statistics -->
     <string name="admin_user_statistics_title">用户统计</string>
-    <string name="admin_watched_more">本月您多看了 %1$s%%</string>
-    <string name="admin_watched_less">本月您少看了 %1$s%%</string>
+    <string name="admin_watched_more">本月您多看了 %1$s%</string>
+    <string name="admin_watched_less">本月您少看了 %1$s%</string>
     <string name="admin_duration_vs_last">%1$s 对比上月的 %2$s</string>
     <string name="admin_content_breakdown">内容细分</string>
     <string name="admin_by_genre">按类型</string>
@@ -311,7 +311,7 @@
     <string name="admin_n_items">%1$d 项</string>
     <string name="admin_n_lines">%1$d 行</string>
     <string name="admin_scanning_library">正在扫描媒体库</string>
-    <string name="admin_scan_progress_pct">扫描中 %1$d%%</string>
+    <string name="admin_scan_progress_pct">扫描中 %1$d%</string>
 
     <!-- Misc UI batch3 -->
     <string name="admin_quick_access">快速访问</string>

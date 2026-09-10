@@ -49,6 +49,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.DownloadQuality
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.StorageBytesUnit
+import com.raulshma.jellyplay.core.model.formatFixed
 import com.raulshma.jellyplay.core.model.toStorageBytesValue
 import com.raulshma.jellyplay.core.ui.adaptive.LocalJellyPlayUi
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
@@ -113,10 +114,13 @@ internal fun DownloadPickerSheet(
         value = availableStorageProvider(isAudio)
     }
     // The one storage-byte table (ByteFormatter) picks the band and scales the
-    // number; this localized wrapper keeps the per-unit string resources (and
-    // their locale-aware %.1f rendering) — declared unifying delta: sizes
-    // switch from ÷1000 to the ÷1024 house convention, and the available-space
-    // line gains the bytes band it used to funnel into "0.0 KB".
+    // number; this localized wrapper keeps the per-unit string resources —
+    // declared unifying delta: sizes switch from ÷1000 to the ÷1024 house
+    // convention, and the available-space line gains the bytes band it used to
+    // funnel into "0.0 KB". The number itself is formatted in Kotlin via
+    // formatFixed: compose-resources' stringResource only substitutes
+    // positional %n$s/%n$d placeholders, so a %1$.1f resource leaks the raw
+    // specifier into the UI (issue #158).
     val fileSizeText = fileSize?.let { size -> localizedStorageSize(size) }
         ?: stringResource(Res.string.detail_size_unknown)
     val availableText = localizedStorageSize(availableBytes)
@@ -311,17 +315,18 @@ internal fun DownloadPickerSheet(
 /**
  * Localized half of the storage-byte table: [toStorageBytesValue] picks the
  * band and scales the value; this wrapper keeps the per-unit string resources
- * (so translations and the locale-aware `%.1f` decimal separator survive)
- * instead of the old hand-copied ÷1000 divisor ladder.
+ * (so translations survive) and formats the number with the house
+ * [formatFixed] — string resources can't carry `%f` placeholders because
+ * compose-resources only substitutes `%n$s`/`%n$d` (issue #158).
  */
 @Composable
 private fun localizedStorageSize(bytes: Long): String {
     val (value, unit) = bytes.toStorageBytesValue()
     return when (unit) {
         StorageBytesUnit.B -> stringResource(Res.string.detail_size_b, value.toLong())
-        StorageBytesUnit.KB -> stringResource(Res.string.detail_size_kb, value)
-        StorageBytesUnit.MB -> stringResource(Res.string.detail_size_mb, value)
-        StorageBytesUnit.GB -> stringResource(Res.string.detail_size_gb, value)
+        StorageBytesUnit.KB -> stringResource(Res.string.detail_size_kb, formatFixed(value, 1))
+        StorageBytesUnit.MB -> stringResource(Res.string.detail_size_mb, formatFixed(value, 1))
+        StorageBytesUnit.GB -> stringResource(Res.string.detail_size_gb, formatFixed(value, 1))
     }
 }
 

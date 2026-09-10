@@ -139,8 +139,8 @@
 
     <!-- Statistics -->
     <string name="admin_user_statistics_title">사용자 통계</string>
-    <string name="admin_watched_more">이번 달에 %1$s%% 더 시청했습니다</string>
-    <string name="admin_watched_less">이번 달에 %1$s%% 덜 시청했습니다</string>
+    <string name="admin_watched_more">이번 달에 %1$s% 더 시청했습니다</string>
+    <string name="admin_watched_less">이번 달에 %1$s% 덜 시청했습니다</string>
     <string name="admin_duration_vs_last">%1$s(지난달 %2$s 대비)</string>
     <string name="admin_content_breakdown">콘텐츠 분석</string>
     <string name="admin_by_genre">장르별</string>
@@ -311,7 +311,7 @@
     <string name="admin_n_items">%1$d개 항목</string>
     <string name="admin_n_lines">%1$d줄</string>
     <string name="admin_scanning_library">라이브러리 스캔 중</string>
-    <string name="admin_scan_progress_pct">스캔 중 %1$d%%</string>
+    <string name="admin_scan_progress_pct">스캔 중 %1$d%</string>
 
     <!-- Misc UI batch3 -->
     <string name="admin_quick_access">빠른 접근</string>

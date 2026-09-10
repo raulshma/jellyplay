@@ -13,6 +13,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.core.model.formatFixed
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.components.TvOrTouchSlider
 import com.raulshma.jellyplay.core.ui.generated.resources.Res as CoreUiRes
@@ -43,7 +44,7 @@ internal fun PlayerSpeedSlider(
     val isTv = LocalTvMode.current
     Text(
         text = stringResource(CoreUiRes.string.player_speed_slider_label) +
-            "  " + stringResource(CoreUiRes.string.player_speed_value, sliderValue),
+            "  " + stringResource(CoreUiRes.string.player_speed_value, formatFixed(sliderValue.toDouble(), 2)),
         style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
         color = MaterialTheme.colorScheme.onSurface,
         modifier = modifier.padding(horizontal = 24.dp, vertical = 8.dp),

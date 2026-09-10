@@ -84,8 +84,8 @@
     <string name="audio_effects_dialogue_boost">대화 부스트</string>
     <string name="audio_effects_night_mode">나이트 모드</string>
     <string name="audio_effects_lr_balance">좌/우 밸런스</string>
-    <string name="audio_effects_balance_left">왼쪽 %1$d%%</string>
-    <string name="audio_effects_balance_right">오른쪽 %1$d%%</string>
+    <string name="audio_effects_balance_left">왼쪽 %1$d%</string>
+    <string name="audio_effects_balance_right">오른쪽 %1$d%</string>
     <string name="audio_effects_balance_center">중앙</string>
     <string name="audio_effects_pitch">피치</string>
     <string name="audio_effects_pitch_original">원본</string>

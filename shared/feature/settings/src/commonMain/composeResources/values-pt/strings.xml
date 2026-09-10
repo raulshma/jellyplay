@@ -850,7 +850,7 @@
     <string name="settings_reduce_motion">Reduzir movimento</string>
     <string name="settings_reduce_motion_subtitle">Desativar parallax pesado e animações de cartões</string>
     <string name="settings_comfort_eye_care">Conforto e cuidado visual</string>
-    <string name="settings_blue_light_filter_summary">Filtro de luz azul · %1$d%%</string>
+    <string name="settings_blue_light_filter_summary">Filtro de luz azul · %1$d%</string>
     <string name="settings_blue_light_filter">Filtro de luz azul</string>
     <string name="settings_blue_light_filter_subtitle">Tingir o ecrã de âmbar para reduzir a fadiga ocular noturna</string>
     <string name="settings_blue_light_filter_strength">Intensidade do filtro de luz azul</string>
@@ -910,7 +910,7 @@
     <string name="settings_tv_zoom_mode">Modo de zoom da TV</string>
     <string name="settings_tv_zoom_mode_subtitle">Recortar/ampliar vídeo para preencher o ecrã (0% = desligado)</string>
     <string name="settings_tv_zoom_none">Sem zoom (proporção original)</string>
-    <string name="settings_tv_zoom_percent">Recortar e ampliar vídeo em %1$d%% para preencher o ecrã</string>
+    <string name="settings_tv_zoom_percent">Recortar e ampliar vídeo em %1$d% para preencher o ecrã</string>
     <string name="settings_episode_browser">Navegador de episódios</string>
     <string name="settings_episode_browser_on">Mostrar lista de episódios durante a reprodução</string>
     <string name="settings_episode_browser_off">Ocultar lista de episódios</string>

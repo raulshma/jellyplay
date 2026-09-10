@@ -848,7 +848,7 @@
     <string name="settings_reduce_motion">モーションを減らす</string>
     <string name="settings_reduce_motion_subtitle">重いパララックスとカードアニメーションを無効化</string>
     <string name="settings_comfort_eye_care">快適さと目の保護</string>
-    <string name="settings_blue_light_filter_summary">ブルーライトフィルター · %1$d%%</string>
+    <string name="settings_blue_light_filter_summary">ブルーライトフィルター · %1$d%</string>
     <string name="settings_blue_light_filter">ブルーライトフィルター</string>
     <string name="settings_blue_light_filter_subtitle">夜間の目の疲れを軽減するため画面を琥珀色に</string>
     <string name="settings_blue_light_filter_strength">ブルーライトフィルター強度</string>
@@ -908,7 +908,7 @@
     <string name="settings_tv_zoom_mode">TV ズームモード</string>
     <string name="settings_tv_zoom_mode_subtitle">画面を埋めるために動画をクロップ/ズーム（0% = オフ）</string>
     <string name="settings_tv_zoom_none">ズームなし（元のアスペクト比）</string>
-    <string name="settings_tv_zoom_percent">画面を埋めるために %1$d%% 動画をクロップ＆ズーム</string>
+    <string name="settings_tv_zoom_percent">画面を埋めるために %1$d% 動画をクロップ＆ズーム</string>
     <string name="settings_episode_browser">エピソードブラウザー</string>
     <string name="settings_episode_browser_on">再生中にエピソードリストを表示</string>
     <string name="settings_episode_browser_off">エピソードリストを非表示</string>

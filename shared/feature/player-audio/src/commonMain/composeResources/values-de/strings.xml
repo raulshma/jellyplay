@@ -84,8 +84,8 @@
     <string name="audio_effects_dialogue_boost">Dialog-Verstärkung</string>
     <string name="audio_effects_night_mode">Nachtmodus</string>
     <string name="audio_effects_lr_balance">L/R-Balance</string>
-    <string name="audio_effects_balance_left">Links %1$d%%</string>
-    <string name="audio_effects_balance_right">Rechts %1$d%%</string>
+    <string name="audio_effects_balance_left">Links %1$d%</string>
+    <string name="audio_effects_balance_right">Rechts %1$d%</string>
     <string name="audio_effects_balance_center">Mitte</string>
     <string name="audio_effects_pitch">Tonhöhe</string>
     <string name="audio_effects_pitch_original">Original</string>

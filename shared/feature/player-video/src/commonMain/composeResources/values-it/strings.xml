@@ -58,7 +58,7 @@
     <string name="player_video_ass_force_hint">Sostituisci lo stile incorporato con i tuoi colori, carattere e bordi</string>
     <string name="player_video_font_color">Colore carattere</string>
     <string name="player_video_background_color">Colore sfondo</string>
-    <string name="player_video_background_opacity">Opacità sfondo: %1$d%%</string>
+    <string name="player_video_background_opacity">Opacità sfondo: %1$d%</string>
     <string name="player_video_edge_type">Tipo di bordo</string>
     <string name="player_video_edge_none">Nessuno</string>
     <string name="player_video_edge_outline">Contorno</string>
@@ -73,7 +73,7 @@
     <string name="player_video_border_width">Larghezza bordo: %1$s</string>
     <string name="player_video_shadow_offset">Offset ombra: %1$s</string>
     <string name="player_video_subtitle_offset">Offset sottotitoli: %1$s</string>
-    <string name="player_video_vertical_position">Posizione verticale: %1$d%%</string>
+    <string name="player_video_vertical_position">Posizione verticale: %1$d%</string>
 
     <!-- Sleep timer sheet -->
     <string name="player_video_sleep_timer">Timer</string>

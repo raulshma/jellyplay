@@ -23,8 +23,8 @@
     <string name="detail_section_seerr_recommendations">Seerr Recommendations</string>
     <string name="detail_section_seerr_similar">Seerr Similar</string>
     <string name="detail_section_reviews">Reviews</string>
-    <!-- Review author rating format: %1$.1f = 0-10 rating. Same in every locale. -->
-    <string name="detail_review_rating" translatable="false">%1$.1f / 10</string>
+    <!-- Review author rating format: %1$s = 0-10 rating. Same in every locale. -->
+    <string name="detail_review_rating" translatable="false">%1$s / 10</string>
 
     <!-- ── Primary action button labels ─────────────────────────────────── -->
     <string name="detail_play_play">Play</string>
@@ -73,7 +73,7 @@
     <string name="detail_option_edit">Edit</string>
     <string name="detail_option_share">Share</string>
     <string name="detail_option_downloading">Downloading…</string>
-    <string name="detail_option_downloading_percent">Downloading (%1$d%%)</string>
+    <string name="detail_option_downloading_percent">Downloading (%1$d%)</string>
     <string name="detail_option_download">Download</string>
     <string name="detail_option_downloading_series">Downloading Series…</string>
     <string name="detail_option_download_series">Download Series</string>
@@ -176,9 +176,9 @@
     </plurals>
 
     <!-- ── File-size formatting ─────────────────────────────────────────── -->
-    <string name="detail_size_gb">%1$.1f GB</string>
-    <string name="detail_size_mb">%1$.1f MB</string>
-    <string name="detail_size_kb">%1$.1f KB</string>
+    <string name="detail_size_gb">%1$s GB</string>
+    <string name="detail_size_mb">%1$s MB</string>
+    <string name="detail_size_kb">%1$s KB</string>
     <string name="detail_size_b">%1$d B</string>
     <string name="detail_size_unknown">Unknown</string>
 

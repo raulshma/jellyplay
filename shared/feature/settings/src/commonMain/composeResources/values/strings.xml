@@ -953,7 +953,7 @@
     <string name="settings_reduce_motion">Reduce Motion</string>
     <string name="settings_reduce_motion_subtitle">Disable heavy parallax and card animations</string>
     <string name="settings_comfort_eye_care">Comfort &amp; Eye Care</string>
-    <string name="settings_blue_light_filter_summary">Blue light filter · %1$d%%</string>
+    <string name="settings_blue_light_filter_summary">Blue light filter · %1$d%</string>
     <string name="settings_blue_light_filter">Blue Light Filter</string>
     <string name="settings_blue_light_filter_subtitle">Tint the screen amber to reduce eye strain at night</string>
     <string name="settings_blue_light_filter_strength">Blue Light Filter Strength</string>
@@ -1013,7 +1013,7 @@
     <string name="settings_tv_zoom_mode">TV Zoom Mode</string>
     <string name="settings_tv_zoom_mode_subtitle">Crop/zoom video to fill screen (0% = off)</string>
     <string name="settings_tv_zoom_none">No zoom (original aspect ratio)</string>
-    <string name="settings_tv_zoom_percent">Crop and zoom video by %1$d%% to fill screen</string>
+    <string name="settings_tv_zoom_percent">Crop and zoom video by %1$d% to fill screen</string>
     <string name="settings_episode_browser">Episode Browser</string>
     <string name="settings_episode_browser_on">Show episode list during playback</string>
     <string name="settings_episode_browser_off">Hide episode list</string>

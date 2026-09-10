@@ -84,8 +84,8 @@
     <string name="audio_effects_dialogue_boost">ダイアログブースト</string>
     <string name="audio_effects_night_mode">ナイトモード</string>
     <string name="audio_effects_lr_balance">L/R バランス</string>
-    <string name="audio_effects_balance_left">左 %1$d%%</string>
-    <string name="audio_effects_balance_right">右 %1$d%%</string>
+    <string name="audio_effects_balance_left">左 %1$d%</string>
+    <string name="audio_effects_balance_right">右 %1$d%</string>
     <string name="audio_effects_balance_center">中央</string>
     <string name="audio_effects_pitch">ピッチ</string>
     <string name="audio_effects_pitch_original">元に戻す</string>

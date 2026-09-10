@@ -848,7 +848,7 @@
     <string name="settings_reduce_motion">모션 줄이기</string>
     <string name="settings_reduce_motion_subtitle">무거운 시차 및 카드 애니메이션 비활성화</string>
     <string name="settings_comfort_eye_care">편안함 및 눈 보호</string>
-    <string name="settings_blue_light_filter_summary">블루라이트 필터 · %1$d%%</string>
+    <string name="settings_blue_light_filter_summary">블루라이트 필터 · %1$d%</string>
     <string name="settings_blue_light_filter">블루라이트 필터</string>
     <string name="settings_blue_light_filter_subtitle">야간 눈 피로를 줄이기 위해 화면을 호박색으로</string>
     <string name="settings_blue_light_filter_strength">블루라이트 필터 강도</string>
@@ -908,7 +908,7 @@
     <string name="settings_tv_zoom_mode">TV 확대 모드</string>
     <string name="settings_tv_zoom_mode_subtitle">화면을 채우도록 비디오 자르기/확대(0% = 꺼짐)</string>
     <string name="settings_tv_zoom_none">확대 없음(원래 화면비)</string>
-    <string name="settings_tv_zoom_percent">화면을 채우도록 비디오를 %1$d%% 자르고 확대</string>
+    <string name="settings_tv_zoom_percent">화면을 채우도록 비디오를 %1$d% 자르고 확대</string>
     <string name="settings_episode_browser">에피소드 브라우저</string>
     <string name="settings_episode_browser_on">재생 중 에피소드 목록 표시</string>
     <string name="settings_episode_browser_off">에피소드 목록 숨기기</string>

@@ -850,7 +850,7 @@
     <string name="settings_reduce_motion">Réduire le mouvement</string>
     <string name="settings_reduce_motion_subtitle">Désactiver la parallaxe lourde et les animations de cartes</string>
     <string name="settings_comfort_eye_care">Confort et soin des yeux</string>
-    <string name="settings_blue_light_filter_summary">Filtre lumière bleue · %1$d%%</string>
+    <string name="settings_blue_light_filter_summary">Filtre lumière bleue · %1$d%</string>
     <string name="settings_blue_light_filter">Filtre lumière bleue</string>
     <string name="settings_blue_light_filter_subtitle">Teinter l\'écran en ambre pour réduire la fatigue oculaire nocturne</string>
     <string name="settings_blue_light_filter_strength">Intensité du filtre lumière bleue</string>
@@ -910,7 +910,7 @@
     <string name="settings_tv_zoom_mode">Mode zoom TV</string>
     <string name="settings_tv_zoom_mode_subtitle">Recadrer/zoomer la vidéo pour remplir l\'écran (0% = désactivé)</string>
     <string name="settings_tv_zoom_none">Pas de zoom (rapport d\'aspect d\'origine)</string>
-    <string name="settings_tv_zoom_percent">Recadrer et zoomer la vidéo de %1$d%% pour remplir l\'écran</string>
+    <string name="settings_tv_zoom_percent">Recadrer et zoomer la vidéo de %1$d% pour remplir l\'écran</string>
     <string name="settings_episode_browser">Navigateur d\'épisodes</string>
     <string name="settings_episode_browser_on">Afficher la liste des épisodes pendant la lecture</string>
     <string name="settings_episode_browser_off">Masquer la liste des épisodes</string>

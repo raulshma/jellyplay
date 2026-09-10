@@ -33,7 +33,7 @@
     <string name="syncplay_error_create_group">No se pudo crear el grupo</string>
 
     <plurals name="syncplay_participants_count">
-        <item quantity="one">%d participante</item>
-        <item quantity="other">%d participantes</item>
+        <item quantity="one">%1$d participante</item>
+        <item quantity="other">%1$d participantes</item>
     </plurals>
 </resources>

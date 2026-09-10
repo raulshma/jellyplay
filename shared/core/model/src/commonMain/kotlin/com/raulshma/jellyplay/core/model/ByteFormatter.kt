@@ -1,13 +1,5 @@
 package com.raulshma.jellyplay.core.model
 
-/** Common replacement for `"%.1f".format(v)` — always one decimal, '.' separator. */
-private fun formatOneDecimal(value: Double): String {
-    val tenths = kotlin.math.round(value * 10.0).toLong()
-    val whole = tenths / 10
-    val frac = tenths % 10
-    return "$whole.$frac"
-}
-
 /** The storage display band a byte count scales into (÷1024 house convention). */
 enum class StorageBytesUnit(val suffix: String) {
     B("B"),
@@ -40,7 +32,7 @@ fun Long.toStorageBytesValue(): StorageBytesValue = when {
 
 /** The band's rendered "number unit" pair; [suffix] carries the "/s" speed tail. */
 private fun StorageBytesValue.render(suffix: String = ""): String {
-    val number = if (unit == StorageBytesUnit.B) value.toLong().toString() else formatOneDecimal(value)
+    val number = if (unit == StorageBytesUnit.B) value.toLong().toString() else formatFixed(value, 1)
     return "$number ${unit.suffix}$suffix"
 }
 

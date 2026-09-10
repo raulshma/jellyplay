@@ -185,6 +185,6 @@
 
     <!-- Player speed-picker custom-value labels (§2.3). Shared by video/audio SpeedPickerSheet. -->
     <string name="player_speed_custom">Custom speed</string>
-    <string name="player_speed_value">%.2fx</string>
+    <string name="player_speed_value">%1$sx</string>
     <string name="player_speed_slider_label">Adjust playback speed</string>
 </resources>

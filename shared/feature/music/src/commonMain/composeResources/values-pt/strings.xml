@@ -56,10 +56,10 @@
     <string name="music_open">Abrir</string>
 
     <!-- Counts -->
-    <string name="music_items_count">%d itens</string>
-    <string name="music_tracks_count">%d faixas</string>
+    <string name="music_items_count">%1$d itens</string>
+    <string name="music_tracks_count">%1$d faixas</string>
     <string name="music_one_track">1 faixa</string>
-    <string name="music_playlist_tracks_count">%d faixas</string>
+    <string name="music_playlist_tracks_count">%1$d faixas</string>
 
     <!-- Home sections -->
     <string name="music_player_screens">Telas do player</string>

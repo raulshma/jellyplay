@@ -58,7 +58,7 @@
     <string name="player_video_ass_force_hint">埋め込みスタイルを独自の色、フォント、縁取りで上書き</string>
     <string name="player_video_font_color">フォントの色</string>
     <string name="player_video_background_color">背景色</string>
-    <string name="player_video_background_opacity">背景の不透明度: %1$d%%</string>
+    <string name="player_video_background_opacity">背景の不透明度: %1$d%</string>
     <string name="player_video_edge_type">縁取りの種類</string>
     <string name="player_video_edge_none">なし</string>
     <string name="player_video_edge_outline">縁取り</string>
@@ -73,7 +73,7 @@
     <string name="player_video_border_width">縁取りの幅: %1$s</string>
     <string name="player_video_shadow_offset">影のオフセット: %1$s</string>
     <string name="player_video_subtitle_offset">字幕のオフセット: %1$s</string>
-    <string name="player_video_vertical_position">垂直位置: %1$d%%</string>
+    <string name="player_video_vertical_position">垂直位置: %1$d%</string>
 
     <!-- Sleep timer sheet -->
     <string name="player_video_sleep_timer">スリープタイマー</string>
