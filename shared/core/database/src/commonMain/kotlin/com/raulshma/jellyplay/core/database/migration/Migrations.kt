@@ -1026,9 +1026,9 @@ val MIGRATION_50_51 = object : Migration(50, 51) {
 //    offline_media_with_playback view with a CASE-led ORDER BY — no planner
 //    path can use a BINARY-collation B-tree there, so the index was pure
 //    write amplification on the app's highest-churn table.
-//  - Add a covering composite on playback_outbox(itemId, deadLetter, createdAt)
-//    for PlaybackOutboxDao.getForItemByType, which runs ~every 10 s during
-//    playback and filters + sorts by createdAt using only the itemId index.
+//  - Add an ordered composite index on playback_outbox(itemId, deadLetter,
+//    createdAt) for PlaybackOutboxDao.getForItemByType, which runs ~every 10 s
+//    during playback and filters + sorts by createdAt using only the itemId index.
 val MIGRATION_51_52 = object : Migration(51, 52) {
     override fun migrate(db: SQLiteConnection) {
         db.execSQL("DROP INDEX IF EXISTS index_offline_media_name")
@@ -1036,7 +1036,7 @@ val MIGRATION_51_52 = object : Migration(51, 52) {
     }
 }
 
-// Covering composite for OfflineMediaDao.getDownloadedEpisodes — the offline
+// Ordered range index for OfflineMediaDao.getDownloadedEpisodes — the offline
 // home's Continue Watching / Next Up source. That reactive query filters
 // `mediaType = 'EPISODE'` over the offline_media_with_playback view and orders
 // by `seriesId, seasonNumber, episodeNumber` (LIMIT 2000); no existing index
@@ -1045,7 +1045,8 @@ val MIGRATION_51_52 = object : Migration(51, 52) {
 // offline_media or playback_state (metadata re-persist, 2 s progress ticks
 // during transfers) re-ran the flow. The new index lets the planner walk the
 // matching mediaType range already in output order (LEFT JOIN playback_state by
-// primary key per row) instead of sorting.
+// primary key per row, then a row lookup for the selected offline_media
+// columns — ordered, not covering) instead of sorting.
 // Schema-additive only; no table data changes.
 val MIGRATION_52_53 = object : Migration(52, 53) {
     override fun migrate(db: SQLiteConnection) {

@@ -27,7 +27,7 @@ import org.koin.dsl.module
  * that LivePlayerScreen renders via the app bus (livetv conveyor's
  * LiveTvUserMessage seam shape).
  *
- *  (live PiP): the VM's `pip` seam is a fourth platform slot —
+ * Live PiP: the VM's `pip` seam is a fourth platform slot —
  * Android binds it in `androidPlayerLiveModule` (adapter over the legacy
  * core:data singleton the host PlayerActivity reads). Like the audio seam it
  * has no jvm definition, so the desktop registration here stays

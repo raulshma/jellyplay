@@ -97,7 +97,7 @@ kotlin {
             implementation(kotlin("test"))
             implementation(libs.coroutines.test)
             implementation(libs.mockk)
-            //DESKTOP COMPOSE UI TEST FOR THE KEYBOARD-FOCUS GRAB
+            // Desktop compose UI test for the keyboard-focus grab
             // (PlayerKeyboardFocusGrabUiTest) — runComposeUiTest is the
             // framework-agnostic ComposeUiTest entry (no JUnit4 runner; the
             // suite stays on kotlin-test like the rest of jvmTest).
@@ -110,8 +110,8 @@ kotlin {
             // ComposeWindow — that AWT window type lives in ui-desktop.
             implementation(libs.jb.compose.ui.desktop)
         }
-        //  shape (subtitle-tester androidMain-heavy precedent, one
-        // notch further): every media3/libmpv/libVLC/cast type, the engine
+        // Subtitle-tester's androidMain-heavy shape taken one notch
+        // further: every media3/libmpv/libVLC/cast type, the engine
         // stack, the Context+Uri session/subtitle managers, the media-session
         // + screenshot + trickplay controllers AND the monolith
         // VideoPlayerViewModel/VideoPlayerScreen pair live here. The pure
@@ -121,10 +121,10 @@ kotlin {
         // apps/desktop's Koin graph and DesktopAppRoot hosts
         // entry<Route.VideoPlayer> (mpv engine behind its platform support
         // guard).
-        //THE DESKTOP DI MODULE (DESKTOPPLAYERVIDEOMODULE) REGISTERS
+        // The desktop DI module (desktopPlayerVideoModule) registers
         // the now-commonMain VideoPlayerViewModel plus the jvmMain seam stubs.
         // No media3/legacy deps here — jvmMain sees only commonMain's deps.
-        //+ JNA FOR THE DESKTOP ENGINEVIDEOSURFACE ACTUAL, WHICH
+        // + JNA for the desktop EngineVideoSurface actual, which
         // resolves the embedded child window's HWND (Native.getComponentPointer,
         // core artifact — no jna-platform). The Android target never sees this
         // edge; apps/desktop already ships libs.jna at runtime for libmpv, so
@@ -142,7 +142,8 @@ kotlin {
         }
         getByName("androidMain").dependencies {
             // Documented shared→legacy edges (library/livetv/admin/settings/
-            // subtitle-tester precedent; dies at ): the Koin factory
+            // subtitle-tester precedent; dies with the legacy playback
+            // host): the Koin factory
             // adapts the Hilt-owned legacy playback singletons
             // (PlaybackSessionManager, CastManager,
             // JellyfinRemotePlayCastStrategy, ActivePlayerController) and

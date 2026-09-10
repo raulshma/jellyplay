@@ -331,7 +331,7 @@ fun main() {
             // live — every data-layer ctor dep is Koin-native
             // (dataJvmModule/datastoreCommonModule), AudioQueueFacade comes
             // from desktopPlayerModule's DefaultAudioQueueFacade binding
-            //, and the module-local platform seams below supply
+            // and the module-local platform seams below supply
             // no-op audio/theme playback + the appdata storage probe.
             // DesktopAppRoot wires detailsSection behind every shared
             // screen that pushes a detail route (search results, requests/

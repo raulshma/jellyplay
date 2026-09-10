@@ -69,7 +69,7 @@ class DesktopSettingsBackupIoTest {
 
     @Test
     fun `cache estimate walks the http-cache root`() = runTest {
-        //THE DESKTOP'S CACHE ESTIMATE IS REAL NOW — IT SUMS FILE
+        // The desktop's cache estimate is real now — it sums file
         // lengths under the injected http-cache root (a missing root reads 0,
         // matching a fresh install whose OkHttp cache was never created).
         val root = createTempDirectory("jp-settings-hc").toFile()

@@ -56,7 +56,7 @@ class AndroidDetailStorageProbe(
 /** Android platform pick for the details module (registered app-side). */
 fun androidDetailsModule(context: Context): Module = module {
     single<DetailStorageProbe> { AndroidDetailStorageProbe(context) }
-    //THE JVM-ONLY DETAIL DEFS (DEPENDENCY CLOSURE REACHES THE
+    // The jvm-only detail defs (dependency closure reaches the
     // jvmShared halves of core:data — AudioQueueFacade, DownloadIntake,
     // OfflineSyncManager, SyncPlayManager) moved here out of commonMain's
     // detailsModule, which is now the wasm-clean module the web shell

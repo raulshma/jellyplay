@@ -108,13 +108,13 @@ fun main() {
             networkWasmModule,
             dataWasmModule,
             requestsModule,
-            //THE SECOND FEATURE SLICE ON WEB — THE CALENDAR VM
+            // The second feature slice on web — the calendar VM
             // (its ctor deps ArrRepository/SeerrRepository/ExperimentalStore
             // all resolve from the modules above, calendarModule registers
             // nothing new). KoinModuleRegistrationGuardTest's web allowlist
             // pins this registration in the same change.
             calendarModule,
-            //THE SEERRDETAIL SLICE. DETAILSMODULE IS NOW THE
+            // The SeerrDetail slice. detailsModule is now the
             // wasm-clean module (the MediaDetail cluster's VM/factory defs
             // moved to the jvm platform modules the android/desktop apps
             // register); its only def the browser ever resolves is
@@ -129,7 +129,7 @@ fun main() {
     }
 
     ComposeViewport(document.body!!) {
-        // .4 image engine: one app-wide Coil ImageLoader. This MUST be
+        // Image engine: one app-wide Coil ImageLoader. This MUST be
         // the first thing in the composition root — setSingletonImageLoader-
         // Factory delegates to SingletonImageLoader.setSafe, which throws if
         // the singleton was already resolved by an earlier AsyncImage call.
@@ -223,7 +223,7 @@ fun main() {
                     // rejects undersized sampled results.
                     add(Keyer<String> { data, _ -> data })
                 }
-                //CACHE/LONG-SESSION OBSERVABILITY FOR THE WEB-SOAK
+                // Cache/long-session observability for the web-soak
                 // lane (tools/e2e/web-soak.mjs). Both hooks are behavior-
                 // preserving (see CoilStats KDoc for what is counted and why
                 // the counting cache mirrors, not replaces, the default).
@@ -242,7 +242,7 @@ fun main() {
         }
 
         JellyPlayTheme(darkTheme = isSystemInDarkTheme(), dynamicColor = false) {
-            //THE ONE VIEWMODELSTOREOWNER/LIFECYCLEOWNER PATH (SEE
+            // The one ViewModelStoreOwner/LifecycleOwner path (see
             // WebShellPlatformOwners.kt) — wraps the whole shell so the
             // requests entry's koinViewModel() resolves, desktop-style.
             ProvideWebShellViewModelOwners {
@@ -257,7 +257,7 @@ fun main() {
                     sessionState = koinApp.koin.get(),
                     authApiClient = koinApp.koin.get(),
                     userPrefs = koinApp.koin.get(DatastoreQualifiers.userPreferencesDataStore),
-                    //THE WEBSEERRCONTROLLER DEPS (SAME PATTERN AS
+                    // The WebSeerrController deps (same pattern as
                     // userPrefs above — resolved here, passed down). All
                     // three bindings are UNNAMED singles (DatastoreQualifiers
                     // qualify only the raw DataStores):

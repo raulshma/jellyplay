@@ -15,7 +15,7 @@ import org.koin.dsl.module
  *    [com.raulshma.jellyplay.core.data.playback.AudioEffectsManager] are the
  *    shared playback contracts the legacy Hilt AudioPlaybackManager single
  *    implements; androidCoreDataModule aliases them onto that manager since
- *     (the former app Hilt-interop bridge died with);
+ *    the former app Hilt-interop bridge died with the conveyor move);
  *  - the module-local AudioPlayerEngine / AudioPlayerCast seams are bridged
  *    the same way (app-side `androidAppInteropAdaptersModule` delegate
  *    adapters over the Koin-owned AudioPlaybackManager / CastManager —

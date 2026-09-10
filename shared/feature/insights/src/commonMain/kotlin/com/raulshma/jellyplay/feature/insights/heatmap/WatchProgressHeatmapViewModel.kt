@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.insights.heatmap
 
 import androidx.compose.runtime.Immutable
+import com.raulshma.jellyplay.core.concurrency.DEFAULT_FANOUT_PARALLELISM
 import com.raulshma.jellyplay.core.concurrency.mapConcurrent
 import com.raulshma.jellyplay.core.data.repository.DailyWatchActivity
 import com.raulshma.jellyplay.core.data.repository.HeatmapFilter
@@ -165,10 +166,11 @@ class WatchProgressHeatmapViewModel(
         }
     }
 
-    private val resolveSemaphore = Semaphore(4)
+    private val resolveSemaphore = Semaphore(DEFAULT_FANOUT_PARALLELISM)
 
     /**
-     * Resolves day-detail items at bounded parallelism (Semaphore(4)) — a
+     * Resolves day-detail items at bounded parallelism
+     * ([DEFAULT_FANOUT_PARALLELISM]) — a
      * binge day used to pay 20-50 sequential detail round-trips before the
      * day sheet populated. Same shape as MusicHomeViewModel's
      * fetchAlbumTracksParallel: a failed detail (getOrNull() == null) drops

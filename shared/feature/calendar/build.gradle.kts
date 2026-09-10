@@ -27,7 +27,7 @@ kotlin {
         }
     }
 
-    //THE CALENDAR SLICE FOLLOWS REQUESTS ONTO THE WEB
+    // The calendar slice follows requests onto the web
     // target — the web shell renders UpcomingCalendarScreen behind the
     // Route.UpcomingCalendar entry. The old blocker (java.time in commonMain)
     // is gone: the grouping helpers, VM month windows, and screen date-picker
@@ -64,7 +64,7 @@ kotlin {
             implementation(project(":shared:core:model"))
             implementation(project(":shared:core:designsystem"))
             implementation(project(":shared:core:data"))
-            //THE WHOLE MODULE RUNS KOTLINX.DATETIME (WASMJS
+            // The whole module runs kotlinx.datetime (wasmJs
             // purification) — grouping helpers, VM month windows, and the
             // date-picker epoch math included.
             implementation(libs.kotlinx.datetime)

@@ -22,7 +22,7 @@ kotlin {
         }
     }
 
-    //THE REQUESTS SLICE'S DATA LAYER COMPILES FOR THE WEB SHELL.
+    // The requests slice's data layer compiles for the web shell.
     // Room stayed behind: :shared:core:database has no wasm build, so the
     // Room-backed repositories (QueuePersistenceHelper, SeenMedia*,
     // ItemPlaybackPreference*, PlaylistRepositories, OfflineSyncProjection,
@@ -60,7 +60,7 @@ kotlin {
             // own concurrency seam, not something borrowed from core:network.
             api(project(":shared:core:concurrency"))
             // Room is consumed ONLY from jvmShared now (database has no wasm
-            // build; demoted from api() in).
+            // build; demoted from api()).
             api(project(":shared:core:datastore"))
             // ArrRepository(Impl)'s calendar windows — kotlinx-datetime 0.8.0
             // (ABI evidence in the catalog note: Kotlin 2.1.20-built klibs,

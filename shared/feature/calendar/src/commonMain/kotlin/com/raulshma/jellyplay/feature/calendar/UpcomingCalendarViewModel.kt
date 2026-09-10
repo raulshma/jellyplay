@@ -109,7 +109,7 @@ class UpcomingCalendarViewModel(
             val month = _state.value.visibleMonth
             val from = month.onDay(1)
             val to = month.lastDay
-            //THE WHOLE MODULE RUNS KOTLINX.DATETIME NOW (WASMJS
+            // The whole module runs kotlinx.datetime now (wasmJs
             // purification) — the repository boundary no longer converts.
             arrRepository.calendar(from, to).collect { items ->
                 if (_state.value.visibleMonth == month) {

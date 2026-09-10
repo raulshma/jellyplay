@@ -11,7 +11,7 @@ fun EntryProviderScope<NavKey>.requestsSection(
     navigator: Navigator,
 ) {
     entry<Route.Requests> {
-        //THE VIEWMODELSTOREOWNER/LIFECYCLEOWNER PROVISIONING
+        // The ViewModelStoreOwner/LifecycleOwner provisioning
         // fallback MUST sit outside RequestsScreen — koinViewModel() evaluates
         // as a default parameter before an in-screen provider would run (see
         // ProvidePlatformLocalsFallback).  update: pass-through on

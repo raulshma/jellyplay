@@ -59,12 +59,12 @@ interface DownloadDao {
      * Count of downloads actively in flight — `PENDING`/`QUEUED`/`DOWNLOADING`
      * only (excludes `PAUSED`, which the summary counts as resolved). Used by the
      * download notification group summary so it collapses to one shade item and
-     * dismisses itself when the last transfer finishes.
+     * dismisses itself when the last transfer finishes. Every other status set in
+     * this DAO is deliberately different (e.g. [getActiveDownloadCount] also
+     * counts `PAUSED`).
      */
-    @Query("SELECT COUNT(*) FROM downloads WHERE status IN (:statuses)")
-    suspend fun getInFlightDownloadCount(
-        statuses: List<String> = IN_FLIGHT_STATUSES,
-    ): Int
+    @Query("SELECT COUNT(*) FROM downloads WHERE status IN ('PENDING', 'QUEUED', 'DOWNLOADING')")
+    suspend fun getInFlightDownloadCount(): Int
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertDownload(download: DownloadEntity)
@@ -150,22 +150,8 @@ interface DownloadDao {
      * Same narrow-projection rationale as [getRecoveryRows] / [getStatus].
      * Served by the `status` index.
      */
-    @Query("SELECT id, downloadedBytes, speedBytesPerSec FROM downloads WHERE status IN (:statuses)")
-    fun getActiveDownloadProgress(
-        statuses: List<String> = IN_FLIGHT_STATUSES,
-    ): Flow<List<DownloadProgressRow>>
-
-    companion object {
-        /**
-         * The in-flight status set — `PENDING`/`QUEUED`/`DOWNLOADING` only
-         * (excludes `PAUSED`, which the summary counts as resolved). One
-         * home for the set [getInFlightDownloadCount] and
-         * [getActiveDownloadProgress] filter on; every other status set in
-         * this DAO is deliberately different (e.g. [getActiveDownloadCount]
-         * also counts `PAUSED`).
-         */
-        val IN_FLIGHT_STATUSES = listOf("PENDING", "QUEUED", "DOWNLOADING")
-    }
+    @Query("SELECT id, downloadedBytes, speedBytesPerSec FROM downloads WHERE status IN ('PENDING', 'QUEUED', 'DOWNLOADING')")
+    fun getActiveDownloadProgress(): Flow<List<DownloadProgressRow>>
 
     /**
      * Lightweight rows for downloads whose [status] is in [statuses], used by the

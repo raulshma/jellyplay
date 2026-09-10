@@ -385,7 +385,7 @@ internal actual fun EngineVideoSurface(
     onSurfaceUpdate: () -> Unit,
     onBoundsChanged: (Int, Int, Int, Int) -> Unit,
 ) {
-    //THE COMMONMAIN CALL SITE COMPOSES THIS SEAM UNCONDITIONALLY
+    // The commonMain call site composes this seam unconditionally
     // (engine may still be null — the desktop SwingPanel host must mount
     // before the engine exists; see PlatformVideoSurfaceSeam). Android renders
     // nothing while null, exactly what the former screen-side

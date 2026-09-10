@@ -57,7 +57,7 @@ fun desktopDetailsPlatformModule(dataDir: Path): Module = module {
     single<DetailAudioPlayback> { NoopDetailAudioPlayback }
     single<DetailThemeMusic> { NoopDetailThemeMusic }
     single<DetailStorageProbe> { DesktopDetailStorageProbe(dataDir) }
-    //THE JVM-ONLY DETAIL DEFS (DEPENDENCY CLOSURE REACHES THE
+    // The jvm-only detail defs (dependency closure reaches the
     // jvmShared halves of core:data — AudioQueueFacade, DownloadIntake,
     // OfflineSyncManager, SyncPlayManager) moved here out of commonMain's
     // detailsModule, which is now the wasm-clean module the web shell

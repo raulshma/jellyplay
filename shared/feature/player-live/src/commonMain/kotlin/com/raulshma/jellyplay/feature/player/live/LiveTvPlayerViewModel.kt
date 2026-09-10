@@ -87,7 +87,7 @@ private const val LIVE_BUFFERING_TIMEOUT_MS = 20_000L
  * seam) and localized error state stays unresolved until render time
  * ([LivePlayerMessage]).
  *
- *  (live PiP): the nullable [pip] seam (androidMain adapter over the
+ * Live PiP: the nullable [pip] seam (androidMain adapter over the
  * legacy core:data singleton the host Activity reads) arms auto-enter on each
  * successful tune, mirrors play state, installs the remote-action transport
  * (SKIP = channel zap) and tears it all down in [stop] — see [PipController].

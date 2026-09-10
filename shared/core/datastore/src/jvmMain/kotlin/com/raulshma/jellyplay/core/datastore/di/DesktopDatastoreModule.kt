@@ -12,7 +12,7 @@ import org.koin.dsl.module
 import okio.Path
 
 /**
- * Desktop platform Koin module (docs/kmp-migration-plan.md ).
+ * Desktop platform Koin module (docs/kmp-migration-plan.md).
  * [dataDir] is the app's writable data directory; preference files land
  * under `dataDir/datastore/` mirroring the Android `filesDir/datastore/`
  * layout. Credential stores use the OS-keyring-backed

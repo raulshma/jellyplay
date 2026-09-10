@@ -262,7 +262,7 @@ object DesktopSessionHarness {
 
             //  question: no keyboard-reachable sheet exists (see KDoc);
             // the SPACE-reachable controls overlay is the ordering probe.
-            //THE SPACE LEG BECAME A REGRESSION GATE (FAIL WHEN
+            // The SPACE leg became a regression gate (fail when
             // playback does not toggle) — pre-fix runs recorded it as a
             // "focus finding" because the player Box held no focus while the
             // controls were visible, and the key died at the scaffold's
@@ -280,7 +280,7 @@ object DesktopSessionHarness {
 
             var spaceReachedPlayer = false
             val overlayOk = !fatalStop && step("OVERLAY_SPACE") {
-                //THE 12 S HARNESS CLIP CAN HIT EOF WHILE LOGIN /
+                // The 12 s harness clip can hit EOF while login /
                 // screenshots burn wall time under machine load; the screen
                 // then auto-pops the route (closePlayer → onBack) BEFORE the
                 // SPACE probe — the failed merged-tree run injected SPACE and
@@ -376,7 +376,7 @@ object DesktopSessionHarness {
             }
 
             step("ESC_SEQUENCE") {
-                //TOLERATE THE 12 S CLIP'S EOF AUTO-POP (THE SCREEN'S
+                // Tolerate the 12 s clip's EOF auto-pop (the screen's
                 // closePlayer flow pops the route without any injected key).
                 // Without this the step's regression assertion could compare
                 // against a stack that had ALREADY returned to 1 (the failed
@@ -435,7 +435,7 @@ object DesktopSessionHarness {
                         when (evt.propertyName) {
                             "focusOwner", "permanentFocusOwner", "focusedWindow" ->
                                 println(
-                                    //EVERY LINE IS STAMPED WITH THE
+                                    // every line is stamped with the
                                     // elapsed-ms since the run started, so flap
                                     // cycles correlate against the step timeline
                                     // and the bringWindowToFront marks below
@@ -603,7 +603,7 @@ object DesktopSessionHarness {
             val window = deps.windowRef?.get() ?: return false
             return runCatchingRethrowingCancellation {
                 bringWindowToFront(window, "injectKey($keyCode) $reason")
-                //SNAPSHOT THE AWT FOCUS STATE AT INJECTION TIME —
+                // Snapshot the AWT focus state at injection time —
                 // Robot delivers to the OS-focused window whose AWT focus owner
                 // receives the key; this line pairs with the [awt-key] events
                 // that follow.

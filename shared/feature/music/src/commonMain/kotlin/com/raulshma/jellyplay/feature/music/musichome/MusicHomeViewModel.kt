@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.music.musichome
 
+import com.raulshma.jellyplay.core.concurrency.DEFAULT_FANOUT_PARALLELISM
 import com.raulshma.jellyplay.core.concurrency.mapConcurrent
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
@@ -293,10 +294,10 @@ class MusicHomeViewModel(
         }
     }
 
-    private val fetchSemaphore = Semaphore(4)
+    private val fetchSemaphore = Semaphore(DEFAULT_FANOUT_PARALLELISM)
 
     /**
-     * Parallel (Semaphore(4)) album-track fetch. Returns each track paired with
+     * Parallel ([DEFAULT_FANOUT_PARALLELISM]) album-track fetch. Returns each track paired with
      * its own album fallback (the source album's name) so the facade can map
      * per-album naming before concatenation — plan 04 risk 2.
      */

@@ -78,7 +78,7 @@ object PlaybackHostRouter {
                 ),
             )
 
-        //  (live PiP): Live TV moved out of the nav shell — the
+        // Live PiP: Live TV moved out of the nav shell — the
         // dedicated PlayerActivity hosts LivePlayerScreen, whose PiP apparatus
         // (auto-enter on home, remote actions, aspect-shaped window) serves
         // live through the live VM's PipController seam. LivePlayerScreen

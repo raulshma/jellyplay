@@ -78,7 +78,7 @@ fun webDatastoreModule(): Module = module {
         webPreferencesDataStore("subtitle_provider_prefs")
     }
 
-    //THE ONLY PERSISTENT CREDENTIAL STORE ON WEB — THE API KEY IS
+    // The ONLY persistent credential store on web — the API key is
     // the sole Seerr auth that can function in a browser (Cookie is a
     // fetch-forbidden header), and it is user-entered config, so it persists
     // via localStorage. See [LocalStorageSecureKeyValueStorage] for the full

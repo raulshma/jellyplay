@@ -58,7 +58,7 @@ internal actual fun grabsKeyboardFocusWithControlsVisible(): Boolean = true
  */
 internal actual fun harnessFocusDiag(message: String) {
     if (System.getProperty("jellyplay.harness.enabled")?.equals("true", ignoreCase = true) == true) {
-        //WALL-CLOCK STAMP ON EVERY LINE SO THE COMPOSE-SIDE STORY
+        // Wall-clock stamp on every line so the Compose-side story
         // correlates exactly with the harness's `t=+…ms` AWT focus lines
         // (harness prints its own epoch ms too).
         println(

@@ -115,7 +115,7 @@ class PlaybackHostRouterTest {
 
     @Test
     fun `live tv with any non-EXTERNAL engine answers DedicatedActivity carrying the channel args`() {
-        //THE DEDICATED PLAYERACTIVITY HOSTS LIVE FOR EVERY EMBEDDED
+        // The dedicated PlayerActivity hosts live for every embedded
         // engine so system PiP serves live TV (the former in-nav answer died
         // with MainActivity's supportsPictureInPicture). The channel fields
         // map onto PlayerActivityArgs.Live verbatim; no resume position for a

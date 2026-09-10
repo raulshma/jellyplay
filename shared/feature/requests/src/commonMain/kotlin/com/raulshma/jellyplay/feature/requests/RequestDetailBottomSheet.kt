@@ -160,7 +160,7 @@ fun RequestDetailBottomSheet(
     }
     val statusLabel = stringResource(statusLabelRes)
 
-    //THE JAVA.TIME READ MOVED TO THE [FORMATREQUESTEDDATE] SEAM
+    // The java.time read moved to the [formatRequestedDate] seam
     // (verbatim `LocalDateTime.parse` + "MMM d, yyyy" on the jvmShared
     // actual; strict-regex + fixed-English months on wasmJs — RequestTime.kt
     // documents the equivalence + the locale degrade). The take(10) fallback

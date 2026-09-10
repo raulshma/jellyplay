@@ -19,7 +19,7 @@ import com.raulshma.jellyplay.PlayerActivity
  *    `onNewIntent`, returning `null` when the variant's mandatory id is
  *    absent (the activity's `finish()` path depends on that null).
  *
- *  (live PiP): the contract is sealed — the dedicated host now also
+ * Live PiP: the contract is sealed — the dedicated host now also
  * mounts Live TV (so system PiP serves live), and a live launch carries a
  * different payload than the video-shaped one:
  *

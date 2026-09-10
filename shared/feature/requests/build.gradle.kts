@@ -27,7 +27,7 @@ kotlin {
         }
     }
 
-    //FIRST SHARED/FEATURE MODULE WITH THE WEB TARGET — THE
+    // First shared/feature module with the web target — the
     // requests slice renders in the ComposeViewport web shell. The old
     // blocker (java.time in commonMain) is gone: those reads moved behind
     // the RequestTime.kt expect/actual seam (jvmShared = the verbatim

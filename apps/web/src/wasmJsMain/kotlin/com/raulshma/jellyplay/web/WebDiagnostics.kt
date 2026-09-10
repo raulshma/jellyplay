@@ -150,7 +150,7 @@ internal fun WebDiagnosticsPane(
         else -> "DIAG_OVERALL: PENDING"
     }
 
-    //COIL COUNTERS ARE PLAIN PROCESS-LIFETIME INTS OUTSIDE
+    // Coil counters are plain process-lifetime Ints outside
     // Compose state, so the lines refresh on a 500ms poll rather than
     // waiting for an unrelated recomposition (same idiom as VideoCheck's
     // position mirror). Drivers gate on IMAGE_STATE: OK first, which orders

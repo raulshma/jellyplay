@@ -49,7 +49,7 @@ kotlin {
         getByName("jvmMain").dependencies {
             implementation(libs.okio)
             // BundledSQLiteDriver for the desktop Room builder
-            // (DesktopDatabaseModule, ).
+            // (DesktopDatabaseModule).
             implementation(libs.androidx.sqlite.bundled)
         }
         getByName("jvmTest").dependencies {

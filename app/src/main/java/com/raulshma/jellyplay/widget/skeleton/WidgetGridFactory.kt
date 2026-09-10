@@ -107,11 +107,11 @@ abstract class WidgetGridFactory<T>(
     // cancels a sibling bind's pass.
     private val warmupScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    // Stable-id set the last scheduled warmup pass ran for — one
+    // Stable-id set of the last scheduled warmup pass — one
     // pass per data generation, so the notify→rebind→tail cycle can never
     // loop on posters that fail to fetch (a re-bind with the same ids finds
     // the pass already attempted and skips).
-    private var warmupAttemptedIds: List<Long>? = null
+    private var warmupAttemptedIds: Set<Long>? = null
 
     /** The latest rows for this widget (memory-only store read). */
     protected abstract fun snapshotProvider(): List<T>
@@ -292,7 +292,7 @@ abstract class WidgetGridFactory<T>(
         val coldSnapshot = items.isEmpty()
         val posterMisses = posterCache.values.any { it == null }
         if (!coldSnapshot && !posterMisses) return
-        val ids = items.map { stableIdOf(it) }
+        val ids = items.map { stableIdOf(it) }.toSet()
         if (warmupAttemptedIds == ids) return
         warmupAttemptedIds = ids
         scheduleWarmupRepaint(coldSnapshot)

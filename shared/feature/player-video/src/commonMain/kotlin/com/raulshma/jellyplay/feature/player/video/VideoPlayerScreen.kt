@@ -324,7 +324,7 @@ fun VideoPlayerScreen(
     val tvCinemaIntroFocusRequester = remember { FocusRequester() }
     val tvNextEpisodeFocusRequester = remember { FocusRequester() }
     val keyboardFocusRequester = remember { FocusRequester() }
-    //  (desktop only — updated by the jvm-gated onFocusChanged below,
+    // (desktop only — updated by the jvm-gated onFocusChanged below,
     // so it stays false on Android where the grab seam no-ops anyway): whether
     // ANYTHING under the keyboard layer holds focus; drives the grab seam's
     // re-assert-on-loss against the mpv surface-mount focus drop.
@@ -787,7 +787,7 @@ fun VideoPlayerScreen(
         }
     }
 
-    //THE HARDWARE-KEYBOARD LAYER'S MEDIA-KEY INTERPRETATION, SO
+    // The hardware-keyboard layer's media-key interpretation, so
     // both delivery paths run the same table: (a) the normal focused dispatch
     // chain (the Box's onKeyEvent, when the layer or a descendant holds Compose
     // focus) and (b) the desktop shell's deterministic forward (the sink
@@ -1072,7 +1072,7 @@ fun VideoPlayerScreen(
                                         "player-keyboard-box onKeyEvent: key=${keyEvent.key}",
                                     )
                                 }
-                                //THE INTERPRETATION MOVED INTO
+                                // The interpretation moved into
                                 // [handleMediaKeyDown] above so the shell's
                                 // deterministic forward (the bridge sink) runs
                                 // the exact same when-block.
@@ -1171,7 +1171,7 @@ fun VideoPlayerScreen(
             // child window mpv embeds into. Zoom transform + PiP bounds
             // tracking stay with the platform actuals.
             //
-            //COMPOSED UNCONDITIONALLY — `ENGINE` IS NULL WHILE THE
+            // Composed UNCONDITIONALLY — `engine` is null while the
             // session is still creating one, and the desktop actual mounts its
             // SwingPanel host exactly then: mpv's `wid` captures the embed
             // target at engine construction, so the surface must exist BEFORE

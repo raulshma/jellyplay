@@ -7,6 +7,14 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 
 /**
+ * Fan-out width the detail-resolve fetches riding [mapConcurrent] share
+ * (arrqueue search-resolve, heatmap day-detail, music album-tracks) — wide
+ * enough to overlap per-item latency, narrow enough to leave the server and
+ * the caller's dispatcher headroom.
+ */
+const val DEFAULT_FANOUT_PARALLELISM = 4
+
+/**
  * Order-preserving bounded-parallel map over [this] semaphore's permits — the
  * acquire/try/finally (or `withPermit`) + async/awaitAll ladder every
  * fan-out site hand-copied. At most [Semaphore.availablePermits] items run

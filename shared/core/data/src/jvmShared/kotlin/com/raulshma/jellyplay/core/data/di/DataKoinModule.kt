@@ -289,7 +289,7 @@ val dataJvmModule: Module = module {
 
     single { HomeSession(get(), get(DatastoreQualifiers.applicationScope)) }
 
-    //THE IDENTITY SEAM THE PROMOTED COMMONMAIN GRAPH CONSUMES
+    // The identity seam the promoted commonMain graph consumes
     // (SeerrRepositoryImpl's cache keys + SessionCacheRegistry's transition
     // subscription). Binds the SAME HomeSession singleton — android/desktop
     // behavior unchanged; wasmJs binds the AtomicSessionState-backed provider

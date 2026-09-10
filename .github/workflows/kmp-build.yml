@@ -234,7 +234,7 @@ jobs:
           done || true
 
       - name: Android app androidTest assembly (relocated player-video UI tests)
-        #THE LEGACY :FEATURE:PLAYER:VIDEO ANDROIDTEST SET MOVED TO
+        # The legacy :feature:player:video androidTest set moved to
         # :app (AGP KMP library plugins expose no androidTest compilation —
         # syncplay relocation precedent); compile-gate it here.
         run: ./gradlew :app:assemblePhoneDebugAndroidTest --stacktrace

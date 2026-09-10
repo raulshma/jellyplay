@@ -241,17 +241,17 @@ internal fun WebConnectFlow(
     networkStatus: NetworkStatus,
     modifier: Modifier = Modifier,
     onOpenConnectionDetails: (() -> Unit)? = null,
-    //OPENS THE GATED E2E DIAGNOSTICS PANE (WEBDIAGNOSTICSPANE)
+    // Opens the gated E2E diagnostics pane (WebDiagnosticsPane)
     // — deliberately optional so nothing renders until the nav root wires it.
     onOpenDiagnostics: (() -> Unit)? = null,
-    //OPENS THE FIRST SHARED FEATURE SCREEN (ROUTE.REQUESTS →
+    // Opens the first shared feature screen (Route.Requests →
     // RequestsScreen). Optional like the other hooks so WebConnectFlow stays
     // renderable without a nav root behind it.
     onOpenRequests: (() -> Unit)? = null,
-    //OPENS THE SECOND SHARED FEATURE SCREEN (ROUTE.UPCOMINGCALENDAR
+    // Opens the second shared feature screen (Route.UpcomingCalendar
     // → UpcomingCalendarScreen). Same optionality contract as onOpenRequests.
     onOpenCalendar: (() -> Unit)? = null,
-    //OPENS THE SEERR CREDENTIALS PANE (WEBSEERRPANE) — THE ENTRY
+    // Opens the Seerr credentials pane (WebSeerrPane) — the entry
     // point that makes the requests feature usable on web (API-key creds).
     onOpenSeerr: (() -> Unit)? = null,
 ) {
@@ -389,7 +389,7 @@ private fun ConnectedCard(
                     Text("Connection details")
                 }
             }
-            //THE FIRST SHARED FEATURE SCREEN. A PRIMARY BUTTON
+            // The first SHARED feature screen. A primary Button
             // (real feature, unlike the diagnostics tooling below) placed
             // before it. The screen itself renders the honest "Seerr not
             // configured" error state until Seerr credentials exist on web —
@@ -399,7 +399,7 @@ private fun ConnectedCard(
                     Text("Requests")
                 }
             }
-            //THE SECOND SHARED FEATURE SCREEN, SAME PRIMARY-BUTTON
+            // The second SHARED feature screen, same primary-Button
             // treatment right next to Requests. The screen renders the honest
             // feature-disabled pane on web (flag off, no settings UI — see
             // WebAppRoot's Route.UpcomingCalendar entry note).
@@ -408,7 +408,7 @@ private fun ConnectedCard(
                     Text("Calendar")
                 }
             }
-            //THE SEERR CREDENTIALS PANE — THE MAKE-REQUESTS-WORK
+            // The Seerr credentials pane — the make-requests-work
             // entry (server URL + API key, persist + test + disconnect).
             // Primary Button like Requests (real feature), placed beside it.
             if (onOpenSeerr != null) {

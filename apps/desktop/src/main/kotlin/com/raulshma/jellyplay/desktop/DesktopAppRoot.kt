@@ -244,7 +244,7 @@ internal fun DesktopAppRoot(
 
     when {
         !sessionRestoreDone -> SessionRestoreSplash()
-        //THE SIGNED-OUT GATE IS THE SHARED AUTH FLOW NOW (SEE
+        // The signed-out gate is the shared auth flow now (see
         // DesktopSignedOutAuthHost) — the legacy DesktopSignInPane pane is
         // retired with its v1 cut-list.
         !isAuthenticated -> DesktopSignedOutAuthHost()
@@ -322,7 +322,7 @@ private fun DesktopNavScaffold(
         true
     }
 
-    //WIRE THE SOFTWARE-SURFACE PROBER BEFORE ANY ROUTE GUARD READS
+    // Wire the software-surface prober before any route guard reads
     // it (the Route.VideoPlayer entry registration below asks it while the
     // entry provider graph is built; the guard derives the same predicate
     // from the graph's ledger). The probe itself is lazy and cached

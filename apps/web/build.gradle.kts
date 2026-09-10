@@ -16,9 +16,9 @@ kotlin {
     // wasm network seam (W.1 chunks 1-3) is wired here and the Coil wasm
     // image engine (W.4) is wired since the repo-wide coil 3.4.0 pin
     // (libs.versions.toml version note): 3.5.0's wasmJs klibs are Kotlin-
-    // 2.4-ABI and silently skipped by our 2.3.21 loader.  adds the
+    // 2.4-ABI and silently skipped by our 2.3.21 loader. This module adds the
     // real navigation shell (WebAppRoot over the JB fork's NavDisplay).
-    //FIRST FEATURE SCREEN — `ENTRY<ROUTE.REQUESTS>` RENDERS THE
+    // First FEATURE screen — `entry<Route.Requests>` renders the
     // shared RequestsScreen (15B's wasm target) with the requests DI slice.
     wasmJs {
         browser {
@@ -28,7 +28,7 @@ kotlin {
                 outputFileName = "webapp.js"
             }
         }
-        //THE MAIN BINARY MUST BE EXECUTABLE FOR WEBPACK TO PRODUCE
+        // The main binary must be EXECUTABLE for webpack to produce
         // the servable bundle (build/kotlin-webpack/wasmJs/
         // developmentExecutable) the CDP verification lane
         // (tools/e2e/web-verify.mjs) drives. Without this only the
@@ -65,7 +65,7 @@ kotlin {
                 implementation(project(":shared:core:ui"))
                 implementation(project(":shared:core:datastore"))
                 implementation(project(":shared:core:network"))
-                //DATAWASMMODULE (THE REQUESTS REPO SLICE —
+                // dataWasmModule (the requests repo slice —
                 // SeerrRepository/ArrRepository over the wasm clients) is
                 // imported into Main.kt's startKoin, hence the direct edge.
                 implementation(project(":shared:core:data"))
@@ -80,7 +80,7 @@ kotlin {
                 // pins exactly these three registrations.
                 implementation(project(":shared:feature:requests"))
                 implementation(project(":shared:feature:calendar"))
-                //THE THIRD SHARED FEATURE SCREEN ON WEB —
+                // The third shared feature screen on web —
                 // WebAppRoot's `entry<Route.SeerrDetail>` composes the shared
                 // SeerrDetailScreen (details' wasmJs target; the MediaDetail
                 // cluster stays jvmShared/off-web) and Main.kt registers
@@ -96,7 +96,7 @@ kotlin {
                 // engine compiles against the real contract.
                 implementation(project(":shared:core:player-contract"))
 
-                // .4 DONE (was BLOCKED at coil 3.5.0 whose wasmJs
+                // DONE (was BLOCKED at coil 3.5.0 whose wasmJs
                 // klibs are Kotlin-2.4-ABI, unreadable by this repo's Kotlin
                 // 2.3.21 klib loader). The pins moved to 3.4.0 — the last
                 // Kotlin-2.3-built release line (Central's kotlin-tooling-
@@ -115,14 +115,14 @@ kotlin {
                 // TRANSITIVE implementation dep of shared/core/network, which
                 // does not leak onto our compile classpath.
                 implementation(libs.ktor.client.js)
-                //  (WebConnectFlow): ktor-client-core is needed to
+                // (WebConnectFlow): ktor-client-core is needed to
                 // CLASSIFY transport failures typed there / in ktor-io
                 // (HttpRequestTimeoutException, IOException) for the connect
                 // form's error lines — the same taxonomy the wasm network
                 // classifier uses. Direct edge for the same leak reason as
                 // ktor-client-js above (implementation dep of core/network).
                 implementation(libs.ktor.client.core)
-                //  (WebMediaRepositoryNarrow): PagingData appears in
+                // (WebMediaRepositoryNarrow): PagingData appears in
                 // MediaRepository's paged-member signatures — a direct edge
                 // for the same leak reason as ktor-client-js above (paging-
                 // common is an implementation dep of shared/core/data, so it
@@ -131,7 +131,7 @@ kotlin {
                 implementation(libs.paging.common)
 
                 implementation(libs.koin.core)
-                //THE KOIN-COMPOSE RUNTIME BEHIND THE REQUESTS
+                // The koin-compose runtime behind the requests
                 // entry's `koinViewModel()` (RequestsScreen's default
                 // parameter, compiled inside the feature klib). Explicit
                 // edges rather than relying on the feature module's

@@ -61,7 +61,7 @@ import org.koin.dsl.module
  * androidDataModule).
  */
 fun androidPlayerVideoModule(context: Context): Module = module {
-    //THE FONTPROVIDER/SUBTITLEPREVIEWREPOSITORY/PLAYERENGINEFACTORY
+    // The FontProvider/SubtitlePreviewRepository/PlayerEngineFactory
     // singles now register their commonMain seam interface (the ViewModel's
     // ctor slots are interface-typed) plus the concrete Android class for the
     // androidMain call sites (engines, overlay) — one instance, two keys.

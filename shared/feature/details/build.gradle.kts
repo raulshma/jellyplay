@@ -26,7 +26,7 @@ kotlin {
         }
     }
 
-    //SECOND SHARED/FEATURE MODULE WITH THE WEB TARGET — THE
+    // Second shared/feature module with the web target — the
     // SeerrDetail slice renders in the ComposeViewport web shell (the
     // Requests→SeerrDetail navigation stub becomes real). The old blocker
     // (java.time/java.text in commonMain) is gone two ways: SeerrDetailScreen/

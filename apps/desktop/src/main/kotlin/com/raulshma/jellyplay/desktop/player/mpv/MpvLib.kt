@@ -191,7 +191,7 @@ object MpvLib {
 
     /** Reads a NODE property into a plain Kotlin value (String/Boolean/Long/Double/List/Map). */
     fun readNode(ctx: Pointer, name: String): Any? {
-        //RAW MEMORY + MANUAL OFFSETS, NOT THE MPVNODE STRUCTURE.
+        // Raw memory + manual offsets, NOT the MpvNode Structure.
         // mpv writes the node tree in C layout and two things broke the old
         // Structure path: top-level arrays arrive as MPV_FORMAT_NODE_ARRAY
         // (format 7 — the old `when` matched only generic NODE), and JNA's

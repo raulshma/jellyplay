@@ -107,7 +107,7 @@ kotlin {
             // networkWasmModule (Koin construction owner on wasm, mirroring
             // networkJvmModule's role for android/jvm).
             implementation(libs.koin.core)
-            //LOCALSTORAGE ACCESS FOR THE PERSISTENT DEVICE ID
+            // localStorage access for the persistent device id
             // (`persistedOrRandomDeviceId` in WasmIdentity.kt) — the same
             // klib the datastore module's Seerr credential store uses; the
             // network stack reads/writes `jellyplay/device-id` directly

@@ -27,7 +27,7 @@ kotlin {
     jvmToolchain(17)
 }
 
-// Desktop shell (docs/kmp-migration-plan.md ): Compose Window + tray
+// Desktop shell (docs/kmp-migration-plan.md): Compose Window + tray
 // + menubar + shortcuts over the shared core stack. Feature modules land here
 // one conveyor step at a time (§V1c/V3).
 dependencies {
@@ -159,7 +159,7 @@ dependencies {
     // clicks open the now-playing screen.
     implementation(project(":shared:feature:player-audio"))
 
-    // …player-video, conveyor slice →  playback LIVE on
+    // …player-video, the conveyor slice → playback LIVE on
     // Windows: the ViewModel/session cluster is commonMain and
     // desktop-resolvable (desktopPlayerVideoModule registers the VM + no-op
     // seam actuals, jvmMain), DesktopAppRoot registers Route.VideoPlayer for
@@ -176,7 +176,7 @@ dependencies {
     implementation(project(":shared:feature:shell"))
 
 
-    // Desktop libmpv binding (MpvDesktopEngine, ): JNA loads
+    // Desktop libmpv binding (MpvDesktopEngine): JNA loads
     // mpv-2.dll / libmpv.so / libmpv.dylib at runtime; also resolves
     // the surface HWND through Native.getComponentPointer (shared
     // player-video's jvmMain declares its own implementation-scoped jna edge).

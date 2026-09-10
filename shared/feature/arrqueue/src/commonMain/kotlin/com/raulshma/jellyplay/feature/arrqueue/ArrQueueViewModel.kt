@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.arrqueue
 
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.State
+import com.raulshma.jellyplay.core.concurrency.DEFAULT_FANOUT_PARALLELISM
 import com.raulshma.jellyplay.core.concurrency.mapConcurrent
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
@@ -181,11 +182,11 @@ class ArrQueueViewModel(
     }
 
     /**
-     * Bounds [deleteSelected]'s search-again fan-out at 4 concurrent
-     * searches — same idiom as WatchProgressHeatmapViewModel's
+     * Bounds [deleteSelected]'s search-again fan-out — same idiom and width
+     * ([DEFAULT_FANOUT_PARALLELISM]) as WatchProgressHeatmapViewModel's
      * resolveSemaphore and MusicHomeViewModel's fetchSemaphore.
      */
-    private val searchSemaphore = Semaphore(4)
+    private val searchSemaphore = Semaphore(DEFAULT_FANOUT_PARALLELISM)
 
     /** Bulk-delete every selected row. */
     fun deleteSelected(blocklist: Boolean, searchAgain: Boolean) {

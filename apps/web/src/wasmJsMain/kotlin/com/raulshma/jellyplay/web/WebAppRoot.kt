@@ -194,7 +194,7 @@ fun WebAppRoot(
     val connectController = remember(sessionState, authApiClient, userPrefs) {
         WebConnectController(auth = authApiClient, userPrefs = userPrefs)
     }
-    //THE SEERR CREDENTIALS CONTROLLER, BUILT EXACTLY LIKE
+    // The Seerr credentials controller, built exactly like
     // [WebConnectController] — plain class, Koin-resolved deps passed in from
     // Main.kt (SeerrPreferencesStore/SeerrSecureCredentialsStore are unnamed
     // singles in datastoreCommonModule/webDatastoreModule, SeerrRepository in
@@ -275,12 +275,12 @@ fun WebAppRoot(
                     networkStatus = currentNetworkStatus,
                     onOpenConnectionDetails = { addEntry(WebStatus) },
                     onOpenDiagnostics = { addEntry(WebDiag) },
-                    //THE SHARED FEATURE ROUTE — PUSHED AS ITSELF,
+                    // The shared feature route — pushed as itself,
                     // NOT as a web-only mirror key (see the route-keys KDoc).
                     onOpenRequests = { addEntry(Route.Requests) },
-                    //THE SECOND SHARED FEATURE ROUTE, SAME SHAPE.
+                    // The second shared feature route, same shape.
                     onOpenCalendar = { addEntry(Route.UpcomingCalendar) },
-                    //THE SEERR CREDENTIALS PANE.
+                    // The Seerr credentials pane.
                     onOpenSeerr = { addEntry(WebSeerr) },
                 )
             }
@@ -302,7 +302,7 @@ fun WebAppRoot(
                 WebSeerrPane(onBack = ::requestPop, controller = seerrController)
             }
             entry<Route.Requests> { _ ->
-                //THE FIRST SHARED FEATURE SCREEN ON WEB. THE SHELL
+                // The FIRST shared feature screen on web. The shell
                 // (Main.kt → ProvideWebShellViewModelOwners) provides the
                 // ViewModelStoreOwner/LifecycleOwner koinViewModel() needs, so
                 // the screen composes bare — there is deliberately no wrapper
@@ -310,7 +310,7 @@ fun WebAppRoot(
                 // `internal` to that module (invisible from apps/web), which
                 // structurally keeps ONE provisioning truth at the shell.
                 //
-                //THE SEERRDETAIL CUT STUB IS GONE —
+                // The SeerrDetail cut stub is gone —
                 // onNavigateToDetail now pushes the real shared route, exactly
                 // like requests' RequestsNavigation does on android/desktop
                 // (`navigator.navigate(Route.SeerrDetail(tmdbId, mediaType))`).
@@ -333,7 +333,7 @@ fun WebAppRoot(
                 )
             }
             entry<Route.UpcomingCalendar> { _ ->
-                //THE SECOND SHARED FEATURE SCREEN ON WEB — THE
+                // The SECOND shared feature screen on web — the
                 // shared UpcomingCalendarScreen (koinViewModel() against
                 // calendarModule, registered in Main.kt this wave). The
                 // feature-disabled pane is the honest v1 state in the browser
@@ -370,7 +370,7 @@ fun WebAppRoot(
                 )
             }
             entry<Route.SeerrDetail> { key ->
-                //THE SECOND SHARED FEATURE SCREEN ON WEB. SAME BARE
+                // The SECOND shared feature screen on web. Same bare
                 // composition + shell-provided owners as the requests entry.
                 //
                 // - onBack rides the guarded pop path (requestPop).

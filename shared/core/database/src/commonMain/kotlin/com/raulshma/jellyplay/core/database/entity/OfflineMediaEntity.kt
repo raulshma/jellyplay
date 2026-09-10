@@ -37,7 +37,7 @@ import androidx.room.PrimaryKey
         Index(value = ["seriesId", "mediaType"]),
         Index(value = ["seasonId", "mediaType"]),
         Index(value = ["mediaType", "createdAt"]),
-        // Covering index for OfflineMediaDao.getDownloadedEpisodes (the offline
+        // Ordered range index for OfflineMediaDao.getDownloadedEpisodes (the offline
         // home's Continue Watching / Next Up source): that query filters
         // `mediaType = 'EPISODE'` and orders by
         // `seriesId, seasonNumber, episodeNumber`, and none of the indices

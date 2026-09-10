@@ -74,7 +74,7 @@ val dataWasmModule: Module = module {
     }
     single<SeerrRepository> { get<SeerrRepositoryImpl>() }
 
-    //SEERRREQUESTDELEGATE MOVED TO COMMONMAIN (ZERO JVM IMPORTS —
+    // SeerrRequestDelegate moved to commonMain (zero JVM imports —
     // pure kotlinx.coroutines + core:model), so the web graph can serve the
     // SeerrDetailViewModel ctor the same way DataKoinModule does on the JVM
     // (single { SeerrRequestDelegate(get()) } over the SeerrRepository above).

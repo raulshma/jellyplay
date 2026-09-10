@@ -119,7 +119,7 @@ open class MpvDesktopEngine(
     override val capabilities: EngineCapabilities = EngineCapabilities(
         supportsPip = false,          // no PiP on desktop; windowing covers it
         supportsMiniMode = false,
-        //`SUB-TEXT`/`SUB-START` NOW ACCUMULATE INTO CURRENTCUES
+        // `sub-text`/`sub-start` now accumulate into currentCues
         // exactly like the Android MPV engine (EngineCapabilityMatrix.MPV).
         supportsCues = true,
         supportsAudioDelay = true,
