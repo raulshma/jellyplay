@@ -90,7 +90,7 @@ class VideoPlayerStore constructor(
         val VIDEO_SHOW_PLAYBACK_METADATA = booleanPreferencesKey("video_show_playback_metadata")
         val VIDEO_PRELOAD_BUFFER_SIZE = stringPreferencesKey("video_preload_buffer_size")
         // The direct-play video byte-cache cap (VideoStreamCache's LRU bound),
-        // added on the F-23 follow-up — never string-typed in the legacy store,
+        // added in a later change — never string-typed in the legacy store,
         // so the read below uses plain `prefs[key] ?: default`.
         val VIDEO_CACHE_SIZE_MB = intPreferencesKey("video_cache_size_mb")
         val SHOW_CLOCK_IN_PLAYER = booleanPreferencesKey("show_clock_in_player")

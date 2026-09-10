@@ -15,20 +15,20 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.modules.SerializersModule
 
 /**
- * The desktop nav saved-state configuration ([desktopNavSavedStateConfiguration],
- * wave 11B): every desktop NavDisplay serializes its back stack through the
+ * The desktop nav saved-state configuration ([desktopNavSavedStateConfiguration]):
+ * every desktop NavDisplay serializes its back stack through the
  * ONE serializersModule built here, which registers the ENTIRE sealed Route
  * hierarchy as NavKey-polymorphic serializers (kotlin-reflect enumeration, so
  * new Route leaves self-register).
  *
  * Invariants pinned:
  *  - A representative OBJECT leaf (Route.ServerList — the signed-out seed),
- *    another OBJECT leaf registered by a later conveyor wave (Route.Settings),
+ *    another OBJECT leaf (Route.Settings),
  *    and the ANDROID-only dead-end leaf (Route.SubtitleTester — pushed from
  *    settings, deliberately unregistered in the entryProvider) all resolve a
  *    NavKey polymorphic serializer: registration covers leaves regardless of
  *    whether a desktop entry exists.
- *  - A representative DATA-CLASS leaf (Route.VideoPlayer — the wave-9A
+ *  - A representative DATA-CLASS leaf (Route.VideoPlayer — the
  *    playback route) resolves a serializer that actually ROUND-TRIPS an
  *    instance through JSON — presence alone is not enough, a broken
  *    registration crashes the first saved-state write/read in a real session.

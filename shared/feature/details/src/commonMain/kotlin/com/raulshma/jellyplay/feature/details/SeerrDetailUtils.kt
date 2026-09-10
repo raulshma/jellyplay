@@ -45,7 +45,7 @@ internal fun List<SeerrCast>.toCastMembers(): List<SeerrCastMember> =
  * Seerr-style date formatting. Parses an ISO date ("yyyy-MM-dd") and renders a
  * short form; falls back to the first 10 chars on parse failure.
  *
- * Wave 16C purification: HEAD parsed with `java.time.format.DateTimeFormatter
+ *  purification: HEAD parsed with `java.time.format.DateTimeFormatter
  * .ofPattern("yyyy-MM-dd")` and formatted with "MMM d, yyyy" + Locale.US. That
  * output is FIXED-ENGLISH on every platform (Locale.US was explicit), so the
  * pure-common replacement below — kotlinx-datetime parse + fixed English
@@ -90,7 +90,7 @@ internal fun youTubeThumbnailUrl(site: String?, key: String?): String? =
 /**
  * Converts a 2-letter ISO country code into its flag emoji.
  *
- * Extracted verbatim from `SeerrDetailScreen.kt`; wave 16C purification moved
+ * Extracted verbatim from `SeerrDetailScreen.kt`; purification moved
  * the code-point arithmetic off `java.lang.Character` (JVM-only) onto the
  * exact-math replicas below — identical outputs for every ISO country code,
  * including the lowercase non-flag edge the jvmTest pins ('g' → U+1F10C, not

@@ -26,7 +26,7 @@ import kotlinx.coroutines.test.runTest
 
 /**
  * Browser-free unit cover for the web connect controller's DECISION logic
- * ([WebConnectController] — wave 12C slice 2). The controller is the web
+ * ([WebConnectController] —  slice 2). The controller is the web
  * shell's entire auth spine (no AuthRepository on wasm), and the behaviors
  * pinned here are exactly the ones whose mistakes only show up in a real
  * browser session:

@@ -2156,7 +2156,7 @@ private fun MediaInfoRow(
     }
 }
 
-// ── Wave 16C formatting seams (java.text purification) ───────────────────────
+// ──  formatting seams (java.text purification) ───────────────────────
 // java.text.NumberFormat/String.format have no wasmJs variant; these integer-
 // math helpers replicate the Locale.US output shapes the two replaced call
 // sites produced. Same body as core:ui's wasmJs formatOneDecimal actual (wave

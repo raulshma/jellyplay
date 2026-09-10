@@ -37,7 +37,7 @@ import org.jetbrains.skia.ImageInfo
 
 /**
  * Seam implemented by engines whose video output is a CPU buffer stream rather
- * than a native window handle (wave 12B): [MpvSoftwareRenderEngine] on
+ * than a native window handle: [MpvSoftwareRenderEngine] on
  * apps/desktop — mpv's render-API software backend pulling composited frames.
  *
  * Lives in jvmMain (not commonMain) because its contract is JVM-native
@@ -67,7 +67,7 @@ interface SoftwareFrameVideoSurface {
 }
 
 /**
- * Desktop software-render video surface (wave 12B, the plan R1 fallback path):
+ * Desktop software-render video surface (the plan R1 fallback path):
  * hosts the newest pulled mpv frame in a Compose [Canvas] — platform
  * independent, no GL context, no heavyweight child window.
  *
@@ -300,7 +300,7 @@ private class FrameSink(widthPx: Int, heightPx: Int) {
     )
 
     /**
-     * Round-robin raster pool (wave 12B perf fix): publishes install
+     * Round-robin raster pool (perf fix): publishes install
      * [stageBytes] into a pooled [Bitmap] instead of allocating a fresh Image +
      * ImageBitmap wrapper chain per frame. Pool size 3, not 2: a buffer is "in
      * flight" from its publish until Compose draws the NEXT-BUT-ONE publish

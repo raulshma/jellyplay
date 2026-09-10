@@ -7,7 +7,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Pins the pure core of the persistent wasm device identity (wave 21C):
+ * Pins the pure core of the persistent wasm device identity:
  * the canonical-UUID-v4 format gate, the stored/generate/persist decision
  * table, and the localStorage key literal the headless-Edge CDP lane
  * (tools/e2e/web-verify.mjs's DEVICE_ID step) hard-codes — a key rename here

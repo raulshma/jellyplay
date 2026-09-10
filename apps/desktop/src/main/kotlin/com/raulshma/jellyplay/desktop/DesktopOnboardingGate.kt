@@ -5,7 +5,7 @@ import com.raulshma.jellyplay.feature.shell.onboardingGateRoute
 
 /**
  * Desktop specialization of the shared first-run gate
- * ([com.raulshma.jellyplay.feature.shell.onboardingGateRoute] — wave 21B, now
+ * ([com.raulshma.jellyplay.feature.shell.onboardingGateRoute] — now
  * one shared pure fn in :shared:feature:shell that the Android JellyPlayApp
  * branch runs too). Kept as a named wrapper so DesktopNavScaffold's call site
  * reads exactly as before and the desktop build pins its specialization:

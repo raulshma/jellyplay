@@ -193,7 +193,7 @@ fun JellyPlayApp(
     }
 
     CompositionLocalProvider(
-        // STA-12: resolved here (first composition) instead of MainActivity's
+        // Resolved here (first composition) instead of MainActivity's
         // onCreate — the bus is needed by every branch below, so this is as
         // late as its provider can fire without redesigning the local.
         LocalUserMessageBus provides infra.userMessageBusLazy.value,
@@ -224,7 +224,7 @@ fun JellyPlayApp(
                     )
                 }
                 CompositionLocalProvider(
-                    // STA-12: resolved in the AUTHENTICATED branch only, so
+                    // Resolved in the AUTHENTICATED branch only, so
                     // NetworkMonitor (and its connectivity-callback
                     // registration) is never built for auth/onboarding
                     // sessions.
@@ -531,7 +531,7 @@ private fun MainContent(
     // Remote "Play" / "Playstate" / "GeneralCommand" navigation requests
     // emitted by the WebSocket receiver; the target→route mapping and the
     // multi-back-stack player pop live in RemoteNavigationRouting.kt (pure,
-    // pinned by RemoteNavigationRoutingTest). STA-12: the bridge resolves
+    // pinned by RemoteNavigationRoutingTest). The bridge resolves
     // INSIDE the effect body — LaunchedEffect runs after the frame applies,
     // so its Koin construction no longer runs during any composition pass.
     LaunchedEffect(infra.remoteNavigationBridgeLazy) {
@@ -547,7 +547,7 @@ private fun MainContent(
     }
 
     // Remote-control "now playing" snackbar; the title fallback + template
-    // format live in the collector's pure fold. STA-12: resolved inside the
+    // format live in the collector's pure fold. Resolved inside the
     // effect body for the same post-frame reason as the bridge above.
     val nowPlayingTemplate = stringResource(R.string.snackbar_now_playing)
     androidx.compose.runtime.LaunchedEffect(infra.remoteControlReceiverLazy) {

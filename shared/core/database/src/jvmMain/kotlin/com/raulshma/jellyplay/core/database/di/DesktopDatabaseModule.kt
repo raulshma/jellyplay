@@ -12,7 +12,7 @@ import org.koin.core.module.Module
 import org.koin.dsl.module
 
 /**
- * Desktop platform Koin module (docs/kmp-migration-plan.md §Phase C4).
+ * Desktop platform Koin module (docs/kmp-migration-plan.md ).
  * [dbPath] is the full path of the `jellyplay.db` file; the DesktopTokenCipher
  * key file (`token.key`) sits in the same directory. Builder arrangement
  * mirrors the jvmTest DAO/migration setup: BundledSQLiteDriver over the

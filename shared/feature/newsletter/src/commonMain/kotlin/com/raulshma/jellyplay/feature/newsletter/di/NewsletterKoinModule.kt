@@ -7,7 +7,7 @@ import org.koin.dsl.module
 
 /**
  * Koin construction owner for the Newsletter feature (docs/kmp-migration-plan.md
- * §Phase V3 conveyor item after search, library, music, livetv, downloads,
+ *  conveyor item after search, library, music, livetv, downloads,
  * syncplay, settings, admin, editor, requests and calendar). The
  * HiltViewModel/@Inject annotations were stripped at the move — Koin is the
  * single constructor owner (one framework per type). Dep posture:
@@ -16,7 +16,7 @@ import org.koin.dsl.module
  *    desktopDataModule / datastoreCommonModule / DataKoinModule), resolving
  *    on BOTH platforms;
  *  - newsletterRepository was the last Hilt-interop dep historically; since the
- *    wave-8 Hilt extinction Koin owns MediaRepositoryImpl natively
+ *     Hilt extinction Koin owns MediaRepositoryImpl natively
  *    (dataJvmModule, which binds the NewsletterRepository view of that same
  *    single), so this VM is fully live-resolvable on desktop too
  *    (the shell nav entry remains the only gate).

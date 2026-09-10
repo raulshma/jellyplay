@@ -89,14 +89,14 @@ class PlayerSessionManager(
     private val offlineRepository: OfflineRepository,
     private val aggregateStore: VideoPlayerAggregateStore,
     private val playerLifecycleManager: PlayerLifecycleManager,
-    /** commonMain PiP seam (wave 8C): androidMain adapter wraps the legacy singleton. */
+    /** commonMain PiP seam: androidMain adapter wraps the legacy singleton. */
     private val pipController: PipController,
     private val adaptiveBitrateManager: com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager,
     private val playerEngineFactory: PlayerEngineFactory,
     private val playbackSourceResolver: com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolver,
     private val streamingSubtitleStore: com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStore,
     /**
-     * Offline-media probe seam (wave 8C): duration extraction
+     * Offline-media probe seam: duration extraction
      * (MediaMetadataRetriever on Android) + container→MIME mapping — the
      * androidMain actual owns the platform bits, the desktop actual no-ops.
      */
@@ -263,7 +263,7 @@ class PlayerSessionManager(
         // Fail fast with feedback instead of dead-airing through every network
         // stage's timeout (#146). Offline (download) sources are unaffected —
         // that is exactly the path offline mode exists for.
-        // KMP seam (wave 7C): compose-resources' suspend resolver replaces
+        // KMP seam: compose-resources' suspend resolver replaces
         // context.getString (loadMedia is suspend).
         if (resolved is PlaybackSource.Online && offlineModeManager.isOffline) {
             failLoad(getString(Res.string.player_video_error_offline_stream))
@@ -307,7 +307,7 @@ class PlayerSessionManager(
             // The file vanished after resolution — surface an error rather
             // than silently falling back online (callers that want fallback
             // should use [PlaybackSource.Auto]).
-            // KMP seam (wave 7C): compose-resources' suspend resolver
+            // KMP seam: compose-resources' suspend resolver
             // replaces context.getString (loadOffline is already suspend).
             _sessionState.update { it.copy(title = getString(Res.string.player_video_error_offline_file_missing), isReady = false) }
             return
@@ -325,7 +325,7 @@ class PlayerSessionManager(
 
         var runTimeTicks = offlineItem?.runTimeTicks
         if (runTimeTicks == null || runTimeTicks <= 0L) {
-            // Wave 8C seam: the MediaMetadataRetriever extraction moved behind
+            //  seam: the MediaMetadataRetriever extraction moved behind
             // OfflineMediaProbe (androidMain actual runs it verbatim).
             val extractedDurationMs = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                 offlineMediaProbe.extractDurationMs(localFile.absolutePath)
@@ -447,7 +447,7 @@ class PlayerSessionManager(
         val detail = detailResult.getOrElse {
             // Surface the failure — the old silent bail left the user staring
             // at a "loading" veil that had lifted over nothing (#146).
-            // KMP seam (wave 7C): compose-resources' suspend resolver replaces
+            // KMP seam: compose-resources' suspend resolver replaces
             // context.getString (loadOnline is suspend).
             failLoad(getString(Res.string.player_video_error_loading_media))
             return
@@ -1090,7 +1090,7 @@ class PlayerSessionManager(
 }
 
 /**
- * `file` URI string for a local path (wave 8C seam transform): replaces
+ * `file` URI string for a local path (seam transform): replaces
  * `android.net.Uri.fromFile(file).toString()`. `java.nio.file.Path.toUri()`
  * emits the identical `file:///<abs-path>` form with matching percent-
  * encoding on Android (Linux filesystem, UTF-8 — spaces and non-ASCII are

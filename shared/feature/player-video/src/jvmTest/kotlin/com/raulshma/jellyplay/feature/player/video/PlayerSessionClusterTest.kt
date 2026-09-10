@@ -8,7 +8,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Wave 8C: the session cluster moved to commonMain, so its pure helpers are
+ *: the session cluster moved to commonMain, so its pure helpers are
  * jvmTest-reachable for the first time. These tests pin the seam transform
  * that replaced `android.net.Uri.fromFile(file).toString()`: the produced
  * strings must carry the `file:///` form (empty authority + absolute path)

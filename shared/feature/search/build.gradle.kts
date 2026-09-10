@@ -14,7 +14,7 @@ kotlin {
         namespace = "com.raulshma.jellyplay.shared.feature.search"
         compileSdk = 37
         minSdk = 28
-        // Compose-resources packaging (wave-21 device-pass finding): with the
+        // Compose-resources packaging (device-pass finding): with the
         // AGP-9 KMP library plugin, android resources are OFF by default, so
         // copyAndroidMainComposeResourcesToAndroidAssets never runs and the
         // app APK ships this module's Res accessors with NO backing .cvr
@@ -27,7 +27,7 @@ kotlin {
         }
     }
 
-    // No wasmJs target: core:ui has one and the Phase W web shell is live,
+    // No wasmJs target: core:ui has one and the web shell is live,
     // but web v1 deliberately covers requests/calendar/details only. Search
     // is one screen+VM unit wired to the Room-backed repository cluster
     // (MediaRepository/OfflineRepository/MediaSearchEngine impls live in

@@ -4,7 +4,7 @@ import com.raulshma.jellyplay.core.model.TrickplayInfo
 import java.io.File
 
 /**
- * Trickplay controller seam (wave 8C): the member set the commonMain
+ * Trickplay controller seam: the member set the commonMain
  * [VideoPlayerViewModel][com.raulshma.jellyplay.feature.player.video.VideoPlayerViewModel]
  * calls. The androidMain [TrickplayManager] implements it (the Bitmap LRU
  * tile caches stay Android); [getThumbnail] returns the platform bitmap as an

@@ -9,7 +9,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * Desktop actual of the [SettingsBackupIo] seam (wave 20C): the picker seam
+ * Desktop actual of the [SettingsBackupIo] seam: the picker seam
  * now delivers native `file:` URI strings (see [rememberBackupFilePicker]),
  * so the stream openers map the URI back to a [File] and open plain
  * JDK streams on [Dispatchers.IO] — the same IO-dispatch + open-stream
@@ -18,7 +18,7 @@ import kotlinx.coroutines.withContext
  * runCatching surfaces as "Export/Import failed: …" exactly like a failing
  * contentResolver stream on Android.
  *
- * The cache estimate (wave 21B) walks the desktop's one persistent cache
+ * The cache estimate walks the desktop's one persistent cache
  * root — `<configDir>/http-cache`, the OkHttp response cache — mirroring the
  * Android actual's cacheDir walk over the roots the platform actually owns
  * (see DesktopStorageAreas for the full desktop storage layout).

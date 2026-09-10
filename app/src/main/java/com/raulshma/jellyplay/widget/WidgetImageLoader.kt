@@ -84,7 +84,7 @@ object WidgetImageLoader {
         override fun sizeOf(key: String, value: Bitmap): Int = value.byteCount
     }
 
-    // Background prewarm scope (CONC-6): fire-and-forget poster fetches kicked
+    // Background prewarm scope: fire-and-forget poster fetches kicked
     // from the widget snapshot-push paths, so a later factory
     // `onDataSetChanged` resolves from [posterMemoryCache] instead of paying
     // its bounded blocking preload against a cold server. Process-scoped like
@@ -126,7 +126,7 @@ object WidgetImageLoader {
     }
 
     /**
-     * STA-11 (2026-09 perf audit): memory-only poster lookup for the widget
+     * Memory-only poster lookup for the widget
      * factories' bind path — the synchronous twin of [loadPoster]. Serves
      * whatever [posterMemoryCache] holds (from a prior fetch or a
      * [prewarmPosters] pass in this process) with zero fetch/decode work, or
@@ -179,7 +179,7 @@ object WidgetImageLoader {
     }
 
     /**
-     * Fire-and-forget [posterMemoryCache] prewarm (CONC-6) for the widget
+     * Fire-and-forget [posterMemoryCache] prewarm for the widget
      * snapshot-push paths: decodes the same URLs, at the same target size and
      * default corner radius, into the same cache the factories read — so a
      * later factory bind resolves from memory. Purely additive warm-up: the
@@ -201,7 +201,7 @@ object WidgetImageLoader {
     }
 
     /**
-     * Canonical Continue-Watching poster rule (CONC-6): the CW factory's
+     * Canonical Continue-Watching poster rule: the CW factory's
      * onDataSetChanged preload and the broadcaster's snapshot prewarm must
      * derive the SAME (image id, url) per row — the image id and cell width
      * come from [WidgetPosterIdentity], the repository is only the url
@@ -220,7 +220,7 @@ object WidgetImageLoader {
     }
 
     /**
-     * Fire-and-forget prewarm (CONC-6) for the whole Continue-Watching
+     * Fire-and-forget prewarm for the whole Continue-Watching
      * snapshot: derives each row's url via [continueWatchingPosterEntry] —
      * the same rule the CW factory's preload uses — so the prewarmed urls
      * and the factory's binds cannot drift. It serves every widget instance

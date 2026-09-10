@@ -6,7 +6,7 @@ import kotlinx.io.IOException
 
 /**
  * The web connect flow's failure taxonomy, extracted out of WebConnectFlow.kt
- * (wave 12C slice 2) so the wasmJs unit lane can pin it — the functions were
+ * (slice 2) so the wasmJs unit lane can pin it — the functions were
  * `private` in a UI file, which left the classification "statically
  * unverifiable" until a real-server browser pass (their original KDoc's own
  * words). The logic below is byte-for-byte the code that shipped there; only

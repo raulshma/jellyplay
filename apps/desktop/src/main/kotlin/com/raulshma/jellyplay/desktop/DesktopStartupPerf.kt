@@ -8,7 +8,7 @@ import java.util.concurrent.atomic.AtomicLong
 import kotlin.system.exitProcess
 
 /**
- * Wave 12A Skia startup/memory baseline — measurement-only scaffold (no
+ *  Skia startup/memory baseline — measurement-only scaffold (no
  * optimization applied; the numbers this produces are the measuring stick,
  * see docs/perf/desktop-skia-baseline.md).
  *

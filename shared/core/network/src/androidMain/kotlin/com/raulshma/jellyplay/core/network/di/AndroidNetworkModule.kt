@@ -20,7 +20,7 @@ import org.koin.core.module.Module
 import org.koin.dsl.module
 
 /**
- * Android platform pick of the Koin-owned network stack (Phase C4).
+ * Android platform pick of the Koin-owned network stack.
  * Constructions replicate the legacy Hilt `NetworkModule` providers
  * byte-for-byte — cache under `context.cacheDir`, the full interceptor stack
  * via [baseOkHttpClient], the Jellyfin SDK options (androidDevice, device-id

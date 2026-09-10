@@ -92,11 +92,11 @@ import kotlinx.coroutines.withTimeoutOrNull
 import org.koin.core.context.startKoin
 import org.koin.mp.KoinPlatform
 
-/** Bound on the STA-3 device-id prewarm await; see the launch in [onCreate]. */
+/** Bound on the device-id prewarm await; see the launch in [onCreate]. */
 private const val DEVICE_ID_PREWARM_TIMEOUT_MS = 5_000L
 
 /**
- * Bound on the STA-8 persisted-security-slice prewarm — DELIBERATELY the
+ * Bound on the persisted-security-slice prewarm — DELIBERATELY the
  * same constant the lock-gate reader it exists to warm runs under
  * ([PlayerActivity.APP_LOCK_GATE_READ_TIMEOUT_MS]), so the prewarm can
  * never wait on the persisted read longer than the gate itself.
@@ -120,14 +120,14 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
             )
             .build()
 
-    // Deferred single access (wave 8B — Hilt removal): the former
+    // Deferred single access (Hilt removal): the former
     // javax.inject.Provider fields deferred Hilt construction off the
     // cold-start path; kotlin `by lazy` over the Koin container preserves that
     // exactly (definitions are lazy, and each resolved single is the same
     // memoized instance the rest of the graph sees).
     private val okHttpClient: OkHttpClient by lazyFromKoin()
     private val networkOfflineStore: com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore by lazyFromKoin()
-    // STA-3 (2026-09 perf audit): resolved ONLY inside the IO prewarm block
+    // Resolved ONLY inside the IO prewarm block
     // below (same deferred-construction pattern as networkOfflineStore above).
     // ServerIdentityStore.identity is stateIn(Eagerly) on Dispatchers.Default,
     // so on a first-launch cold start the network single's `identity.value
@@ -138,7 +138,7 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
     // runBlocking branch never fires — same UUID either way, and DataStore
     // serializes the (first-launch-only) write.
     private val serverIdentityStore: com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore by lazyFromKoin()
-    // STA-8 (2026-09 perf audit): resolved ONLY inside the IO prewarm block
+    // Resolved ONLY inside the IO prewarm block
     // below (same deferred-construction pattern as serverIdentityStore above).
     // PlayerActivity's lock-gate check reads the PERSISTED security slice via
     // `runBlocking { withTimeoutOrNull(1s) { firstPersistedSecurity() } }` on
@@ -152,7 +152,7 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
     // the fail-closed safety net (timeout ⇒ gate configured) — the prewarm
     // only widens the warm window, it changes no gate semantics.
     private val securityStore: com.raulshma.jellyplay.core.datastore.security.SecurityStore by lazyFromKoin()
-    // (Wave 7C: the FontProvider/VideoStreamCache prewarm Providers that used
+    // (the FontProvider/VideoStreamCache prewarm Providers that used
     // to live here left with the player-video migration — both impls are
     // Koin-owned in shared/feature/player-video's androidPlayerVideoModule, so
     // no bridged binding remains; the IO block below resolves them from the
@@ -214,8 +214,8 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
     }
 
     override fun onCreate() {
-        // Koin owns construction for every module (plan §Phase C4 / wave 8B —
-        // Hilt is fully gone from :app). MUST run before anything resolves a
+        // Koin owns construction for every module —
+        // Hilt is fully gone from :app. MUST run before anything resolves a
         // dependency: the lazy fields and every Activity/Service/widget entry
         // point reach into this container, and definitions are lazy, so this
         // adds no cold-start construction cost.
@@ -229,7 +229,7 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                 androidNetworkModule(this@JellyPlayApplication),
                 dataJvmModule,
                 androidDataModule(this@JellyPlayApplication),
-                // Legacy core:data remainder (wave 8A: Hilt-extinct — media3
+                // Legacy core:data remainder (Hilt-extinct — media3
                 // audio stack, cast, schedulers, remote control, workers) +
                 // core:notification and core:ui's UserMessageBus.
                 androidCoreDataModule(this@JellyPlayApplication),
@@ -244,12 +244,12 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                 // Dev v0.10.7 quick-action download-outcome bridge lives in
                 // androidAppInteropAdaptersModule below (DownloadOutcomeMessenger
                 // -> core:ui UserMessageBus).
-                // Admin flip (Wave wB): Android actual of the admin-statistics
+                // Admin flip: Android actual of the admin-statistics
                 // label seam — legacy core:data R.string over the Koin-owned
                 // AdminStatisticsRepositoryImpl (dataJvmModule), byte-identical
                 // to the pre-move context.getString calls.
                 androidAdminSeamsModule(this@JellyPlayApplication),
-                // App Koin graph (wave 8B): the former Hilt-owned :app classes
+                // App Koin graph: the former Hilt-owned :app classes
                 // (shell coordinators, startup initializers, widget schedulers/
                 // updaters, DeepLinkHandler, FloatingPlayerState), the three
                 // former WidgetModule @Binds pairs, and the shared-feature seam
@@ -294,7 +294,7 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                 // editor ViewModel. MetadataEditorRepository / AuthRepository /
                 // SubtitleProviderRepository are Koin-native; the
                 // StreamingSubtitleStore dep resolves from the core Koin graph
-                // (the legacy :core:data remainder, wave 8A).
+                // (the legacy :core:data remainder).
                 editorModule,
 
                 // V3 calendar conveyor: all three ctor deps (ArrRepository,
@@ -313,8 +313,8 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
 
                 // V3 shortcuts conveyor: sole ctor dep AuthRepository is
                 // Koin-native — zero Hilt interop (calendar/requests class).
-                // Missed at the feature's landing; caught by the Phase X
-                // Koin-registration audit (NoDefinitionFound on Route.Shortcuts).
+                // Missed at the feature's landing; caught by a
+                // registration check (NoDefinitionFound on Route.Shortcuts).
                 shortcutsModule,
 
 
@@ -343,7 +343,7 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                 // UserMessageBus ctor dep.
                 arrqueueModule,
 
-                // Home conveyor (Phase X cutover; desktop landing screen):
+                // Home conveyor (desktop landing screen):
                 // 26 of HomeViewModel's 30 ctor deps are Koin-native in the
                 // shared graph; the remaining four (PlaybackSyncScheduler,
                 // TvWatchNextScheduler from the core data graph, and
@@ -363,17 +363,17 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                 // application context here.
                 androidSubtitleTesterModule(this@JellyPlayApplication),
 
-                // Player-video conveyor (wave 7C): the migrated video player
+                // Player-video conveyor: the migrated video player
                 // (:feature:player:video + the absorbed :feature:player:core
                 // remains). Koin owns the engine stack, the font/cache/
                 // preview singletons and the VideoPlayerViewModel; the six
                 // legacy playback deps resolve from the core Koin graph
-                // (the legacy :core:data remainder, wave 8A). Sole entry
+                // (the legacy :core:data remainder). Sole entry
                 // point stays PlayerActivity — no desktop registration
                 // (latent feature, subtitle-tester precedent).
                 androidPlayerVideoModule(this@JellyPlayApplication),
 
-                // Phase X auth cutover (feature-conveyor transform): both VM
+                //  auth cutover (feature-conveyor transform): both VM
                 // ctor deps (AuthRepository, ServerDiscoveryRepository) were
                 // already Koin-owned in dataJvmModule — zero Hilt interop
                 // (calendar/requests/shortcuts class). The LocalNetworkStatus
@@ -383,7 +383,7 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                 // non-blaming pick from the shared module's jvmMain.
                 authModule,
                 androidAuthModule(this@JellyPlayApplication),
-                // Details conveyor (Phase X cutover wave): the shared details
+                // Details conveyor (cutover wave): the shared details
                 // ViewModels + helpers. Data-layer deps are all Koin-native
                 // (dataJvmModule/datastoreCommonModule); the two media3
                 // playback seams (per-item audio play, ambient theme music)
@@ -392,7 +392,7 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                 // below.
                 detailsModule,
                 androidDetailsModule(this@JellyPlayApplication),
-                // Audio player conveyor (wave 7A, legacy :feature:player:audio
+                // Audio player conveyor (legacy :feature:player:audio
                 // deleted): the shared player ViewModels. Queue/effects/transport
                 // deps resolve from the core Koin graph (AudioPlaybackManager
                 // implements both shared playback contracts), and the engine/
@@ -400,7 +400,7 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                 // above over the same single + CastManager.
                 playerAudioModule,
 
-                // Player-live conveyor (wave 7B): the shared live-player
+                // Player-live conveyor: the shared live-player
                 // ViewModel (Koin-native deps + the three platform seams
                 // below) replacing the legacy :feature:player:live module.
                 // The engine factory resolves the shared
@@ -416,12 +416,12 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
         // Critical-path prewarms: (a) the network-offline DataStore slice —
         // the real persisted read happens in the store's eager stateIn
         // upstream, this keeps the flow warm for the imageLoader's
-        // lazily-sized DiskCache — (b) the identity slice (STA-3, see the
+        // lazily-sized DiskCache — (b) the identity slice (see the
         // field comment above), and (c) the subtitle font byte cache and
         // video stream cache so the first ASS playback doesn't read fonts
         // on Main.
         //
-        // STA-5 (2026-09 perf audit): this block used to await, strictly in
+        // This block used to await, strictly in
         // order, offline read → font prewarm → stream-cache prewarm → audio
         // start → widget start — off-main but serialized. The two cache
         // prewarms now run concurrently (no shared state between the
@@ -435,7 +435,7 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
         // prewarms, preserving exactly the head start they had before.
         applicationScope.launch(Dispatchers.IO) {
             runCatchingRethrowingCancellation { networkOfflineStore.networkOffline.first() }
-            // STA-3: NOT the audit's literal `identity.first()` — a
+            // Not a plain `identity.first()` — a
             // stateIn(Eagerly) StateFlow always has its initial value
             // available, so a plain first() returns the all-null placeholder
             // instantly during the DataStore-read window and closes nothing;
@@ -461,11 +461,11 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                     serverIdentityStore.identity.first { !it.deviceId.isNullOrEmpty() }
                 }
             }
-            // STA-8: hydrate the persisted security slice for PlayerActivity's
+            // Hydrate the persisted security slice for PlayerActivity's
             // lock-gate read (see the field comment above). Shares the same
             // "user_prefs" DataStore file as the two reads above, so this
             // piggybacks their already-in-flight/completed initial read and is
-            // effectively free on a warm one. Bounded like the STA-3 wait so a
+            // effectively free on a warm one. Bounded like the identity prewarm so a
             // wedged read can never gate the font/stream prewarms below; on
             // timeout we proceed anyway — PlayerActivity's own 1 s-bounded
             // fail-closed read is unchanged and remains the gate's authority.
@@ -474,7 +474,7 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                     securityStore.firstPersistedSecurity()
                 }
             }
-            // Wave 7C: Koin-owned since the player-video migration (the Hilt
+            // Koin-owned since the player-video migration (the Hilt
             // javax.inject.Provider fields died with the module flip); still
             // resolved here, inside the IO launcher, so the font-asset copy +
             // cache-index open stay off the cold-start critical path.
@@ -491,7 +491,7 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                 async { runCatching { koin?.get<com.raulshma.jellyplay.feature.player.video.engine.VideoStreamCache>()?.prewarm() } }
             }
         }
-        // STA-5: the audio + widget updaters — launched as a sibling of the
+        // The audio + widget updaters — launched as a sibling of the
         // prewarm block above instead of serializing behind it. Resolves the
         // same lazy fields as before (AudioPlaybackManager's 14-dep graph +
         // Room queue restore, then NowPlayingWidgetUpdater), in the same

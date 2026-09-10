@@ -17,7 +17,7 @@ kotlin {
         }
     }
 
-    // No wasmJs target: web v1 ships without Room (plan §Phase W — the server
+    // No wasmJs target: web v1 ships without Room (the server
     // stays the source of truth; session-scoped state only).
     jvm {
         compilerOptions {
@@ -37,7 +37,7 @@ kotlin {
 
         getByName("jvmShared").dependencies {
             // Module/qualifier types appear in the public di signatures
-            // (Phase C4 Koin construction owner).
+            // ( Koin construction owner).
             api(libs.koin.core)
         }
 
@@ -49,14 +49,14 @@ kotlin {
         getByName("jvmMain").dependencies {
             implementation(libs.okio)
             // BundledSQLiteDriver for the desktop Room builder
-            // (DesktopDatabaseModule, Phase C4).
+            // (DesktopDatabaseModule, ).
             implementation(libs.androidx.sqlite.bundled)
         }
         getByName("jvmTest").dependencies {
             implementation(kotlin("test"))
             implementation(libs.coroutines.test)
             // BundledSQLiteDriver for in-memory DAO tests and the JVM-driver
-            // migration chain verification (plan §S4).
+            // migration chain verification.
             implementation(libs.androidx.sqlite.bundled)
             implementation(libs.koin.test)
         }
@@ -68,7 +68,7 @@ kotlin {
 // Room KSP runs per target; schema JSONs continue accumulating in the
 // repo-tracked shared/core/database/schemas directory (identity of the
 // JellyPlayDatabase schema history is what MigrationTest verifies against;
-// moved from the deleted core/database shim in wave 8A).
+// moved from the deleted core/database shim in).
 dependencies {
     add("kspAndroid", libs.room.compiler)
     add("kspJvm", libs.room.compiler)

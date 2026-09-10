@@ -211,7 +211,7 @@ private const val HOLD_SPEED_PILL_BOTTOM_CLEARANCE_DP = 180
 private const val TRICKPLAY_THUMB_BOTTOM_CLEARANCE_DP = 120
 
 /**
- * Platform seam (wave 9A): nudging the system media (STREAM_MUSIC) volume for
+ * Platform seam: nudging the system media (STREAM_MUSIC) volume for
  * the hardware-keyboard shortcuts (arrows / volume keys on non-TV) needs
  * AudioManager on Android; desktop is a no-op. Mirrors the gesture volume
  * path, which adjusts the stream volume rather than the engine volume so the
@@ -230,7 +230,7 @@ fun VideoPlayerScreen(
     onOpenSubtitleTester: () -> Unit = {},
     viewModel: VideoPlayerViewModel = koinViewModel(),
 ) {
-    // Host-window + input seams (wave 9A): the Activity/Context system-surface
+    // Host-window + input seams: the Activity/Context system-surface
     // work this screen used to do inline lives behind these now — androidMain
     // actuals keep it verbatim, the desktop actuals are no-ops.
     val windowOps = rememberPlayerWindowOps()
@@ -315,7 +315,7 @@ fun VideoPlayerScreen(
     // DeX). Drives the non-TV keyboard-shortcut handler so phones/tablets with
     // a keyboard get space/arrows/F/M/Esc controls while touch-only devices
     // attach no extra key handler. TV keeps its dedicated D-pad scheme below.
-    // Platform seam (wave 9A): the Configuration read lives in the androidMain
+    // Platform seam: the Configuration read lives in the androidMain
     // actual; desktop always reports true.
     val hasHardwareKeyboard = rememberHasHardwareKeyboard()
 
@@ -324,7 +324,7 @@ fun VideoPlayerScreen(
     val tvCinemaIntroFocusRequester = remember { FocusRequester() }
     val tvNextEpisodeFocusRequester = remember { FocusRequester() }
     val keyboardFocusRequester = remember { FocusRequester() }
-    // Wave 14D (desktop only — updated by the jvm-gated onFocusChanged below,
+    //  (desktop only — updated by the jvm-gated onFocusChanged below,
     // so it stays false on Android where the grab seam no-ops anyway): whether
     // ANYTHING under the keyboard layer holds focus; drives the grab seam's
     // re-assert-on-loss against the mpv surface-mount focus drop.
@@ -662,7 +662,7 @@ fun VideoPlayerScreen(
         }
     }
 
-    // Desktop (wave 14A): the hardware-keyboard layer must OWN focus whenever
+    // Desktop: the hardware-keyboard layer must OWN focus whenever
     // it composes, not only once the controls have hidden — see
     // [grabsKeyboardFocusWithControlsVisible]. The at-HEAD effect above fires
     // on the showControls→false edge, but the controls START visible
@@ -671,7 +671,7 @@ fun VideoPlayerScreen(
     // press in that window had no focused node to land on: Compose's
     // null-focus fallback dispatch stops at the topmost key-input node (the
     // desktop shell's scaffold onPreviewKeyEvent Row) — ESC popped, SPACE
-    // never reached this screen's handler (wave 13B harness finding).
+    // never reached this screen's handler (harness finding).
     // [layerComposed] tracks the keyboard layer's modifier branch above, so
     // the grab re-arms when it re-composes after a sheet closes. The Android
     // actual returns false, so the effect composes nothing on Android (phone
@@ -787,7 +787,7 @@ fun VideoPlayerScreen(
         }
     }
 
-    // Wave 14E: the hardware-keyboard layer's media-key interpretation, so
+    //THE HARDWARE-KEYBOARD LAYER'S MEDIA-KEY INTERPRETATION, SO
     // both delivery paths run the same table: (a) the normal focused dispatch
     // chain (the Box's onKeyEvent, when the layer or a descendant holds Compose
     // focus) and (b) the desktop shell's deterministic forward (the sink
@@ -855,7 +855,7 @@ fun VideoPlayerScreen(
         }
     }
 
-    // Wave 14E deterministic desktop delivery (desktop only — the seam is
+    //  deterministic desktop delivery (desktop only — the seam is
     // Android-inert, see [grabsKeyboardFocusWithControlsVisible]): publish the
     // handler above to the shell's bridge while this screen composes. The
     // sink declines (returns false) when the normal focused dispatch chain
@@ -1027,7 +1027,7 @@ fun VideoPlayerScreen(
                         // Esc=back, J/L=seek like YouTube.
                         Modifier
                             .focusRequester(keyboardFocusRequester)
-                            // Wave 14D focus diagnostics — desktop-only (the
+                            //  focus diagnostics — desktop-only (the
                             // grab seam is the same gate), so the Android
                             // modifier chain is byte-identical: `.then(Modifier)`
                             // short-circuits to `this`. onFocusChanged observes
@@ -1063,7 +1063,7 @@ fun VideoPlayerScreen(
                             .focusable()
                             .onKeyEvent { keyEvent ->
                                 if (keyEvent.type != KeyEventType.KeyDown) return@onKeyEvent false
-                                // Wave 14D diagnostic (desktop-only, harness-gated
+                                //  diagnostic (desktop-only, harness-gated
                                 // no-op): proves the key HANDLER ran, separating
                                 // "no Compose focus target" failures from
                                 // "handler ran but the play state flipped back".
@@ -1072,7 +1072,7 @@ fun VideoPlayerScreen(
                                         "player-keyboard-box onKeyEvent: key=${keyEvent.key}",
                                     )
                                 }
-                                // Wave 14E: the interpretation moved into
+                                //THE INTERPRETATION MOVED INTO
                                 // [handleMediaKeyDown] above so the shell's
                                 // deterministic forward (the bridge sink) runs
                                 // the exact same when-block.
@@ -1165,13 +1165,13 @@ fun VideoPlayerScreen(
             val effectiveZoom = if (isInPipMode) 1f else videoZoom * tvBaselineZoom
             val zoomed = effectiveZoom > 1f
 
-            // Platform surface seam (wave 9A): Android hosts the engine's
+            // Platform surface seam: Android hosts the engine's
             // SurfaceView (or the empty fallback view for non-View-surface
             // engines — the V2a degrade); desktop hosts the SwingPanel/HWND
             // child window mpv embeds into. Zoom transform + PiP bounds
             // tracking stay with the platform actuals.
             //
-            // Wave 14B: composed UNCONDITIONALLY — `engine` is null while the
+            //COMPOSED UNCONDITIONALLY — `ENGINE` IS NULL WHILE THE
             // session is still creating one, and the desktop actual mounts its
             // SwingPanel host exactly then: mpv's `wid` captures the embed
             // target at engine construction, so the surface must exist BEFORE
@@ -2294,7 +2294,7 @@ private fun PlayerSheetRouter(
                 onUseSubtitle = { rowKey -> viewModel.useDownloadedSubtitle(rowKey) },
                 isUploading = subtitleState.isUploadingSubtitle,
                 onUpload = { uriStr, fileName, language, isForced, isHearingImpaired ->
-                    // KMP seam (wave 7C): the sheets hand the picked SAF
+                    // KMP seam: the sheets hand the picked SAF
                     // document as its string form; SubtitleManager consumes it.
                     viewModel.subtitles.uploadSubtitle(
                         uriStr,

@@ -33,7 +33,7 @@ class ContinueWatchingBroadcasterImpl(
     }
 
     /**
-     * CONC-6: fire-and-forget poster prewarm for the snapshot the CW factory
+     * Fire-and-forget poster prewarm for the snapshot the CW factory
      * is about to re-bind against. The data push itself (`setContinueWatching`)
      * lives in the shared home refresher; this broadcast is the app-side
      * signal that the snapshot changed, so it doubles as the prewarm hook.

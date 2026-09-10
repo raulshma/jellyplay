@@ -6,13 +6,13 @@ import kotlinx.browser.localStorage
 
 /**
  * localStorage-backed [SecureKeyValueStorage] for the SEERR credential store
- * ONLY (wave 16B). Keys are `jellyplay/secure/seerr/<key>` (see
+ * ONLY. Keys are `jellyplay/secure/seerr/<key>` (see
  * [DEFAULT_KEY_PREFIX]); values are Base64-of-UTF8 — the same encoding the
  * DataStore-over-localStorage adapter in `di/WebDatastoreModule.kt` uses, so
  * everything stored stays plain-text-decodable, never pretending to be
  * encrypted.
  *
- * WHY THIS EXISTS (the wave-16B scope change): web v1 kept ALL credential
+ * WHY THIS EXISTS (the scope change): web v1 kept ALL credential
  * stores in [WasmSecureKeyValueStorage] process memory — empty every boot.
  * That made the Seerr feature useless on web: of the two Seerr auth modes,
  * session-cookie auth is BROWSER-IMPOSSIBLE by platform rule (the `Cookie`
@@ -23,7 +23,7 @@ import kotlinx.browser.localStorage
  * (gathered once from the Overseerr/Jellyseerr UI, same tier as the server
  * URL it pairs with), not a per-login secret — losing it on every reload
  * meant re-entering it every session with no path around that. Persisting it
- * across reloads is what makes the wave-16B credentials pane (apps/web
+ * across reloads is what makes the credentials pane (apps/web
  * WebSeerrPane) an actual feature instead of a form.
  *
  * HONEST SECURITY CAVEAT: localStorage is readable by any script running in

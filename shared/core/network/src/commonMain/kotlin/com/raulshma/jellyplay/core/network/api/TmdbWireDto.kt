@@ -7,7 +7,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
 /**
- * Wire DTOs for the Phase W wasm TMDB client — field-for-field transcriptions
+ * Wire DTOs for the wasm TMDB client — field-for-field transcriptions
  * of the jvmShared `TmdbApiClientImpl`'s DTOs (`TmdbVideosResponse` /
  * `TmdbVideo` are nested in the impl class; `TmdbReviewsResponse` is a
  * file-private top-level there, hence the `Wire` suffix here to keep the

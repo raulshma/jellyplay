@@ -39,7 +39,7 @@ import kotlinx.datetime.LocalDate
  * poller, mirroring the `SeerrRepository.startPolling` doc rationale — the
  * flag is opt-in and battery-sensitive.
  *
- * Wave 15B: promoted from jvmShared to commonMain, so the calendar window
+ *: promoted from jvmShared to commonMain, so the calendar window
  * takes `kotlinx.datetime.LocalDate` (the JVM `java.time.LocalDate` in these
  * signatures was the one JVM leak). JVM callers convert at the boundary with
  * kotlinx-datetime's `toKotlinLocalDate()`; the string forms (`yyyy-MM-dd`,

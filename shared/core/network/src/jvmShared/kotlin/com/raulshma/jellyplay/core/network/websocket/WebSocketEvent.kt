@@ -6,7 +6,7 @@ import org.json.JSONObject
 /**
  * One entry in the inbound Jellyfin WebSocket message stream.
  *
- * C3 note: this type lives in jvmShared (not commonMain) because its payload
+ * This type lives in jvmShared (not commonMain) because its payload
  * fields are org.json types consumed AS SUCH by legacy :core:data
  * (RemoteControlReceiver / SyncPlayManager / SyncPlayEventHandler read
  * `event.data` as a JSONObject) — those files must keep compiling unchanged,

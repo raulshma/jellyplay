@@ -12,7 +12,7 @@ import com.raulshma.jellyplay.core.model.subtitle.SubtitleSearchResult
  *
  * Implementations are keyed by [kind] and collected into the
  * `Map<SubtitleProviderKind, SubtitleProvider>` built by `networkJvmModule`
- * (Phase C4 part 2: the Hilt `@IntoMap` multibinding and its MapKey
+ * (part 2: the Hilt `@IntoMap` multibinding and its MapKey
  * annotation were deleted with that flip; the legacy shim's
  * `di/SubtitleProviderModule.kt` is a `koin().get()` bridge).
  * The Jellyfin path is **not** a [SubtitleProvider] — it is handled separately

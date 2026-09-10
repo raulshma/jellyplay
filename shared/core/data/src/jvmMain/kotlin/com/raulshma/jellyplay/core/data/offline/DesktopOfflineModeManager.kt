@@ -72,7 +72,7 @@ class DesktopOfflineModeManager(
 
     override fun checkNetworkAndAutoDetect() {
         // Desktop never auto-engages offline mode: the manual flag is the
-        // only input — the wave-17C real probe flipping the reported
+        // only input — the real probe flipping the reported
         // network status must not flip the mode either.
         if (networkOfflineStore.networkOffline.value.manualOfflineEnabled) {
             _offlineMode.value = OfflineMode.OFFLINE_MANUAL

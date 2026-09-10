@@ -16,7 +16,7 @@ import org.jetbrains.compose.resources.stringResource
  * (`SubtitleManagerSheet`) and the metadata editor (`SubtitlesTab`).
  *
  * The `@StringRes Int` half stays in the legacy `:core:ui` shim until every
- * consumer has migrated off resource ids (plan §Phase X).
+ * consumer has migrated off resource ids.
  */
 
 /** Localized display name for this subtitle provider. */

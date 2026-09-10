@@ -6,7 +6,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * Pins the deliberate no-op contract of [DesktopAudioPlayerCast] (plan §4 —
+ * Pins the deliberate no-op contract of [DesktopAudioPlayerCast] (Cast stays Android-only —
  * Cast stays Android-only): the desktop implementation is a permanent
  * never-connected stub. [AudioPlayerCast.isConnected] must read false before
  * AND after every entry point, discovery must never surface a device, and the

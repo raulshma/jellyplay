@@ -17,14 +17,14 @@ import kotlinx.coroutines.flow.StateFlow
  * undo/A→B loop + crossfade/gapless setters.
  *
  * One-framework-per-type: the concrete manager is a 1650-line media3 class
- * that stays the Android Koin single (androidCoreDataModule since wave 8A,
+ * that stays the Android Koin single (androidCoreDataModule since then,
  * which also aliases AudioQueueManager/AudioEffectsManager onto it); this
  * seam binds Android-side through the app's `androidAppInteropAdaptersModule`
  * (`AppAudioPlayerEngine(manager = get())`, a pure delegate — the former
- * `HiltInteropModule.HiltAudioPlayerEngine` bridge died with wave 8B),
+ * `HiltInteropModule.HiltAudioPlayerEngine` bridge died with),
  * while desktop binds it to
  * DesktopAudioQueueManager (the same one-object-two-contracts shape over an
- * audio-only mpv engine) in apps/desktop's desktopPlayerModule — wave 9B real
+ * audio-only mpv engine) in apps/desktop's desktopPlayerModule —  real
  * audio, Route.AudioPlayer unguarded.
  */
 interface AudioPlayerEngine {

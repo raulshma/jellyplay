@@ -38,14 +38,14 @@ import kotlinx.browser.document
 import org.koin.core.context.startKoin
 
 /**
- * Phase W web shell entry (docs/kmp-migration-plan.md §Phase W): boots the
+ *  web shell entry (docs/kmp-migration-plan.md §): boots the
  * shared datastore + wasm network DI stacks and renders the navigation
- * shell. The W.1/W.4 boot-proof placeholder grew up with wave 11B:
+ * shell. The W.1/W.4 boot-proof placeholder grew up with:
  * [WebAppRoot] renders real shared UI through core/ui's wasm-visible
  * primitives over the JB fork's NavDisplay.
  *
  * W.1 chunk 3: `networkWasmModule` registers the Ktor wasm clients
- * (auth/library/playback over ONE shared [AtomicSessionState]). Wave 12C:
+ * (auth/library/playback over ONE shared [AtomicSessionState]).:
  * [WebAppRoot] now DRIVES the auth client — connect probe, sign-in,
  * capabilities, logout — through WebConnectController, so the shell observes
  * published sessions it actually created end-to-end.
@@ -59,10 +59,10 @@ import org.koin.core.context.startKoin
  * `CanvasBasedWindow`); it renders into the document body, taking the full
  * viewport.
  *
- * Wave 15C — the first FEATURE screen renders here: `requestsModule` (the
+ * The first FEATURE screen renders here: `requestsModule` (the
  * shared RequestsViewModel registration, same `module {}` the desktop shell
- * lists) + `dataWasmModule` (15B's requests repository slice:
- * SeerrRepository/ArrRepository over 15A's Seerr/TMDB/Radarr/Sonarr wasm
+ * lists) + `dataWasmModule` (the requests repository slice:
+ * SeerrRepository/ArrRepository over the Seerr/TMDB/Radarr/Sonarr wasm
  * clients) join the startKoin list, and [WebAppRoot] gains an
  * `entry<Route.Requests>` composing the shared RequestsScreen. The shell
  * also provisions the ViewModelStoreOwner/LifecycleOwner pair at this root
@@ -71,7 +71,7 @@ import org.koin.core.context.startKoin
  *
  * SEERR-ON-WEB HONESTY (the wiring-site place a reader hits it): the
  * requests feature talks to a separate Overseerr/Jellyseerr server whose
- * credentials come from SeerrSecureCredentialsStore. Wave 16B closes the
+ * credentials come from SeerrSecureCredentialsStore.  closes the
  * biggest honesty gap: a credentials UI now EXISTS ([WebSeerrPane] via
  * WebAppRoot's `entry<WebSeerr>`, opened from the connected card's "Seerr"
  * button), and the API key PERSISTS across reloads — webDatastoreModule
@@ -88,7 +88,7 @@ import org.koin.core.context.startKoin
  * credential stores (Jellyfin token, *arr keys, subtitle-provider
  * credentials) remain SESSION-MEMORY ONLY
  * ([com.raulshma.jellyplay.core.datastore.WasmSecureKeyValueStorage], empty
- * every boot) — the wave-16B persistence carve-out covers Seerr alone.
+ * every boot) — the persistence carve-out covers Seerr alone.
  * NET RESULT: until credentials are entered in the Seerr pane, the requests
  * screen on web shows its honest not-configured error state ("Seerr not
  * configured" + Retry); after a successful Save/Test they flip live with no
@@ -98,8 +98,8 @@ import org.koin.core.context.startKoin
 fun main() {
     // DI first: everything composable resolves lazily through Koin, so the
     // container must exist before the first composition. Same module shape
-    // as the desktop shell's startKoin, minus the jvm-only stacks. Wave 15C
-    // adds the requests slice (feature VM + data repositories) — exactly the
+    // as the desktop shell's startKoin, minus the jvm-only stacks. The
+    // requests slice (feature VM + data repositories) — exactly the
     // set the KoinModuleRegistrationGuardTest's web allowlist pins.
     val koinApp = startKoin {
         modules(
@@ -108,13 +108,13 @@ fun main() {
             networkWasmModule,
             dataWasmModule,
             requestsModule,
-            // Wave 16A: the second feature slice on web — the calendar VM
+            //THE SECOND FEATURE SLICE ON WEB — THE CALENDAR VM
             // (its ctor deps ArrRepository/SeerrRepository/ExperimentalStore
             // all resolve from the modules above, calendarModule registers
             // nothing new). KoinModuleRegistrationGuardTest's web allowlist
             // pins this registration in the same change.
             calendarModule,
-            // Wave 16C: the SeerrDetail slice. detailsModule is now the
+            //THE SEERRDETAIL SLICE. DETAILSMODULE IS NOW THE
             // wasm-clean module (the MediaDetail cluster's VM/factory defs
             // moved to the jvm platform modules the android/desktop apps
             // register); its only def the browser ever resolves is
@@ -129,7 +129,7 @@ fun main() {
     }
 
     ComposeViewport(document.body!!) {
-        // Phase W.4 image engine: one app-wide Coil ImageLoader. This MUST be
+        // .4 image engine: one app-wide Coil ImageLoader. This MUST be
         // the first thing in the composition root — setSingletonImageLoader-
         // Factory delegates to SingletonImageLoader.setSafe, which throws if
         // the singleton was already resolved by an earlier AsyncImage call.
@@ -145,7 +145,7 @@ fun main() {
         // so the registry can never be populated on this target and explicit
         // registration is mandatory, not merely deterministic.
         //
-        // RUNTIME HONESTY: VERIFIED IN A REAL BROWSER (2026-08-27, wave 13C)
+        // RUNTIME HONESTY: VERIFIED IN A REAL BROWSER (2026-08-27)
         // — the headless-Edge CDP lane (tools/e2e/web-verify.mjs) drove the
         // connect/sign-in flow and the gated WebDiagnosticsPane against a
         // live Jellyfin 10.11.11 server: a Primary artwork request through
@@ -155,7 +155,7 @@ fun main() {
         // exceptions. Bearer-less image URLs (SDK parity — no api_key) load
         // fine against that server.
         //
-        // CACHE/LONG-SESSION: NOW VERIFIED TOO (2026-08-28, wave 18A, tools/
+        // CACHE/LONG-SESSION: verified (tools/
         // e2e/web-soak.mjs, 50 Back→Diagnostics cycles + 3 reloads): cold
         // load = 2 network fetches (the pane's two concurrent same-URL loads
         // — raw painter + MediaImage — are NOT coalesced; each fetches, both
@@ -170,8 +170,8 @@ fun main() {
         // instrumentation draft ALSO caught a real bug in itself (counters
         // nobody read reported hits=0 while Coil's DEBUG log proved
         // MEMORY_CACHE hits) — recorded in CountingMemoryCache's KDoc.
-        // WAVE 20B CLOSES THE LAST TWO CUTS (tools/e2e/web-cache-eviction.mjs,
-        // 2026-08-28, two consecutive PASS runs): (1) LRU EVICTION under
+        // A final lane closes the last two cuts (tools/e2e/web-cache-eviction.mjs,
+        // two consecutive PASS runs): (1) LRU EVICTION under
         // large-library pressure — 8 extra fixture movies with 2560x1440
         // posters (14,745,600 decoded bytes each; 8x = 117,964,800 = 1.47x
         // the measured 80,530,636-byte cap) probed sequentially at
@@ -202,7 +202,7 @@ fun main() {
                     // engine construction out of composition until the first
                     // request.
                     add(KtorNetworkFetcherFactory(httpClient = { HttpClient(Js) }))
-                    // WAVE 18A MEASURED FINDING (the Coil long-session soak):
+                    // Measured in the Coil long-session soak:
                     // without a Keyer for String, the memory cache NEVER
                     // engages on this target — MemoryCacheService.newCacheKey
                     // consults ComponentRegistry.keyers, and coil-core 3.4.0's
@@ -223,7 +223,7 @@ fun main() {
                     // rejects undersized sampled results.
                     add(Keyer<String> { data, _ -> data })
                 }
-                // Wave 18A: cache/long-session observability for the web-soak
+                //CACHE/LONG-SESSION OBSERVABILITY FOR THE WEB-SOAK
                 // lane (tools/e2e/web-soak.mjs). Both hooks are behavior-
                 // preserving (see CoilStats KDoc for what is counted and why
                 // the counting cache mirrors, not replaces, the default).
@@ -242,13 +242,13 @@ fun main() {
         }
 
         JellyPlayTheme(darkTheme = isSystemInDarkTheme(), dynamicColor = false) {
-            // Wave 15C: the ONE ViewModelStoreOwner/LifecycleOwner path (see
+            //THE ONE VIEWMODELSTOREOWNER/LIFECYCLEOWNER PATH (SEE
             // WebShellPlatformOwners.kt) — wraps the whole shell so the
             // requests entry's koinViewModel() resolves, desktop-style.
             ProvideWebShellViewModelOwners {
                 // The one shared session state the three wasm API clients are
                 // built around — passed in directly rather than via a compose
-                // Koin scope (koin-compose is not a web-shell dep yet). Wave 12C
+                // Koin scope (koin-compose is not a web-shell dep yet). A later pass
                 // adds the auth client (the session's writer) and the shared
                 // "user_prefs" DataStore (last-server-url persistence for the
                 // connect form); WebAppRoot provisions the core/ui composition
@@ -257,13 +257,13 @@ fun main() {
                     sessionState = koinApp.koin.get(),
                     authApiClient = koinApp.koin.get(),
                     userPrefs = koinApp.koin.get(DatastoreQualifiers.userPreferencesDataStore),
-                    // Wave 16B: the WebSeerrController deps (same pattern as
+                    //THE WEBSEERRCONTROLLER DEPS (SAME PATTERN AS
                     // userPrefs above — resolved here, passed down). All
                     // three bindings are UNNAMED singles (DatastoreQualifiers
                     // qualify only the raw DataStores):
                     // datastoreCommonModule → SeerrPreferencesStore,
                     // webDatastoreModule → SeerrSecureCredentialsStore
-                    // (localStorage-backed since wave 16B),
+                    // (localStorage-backed since then),
                     // dataWasmModule → SeerrRepository.
                     seerrPreferencesStore = koinApp.koin.get(),
                     seerrSecureCredentialsStore = koinApp.koin.get(),
@@ -285,12 +285,12 @@ fun main() {
  * GATED E2E BOOT ROUTE (desktop `jellyplay.harness.*` prop precedent):
  * `?e2eRoute=seerrdetail/<tmdbId>/<mediaType>` seeds the shell's back stack
  * with that shared route at boot so the CDP verification lane can reach it
- * without depending on synthetic mouse-click geometry (wave 17A's
- * clean-room probe found NO Compose input dead region — the wave-16 report
- * was that wave's SeerrDetailViewModel construction crash freezing
+ * without depending on synthetic mouse-click geometry (the
+ * clean-room probe found NO Compose input dead region — the earlier
+ * report was a SeerrDetailViewModel construction crash freezing
  * composition after the demo-button click landed;
  * docs/e2e/web-input-dead-region.md has the measured evidence, WebAppRoot's
- * backStack note the lane rationale). Wave 17A adds
+ * backStack note the lane rationale).  adds
  * `?e2eRoute=inputprobe` for that investigation: that route bypasses the
  * shell entirely (see [WebInputProbe]) — no NavDisplay, no session gate, no
  * server. Parsed ONCE at boot; no user-facing surface sets the parameter,
@@ -322,7 +322,7 @@ private fun e2eVariantParam(): String? = js("new URLSearchParams(window.location
 private fun e2eRouteParam(): String? = js("new URLSearchParams(window.location.search).get('e2eRoute')")
 
 /**
- * Wave 18A: process-lifetime counters for the web Coil singleton, surfaced in
+ *: process-lifetime counters for the web Coil singleton, surfaced in
  * the WebDiagnostics pane as the load-bearing `COIL_STATS:` / `COIL_CACHE:`
  * lines (see that pane's strings-contract note) and read by the long-session
  * soak lane (tools/e2e/web-soak.mjs). Deliberately dumb totals — no reset, no

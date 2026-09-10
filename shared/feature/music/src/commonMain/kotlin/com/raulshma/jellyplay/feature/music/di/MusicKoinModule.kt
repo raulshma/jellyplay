@@ -20,20 +20,20 @@ import org.koin.dsl.module
 
 /**
  * Koin construction owner for the music feature (docs/kmp-migration-plan.md
- * §Phase V3, third conveyor item after search and library). The
+ * , third conveyor item after search and library). The
  * HiltViewModel/@Inject annotations were stripped at the move — Koin is the
  * single constructor owner (one framework per type). Ctor deps split three
  * ways:
  *  - MediaRepository / DownloadRepository / DownloadIntake / AudioQueueFacade
  *    are still Hilt-owned in the legacy data shim and reach Koin through the
- *    app composition root's Hilt interop module (dies at Phase X);
+ *    app composition root's Hilt interop module (dies at );
  *  - ImageUrlProvider / MoodPlaylistRepository / SmartPlaylistRepository
  *    (shared data), HomeDiscoveryStore (shared datastore) and
  *    OfflineModeManager resolve from the C4 shared-module graph;
  *  - MusicMessageBus is app-provided on Android (bridge to the legacy
  *    UserMessageBus) and a buffering relay on desktop
  *    (desktopMusicMessageBusModule — the desktop shell's snackbar host
- *    collects it since wave 21B).
+ *    collects it since then).
  *
  * GenreDetailViewModel's SavedStateHandle is pulled from the definition
  * parameters: on Android, Koin synthesizes it from the CreationExtras of the

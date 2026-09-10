@@ -4,7 +4,7 @@ import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import kotlinx.coroutines.flow.StateFlow
 
 /**
- * Cast-to-device controller seam for the video player (wave 8C): the
+ * Cast-to-device controller seam for the video player: the
  * member set the commonMain [VideoPlayerViewModel] and the screen use on the
  * androidMain class formerly named `PlayerCastController` (renamed
  * [AndroidPlayerCastController][com.raulshma.jellyplay.feature.player.video.AndroidPlayerCastController],

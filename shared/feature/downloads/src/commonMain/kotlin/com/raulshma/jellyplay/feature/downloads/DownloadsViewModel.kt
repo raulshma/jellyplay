@@ -110,7 +110,7 @@ class DownloadsViewModel(
 
     /**
      * Live per-row byte/speed for in-flight downloads, keyed by download id —
-     * the moving half of the split uiState. Perf audit: the 2 s transfer tick
+     * the moving half of the split uiState. The 2 s transfer tick
      * used to re-emit the whole list (and re-execute the entire screen) per
      * progress event; rows now read their moving values from here while the
      * list itself only re-emits on structural change. The backing StateFlow

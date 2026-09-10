@@ -39,7 +39,7 @@ fun rememberNavigationState(
         },
     )) { mutableStateOf(startRoute) }
 
-    // Platform seam (wave-21 device pass fix): Android takes the reflection
+    // Platform seam (device pass fix): Android takes the reflection
     // overload (the explicit-configuration overload + DEFAULT module is the
     // launch-crash the device pass caught); JVM/wasm keep the configuration
     // path. See NavBackStackSaveable.kt for the full account.

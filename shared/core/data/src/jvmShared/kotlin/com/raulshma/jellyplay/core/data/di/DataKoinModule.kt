@@ -121,7 +121,7 @@ import org.koin.dsl.module
 
 /**
  * Koin construction owner for the platform-independent data layer
- * (docs/kmp-migration-plan.md §Phase C4 part 2). Batch 1 moved the portable
+ * (docs/kmp-migration-plan.md part 2). Batch 1 moved the portable
  * leaf types; batch 2 moved the Koin-constructible repository layer; batch 3
  * the session / playback / sync / syncplay / worker cluster. Each definition
  * is explicit (no reflection) and matches the constructor verbatim.
@@ -130,16 +130,16 @@ import org.koin.dsl.module
  * per type. During the Hilt era these singles were reached from Hilt through
  * the legacy DataModule's `koin().get()` bridges; the impl classes'
  * `@Inject`/`@Singleton` annotations were stripped at the move, and the whole
- * bridge layer left with the wave-8 Hilt extinction — Koin only.
+ * bridge layer left with the Hilt extinction — Koin only.
  *
- * Phase X MediaRepository cluster flip: the last Hilt-owned data-layer
+ *  MediaRepository cluster flip: the last Hilt-owned data-layer
  * cluster moved here — `MediaRepositoryImpl` (+ its PlayedStateSync /
  * MediaRepositoryCacheInvalidation / LyricsRepository views),
  * `PlayedStateSyncImpl`, `UserDataMutatorImpl`, `MediaSearchEngineImpl`,
  * `UnifiedMediaDetailProviderImpl`, `OfflineFirstItemResolverImpl` and
  * `OfflinePlaybackFacade` (see the definitions below). The legacy DataModule
  * constructs nothing from the cluster anymore (the whole legacy DataModule
- * left with the wave-8 Hilt extinction); Koin builds the cluster natively. `PlaybackSourceResolver` left
+ * left with the Hilt extinction); Koin builds the cluster natively. `PlaybackSourceResolver` left
  * that latent-on-desktop state with the playback-flips wave: its impl moved
  * here Uri-free (`File.toURI()` instead of `android.net.Uri.fromFile`), so
  * UnifiedMediaDetailProviderImpl's ctor dep resolves from this module on
@@ -162,13 +162,13 @@ import org.koin.dsl.module
  * `DefaultAudioQueueFacade` is the one playback-graph type NOT defined here:
  * its AudioQueueManager ctor dep is the media3 AudioPlaybackManager, so its
  * Koin single lives in the legacy core:data androidCoreDataModule (owned
- * there since wave 8A; desktopPlayerModule binds the desktop twin).
+ * there since then; desktopPlayerModule binds the desktop twin).
  * `AudioLyricsManager` left that Android-only set when its sole dep (the
  * LyricsRepository view of MediaRepository) became the single below;
  * `OfflineSyncManager` flipped into this module with the V3 downloads
  * conveyor.
  *
- * The admin flip (Wave wB) moved the last two Hilt-owned repositories here:
+ * The admin flip moved the last two Hilt-owned repositories here:
  * `AdminRepositoryImpl` (verbatim — no platform surface) and
  * `AdminStatisticsRepositoryImpl`, whose Android surfaces became seams: the
  * former `context.getString(R.string.data_*)` labels now flow through
@@ -289,7 +289,7 @@ val dataJvmModule: Module = module {
 
     single { HomeSession(get(), get(DatastoreQualifiers.applicationScope)) }
 
-    // Wave 15B: the identity seam the promoted commonMain graph consumes
+    //THE IDENTITY SEAM THE PROMOTED COMMONMAIN GRAPH CONSUMES
     // (SeerrRepositoryImpl's cache keys + SessionCacheRegistry's transition
     // subscription). Binds the SAME HomeSession singleton — android/desktop
     // behavior unchanged; wasmJs binds the AtomicSessionState-backed provider
@@ -323,7 +323,7 @@ val dataJvmModule: Module = module {
     // shim — SystemClock.elapsedRealtime became the TimeSource seam above
     // (the Android actual IS SystemClock.elapsedRealtime, so the countdown is
     // unchanged). The audio/live player VMs resolve this single through Koin
-    // directly since their wave-7 migrations; legacy core:data's
+    // directly since their migrations; legacy core:data's
     // AudioPlaybackManager resolves this single from androidCoreDataModule.
     // No other consumer needs the AudioSleepTimerManager interface, so only
     // the Koin alias exists here.
@@ -366,7 +366,7 @@ val dataJvmModule: Module = module {
     // details' ResyncActions shares the same instance through Koin).
     // `writer` reuses the DownloadRepository single: the interface extends
     // OfflineDownloadWriter, so no separate definition is needed. The former
-    // Hilt→Koin→Hilt edge (interop MediaRepository) died with the Phase X
+    // Hilt→Koin→Hilt edge (interop MediaRepository) died with the 
     // MediaRepository cluster flip below — the mediaRepository dep is now
     // this module's own MediaRepositoryImpl single on both platforms, so the
     // graph is pure Koin from OfflineSyncManager down.
@@ -385,7 +385,7 @@ val dataJvmModule: Module = module {
         )
     }
 
-    // ── Phase X MediaRepository cluster flip ───────────────────────────────
+    // ──  MediaRepository cluster flip ───────────────────────────────
     // The last Hilt-owned data-layer cluster (C4 part 2's "deliberately
     // Hilt-retained" list, unblocked by the downloads seams). The impls moved
     // here verbatim (see each file's move note); definitions mirror the
@@ -483,7 +483,7 @@ val dataJvmModule: Module = module {
     // :core:data shim (Uri.fromFile → File.toURI, see the impl's URI-shape
     // note) — UnifiedMediaDetailProviderImpl's ctor dep below now resolves
     // from this module on BOTH platforms, and the app's HiltInterop reverse
-    // single for the interface was deleted with the wave-8 Hilt extinction.
+    // single for the interface was deleted with the Hilt extinction.
     // Every consumer of the interface (app MainViewModel,
     // feature:player:video PlayerSessionManager, the core:data audio trio)
     // resolves this single from Koin directly.
@@ -573,7 +573,7 @@ val dataJvmModule: Module = module {
     // notification summary + Coil preloading → platform no-op-able fun
     // interfaces, and MediaRepository behind the deferred MediaRepositoryAccess
     // (both platform defs forward to this module's own MediaRepositoryImpl
-    // single since the Phase X cluster flip — Android in androidDataModule,
+    // single since the cluster flip — Android in androidDataModule,
     // desktop in desktopDataModule). `downloadDelegate` keeps the
     // construction cycle broken via a memoizing kotlin Lazy (the Lazy-deferred
     // pattern). Consumers (PlayedStateSyncImpl,
@@ -694,7 +694,7 @@ val dataJvmModule: Module = module {
     }
     single<ArrRepository> { get<ArrRepositoryImpl>() }
 
-    // ── Phase X admin flip (Wave wB) ──────────────────────────────────────
+    // ──  admin flip ──────────────────────────────────────
     // AdminRepositoryImpl + AdminStatisticsRepositoryImpl moved from the
     // legacy :core:data shim (Hilt @Binds -> koin().get() bridges there, the
     // app's Hilt interop singles deleted). Every ctor dep resolves natively

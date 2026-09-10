@@ -7,7 +7,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
 /**
- * Wave 21B first-run gate: pins the pure decision the desktop shell makes
+ *  first-run gate: pins the pure decision the desktop shell makes
  * once per authenticated session (DesktopNavScaffold) against the Android
  * JellyPlayApp branch it mirrors — gate fires only for a signed-in user that
  * never completed the wizard, never for a completer or a signed-out session.

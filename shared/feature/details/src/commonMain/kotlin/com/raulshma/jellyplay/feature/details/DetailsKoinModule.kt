@@ -16,10 +16,10 @@ import org.koin.core.module.Module
 import org.koin.dsl.module
 
 /**
- * Koin module for the details feature (V3/Phase X conveyor move; one
+ * Koin module for the details feature (V3/ conveyor move; one
  * framework per type — every Hilt annotation was stripped at the move).
  *
- * Wave 16C wasmJs split: everything whose dependency closure reaches the
+ *  wasmJs split: everything whose dependency closure reaches the
  * jvmShared halves of core:data (AudioQueueFacade, DownloadIntake,
  * OfflineSyncManager, SyncPlayManager — Room/downloads/sync) moved OUT of
  * commonMain together with [DetailViewModel] and its action-factory bundle;
@@ -32,7 +32,7 @@ import org.koin.dsl.module
  * deps (SeerrRepository + SeerrRequestDelegate from dataWasmModule,
  * PreferenceProjections + SeerrPreferencesStore from datastoreCommonModule,
  * the web shell's narrow MediaRepository) all resolve on web — that is the
- * one path wave 16C puts on the browser.
+ * one path puts on the browser.
  *
  * Data-layer ctor deps resolve from the shared core graph on BOTH platforms
  * (dataJvmModule + datastoreCommonModule); the platform seams are registered
@@ -52,7 +52,7 @@ val detailsModule: Module = module {
     single { RemoteDiscoveryClients(get(), get(), get(), get()) }
     single { PlaylistTargets.Factory(get(), get()) }
 
-    // Wave 16C + the #147 download quick-actions merge: the
+    // The #147 download quick-actions merge: the
     // Collection/Person detail VMs gained MediaDownloadActions (core:data
     // jvmShared) ctor deps, so both moved to jvmShared with their screens and
     // their defs moved to the per-platform registration modules — same

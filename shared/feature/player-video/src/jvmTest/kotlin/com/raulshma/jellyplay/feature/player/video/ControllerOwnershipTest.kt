@@ -40,7 +40,7 @@ class ControllerOwnershipTest {
     private val maxGodStateWirings = 3
 
     private fun mainSources(): List<File> {
-        // KMP move (wave 7C): the module's main sources now live under
+        // KMP move: the module's main sources now live under
         // src/commonMain/kotlin + src/androidMain/kotlin (the monolith
         // ViewModel + session stack are androidMain), not src/main/java.
         var dir: File? = File(System.getProperty("user.dir")).absoluteFile

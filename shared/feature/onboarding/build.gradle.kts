@@ -14,7 +14,7 @@ kotlin {
         namespace = "com.raulshma.jellyplay.shared.feature.onboarding"
         compileSdk = 37
         minSdk = 28
-        // Compose-resources packaging (wave-21 device-pass finding): with the
+        // Compose-resources packaging (device-pass finding): with the
         // AGP-9 KMP library plugin, android resources are OFF by default, so
         // copyAndroidMainComposeResourcesToAndroidAssets never runs and the
         // app APK ships this module's Res accessors with NO backing .cvr
@@ -84,7 +84,7 @@ kotlin {
             implementation(libs.mockk)
         }
         // Documented shared→legacy :core:ui androidMain edge (library/livetv/
-        // admin/calendar/downloads/settings precedents; dies at Phase X): the
+        // admin/calendar/downloads/settings precedents; dies at ): the
         // biometric-availability actual wraps the legacy BiometricAuthHelper,
         // whose strong-authentication check has no shared counterpart yet.
         getByName("androidMain").dependencies {

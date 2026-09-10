@@ -266,7 +266,7 @@ internal fun PlayerControls(
     onLockClick: () -> Unit = {},
     onControlsFocusChange: (Boolean) -> Unit = {},
     onOverflowMenuChange: (Boolean) -> Unit = {},
-    // Opaque cast-manager handle (wave 9A seam): the Android host passes the
+    // Opaque cast-manager handle (seam): the Android host passes the
     // legacy discovery/connect CastManager; desktop passes null and the cast
     // button hides. See VideoPlayerViewModel.platformCastManager.
     castManager: Any? = null,

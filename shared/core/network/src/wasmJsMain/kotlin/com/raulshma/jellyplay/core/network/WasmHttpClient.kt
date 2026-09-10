@@ -31,7 +31,7 @@ internal val userPostWireJson: Json = Json(from = wasmWireJson) {
 }
 
 /**
- * Phase W chunk 1: the Ktor HTTP stack for the wasmJs target. The Js engine
+ *  chunk 1: the Ktor HTTP stack for the wasmJs target. The Js engine
  * is fetch-backed on wasmJs and ships a wasmJs variant since Ktor 3.0 —
  * `libs.ktor.client.js` resolves directly for this target (no separate wasm
  * engine artifact exists).

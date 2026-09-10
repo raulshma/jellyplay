@@ -15,7 +15,7 @@ import kotlin.test.assertNotEquals
  * change to any fingerprinted field must flip the fingerprint (else a real
  * content change would be skipped for a full dedup window); a change to a
  * non-fingerprinted metadata field must NOT flip it (the documented
- * audit-accepted one-refresh delay for metadata-only edits).
+ * one-refresh delay for metadata-only edits).
  */
 class HomeSnapshotFingerprintTest {
 

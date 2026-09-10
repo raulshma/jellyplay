@@ -5,7 +5,7 @@ import com.raulshma.jellyplay.feature.player.audio.AudioPlayerCast
 
 /**
  * Desktop actual: renders nothing. Route.AudioPlayer went live on desktop
- * with the wave-9B real audio core (this button now mounts), but cast
+ * with the real audio core (this button now mounts), but cast
  * discovery + the device picker remain Android-only — playback routes through
  * the never-connected DesktopAudioPlayerCast def in desktopPlayerModule.
  */

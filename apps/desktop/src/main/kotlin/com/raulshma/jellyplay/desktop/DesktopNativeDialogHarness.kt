@@ -39,12 +39,11 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
 /**
- * Wave 22F native-dialog harness — the in-app, in-window verification of the
- * AWT [FileDialog] flows that wave 20 landed "manually-verified-only" (audit
- * finding F9: the item then silently fell off wave 21's remaining-surface
- * ledger). Driven entirely by `jellyplay.dialogpass.*` system properties
+ * Native-dialog harness — the in-app, in-window verification of the
+ * AWT [FileDialog] flows that landed "manually-verified-only" before this
+ * harness existed. Driven entirely by `jellyplay.dialogpass.*` system properties
  * (injected through JAVA_TOOL_OPTIONS by tools/e2e/desktop-native-dialog-pass.sh,
- * the wave-13B [DesktopSessionHarness] pattern); when
+ * the [DesktopSessionHarness] pattern); when
  * `jellyplay.dialogpass.enabled` is unset, [runIfRequested] returns without
  * touching anything.
  *
@@ -80,7 +79,7 @@ import kotlinx.serialization.json.jsonPrimitive
  *  5. DIALOG_CANCEL_ESC — a LOAD dialog dismissed with ESC (native cancel):
  *     [pickAwtFile] returns null, so the production picker fires no callback
  *     and the VM's backup-restore state is untouched — the live twin of the
- *     `pickedAwtFile` cancel-shape unit test (wave 21D covered the mapping in
+ *     `pickedAwtFile` cancel-shape unit test (covered the mapping in
  *     isolation; this covers the real modal dismissal).
  *  6. Report — `<logs>/dialog-harness.json` (same step-ledger shape as the
  *     session harness, `harness:"desktop-native-dialog"`), a screenshot of
@@ -93,7 +92,7 @@ import kotlinx.serialization.json.jsonPrimitive
  * Deliberate boundary (honest cut, not a gap): the harness calls [pickAwtFile]
  * + the production callback bodies directly instead of pointer-clicking the
  * BackupSettingsScreen rows. Robot mouse-pixel clicks into a scrollable
- * LazyColumn are the one ingredient the wave-13/14 lessons say not to bet on
+ * LazyColumn are the one ingredient the earlier lessons say not to bet on
  * (unstable coordinates, focus thieves, wrong-row risk — the third row is
  * Factory Reset), and no compose-test machinery exists inside a production
  * app to resolve a row's bounds. The row→picker→VM wiring those clicks cover
@@ -392,11 +391,11 @@ object DesktopNativeDialogHarness {
          * The Robot half. Runs OFF the EDT (the EDT is inside the modal
          * loop). Waits for a showing [FileDialog], brings it to front, and
          * either types the full absolute path + Enter (cancel=false) or
-         * presses ESC (cancel=true). Bounded attempts per the wave-14 retry
+         * presses ESC (cancel=true). Bounded attempts per the retry
          * lesson; a dialog that outlives every attempt gets a final ESC so
          * the blocked EDT resumes and the step fails instead of wedging until
-         * auto-exit. Every action prints a t=+ms-stamped diag line (wave-14
-         * lesson: timestamps on diag lines).
+         * auto-exit. Every action prints a t=+ms-stamped diag line (a past lesson:
+         * timestamps on diag lines).
          */
         private class DialogDriver(
             private val screenshotDir: Path,

@@ -9,7 +9,7 @@ import com.sun.jna.ptr.PointerByReference
 
 /**
  * JNA binding for the subset of libmpv's `render.h` API that the software
- * renderer path uses (wave 12B). Every constant below was verified against
+ * renderer path uses. Every constant below was verified against
  * the AUTHORITATIVE dev header shipped with this checkout
  * (`tools/mpv/include/mpv/render.h`, mpv-dev package) — line-referenced in
  * docs/spikes/x-desktop-video-surface-story.md.

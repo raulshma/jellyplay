@@ -12,7 +12,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * Desktop actual of the [HeatmapShare] seam (wave 20C): the F-23 GraphicsLayer
+ * Desktop actual of the [HeatmapShare] seam: the GraphicsLayer
  * capture is platform-common — the grid's recorded subtree snapshots through
  * the same `toImageBitmap()` the Android actual uses — so the desktop body
  * only swaps the handoff: desktop has no ACTION_SEND chooser, so the PNG lands

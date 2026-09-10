@@ -20,7 +20,7 @@ import com.sun.jna.ptr.PointerByReference
  *
  * Everything else — event pump, property surface, error taxonomy, release
  * discipline — is the [MpvDesktopEngine] contract verbatim, which is why this
- * type SUBCLASSES rather than duplicates it (wave 12B hooks: [liveMpvHandle],
+ * type SUBCLASSES rather than duplicates it (hooks: [liveMpvHandle],
  * [hwdecFor], [onBeforeContextDestroy]).
  *
  * Video pipeline (render.h, header-verified):

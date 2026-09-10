@@ -23,7 +23,7 @@ import com.raulshma.jellyplay.core.model.Studio
 import com.raulshma.jellyplay.core.model.TrickplayInfo
 
 /**
- * Wire → core.model mappers for the Phase W wasm library/playback clients.
+ * Wire → core.model mappers for the wasm library/playback clients.
  * Every mapped field, fallback and tick conversion mirrors the jvmShared
  * `JellyfinDtoMappers` + the inline mappings in `LibraryApiClientImpl`
  * field-for-field; deviations are limited to the two documented wasm deltas:

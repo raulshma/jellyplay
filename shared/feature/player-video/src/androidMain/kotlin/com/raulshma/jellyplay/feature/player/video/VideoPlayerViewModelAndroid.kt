@@ -4,7 +4,7 @@ import com.raulshma.jellyplay.feature.player.video.subtitle.AndroidFontProvider
 
 /**
  * Android-typed view over the commonMain [VideoPlayerViewModel] surface
- * (wave 8C). Wave 9A moved the player screen to commonMain behind the
+ * moved the player screen to commonMain behind the
  * platform seams, so the former android.net.Uri / android.graphics adapter
  * extensions (updatePipSourceRect(Rect?), getTrickplayThumbnail,
  * installUserFont(Uri), SubtitleManager.addLocalSubtitle/uploadSubtitle Uri

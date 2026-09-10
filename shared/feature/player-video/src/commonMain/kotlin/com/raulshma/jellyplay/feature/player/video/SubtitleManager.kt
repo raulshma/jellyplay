@@ -87,17 +87,17 @@ data class MediaDetailRefresh(
  *
  * File reads (`queryFileSizeBytes` / `readAndEncode`) live here because they
  * only need the [SubtitleContentGateway] seam; they are private to this
- * class. (Wave 8C: moved to commonMain — SAF/document Uri params are strings
+ * class. (moved to commonMain — SAF/document Uri params are strings
  * at the API boundary, so the screens keep the string forms end to end.)
  */
 internal class SubtitleManager(
-    /** Content-URI IO seam (wave 8C): androidMain impl reads via ContentResolver. */
+    /** Content-URI IO seam: androidMain impl reads via ContentResolver. */
     private val contentGateway: SubtitleContentGateway,
     private val playbackRepository: PlaybackRepository,
     private val mediaRepository: MediaRepository,
     private val subtitleProviderRepository: SubtitleProviderRepository,
     private val streamingSubtitleStore: StreamingSubtitleStore,
-    /** User-feedback seam (wave 8C): androidMain bridge posts to the legacy UserMessageBus. */
+    /** User-feedback seam: androidMain bridge posts to the legacy UserMessageBus. */
     private val userMessageBus: PlayerVideoMessageBus,
     private val scope: CoroutineScope,
     private val addExternalSubtitle: (SubtitleSource) -> Unit,
@@ -843,7 +843,7 @@ internal class SubtitleManager(
                             // local durable copy). Failure here is NOT fatal — the
                             // durable on-device copy still backs the side-load and
                             // survives replay via the streaming-subtitle store.
-                            // KMP seam (wave 8C): java.util.Base64 replaces
+                            // KMP seam: java.util.Base64 replaces
                             // android.util.Base64.NO_WRAP — identical output.
                             val base64 = java.util.Base64.getEncoder().encodeToString(file.bytes)
                             val preUploadExternalIndices = getMediaStreams().externalSubtitleIndices()

@@ -54,7 +54,7 @@ import org.koin.mp.KoinPlatform
 
 /**
  * Dedicated host Activity for fullscreen playback — VOD ([VideoPlayerScreen])
- * and, since wave 19C, Live TV ([LivePlayerScreen]; the host table moved live
+ * and, since then, Live TV ([LivePlayerScreen]; the host table moved live
  * out of the nav shell so system PiP serves it — see [PlaybackHostRouter]).
  *
  * Introduced so that system Picture-in-Picture floats over the browse UI
@@ -73,7 +73,7 @@ import org.koin.mp.KoinPlatform
  * fold and the broadcast id codec); this class keeps only Android wiring.
  * Both hosts feed it
  * through the same legacy `core:data` PipController singleton — VOD's VM via
- * the wave-8C player-video seam, live's VM via the wave-19C player-live seam
+ * the player-video seam, live's VM via the player-live seam
  * (SKIP remote actions map to channel zap for live) — so every collector below
  * serves both variants unchanged.
  *
@@ -82,7 +82,7 @@ import org.koin.mp.KoinPlatform
  * open-play-PiP flow.
  *
  * Because the media notification opens this host by class name (bypassing
- * MainActivity), it enforces the app PIN/biometric gate itself (wave 20E):
+ * MainActivity), it enforces the app PIN/biometric gate itself:
  * `onCreate`/`onNewIntent` redirect to MainActivity while a lock is
  * configured and the app-scoped AppLockState says locked — see
  * [redirectToLockGateIfNeeded].
@@ -95,7 +95,7 @@ class PlayerActivity : FragmentActivity() {
     // activeCallbacks slot with no owner identity, so a second host pausing
     // here would reach across Activities into this activity's engine. Keep it
     // that way until per-host engine scoping lands (see Plan 01/02).
-    // Resolved from the Koin container (wave 8B — Hilt removal).
+    // Resolved from the Koin container (Hilt removal).
     private val playerLifecycleManager: PlayerLifecycleManager by lazy { KoinPlatform.getKoin()!!.get() }
 
     private val pipController: PipController by lazy { KoinPlatform.getKoin()!!.get() }
@@ -118,7 +118,7 @@ class PlayerActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // PIN/biometric gate (wave 20E) — FIRST, before any window styling,
+        // PIN/biometric gate — FIRST, before any window styling,
         // playback setup or setContent: while a lock is configured and the
         // app is locked, no player UI may compose. The media notification's
         // content intent opens this activity by class name, so this host must
@@ -330,13 +330,13 @@ class PlayerActivity : FragmentActivity() {
     // gesture is irrelevant in the floating window) and restores it on expand.
     private var savedBrightness: Float = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
 
-    // ── PIN/biometric lock gate (wave 20E) ─────────────────────────────────
+    // ── PIN/biometric lock gate ─────────────────────────────────
     //
     // Closes the media-notification bypass: the video MediaSession pins its
     // session-activity PendingIntent to this class BY NAME
     // (AndroidMediaSessionController), so a notification tap while the app is
     // locked used to reach full playback (video since the dedicated-host
-    // split, live TV too since wave 19C) without ever hitting MainActivity's
+    // split, live TV too since then) without ever hitting MainActivity's
     // lock gate. When a gate is configured and the app-scoped AppLockState
     // says locked, this host hands off to MainActivity — whose own gate then
     // renders AuthChallengeScreen — and finishes before composing anything.
@@ -365,7 +365,7 @@ class PlayerActivity : FragmentActivity() {
         // lands — warm-process callers return from the cached snapshot
         // without disk IO — bounded by a timeout so a pathological read can
         // never wedge cold start (timeout handling: fail CLOSED, see below).
-        // STA-8 (2026-09 perf audit): the Application's IO prewarm hydrates
+        // The Application's IO prewarm hydrates
         // this same persisted slice off main at process start, so in the
         // common case the read below is an instant memory replay — the
         // runBlocking + timeout stays exactly as the fail-closed safety net
@@ -376,7 +376,7 @@ class PlayerActivity : FragmentActivity() {
                 securityStore.firstPersistedSecurity()
             }
         }
-        // Fail CLOSED on a timed-out read (reviewer D, wave 20 fix round):
+        // Fail CLOSED on a timed-out read:
         // falling back to the `.security` StateFlow seed would re-open the
         // cold-start race this read exists to close whenever the read is
         // merely slow. Treating "unknown" as gate-configured still lets an
@@ -411,7 +411,7 @@ class PlayerActivity : FragmentActivity() {
 
     /**
      * Set the first time [redirectToLockGateIfNeeded] fired — the onResume /
-     * PiP-expand re-checks (reviewer D, wave 20 fix round) must not launch a
+     * PiP-expand re-checks must not launch a
      * SECOND MainActivity handoff for the same redirect: after onCreate or
      * onNewIntent redirects, the activity still walks its lifecycle through
      * onResume while finishing.
@@ -464,7 +464,7 @@ class PlayerActivity : FragmentActivity() {
                 screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
             }
         } else {
-            // PiP-expand gate re-check (reviewer D, wave 20 fix round): some
+            // PiP-expand gate re-check: some
             // OEMs keep the activity RESUMED through the whole PiP session,
             // so the onResume re-check may not re-fire on expand — consult
             // the gate here too (idempotent via lockGateRedirected; the
@@ -536,7 +536,7 @@ class PlayerActivity : FragmentActivity() {
 
     override fun onResume() {
         super.onResume()
-        // Gate re-check on every resume (reviewer D, wave 20 fix round): the
+        // Gate re-check on every resume: the
         // gate otherwise runs only at intent-delivery moments (onCreate /
         // onNewIntent), but a live PiP window survives MainActivity's
         // auto-lock — expanding it returns here with the holder already

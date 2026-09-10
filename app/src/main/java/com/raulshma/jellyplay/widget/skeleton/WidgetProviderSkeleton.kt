@@ -13,8 +13,7 @@ import kotlinx.coroutines.launch
 import org.koin.mp.KoinPlatform
 
 /**
- * Resolves the widget store straight from the application container (wave 8B
- * — Hilt removal), or null during the process-start race where Koin is not
+ * Resolves the widget store straight from the application container (Hilt removal), or null during the process-start race where Koin is not
  * up yet — the widget cleanup must degrade to a no-op there, never crash the
  * broadcast.
  */

@@ -19,7 +19,7 @@ import kotlinx.coroutines.isActive
 
 /**
  * Desktop implementation of the [NetworkMonitor] seam: JVM
- * [NetworkInterface]-based reachability (wave 17C — replaces the
+ * [NetworkInterface]-based reachability (replaces the
  * always-Online stub whose deferral note outlived its phase). The JVM has
  * no connectivity callback, so the upstream re-probes the interface table
  * on a timer; the wiring mirrors [AndroidNetworkMonitor]

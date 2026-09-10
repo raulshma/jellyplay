@@ -2,7 +2,7 @@ package com.raulshma.jellyplay.feature.player.video
 
 /**
  * Android adapter over the Hilt-owned legacy `core:data` CastManager
- * singleton (wave 8C seam): exposes the member set the commonMain
+ * singleton (seam): exposes the member set the commonMain
  * [VideoPlayerViewModel] calls. The discovery/connect surface stays on the
  * legacy class — the screen reaches it through the `androidCastManager`
  * ViewModel extension. `castPlayerForSession` is widened to the opaque

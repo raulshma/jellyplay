@@ -9,8 +9,8 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
 
 /**
- * STA-10 (2026-09 perf audit): bound on the in-definition `ensureDeviceId()`
- * fallback. Generous on purpose — the STA-3 prewarms (JellyPlayApplication on
+ * Bound on the in-definition `ensureDeviceId()`
+ * fallback. Generous on purpose — the identity prewarms (JellyPlayApplication on
  * Android, Main.kt on desktop) already bound their own attempt at 5 s, so the
  * bound below only fires on a first resolution racing that prewarm, and by the
  * time it gives up the DataStore has had 10 s to land one local file read. The
@@ -33,12 +33,12 @@ private const val DEVICE_ID_RESOLVE_TIMEOUT_MS = 10_000L
  * back to the blocking `ensureDeviceId()` — which generates + persists the id.
  * The resolved id is identical either way; the fast path simply skips the IO.
  *
- * STA-10 (2026-09 perf audit): the fallback used to be an UNBOUNDED
- * runBlocking — mitigated by the STA-3 prewarm winning the race in practice,
+ * The fallback used to be an UNBOUNDED
+ * runBlocking — mitigated by the identity prewarm winning the race in practice,
  * but structurally a thread (usually main, via the first ViewModel pulling the
  * graph) could block on DataStore forever. It is now bounded like the prewarm
  * itself. The `UUID.randomUUID()` last-resort arm is unreachable unless
- * DataStore is wedged past BOTH the STA-3 prewarm (5 s) and the bound above —
+ * DataStore is wedged past BOTH the identity prewarm (5 s) and the bound above —
  * the tradeoff there is deliberate: burn a fresh id (which merely registers a
  * new device row server-side, same class of drift as the pre-prewarm
  * first-launch race) rather than block the resolving thread indefinitely.

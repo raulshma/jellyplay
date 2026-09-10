@@ -19,7 +19,7 @@ import org.koin.mp.KoinPlatform
 @RequiresApi(Build.VERSION_CODES.N)
 class JellyPlayTileService : TileService() {
 
-    // Koin single (wave 8B — Hilt removal); lazy defers the playback graph's
+    // Koin single (Hilt removal); lazy defers the playback graph's
     // construction until the tile is actually bound/listened to.
     private val audioPlaybackManager: AudioPlaybackManager by lazy { KoinPlatform.getKoin()!!.get() }
 

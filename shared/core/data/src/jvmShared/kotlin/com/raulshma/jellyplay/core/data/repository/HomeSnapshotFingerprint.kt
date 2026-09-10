@@ -4,7 +4,7 @@ import com.raulshma.jellyplay.core.model.HomeSectionsResult
 
 /**
  * Cheap structural fingerprint of a [HomeSectionsResult] for
- * [MediaRepositoryImpl.persistHomeSectionsSnapshot]'s dedup window (DATA-1):
+ * [MediaRepositoryImpl.persistHomeSectionsSnapshot]'s dedup window:
  * ONE string per fetch (indexed loops, no per-item object allocations),
  * covering what a foreground home refresh can change — failed section types,
  * per-section header identity (id/title/type/libraryId/collectionType/seed

@@ -386,7 +386,7 @@ class HomeDiscoveryStoreTest {
 
     @Test
     fun `factory reset clears both users' namespaced keys, legacy keys and the marker`() = runTest {
-        // Wave 20D deflake — the constructor-ordering race lived HERE, not in
+        // The constructor-ordering race lived HERE, not in
         // setup: createUserPreferencesStore() builds a fresh HomeDiscoveryStore
         // whose init subscribes an ensureNamespacedMigration collector against
         // the FIRST activeUserId emission it processes. Constructed at the

@@ -12,7 +12,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Pins [DesktopStartupPerf]'s measurement contract (wave 12A baseline
+ * Pins [DesktopStartupPerf]'s measurement contract (baseline
  * scaffold): marks are always-on AtomicLong writes, disk output happens ONLY
  * when a `jellyplay.perf.*` property is present, the flush fires from
  * whichever of window-shown / first-frame lands LAST once BOTH marks exist

@@ -12,7 +12,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * Wave 20C: the desktop subtitle-upload seam's pure/IO half — the advisory
+ * The desktop subtitle-upload seam's pure/IO half — the advisory
  * extension list and the `file:` uri → length/bytes gateway the upload
  * button's existing IO path consumes. The AWT FileDialog half (native LOAD
  * dialog, cancel retaining the prior pick) is manually-verified.
@@ -33,7 +33,7 @@ class SubtitleUploadPickerJvmTest {
 
     @Test
     fun `filename filter passes directories of the LISTED dir so navigation works`() {
-        // Reviewer catch (wave 20 fix round): the filter once resolved
+        // The filter once resolved
         // `File(name).isDirectory` against the process CWD, so on peers that
         // honor setFilenameFilter every directory read false and the dialog
         // was unnavigable. The directory check must resolve against the dir

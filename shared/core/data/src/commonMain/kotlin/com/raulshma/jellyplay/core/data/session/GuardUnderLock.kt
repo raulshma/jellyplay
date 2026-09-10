@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.core.data.session
 
 /**
- * Runs [block] while holding [lock]'s monitor. Wave 15B seam for the
+ * Runs [block] while holding [lock]'s monitor.  seam for the
  * wasmJs target (`synchronized` does not exist there):
  *  - JVM actual (android + desktop): `synchronized(lock) { block() }` — the
  *    exact pre-promotion shape of [SessionCacheRegistry]'s registration-map

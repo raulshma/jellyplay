@@ -7,7 +7,7 @@ import org.koin.dsl.module
 
 /**
  * Koin construction owner for the arrqueue feature (docs/kmp-migration-plan.md
- * §Phase V3, V3 conveyor item). The HiltViewModel/@Inject annotations
+ * , V3 conveyor item). The HiltViewModel/@Inject annotations
  * were stripped at the move — Koin is the single constructor owner (one
  * framework per type). Both remaining ctor deps were already Koin-native
  * before this feature moved (no Hilt interop at all, calendar/requests class):

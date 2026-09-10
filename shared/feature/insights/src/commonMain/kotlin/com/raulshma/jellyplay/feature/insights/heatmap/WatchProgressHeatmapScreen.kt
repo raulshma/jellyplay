@@ -154,10 +154,10 @@ fun WatchProgressHeatmapScreen(
     val scope = rememberCoroutineScope()
     val adaptiveInfo = LocalAdaptiveInfo.current
     // Share seam (editor picker gating pattern): the Android actual carries the
-    // capture + FileProvider chooser bodies; the desktop actual (wave 20C)
+    // capture + FileProvider chooser bodies; the desktop actual
     // snapshots the same layer and opens the PNG in the system viewer. The
     // chooser title resolves here in composition — the legacy body called
-    // Context.getString at share time. The F-23 capture: the grid records
+    // Context.getString at share time. The capture: the grid records
     // itself into this layer each draw pass and both actuals snapshot it
     // (subtree share, not whole-window).
     val captureLayer = rememberGraphicsLayer()
@@ -655,7 +655,7 @@ private fun HeatmapGrid(
     val focusRingColor = MaterialTheme.colorScheme.primary
     val focusRingWidthPx = with(LocalDensity.current) { TvFocusDefaults.BorderWidth.toPx() }
 
-    // F-23 share capture: when a layer is provided (Android share path), every
+    // Share capture: when a layer is provided (Android share path), every
     // draw pass re-records this subtree into it so the share seam can snapshot
     // the grid — labels, cells, legend — instead of the whole window. Recording
     // passes the content through the layer; on-screen output is unchanged.

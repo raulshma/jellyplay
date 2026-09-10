@@ -7,7 +7,7 @@ import androidx.compose.ui.graphics.toComposeImageBitmap
 import org.jetbrains.skia.Image
 
 /**
- * Wave 12A: runtime-loadable app icon (window title-bar + system-tray).
+ *: runtime-loadable app icon (window title-bar + system-tray).
  *
  * The bytes are the SAME deterministic PNG the packaging generator task draws
  * (`generatePackagingIcons` in build.gradle.kts → packaging/icons/JellyPlay-linux.png;

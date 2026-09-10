@@ -14,7 +14,7 @@ import java.io.File
 import okio.Path.Companion.toPath
 
 /**
- * Android platform Koin module (docs/kmp-migration-plan.md §Phase C4): the
+ * Android platform Koin module (docs/kmp-migration-plan.md ): the
  * per-file preference DataStores and the EncryptedSharedPreferences-backed
  * credential stores. Paths and file names are byte-for-byte the legacy Hilt
  * wiring so existing installs keep their data:

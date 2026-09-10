@@ -9,8 +9,8 @@ import java.net.UnknownHostException
 import com.raulshma.jellyplay.core.network.config.isTlsTrustFailure
 
 /**
- * JVM-side throwable classifiers for [ApiException] (docs/kmp-migration-plan.md
- * §Phase C3 split): these need java.net + Jellyfin-SDK types, so they live in
+ * JVM-side throwable classifiers for [ApiException] (docs/kmp-migration-plan.md):
+ * these need java.net + Jellyfin-SDK types, so they live in
  * jvmShared as companion EXTENSION functions. Every pre-split call site
  * (`ApiException.fromJellyfin(x)` / `ApiException.fromNetwork(...)`) compiles
  * unchanged — files in other packages just import the extension explicitly.

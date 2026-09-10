@@ -3,7 +3,7 @@ package com.raulshma.jellyplay.feature.player.video
 import androidx.compose.ui.input.key.KeyEvent
 
 /**
- * Platform key-code seam for the player's hardware-keyboard layers (wave 9A).
+ * Platform key-code seam for the player's hardware-keyboard layers.
  * The androidMain actual returns `nativeKeyEvent.keyCode` and aliases the
  * [PlayerKeyCodes] constants to `android.view.KeyEvent`'s — the screen's
  * `when` blocks are unchanged from their pre-split form. The jvmMain actual

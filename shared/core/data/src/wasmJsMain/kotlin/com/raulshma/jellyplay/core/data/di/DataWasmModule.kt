@@ -14,7 +14,7 @@ import org.koin.core.module.Module
 import org.koin.dsl.module
 
 /**
- * Wave 15B: the wasmJs slice of the data graph — exactly the repos the
+ *: the wasmJs slice of the data graph — exactly the repos the
  * requests feature consumes, wired the same way `DataKoinModule` wires them
  * on the JVM:
  *  - [SessionIdentityProvider] is the [WasmSessionIdentityProvider] over the
@@ -26,14 +26,14 @@ import org.koin.dsl.module
  *    `datastoreCommonModule` (stores + application scope) and
  *    `networkWasmModule`.
  *
- * DEPENDENCY CLOSURE (wave 15C update — the follow-up this module's first
+ * DEPENDENCY CLOSURE (update — the follow-up this module's first
  * revision documented is DONE): the wasm clients this module's repos need —
  * `SeerrApiClient`/`TmdbApiClient`/`RadarrApiClient`/`SonarrApiClient` — are
  * registered by `networkWasmModule` (15A's KtorWasm* client bindings), and
  * the web shell's startKoin (apps/web Main.kt) lists BOTH modules plus
  * `requestsModule`, so the requests ViewModels resolve end-to-end at
  * runtime on web (browser-verified by tools/e2e/web-verify.mjs). The
- * credentials-UI cut this note used to carry is closed by wave 16B: the
+ * credentials-UI cut this note used to carry is closed by: the
  * shell's Seerr pane (WebSeerrPane) saves and persists the API key
  * (localStorage carve-out — the other web credential stores stay
  * session-memory only). Still true: session-cookie Seerr auth is
@@ -74,7 +74,7 @@ val dataWasmModule: Module = module {
     }
     single<SeerrRepository> { get<SeerrRepositoryImpl>() }
 
-    // Wave 16C: SeerrRequestDelegate moved to commonMain (zero JVM imports —
+    //SEERRREQUESTDELEGATE MOVED TO COMMONMAIN (ZERO JVM IMPORTS —
     // pure kotlinx.coroutines + core:model), so the web graph can serve the
     // SeerrDetailViewModel ctor the same way DataKoinModule does on the JVM
     // (single { SeerrRequestDelegate(get()) } over the SeerrRepository above).

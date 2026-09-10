@@ -76,7 +76,7 @@ class MpvPlayerEngine(
 
     private val isLowRamDevice by lazy { EngineDeviceProfile.isLowRamDevice(context) }
 
-    // KMP seam (wave 7C): the legacy module's BuildConfig.DEBUG gate, replaced
+    // KMP seam: the legacy module's BuildConfig.DEBUG gate, replaced
     // by the runtime FLAG_DEBUGGABLE read (DataBuildFlags.android precedent —
     // the KMP library plugin generates no BuildConfig). Same value for every
     // standard build type; the three call sites are debug-logging gates.

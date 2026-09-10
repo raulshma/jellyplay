@@ -8,7 +8,7 @@ package com.raulshma.jellyplay.core.model
  * sits below the layer that owned the cache; both depend on `core:model`, so
  * the canonical implementation lives here and the duplicates were removed.
  *
- * Thread-safety regime (wave 15B promotion to commonMain): on the JVM targets
+ * Thread-safety regime (promotion to commonMain): on the JVM targets
  * (android + desktop) the backing map is a `Collections.synchronizedMap`
  * wrapper — the exact historical shape — and [withMapMonitor] takes that
  * wrapper's monitor, so every compound section below is mutually exclusive

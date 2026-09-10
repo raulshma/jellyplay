@@ -11,7 +11,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Wave 13B session-harness evidence model — the pure classification the
+ *  session-harness evidence model — the pure classification the
  * harness asserts from (EngineActivitySnapshot), plus the recorder wiring
  * against the existing FakeMediaEngine double (no libmpv, no AWT; the
  * recorder's collectors run on its own scope, so tests poll the snapshots).
@@ -85,7 +85,7 @@ class EngineActivityEvidenceTest {
         assertEquals(0L, snapshot.advanceSinceMs(2_500L))
     }
 
-    // ── wave 14A SPACE-toggle gate classification (pausedSince) ─────────────
+    // ──  SPACE-toggle gate classification (pausedSince) ─────────────
 
     @Test
     fun `pausedSince flips true once a post-key sample reads paused after playing`() {

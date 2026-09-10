@@ -9,7 +9,7 @@ import kotlin.test.assertTrue
 import kotlinx.coroutines.test.runTest
 
 /**
- * Wave 20C: the desktop backup seam's pure/IO half — the picker→IO uri
+ * The desktop backup seam's pure/IO half — the picker→IO uri
  * contract and the JDK stream mapping. The AWT FileDialog half (showing the
  * native SAVE/LOAD dialog, pre-filling the suggested export name, swallowing
  * cancels) is a native modal dialog and stays manually-verified; these tests
@@ -30,7 +30,7 @@ class DesktopSettingsBackupIoTest {
     fun `picker file uri with spaces and unicode round-trips through backupFileFor`() {
         // Realistic Windows pick: toURI percent-encodes ('John Smith' →
         // 'John%20Smith'); File(URI) must decode back to the exact path.
-        // Reviewer nit (wave 20 fix round): the space-free test alone
+        // The space-free test alone
         // pinned only the trivial case.
         val picked = File(createTempDirectory("jp-settings-sp").toFile(), "John Smith — backup (1).json")
         val uri = picked.toURI().toString()
@@ -69,7 +69,7 @@ class DesktopSettingsBackupIoTest {
 
     @Test
     fun `cache estimate walks the http-cache root`() = runTest {
-        // Wave 21B: the desktop's cache estimate is real now — it sums file
+        //THE DESKTOP'S CACHE ESTIMATE IS REAL NOW — IT SUMS FILE
         // lengths under the injected http-cache root (a missing root reads 0,
         // matching a fresh install whose OkHttp cache was never created).
         val root = createTempDirectory("jp-settings-hc").toFile()

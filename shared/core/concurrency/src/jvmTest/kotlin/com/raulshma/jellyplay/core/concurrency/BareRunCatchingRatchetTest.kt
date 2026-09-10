@@ -10,11 +10,11 @@ import java.io.File
  * CancellationException like any other Throwable, masking structured
  * cancellation (a cancelled call reports as a failed Result instead of
  * stopping — broken worker retries, half-applied sync flips, zombie prewarms).
- * Five of the fifteen commits before 2026-09-07 were per-site fixes of exactly
+ * The pre-ratchet history included repeated per-site fixes of exactly
  * this; the fix is [runCatchingRethrowingCancellation], and this test keeps
  * the converted set converted.
  *
- * Guarded module set: DISCOVERED from the build itself (2026-09-09 — before
+ * Guarded module set: DISCOVERED from the build itself (before
  * that, ~40 hand-listed roots that a new module would silently escape):
  * every `include(":…")` module declared in settings.gradle.kts, plus every
  * directory under shared/ and apps/ that carries its own build.gradle.kts
@@ -23,7 +23,7 @@ import java.io.File
  * `src/main` for legacy single-variant modules (app, the legacy core tree,
  * :baselineprofile, apps/desktop). The hand list this discovery replaced is
  * kept as [legacyHandMaintainedRoots]; a canary test pins that discovery
- * still covers all of its on-disk roots. (2026-09-08: the guard went
+ * still covers all of its on-disk roots. (the guard has since gone
  * repo-complete; the formerly unguarded roots carried one live hazard —
  * AddToTargetActions.resolveTargetItemIds, since converted — plus the
  * deliberate baseline entries below). Non-suspend
@@ -39,7 +39,7 @@ import java.io.File
  * Heuristic limitation, known and accepted: the scan matches literal
  * `suspend fun` declarations, so a bare `runCatching` inside a suspend
  * LAMBDA (e.g. a `fetch = { runCatching { … } }` argument) is invisible
- * to it. The 2026-09-08 third wave's review pass converted the two sites
+ * to it. A later review pass converted the two sites
  * found this way (AdminDashboardViewModel's and LogsViewModel's AdminLoad
  * fetch variants) — keep new suspend-lambda fetches on
  * [runCatchingRethrowingCancellation] by discipline; widening the
@@ -55,7 +55,7 @@ class BareRunCatchingRatchetTest {
     private val maxBareRunCatchingInSuspendFuns = 22
 
     /**
-     * The hand-maintained guard list this test used until 2026-09-09, kept as
+     * The hand-maintained guard list this test used before root discovery, kept as
      * a canary: root discovery must cover every one of these paths that still
      * exists on disk (see the `discovered guard roots cover the hand list
      * they replaced` test). Roots whose module has since been deleted are

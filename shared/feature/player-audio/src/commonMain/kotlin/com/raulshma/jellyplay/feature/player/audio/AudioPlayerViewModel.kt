@@ -29,7 +29,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 
 /**
- * Koin-owned (wave 7A conveyor move from `:feature:player:audio` — the
+ * Koin-owned (conveyor move from `:feature:player:audio` — the
  * HiltViewModel/@Inject annotations were stripped; see di/PlayerAudioKoin
  * Module.kt). The former concrete [com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager]
  * ctor dep is split across the two shared playback contracts

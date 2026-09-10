@@ -7,7 +7,7 @@ import androidx.compose.runtime.Composable
 @Composable
 internal actual fun dynamicPlatformColorScheme(darkTheme: Boolean): ColorScheme? = null
 
-// Desktop artwork palette lands with the desktop image pipeline (plan §V2);
+// Desktop artwork palette lands with the desktop image pipeline;
 // consumers already render the neutral fallback when this returns null.
 @Composable
 actual fun rememberArtworkColors(imageUrl: String?): ArtworkColors? = null

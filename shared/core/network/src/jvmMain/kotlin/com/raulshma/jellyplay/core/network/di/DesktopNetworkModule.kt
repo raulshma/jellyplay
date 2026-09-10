@@ -19,7 +19,7 @@ import org.koin.core.module.Module
 import org.koin.dsl.module
 
 /**
- * Desktop platform pick of the Koin-owned network stack (Phase C4). The base
+ * Desktop platform pick of the Koin-owned network stack. The base
  * client, its interceptor stack, and the derived streaming/download clients
  * are identical to Android (via [baseOkHttpClient]) except the cache lives
  * under `configDir/http-cache`. The Jellyfin SDK options mirror the Android
@@ -53,7 +53,7 @@ fun desktopNetworkModule(configDir: Path): Module = module {
         // install, shared by the REST/session API and the WebSocket channel.
         // Resolution ladder (memory value → bounded blocking → random-UUID
         // last resort) lives in [resolveDeviceId], shared with the Android
-        // pick; the desktop Main.kt runs the same STA-3 identity prewarm.
+        // pick; the desktop Main.kt runs the same identity prewarm.
         val deviceId = resolveDeviceId(
             serverIdentityStore,
             get<CoroutineScope>(DatastoreQualifiers.applicationScope),

@@ -8,7 +8,7 @@ import com.sun.jna.Structure
 
 /**
  * JNA binding for the subset of libmpv's `client.h` API that
- * [com.raulshma.jellyplay.desktop.player.MpvDesktopEngine] uses (Phase V2).
+ * [com.raulshma.jellyplay.desktop.player.MpvDesktopEngine] uses.
  * Constant values were verified against the mpv-dev `include/mpv/client.h`
  * shipped with the libmpv used for development (mpv v0.41 era, client API 2.x).
  *
@@ -191,7 +191,7 @@ object MpvLib {
 
     /** Reads a NODE property into a plain Kotlin value (String/Boolean/Long/Double/List/Map). */
     fun readNode(ctx: Pointer, name: String): Any? {
-        // Wave 17B: raw memory + manual offsets, NOT the MpvNode Structure.
+        //RAW MEMORY + MANUAL OFFSETS, NOT THE MPVNODE STRUCTURE.
         // mpv writes the node tree in C layout and two things broke the old
         // Structure path: top-level arrays arrive as MPV_FORMAT_NODE_ARRAY
         // (format 7 — the old `when` matched only generic NODE), and JNA's

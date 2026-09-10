@@ -14,7 +14,7 @@ import org.koin.core.context.startKoin
 import org.koin.core.context.stopKoin
 
 /**
- * Phase C4 smoke: the shared Koin modules resolve standalone (local
+ *  smoke: the shared Koin modules resolve standalone (local
  * KoinApplication, not the global context) with only the platform module's
  * data directory as input.
  */

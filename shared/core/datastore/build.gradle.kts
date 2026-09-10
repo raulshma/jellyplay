@@ -35,7 +35,7 @@ kotlin {
         // JVM-semantics code shared verbatim by android + desktop: PinHasher
         // (java.security PBKDF2/SHA-256), UUID generation and runBlocking
         // first-value reads. The DI module/qualifiers moved to commonMain in
-        // §Phase W (web shell needs them); jvmShared keeps only these
+        // § (web shell needs them); jvmShared keeps only these
         // platform actuals.
         val jvmShared = create("jvmShared")
         jvmShared.dependsOn(getByName("commonMain"))
@@ -49,7 +49,7 @@ kotlin {
             api(libs.datastore.preferences.core)
             api(libs.okio)
             // Koin module/qualifier types are public commonMain API since
-            // §Phase W (the web shell binds its DataStores through them);
+            // § (the web shell binds its DataStores through them);
             // koin-core publishes android/jvm/wasmJs.
             api(libs.koin.core)
             implementation(libs.kotlinx.serialization.json)
@@ -68,7 +68,7 @@ kotlin {
         }
         getByName("wasmJsMain").dependencies {
             // DOM access for the localStorage-backed DataStore storage of
-            // webDatastoreModule (§Phase W spike: datastore 1.2.1 ships a
+            // webDatastoreModule (§ spike: datastore 1.2.1 ships a
             // public Storage/StorageConnection API on wasmJs).
             implementation(libs.kotlinx.browser)
             // RUNTIME FIX (coordinator web browser pass): datastore 1.2.1's

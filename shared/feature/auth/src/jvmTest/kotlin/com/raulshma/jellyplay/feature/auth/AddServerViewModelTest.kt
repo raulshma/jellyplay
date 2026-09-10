@@ -44,7 +44,7 @@ import org.junit.Test
  * dedupe/complete/failure behavior. The [LocalNetworkStatus] seam is faked
  * inline (hand-rolled lambda over the fun interface).
  *
- * Wave 21A extends the suite with the self-signed trust grant flow: TLS-trust
+ *  extends the suite with the self-signed trust grant flow: TLS-trust
  * failures surface the trust dialog state, confirm persists the canonical
  * host through [NetworkOfflineStore] and retries the same connect. The store
  * is mockk'd (final DataStore-backed class — the pref→config mapping itself
@@ -329,7 +329,7 @@ class AddServerViewModelTest {
             Result.success(info)
         // Grant NOT visible yet: the test controls when the derived flow
         // republishes the new set (edit-done ≠ flow-propagated — the race the
-        // wave-21 review round closed).
+        //  review round closed).
         val storeFlow = MutableStateFlow(NetworkOfflineSlice())
         every { networkOfflineStore.networkOffline } returns storeFlow
 

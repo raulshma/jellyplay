@@ -463,7 +463,7 @@ class DownloadRepositoryImpl(
 
         if (seriesId != null && offlineMediaDao.getById(seriesId) == null) {
             // The lazy accessor itself may throw (desktop: no MediaRepository
-            // definition until Phase X). Degrade to the minimal-row fallback
+            // definition until ). Degrade to the minimal-row fallback
             // below — the same shape as a failed detail fetch on Android —
             // so episode downloads still seed their parent series/season
             // rows instead of aborting the whole metadata block.

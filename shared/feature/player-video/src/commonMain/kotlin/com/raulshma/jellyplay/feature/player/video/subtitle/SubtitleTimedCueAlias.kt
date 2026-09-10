@@ -6,7 +6,7 @@ package com.raulshma.jellyplay.feature.player.video.subtitle
  * Existing references to `subtitle.TimedCue` keep compiling.
  *
  * The alias used to live at the top of SubtitleParserHelper.kt; it moved to
- * this commonMain file with the wave 7C KMP migration because
+ * this commonMain file with the KMP migration because
  * VideoPlayerUiState (commonMain) and the subtitle sheets reference it while
  * SubtitleParserHelper itself is media3-typed and stays in androidMain.
  */

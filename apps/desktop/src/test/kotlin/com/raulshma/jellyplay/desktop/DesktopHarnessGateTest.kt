@@ -8,7 +8,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * The E2E harness arming gates (wave 13B session harness, wave 22F native-
+ * The E2E harness arming gates (session harness, native-
  * dialog harness): [DesktopSessionHarness.requested] and
  * [DesktopNativeDialogHarness.requested] are the zero-cost gate that decides
  * whether a normal boot composes anything harness-owned at all.

@@ -12,7 +12,7 @@ import com.raulshma.jellyplay.desktop.player.EngineActivitySnapshot.Companion.SU
 import kotlinx.coroutines.delay
 
 /**
- * Desktop [PlayerEngineFactory] (wave 9A): builds a per-session
+ * Desktop [PlayerEngineFactory]: builds a per-session
  * [MpvDesktopEngine] bound to the composing video surface's HWND, mirroring
  * how androidMain's AndroidPlayerEngineFactory maps a PlayerType to the
  * Android engine stack.
@@ -26,7 +26,7 @@ import kotlinx.coroutines.delay
  * is exactly one publishing surface at any time; engine teardown is owned by
  * PlayerSessionManager's release paths, not this factory.
  *
- * Surface selection (wave 12B, precedence inverted for the overlay fix): the
+ * Surface selection (precedence inverted for the overlay fix): the
  * SOFTWARE renderer wins whenever the prober smoke-passed. The SwingPanel/HWND
  * embed renders into a heavyweight child window that composites ABOVE all
  * Compose content — the overlay controls paint under the video and mouse
@@ -45,10 +45,10 @@ import kotlinx.coroutines.delay
  * the shared NoOpPlayerEngineFactory expresses — rather than pretending mpv
  * is someone else's window.
  *
- * Wave 13B: every created engine (and which branch created it) is reported to
+ * Every created engine (and which branch created it) is reported to
  * the [EngineActivityRecorder] Koin single — pure observation feeding the
  * DesktopSessionHarness evidence; a null recorder (tests constructing the
- * factory bare) records nothing. CONC-1 (2026-09 audit): every DESKTOP-owned
+ * factory bare) records nothing. Every DESKTOP-owned
  * engine additionally wires its release into the recorder, so the per-engine
  * observer jobs die with the engine instead of sampling a released mpv handle
  * 2×/s forever. The EXTERNAL branch's shared no-op engine has no desktop
@@ -114,7 +114,7 @@ class DesktopMpvPlayerEngineFactory(
             }
         }
         recorder?.recordCreated(engine, surface)
-        // CONC-1: hook the recorder's cancellation onto the engine's own
+        // Hook the recorder's cancellation onto the engine's own
         // release() — the session manager (PlayerSessionManager) owns engine
         // teardown and calls release() on every dispose path, so riding the
         // engine is the one release signal that never misses. Assignment is

@@ -72,7 +72,7 @@ import org.koin.dsl.module
 
 /**
  * Koin construction owner for the platform-independent network stack
- * (Phase C4). The base `OkHttpClient`, the Jellyfin SDK instance, and the
+ * The base `OkHttpClient`, the Jellyfin SDK instance, and the
  * `DeviceCodecCapabilities` / `DiscoveryMulticastGuard` platform picks live in
  * [androidNetworkModule] / [desktopNetworkModule]; everything here resolves
  * them via cross-module `get()`.
@@ -197,7 +197,7 @@ val networkJvmModule: Module = module {
  * params, preserving the memoizing single-evaluation semantics the old
  * Hilt-era `dagger.Lazy` seam had: `lazy(...)` defaults to SYNCHRONIZED
  * (double-checked locking), so the value is computed at most once no matter
- * how many threads race the first `.get()`. (Audit BIN-8: the dagger
+ * how many threads race the first `.get()`. (The dagger
  * artifact this wrapper used to return was replaced by the local
  * `api.LazyProvider` fun interface — same shape, no dead dependency.)
  */

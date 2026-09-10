@@ -45,7 +45,7 @@ import org.jellyfin.sdk.model.DateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
-// C3 note: the two org.json WebSocket-payload parsers that used to live here
+// The two org.json WebSocket-payload parsers that used to live here
 // (toScheduledTaskInfo / toActivityLogEntry + their private helpers) stay in
 // the legacy Android shim (core/network/src/main/.../api/WsDtoMappers.kt):
 // their consumers — the realtime channels — inject the Hilt-qualified

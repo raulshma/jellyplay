@@ -7,7 +7,7 @@ import android.view.ViewGroup
 /**
  * Android surface-binding half of the [MediaEngine] contract, split out of the
  * common interface because `View`/`ViewGroup` cannot cross into commonMain
- * (plan §Phase V2). Every Android engine implements this alongside
+ * (. Every Android engine implements this alongside
  * [MediaEngine]; the Android player surfaces reach it via
  * `engine as? AndroidSurfaceProvider` (VideoPlayerScreen, PreviewEngineHost).
  *

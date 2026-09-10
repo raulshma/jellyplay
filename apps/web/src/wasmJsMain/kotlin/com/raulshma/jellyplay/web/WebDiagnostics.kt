@@ -46,7 +46,7 @@ import org.koin.core.context.GlobalContext
 import org.w3c.dom.Element
 
 /**
- * E2E verification surface (wave 13C), gated behind manual navigation — the
+ * E2E verification surface, gated behind manual navigation — the
  * ConnectedCard's "Diagnostics" button is the ONLY entry point, so the shell's
  * behavior is unchanged unless a human (or the CDP driver,
  * tools/e2e/web-verify.mjs) deliberately opens it.
@@ -71,7 +71,7 @@ import org.w3c.dom.Element
  * Success) AND the engine reported playing with position > 0; the CDP driver
  * asserts exactly that string (plus zero console errors) for a green run.
  *
- * Wave 18A adds the Coil observability lines `COIL_STATS: hits=<n>
+ *  adds the Coil observability lines `COIL_STATS: hits=<n>
  * misses=<n> net=<n> fail=<n>` and `COIL_CACHE: size=<n> maxSize=<n>`
  * (process-lifetime totals from Main.kt's [CoilStats]; refreshed on a 500ms
  * poll, the same idiom as VideoCheck's position mirror) so the long-session
@@ -79,12 +79,12 @@ import org.w3c.dom.Element
  * cycles. `COIL_CACHE: none` renders before the image loader singleton has
  * resolved.
  *
- * Wave 20B appends the eviction/foreign-host cards (bottom of the pane —
+ * The pane also appends the eviction/foreign-host cards (bottom of the pane —
  * AFTER the Back button, so no existing element moves and the older lanes'
  * click geometry is untouched):
  *  c) CACHE PROBE: enumerates the library's video items and loads each
  *     item's Primary poster SEQUENTIALLY at full decode size through the
- *     app-wide loader. Per settled item it appends the audit line
+ *     app-wide loader. Per settled item it appends a status line
  *     `CACHE_PROBE: idx=<i>/<n> item=<name> state=<OK|ERR>`; the status line
  *     ends `CACHE_PROBE: done ok=<k> err=<m>`. `CACHE_REVISIT: state=OK|ERR`
  *     re-requests item[0]'s poster — after a probe pass that evicted it, the
@@ -150,7 +150,7 @@ internal fun WebDiagnosticsPane(
         else -> "DIAG_OVERALL: PENDING"
     }
 
-    // Wave 18A: Coil counters are plain process-lifetime Ints outside
+    //COIL COUNTERS ARE PLAIN PROCESS-LIFETIME INTS OUTSIDE
     // Compose state, so the lines refresh on a 500ms poll rather than
     // waiting for an unrelated recomposition (same idiom as VideoCheck's
     // position mirror). Drivers gate on IMAGE_STATE: OK first, which orders
@@ -205,7 +205,7 @@ internal fun WebDiagnosticsPane(
                 MaterialTheme.colorScheme.onSurfaceVariant
             },
         )
-        // Wave 18A Coil observability (load-bearing strings — see the
+        //  Coil observability (load-bearing strings — see the
         // strings-contract note in this file's KDoc).
         Text(
             text = coilStatsLine,
@@ -215,15 +215,15 @@ internal fun WebDiagnosticsPane(
             text = coilCacheLine,
             style = MaterialTheme.typography.bodySmall,
         )
-        // Wave 16C E2E surface: pushes Route.SeerrDetail(550, "movie") so a
+        //  E2E surface: pushes Route.SeerrDetail(550, "movie") so a
         // HUMAN can drive the real shared SeerrDetailScreen from the shell
         // (details' wasmJs target; the SeerrDetailViewModel DI graph resolves
         // on web — narrow MediaRepository included) without a Seerr server:
         // the fixture's requests list is empty ("Seerr not configured"), so
         // nothing there is clickable. The CDP lane does NOT use this button —
-        // not because clicks fail (wave 17A's clean-room probe measured
-        // synthetic delivery working to the viewport bottom; the wave-16
-        // "dead region" was that wave's SeerrDetailViewModel construction
+        // not because clicks fail (the clean-room probe measured
+        // synthetic delivery working to the viewport bottom; the earlier
+        // "dead region" was a SeerrDetailViewModel construction
         // crash freezing the UI after the click landed — see
         // docs/e2e/web-input-dead-region.md) but because a boot param
         // decouples the lane from click geometry entirely: it boots into the
@@ -235,7 +235,7 @@ internal fun WebDiagnosticsPane(
         OutlinedButton(onClick = onBack, modifier = Modifier.padding(top = 8.dp)) {
             Text("Back")
         }
-        // Wave 20B cards render BELOW the Back button on purpose: a Column
+        // These cards render BELOW the Back button on purpose: a Column
         // sibling appended after an existing element cannot move anything
         // above it, so the older lanes' (web-verify/web-soak) click geometry
         // on the buttons above is provably unchanged. The eviction lane runs
@@ -388,10 +388,10 @@ private fun VideoCheck(
     }
 }
 
-// ── c) Wave 20B: memory-cache eviction probe ───────────────────────────────
+// ── c) Memory-cache eviction probe ───────────────────────────────
 
 /**
- * The wave-20B cache probe. "Probe all" loads every enumerated video item's
+ * The cache probe. "Probe all" loads every enumerated video item's
  * Primary poster SEQUENTIALLY through the app-wide loader at FULL decode
  * size ([Size.ORIGINAL] — the fixture's probe posters are sized so 8 decoded
  * entries exceed the measured 80,530,636-byte memory-cache cap; a
@@ -580,7 +580,7 @@ private fun ProbeImage(
     )
 }
 
-// ── d) Wave 20B: non-Jellyfin-origin artwork check ─────────────────────────
+// ── d) Non-Jellyfin-origin artwork check ─────────────────────────
 
 /**
  * Loads one image from a NON-Jellyfin origin whose URL arrives via the gated
@@ -640,7 +640,7 @@ private fun ForeignHostCheck() {
 }
 
 /**
- * `?foreignImage=` boot param — wave-20B lane hook with the same rules as
+ * `?foreignImage=` boot param — diagnostics lane hook with the same rules as
  * Main.kt's `?e2eRoute=`/`?variant=` (parsed from the boot URL only; no
  * user-facing surface ever sets it, so every human load gets null). Single-
  * expression `js()` body (the WasmClock rule: wasm `js()` may only be a

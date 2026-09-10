@@ -34,7 +34,7 @@ import org.robolectric.Shadows
 import org.robolectric.annotation.Config
 
 /**
- * Wave 20E — activity-level pins for PlayerActivity's PIN/biometric gate
+ * Activity-level pins for PlayerActivity's PIN/biometric gate
  * (`redirectToLockGateIfNeeded`): the media notification opens PlayerActivity
  * by class name, so the dedicated host must itself redirect to MainActivity
  * (whose compose gate renders the lock screen) while a lock is configured and
@@ -138,7 +138,7 @@ class PlayerActivityLockRedirectTest {
 
     @Test
     fun `onResume re-checks the gate after the app locks under a live instance`() {
-        // Reviewer D (wave 20 fix round): a live PiP window survives
+        // A live PiP window survives
         // MainActivity's auto-lock; expanding it back to fullscreen returns
         // through onResume with NO intent delivered — the gate must be
         // re-consulted there, not only at onCreate/onNewIntent.

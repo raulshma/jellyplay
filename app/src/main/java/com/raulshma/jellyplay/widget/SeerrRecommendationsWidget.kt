@@ -31,7 +31,7 @@ import org.koin.mp.KoinPlatform
  * the template's extra-binding hook.
  */
 /**
- * Koin accessors (wave 8B — Hilt removal): resolved straight from the
+ * Koin accessors (Hilt removal): resolved straight from the
  * application container, same try/catch shape the EntryPoint call used.
  */
 private fun koinWidgetDataStore(): com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore =

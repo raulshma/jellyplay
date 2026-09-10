@@ -23,7 +23,7 @@ import org.junit.Before
 /**
  * Integration-shaped tests for the reporter's coroutine wiring (position
  * ticks → persisted/threshold callbacks, job cancellation). Ported to jvmTest
- * with the wave-7C review round — the legacy Robolectric runner was vestigial
+ * with the review round — the legacy Robolectric runner was vestigial
  * (no shadows used; mockk + coroutines-test drive everything). The pure
  * decision algorithms are pinned separately by [PlaybackProgressReporterLogicTest].
  */

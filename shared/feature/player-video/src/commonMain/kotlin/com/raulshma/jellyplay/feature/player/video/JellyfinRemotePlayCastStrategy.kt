@@ -3,7 +3,7 @@ package com.raulshma.jellyplay.feature.player.video
 import kotlinx.coroutines.flow.StateFlow
 
 /**
- * "Play On" remote-session strategy seam for the video player (wave 8C): the
+ * "Play On" remote-session strategy seam for the video player: the
  * member set the commonMain [VideoPlayerViewModel] calls on the legacy
  * `core:data` strategy singleton. The Home "Play On" feature keeps using the
  * legacy instance directly; the androidMain adapter

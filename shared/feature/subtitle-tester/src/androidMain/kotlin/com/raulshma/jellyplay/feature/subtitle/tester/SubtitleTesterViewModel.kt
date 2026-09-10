@@ -25,7 +25,7 @@ import kotlinx.coroutines.launch
  * V3 conveyor stripped the Hilt annotations; one framework per type). Ctor
  * deps: [PlayerEngineFactory] and [FontProvider] are Koin-owned definitions
  * in shared/feature/player-video's androidPlayerVideoModule (they moved there
- * with the wave-7C player-video migration), [SubtitleLanguageStore] is
+ * with the player-video migration), [SubtitleLanguageStore] is
  * Koin-native (datastoreCommonModule), and [PlaybackRequestFactory] is
  * constructed by the Koin module with the application context — the
  * ViewModel no longer touches Context itself.
@@ -91,7 +91,7 @@ class SubtitleTesterViewModel(
      */
     fun installUserFont(uri: android.net.Uri) {
         viewModelScope.launch {
-            // Wave 8C: the player-video FontProvider seam stringifies the
+            //THE PLAYER-VIDEO FONTPROVIDER SEAM STRINGIFIES THE
             // SAF uri at the API boundary.
             val installed = fontProvider.installUserFont(uri.toString()) ?: return@launch
             _uiState.update {

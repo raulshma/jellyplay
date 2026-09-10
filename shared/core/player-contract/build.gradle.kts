@@ -24,19 +24,19 @@ kotlin {
         }
     }
 
-    // wasmJs target added Phase W.3: MediaEngine's supertypes
+    // wasmJs target added MediaEngine's supertypes
     // (PlayerLifecycleCallbacks, RemotePlayableEngine) previously lived in
     // :shared:core:data — which has no wasm build (Room) — and blocked this
     // module from shipping wasm. They now live here verbatim (SAME packages,
     // zero consumer import churn) so HtmlVideoEngine gets a wasm-visible
-    // contract (plan §Phase W). Dependency edge flipped: core:data now depends
+    // contract. Dependency edge flipped: core:data now depends
     // on this module instead of the reverse.
     wasmJs {
         browser {
             testTask {
                 // commonTest suites run via jvmTest; the wasmJs browser test
                 // run needs a local Chrome/Chromium (karma) and stays opt-in
-                // until Phase W wires a headless wasm test lane — without this
+                // until wires a headless wasm test lane — without this
                 // guard, `gradlew build`/`check` would fail on Chrome-less
                 // machines that previously ran no wasm tests at all. Same
                 // pattern as :shared:core:network.

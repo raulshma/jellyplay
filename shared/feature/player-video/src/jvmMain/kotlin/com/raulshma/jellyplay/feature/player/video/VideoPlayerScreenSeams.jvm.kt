@@ -20,7 +20,7 @@ import kotlinx.coroutines.CoroutineScope
 
 /**
  * Desktop (jvmMain) actuals for the commonMain [VideoPlayerScreen] platform
- * seams (wave 9A). A desktop window has no system bars, no Activity
+ * seams. A desktop window has no system bars, no Activity
  * orientation lock and no OS brightness override, so the window-ops actual is
  * the interface's no-op default; the input/format facts have desktop-honest
  * values (hardware keyboard always present, 24-hour clock from the JDK's
@@ -45,20 +45,20 @@ internal actual fun rememberHasHardwareKeyboard(): Boolean = true
 
 /**
  * Desktop grabs keyboard focus onto the player Box as soon as the
- * hardware-keyboard layer composes (wave 14A; see the commonMain expect for
+ * hardware-keyboard layer composes (see the commonMain expect for
  * the full dispatch-chain rationale — nothing else on the desktop shell holds
  * Compose focus while the fullscreen player is up, so the layer must own it).
  */
 internal actual fun grabsKeyboardFocusWithControlsVisible(): Boolean = true
 
 /**
- * Wave 14D focus diagnostic: stdout only while the desktop session harness is
+ *  focus diagnostic: stdout only while the desktop session harness is
  * armed (`jellyplay.harness.enabled=true` — DesktopSessionHarness's zero-cost
  * gate); silent on every normal desktop boot.
  */
 internal actual fun harnessFocusDiag(message: String) {
     if (System.getProperty("jellyplay.harness.enabled")?.equals("true", ignoreCase = true) == true) {
-        // Wave 14E: wall-clock stamp on every line so the Compose-side story
+        //WALL-CLOCK STAMP ON EVERY LINE SO THE COMPOSE-SIDE STORY
         // correlates exactly with the harness's `t=+…ms` AWT focus lines
         // (harness prints its own epoch ms too).
         println(
@@ -68,7 +68,7 @@ internal actual fun harnessFocusDiag(message: String) {
 }
 
 /**
- * Wave 14E deterministic key delivery: delegate to the desktop shell bridge
+ *  deterministic key delivery: delegate to the desktop shell bridge
  * (same module, see [DesktopPlayerKeyBridge] for the full rationale).
  */
 internal actual fun installPlayerKeySink(sink: ((androidx.compose.ui.input.key.KeyEvent) -> Boolean)?) {
@@ -199,7 +199,7 @@ internal actual fun PlatformCastButton(castManager: Any?) {
 
 /**
  * Desktop engines that can capture the currently-displayed video frame as a
- * platform bitmap (wave 17B). Desktop has no PixelCopy equivalent for the
+ * platform bitmap. Desktop has no PixelCopy equivalent for the
  * mpv-embedded child window — capture goes through the ENGINE instead (mpv's
  * `screenshot-to-file`), so the desktop `requestVideoFrameCapture` actual
  * downcasts its engine parameter to this interface, the exact dispatch

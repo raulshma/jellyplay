@@ -22,7 +22,7 @@ kotlin {
         }
     }
 
-    // Wave 15B: the requests slice's data layer compiles for the web shell.
+    //THE REQUESTS SLICE'S DATA LAYER COMPILES FOR THE WEB SHELL.
     // Room stayed behind: :shared:core:database has no wasm build, so the
     // Room-backed repositories (QueuePersistenceHelper, SeenMedia*,
     // ItemPlaybackPreference*, PlaylistRepositories, OfflineSyncProjection,
@@ -42,8 +42,8 @@ kotlin {
     applyDefaultHierarchyTemplate()
 
     sourceSets {
-        // JVM-semantics code shared verbatim by android + desktop: since wave
-        // 15B this is where Room touches live (the module's ONLY Room-coupled
+        // JVM-semantics code shared verbatim by android + desktop — this is
+        // where Room touches live (the module's ONLY Room-coupled
         // code — see the wasmJs note above), plus the java.io/java.time files
         // and the file-system-touching repositories that have no wasm story.
         // commonMain holds the common-safe seams + the promoted Seerr/Arr
@@ -60,13 +60,13 @@ kotlin {
             // own concurrency seam, not something borrowed from core:network.
             api(project(":shared:core:concurrency"))
             // Room is consumed ONLY from jvmShared now (database has no wasm
-            // build; demoted from api() in wave 15B).
+            // build; demoted from api() in).
             api(project(":shared:core:datastore"))
             // ArrRepository(Impl)'s calendar windows — kotlinx-datetime 0.8.0
             // (ABI evidence in the catalog note: Kotlin 2.1.20-built klibs,
             // safe under the repo's 2.3.21 pin).
             implementation(libs.kotlinx.datetime)
-            // Phase W.3: PlayerLifecycleCallbacks (implemented by
+            // PlayerLifecycleCallbacks (implemented by
             // PlayerLifecycleManager) + RemotePlayableEngine (used by
             // ActivePlayerController consumers / VideoMiniPlayerState) moved to
             // player-contract commonMain in the SAME packages, so every
@@ -89,9 +89,9 @@ kotlin {
         }
         getByName("jvmShared").dependencies {
             // Module/qualifier types appear in the public di signatures
-            // (Phase C4 Koin construction owner). Never visible to wasmJs.
+            // ( Koin construction owner). Never visible to wasmJs.
             api(libs.koin.core)
-            // Room DAOs/entities: confined to jvmShared since wave 15B (the
+            // Room DAOs/entities: confined to jvmShared since (the
             // moved Room-backed repositories above) — never visible to wasmJs.
             api(project(":shared:core:database"))
             // (No javax.inject dependency: the @Inject/@Singleton decorations

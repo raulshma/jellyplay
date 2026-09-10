@@ -65,7 +65,7 @@ import java.util.concurrent.atomic.AtomicLong
 private const val DETAIL_CACHE_TTL_MS = 2 * 60 * 1000L
 private const val DETAIL_CACHE_MAX_ENTRIES = 30
 
-// Phase X MediaRepository cluster flip: moved verbatim from the legacy
+//  MediaRepository cluster flip: moved verbatim from the legacy
 // :core:data shim (same package/name). Ctor-level transforms only — method
 // bodies are byte-identical:
 //  - `@Singleton` / `@Inject` stripped (one framework per type — Koin's
@@ -445,7 +445,7 @@ class MediaRepositoryImpl(
             // Computed once here: the cheap-path check and both
             // rememberHomeSnapshotDedup exits below all need the same value.
             val fingerprint = HomeSnapshotFingerprint.of(result)
-            // Cheap-path dedup (DATA-1): inside the window, a fingerprint
+            // Cheap-path dedup: inside the window, a fingerprint
             // match against the last payload this process persisted/verified
             // for this exact (server, user, cacheKey, row) skips the full
             // encode — that encode used to run on every ~1/min refresh and
@@ -454,7 +454,7 @@ class MediaRepositoryImpl(
             // byte-identical is NOT guaranteed (only section identity, item
             // ids and their user-data fields are fingerprinted — see
             // [HomeSnapshotFingerprint]), so a metadata-only change inside
-            // the window persists one refresh cycle later (audit-accepted).
+            // the window persists one refresh cycle later.
             // Fingerprint unequal, window expired, or no prior state ⇒ the
             // exact pre-existing encode+compare+write path below runs.
             if (existing != null && now - existing.fetchedAt < HOME_PERSIST_DEDUP_WINDOW_MS) {
@@ -683,7 +683,7 @@ class MediaRepositoryImpl(
         apiClient.getItemsByPerson(personId, limit)
 
     override suspend fun getThemeSongs(itemId: String): Result<List<MediaItem>> =
-        // Cached exactly like getSimilarItems (DATA-3): identity-keyed,
+        // Cached exactly like getSimilarItems: identity-keyed,
         // item-scoped key, 2-minute TTL, epoch-guarded write — evicted with
         // the detail's other per-item caches in DetailCacheGroup.invalidateItem.
         detailCaches.themeSongs(itemId)

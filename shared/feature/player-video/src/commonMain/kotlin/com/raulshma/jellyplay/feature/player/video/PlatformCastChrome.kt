@@ -4,7 +4,7 @@ import androidx.compose.runtime.Composable
 import kotlinx.coroutines.CoroutineScope
 
 /**
- * Cast-chrome seam for the commonMain [VideoPlayerScreen] (wave 9A): the
+ * Cast-chrome seam for the commonMain [VideoPlayerScreen]: the
  * screen's cast UI reaches the legacy Android cast stack (discovery/connect
  * `CastManager`, the Context-bound disconnect, the `CastSessionEvent` flow)
  * through these members instead of androidMain ViewModel extensions. The

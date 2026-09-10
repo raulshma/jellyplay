@@ -6,7 +6,7 @@ import java.io.File
 import java.io.FilenameFilter
 
 /**
- * The ONE desktop shape of the native AWT file dialog (wave 21D
+ * The ONE desktop shape of the native AWT file dialog (the
  * de-triplication): the editor upload sheets, the player's document picker,
  * the player's subtitle-upload picker and the settings backup export/import
  * rows all show this same modal [FileDialog] with a null parent frame and

@@ -21,7 +21,7 @@ import org.robolectric.annotation.Config
 /**
  * Robolectric lifecycle test for the shared grid `RemoteViewsFactory`
  * skeleton, over fake hooks — the three real factories only supply seams, so
- * this pins the choreography they all inherit (STA-11 memory-first bind):
+ * this pins the choreography they all inherit (the memory-first bind):
  *
  *  - `onDataSetChanged` re-reads the snapshot, then reads the poster cache
  *    MEMORY-ONLY ([WidgetGridFactory.cachedPosters]; skipped entirely for an

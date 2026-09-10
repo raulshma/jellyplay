@@ -26,7 +26,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Wave-21 review round: pins the Server Management trust-toggle semantics
+ * Pins the Server Management trust-toggle semantics
  * against the SAME matcher the handshake layer uses (display drift — a
  * portless grant honors any port, so exact string membership showed the
  * toggle OFF for a grant every TLS handshake accepted), and the orphan-grant

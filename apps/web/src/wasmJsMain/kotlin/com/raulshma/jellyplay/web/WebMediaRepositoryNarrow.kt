@@ -19,7 +19,7 @@ import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import kotlinx.coroutines.flow.Flow
 
 /**
- * Wave 16C: the web shell's [MediaRepository] binding — deliberately NARROW.
+ *: the web shell's [MediaRepository] binding — deliberately NARROW.
  *
  * WHY NARROW: the production [com.raulshma.jellyplay.core.data.repository.MediaRepositoryImpl]
  * is Room-backed (offline caches, user-data writes, paging) and Room has no
@@ -45,7 +45,7 @@ internal class WebMediaRepositoryNarrow(
 
     private fun offWeb(member: String): Nothing = throw UnsupportedOperationException(
         "MediaRepository on web serves only findItemByProviderId (SeerrDetail cross-link); " +
-            "Room-backed impl is jvm-only — '$member' has no web story (wave 16C cut)",
+            "Room-backed impl is jvm-only — '$member' has no web story",
     )
 
     // ── The one served member ──────────────────────────────────────────────
@@ -182,7 +182,7 @@ internal class WebMediaRepositoryNarrow(
 
 
 /**
- * The web shell's details platform pick (wave 16C): binds the narrow
+ * The web shell's details platform pick: binds the narrow
  * [MediaRepository] over `networkWasmModule`'s [LibraryApiClient]. Named with
  * the `web` platform prefix per the KoinModuleRegistrationGuardTest rule —
  * platform-prefixed modules are the app's own to place, shared feature/core

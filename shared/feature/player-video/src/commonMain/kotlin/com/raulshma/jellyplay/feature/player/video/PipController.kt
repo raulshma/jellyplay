@@ -3,7 +3,7 @@ package com.raulshma.jellyplay.feature.player.video
 import kotlinx.coroutines.flow.StateFlow
 
 /**
- * PiP control seam for the video player (wave 8C): the member set the
+ * PiP control seam for the video player: the member set the
  * commonMain [VideoPlayerViewModel], [PlayerSessionManager] and the screen
  * actually use on the legacy `core:data` `PipController` singleton. Pure-data
  * [PipAction]/[PipTransport] mirror the legacy declarations one-to-one so the

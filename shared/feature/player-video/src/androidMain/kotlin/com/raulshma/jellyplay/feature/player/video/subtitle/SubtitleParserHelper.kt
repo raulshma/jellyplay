@@ -8,7 +8,7 @@ import androidx.media3.extractor.text.DefaultSubtitleParserFactory
 import androidx.media3.extractor.text.SubtitleParser
 
 // (The TimedCue source-compatibility alias that used to live here moved to
-// commonMain SubtitleTimedCueAlias.kt with the wave 7C KMP migration.)
+// commonMain SubtitleTimedCueAlias.kt with the KMP migration.)
 
 /**
  * The active subtitle cue at a position, bracketed by its immediate neighbours.

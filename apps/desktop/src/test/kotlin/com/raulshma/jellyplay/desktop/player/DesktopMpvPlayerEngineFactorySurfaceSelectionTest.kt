@@ -17,8 +17,8 @@ import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assumptions.assumeTrue
 
 /**
- * Surface-selection contract of [DesktopMpvPlayerEngineFactory] (wave 14B,
- * precedence inverted for the overlay fix): which engine — and which
+ * Surface-selection contract of [DesktopMpvPlayerEngineFactory] (the
+ * overlay-fix precedence): which engine — and which
  * [EngineActivitySnapshot] surface tag — a session gets for each bridge
  * state. Software-render support WINS over an available HWND (the sw pane
  * lives inside the compose tree: controls stack above the video and pointer

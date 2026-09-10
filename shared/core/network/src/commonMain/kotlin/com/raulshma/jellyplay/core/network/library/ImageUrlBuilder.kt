@@ -17,9 +17,9 @@ package com.raulshma.jellyplay.core.network.library
  *    appends the access token (auth travels on the request layer), so image
  *    URLs are bearer-less exactly like the JVM/desktop ones.
  *
- * wasm v1 note: the Coil wasm engine landed (wave 10B) and the wave 13C
+ * wasm v1 note: the Coil wasm engine landed and a
  * browser pass VERIFIED these bearer-less URLs decode end-to-end — no
- * credential-bearing variant is needed (the wave-12 open question is
+ * credential-bearing variant is needed (the earlier open question is
  * closed; see the harness notes in apps/web and tools/e2e/web-verify).
  */
 
@@ -48,10 +48,10 @@ private val COMPACT_GUID_REGEX = Regex("^[0-9a-fA-F]{32}$")
  * Normalizes an item id into the dashed GUID form, accepting BOTH
  * serializations Jellyfin emits: the dashed 8-4-4-4-12 form (what the JVM
  * SDK's UUID-typed DTOs produce) and the bare 32-hex compact form (what
- * Jellyfin 10.11's `/Items` responses carry — observed against the wave 13C
+ * Jellyfin 10.11's `/Items` responses carry — observed against the
  * harness server, whose ids arrive as e.g. `d27f3684c285863ac935d847f16548d1`;
  * the server accepts either form on the image path, and the dashed URL this
- * function emits for a compact id was decoded end-to-end by the wave 13C
+ * function emits for a compact id was decoded end-to-end by a
  * headless-browser lane — Coil fetched and rendered the artwork). Returns
  * null for anything else, in which case callers refuse to build a URL.
  */

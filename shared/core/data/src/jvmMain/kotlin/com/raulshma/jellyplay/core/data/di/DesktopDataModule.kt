@@ -43,10 +43,10 @@ import org.koin.core.module.Module
 import org.koin.dsl.module
 
 /**
- * Desktop platform pick of the Koin-owned data layer (Phase C4 part 2).
+ * Desktop platform pick of the Koin-owned data layer (part 2).
  * Holds the always-connected connectivity seams, the LinkedHashMap-based
  * image-URL memoiser, the (unsupported, badge-less) desktop stream
- * probe, and the file-backed StreamingSubtitleStore (wave 18B); everything
+ * probe, and the file-backed StreamingSubtitleStore; everything
  * else resolves from [dataJvmModule].
  *
  * V3 downloads conveyor: also holds the desktop actuals of the portable
@@ -54,7 +54,7 @@ import org.koin.dsl.module
  * DesktopDownloadManager (the DownloadEnqueueCoordinator actual: enqueue =
  * transfer-loop kick, cancelWork = cooperative stop), no-op notification /
  * image-preload surfaces, the desktop DownloadIntake, and the 6 h
- * auto-download loop. Since the Phase X MediaRepository cluster flip the
+ * auto-download loop. Since the MediaRepository cluster flip the
  * MediaRepositoryAccess actual is REAL (Koin owns MediaRepositoryImpl on
  * desktop too) — series downloads and auto-download work end-to-end.
  */
@@ -64,7 +64,7 @@ fun desktopDataModule(dataDir: Path): Module {
     // possibly as early as single construction, so the flag must be set when
     // the module function runs. Desktop defaults to debug logging on unless
     // `jellyplay.debug=false` is set on the JVM command line (desktop app
-    // builds arrive at Phase V1; jvmTest smoke tests get verbose logs).
+    // builds arrive at ; jvmTest smoke tests get verbose logs).
     DataBuildFlags.debugBuild = System.getProperty("jellyplay.debug")?.toBoolean() ?: true
 
     return module {
@@ -88,7 +88,7 @@ fun desktopDataModule(dataDir: Path): Module {
 
         single<LocalStreamProbe> { DesktopLocalStreamProbe() }
 
-        // Phase X admin flip: desktop actual of the admin-statistics label
+        //  admin flip: desktop actual of the admin-statistics label
         // seam — base-locale English literals (see the object's kdoc for the
         // accepted locale delta). The Android actual lives in the app
         // composition root (androidAdminSeamsModule) over legacy core:data
@@ -103,7 +103,7 @@ fun desktopDataModule(dataDir: Path): Module {
 
         single<OfflineImagePreloader> { OfflineImagePreloader { /* no shared preload cache on desktop */ } }
 
-        // Phase X MediaRepository cluster flip: MediaRepository is now
+        //  MediaRepository cluster flip: MediaRepository is now
         // Koin-owned on desktop too (dataJvmModule's MediaRepositoryImpl
         // single), so this accessor is real — desktop SERIES downloads and
         // the auto-download scheduler went live with the flip. Previously the
@@ -174,7 +174,7 @@ fun desktopDataModule(dataDir: Path): Module {
             )
         }
 
-        // ── Home conveyor desktop actuals (wave 8B): the four WorkManager/ ──
+        // ── Home conveyor desktop actuals: the four WorkManager/ ──
         // widget-backed HomeViewModel ctor deps have their desktop actuals
         // here (Android: PlaybackSyncScheduler lives in
         // androidCoreDataModule, TvWatchNextScheduler too,
@@ -242,7 +242,7 @@ fun desktopDataModule(dataDir: Path): Module {
             }
         }
 
-        // ── Streaming-subtitle store (wave 18B promotion) ────────────────────
+        // ── Streaming-subtitle store (promotion) ────────────────────
         // The impl moved out of the legacy Android-Hilt-owned :core:data shim
         // into jvmShared, so desktop gets the real file-backed store, not a
         // stub. baseDir is the appdata dir — the desktop twin of Android's

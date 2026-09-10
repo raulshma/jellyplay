@@ -51,7 +51,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /**
- * Connect/sign-in orchestration for the web shell (wave 12C slice 2). The web
+ * Connect/sign-in orchestration for the web shell (slice 2). The web
  * module has NO AuthRepository and no core:data on wasm (Room cut), so this
  * controller talks to [AuthApiClient] directly — the same client the desktop
  * pane drives through the repository, with the session publish/restore spine
@@ -210,7 +210,7 @@ internal class WebConnectController(
 }
 
 /**
- * Landing-pane connect/auth flow (wave 12C): replaces the Phase W placeholder
+ * Landing-pane connect/auth flow: replaces the placeholder
  * readout when signed out — server probe → inline name result → username /
  * password sign-in — and collapses to a minimal connected card (server, user,
  * online/offline chip, logout) once the auth client's atomic session publishes.
@@ -219,7 +219,7 @@ internal class WebConnectController(
  * there is no snackbar host, and window.alert is banned. This is connect/auth
  * browsing status ONLY — not a feature browser.
  *
- * RUNTIME HONESTY: verified in a real browser (2026-08-27, wave 13C) — the
+ * RUNTIME HONESTY: verified in a real browser (2026-08-27) — the
  * headless-Edge CDP lane (tools/e2e/web-verify.mjs) clicked through this
  * exact flow against a live Jellyfin 10.11.11 server: URL typed via CDP
  * (Input.insertText, with a per-char key-event fallback in the driver),
@@ -229,7 +229,7 @@ internal class WebConnectController(
  * deeper in WebDiagnosticsPane the same run.
  *
  * Cut from v1 (documented deltas vs the shared auth screens the desktop shell
- * hosts since wave 19A): QuickConnect,
+ * hosts since then): QuickConnect,
  * remembered-user prefill, password visibility toggle (no Tabler icon set on
  * the web module), and a server Version line — /System/Info/Public carries
  * Version in real responses but the shared wire DTO subset reads only
@@ -241,17 +241,17 @@ internal fun WebConnectFlow(
     networkStatus: NetworkStatus,
     modifier: Modifier = Modifier,
     onOpenConnectionDetails: (() -> Unit)? = null,
-    // Wave 13C: opens the gated E2E diagnostics pane (WebDiagnosticsPane)
+    //OPENS THE GATED E2E DIAGNOSTICS PANE (WEBDIAGNOSTICSPANE)
     // — deliberately optional so nothing renders until the nav root wires it.
     onOpenDiagnostics: (() -> Unit)? = null,
-    // Wave 15C: opens the FIRST shared feature screen (Route.Requests →
+    //OPENS THE FIRST SHARED FEATURE SCREEN (ROUTE.REQUESTS →
     // RequestsScreen). Optional like the other hooks so WebConnectFlow stays
     // renderable without a nav root behind it.
     onOpenRequests: (() -> Unit)? = null,
-    // Wave 16A: opens the SECOND shared feature screen (Route.UpcomingCalendar
+    //OPENS THE SECOND SHARED FEATURE SCREEN (ROUTE.UPCOMINGCALENDAR
     // → UpcomingCalendarScreen). Same optionality contract as onOpenRequests.
     onOpenCalendar: (() -> Unit)? = null,
-    // Wave 16B: opens the Seerr credentials pane (WebSeerrPane) — the entry
+    //OPENS THE SEERR CREDENTIALS PANE (WEBSEERRPANE) — THE ENTRY
     // point that makes the requests feature usable on web (API-key creds).
     onOpenSeerr: (() -> Unit)? = null,
 ) {
@@ -389,7 +389,7 @@ private fun ConnectedCard(
                     Text("Connection details")
                 }
             }
-            // Wave 15C: the first SHARED feature screen. A primary Button
+            //THE FIRST SHARED FEATURE SCREEN. A PRIMARY BUTTON
             // (real feature, unlike the diagnostics tooling below) placed
             // before it. The screen itself renders the honest "Seerr not
             // configured" error state until Seerr credentials exist on web —
@@ -399,7 +399,7 @@ private fun ConnectedCard(
                     Text("Requests")
                 }
             }
-            // Wave 16A: the second SHARED feature screen, same primary-Button
+            //THE SECOND SHARED FEATURE SCREEN, SAME PRIMARY-BUTTON
             // treatment right next to Requests. The screen renders the honest
             // feature-disabled pane on web (flag off, no settings UI — see
             // WebAppRoot's Route.UpcomingCalendar entry note).
@@ -408,7 +408,7 @@ private fun ConnectedCard(
                     Text("Calendar")
                 }
             }
-            // Wave 16B: the Seerr credentials pane — the make-requests-work
+            //THE SEERR CREDENTIALS PANE — THE MAKE-REQUESTS-WORK
             // entry (server URL + API key, persist + test + disconnect).
             // Primary Button like Requests (real feature), placed beside it.
             if (onOpenSeerr != null) {
@@ -416,7 +416,7 @@ private fun ConnectedCard(
                     Text("Seerr")
                 }
             }
-            // Wave 13C E2E hook: gated entry into WebDiagnosticsPane. An
+            //  E2E hook: gated entry into WebDiagnosticsPane. An
             // OutlinedButton so it reads as secondary tooling next to the
             // primary actions — the pane is a verification surface, not a
             // user-facing feature.

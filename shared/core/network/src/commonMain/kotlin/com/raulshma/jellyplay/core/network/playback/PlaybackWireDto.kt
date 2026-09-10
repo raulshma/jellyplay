@@ -5,8 +5,8 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
- * Minimal Jellyfin wire DTOs for the Phase W wasm playback client
- * (docs/kmp-migration-plan.md §Phase W chunk 2), following the chunk-1
+ * Minimal Jellyfin wire DTOs for the wasm playback client
+ * (docs/kmp-migration-plan.md § chunk 2), following the chunk-1
  * `auth/AuthWireDto.kt` pattern. Response mapping semantics mirror the
  * jvmShared `PlaybackApiClientImpl` + `JellyfinDtoMappers.toMediaSource` /
  * `toMediaStream` (via `library/` mappers, shared with the detail path).
@@ -21,7 +21,7 @@ data class PlaybackInfoRequestDtoWire(
     @SerialName("MediaSourceId") val mediaSourceId: String? = null,
     /**
      * wasm v1 cut: no codec-constraining DeviceProfile is sent (no codec
-     * negotiation exists until HtmlVideoEngine lands in a later Phase W
+     * negotiation exists until HtmlVideoEngine lands in a later 
      * chunk and documents the web `<video>` profile) — the flag table in
      * `resolveWasmPlaybackFlags` still honors PlaybackMode/LiveStreamOption.
      */

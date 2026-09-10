@@ -8,7 +8,7 @@ import androidx.savedstate.serialization.SavedStateConfiguration
 /**
  * Platform seam for the saveable Navigation 3 back stack created by
  * [rememberNavigationState] — the fix for the Android launch crash found by
- * the wave-21 device pass (phone app FATAL on first composition:
+ * the device pass (phone app FATAL on first composition:
  * `IllegalArgumentException: You must pass a SavedStateConfiguration.
  * serializersModule configured to handle NavKey open polymorphism`).
  *

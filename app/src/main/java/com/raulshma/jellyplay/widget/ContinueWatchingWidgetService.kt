@@ -28,7 +28,7 @@ import org.koin.mp.KoinPlatform
  *
  * The factory is an adapter over [WidgetGridFactory], which owns the
  * lifecycle choreography (memory-first snapshot + poster read → dims refresh
- * → async warmup repaint — STA-11; deep-link `getViewAt`); this class
+ * → async warmup repaint; deep-link `getViewAt`); this class
  * supplies the Continue Watching seams: the snapshot read (capped by the
  * widget's per-widget item count), the progress-bar/remaining-text row
  * decisions, and the `jellyfin://media/{id}` fill-in link. It is also the
@@ -39,7 +39,7 @@ import org.koin.mp.KoinPlatform
  *
  * `onDataSetChanged` runs on the main thread; the list is read from the
  * store's eagerly-warmed [kotlinx.coroutines.flow.StateFlow] snapshot —
- * memory-only, no DataStore disk IO (STA-11: the former bounded ≤1 s
+ * memory-only, no DataStore disk IO (the former bounded ≤1 s
  * blocking warm-up read is gone from the bind; a cold snapshot renders the
  * empty view and the skeleton's async tail repaints once the eager flow
  * lands). The [ContinueWatchingWidget] calls
@@ -49,7 +49,7 @@ import org.koin.mp.KoinPlatform
 class ContinueWatchingWidgetService : RemoteViewsService() {
 
     override fun onGetViewFactory(intent: Intent): RemoteViewsFactory {
-        // Koin accessors (wave 8B — Hilt removal): resolved straight from the
+        // Koin accessors (Hilt removal): resolved straight from the
         // application container, same shape the EntryPoint call used.
         val koin = KoinPlatform.getKoin()!!
         val store: WidgetDataStore = koin.get()
@@ -77,14 +77,14 @@ class ContinueWatchingWidgetService : RemoteViewsService() {
         remoteAdapterViewId = R.id.cw_widget_list,
     ) {
 
-        // STA-11: memory-only — the StateFlow's current value; the store's
+        // Memory-only — the StateFlow's current value; the store's
         // *Snapshot() accessor (bounded BLOCKING disk read when cold) is
         // deliberately NOT taken on the bind path anymore.
         override fun snapshotProvider(): List<MediaItem> =
             capped(store.continueWatching.value)
 
         /**
-         * STA-11: the async tail's cold-snapshot wait — the skeleton's
+         * The async tail's cold-snapshot wait — the skeleton's
          * [awaitWarmed] on this store's flow, capped by the same take-rule
          * as [snapshotProvider].
          */
@@ -109,7 +109,7 @@ class ContinueWatchingWidgetService : RemoteViewsService() {
             return entries.associate { it.imageId to urlToBitmap[it.url] }
         }
 
-        // STA-11: the bind's memory-only poster read — same entries as
+        // The bind's memory-only poster read — same entries as
         // [preloadPosters], resolved against WidgetImageLoader.cachedPoster
         // instead of a fetch.
         override fun cachedPosters(items: List<MediaItem>): Map<String, Bitmap?> =

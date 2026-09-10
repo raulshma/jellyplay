@@ -124,7 +124,7 @@ class ServerManagementViewModel(
      * ([SelfSignedTrustMatcher], reached through the jvmShared facade): the
      * layer honors a portless grant on ANY port of the host, so exact string
      * membership here would show the toggle OFF for a grant every handshake
-     * honors (wave-21 review finding — display drift).
+     * honors (review finding — display drift).
      */
     fun isSelfSignedTrustGranted(server: ServerInfo): Boolean =
         SelfSignedTrustMatcher.isAddressGranted(selfSignedTrustHosts, normalizeServerAddress(server.address))

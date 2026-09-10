@@ -28,7 +28,7 @@ import javax.inject.Singleton
 
 @Singleton
 class JellyfinApiEngine @Inject constructor(
-    // LazyProvider ctor params (the local seam in LazyProvider.kt, audit BIN-8 — this used
+    // LazyProvider ctor params (the local seam in LazyProvider.kt — this used
     // to be dagger.Lazy, back when a Hilt graph constructed this class)
     // defer construction of both the Jellyfin SDK instance and the shared
     // OkHttpClient off the synchronous Koin graph: MainViewModel's
@@ -73,7 +73,7 @@ class JellyfinApiEngine @Inject constructor(
     @Volatile
     private var _api: ApiClient? = null
 
-    // C3 note: internal since the Phase C3 audit — referenced only inside this
+    // Internal — referenced only inside this
     // module (core/data reads currentServer/currentUser/okHttpClient, never the
     // raw ApiClient). The ported tests land in this module's jvmTest, where
     // internal stays visible.
@@ -105,7 +105,7 @@ class JellyfinApiEngine @Inject constructor(
         }
     }
 
-    // C3 note: internal — see the note on [api].
+    // Internal — see the note on [api].
     internal fun requireApi(): ApiClient =
         _api ?: throw IllegalStateException("Not connected to server")
 

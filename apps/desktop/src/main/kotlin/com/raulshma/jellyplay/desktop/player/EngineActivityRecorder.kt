@@ -14,7 +14,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 
 /**
- * Wave 13B session-harness instrumentation: records what every engine the
+ *  session-harness instrumentation: records what every engine the
  * [DesktopMpvPlayerEngineFactory] creates actually DID — playback-state
  * transitions, isPlaying observations and sampled playhead positions — on the
  * recorder's own SupervisorJob scope, without touching the shared modules.
@@ -25,8 +25,7 @@ import java.util.concurrent.CopyOnWriteArrayList
  * classification helpers the harness asserts with and the unit tests cover).
  *
  * Koin single (DesktopPlayerModule); app-lifetime, like the factory it serves.
- * Per-engine observers are CANCELLED on engine release (CONC-1, 2026-09 audit
- * — they used to run for the process lifetime, so N released engines kept N×3
+ * Per-engine observers are CANCELLED on engine release (they used to run for the process lifetime, so N released engines kept N×3
  * coroutines waking 2×/s against dead JNA handles): the desktop factory wires
  * every engine it owns into [onEngineReleased], which cancels the three observer
  * jobs while KEEPING the record itself (accumulated evidence is the point —
@@ -113,7 +112,7 @@ class EngineActivityRecorder {
     }
 
     /**
-     * Stops the per-engine observers for a released engine (CONC-1): cancels
+     * Stops the per-engine observers for a released engine: cancels
      * the three [recordCreated] jobs — the 500 ms position sampler and the two
      * flow collectors — while keeping everything recorded up to the release
      * point (post-release samples would read a dead handle anyway). Idempotent

@@ -625,7 +625,7 @@ class AdminStatisticsRepositoryImpl constructor(
             while (true) {
                 val page = fetchNextPage() ?: break
                 val items = mapRows(page.second)
-                // Retain at most MAX_SCAN_RESULTS stubs (DATA-5): without the
+                // Retain at most MAX_SCAN_RESULTS stubs: without the
                 // cap the scan accumulates the whole server library in memory
                 // and then serializes it as one JSON blob — on a 50k-item
                 // server a transient double allocation (list + multi-MB

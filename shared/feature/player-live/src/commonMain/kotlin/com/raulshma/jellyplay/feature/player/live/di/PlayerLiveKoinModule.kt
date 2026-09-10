@@ -8,7 +8,7 @@ import org.koin.dsl.module
 
 /**
  * Koin construction owner for the live player feature (docs/kmp-migration-
- * plan.md §Phase V3, player-live conveyor). The HiltViewModel/@Inject
+ * plan.md , player-live conveyor). The HiltViewModel/@Inject
  * annotations were stripped at the move — Koin is the single constructor
  * owner (one framework per type). Ctor deps split three ways:
  *  - LiveTvRepository/PlaybackRepository/ImageUrlProvider are Koin-native
@@ -27,7 +27,7 @@ import org.koin.dsl.module
  * that LivePlayerScreen renders via the app bus (livetv conveyor's
  * LiveTvUserMessage seam shape).
  *
- * Wave 19C (live PiP): the VM's `pip` seam is a fourth platform slot —
+ *  (live PiP): the VM's `pip` seam is a fourth platform slot —
  * Android binds it in `androidPlayerLiveModule` (adapter over the legacy
  * core:data singleton the host PlayerActivity reads). Like the audio seam it
  * has no jvm definition, so the desktop registration here stays

@@ -14,7 +14,7 @@ kotlin {
         namespace = "com.raulshma.jellyplay.shared.feature.player.audio"
         compileSdk = 37
         minSdk = 28
-        // Compose-resources packaging (wave-21 device-pass finding): with the
+        // Compose-resources packaging (device-pass finding): with the
         // AGP-9 KMP library plugin, android resources are OFF by default, so
         // copyAndroidMainComposeResourcesToAndroidAssets never runs and the
         // app APK ships this module's Res accessors with NO backing .cvr
@@ -81,7 +81,7 @@ kotlin {
         // AudioPlayerCast seam — the Hilt-owned legacy CastManager stays
         // APP-side (HiltInteropModule) because constructing it here would be
         // a second framework per type (details DetailAudioPlayback
-        // precedent; dies at Phase X).
+        // precedent; dies at ).
     }
 }
 

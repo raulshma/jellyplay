@@ -7,10 +7,10 @@ import androidx.compose.ui.graphics.layer.GraphicsLayer
  * Platform seam for the heatmap's share action (insights conveyor; admin
  * StatisticsExport + editor EditorFilePicker shapes). Android keeps the
  * share body in the androidMain actual: the HeatmapGrid subtree is recorded
- * into [captureLayer] by the grid's draw pass (the F-23 GraphicsLayer capture
+ * into [captureLayer] by the grid's draw pass (the GraphicsLayer capture
  * — a subtree snapshot, not the whole-window `View.drawToBitmap` the legacy
  * body used) and handed to the cacheDir PNG / FileProvider / ACTION_SEND
- * chooser handoff. Desktop (wave 20C) snapshots the same recorded subtree
+ * chooser handoff. Desktop snapshots the same recorded subtree
  * (`toImageBitmap` is platform-common) and hands the PNG to the system image
  * viewer — a tmpdir file + AWT Desktop.open, the StatisticsExport desktop
  * precedent, since there is no ACTION_SEND equivalent.

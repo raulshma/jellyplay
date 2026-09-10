@@ -237,7 +237,7 @@ class AuthApiClientImplTest {
 
     @Test
     fun `connectToServer tls-trust probe failure fails after exactly one attempt`() = runTest {
-        // Wave-21 review round: no retry can fix an untrusted certificate —
+        // No retry can fix an untrusted certificate —
         // retrying just delayed the Add Server trust dialog by 3 probe
         // rounds. The probe wraps TLS-trust failures into a non-retryable
         // signal; RetryPolicy must stop after attempt 1 while the original

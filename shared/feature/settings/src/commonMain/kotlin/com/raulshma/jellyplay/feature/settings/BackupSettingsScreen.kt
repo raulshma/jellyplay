@@ -51,7 +51,7 @@ fun BackupSettingsScreen(
     val messenger = rememberSettingsMessenger()
 
     // SAF/native pickers behind the platform seam: Android returns the SAF
-    // launcher facade, desktop (wave 20C) an AWT FileDialog facade — both
+    // launcher facade, desktop an AWT FileDialog facade — both
     // deliver opaque uri strings straight into the ViewModel below.
     val backupPicker = rememberBackupFilePicker(
         onExportUriSelected = { viewModel.exportSettings(it) },

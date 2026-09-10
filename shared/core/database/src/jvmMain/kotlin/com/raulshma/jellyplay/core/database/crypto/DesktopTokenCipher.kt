@@ -11,7 +11,7 @@ import javax.crypto.spec.SecretKeySpec
  * Production [TokenCipher] for desktop: a generated AES-256 key stored in a
  * `token.key` file under [keyDirectory] (owner-only permissions where the OS
  * supports them). Weaker than Android's hardware-backed Keystore by design of
- * desktop OSes; revisit in Phase V1 hardening if the desktop security work
+ * desktop OSes; revisit in a later hardening pass if the desktop security work
  * wants an OS-keychain-backed provider instead.
  */
 class DesktopTokenCipher(

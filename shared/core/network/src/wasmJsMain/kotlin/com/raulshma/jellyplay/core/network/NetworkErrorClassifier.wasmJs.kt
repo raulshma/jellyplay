@@ -4,7 +4,7 @@ import io.ktor.client.plugins.HttpRequestTimeoutException
 import io.ktor.utils.io.errors.IOException
 
 /**
- * wasmJs actual of the Phase W retry-classifier seam (see RetryPolicy.kt in
+ * wasmJs actual of the retry-classifier seam (see RetryPolicy.kt in
  * commonMain). On wasm the HTTP stack is Ktor on the fetch-backed Js engine,
  * so the transient-network taxonomy is:
  *  - [HttpRequestTimeoutException]: the HttpTimeout plugin fired (request or

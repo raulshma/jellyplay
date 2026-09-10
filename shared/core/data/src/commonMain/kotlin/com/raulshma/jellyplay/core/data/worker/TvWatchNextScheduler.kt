@@ -14,7 +14,7 @@ package com.raulshma.jellyplay.core.data.worker
  * One-shot by design: there is no periodic schedule; see `TvWatchNextWorker`
  * for the rationale.
  *
- * Home conveyor (plan §Phase X cutover): the interface was split out of the
+ * Home conveyor: the interface was split out of the
  * legacy `worker/TvWatchNextScheduler.kt` (same package) so the shared home
  * feature's commonMain can reference it — the PlaybackSyncScheduler
  * precedent. The WorkManager-backed `TvWatchNextSchedulerImpl` stays in the

@@ -119,7 +119,7 @@ sealed class LanguageSettingsDialog {
 // App display languages. MUST stay in lockstep with `resourceConfigurations` in
 // app/build.gradle.kts — that list is the source of truth for which locales have
 // shipped values-<locale>/strings.xml. Advertising a locale here without translations
-// causes a silent fallback to English (analysis F-19), so never add an entry whose
+// causes a silent fallback to English, so never add an entry whose
 // tag isn't also in resourceConfigurations.
 internal val appLanguages = listOf(
     null to "System Default",

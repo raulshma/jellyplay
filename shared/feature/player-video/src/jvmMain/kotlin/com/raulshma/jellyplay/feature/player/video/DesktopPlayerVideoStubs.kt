@@ -31,13 +31,13 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.emptyFlow
 
 /**
- * Desktop (jvmMain) stubs for the wave-8C video player seams: the desktop
- * playback host has been live since wave 9A (SwingPanel/HWND surface +
+ * Desktop (jvmMain) stubs for the video player seams: the desktop
+ * playback host has been live (SwingPanel/HWND surface +
  * Route.VideoPlayer unguarded on Windows), but the seams that still have no
  * desktop implementation (media session, cast, PiP, font install, subtitle
  * preview, audio focus) resolve to no-ops here, mirroring the
  * desktopMusicMessageBusModule precedent. The content-URI IO members stopped
- * being stubs in wave 20C — the desktop pickers deliver `file:` URIs and
+ * being stubs — the desktop pickers deliver `file:` URIs and
  * [DesktopVideoPlayerPlatform] reads them (see [pickedLocalFile]). The
  * jvmTest suite builds its own fakes and never resolves Koin.
  */
@@ -248,7 +248,7 @@ internal fun pickedLocalFile(uri: String): File? =
 /**
  * Desktop actual of the [VideoPlayerPlatform] aggregate seam: no platform
  * media stack yet, so the low-RAM gate is false and the controller factories
- * return no-ops. Content-URI IO (wave 20C) resolves the desktop pickers'
+ * return no-ops. Content-URI IO resolves the desktop pickers'
  * `file:` URIs to real file length/bytes — the subtitle upload flow depends
  * on it — while anything else still reads 0/empty; the offline probe reports
  * unknown.

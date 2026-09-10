@@ -168,7 +168,7 @@ jobs:
       - name: Build web wasm bundle (production)
         run: ./gradlew :apps:web:wasmJsBrowserDistribution --stacktrace
 
-      # BIN-5b (audit): write <name>.gz sidecars for every *.wasm/*.js/*.css
+      # Write <name>.gz sidecars for every *.wasm/*.js/*.css
       # inside the distribution BEFORE the zip step below (it takes the whole
       # directory verbatim), so self-hosters can serve them with nginx
       # `gzip_static on;` / Caddy `file_server precompressed` instead of

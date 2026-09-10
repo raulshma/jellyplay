@@ -16,7 +16,7 @@ import kotlinx.coroutines.withContext
 
 /**
  * Android actual of the [HeatmapShare] seam. The legacy body captured the
- * whole window via `View.drawToBitmap`; the F-23 revisit replaced that with a
+ * whole window via `View.drawToBitmap`; a later revision replaced that with a
  * GraphicsLayer subtree capture — the grid records itself into
  * [captureLayer] on every draw pass (see [WatchProgressHeatmapScreen]'s
  * HeatmapGrid), and `toImageBitmap()` snapshots exactly that subtree, so the

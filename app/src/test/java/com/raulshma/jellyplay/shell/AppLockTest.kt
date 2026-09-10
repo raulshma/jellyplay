@@ -6,7 +6,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Wave 20E pins for the app-lock plumbing shared by both hosts:
+ * Pins for the app-lock plumbing shared by both hosts:
  *
  *  - [AppLockState] — the Koin-single unlocked flag hoisted off
  *    MainActivity's former compose-local `isPinUnlocked` state. The holder is

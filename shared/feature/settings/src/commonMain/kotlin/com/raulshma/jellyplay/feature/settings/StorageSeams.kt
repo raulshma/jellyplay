@@ -45,7 +45,7 @@ data class StorageSizeEstimate(
 /**
  * Platform seam for the auto-download work-manager sync the legacy VM reached
  * through `AutoDownloadScheduler.sync()` (Android WorkManager enqueue/cancel;
- * non-suspend, fire-and-forget). Desktop has no scheduler yet — Wave 2
+ * non-suspend, fire-and-forget). Desktop has no scheduler yet — the desktop module
  * registers a no-op at the Koin edge.
  */
 fun interface AutoDownloadSync {

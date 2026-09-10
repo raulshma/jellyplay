@@ -63,9 +63,9 @@ class MainActivity : FragmentActivity() {
     private val viewModel: MainViewModel by viewModels { KoinViewModelFactory }
 
     // Cross-cutting shell infrastructure, resolved from the Koin container
-    // (wave 8B — Hilt removal) instead of re-exported through MainViewModel —
+    // instead of re-exported through MainViewModel —
     // the ViewModel exposes only the signals it owns plus the coordinator
-    // seam. STA-12 (2026-09 perf audit): the four ShellInfra-bundled members
+    // seam. The four ShellInfra-bundled members
     // became Lazy PROVIDERS (mirroring audioPlaybackManagerLazy below) so
     // MainActivity.onCreate constructs none of them — JellyPlayApp resolves
     // the bus/network pair at their composition branches and the
@@ -89,7 +89,7 @@ class MainActivity : FragmentActivity() {
     private val audioPlaybackManagerLazy: kotlin.Lazy<AudioPlaybackManager> =
         lazy { KoinPlatform.getKoin()!!.get() }
 
-    // App-scoped lock flag (wave 20E): hoisted off the former compose-local
+    // App-scoped lock flag: hoisted off the former compose-local
     // `isPinUnlocked` mutableStateOf so PlayerActivity's redirect check (the
     // media-notification class-name-PendingIntent bypass fix) reads the SAME
     // flag this gate renders. Same resolution pattern as the shell infra
@@ -111,7 +111,7 @@ class MainActivity : FragmentActivity() {
     }
 
     // Flipped by the cast-init coroutine kicked off in onCreate just before
-    // setContent (STA-6): whether the one-time CastContext initialization
+    // setContent: whether the one-time CastContext initialization
     // succeeded. Held as plain mutableStateOf — NOT remember-cached at the
     // read site — so the hidden media-route button in setContent composes the
     // moment it flips true (a frame or two after the first composition), and
@@ -146,7 +146,7 @@ class MainActivity : FragmentActivity() {
         // hasSystemFeature binder call) used to run synchronously here, before
         // setContent, putting both straight into TTID — the splash cannot
         // release until onCreate + the first composition finish. It now runs
-        // in the coroutine kicked off just before setContent below (STA-6);
+        // in the coroutine kicked off just before setContent below;
         // every later getSharedInstance caller (the hidden route button
         // there, CastManager, GoogleCastStrategy) still hits the cached
         // singleton.
@@ -189,7 +189,7 @@ class MainActivity : FragmentActivity() {
         handleIncomingIntent(intent)
 
         // Bundled once here so the shell host's five cross-cutting services
-        // travel to JellyPlayApp → MainContent as one value. STA-12: all
+        // travel to JellyPlayApp → MainContent as one value. All
         // five are lazy providers — nothing below resolves any Koin single;
         // each `.value` fires at the consumer's first real use (see
         // ShellInfra's KDoc).
@@ -229,7 +229,7 @@ class MainActivity : FragmentActivity() {
             }
         }
 
-        // STA-6: the CastContext init, kicked off here so it runs CONCURRENTLY
+        // The CastContext init, kicked off here so it runs CONCURRENTLY
         // with setContent instead of serially before it — onCreate (and thus
         // TTID) no longer pays the Dynamite dex load + hasSystemFeature binder
         // call. Still on Main (getSharedInstance is main-thread-only, the API
@@ -253,7 +253,7 @@ class MainActivity : FragmentActivity() {
         }
         setContent {
             val preferences by viewModel.preferences.collectAsStateWithLifecycle()
-            // The unlocked flag lives in the app-scoped holder (wave 20E) —
+            // The unlocked flag lives in the app-scoped holder —
             // collected here so the gate below recomposes exactly like the
             // former compose-local isPinUnlocked state did.
             val pinUnlocked by appLockState.unlocked.collectAsStateWithLifecycle()
@@ -262,7 +262,7 @@ class MainActivity : FragmentActivity() {
             val context = androidx.compose.ui.platform.LocalContext.current
 
             // Hidden Cast media-route button, composed only once the onCreate
-            // cast-init coroutine (kicked off just before setContent, STA-6)
+            // cast-init coroutine (kicked off just before setContent)
             // reports success — so setUpMediaRouteButton resolves the cached
             // singleton and does no dex I/O. Reading castPreinitialized
             // directly (no remember {}) subscribes this call site, so the

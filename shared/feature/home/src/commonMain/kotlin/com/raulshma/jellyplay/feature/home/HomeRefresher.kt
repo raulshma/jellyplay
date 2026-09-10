@@ -974,7 +974,7 @@ internal class HomeRefresher(
     private suspend fun fetchRecentlyGrabbed() {
         val now = timeSource.today(ZoneOffset.systemDefault())
         val end = now.plusDays(30)
-        // Wave 15B: ArrRepository takes kotlinx.datetime.LocalDate now; the
+        //ARRREPOSITORY TAKES KOTLINX.DATETIME.LOCALDATE NOW; THE
         // home pipeline keeps java.time (TimeSource seam) and converts at the
         // boundary.
         arrRepository.refreshCalendar(now.toKotlinLocalDate(), end.toKotlinLocalDate())

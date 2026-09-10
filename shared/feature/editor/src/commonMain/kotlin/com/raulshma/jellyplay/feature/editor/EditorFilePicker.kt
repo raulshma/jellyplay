@@ -11,7 +11,7 @@ import org.jetbrains.compose.resources.StringResource
  * plus the contentResolver byte read that used to live in
  * EditorViewModel.uploadImageFromUri/uploadSubtitleFromUri (the
  * `@ApplicationContext Context` ctor param died with the move); the desktop
- * actual (wave 20A) opens the native AWT FileDialog the player's document
+ * actual opens the native AWT FileDialog the player's document
  * picker already uses, advisory-filtered to image extensions for the Images
  * tab and unfiltered for the Subtitles tab (Android's any-type launch).
  *

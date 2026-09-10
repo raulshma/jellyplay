@@ -10,7 +10,7 @@ import kotlin.test.assertTrue
 import kotlinx.coroutines.test.runTest
 
 /**
- * Wave 21B: the desktop storage actual walks/clears the roots the desktop
+ *: the desktop storage actual walks/clears the roots the desktop
  * data seams own — `<dataDir>/downloads` (DesktopDownloadStorageLayout's
  * root, nested music subtree included) and `<configDir>/http-cache`
  * (DesktopNetworkModule's OkHttp cache) — with the image bucket delegating

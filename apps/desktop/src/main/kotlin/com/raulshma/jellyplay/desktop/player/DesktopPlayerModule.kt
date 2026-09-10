@@ -16,7 +16,7 @@ import org.koin.core.module.Module
 import org.koin.dsl.module
 
 /**
- * Desktop player wiring (Phase V2 + waves 9A/9B).
+ * Desktop player wiring.
  *
  * - Video: [PlayerEngineFactory] is bound here (the shared
  *   desktopPlayerVideoModule deliberately does not bind it — MpvDesktopEngine
@@ -54,7 +54,7 @@ import org.koin.dsl.module
  * `manager.start()` twin) is invoked from Main.kt after startKoin.
  */
 val desktopPlayerModule: Module = module {
-    // Wave 13B session harness: app-lifetime recorder of everything the video
+    //  session harness: app-lifetime recorder of everything the video
     // factory creates (engine + surface branch + state/position activity).
     // Observation only — see EngineActivityRecorder.
     single { EngineActivityRecorder() }

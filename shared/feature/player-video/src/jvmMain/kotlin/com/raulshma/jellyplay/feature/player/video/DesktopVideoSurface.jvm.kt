@@ -16,10 +16,10 @@ import java.awt.event.HierarchyEvent
 import javax.swing.JPanel
 
 /**
- * Desktop actual of the engine video-surface seam (wave 9A): a SwingPanel
+ * Desktop actual of the engine video-surface seam: a SwingPanel
  * hosting a heavyweight [Canvas] whose HWND mpv embeds into via `wid`.
  *
- * Wave 12B dispatch: engines implementing [SoftwareFrameVideoSurface] (mpv
+ *  dispatch: engines implementing [SoftwareFrameVideoSurface] (mpv
  * render-API software renderer) render through DesktopSoftwareVideoPane — a
  * plain Compose Canvas — when the machine's sw support smoke-passed; see that
  * pane for the pixel pipeline. The engine factory prefers that path EVERYWHERE
@@ -62,7 +62,7 @@ internal actual fun EngineVideoSurface(
     onSurfaceUpdate: () -> Unit,
     onBoundsChanged: (Int, Int, Int, Int) -> Unit,
 ) {
-    // Wave 12B dispatch: engines whose video output is CPU frame buffers (mpv
+    //  dispatch: engines whose video output is CPU frame buffers (mpv
     // render-API software backend) host through the Compose Canvas pane instead — no child
     // window. Selected ONLY when the sw surface actually smoke-passed on this
     // machine's libmpv; every other engine keeps the exact SwingPanel/HWND
@@ -86,7 +86,7 @@ internal actual fun EngineVideoSurface(
         )
         return
     }
-    // SwingPanel/HWND host. Wave 14B: this composes BEFORE the engine exists
+    // SwingPanel/HWND host.: this composes BEFORE the engine exists
     // (engine == null) — mpv's `wid` is ctor-time, so the child window must be
     // realized while DesktopMpvPlayerEngineFactory waits for the handle; see
     // the commonMain seam KDoc for the full null-engine contract. The call

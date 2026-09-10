@@ -2,7 +2,7 @@ package com.raulshma.jellyplay.feature.settings.platform
 
 /**
  * The desktop image-cache handle behind [StorageAreas]' image-cache bucket
- * and clear action (wave 21B). The desktop image pipeline is Coil, and its
+ * and clear action. The desktop image pipeline is Coil, and its
  * persistent cache is NOT memory-only: coil3's default desktop loader (the
  * app shell's Main.kt configures no custom disk cache) writes decoded files
  * to the coil3 process-wide singleton disk cache under the SYSTEM TEMP

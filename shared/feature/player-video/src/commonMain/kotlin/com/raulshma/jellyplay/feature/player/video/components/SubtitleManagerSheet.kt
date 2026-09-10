@@ -168,7 +168,7 @@ fun SubtitleManagerSheet(
     onUseSubtitle: (String) -> Unit = {},
     // Upload tab
     isUploading: Boolean,
-    // KMP seam (wave 7C): the picked SAF document travels as its string form
+    // KMP seam: the picked SAF document travels as its string form
     // (android.net.Uri died with the commonMain move); the Android host
     // re-parses it at the call site.
     onUpload: (String, String, String?, Boolean, Boolean) -> Unit,
@@ -1115,7 +1115,7 @@ private fun UploadTab(
     var selectedFileName by rememberSaveable { mutableStateOf("") }
     val selectFileBtnFocus = rememberTvFocusState()
 
-    // KMP seam (wave 7C): the SAF launcher moved behind the
+    // KMP seam: the SAF launcher moved behind the
     // rememberSubtitleUploadPicker expect/actual (EditorFilePicker precedent);
     // the Android actual is the verbatim OpenDocument launcher.
     val filePicker = rememberSubtitleUploadPicker { uri, fileName ->

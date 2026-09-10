@@ -1,4 +1,4 @@
-# Baseline-profile generation lane (STA-8 follow-up): the consumer plugin's
+# Baseline-profile generation lane: the consumer plugin's
 # saveInSrc fallback tree (app/src/phoneRelease/generated/baselineProfiles) has
 # never been populated — every non-CI release build (local assembles,
 # sideloads, macrobenchmarks against local APKs) therefore ships with ZERO

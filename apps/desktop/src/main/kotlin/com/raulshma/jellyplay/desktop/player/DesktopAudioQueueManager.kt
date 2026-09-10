@@ -35,7 +35,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 /**
- * Desktop audio playback core (wave 9B): real queue + transport over a
+ * Desktop audio playback core: real queue + transport over a
  * dedicated audio-only [MpvDesktopEngine] (`vo=null` — audio tracks never open
  * a video output).
  *
@@ -86,7 +86,7 @@ import kotlinx.coroutines.launch
  *    `setGaplessEnabled` keep the observable state flows but there is no
  *    crossfader; track changes are load-file boundaries, so a small gap can
  *    be heard. Crossfade parity needs a second engine instance (later item).
- *    Gapless (mpv playlist-driven auto-advance) was SPIKED for wave 14C and
+ *    Gapless (mpv playlist-driven auto-advance) was SPIKED for and
  *    declined on evidence: feeding the next item via `loadfile … append-play`
  *    under the production engine options (`keep-open=yes`,
  *    `gapless-audio=weak`) makes mpv advance itself — END_FILE(EOF) for the
@@ -96,7 +96,7 @@ import kotlinx.coroutines.launch
  *    start the next item), and (b) makes current-item identity depend on
  *    mpv's shadow playlist, which every queue mutation below (remove/move/
  *    shuffle/undo/skip) would have to mirror. That re-couples the whole
- *    case-by-case parity surface to playlist plumbing wave 9B deliberately
+ *    case-by-case parity surface to playlist plumbing deliberately
  *    replaced ("the queue list IS the truth"); revisit only behind a
  *    dedicated engine contract for playlist identity.
  *  - **Queue pre-warm is next-item-only** — Android builds MediaItems for
@@ -134,7 +134,7 @@ import kotlinx.coroutines.launch
  *  - **Main-thread guard** — Android asserts `Looper.myLooper() == main` on
  *    every mutation; the desktop twin asserts the AWT EDT (the app's
  *     Dispatchers.Main). Injectable so tests can disable it.
- *  - **Audio effects are REAL via the engine's mpv `af` chain (wave 14C)** —
+ *  - **Audio effects are REAL via the engine's mpv `af` chain** —
  *    the shared AudioEffectsManager desktop impl ([DesktopAudioEffectsManager])
  *    keeps the full state machine and computes the final per-track ReplayGain
  *    here; every mutation is folded into `EngineConfig.audioEffects` and

@@ -17,8 +17,8 @@ import com.raulshma.jellyplay.widget.skeleton.RecommendationWorkerSkeleton
 import kotlinx.coroutines.flow.first
 
 /**
- * Plain CoroutineWorker constructed by [AppWidgetWorkerFactory] (wave 8B —
- * Hilt removal: the former Hilt worker assisted-injection ctor became this
+ * Plain CoroutineWorker constructed by [AppWidgetWorkerFactory]
+ * (Hilt removal: the former Hilt worker assisted-injection ctor became this
  * explicit constructor; deps resolve from the Koin container). A thin adapter
  * over [RecommendationWorkerSkeleton], which owns the guard → fetch →
  * empty-keep → persist → retry-fold chassis; this class supplies the Library

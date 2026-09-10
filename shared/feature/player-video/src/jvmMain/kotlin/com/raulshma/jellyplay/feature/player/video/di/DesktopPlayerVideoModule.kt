@@ -25,21 +25,21 @@ import org.koin.core.module.Module
 import org.koin.dsl.module
 
 /**
- * Desktop wiring for the video player (wave 8C): the VideoPlayerViewModel is
+ * Desktop wiring for the video player: the VideoPlayerViewModel is
  * commonMain and live-resolvable here. Every repository/DataStore dep
  * resolves from the shared modules the desktop root already loads
  * (dataJvmModule / datastoreCommonModule / desktopDataModule) — including
  * [StreamingSubtitleStore], the real file-backed store in desktopDataModule
- * since the wave 18B jvmShared promotion of its impl (it was a throwing
+ * since the jvmShared promotion of its impl (it was a throwing
  * empty-store stub before that).
  *
- * Wave 9A: the desktop playback host is live (SwingPanel/HWND surface +
+ *: the desktop playback host is live (SwingPanel/HWND surface +
  * Route.VideoPlayer unguarded on Windows), and the per-session engine
  * factory is NOT bound here — [PlayerEngineFactory] must return an mpv
  * engine carrying the composing surface's HWND, which only the app layer
  * can build (MpvDesktopEngine lives in apps/desktop), so apps/desktop's
  * DesktopPlayerModule owns that binding and delegates EXTERNAL picks to the
- * public NoOpPlayerEngineFactory. Wave-8C no-op seam bindings stay here;
+ * public NoOpPlayerEngineFactory.  no-op seam bindings stay here;
  * they still cover non-Windows JVMs where the route stays guarded. The
  * jvmTest suite never resolves Koin — it builds its own fakes.
  */

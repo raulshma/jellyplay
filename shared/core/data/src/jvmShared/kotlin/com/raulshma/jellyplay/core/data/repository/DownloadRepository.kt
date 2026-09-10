@@ -35,7 +35,7 @@ interface DownloadRepository : OfflineDownloadWriter {
 
     /**
      * Live byte/speed progress for in-flight downloads, keyed by download id
-     * — the hot companion to [getAllDownloads]. Perf audit: the 2 s transfer
+     * — the hot companion to [getAllDownloads]. The 2 s transfer
      * ticker's DAO write invalidates the whole `downloads` table, and
      * [getAllDownloads]' change filter (id order + per-item bytes/status)
      * deliberately forwards byte movement for consumers that render live

@@ -33,7 +33,7 @@ import org.koin.mp.KoinPlatform
  * 7_400_0xx request-code namespace).
  */
 /**
- * Koin accessors (wave 8B — Hilt removal): resolved straight from the
+ * Koin accessors (Hilt removal): resolved straight from the
  * application container, same try/catch shape the EntryPoint call used.
  */
 private fun koinWidgetDataStore(): com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore =

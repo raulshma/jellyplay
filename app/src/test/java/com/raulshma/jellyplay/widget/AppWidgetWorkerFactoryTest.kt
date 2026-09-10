@@ -22,7 +22,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * Pins the app-widget WorkerFactory wiring (wave 8B — the Hilt-worker
+ * Pins the app-widget WorkerFactory wiring (the Hilt-worker
  * replacement): the two recommendation workers are constructed with their
  * dependencies resolved from the Koin container, an unknown worker class
  * name returns null so the delegating chain keeps walking, and with no

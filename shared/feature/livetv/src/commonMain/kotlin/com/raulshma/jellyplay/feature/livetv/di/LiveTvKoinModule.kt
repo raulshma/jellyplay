@@ -14,13 +14,13 @@ import org.koin.dsl.module
 
 /**
  * Koin construction owner for the Live TV feature (docs/kmp-migration-plan.md
- * §Phase V3, fourth conveyor item after search, library and music). The
+ * , fourth conveyor item after search, library and music). The
  * HiltViewModel/@Inject annotations were stripped at the move — Koin is the
  * single constructor owner (one framework per type). Ctor deps split three
  * ways:
  *  - MediaRepository is still Hilt-owned in the legacy data shim and reaches
  *    Koin through the app composition root's Hilt interop module (dies at
- *    Phase X);
+ *    );
  *  - ImageUrlProvider, TimeSource (shared data) and AppRuntimeStateStore
  *    (shared datastore) resolve from the C4 shared-module graph;
  *  - VideoMiniPlayerState resolves from dataJvmModule (V3 livetv conveyor:

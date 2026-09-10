@@ -14,7 +14,7 @@ import kotlinx.coroutines.flow.StateFlow
  * MainContent. Pure parameter aggregation — each service stays owned by its
  * provider; the ViewModel-owned signals stay on [com.raulshma.jellyplay.MainViewModel].
  *
- * STA-12 (2026-09 perf audit): every field is a lazy provider, not just
+ * Every field is a lazy provider, not just
  * [audioPlaybackManagerLazy]. The former eager fields forced MainActivity's
  * onCreate to construct UserMessageBus, NetworkMonitor (whose constructor
  * registers a connectivity callback) and the remote-control objects on the

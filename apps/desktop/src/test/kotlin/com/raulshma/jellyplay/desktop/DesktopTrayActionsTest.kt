@@ -4,7 +4,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 /**
- * Wave 13A: programmatic cover for the tray menu actions extracted out of
+ *: programmatic cover for the tray menu actions extracted out of
  * Main.kt's inline lambdas (docs/perf/desktop-skia-baseline.md limits §6).
  *
  * Scope honesty: a real ComposeWindow is a java.awt Window subclass and

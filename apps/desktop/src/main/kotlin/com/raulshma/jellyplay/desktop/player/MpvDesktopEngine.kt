@@ -69,7 +69,7 @@ import kotlinx.coroutines.launch
 
 /**
  * Desktop playback backend: libmpv over JNA, implementing the common
- * [MediaEngine] contract (plan §Phase V2). Property/event surface mirrors the
+ * [MediaEngine] contract (. Property/event surface mirrors the
  * Android `MpvPlayerEngine` where semantics are shared — same observed
  * properties, same END_FILE/eof-reached state mapping, same error taxonomy —
  * so the shared player feature behaves identically on both platforms when it
@@ -80,14 +80,14 @@ import kotlinx.coroutines.launch
  * on Windows) from the Compose/Swing layer. Headless setups (tests) pass
  * [extraOptions] with `vo=null`/`ao=null`.
  *
- * The former V2 cuts are closed (wave 17B, the "when the player feature
+ * The former V2 cuts are closed (the "when the player feature
  * migrates" trigger fired waves ago): `EngineConfig.videoEffects` is applied
  * as a live mpv `vf` chain + `video-rotate` property ([DesktopVideoEffectChain]
  * builds the strings — see its shared→mpv parity table), screenshot capture
  * goes through mpv's `screenshot-to-file` ([captureVideoFrame], the desktop
  * seam's COMPOSE engine hook), and [currentCues] accumulates the live-cue
  * history from the observed `sub-text` (with a live `sub-start` read) like
- * the Android MPV engine's `accumulateMpvSubText`. Wave 14C closed the
+ * the Android MPV engine's `accumulateMpvSubText`.  closed the
  * audio-effects cut before that: `EngineConfig.audioEffects` is applied as a
  * live mpv `af` chain + `audio-channels`/`pitch` properties
  * ([DesktopAudioEffectChain] builds the strings — see its Android→mpv parity
@@ -96,7 +96,7 @@ import kotlinx.coroutines.launch
  * (`replayGainEffectiveDb`), mirroring where Android's `AudioPlaybackManager`
  * applies the gain.
  *
- * Open (wave 12B) so [MpvSoftwareRenderEngine] can subclass it for the
+ * Open so [MpvSoftwareRenderEngine] can subclass it for the
  * render-API software-render path with three small hooks ([liveMpvHandle],
  * [onBeforeContextDestroy], [hwdecFor]) instead of duplicating the ~800-line
  * contract implementation.
@@ -119,7 +119,7 @@ open class MpvDesktopEngine(
     override val capabilities: EngineCapabilities = EngineCapabilities(
         supportsPip = false,          // no PiP on desktop; windowing covers it
         supportsMiniMode = false,
-        // Wave 17B: `sub-text`/`sub-start` now accumulate into currentCues
+        //`SUB-TEXT`/`SUB-START` NOW ACCUMULATE INTO CURRENTCUES
         // exactly like the Android MPV engine (EngineCapabilityMatrix.MPV).
         supportsCues = true,
         supportsAudioDelay = true,
@@ -230,7 +230,7 @@ open class MpvDesktopEngine(
     private val released = AtomicBoolean(false)
 
     /**
-     * Optional release notification (CONC-1, 2026-09 audit): invoked EXACTLY
+     * Optional release notification: invoked EXACTLY
      * ONCE from [release] — right after the released CAS wins, before any
      * teardown — so instrumentation attached to the constructed engine (the
      * session harness's EngineActivityRecorder, wired by the factory) can stop
@@ -343,7 +343,7 @@ open class MpvDesktopEngine(
     @Volatile private var lastAppliedPitch: Double? = 1.0
     @Volatile private var lastAppliedAfChain: String? = null
 
-    // Video twin of the same discipline (wave 17B): `vf` writes re-init the
+    // Video twin of the same discipline: `vf` writes re-init the
     // video pipeline, so only actual CHANGES are pushed, and an all-defaults
     // config performs zero writes. `video-rotate` starts at mpv's own 0.
     @Volatile private var lastAppliedVfChain: String? = null
@@ -357,7 +357,7 @@ open class MpvDesktopEngine(
     private fun aliveCtx(): Pointer? = if (released.get()) null else ctx
 
     /**
-     * Engine-variant hook (wave 12B): the live mpv handle for subclasses that
+     * Engine-variant hook: the live mpv handle for subclasses that
      * attach auxiliary contexts tied to it — [MpvSoftwareRenderEngine]'s
      * render-API context is created on this handle at construction. Returns
      * null post-[release] like [aliveCtx].
@@ -365,7 +365,7 @@ open class MpvDesktopEngine(
     protected fun liveMpvHandle(): Pointer? = aliveCtx()
 
     /**
-     * Engine-variant hook (wave 12B): emits into the engine's [errorFlow]
+     * Engine-variant hook: emits into the engine's [errorFlow]
      * during construction (e.g. sw render-context creation failure) —
      * subclasses cannot touch the private backing flow directly.
      */
@@ -463,7 +463,7 @@ open class MpvDesktopEngine(
             "demuxer-cache-time" -> data?.let { _bufferedPositionMs.value = it.getLong(0) * 1000 }
             // Contract: null when no line is active — mpv emits "" on clear.
             // Non-blank lines also fold into the currentCues history (G10,
-            // same pairing as Android's accumulateMpvSubText). Wave 17B fix:
+            // same pairing as Android's accumulateMpvSubText).  fix:
             // FORMAT_STRING event data is a char** (client.h hands the value
             // behind one pointer) — reading the bytes AT data yielded pointer
             // garbage; dereference first.
@@ -600,7 +600,7 @@ open class MpvDesktopEngine(
     }
 
     /**
-     * Engine-variant hook (wave 12B): invoked exactly once during [release],
+     * Engine-variant hook: invoked exactly once during [release],
      * after the event thread has drained/joined (or the leak path bailed) but
      * BEFORE [MpvLib.mpv_terminate_destroy] — the last point where auxiliary
      * native contexts tied to [ctx] can be torn down against a live core, as
@@ -841,7 +841,7 @@ open class MpvDesktopEngine(
     }
 
     /**
-     * Wave 14C: push the audio-effects config onto mpv — the `af` chain
+     *: push the audio-effects config onto mpv — the `af` chain
      * ([DesktopAudioEffectChain.buildAfChain]), the channel-mix
      * `audio-channels` property, and the `pitch` property. All three are
      * runtime-settable; mpv rebuilds the audio chain on write — which is why
@@ -873,7 +873,7 @@ open class MpvDesktopEngine(
     }
 
     /**
-     * Wave 17B: push the video-effects config onto mpv — the `vf` chain
+     *: push the video-effects config onto mpv — the `vf` chain
      * ([DesktopVideoEffectChain.buildVfChain]) and the rotation via the
      * separate `video-rotate` property (rotation is an output transform, not
      * a filter). Both are runtime-settable; mpv rebuilds the video pipeline
@@ -933,10 +933,10 @@ open class MpvDesktopEngine(
         _currentCues.value = mergeAccumulatedCues(_currentCues.value, listOf(incoming))
     }
 
-    // ── Screenshot capture (wave 17B) ────────────────────────────────────────
+    // ── Screenshot capture ────────────────────────────────────────
 
     /**
-     * Wave 17B: captures the currently-displayed video frame (subtitles
+     *: captures the currently-displayed video frame (subtitles
      * composited, like Android's PixelCopy path) via mpv's
      * `screenshot-to-file` into a temp PNG, decodes it into the platform
      * bitmap the desktop capture seam consumes, and deletes the temp file.

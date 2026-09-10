@@ -41,7 +41,7 @@ private class LoadedFlag {
  *
  * **Storage**: injects the shared `"user_prefs"` DataStore (Koin definition
  * in `di.DatastoreKoinModules` / platform `di.AndroidDatastoreModule` since
- * Phase C4) — same file as `UserPreferencesStore` and the other extracted
+ * ) — same file as `UserPreferencesStore` and the other extracted
  * stores, never a second DataStore instance (AndroidX forbids that).
  */
 class WidgetDataStore constructor(

@@ -62,7 +62,7 @@ import kotlin.math.abs
  */
 class FloatingPlayerService : Service() {
 
-    // Koin single (wave 8B — Hilt removal); lazy keeps construction off the
+    // Koin single (Hilt removal); lazy keeps construction off the
     // service's creation path until the overlay actually reads state.
     private val floatingPlayerState: FloatingPlayerState by lazy { KoinPlatform.getKoin()!!.get() }
 

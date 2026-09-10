@@ -7,7 +7,7 @@ import org.koin.dsl.module
 
 /**
  * Koin construction owner for the Requests feature (docs/kmp-migration-plan.md
- * §Phase V3, eleventh conveyor item after search, library, music, livetv,
+ * , eleventh conveyor item after search, library, music, livetv,
  * downloads, syncplay, settings, admin, editor and calendar). The
  * HiltViewModel/@Inject annotations were stripped at the move — Koin is the
  * single constructor owner (one framework per type). All three ctor deps were

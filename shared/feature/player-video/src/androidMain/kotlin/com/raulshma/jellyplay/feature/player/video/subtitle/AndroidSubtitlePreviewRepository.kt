@@ -16,7 +16,7 @@ import java.io.File
  * Resolves and parses the active external subtitle track into a [TimedCue] list
  * for the subtitle-sync preview.
  *
- * (Wave 8C: renamed from `SubtitlePreviewRepository` — the commonMain
+ * (renamed from `SubtitlePreviewRepository` — the commonMain
  * [SubtitlePreviewRepository] seam interface took the old name; this class is
  * its Android actual.) Covers side-loaded text subs (user pick,
  * provider download, Jellyfin/OpenSubtitles/Wyzie delivery) and the text subs

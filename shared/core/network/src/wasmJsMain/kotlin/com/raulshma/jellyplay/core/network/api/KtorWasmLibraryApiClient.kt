@@ -56,7 +56,7 @@ import com.raulshma.jellyplay.core.network.library.toStudio
 import io.ktor.client.HttpClient
 
 /**
- * Phase W chunk 2: the wasmJs [LibraryApiClient] — a hand-rolled Ktor
+ *  chunk 2: the wasmJs [LibraryApiClient] — a hand-rolled Ktor
  * replacement for the jvmShared `LibraryApiClientImpl` (Jellyfin SDK +
  * OkHttp). Endpoint paths, query parameters (including the SDK's non-null
  * `enableTotalRecordCount=true`/`enableImages=true` defaults on `/Items`)

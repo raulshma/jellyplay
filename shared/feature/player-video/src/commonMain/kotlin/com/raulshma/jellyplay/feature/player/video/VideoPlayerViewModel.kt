@@ -131,7 +131,7 @@ private fun computeOverlay(positionMs: Long, input: SegmentCalculatorInput): Seg
 
 class VideoPlayerViewModel(
     /**
-     * Aggregate platform seam (wave 8C): replaces the former
+     * Aggregate platform seam: replaces the former
      * `android.content.Context` slot — carries the low-RAM gate, subtitle
      * content-URI IO, the offline-media probe and the factory methods for the
      * androidMain trickplay/cast-controller/audio-lifecycle collaborators.
@@ -176,13 +176,13 @@ class VideoPlayerViewModel(
     private val appearanceStore: com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore,
     private val networkOfflineStore: com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore,
     /**
-     * Media-session factory seam (wave 8C): replaces the former legacy
+     * Media-session factory seam: replaces the former legacy
      * `PlaybackSessionManager` slot — that type is now captured inside the
      * androidMain factory alongside the Context the controller needs.
      */
     private val mediaSessionFactory: VideoMediaSessionFactory,
     // Public: the screen's cast UI (route button, disconnect handler) needs the
-    // manager directly; every playback-side use stays private above. Wave 8C:
+    // manager directly; every playback-side use stays private above.:
     // typed as the commonMain seam interface — the androidMain screen reaches
     // the full legacy surface through the `androidCastManager` extension.
     val castManager: CastManager,
@@ -866,7 +866,7 @@ class VideoPlayerViewModel(
         },
         getPlaybackMode = { _uiState.value.uiPrefs.playbackMode },
         directPlayFallbackNotice = { errorText ->
-            // KMP seam (wave 7C): compose-resources' suspend resolver replaces
+            // KMP seam: compose-resources' suspend resolver replaces
             // context.getString; the lambda contract went suspend with it
             // (DetailStrings precedent) — EngineEventCoordinator invokes it
             // from its error-flow collector, already a coroutine.
@@ -2524,7 +2524,7 @@ class VideoPlayerViewModel(
     }
 
     /**
-     * Trickplay thumbnail as an opaque platform handle (wave 8C seam): the
+     * Trickplay thumbnail as an opaque platform handle (seam): the
      * screen narrows it back to [PlatformBitmap] (Bitmap/BufferedImage) at the
      * call site.
      */

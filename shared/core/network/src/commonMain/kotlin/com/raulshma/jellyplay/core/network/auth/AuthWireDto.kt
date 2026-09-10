@@ -7,8 +7,8 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 
 /**
- * Minimal Jellyfin wire DTOs for the Phase W wasm auth client
- * (docs/kmp-migration-plan.md §Phase W chunk 1).
+ * Minimal Jellyfin wire DTOs for the wasm auth client
+ * (docs/kmp-migration-plan.md § chunk 1).
  *
  * The domain models in `shared/core/model` are @Serializable in their own
  * (camelCase, app-shaped) format — the WIRE format is Jellyfin's PascalCase
@@ -79,7 +79,7 @@ data class QuickConnectResultDto(
  * `deviceProfile` stays a raw [JsonElement] placeholder: the JVM engine sends
  * the full codec-negotiating DeviceProfile built by `DeviceProfileProvider`,
  * which has no wasm equivalent yet (web playback lands with HtmlVideoEngine,
- * Phase W chunk 3+) — the wasm client omits it and documents the cut.
+ *  chunk 3+) — the wasm client omits it and documents the cut.
  */
 @Serializable
 data class ClientCapabilitiesWireDto(

@@ -14,7 +14,7 @@ kotlin {
         namespace = "com.raulshma.jellyplay.shared.feature.calendar"
         compileSdk = 37
         minSdk = 28
-        // Compose-resources packaging (wave-21 device-pass finding): with the
+        // Compose-resources packaging (device-pass finding): with the
         // AGP-9 KMP library plugin, android resources are OFF by default, so
         // copyAndroidMainComposeResourcesToAndroidAssets never runs and the
         // app APK ships this module's Res accessors with NO backing .cvr
@@ -27,7 +27,7 @@ kotlin {
         }
     }
 
-    // Wave 16A: the calendar slice follows requests (wave 15B) onto the web
+    //THE CALENDAR SLICE FOLLOWS REQUESTS ONTO THE WEB
     // target — the web shell renders UpcomingCalendarScreen behind the
     // Route.UpcomingCalendar entry. The old blocker (java.time in commonMain)
     // is gone: the grouping helpers, VM month windows, and screen date-picker
@@ -64,7 +64,7 @@ kotlin {
             implementation(project(":shared:core:model"))
             implementation(project(":shared:core:designsystem"))
             implementation(project(":shared:core:data"))
-            // Wave 16A: the whole module runs kotlinx.datetime (wasmJs
+            //THE WHOLE MODULE RUNS KOTLINX.DATETIME (WASMJS
             // purification) — grouping helpers, VM month windows, and the
             // date-picker epoch math included.
             implementation(libs.kotlinx.datetime)
@@ -114,10 +114,10 @@ kotlin {
         getByName("androidMain").dependencies {
             // The user-messenger actual bridges to the app-wide
             // LocalUserMessageBus, which still lives in the legacy Android-only
-            // :core:ui shim (plan §V1a list) until its own conveyor move — same
+            // :core:ui shim until its own conveyor move — same
             // transition-period relationship as the livetv conveyor's
             // AndroidLiveTvMessenger (4th documented shared→legacy :core:ui
-            // androidMain edge after library/livetv/admin), dies at Phase X.
+            // androidMain edge after library/livetv/admin), dies at .
             implementation(project(":core:ui"))
         }
     }

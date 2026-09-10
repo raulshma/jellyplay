@@ -40,8 +40,7 @@ import kotlin.concurrent.Volatile
  */
 
 /**
- * Defers the default warm pass out of the t=0 first-frame window (STA-4,
- * 2026-09 perf audit). The Koin single is eager and fires [SettingsSearchCatalogPrewarmer.warm]
+ * Defers the default warm pass out of the t=0 first-frame window. The Koin single is eager and fires [SettingsSearchCatalogPrewarmer.warm]
  * inside startKoin, so the 771 blocking per-entry reads (each an APK-asset
  * DEFLATE inflation on Android) were contending the Default/IO threads
  * against first-frame classloading and rendering for the first seconds of

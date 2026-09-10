@@ -6,7 +6,7 @@ import kotlin.test.assertTrue
 import kotlin.test.fail
 
 /**
- * Koin-registration ratchet guard (docs/kmp-migration-plan.md §Phase X, the
+ * Koin-registration ratchet guard (docs/kmp-migration-plan.md §, the
  * arrqueue + subtitle-tester lessons, plan lines ~1402-1408).
  *
  * Koin module registration is runtime-only wiring: compile gates and
@@ -25,9 +25,9 @@ import kotlin.test.fail
  * automatically; forgetting the one-line registration fails this test with
  * the exact fix.
  *
- * apps/web/Main.kt is covered per-site (wave 15C, the move the KDoc below
- * anticipated): the web shell registers only the slice of the feature graph
- * that has a wasmJs target — requestsModule since wave 15C, more as features
+ * apps/web/Main.kt is covered per-site: the web shell registers only the
+ * slice of the feature graph that has a wasmJs target — requestsModule, more
+ * as features
  * land web targets — so its forward check runs against an explicit
  * ALLOWLIST ([webForwardAllowlist]) with set-equality in BOTH directions:
  * an allowlisted module missing from the web startKoin fails, and a feature
@@ -35,8 +35,7 @@ import kotlin.test.fail
  * allowlist can only grow by a conscious test edit (the same ratchet spirit
  * as the desktop floor below). Desktop forward check + floor stay untouched.
  *
- * Source-scanning on plain text (no PSI) — deliberately cheap, like the
- * plan's "grep both registration files per feature" audit, but executable.
+ * Source-scanning on plain text (no PSI) — deliberately cheap, but executable.
  */
 class KoinModuleRegistrationGuardTest {
 
@@ -58,9 +57,9 @@ class KoinModuleRegistrationGuardTest {
     /**
      * The web shell's forward allowlist: every shared feature module the web
      * startKoin is EXPECTED to register, exactly. apps/web depends on three
-     * features today ([requestsModule] — wave 15C put Route.Requests on the
-     * browser; [calendarModule] — wave 16A put Route.UpcomingCalendar there;
-     * [detailsModule] — wave 16C put Route.SeerrDetail there, the SeerrDetail
+     * features today ([requestsModule] put Route.Requests on the
+     * browser; [calendarModule] put Route.UpcomingCalendar there;
+     * [detailsModule] put Route.SeerrDetail there, the SeerrDetail
      * slice of details' split commonMain module, the MediaDetail cluster's
      * VM/factory defs living in the per-platform androidDetailsModule /
      * desktopDetailsPlatformModule the android/desktop apps register); when
@@ -86,7 +85,7 @@ class KoinModuleRegistrationGuardTest {
 
     /**
      * Ratchet floor: the count of commonMain feature modules, re-measured at
-     * each housekeeping pass. 21 as of the wave-9C re-count (23 features;
+     * each housekeeping pass. 21 as of the re-count (23 features;
      * subtitle-tester contributes none — androidMain-only — and player-video's
      * defs live in its platform modules androidPlayerVideoModule/
      * desktopPlayerVideoModule, so its commonMain declares no Module val).

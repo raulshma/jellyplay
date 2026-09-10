@@ -13,11 +13,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * Desktop [AudioEffectsManager] (wave 9B state machine, wave 14C DSP half).
+ * Desktop [AudioEffectsManager] (state machine, DSP half).
  *
  * Every state flow is present with the SAME initial values as the Android
  * `AudioEffectsProcessor`, and every setter mutates that in-memory state
- * exactly like the Android one does. Since wave 14C the state is ALSO
+ * exactly like the Android one does. Since the state is ALSO
  * applied as real DSP: [snapshotConfig] folds the full state into the shared
  * [AudioEffectsConfig] and the desktop audio core ([DesktopAudioQueueManager])
  * pushes it onto the audio engine's mpv `af` chain — on load and live on
@@ -34,7 +34,7 @@ import kotlinx.coroutines.flow.asStateFlow
  * Still absent (declared): the visualizer taps — `fftData`/`waveformData`
  * stay empty because mpv offers no in-sink PCM tap without a full render-API
  * audio pull (Android taps the audio session id). `enableVisualizer` is a
- * state-only no-op like wave 9B.
+ * state-only no-op.
  */
 class DesktopAudioEffectsManager : AudioEffectsManager {
 

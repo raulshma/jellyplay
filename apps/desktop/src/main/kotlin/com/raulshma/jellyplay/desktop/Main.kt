@@ -100,7 +100,7 @@ import org.koin.compose.koinInject
 import org.koin.core.context.startKoin
 
 fun main() {
-    // Wave 12A startup baseline: t0 is the literal first statement so every
+    //  startup baseline: t0 is the literal first statement so every
     // mark below measures against true process start. Marks themselves are
     // AtomicLong writes (~zero cost); everything heavier (JSON emission,
     // auto-exit timer) only arms when a jellyplay.perf.* property is set —
@@ -123,7 +123,7 @@ fun main() {
         }
     }
 
-    // Wave 10A crash scaffold: hooks the JVM-wide uncaught-exception handler
+    //  crash scaffold: hooks the JVM-wide uncaught-exception handler
     // BEFORE anything that can throw (Koin graph, player engines, compose
     // window), then consumes the previous session's crash marker — if the
     // last run recorded an uncaught throwable, log it here and surface a
@@ -154,7 +154,7 @@ fun main() {
             dataJvmModule,
             desktopDataModule(paths.dataDirNio),
             desktopPlayerModule,
-            // Video player (wave 8C registration, wave 9A playback): the
+            // Video player (registration, playback): the
             // VideoPlayerViewModel is commonMain and live-resolvable here, the
             // SwingPanel/HWND video surface composes inside Route.VideoPlayer,
             // and desktopPlayerModule supplies the per-session mpv
@@ -164,7 +164,7 @@ fun main() {
             // OSes where no embedded surface exists. The no-op seam bindings in
             // the module still cover those guarded OSes.
             desktopPlayerVideoModule,
-            // V3 feature conveyor: search — LIVE since the Phase X desktop
+            // V3 feature conveyor: search — LIVE since the desktop
             // nav v1 (DesktopAppRoot renders searchSection as a rail
             // destination; Home is the start tab); all VM deps resolve
             // since the MediaRepository cluster flip.
@@ -175,11 +175,11 @@ fun main() {
             libraryModule,
             desktopPhotoExportModule(),
             // …music, third conveyor item — LIVE since Wave wC (browse) and
-            // fully playable since wave 9B: desktopPlayerModule provides the
+            // fully playable since: desktopPlayerModule provides the
             // real desktop audio core (DesktopAudioQueueManager over an
             // audio-only MpvDesktopEngine + DefaultAudioQueueFacade), so
             // play/enqueue/instant-mix drive real playback and track clicks
-            // navigate to the now-live Route.AudioPlayer. Since wave 21B the
+            // navigate to the now-live Route.AudioPlayer. Since the
             // message-bus actual feeds a relay the shell's snackbar host
             // collects (DesktopAppRoot) — error messages surface instead of
             // dropping.
@@ -200,13 +200,13 @@ fun main() {
             // and nav v1 renders syncPlaySection in the rail.
             syncPlayModule,
             // …settings, seventh conveyor item — LIVE since the admin
-            // repositories' Koin flip (Wave wB): the last Hilt-only edges
+            // repositories' Koin flip: the last Hilt-only edges
             // (SettingsViewModel/AboutViewModel's AdminRepository) resolve
             // from dataJvmModule, and nav v1+ renders settingsSection in the
             // rail (with the desktop platform actuals below). Desktop's
             // update-check row went live with the AppUpdate split (Wave xB;
             // AppUpdateRepository resolves from desktopDataModule), and the
-            // storage actuals went REAL with wave 21B (downloads + http-cache
+            // storage actuals went REAL with (downloads + http-cache
             // walked/cleared, Coil's disk cache cleared through the
             // injected image-cache handle).
             settingsModule,
@@ -226,13 +226,13 @@ fun main() {
             adminModule,
 
 
-            // …editor, ninth conveyor item — LIVE since the wave 18B store
+            // …editor, ninth conveyor item — LIVE since the store
             // promotion: StreamingSubtitleStoreImpl moved to jvmShared and
             // desktopDataModule binds the real file-backed store (appdata
             // streaming-subtitles subtree), so the EditorViewModel ctor graph
             // fully resolves and DesktopAppRoot renders editorSection (the
-            // details screen's edit push, admin-gated like Android). Wave 20A
-            // gave the upload sheets native AWT file pickers
+            // details screen's edit push, admin-gated like Android). The
+            // upload sheets use native AWT file pickers
             // (DesktopEditorFilePicker), so upload-from-file works alongside
             // URL image upload and remote/provider subtitle search.
             editorModule,
@@ -271,7 +271,7 @@ fun main() {
             // (WatchHistoryRepository + PlaybackRepository from
             // dataJvmModule, MediaRepository from the flipped cluster), and
             // nav v1 renders insightsSection in the rail. The share seam's
-            // desktop actual (wave 20C) writes a tmpdir PNG and hands it to
+            // desktop actual writes a tmpdir PNG and hands it to
             // the system viewer, so the share button is visible.
             insightsModule,
 
@@ -285,7 +285,7 @@ fun main() {
             // SeerrPreferencesStore/PreferencesEditor from datastoreCommon
             // Module, SeerrSecureCredentialsStore from desktopDatastore
             // Module). Nav v1 registers onboardingSection (reachable from
-            // Shortcuts), and wave 21B added the first-run gate: the shell
+            // Shortcuts), and a later pass added the first-run gate: the shell
             // pushes Route.Onboarding once per authenticated session while
             // the persisted onboarding_completed flag is unset (same pref
             // the Android app gates on; completion through the shared wizard
@@ -298,7 +298,7 @@ fun main() {
             // datastoreCommonModule resolve on desktop.
             arrqueueModule,
 
-            // …auth, Phase X cutover (feature-conveyor transform from the
+            // …auth, cutover (feature-conveyor transform from the
             // legacy :feature:auth): the entire ctor graph resolves on
             // desktop (AuthRepository + ServerDiscoveryRepository from
             // dataJvmModule, LocalNetworkStatus — the auth seam's fun-interface
@@ -306,7 +306,7 @@ fun main() {
             // 17+ local-network permission), NOT core/ui's same-named
             // composition local — from the jvmMain platform pick below), so
             // this registration is live-resolvable — NOT
-            // dormant-for-missing-deps. Wave 19A unified sign-in
+            // dormant-for-missing-deps.  unified sign-in
             // on these shared screens: the signed-out gate
             // (DesktopSignedOutAuthHost) and the signed-in settings drill-ins
             // (DesktopAppRoot's authSection entries) both instantiate these
@@ -314,7 +314,7 @@ fun main() {
             authModule,
             desktopAuthPlatformModule,
 
-            // …player-live, conveyor feature (wave 7B): documented-latent.
+            // …player-live, conveyor feature: documented-latent.
             // The shared live-player ViewModel + LastChannelStore resolve
             // (data/datastore graph), but the three platform seams (engine
             // factory, audio, transcode-reasons renderer) are
@@ -326,12 +326,12 @@ fun main() {
 
 
 
-            // …details, Phase X cutover wave (legacy :feature:details was the
+            // …details, cutover wave (legacy :feature:details was the
             // largest never-conveyor module): registration fully
             // live — every data-layer ctor dep is Koin-native
             // (dataJvmModule/datastoreCommonModule), AudioQueueFacade comes
             // from desktopPlayerModule's DefaultAudioQueueFacade binding
-            // (wave 9B), and the module-local platform seams below supply
+            //, and the module-local platform seams below supply
             // no-op audio/theme playback + the appdata storage probe.
             // DesktopAppRoot wires detailsSection behind every shared
             // screen that pushes a detail route (search results, requests/
@@ -339,7 +339,7 @@ fun main() {
             // instantiate for real.
             detailsModule,
             desktopDetailsPlatformModule(paths.dataDirNio),
-            // Home conveyor: LIVE since the wave 8B desktop wiring — the
+            // Home conveyor: LIVE since the desktop wiring — the
             // four WorkManager/widget-backed HomeViewModel ctor deps
             // (PlaybackSyncScheduler, TvWatchNextScheduler,
             // ContinueWatchingBroadcaster, LibrarySyncHook) resolve to the
@@ -349,8 +349,8 @@ fun main() {
             // than a process start/stop signal).
             coreUiMessageModule,
             homeModule,
-            // …player-audio, wave 7A conveyor (legacy :feature:player:audio
-            // deleted): LIVE since wave 9B — desktopPlayerModule provides the
+            // …player-audio, conveyor (legacy :feature:player:audio
+            // deleted): LIVE since then — desktopPlayerModule provides the
             // four playback/cast ctor deps (AudioQueueManager/
             // AudioEffectsManager/AudioPlayerEngine over the shared
             // DesktopAudioQueueManager single, plus the never-connected
@@ -366,7 +366,7 @@ fun main() {
             // NO registration here: the entire feature (ViewModel, screen,
             // preview engine host, raw-asset factory) lives in the shared
             // module's androidMain — its engine factory and font provider
-            // actuals are Android-only (Koin-owned since wave 8) with no
+            // actuals are Android-only (Koin-owned since then) with no
             // desktop halves — so there is no
             // commonMain Koin module to register. The shared settings-search
             // row for Route.SubtitleTester stays unreachable on desktop
@@ -380,11 +380,11 @@ fun main() {
         )
     }
 
-    // Wave 12A startup mark: Koin graph construction is the first heavy
+    //  startup mark: Koin graph construction is the first heavy
     // milestone of boot (module list above is untouched — no reordering).
     startupPerf.markKoinStarted()
 
-    // V3 downloads conveyor + wave 9B real audio: the download engine (the
+    // V3 downloads conveyor +  real audio: the download engine (the
     // in-process supervisor observing PENDING rows, plus the 6 h
     // auto-download loop) and the desktop audio core's app-lifetime kickoff
     // (persisted queue/state restore + Room persistence observation — the
@@ -392,7 +392,7 @@ fun main() {
     // documented side-effect free; every start() launches its loops on the
     // manager's OWN scope and is idempotent.
     //
-    // STA-2 (2026-09 perf audit): these three gets used to resolve
+    // These three gets used to resolve
     // synchronously here, ON MAIN, building the whole download/audio graph
     // inside the koin→windowShown segment — Room databaseBuilder().build(),
     // DesktopTokenCipher's key-file read-or-create, and DesktopNetworkMonitor's
@@ -410,8 +410,8 @@ fun main() {
     // putIfAbsent BEFORE launching (the ExistingWorkPolicy.KEEP equivalent),
     // and start()'s own pending-rows observer re-kicks through that same
     // reservation.
-    // Shared launcher for the off-critical-path startup work below (STA-2's
-    // manager starts, STA-7's icon decode, STA-3's identity prewarm).
+    // Shared launcher for the off-critical-path startup work below (the
+    // manager starts, the icon decode, the identity prewarm).
     val appScope = koinApp.koin.get<CoroutineScope>(DatastoreQualifiers.applicationScope)
     appScope
         .launch(Dispatchers.Default) {
@@ -427,8 +427,8 @@ fun main() {
             koinApp.koin.get<DesktopPlaybackSyncScheduler>().start()
         }
 
-    // Wave 12A runtime icon (title bar + tray), decoded OFF the pre-window
-    // critical path (STA-7, 2026-09 audit): desktopAppIconOrNull() is a
+    // Runtime icon (title bar + tray), decoded OFF the pre-window
+    // critical path: desktopAppIconOrNull() is a
     // classpath PNG read + Skia decode — small, but it used to run inside a
     // remember {} during the first composition, so the IO + decode sat inside
     // the measured koin→windowShown segment (the largest of the small
@@ -438,13 +438,13 @@ fun main() {
     // today's null when the resource is unreadable — and the Window/Tray/
     // DesktopTitleBar icon slots below pick the painter up on the
     // recomposition that lands it (a frame or two later than the old inline
-    // decode, which is exactly the trade this finding asks for).
+    // decode — the intended trade).
     val appIconState = mutableStateOf<Painter?>(null)
     appScope.launch {
         appIconState.value = desktopAppIconOrNull()
     }
 
-    // STA-3 desktop twin (2026-09 audit): ServerIdentityStore.identity is
+    // Desktop twin of the identity prewarm: ServerIdentityStore.identity is
     // stateIn(Eagerly) on Dispatchers.Default, and DesktopNetworkModule's
     // `?: runBlocking { ensureDeviceId() }` fallback blocks the resolving
     // thread on a first-launch DataStore read+write whenever the network
@@ -475,8 +475,8 @@ fun main() {
     // explicit registration below wins either way (first match loses to it),
     // but serviceLoaderEnabled(false) makes the exclusivity STRUCTURAL
     // instead of registration-order luck: the ServiceLoader factory can
-    // never resurrect its default-client fetcher behind our back (wave-21
-    // review round — it was dormant-first-match-loser; keep it that way by
+    // never resurrect its default-client fetcher behind our back (a
+    // review round found it dormant-first-match-loser; keep it that way by
     // construction). The lambda defers the Koin resolution to the first
     // image load (well after startKoin); crossfade stays the only other
     // tweak.
@@ -492,7 +492,7 @@ fun main() {
                     ),
                 )
             }
-            // DATA-2 (2026-09 perf audit): explicit disk cache, mirroring the
+            // Explicit disk cache, mirroring the
             // Android builder in JellyPlayApplication — desktop previously
             // ran on coil3's default (the process-wide singleton DiskCache
             // under the SYSTEM TEMP directory, sized 2% of that volume
@@ -505,8 +505,7 @@ fun main() {
             // walks ONLY the http-cache subtree, so the image cache is never
             // double-counted; its storage bucket measures through
             // DesktopCoilImageCache, which resolves THIS loader's diskCache —
-            // by construction the same directory it clears, the audit's
-            // directory-match constraint). Like Android, sized inside the
+            // by construction the same directory it clears). Like Android, sized inside the
             // builder lambda: coil builds the DiskCache lazily on first
             // access (the first networked image write), not at ImageLoader
             // construction, and the slice is an Eagerly-stateIn StateFlow, so
@@ -551,10 +550,10 @@ fun main() {
         )
         val showAbout = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
 
-        // Wave 12A: runtime icon for the title bar + tray (packaging icons are
+        // Runtime icon for the title bar + tray (packaging icons are
         // NOT on the runtime classpath — see DesktopAppIcon). The decode was
         // kicked off BEFORE `application {}` on the Koin application scope
-        // (see appIconState above, STA-7); reading .value here subscribes
+        // (see appIconState above); reading .value here subscribes
         // this composition, so the painter pops in on the recomposition that
         // lands it — and a null keeps the pre-existing icon-less fallback
         // (unreadable resource, or the decode simply hasn't landed yet).
@@ -565,7 +564,7 @@ fun main() {
             java.util.concurrent.atomic.AtomicReference<ComposeWindow?>(null)
         }
 
-        // Startup marks, wave 12A. windowShownNanos is the AWT-authoritative
+        // Startup marks. windowShownNanos is the AWT-authoritative
         // visibility event. firstFrameNanos resumes when the frame clock
         // delivers the first frame after this root content applies its initial
         // composition — DesktopAppRoot composes inside this same pass, so it is
@@ -734,7 +733,7 @@ fun main() {
                         showAbout = showAbout.value,
                         onDismissAbout = { showAbout.value = false },
                         previousCrashLogPath = previousCrash?.logFile?.toString(),
-                        // Wave 13B session harness only (screenshots + key
+                        //  session harness only (screenshots + key
                         // injection); unused on every normal boot path.
                         windowRef = windowRef,
                         menuRefreshRequests = menuRefreshRequests,
@@ -743,7 +742,7 @@ fun main() {
             }
         }
 
-        // Wave 12A tray affordance. STRICTLY ADDITIVE semantics: closing the
+        //  tray affordance. STRICTLY ADDITIVE semantics: closing the
         // window still quits (onCloseRequest above is unchanged) — there is no
         // hide-to-tray behavior here. Skipped entirely when the runtime icon
         // failed to load or AWT exposes no system tray (headless/locked-down
@@ -761,7 +760,7 @@ fun main() {
                         // loop turn while guaranteeing every future listener
                         // variant stays on-thread.
                         // Window restore/focus itself lives in DesktopTrayActions
-                        // (wave 13A extraction — null path unit-covered; the
+                        // (extraction — null path unit-covered; the
                         // visual restore still needs a one-time manual eyeball,
                         // see docs/perf notes + gate report).
                         java.awt.EventQueue.invokeLater {

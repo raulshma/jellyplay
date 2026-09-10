@@ -22,7 +22,7 @@ import kotlinx.coroutines.flow.receiveAsFlow
  * confirmation to [messages] (buffered Channel, single collector, never
  * replayed — same semantics as the legacy UserMessageBus). The FS cache wipes
  * delegate to the [StorageAreas] platform seam (the legacy bodies read
- * `Context` directly); Wave 2 binds the actuals at the Koin edge.
+ * `Context` directly); binds the actuals at the Koin edge.
  *
  * Sign-out is intentionally NOT handled here: it is an app-level concern
  * (`MainViewModel.logout`) and is invoked from the screen via the `onLogout`

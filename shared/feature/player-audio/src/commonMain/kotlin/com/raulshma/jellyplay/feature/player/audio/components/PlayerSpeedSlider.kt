@@ -26,7 +26,7 @@ private const val SPEED_STEPS = 34 // ((2.0 - 0.25) / 0.05) - 1
 private const val DPAD_STEP = 0.05f
 
 /**
- * Playback-speed slider with label (wave 7A conveyor): byte-same body as the
+ * Playback-speed slider with label (conveyor): byte-same body as the
  * legacy `:core:ui` `com.raulshma.jellyplay.core.ui.player.SpeedSlider` the
  * speed-picker sheet used to import — that composable is still legacy-module
  * only (the video player's sheet keeps using it there), so this module-local

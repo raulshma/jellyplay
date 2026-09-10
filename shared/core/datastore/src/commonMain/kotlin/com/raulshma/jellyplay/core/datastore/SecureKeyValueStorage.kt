@@ -8,7 +8,7 @@ package com.raulshma.jellyplay.core.datastore
  * Android [androidx.security.crypto.EncryptedSharedPreferences], desktop the
  * OS keyring (Windows Credential Manager / macOS Keychain / Linux Secret
  * Service), web process-lifetime memory only (no persistent secret storage
- * in web v1 — plan §Phase W scope cut).
+ * in web v1 — scope cut).
  *
  * There is deliberately no bulk `clear()`: the desktop keyring backend can't
  * enumerate entries, so credential stores clear by deleting each of their own

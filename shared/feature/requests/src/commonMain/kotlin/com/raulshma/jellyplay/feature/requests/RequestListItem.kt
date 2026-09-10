@@ -387,7 +387,7 @@ private fun rememberRelativeTimeFormats(): RelativeTimeFormats {
 }
 
 /**
- * Wave 15B: the java.time body moved to the [requestAgeMinutes] seam (the
+ *: the java.time body moved to the [requestAgeMinutes] seam (the
  * verbatim `OffsetDateTime`/`Duration` pipeline is the jvmShared actual;
  * wasmJs gets strict-regex + integer-math — see RequestTime.kt). The buckets
  * are integer-math over whole minutes and provably match the old

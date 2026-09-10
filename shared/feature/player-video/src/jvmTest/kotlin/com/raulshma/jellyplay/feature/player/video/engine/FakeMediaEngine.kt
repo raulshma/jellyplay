@@ -13,7 +13,7 @@ import kotlinx.coroutines.flow.flowOf
 /**
  * Behavioural [MediaEngine] test double for jvmTest — the common-pure twin of
  * the Android testFixtures fake that was deleted with `:feature:player:core`
- * (wave 7C; AGP 9 KMP libraries expose no androidMain unit-test compilation,
+ * (AGP 9 KMP libraries expose no androidMain unit-test compilation,
  * so the fixtures had no home). The Android-only `AndroidSurfaceProvider`
  * half (context/View surface creation) is intentionally absent: jvmTest
  * consumers (EngineEventCoordinator-style policy tests) only drive state

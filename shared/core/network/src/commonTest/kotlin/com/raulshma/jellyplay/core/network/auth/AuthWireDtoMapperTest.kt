@@ -8,7 +8,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Pins the Phase W wire DTOs' PascalCase field contract and the
+ * Pins the wire DTOs' PascalCase field contract and the
  * DTO→core.model mapping semantics (mirrors the jvmShared
  * AuthApiClientImpl.toUserInfo / probeServerInfo behavior these tests
  * substitute for). Decoding runs through the same lenient Json configuration

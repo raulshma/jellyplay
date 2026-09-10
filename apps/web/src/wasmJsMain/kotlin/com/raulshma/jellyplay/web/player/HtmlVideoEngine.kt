@@ -41,7 +41,7 @@ import org.w3c.dom.events.Event
 
 /**
  * Web (wasmJs) playback backend: a browser `<video>` element implementing the
- * common [MediaEngine] contract (plan §Phase W). Structure mirrors
+ * common [MediaEngine] contract. Structure mirrors
  * `MpvDesktopEngine` — MutableStateFlow per contract flow, tryEmit-only
  * SharedFlows for errors/subtitle events, scalar mirrors for the synchronous
  * getters, one `engineScope` — with the DOM event pump replacing mpv's event
@@ -85,7 +85,7 @@ import org.w3c.dom.events.Event
  *    non-VTT [SubtitleSource]s (SRT/ASS extraction URLs) are skipped.
  *    Track elements appended after the media is loaded only activate on the
  *    next `load()` (HTML spec re-runs the track algorithm there).
- *    **CORS caveat (reviewer catch):** track fetches inherit the media
+ *    **CORS caveat:** track fetches inherit the media
  *    element's `crossOrigin`, which this engine leaves unset ("no CORS"
  *    mode) — setting it to "anonymous" would flip the VIDEO request to CORS
  *    mode and break servers without CORS headers. Consequence: cross-origin
@@ -348,7 +348,7 @@ class HtmlVideoEngine : MediaEngine {
     }
 
     /**
-     * Stale-event guard for the src-swap race (reviewer catch): load() resets
+     * Stale-event guard for the src-swap race: load() resets
      * the scalars synchronously, but timeupdate/progress/durationchange tasks
      * already queued for the OLD src still run afterward (single JS thread ≠
      * cancelled tasks). Per spec the readyState drops to HAVE_NOTHING when

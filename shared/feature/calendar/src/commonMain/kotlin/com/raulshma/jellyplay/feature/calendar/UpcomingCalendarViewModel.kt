@@ -109,7 +109,7 @@ class UpcomingCalendarViewModel(
             val month = _state.value.visibleMonth
             val from = month.onDay(1)
             val to = month.lastDay
-            // Wave 16A: the whole module runs kotlinx.datetime now (wasmJs
+            //THE WHOLE MODULE RUNS KOTLINX.DATETIME NOW (WASMJS
             // purification) — the repository boundary no longer converts.
             arrRepository.calendar(from, to).collect { items ->
                 if (_state.value.visibleMonth == month) {
@@ -239,6 +239,6 @@ class UpcomingCalendarViewModel(
 /**
  * Today's date in the device timezone, centralised so the screen and VM agree.
  * kotlin.time.Clock + the kotlinx todayIn extension (multiplatform since the
- * wave 16A wasmJs purification — the java.time ZoneId seam is gone).
+ *  wasmJs purification — the java.time ZoneId seam is gone).
  */
 internal fun today(): LocalDate = Clock.System.todayIn(TimeZone.currentSystemDefault())

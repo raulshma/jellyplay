@@ -58,7 +58,7 @@ class AuthRepositoryImpl constructor(
         private val folderIdsCache = LruCache<String, List<String>>(16)
 
         /**
-         * Audit STA-1 (2026-09 perf audit): the network half
+         * The network half
          * of session restore must not gate the first real frame on a live
          * round trip. Address selection probes sequentially (5 s callTimeout
          * per address) and the restore-time token check is an authenticated
@@ -287,7 +287,7 @@ class AuthRepositoryImpl constructor(
             val server = serverEntity.toServerInfo()
             apiClient.setServer(server)
             // Address failover rationale lives on
-            // [selectReachableAddressDefensively]. STA-1: the probes are
+            // [selectReachableAddressDefensively]. The probes are
             // sequential network calls, so the wait is bounded — on timeout
             // the gate below releases on the primary address and selection
             // re-runs off the gate in the deferred pass.
@@ -321,7 +321,7 @@ class AuthRepositoryImpl constructor(
                         } ?: emptyList(),
                     )
                 )
-                // STA-1: the token check is a live authenticated GET — bound it
+                // The token check is a live authenticated GET — bound it
                 // the same way. On timeout the restored session stands exactly
                 // as a successful (or non-401-failed) validation leaves it, so
                 // the first-frame gate releases with the session kept.
@@ -340,7 +340,7 @@ class AuthRepositoryImpl constructor(
     }
 
     /**
-     * STA-1: runs one restore-time network stage bounded by
+     * Runs one restore-time network stage bounded by
      * [RESTORE_NETWORK_STAGE_TIMEOUT_MS]. Returns whether the stage completed
      * within the bound — false on timeout (the stage is abandoned mid-flight),
      * leaving the caller to re-run it in the deferred pass.
@@ -352,7 +352,7 @@ class AuthRepositoryImpl constructor(
         } ?: false
 
     /**
-     * Deferred validation pass (STA-1) on the application scope — never
+     * Deferred validation pass on the application scope — never
      * cancelled for this singleton. A definitive 401 here funnels through
      * validateRestoredSession's disconnect + clearSession, the same teardown
      * the shell already observes through isAuthenticated flipping false, so
@@ -477,7 +477,7 @@ class AuthRepositoryImpl constructor(
      * server — and then stops: no user to adopt, nothing to stamp, success.
      *
      * [restoreSession] deliberately does NOT ride this spine: its network
-     * stages are STA-1 timeout-bounded BETWEEN the steps (address selection
+     * stages are timeout-bounded BETWEEN the steps (address selection
      * before the user is resolved, token validation after `setUser`, each
      * with a deferred re-run off the application scope), its 401 reaction
      * is a teardown (`disconnect` + `clearSession`, with restore still

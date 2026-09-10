@@ -5,9 +5,9 @@ import java.io.OutputStream
 
 /**
  * Platform IO seam for [SettingsViewModel]'s backup/restore + cache-size
- * plumbing (V3 settings conveyor). Android bridges the SAF contentResolver
+ * plumbing. Android bridges the SAF contentResolver
  * streams (create-document output sink, open-document input source) and walks
- * the internal/external cache dirs; desktop (wave 20C) maps the picker's
+ * the internal/external cache dirs; desktop maps the picker's
  * `file:` URIs to plain JDK file streams — the cache-size actual still
  * reports 0 (no desktop storage layout yet).
  *

@@ -26,7 +26,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.random.Random
 
-// C3 note: this client keeps its org.json-based message routing verbatim.
+// This client keeps its org.json-based message routing verbatim.
 // Every emitted [WebSocketEvent] carries the `Data` payload as an
 // org.json object/array because legacy :core:data consumers
 // (RemoteControlReceiver, SyncPlayManager) read those typed fields directly

@@ -39,7 +39,7 @@ import kotlinx.coroutines.launch
 
 /**
  * Android actuals for the commonMain [VideoPlayerScreen] platform seams
- * (wave 9A). Every body here is the screen's pre-split inline code, moved
+ * Every body here is the screen's pre-split inline code, moved
  * verbatim — the transforms are call-shape only (Activity/Context acquired
  * inside the actuals, android.net.Uri stringified at the boundary).
  */
@@ -385,7 +385,7 @@ internal actual fun EngineVideoSurface(
     onSurfaceUpdate: () -> Unit,
     onBoundsChanged: (Int, Int, Int, Int) -> Unit,
 ) {
-    // Wave 14B: the commonMain call site composes this seam unconditionally
+    //THE COMMONMAIN CALL SITE COMPOSES THIS SEAM UNCONDITIONALLY
     // (engine may still be null — the desktop SwingPanel host must mount
     // before the engine exists; see PlatformVideoSurfaceSeam). Android renders
     // nothing while null, exactly what the former screen-side

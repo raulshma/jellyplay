@@ -871,7 +871,7 @@ class DetailViewModel internal constructor(
      * has its own local-source fallback (`resolveLocalSource`) when the server
      * fetch fails — so a downloaded track plays without a server round-trip.
      *
-     * Decision (plan §I): `AudioPlaybackManager.play(itemId)` exists and carries
+     * Decision: `AudioPlaybackManager.play(itemId)` exists and carries
      * the local-source fallback, so it is used directly rather than routing
      * through `onAudioClick` → `Route.AudioPlayer`. `play()` asserts the main
      * thread (ExoPlayer contract); the click handler runs on the main thread.

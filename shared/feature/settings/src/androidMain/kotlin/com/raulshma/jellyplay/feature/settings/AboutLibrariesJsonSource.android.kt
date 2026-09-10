@@ -5,7 +5,7 @@ import android.content.Context
 /**
  * Android actual of the [AboutLibrariesJsonSource] seam — the pre-migration
  * LicensesViewModel asset read, verbatim. Takes the application Context the
- * same way the Wave 1a AndroidSettingsPlatformModule Context-shaped actuals
+ * same way the AndroidSettingsPlatformModule Context-shaped actuals
  * (AndroidSettingsBackupIo / AndroidAppLocaleSetter) do; the composition root
  * constructs it during startKoin.
  */

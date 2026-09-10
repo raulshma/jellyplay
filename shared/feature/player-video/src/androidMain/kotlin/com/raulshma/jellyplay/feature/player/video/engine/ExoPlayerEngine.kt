@@ -595,7 +595,7 @@ class ExoPlayerEngine(
         // point for content protection — the engine never hard-codes Widevine
         // or any scheme, so it stays testable without a DRM framework. A `null`
         // manager (clear content) leaves Media3's default no-DRM path in place.
-        // The provider's return is type-erased (`Any?`, Phase V2 common-ization);
+        // The provider's return is type-erased (`Any?`, common-ization);
         // only a media3 DrmSessionManager attaches — anything else is ignored.
         currentConfig.drmSessionManagerProvider?.provide()?.let { raw ->
             (raw as? DrmSessionManager)?.let { drmManager ->

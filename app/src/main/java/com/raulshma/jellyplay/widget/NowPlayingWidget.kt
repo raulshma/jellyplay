@@ -16,7 +16,7 @@ import kotlinx.coroutines.cancel
 import org.koin.mp.KoinPlatform
 
 /**
- * Koin accessors (wave 8B — Hilt removal): each call site resolves its
+ * Koin accessors (Hilt removal): each call site resolves its
  * dependency straight from the application container, wrapped in the same
  * try/catch the former EntryPointAccessors call used (process-start race →
  * the caller's empty/fallback state, never a crash from the broadcast).

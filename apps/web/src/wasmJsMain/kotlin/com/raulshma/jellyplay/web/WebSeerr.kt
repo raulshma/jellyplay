@@ -36,14 +36,14 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /**
- * Seerr credentials orchestration for the web shell (wave 16B) — the web
+ * Seerr credentials orchestration for the web shell — the web
  * counterpart of `SeerrSettingsViewModel`, cut down to what a browser can
  * actually do: server URL + API key entry. The ViewModel's cookie login
  * paths (Jellyfin/LOCAL) are deliberately ABSENT, not merely hidden: a
  * browser tab cannot set the `Cookie` request header (fetch-forbidden) nor
  * read `Set-Cookie`, so cookie credentials can never function here (see
  * SeerrWireSupport's WASM BROWSER CAVEAT and Main.kt's SEERR-ON-WEB
- * HONESTY). API-key mode is the only web-viable auth, and since wave 16B the
+ * HONESTY). API-key mode is the only web-viable auth, and since the
  * key persists across reloads via [LocalStorageSecureKeyValueStorage].
  *
  * Call order mirrors `SeerrSettingsViewModel.testApiKeyConnection` exactly:
@@ -170,7 +170,7 @@ internal class WebSeerrController(
 }
 
 /**
- * Seerr credentials pane (wave 16B): the first place web users can make the
+ * Seerr credentials pane: the first place web users can make the
  * requests feature work — server URL + API key, persist + test + disconnect.
  * All feedback is plain inline Text (no Scaffold/snackbar host; window.alert
  * is banned — same rules as WebConnectFlow), and every control is

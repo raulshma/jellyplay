@@ -45,7 +45,7 @@ import kotlin.concurrent.withLock
  * [ExoPlayerEngine] rejects them, and the key factory is the backstop.
  *
  * [SimpleCache] requires a single instance per directory, hence this
- * process-wide singleton (Koin-owned since the wave 7C KMP move; was a
+ * process-wide singleton (Koin-owned since the KMP move; was a
  * Hilt `@Singleton`) holder with construction serialized by
  * [initLock] ([ensureCacheLocked]). If the cache directory cannot be opened
  * (disk full, permissions), [getCacheDataSourceFactory] degrades to

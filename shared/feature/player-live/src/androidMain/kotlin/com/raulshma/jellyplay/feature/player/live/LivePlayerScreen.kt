@@ -282,7 +282,7 @@ fun LivePlayerScreen(
                             // LiveErrorBanner (M3 Expressive LoadingIndicator);
                             // disable Media3's native spinner to avoid doubles.
                             setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
-                            // PiP aspect-ratio feed (wave 19C): forward the
+                            // PiP aspect-ratio feed: forward the
                             // decoded video's dimensions so the host
                             // PlayerActivity shapes the PiP window to the
                             // content instead of its 16:9 fallback. Fires on

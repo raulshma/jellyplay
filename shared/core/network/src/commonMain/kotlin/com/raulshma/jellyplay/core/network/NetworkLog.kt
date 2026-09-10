@@ -1,8 +1,8 @@
 package com.raulshma.jellyplay.core.network
 
 /**
- * Minimal logging facade for the shared network module (docs/kmp-migration-plan.md
- * §Phase C3). The jvmShared impls previously called android.util.Log directly;
+ * Minimal logging facade for the shared network module (docs/kmp-migration-plan.md).
+ * The jvmShared impls previously called android.util.Log directly;
  * each target maps onto its native logger:
  *  - androidMain → android.util.Log (identical tags/levels as pre-migration)
  *  - jvmMain     → slf4j (the same backend the Jellyfin SDK logs through)

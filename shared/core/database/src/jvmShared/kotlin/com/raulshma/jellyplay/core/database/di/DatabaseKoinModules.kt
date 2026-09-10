@@ -5,7 +5,7 @@ import org.koin.dsl.module
 
 /**
  * Koin construction owner for the JellyPlayDatabase DAOs
- * (docs/kmp-migration-plan.md §Phase C4). Mirrors the legacy Hilt
+ * (docs/kmp-migration-plan.md ). Mirrors the legacy Hilt
  * DatabaseModule provider list one-to-one; the JellyPlayDatabase instance
  * itself (and the TokenCipher feeding the migration chain) comes from the
  * platform modules [androidDatabaseModule] / [desktopDatabaseModule].

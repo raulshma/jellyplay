@@ -72,7 +72,7 @@ import java.util.concurrent.atomic.AtomicLong
  * resolution. `NetworkStatus.Local` still permits the remote attempt because
  * `OfflineModeManager` keeps [OfflineMode.ONLINE] on a LAN.
  */
-// Phase X MediaRepository cluster flip: moved verbatim from the legacy
+//  MediaRepository cluster flip: moved verbatim from the legacy
 // :core:data shim (same package/name). Ctor-level transforms only — method
 // bodies are byte-identical:
 //  - `@Singleton` / `@Inject` stripped (one framework per type — Koin's

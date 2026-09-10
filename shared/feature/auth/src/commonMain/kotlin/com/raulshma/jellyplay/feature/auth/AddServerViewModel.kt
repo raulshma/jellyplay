@@ -239,7 +239,7 @@ internal fun tlsTrustPromptFor(address: String, throwable: Throwable): String? {
     if (!normalized.startsWith("https://")) return null
     // SSLHandshakeException / SSLPeerUnverifiedException are both SSLException
     // subclasses. The network probe wraps TLS-trust failures in a plain
-    // RuntimeException marker (non-retryable, wave-21 review round) —
+    // RuntimeException marker (non-retryable, review round) —
     // getRootCause walks past the wrapper to the underlying SSLException.
     return if (getRootCause(throwable) is javax.net.ssl.SSLException) normalized else null
 }

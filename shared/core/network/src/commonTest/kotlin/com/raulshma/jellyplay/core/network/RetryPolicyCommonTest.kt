@@ -7,7 +7,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * Pins the pure retry math of [RetryPolicy] after its Phase W chunk 1 move
+ * Pins the pure retry math of [RetryPolicy] after its chunk 1 move
  * to commonMain (backoff windows, ApiException precedence, Retry-After
  * flooring). Runs per target from commonTest; the platform throwable
  * classification (isRetryableNetworkError actuals) stays untested here —

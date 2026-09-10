@@ -4,5 +4,5 @@ import androidx.compose.runtime.Composable
 
 @Composable
 actual fun JellyPlayBackHandler(enabled: Boolean, onBack: () -> Unit) {
-    // Desktop: shell-level Escape handling (plan §V1b).
+    // Desktop: shell-level Escape handling.
 }

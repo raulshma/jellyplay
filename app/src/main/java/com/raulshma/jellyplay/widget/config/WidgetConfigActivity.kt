@@ -70,7 +70,7 @@ import org.koin.mp.KoinPlatform
 abstract class BaseWidgetConfigActivity : ComponentActivity() {
 
     // Per-activity instance via the AndroidX ViewModelStore + Koin factory
-    // (wave 8B — Hilt removal): each config session owns its VM because
+    // (Hilt removal): each config session owns its VM because
     // initWidgetId wires the per-widget store lookup.
     protected val viewModel: WidgetConfigViewModel by viewModels { KoinViewModelFactory }
     protected var widgetId: Int = AppWidgetManager.INVALID_APPWIDGET_ID

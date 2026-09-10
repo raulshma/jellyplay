@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.feature.requests
 
 /**
- * Wave 15B wasmJs purification of the two java.time consumers this module
+ *  wasmJs purification of the two java.time consumers this module
  * had ([RequestListItem]'s relative time, [RequestDetailBottomSheet]'s
  * requested-date row). The JVM/android behavior is byte-preserved by the
  * jvmShared actuals (the literal pre-15B java.time bodies); the wasmJs
@@ -14,7 +14,7 @@ package com.raulshma.jellyplay.feature.requests
  *    offset/bracket-zone suffix — which is exactly what
  *    `LocalDateTime.parse(..., ISO_DATE_TIME)` did on the JVM.
  *
- * DOCUMENTED BROWSER-TZ / LOCALE DEGRADES (web only, wave-11A §8 template):
+ * DOCUMENTED BROWSER-TZ / LOCALE DEGRADES (web only):
  *  - The requested-date row's month abbreviation is FIXED ENGLISH on web
  *    ("MMM d, yyyy" through `DateTimeFormatter.ofPattern` was host-locale
  *    driven on the JVM) — same cut core/ui's DateFormatHelper documents.
@@ -42,7 +42,7 @@ internal expect fun formatRequestedDate(dateStr: String): String?
 
 /**
  * Substitutes the resource templates' count placeholder (`%1$d`, or plain
- * `%d` in some translations) with [value]. Wave 15B: replaces the old
+ * `%d` in some translations) with [value].: replaces the old
  * `String.format(template, n)` calls — kotlin.text.format has no wasmJs
  * actual, and `String.format("%1\$dm", 5L)` produces exactly the same string
  * as the substitution for these plain `%d` placeholders (no flags/width).

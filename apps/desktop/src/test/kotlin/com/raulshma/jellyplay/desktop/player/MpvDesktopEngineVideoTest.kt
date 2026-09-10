@@ -19,11 +19,11 @@ import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.io.TempDir
 
 /**
- * Wave 17B real-libmpv slice for the closed V2 cuts — the live `vf` /
+ *  real-libmpv slice for the closed V2 cuts — the live `vf` /
  * `video-rotate` application ([DesktopVideoEffectChain] through
  * [MpvDesktopEngine.updateConfig]), the [MpvDesktopEngine.captureVideoFrame]
  * screenshot path, and the [MediaEngine.currentCues] live-cue history. Cases
- * mirror the wave-14C real-engine af test's property-level assertion style:
+ * mirror the real-engine af test's property-level assertion style:
  * the engine is driven through the CONTRACT surface, then mpv's own
  * properties are read back.
  *
@@ -214,7 +214,7 @@ class MpvDesktopEngineVideoTest {
             waitUntil(15_000) { engine.playbackState.value == EnginePlaybackState.READY }
 
             // sub-add "auto" selects nothing — pick the sidecar explicitly
-            // (also regression-covers the wave-17B NODE_ARRAY readNode fix:
+            // (also regression-covers the NODE_ARRAY readNode fix:
             // this was empty before it).
             val subTrack = engine.availableTracks.value.firstOrNull { it.type == TrackType.SUBTITLE }
             assertNotNull(subTrack, "sidecar subtitle track listed")

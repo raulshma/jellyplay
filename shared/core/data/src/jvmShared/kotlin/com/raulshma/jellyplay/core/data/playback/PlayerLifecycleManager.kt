@@ -14,7 +14,7 @@ import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
  * engine lifecycle.
  *
  * [PlayerLifecycleCallbacks] itself (same package) moved to
- * :shared:core:player-contract commonMain (Phase W.3) so MediaEngine's
+ * :shared:core:player-contract commonMain, so MediaEngine's
  * supertype is wasm-visible; this manager stayed behind in core:data.
  */
 class PlayerLifecycleManager(

@@ -1,10 +1,10 @@
 name: KMP Build
 
-# Shared-tree (KMP) verification: docs/kmp-migration-plan.md Phase 0.
+# Shared-tree (KMP) verification (see docs/kmp-migration-plan.md).
 # Compiles every configured target of the shared/ tree on all three desktop
 # OSes and runs its common tests. The android-app job below covers the :app
-# module itself — its phone/tv unit tests (audit F5) and the phoneDebug APK
-# compose-resources guard (audit F1).
+# module itself — its phone/tv unit tests and the phoneDebug APK
+# compose-resources guard.
 
 on:
   push:
@@ -68,13 +68,13 @@ jobs:
         # android target verifies via its single androidMain compilation.
         # wasmJs target exists on model/datastore/designsystem/ui/network/
         # data/player-contract plus the calendar/requests/details feature
-        # modules (waves 16A/15B/16C) and the apps:web shell (§Phase W) —
-        # only database ships without it (no Room on wasm v1, plan §Phase W).
-        # data gained wasm in 15B when the Room-backed repositories moved to
-        # its jvmShared source set (the lane line below caught up in 20D —
+        # modules and the apps:web shell —
+        # only database ships without it (no Room on wasm v1).
+        # data gained wasm when the Room-backed repositories moved to
+        # its jvmShared source set (the lane line below caught up later —
         # the target existed but was never compiled here, so wasm-only
         # breakage in core:data surfaced only via :apps:web).
-        # player-contract gained wasm in W.3 when MediaEngine's supertypes
+        # player-contract gained wasm when MediaEngine's supertypes
         # (PlayerLifecycleCallbacks, RemotePlayableEngine) moved into it from
         # shared core:data in the same packages.
         # :apps:web:compileTestKotlinWasmJs compile-gates the web shell's
@@ -234,7 +234,7 @@ jobs:
           done || true
 
       - name: Android app androidTest assembly (relocated player-video UI tests)
-        # Wave 7C: the legacy :feature:player:video androidTest set moved to
+        #THE LEGACY :FEATURE:PLAYER:VIDEO ANDROIDTEST SET MOVED TO
         # :app (AGP KMP library plugins expose no androidTest compilation —
         # syncplay relocation precedent); compile-gate it here.
         run: ./gradlew :app:assemblePhoneDebugAndroidTest --stacktrace
@@ -242,24 +242,24 @@ jobs:
       - name: Shell tests (Koin registration guard + packaging asset suites)
         # :apps:desktop:test hosts the Koin-registration ratchet
         # (KoinModuleRegistrationGuardTest) — startKoin wiring is runtime-only
-        # and invisible to every compile gate (arrqueue/shortcuts lessons,
-        # plan §Phase X) — plus the wave-10A DesktopCrashHandlerTest and
+        # and invisible to every compile gate (arrqueue/shortcuts lessons) — plus
+        # the DesktopCrashHandlerTest and
         # PackagingIconAssetsTest suites, so it must run in CI, not just
         # locally.
         run: ./gradlew :apps:desktop:test --stacktrace
 
   android-app:
-    # Wave 22c audit findings F1 + F5: the :app module previously ran in NO
-    # lane of this workflow — its unit tests existed only as local wave gates
-    # (F5), and the wave-21 P0 (AGP-9 KMP library modules shipping Res
-    # accessors with no backing .cvr assets — fixed by
-    # androidResources { enable = true } in every shared module) had no
-    # automated check because no gate ever opened the built APK (F1). The
+    # The :app module previously ran in NO
+    # lane of this workflow — its unit tests existed only as local runs, and
+    # the AGP-9 KMP library modules shipping Res accessors with no backing
+    # .cvr assets (fixed by androidResources { enable = true } in every shared
+    # module) had no automated check because no gate ever opened the built
+    # APK. The
     # :app:verifyPhoneDebugComposeResources task closes that: it derives the
     # resource-carrying shared modules and their locale sets from the source
     # tree at execution time and asserts every assets/composeResources/
     # <packageOfResClass>/ prefix carries a .cvr entry per locale in the
-    # built phoneDebug APK (wave-21 baseline: 216 = 24 modules x 9 locales).
+    # built phoneDebug APK (baseline: 216 = 24 modules x 9 locales).
     # No explicit Android SDK setup is needed: hosted ubuntu runners ship the
     # SDK (same reliance as release.yml and codeql.yml).
     runs-on: ubuntu-latest
@@ -279,12 +279,12 @@ jobs:
           cache-read-only: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master' }}
 
       - name: App unit tests (phone + tv debug)
-        # F5: run in CI, not just as local wave gates (wave-21 baseline:
+        # Run in CI, not just as local gate runs (baseline:
         # 94 phone / 98 tv tests).
         # :core:notification:testDebugUnitTest closes the dark lane that let
         # its 8 Robolectric suites (67 tests) gate nothing — the exact
         # no-CI-lane failure mode that stranded the legacy core/data suites
-        # (CONTEXT.md); notification is living code, not the Phase-X husk.
+        # (CONTEXT.md); notification is living code, not a husk.
         # :core:data:testDebugUnitTest closes the same dark lane for core:data
         # (worker suites incl. the OfflineWatchSyncContractTest regression
         # pin); the drain-policy bodies themselves run portable in
@@ -298,12 +298,12 @@ jobs:
         # :app:assemblePhoneDebugAndroidTest above).
         run: ./gradlew :app:testPhoneDebugUnitTest :app:testTvDebugUnitTest :core:notification:testDebugUnitTest :core:data:testDebugUnitTest :core:ui:testDebugUnitTest :core:ui:assembleDebugAndroidTest --stacktrace
 
-      - name: Compose-resources APK guard (wave-21 P0 regression guard, F1)
+      - name: Compose-resources APK guard
         # dependsOn assemblePhoneDebug — the guard opens the built APKs.
         run: ./gradlew :app:verifyPhoneDebugComposeResources --stacktrace
 
   desktop-package:
-    # Wave 10A release engineering: packaging dry-run per OS. Proves the
+    #  release engineering: packaging dry-run per OS. Proves the
     # nativeDistributions config stays buildable and produces real installers:
     # :apps:desktop:packageDistributionForCurrentOS picks the targetFormats
     # valid for the runner (ubuntu → deb+rpm, windows → msi with the CMP

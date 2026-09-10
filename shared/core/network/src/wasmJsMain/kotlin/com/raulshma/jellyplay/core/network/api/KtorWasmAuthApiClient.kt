@@ -32,7 +32,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /**
- * Phase W chunk 1: the wasmJs [AuthApiClient] — a hand-rolled Ktor
+ *  chunk 1: the wasmJs [AuthApiClient] — a hand-rolled Ktor
  * replacement for the jvmShared `AuthApiClientImpl` (Jellyfin SDK + OkHttp),
  * mirroring its session discipline and wire behavior.
  *
@@ -65,10 +65,10 @@ import kotlinx.coroutines.withContext
  *    base URL + token from the session state per call, so `setUser`'s
  *    build-client-before-publish ordering collapses to publish-inside-lock.
  *  - The device id is random PER BOOT (no persisted identity on wasm v1);
- *    the server will list each browser session as a new device until Phase W
+ *    the server will list each browser session as a new device until 
  *    persistence lands.
  *  - postCapabilities omits the DeviceProfile (no codec profile on wasm yet
- *    — HtmlVideoEngine lands in a later Phase W chunk).
+ *    — HtmlVideoEngine lands in a later chunk).
  *  - No Dispatchers.IO hop (no such dispatcher on wasm; the fetch engine is
  *    non-blocking).
  */

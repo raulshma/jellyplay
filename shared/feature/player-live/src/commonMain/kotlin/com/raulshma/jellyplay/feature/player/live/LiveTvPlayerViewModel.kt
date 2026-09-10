@@ -75,7 +75,7 @@ private const val LIVE_BUFFERING_TIMEOUT_MS = 20_000L
  * call [LivePlayerEngine.load] on the same instance. The last-watched channel
  * is persisted via [LastChannelStore].
  *
- * Player-live conveyor (wave 7B): the ViewModel moved to commonMain over
+ * Player-live conveyor: the ViewModel moved to commonMain over
  * four seams — [LiveEngineFactory] (platform engine construction), the
  * engine's commonMain state surface ([LivePlayerEngine]; the media3 player
  * handle stays behind the androidMain `Media3LivePlayerEngine` cast),
@@ -87,7 +87,7 @@ private const val LIVE_BUFFERING_TIMEOUT_MS = 20_000L
  * seam) and localized error state stays unresolved until render time
  * ([LivePlayerMessage]).
  *
- * Wave 19C (live PiP): the nullable [pip] seam (androidMain adapter over the
+ *  (live PiP): the nullable [pip] seam (androidMain adapter over the
  * legacy core:data singleton the host Activity reads) arms auto-enter on each
  * successful tune, mirrors play state, installs the remote-action transport
  * (SKIP = channel zap) and tears it all down in [stop] — see [PipController].
@@ -136,7 +136,7 @@ class LiveTvPlayerViewModel(
 
     /**
      * A zap that arrived while the channel list was still loading, deferred
-     * instead of dropped (wave 19C gap: a zap during load silently no-oped;
+     * instead of dropped (gap: a zap during load silently no-oped;
      * the callers that actually hit the window are D-pad/screen zaps — the
      * PiP transport is armed only after an engine exists, and no engine
      * exists during a load window). Exactly ONE zap is retained and a

@@ -16,7 +16,7 @@ package com.raulshma.jellyplay.core.data.worker
  * `worker/PlaybackSyncScheduler.kt` so `SyncStatusStateHolder` (jvmShared)
  * can reference it. Platform actuals: the WorkManager-backed
  * `PlaybackSyncSchedulerImpl` stays in the legacy `:core:data` (workers are
- * Android-side per plan §Phase C4) as a Koin single in
+ * Android-side per plan ) as a Koin single in
  * androidCoreDataModule; desktop runs the in-process
  * [DesktopPlaybackSyncScheduler] (shared jvmMain) once the playback-outbox
  * drainer moved into jvmShared — its outbox drains no longer sit.

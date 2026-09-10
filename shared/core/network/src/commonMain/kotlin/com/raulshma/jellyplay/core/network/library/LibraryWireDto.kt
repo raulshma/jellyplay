@@ -4,8 +4,8 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
- * Minimal Jellyfin wire DTOs for the Phase W wasm library client
- * (docs/kmp-migration-plan.md §Phase W chunk 2), following the chunk-1
+ * Minimal Jellyfin wire DTOs for the wasm library client
+ * (docs/kmp-migration-plan.md § chunk 2), following the chunk-1
  * `auth/AuthWireDto.kt` pattern: PascalCase `@SerialName`s for exactly the
  * fields the library/playback mappers read, decoded with the SDK-lenient
  * shared Json instance (`ignoreUnknownKeys + isLenient`).

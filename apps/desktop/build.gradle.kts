@@ -27,7 +27,7 @@ kotlin {
     jvmToolchain(17)
 }
 
-// Desktop shell (docs/kmp-migration-plan.md §Phase V1b): Compose Window + tray
+// Desktop shell (docs/kmp-migration-plan.md ): Compose Window + tray
 // + menubar + shortcuts over the shared core stack. Feature modules land here
 // one conveyor step at a time (§V1c/V3).
 dependencies {
@@ -40,10 +40,10 @@ dependencies {
     implementation(project(":shared:core:database"))
     implementation(project(":shared:core:network"))
     implementation(project(":shared:core:data"))
-    // MediaEngine contract for the desktop player engine (Phase V2).
+    // MediaEngine contract for the desktop player engine.
     implementation(project(":shared:core:player-contract"))
 
-    // V3 feature conveyor: search — LIVE since the Phase X desktop nav v1
+    // V3 feature conveyor: search — LIVE since the desktop nav v1
     // (DesktopAppRoot's NavDisplay renders searchSection as the start tab).
     implementation(project(":shared:feature:search"))
 
@@ -52,7 +52,7 @@ dependencies {
     // share buttons).
     implementation(project(":shared:feature:library"))
 
-    // …music, third conveyor item — fully LIVE since wave 9B real audio:
+    // …music, third conveyor item — fully LIVE since the real-audio engine:
     // browse since Wave wC, and play/enqueue/instant-mix drive real playback
     // through the DefaultAudioQueueFacade over DesktopAudioQueueManager.
     implementation(project(":shared:feature:music"))
@@ -70,10 +70,10 @@ dependencies {
     implementation(project(":shared:feature:syncplay"))
 
     // …settings, seventh conveyor item — LIVE since the admin repositories'
-    // Koin flip (Wave wB): nav v1+ renders settingsSection in the rail (with
+    // Koin flip: nav v1+ renders settingsSection in the rail (with
     // the desktop platform actuals; Desktop's update-check row since Wave xB).
     implementation(project(":shared:feature:settings"))
-    // Wave 22F dialog pass: the harness names SettingsViewModel directly (the
+    //  dialog pass: the harness names SettingsViewModel directly (the
     // shell's own screens only render settingsSection, so the ViewModel
     // supertype was never on the shell classpath before).
     implementation(libs.lifecycle.viewmodel)
@@ -86,7 +86,7 @@ dependencies {
 
 
 
-    // …editor, ninth conveyor item — LIVE since the wave 18B store
+    // …editor, ninth conveyor item — LIVE since the store
     // promotion: desktopDataModule binds the real StreamingSubtitleStore and
     // DesktopAppRoot renders editorSection (the details screen's edit push,
     // admin-gated like Android).
@@ -117,7 +117,7 @@ dependencies {
 
     // …onboarding, conveyor feature — fully live: nav v1 registers
     // onboardingSection (reachable from Shortcuts and the settings "rerun
-    // setup" row), and since wave 21B the shell gates first run —
+    // setup" row), and since the shell gates first run —
     // DesktopNavScaffold pushes Route.Onboarding once per authenticated
     // session while the persisted onboarding_completed flag is unset
     // (Android's JellyPlayApp gate order and pref; completion flows through
@@ -126,22 +126,22 @@ dependencies {
     implementation(project(":shared:feature:details"))
 
 
-    // …auth, Phase X cutover (feature-conveyor transform): LIVE since wave
-    // 19A unified sign-in — the signed-out gate (DesktopSignedOutAuthHost)
+    // …auth, cutover (feature-conveyor transform): LIVE since the
+    // unified sign-in landing — the signed-out gate (DesktopSignedOutAuthHost)
     // and the signed-in settings drill-ins (DesktopAppRoot's authSection
     // entries) both instantiate these ViewModels; the whole ctor graph is
     // Koin-native here.
     implementation(project(":shared:feature:auth"))
 
 
-    // …home, Phase X cutover feature (the desktop landing screen) — LIVE
-    // since the wave 8B desktop wiring: the four WorkManager/widget-backed
+    // …home, cutover feature (the desktop landing screen) — LIVE
+    // since the desktop wiring: the four WorkManager/widget-backed
     // HomeViewModel ctor deps resolve to the no-op desktop defs in
     // desktopDataModule, and DesktopAppRoot wires homeSection in the rail.
     implementation(project(":shared:feature:home"))
 
 
-    // …player-live, conveyor feature (wave 7B) — module compiles and
+    // …player-live, conveyor feature — module compiles and
     // playerLiveModule is registered LATENT: the player screen + engine
     // factory/audio/renderer seams are Android-only (androidMain) and
     // Route.LiveTvChannelPlayer stays guarded in DesktopAppRoot, so
@@ -149,8 +149,8 @@ dependencies {
     // exists for the shared ViewModel's jvmTest suite.
     implementation(project(":shared:feature:player-live"))
 
-    // …player-audio, wave 7A conveyor (legacy :feature:player:audio deleted):
-    // LIVE since wave 9B real audio — desktopPlayerModule provides the four
+    // …player-audio, conveyor (legacy :feature:player:audio deleted):
+    // LIVE since real audio — desktopPlayerModule provides the four
     // playback/cast ctor deps (DesktopAudioQueueManager implements
     // AudioQueueManager + AudioPlayerEngine over an audio-only MpvDesktop
     // Engine; state-only DesktopAudioEffectsManager; never-connected
@@ -159,7 +159,7 @@ dependencies {
     // clicks open the now-playing screen.
     implementation(project(":shared:feature:player-audio"))
 
-    // …player-video, wave 8C conveyor slice → wave 9A playback LIVE on
+    // …player-video, conveyor slice →  playback LIVE on
     // Windows: the ViewModel/session cluster is commonMain and
     // desktop-resolvable (desktopPlayerVideoModule registers the VM + no-op
     // seam actuals, jvmMain), DesktopAppRoot registers Route.VideoPlayer for
@@ -176,8 +176,8 @@ dependencies {
     implementation(project(":shared:feature:shell"))
 
 
-    // Desktop libmpv binding (MpvDesktopEngine, Phase V2): JNA loads
-    // mpv-2.dll / libmpv.so / libmpv.dylib at runtime; wave 9A also resolves
+    // Desktop libmpv binding (MpvDesktopEngine, ): JNA loads
+    // mpv-2.dll / libmpv.so / libmpv.dylib at runtime; also resolves
     // the surface HWND through Native.getComponentPointer (shared
     // player-video's jvmMain declares its own implementation-scoped jna edge).
     implementation(libs.jna)
@@ -242,7 +242,7 @@ val libmpvToolsDir = rootProject.layout.projectDirectory.dir("tools/mpv")
 // responses. Both URLs and sha256s are pinned; bump the build inside the
 // URLs (and re-hash the archives) to move to a newer mpv — deliberately: the
 // engine's property semantics and the real-engine test expectations were
-// live-probed against this v0.41-era build (wave 17B), and an Aug-2026 git
+// live-probed against this v0.41-era build, and an Aug-2026 git
 // build already showed `vf` readback drift in MpvDesktopEngineVideoTest.
 // The dev archive carries only libmpv-2.dll; the PLAYER archive from the
 // same build supplies lua51.dll, which this libmpv links dynamically
@@ -505,7 +505,7 @@ configurations.all {
     }
 }
 
-// ── Wave 10A release engineering ────────────────────────────────────────────
+// ──  release engineering ────────────────────────────────────────────
 // packageVersion is release-driven: pass -PjellyplayVersion=x.y.z on the
 // release lane (CI desktop-package job does exactly that). jpackage demands
 // a strictly numeric major.minor.build triple — Windows MSI's ProductVersion
@@ -678,14 +678,14 @@ compose.desktop {
     application {
         mainClass = "com.raulshma.jellyplay.desktop.MainKt"
 
-        // BIN-4 (2026-09 perf audit) — deliberately NOT applied: the
+        // Deliberately NOT applied: the
         // suggested -Xms256m/-Xmx2g pins a heap ceiling BELOW the JVM default
         // (25% of physical RAM) on >8 GB machines, a player OOM regression
         // risk. Only add jvmArgs here after A/B-ing via
         // tools/perf/desktop-baseline.sh.
 
         buildTypes.release.proguard {
-            // Ship unsigned minimal packaging for V1; hardening is §Phase X.
+            // Ship unsigned minimal packaging for V1.
             isEnabled = false
         }
         nativeDistributions {

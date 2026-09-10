@@ -13,7 +13,7 @@ import org.koin.dsl.module
 
 /**
  * App-authored Koin definitions for the Android actuals of the settings
- * feature's four seams (V3 settings conveyor Wave 2; wave 8B — Hilt removal:
+ * feature's four seams (Hilt removal:
  * the four legacy impls are Koin-owned now, so each seam resolves its
  * dependency straight from the container instead of through the former
  * SettingsSeamsEntryPoint).

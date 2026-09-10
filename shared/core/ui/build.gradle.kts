@@ -17,7 +17,7 @@ kotlin {
         namespace = "com.raulshma.jellyplay.shared.core.ui"
         compileSdk = 37
         minSdk = 28
-        // Compose-resources packaging (wave-21 device-pass finding): with the
+        // Compose-resources packaging (device-pass finding): with the
         // AGP-9 KMP library plugin, android resources are OFF by default, so
         // copyAndroidMainComposeResourcesToAndroidAssets never runs and the
         // app APK ships this module's Res accessors with NO backing .cvr
@@ -48,14 +48,14 @@ kotlin {
                 enabled = false
             }
         }
-        // Headless wasm test lane (wave 12D): wasmJsNodeTest compiles the full
+        // Headless wasm test lane: wasmJsNodeTest compiles the full
         // main+test wasm graphs headlessly — no Karma, no Chrome — but CANNOT
         // EXECUTE this module's tests under plain Node: the Compose graph
         // links skiko.mjs and Node cannot fetch/prepare its wasm ("both async
         // and sync fetching of the wasm failed"). Execution is proven green
         // only for skiko-free modules (:shared:core:model). Kept as a compile
-        // gate plus future hook; runs under FAIL_ON_PROJECT_REPOS since wave
-        // 13C's settings.gradle.kts node/yarn governance (no flips needed).
+        // gate plus future hook; runs under FAIL_ON_PROJECT_REPOS — the
+        // settings.gradle.kts node/yarn governance (no flips needed).
         nodejs()
     }
 
@@ -91,7 +91,7 @@ kotlin {
             implementation(libs.tabler.icons.outline)
             implementation(libs.tabler.icons.filled)
             implementation(libs.coil.compose)
-            // MarkdownText's engine (wave 21D): the mikepenz 0.41.0 pin
+            // MarkdownText's engine: the mikepenz 0.41.0 pin
             // publishes Kotlin-2.3-built wasm klibs, so the SAME GFM pipeline
             // renders on android + desktop + wasm (see the catalog note).
             implementation(libs.multiplatform.markdown.renderer)

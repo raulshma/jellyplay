@@ -33,8 +33,8 @@ kotlin {
         browser()
         // Headless commonTest lane: wasmJsNodeTest runs under Kotlin's
         // downloaded Node.js distribution — no Karma, no Chrome (the browser
-        // lane demanded Chrome, see plan history). The wave-12D note about a
-        // PREFER_PROJECT flip being required is OBSOLETE: wave 13C's
+        // lane demanded Chrome, see plan history). The earlier note about a
+        // PREFER_PROJECT flip being required is OBSOLETE: the
         // settings.gradle.kts node/yarn governance owns the tool
         // repositories, so this lane runs under FAIL_ON_PROJECT_REPOS with
         // no flips. Suite verified green on Node that way.
@@ -48,7 +48,7 @@ kotlin {
         // (synchronizedMap/LinkedHashMap access-order), BoundedCollections,
         // CacheIdentity (@JvmInline), and the java.util.Locale-driven
         // language-code tables. Wasm gets a pure-Kotlin replacement when it
-        // first needs them (plan §Phase W).
+        // first needs them.
         val jvmShared = create("jvmShared")
         jvmShared.dependsOn(getByName("commonMain"))
         getByName("androidMain") { dependsOn(jvmShared) }

@@ -2,7 +2,7 @@ package com.raulshma.jellyplay.core.datastore
 
 /**
  * Process-lifetime [SecureKeyValueStorage] for web. Web v1 has no persistent
- * secret storage (plan §Phase W scope cut): credentials live only as long as
+ * secret storage (a scope cut): credentials live only as long as
  * the page session, and users re-enter them per session.
  */
 class WasmSecureKeyValueStorage : SecureKeyValueStorage {

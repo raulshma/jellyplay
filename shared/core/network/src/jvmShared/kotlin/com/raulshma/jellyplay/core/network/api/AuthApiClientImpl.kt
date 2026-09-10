@@ -74,7 +74,7 @@ class AuthApiClientImpl @Inject constructor(
         // surfaced as a hard failure and prompted re-taps that each fired N
         // independent discovery HTTP calls instead of one call with backoff.
         //
-        // TLS-trust failures are exempt FROM THIS PROBE ONLY (wave-21 review
+        // TLS-trust failures are exempt FROM THIS PROBE ONLY (review
         // round): no retry can fix an untrusted certificate, so retrying just
         // burned 3 probe rounds before the Add Server trust dialog could
         // appear. RetryPolicy's classifier treats any IOException as

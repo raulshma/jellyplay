@@ -51,7 +51,7 @@ import kotlinx.coroutines.flow.StateFlow
  * the cast / local player through the media-session controller; they stay in
  * the VM until media-session ownership is itself extracted.
  *
- * (Wave 8C: renamed from `PlayerCastController` — the commonMain
+ * (renamed from `PlayerCastController` — the commonMain
  * [PlayerCastController] seam interface took the old name; this class is its
  * Android actual. `disconnect(context)` and `castSessionEvents` carry
  * Android/legacy types and stay class-local — the screen reaches them

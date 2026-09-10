@@ -50,11 +50,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import org.w3c.dom.events.Event
 
 /**
- * Web-only route keys (wave 11B web-nav v1): apps/web keeps its OWN tiny
+ * Web-only route keys (web-nav v1): apps/web keeps its OWN tiny
  * table of web-only leaves alongside the SHARED Route sealed class. The web
  * entries render web-only panes ([WebLanding] carries the connect/sign-in
  * flow ([WebConnectFlow]), [WebStatus] the connection-details level,
- * [WebDiag] the diagnostics level); wave 15C adds the first SHARED route —
+ * [WebDiag] the diagnostics level); adds the first SHARED route —
  * `entry<Route.Requests>` renders the feature module's RequestsScreen —
  * which is exactly why the shared keys remain usable here without being
  * registered in this private table (the private objects exist because no
@@ -75,14 +75,14 @@ private data object WebLanding : NavKey
 private data object WebStatus : NavKey
 
 /**
- * Wave 13C diagnostics level ([WebDiagnosticsPane]): gated E2E surface for
+ *  diagnostics level ([WebDiagnosticsPane]): gated E2E surface for
  * the Coil artwork + HtmlVideoEngine browser passes. Same lifetime rules as
  * [WebStatus] — memory-only, no deep link.
  */
 private data object WebDiag : NavKey
 
 /**
- * Wave 16B Seerr credentials level ([WebSeerrPane]): server URL + API key
+ *  Seerr credentials level ([WebSeerrPane]): server URL + API key
  * entry/persist/test/disconnect — the pane that finally lets the requests
  * feature work on web (API-key mode is the only browser-viable Seerr auth).
  * Same lifetime rules as [WebStatus]/[WebDiag] — memory-only, no deep link;
@@ -92,7 +92,7 @@ private data object WebDiag : NavKey
 private data object WebSeerr : NavKey
 
 /**
- * Web nav root (wave 12C slice 2 over wave 11B's web-nav v1): NavDisplay from
+ * Web nav root (slice 2 over the web-nav v1): NavDisplay from
  * the JB fork's navigation3-ui wasm klib over the shared core/ui primitives,
  * with the landing level grown from placeholder text into the real
  * connect/sign-in flow ([WebConnectFlow] driving [KtorWasmAuthApiClient]
@@ -107,7 +107,7 @@ private data object WebSeerr : NavKey
  * SERVER HEALTH: still static Unknown by design this slice — health probing
  * is not part of connect/auth browsing status.
  *
- * BROWSER-HISTORY MODEL (wave 12C — supersedes the "deferred" cut): the
+ * BROWSER-HISTORY MODEL (supersedes the "deferred" cut): the
  * snapshot list IS the single owner of truth; history MIRRORS it. The whole
  * rule set — dispatch-first pops, root-refuse, reload hash normalization,
  * forward-onto-pruned walk-back — lives on [WebBackStackMirror] as a pure
@@ -129,13 +129,13 @@ private data object WebSeerr : NavKey
  * panes are browser-verified by the headless-Edge CDP lane
  * (tools/e2e/web-verify.mjs — connect/sign-in, Connectivity flips are NOT
  * flipped in-lane, pushState/popstate round-trips are exercised only as far
- * as the lane's Back click). Wave 15C extends the lane one level further:
+ * as the lane's Back click).  extends the lane one level further:
  * after the diagnostics pane it pops back and opens the FIRST feature
  * screen, Route.Requests → shared RequestsScreen, asserting the filter bar
  * + the honest "Seerr not configured" error state with zero console errors
  * (honest at that lane point: no credentials saved yet — the 16B Seerr
  * pane opens later in the lane — and session-cookie auth stays
- * browser-impossible; see Main.kt). Wave 16A
+ * browser-impossible; see Main.kt). A later lane
  * extends it once more: back from Requests, open Route.UpcomingCalendar →
  * shared UpcomingCalendarScreen, asserting the honest feature-disabled pane
  * (the DIRECT_ARR_INTEGRATION flag boots off and no web settings UI can
@@ -152,7 +152,7 @@ fun WebAppRoot(
     bootRoute: NavKey? = null,
     bootVariant: String? = null,
 ) {
-    // GATED E2E INPUT PROBE (wave 17A, `?e2eRoute=inputprobe[&variant=scroll]`):
+    // GATED E2E INPUT PROBE (`?e2eRoute=inputprobe[&variant=scroll]`):
     // render ONLY the probe lattice and return — no NavDisplay, no session
     // gate, no browser-history wiring. The check sits BEFORE any remember{}
     // below so the probe pane composes in complete isolation from the shell
@@ -174,11 +174,11 @@ fun WebAppRoot(
     // GATED E2E BOOT ROUTE (desktop `jellyplay.harness.*` prop precedent):
     // [bootRoute] seeds the stack one level deep so the CDP lane can reach a
     // shared-feature route without depending on synthetic mouse-click
-    // GEOMETRY. Wave 17A's clean-room probe (tools/e2e/input-probe.mjs +
+    // GEOMETRY. The clean-room probe (tools/e2e/input-probe.mjs +
     // docs/e2e/web-input-dead-region.md) found NO Compose input dead region:
     // synthetic clicks deliver everywhere inside the viewport (measured to
-    // y=803.5 of an 805px viewport, at device scale 1 and 1.5). The wave-16
-    // "dead region below y≈600" report is attributed to that wave's
+    // y=803.5 of an 805px viewport, at device scale 1 and 1.5). The earlier
+    // "dead region below y≈600" report is attributed to a
     // SeerrDetailViewModel construction crash freezing composition after the
     // demo-button click LANDED (plus headless geometry: --window-size height
     // 900 is an 805px viewport, and below-fold boxes zero out at (0,0)).
@@ -194,7 +194,7 @@ fun WebAppRoot(
     val connectController = remember(sessionState, authApiClient, userPrefs) {
         WebConnectController(auth = authApiClient, userPrefs = userPrefs)
     }
-    // Wave 16B: the Seerr credentials controller, built exactly like
+    //THE SEERR CREDENTIALS CONTROLLER, BUILT EXACTLY LIKE
     // [WebConnectController] — plain class, Koin-resolved deps passed in from
     // Main.kt (SeerrPreferencesStore/SeerrSecureCredentialsStore are unnamed
     // singles in datastoreCommonModule/webDatastoreModule, SeerrRepository in
@@ -233,7 +233,7 @@ fun WebAppRoot(
         }
     }
 
-    // THE pop path (wave 21C: dispatch-first, then the root-refusing guarded
+    // THE pop path (dispatch-first, then the root-refusing guarded
     // pop — WebBackStackMirror.requestPop owns the ordering). Local trim
     // before the cursor move so the UI never waits on the async history turn.
     fun requestPop() {
@@ -275,12 +275,12 @@ fun WebAppRoot(
                     networkStatus = currentNetworkStatus,
                     onOpenConnectionDetails = { addEntry(WebStatus) },
                     onOpenDiagnostics = { addEntry(WebDiag) },
-                    // Wave 15C: the shared feature route — pushed as itself,
+                    //THE SHARED FEATURE ROUTE — PUSHED AS ITSELF,
                     // NOT as a web-only mirror key (see the route-keys KDoc).
                     onOpenRequests = { addEntry(Route.Requests) },
-                    // Wave 16A: the second shared feature route, same shape.
+                    //THE SECOND SHARED FEATURE ROUTE, SAME SHAPE.
                     onOpenCalendar = { addEntry(Route.UpcomingCalendar) },
-                    // Wave 16B: the Seerr credentials pane.
+                    //THE SEERR CREDENTIALS PANE.
                     onOpenSeerr = { addEntry(WebSeerr) },
                 )
             }
@@ -290,7 +290,7 @@ fun WebAppRoot(
             entry<WebDiag> { _ ->
                 WebDiagnosticsPane(
                     onBack = ::requestPop,
-                    // Wave 16C E2E surface: pushes the SeerrDetail screen for a
+                    //  E2E surface: pushes the SeerrDetail screen for a
                     // FIXED demo key (tmdb 550, "movie") so the headless lane
                     // can drive the real shared screen without a Seerr server
                     // (the requests list is empty in the fixture — nothing is
@@ -302,7 +302,7 @@ fun WebAppRoot(
                 WebSeerrPane(onBack = ::requestPop, controller = seerrController)
             }
             entry<Route.Requests> { _ ->
-                // Wave 15C: the FIRST shared feature screen on web. The shell
+                //THE FIRST SHARED FEATURE SCREEN ON WEB. THE SHELL
                 // (Main.kt → ProvideWebShellViewModelOwners) provides the
                 // ViewModelStoreOwner/LifecycleOwner koinViewModel() needs, so
                 // the screen composes bare — there is deliberately no wrapper
@@ -310,7 +310,7 @@ fun WebAppRoot(
                 // `internal` to that module (invisible from apps/web), which
                 // structurally keeps ONE provisioning truth at the shell.
                 //
-                // Wave 16C: the SEERRDETAIL CUT STUB IS GONE —
+                //THE SEERRDETAIL CUT STUB IS GONE —
                 // onNavigateToDetail now pushes the real shared route, exactly
                 // like requests' RequestsNavigation does on android/desktop
                 // (`navigator.navigate(Route.SeerrDetail(tmdbId, mediaType))`).
@@ -333,7 +333,7 @@ fun WebAppRoot(
                 )
             }
             entry<Route.UpcomingCalendar> { _ ->
-                // Wave 16A: the SECOND shared feature screen on web — the
+                //THE SECOND SHARED FEATURE SCREEN ON WEB — THE
                 // shared UpcomingCalendarScreen (koinViewModel() against
                 // calendarModule, registered in Main.kt this wave). The
                 // feature-disabled pane is the honest v1 state in the browser
@@ -350,7 +350,7 @@ fun WebAppRoot(
                 // is inert on web. It becomes addEntry(Route.ArrSettings())
                 // when settings gains the web target.
                 //
-                // onItemClick is REAL since wave 16C landed Route.SeerrDetail
+                // onItemClick is REAL since Route.SeerrDetail landed
                 // on web (coordinator merge): calendar rows forward
                 // (tmdbId, mediaType) verbatim, same pass-through the
                 // requests entry uses. Unreachable in the fixture (the flag
@@ -370,7 +370,7 @@ fun WebAppRoot(
                 )
             }
             entry<Route.SeerrDetail> { key ->
-                // Wave 16C: the SECOND shared feature screen on web. Same bare
+                //THE SECOND SHARED FEATURE SCREEN ON WEB. SAME BARE
                 // composition + shell-provided owners as the requests entry.
                 //
                 // - onBack rides the guarded pop path (requestPop).
@@ -488,7 +488,7 @@ private fun rememberBrowserConnectivityStatus(): MutableStateFlow<NetworkStatus>
 }
 
 /**
- * Connection-details pane (wave 12C update of wave 11B's status pane):
+ * Connection-details pane (an update of the status pane):
  * connectivity line from the app-level composition locals over the static
  * Unknown health provisioning, unchanged from v1. Session/server facts live
  * in the landing card ([WebConnectFlow]); this level stays reachable via

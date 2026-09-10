@@ -40,7 +40,7 @@ data class WasmClientIdentity(
 )
 
 /**
- * Phase W chunk 2: the Ktor request plumbing chunk 1 built inside
+ *  chunk 2: the Ktor request plumbing chunk 1 built inside
  * [KtorWasmAuthApiClient], factored into a base class so the auth /
  * library / playback wasm clients share ONE implementation of the wire
  * mechanics: URL joining, the SDK-identical `Authorization` header, JSON

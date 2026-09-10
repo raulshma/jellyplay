@@ -44,7 +44,7 @@ fun interface AudioTrackResolver {
 /**
  * Desktop per-item playback source resolution — a case-for-case port of the
  * Android audio path's `AudioLibraryBrowser.buildPlayableMediaItem` (the
- * semantics source of truth for wave 9B):
+ * semantics source of truth for):
  *
  *  1. `getMediaDetail` + `resolveLocalSource` run CONCURRENTLY (Android does
  *     the same via two asyncs);

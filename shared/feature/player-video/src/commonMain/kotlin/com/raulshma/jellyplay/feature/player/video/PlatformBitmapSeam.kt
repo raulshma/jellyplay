@@ -3,7 +3,7 @@ package com.raulshma.jellyplay.feature.player.video
 import androidx.compose.ui.graphics.ImageBitmap
 
 /**
- * Platform bitmap seam (wave 9A): trickplay thumbnails cross from the
+ * Platform bitmap seam: trickplay thumbnails cross from the
  * platform controllers (`Any?` on the common
  * [VideoPlayerViewModel.loadTrickplayThumbnail]) into the overlay/controls
  * renderers as this type. The androidMain actual is a typealias to

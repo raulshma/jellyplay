@@ -29,7 +29,7 @@ import kotlinx.coroutines.withTimeoutOrNull
  *
  *  - `onDataSetChanged` re-reads the latest snapshot ([snapshotProvider]),
  *    reads the poster cache MEMORY-ONLY ([cachedPosters]) and refreshes the
- *    cached widget dimensions for this bind (STA-11 — see
+ *    cached widget dimensions for this bind (see
  *    [onDataSetChanged]); a cold snapshot or uncached posters schedule the
  *    async repaint tail ([scheduleWarmupRepaint]) which warms both off the
  *    bind path and repaints via `notifyAppWidgetViewDataChanged`. The
@@ -92,7 +92,7 @@ abstract class WidgetGridFactory<T>(
     // map lookup (never network I/O on the binder thread). Keyed by the
     // adapter's poster seam: [posterUrlOf] by default, the Continue Watching
     // image id for its override. Null entries are the placeholder render
-    // path — the same render a failed bounded fetch produced before STA-11.
+    // path — the same render a failed bounded fetch produced.
     protected var posterCache: Map<String, Bitmap?> = emptyMap()
         private set
 
@@ -101,26 +101,26 @@ abstract class WidgetGridFactory<T>(
     protected var widgetDims: WidgetDimensions? = null
         private set
 
-    // STA-11: fire-and-forget scope for the async repaint tail; cancelled in
+    // Fire-and-forget scope for the async repaint tail; cancelled in
     // [onDestroy] (same per-instance scope pattern as the provider
     // skeleton's refreshScope). SupervisorJob so a failed warmup pass never
     // cancels a sibling bind's pass.
     private val warmupScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    // STA-11: stable-id set the last scheduled warmup pass ran for — one
+    // Stable-id set the last scheduled warmup pass ran for — one
     // pass per data generation, so the notify→rebind→tail cycle can never
     // loop on posters that fail to fetch (a re-bind with the same ids finds
     // the pass already attempted and skips).
     private var warmupAttemptedIds: List<Long>? = null
 
-    /** The latest rows for this widget (memory-only store read — STA-11). */
+    /** The latest rows for this widget (memory-only store read). */
     protected abstract fun snapshotProvider(): List<T>
 
     /** The poster url to preload for [item]; null/blank → placeholder. */
     protected open fun posterUrlOf(item: T): String? = null
 
     /**
-     * STA-11: the bind's poster read — memory cache ONLY, keyed exactly like
+     * The bind's poster read — memory cache ONLY, keyed exactly like
      * [posterFor] ([posterUrlOf] by default). Misses map to null (the
      * placeholder render the bounded fetch's failures always produced); the
      * async repaint tail does the actual fetching off the bind path.
@@ -132,7 +132,7 @@ abstract class WidgetGridFactory<T>(
             .associateWith { WidgetImageLoader.cachedPoster(it) }
 
     /**
-     * STA-11: suspends until the store's eager snapshot has materialized,
+     * Suspends until the store's eager snapshot has materialized,
      * then returns the warmed rows this factory would render (null when the
      * bounded wait expired — a cold store that never emitted, treated as
      * "nothing to repaint"; the empty view the cold bind rendered stays).
@@ -141,7 +141,7 @@ abstract class WidgetGridFactory<T>(
     protected open suspend fun awaitWarmedSnapshot(): List<T>? = null
 
     /**
-     * STA-11: suspends until [flow] — the store's eagerly-warmed snapshot —
+     * Suspends until [flow] — the store's eagerly-warmed snapshot —
      * emits non-empty, under the bounded [SNAPSHOT_WARMUP_REPAINT_TIMEOUT_MS];
      * null when the wait expired (a genuinely-empty snapshot never emits, so
      * the bounded wait expires and the empty view the cold bind rendered
@@ -165,7 +165,7 @@ abstract class WidgetGridFactory<T>(
     protected abstract fun fillInIntent(item: T): Intent
 
     /**
-     * Batch poster fetch used by the ASYNC repaint tail (STA-11) so a later
+     * Batch poster fetch used by the ASYNC repaint tail so a later
      * bind resolves from memory. Default fetches every non-blank
      * [posterUrlOf] (the url-keyed grids); the bounded batch is
      * [WidgetImageLoader]'s — slow urls simply map to null and fall through
@@ -251,7 +251,7 @@ abstract class WidgetGridFactory<T>(
     final override fun onCreate() = Unit
 
     final override fun onDataSetChanged() {
-        // STA-11 (2026-09 perf audit): memory-first bind. This used to read
+        // Memory-first bind. This used to read
         // the snapshot through the store's *Snapshot() accessors (ONE bounded
         // ≤1 s BLOCKING disk read on a cold process — WidgetDataStore's
         // SNAPSHOT_WARMUP_TIMEOUT_MS) and then runBlocking the batch poster
@@ -280,7 +280,7 @@ abstract class WidgetGridFactory<T>(
     }
 
     /**
-     * STA-11 decision half: schedule the async repaint tail when this bind
+     * Decision half: schedule the async repaint tail when this bind
      * came back cold (empty memory snapshot) or with uncached posters — at
      * most ONE tail per data generation (stable-id set), so a
      * notify→rebind→tail cycle can never loop on posters that fail to
@@ -299,7 +299,7 @@ abstract class WidgetGridFactory<T>(
     }
 
     /**
-     * STA-11 tail half: off the bind path, await the store's eager snapshot
+     * Tail half: off the bind path, await the store's eager snapshot
      * when the bind was cold ([awaitWarmedSnapshot]), batch-fetch the
      * missing posters ([preloadPosters] — bounded by WidgetImageLoader's
      * own batch deadline, filling the same memory cache the next bind
@@ -331,7 +331,7 @@ abstract class WidgetGridFactory<T>(
         items = emptyList()
         posterCache = emptyMap()
         widgetDims = null
-        // STA-11: the factory is going away — drop any still-running warmup
+        // The factory is going away — drop any still-running warmup
         // pass with it (a completed pass's repaint targeted this widget id
         // and is already inert).
         warmupScope.cancel()
@@ -358,7 +358,7 @@ abstract class WidgetGridFactory<T>(
 
     companion object {
         /**
-         * STA-11: bound on the async tail's wait for the store's eager
+         * Bound on the async tail's wait for the store's eager
          * snapshot to materialize ([awaitWarmedSnapshot]) — deliberately
          * generous (a local file read) because nobody blocks on it: the tail
          * is fire-and-forget off the bind path.

@@ -23,7 +23,7 @@ import kotlin.test.assertTrue
 import kotlinx.coroutines.test.runTest
 
 /**
- * Browser-free unit cover for [WebMediaRepositoryNarrow] (wave 16C) — the web
+ * Browser-free unit cover for [WebMediaRepositoryNarrow] — the web
  * shell's deliberately NARROW MediaRepository binding. Invariants pinned:
  *
  *  - THE ONE SERVED MEMBER: findItemByProviderId (the SeerrDetail cross-link)
@@ -151,7 +151,7 @@ class WebMediaRepositoryNarrowTest {
     @Test
     fun `construction never touches the off-web surface`() {
         // The SeerrDetailViewModel ctor resolves this binding through Koin —
-        // an eager off-web throw here was the wave-16C browser crash.
+        // an eager off-web throw here was the browser crash.
         repository()
     }
 

@@ -55,7 +55,7 @@ class SettingsSearchCatalogTest {
     fun `aggregation preserves the verbatim move - all 258 items in flat order`() {
         val items = SettingsSearchCatalog.items
         // The old core/ui registry held 259 items; the aggregation must have
-        // kept every one (the 260th is the wave-18C video-cache-size row).
+        // kept every one (the 260th is the video-cache-size row).
         // v0.10.6 then consolidated the 5 synthwave/soothing/monochrome mode
         // + accent entries into theme_style + style_accent (257); the
         // missing auto_delete_after_watch declaration followed its existing

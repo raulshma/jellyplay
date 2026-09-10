@@ -90,7 +90,7 @@ class LiveTvPlayerViewModelTest {
         every { fakeEngine.durationMs } returns MutableStateFlow(-1L)
         every { fakeEngine.errorMessage } returns MutableStateFlow(null)
         // Read by the state collector on the ERROR path (transcode-reasons
-        // detail merge) — first exercised by the wave-19C PiP auto-exit test.
+        // detail merge) — first exercised by the PiP auto-exit test.
         every { fakeEngine.errorDetail } returns MutableStateFlow(null)
         every { fakeEngine.load(any()) } answers { capturedRequests.add(firstArg()) }
 
@@ -383,7 +383,7 @@ class LiveTvPlayerViewModelTest {
         assertNull(vm.state.value.currentChannel)
     }
 
-    // ── Deferred zaps (wave 20D): a zap during the channel-list load is
+    // ── Deferred zaps: a zap during the channel-list load is
     // queued, not dropped — PiP SKIP maps to a zap, so SKIP used to no-op
     // while the list was loading. The gate pattern below parks
     // getLiveTvChannels mid-flight so the zap provably arrives inside the
@@ -560,7 +560,7 @@ class LiveTvPlayerViewModelTest {
     }
 
     /**
-     * Recording fake of the wave-19C live PiP seam: captures the calls the VM
+     * Recording fake of the live PiP seam: captures the calls the VM
      * makes so the seam assertions below read as plain list checks.
      */
     private class FakePip : PipController {

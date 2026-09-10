@@ -1,4 +1,4 @@
-# Startup macrobenchmark lane (perf audit follow-up): StartupBenchmark.kt
+# Startup macrobenchmark lane: StartupBenchmark.kt
 # existed in :baselineprofile but nothing in CI ever ran it, so baseline-profile
 # quality had no numeric gate — a silently narrow profile (emulator flake in the
 # generate lane) would ship unnoticed. This lane boots the same ciPixel8 GMD the

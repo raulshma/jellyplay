@@ -142,7 +142,7 @@ interface DownloadDao {
      * Narrow live-progress projection of the in-flight rows (`PENDING`/
      * `QUEUED`/`DOWNLOADING` — the [getInFlightDownloadCount] status set; the
      * 2 s ticker writes land on `DOWNLOADING` rows, the other two statuses
-     * only sit in the window around transitions). Perf audit: Room
+     * only sit in the window around transitions). Room
      * invalidation is table-level, so every [updateProgressWithSpeed] tick
      * re-ran the downloads screen's full 23-column [getAllDownloads] window
      * and re-executed the whole screen per event; the screen now takes its

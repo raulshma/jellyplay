@@ -8,7 +8,7 @@ import org.koin.core.module.Module
 import org.koin.dsl.module
 
 /**
- * Desktop actual of the [MusicMessageBus] (wave 21B — replaces the
+ * Desktop actual of the [MusicMessageBus] (replaces the
  * message-dropping no-op whose "no host yet" note outlived the desktop
  * shell's snackbar): a small buffering relay the desktop shell collects into
  * its snackbar host (DesktopAppRoot's DesktopNavScaffold — the twin of

@@ -25,7 +25,7 @@ import org.koin.dsl.module
  *    Koin singles in androidCoreDataModule / the app module on Android,
  *    honest no-op defs in desktopDataModule on desktop. All resolve on BOTH
  *    platforms — desktop renders homeSection in the rail (live since the
- *    wave 8B desktop wiring).
+ *     desktop wiring).
  */
 val homeModule: Module = module {
     single {

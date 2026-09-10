@@ -13,7 +13,7 @@ kotlin {
         namespace = "com.raulshma.jellyplay.shared.feature.player.video"
         compileSdk = 37
         minSdk = 28
-        // Compose-resources packaging (wave-21 device-pass finding): with the
+        // Compose-resources packaging (device-pass finding): with the
         // AGP-9 KMP library plugin, android resources are OFF by default, so
         // copyAndroidMainComposeResourcesToAndroidAssets never runs and the
         // app APK ships this module's Res accessors with NO backing .cvr
@@ -26,7 +26,7 @@ kotlin {
         }
     }
 
-    // No wasmJs target: the Phase W web shell is live but covers
+    // No wasmJs target: the web shell is live but covers
     // requests/calendar/details only, and this module's commonMain
     // legitimately carries java.* (the track-scoring / trickplay helpers use
     // java.io.File, the seek bar java.text.SimpleDateFormat) which a wasm
@@ -48,7 +48,7 @@ kotlin {
             // sheets and controllers read (MediaRepository, PlaybackRepository,
             // OfflinePlaybackFacade, PlaybackSourceResolver, EpisodeCatalogue,
             // SyncPlayManager, AdaptiveBitrateManager, … all commonMain/
-            // jvmShared since the Phase C4 flips).
+            // jvmShared since the flips).
             implementation(project(":shared:core:data"))
             // 10 DataStore slices + VideoPlayerAggregateStore projection.
             implementation(project(":shared:core:datastore"))
@@ -56,7 +56,7 @@ kotlin {
             // MediaEngine contract + engine value types (AspectRatio,
             // EnginePlaybackState, SegmentCalculator, SubtitleSource, …) —
             // replaces the legacy :feature:player:core api edge, which this
-            // module absorbed (wave 7C).
+            // module absorbed.
             implementation(project(":shared:core:player-contract"))
             // JetBrains CMP distribution (see catalog note): Android targets
             // redirect to the androidx artifacts.
@@ -97,7 +97,7 @@ kotlin {
             implementation(kotlin("test"))
             implementation(libs.coroutines.test)
             implementation(libs.mockk)
-            // Wave 14A: desktop compose UI test for the keyboard-focus grab
+            //DESKTOP COMPOSE UI TEST FOR THE KEYBOARD-FOCUS GRAB
             // (PlayerKeyboardFocusGrabUiTest) — runComposeUiTest is the
             // framework-agnostic ComposeUiTest entry (no JUnit4 runner; the
             // suite stays on kotlin-test like the rest of jvmTest).
@@ -110,7 +110,7 @@ kotlin {
             // ComposeWindow — that AWT window type lives in ui-desktop.
             implementation(libs.jb.compose.ui.desktop)
         }
-        // Wave 7C shape (subtitle-tester androidMain-heavy precedent, one
+        //  shape (subtitle-tester androidMain-heavy precedent, one
         // notch further): every media3/libmpv/libVLC/cast type, the engine
         // stack, the Context+Uri session/subtitle managers, the media-session
         // + screenshot + trickplay controllers AND the monolith
@@ -121,10 +121,10 @@ kotlin {
         // apps/desktop's Koin graph and DesktopAppRoot hosts
         // entry<Route.VideoPlayer> (mpv engine behind its platform support
         // guard).
-        // Wave 8C: the desktop DI module (desktopPlayerVideoModule) registers
+        //THE DESKTOP DI MODULE (DESKTOPPLAYERVIDEOMODULE) REGISTERS
         // the now-commonMain VideoPlayerViewModel plus the jvmMain seam stubs.
         // No media3/legacy deps here — jvmMain sees only commonMain's deps.
-        // Wave 9A: + JNA for the desktop EngineVideoSurface actual, which
+        //+ JNA FOR THE DESKTOP ENGINEVIDEOSURFACE ACTUAL, WHICH
         // resolves the embedded child window's HWND (Native.getComponentPointer,
         // core artifact — no jna-platform). The Android target never sees this
         // edge; apps/desktop already ships libs.jna at runtime for libmpv, so
@@ -142,7 +142,7 @@ kotlin {
         }
         getByName("androidMain").dependencies {
             // Documented shared→legacy edges (library/livetv/admin/settings/
-            // subtitle-tester precedent; dies at Phase X): the Koin factory
+            // subtitle-tester precedent; dies at ): the Koin factory
             // adapts the Hilt-owned legacy playback singletons
             // (PlaybackSessionManager, CastManager,
             // JellyfinRemotePlayCastStrategy, ActivePlayerController) and

@@ -14,7 +14,7 @@ kotlin {
         namespace = "com.raulshma.jellyplay.shared.feature.downloads"
         compileSdk = 37
         minSdk = 28
-        // Compose-resources packaging (wave-21 device-pass finding): with the
+        // Compose-resources packaging (device-pass finding): with the
         // AGP-9 KMP library plugin, android resources are OFF by default, so
         // copyAndroidMainComposeResourcesToAndroidAssets never runs and the
         // app APK ships this module's Res accessors with NO backing .cvr
@@ -83,9 +83,9 @@ kotlin {
         getByName("androidMain").dependencies {
             // The user-messenger actual bridges to the app-wide
             // LocalUserMessageBus, which still lives in the legacy Android-only
-            // :core:ui shim (plan §V1a list) until its own conveyor move — same
+            // :core:ui shim until its own conveyor move — same
             // transition-period relationship as the library/livetv conveyors'
-            // messenger actuals, dies at Phase X.
+            // messenger actuals, dies at .
             implementation(project(":core:ui"))
         }
     }

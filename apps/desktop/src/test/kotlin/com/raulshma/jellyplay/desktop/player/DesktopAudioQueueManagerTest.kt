@@ -802,7 +802,7 @@ class DesktopAudioQueueManagerTest {
         assertEquals(0L, h.manager.currentPosition.value, "poll reconciles to the engine state after the clamp")
     }
 
-    // ── effects wiring (wave 14C): state → engine af config ──────────────
+    // ── effects wiring: state → engine af config ──────────────
 
     @Test
     fun engineCreationPushesInitialEffectsSnapshotAndMutationsRepush() {
@@ -865,7 +865,7 @@ class DesktopAudioQueueManagerTest {
         assertEquals(EqualizerPreset.FLAT, h.effects.equalizerPreset.value)
     }
 
-    // ── next-item prefetch (wave 14C: "pre-warm is next-item-only") ──────
+    // ── next-item prefetch ("pre-warm is next-item-only") ──────
 
     @Test
     fun prefetchResolvesTheNextItemBehindCurrentWithoutLoadingTheEngine() {

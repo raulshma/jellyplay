@@ -9,11 +9,11 @@ import okhttp3.OkHttpClient
 /**
  * Maps a [PlayerType] to a concrete [MediaEngine].
  *
- * (Wave 8C: renamed from `PlayerEngineFactory` — the commonMain
+ * (renamed from `PlayerEngineFactory` — the commonMain
  * [PlayerEngineFactory] seam interface took the old name; this class is its
  * Android actual.)
  *
- * Process-wide single (Koin-owned since the wave 7C KMP move; was a
+ * Process-wide single (Koin-owned since the KMP move; was a
  * Hilt @Singleton): owns the shared [DefaultBandwidthMeter] so adaptive
  * bitrate learning carries across streams. Previously a plain `object` (kept
  * that way deliberately so the shared meter stayed testable); the

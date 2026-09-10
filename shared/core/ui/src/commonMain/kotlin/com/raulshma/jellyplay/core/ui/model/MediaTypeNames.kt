@@ -42,7 +42,7 @@ import org.jetbrains.compose.resources.stringResource
  * single set of `core_media_*` keys to translate.
  *
  * The `@StringRes Int` halves stay in the legacy `:core:ui` shim until every
- * consumer has migrated off resource ids (plan §Phase X).
+ * consumer has migrated off resource ids.
  */
 
 /** Singular, localized display name for this media type. */

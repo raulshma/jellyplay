@@ -6,7 +6,7 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 /**
- * The desktop software-render pane's redraw trigger policy (wave 12B), pinned
+ * The desktop software-render pane's redraw trigger policy, pinned
  * as a decision table: [DesktopSoftwareVideoPane]'s LaunchedEffect delegates
  * every loop step to [SwPaneTicker.plan], so these four rows ARE the behavior.
  *

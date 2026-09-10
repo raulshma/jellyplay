@@ -182,7 +182,7 @@ class ApiExceptionTest {
         assertNull(ex.retryAfterMs)
     }
 
-    // ------------------------------------------- wave 21A: TLS-trust flag
+    // -------------------------------------------: TLS-trust flag
 
     @Test
     fun `fromNetwork flags SSLHandshakeException as a TLS-trust failure`() {

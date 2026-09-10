@@ -4,7 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 
 /**
- * Platform seams for the detail feature (V3/Phase X conveyor move from
+ * Platform seams for the detail feature (V3/ conveyor move from
  * `:feature:details`, which reached three Hilt-owned Android-only singletons
  * and one Intent share target).
  *
@@ -13,7 +13,7 @@ import androidx.compose.ui.Modifier
  * one of these module-local interfaces instead:
  *
  * - [DetailAudioPlayback] — legacy `AudioPlaybackManager` (ExoPlayer/media3,
- *   Hilt-owned in legacy `:core:data` until Phase X). The detail screen's ONLY
+ *   Hilt-owned in legacy `:core:data` until ). The detail screen's ONLY
  *   use of the manager is per-item `play(itemId)` with its local-source
  *   fallback (`playLocalTrack`).
  * - [DetailThemeMusic] — legacy `ThemeMusicPlayer` (a dedicated ExoPlayer
@@ -75,7 +75,7 @@ internal expect fun rememberShareMediaAction(itemId: String, chooserTitle: Strin
  * In-app YouTube trailer embed host (legacy core:ui's WebView iframe player).
  * Android actual delegates to that composable verbatim (this module's
  * androidMain → legacy `:core:ui` edge, library/livetv/admin/calendar
- * messenger precedent — dies at Phase X); desktop actual fires
+ * messenger precedent — dies at ); desktop actual fires
  * [onEmbedFailed] immediately so every call site degrades through the SAME
  * fallback Android uses when the WebView embed breaks (open the browser /
  * hide the autoplay overlay) — no desktop code path reaches a stuck black

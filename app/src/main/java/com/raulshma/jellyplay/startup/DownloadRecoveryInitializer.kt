@@ -25,7 +25,7 @@ class DownloadRecoveryInitializer (
     private val downloadEnqueuer: DownloadEnqueuer,
 ) {
     suspend fun recover() {
-        // STA-9 (2026-09 perf audit): the three passes used to run strictly
+        // The three passes used to run strictly
         // sequentially at every cold start. The reconcile→recover order stays
         // exactly as written below (load-bearing); the cleanup pass is independent —
         // its FAILED-row file deletes touch a disjoint row set, and its bulk

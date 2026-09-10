@@ -11,10 +11,10 @@ fun EntryProviderScope<NavKey>.requestsSection(
     navigator: Navigator,
 ) {
     entry<Route.Requests> {
-        // Wave 15B: the ViewModelStoreOwner/LifecycleOwner provisioning
+        //THE VIEWMODELSTOREOWNER/LIFECYCLEOWNER PROVISIONING
         // fallback MUST sit outside RequestsScreen — koinViewModel() evaluates
         // as a default parameter before an in-screen provider would run (see
-        // ProvidePlatformLocalsFallback). Wave 15C update: pass-through on
+        // ProvidePlatformLocalsFallback).  update: pass-through on
         // ALL shipped surfaces now — android/desktop have their own owners
         // and the web shell provisions at its root
         // (apps/web ProvideWebShellViewModelOwners); the wrapper remains the

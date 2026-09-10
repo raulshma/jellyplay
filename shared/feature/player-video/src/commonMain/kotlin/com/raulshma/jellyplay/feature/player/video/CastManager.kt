@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.feature.player.video
 
 /**
- * Cast-manager seam for the video player (wave 8C): the member set the
+ * Cast-manager seam for the video player: the member set the
  * commonMain [VideoPlayerViewModel] calls on the legacy `core:data`
  * `CastManager` singleton. The full discovery/connect surface (Context-bound
  * startDiscovery/connect, cast-device types) stays on the legacy class — the

@@ -8,13 +8,13 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.staticCompositionLocalOf
 
 /**
- * Shell-provided back dispatcher for the web runtime (wave 12C): the browser
+ * Shell-provided back dispatcher for the web runtime: the browser
  * shell owns ONE pop path — its nav stack is mirrored into browser history,
  * so every enabled back request must route through the shell's pop/history
  * bookkeeping rather than firing a raw `window.history.back()` per screen.
  *
  * The shell (apps/web's WebAppRoot) provides a [WebBackDispatcher] through
- * [LocalWebBackDispatcher] and — since wave 21C — consults it FIRST in its
+ * [LocalWebBackDispatcher] and — since then — consults it FIRST in its
  * pop path (`requestPop`): a registered, enabled handler consumes the back
  * press and the shell pops nothing; only when [dispatchBack] returns false
  * does the shell's own root-refusing, history-mirroring pop run. Outside
@@ -31,7 +31,7 @@ val LocalWebBackDispatcher: ProvidableCompositionLocal<WebBackDispatcher?> =
  * active handler wins dispatch, which mirrors Android's on-back-callback
  * semantics for the nested-composition order Compose produces (parents compose
  * before their children, so children register later and win). The shell's
- * own pop path routes THROUGH this class since wave 21C — requestPop
+ * own pop path routes THROUGH this class since then — requestPop
  * dispatches here first and only falls back to its guarded history-mirroring
  * pop when nothing is registered.
  *
@@ -67,7 +67,7 @@ class WebBackDispatcher {
 }
 
 /**
- * Wasm back-navigation seam (wave 12C): when the surrounding shell provides a
+ * Wasm back-navigation seam: when the surrounding shell provides a
  * [WebBackDispatcher] via [LocalWebBackDispatcher], an ENABLED registration is
  * added to it while this call is in the composition (and removed on leave, or
  * whenever [enabled] flips off), with the latest [onBack] lambda captured via

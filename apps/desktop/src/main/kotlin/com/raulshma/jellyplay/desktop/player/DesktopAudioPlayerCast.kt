@@ -6,8 +6,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * Desktop [AudioPlayerCast] (wave 9B): never-connected no-op. The desktop has
- * no cast stack (plan §4 — Cast stays Android-only), so discovery returns no
+ * Desktop [AudioPlayerCast]: never-connected no-op. The desktop has
+ * no cast stack (Cast stays Android-only), so discovery returns no
  * devices, [isConnected] is permanently false, and every transport call is a
  * dead no-op. The jvm CastButton actual renders nothing, so the picker never
  * opens; `castToDevice()` in the ViewModel guards on the (never-set) current

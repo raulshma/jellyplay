@@ -251,7 +251,7 @@ class ShortcutsViewModelTest {
         assertEquals(18, items.map { it.descriptionRes }.distinct().size)
 
         // All 18 route classes resolve against shared/core:ui's NavKey Route
-        // (the audit's resolvability check, expressed as the expected set).
+        // (expressed as the expected set).
         val expected: List<KClass<out Route>> = listOf(
             Route.Downloads::class, Route.Favorites::class, Route.WatchProgressHeatmap::class,
             Route.LiveTv::class, Route.Playlists::class, Route.SyncPlay::class,

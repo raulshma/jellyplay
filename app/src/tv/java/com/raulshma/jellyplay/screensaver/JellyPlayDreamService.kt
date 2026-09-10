@@ -46,7 +46,7 @@ private class DreamLifecycleOwner : LifecycleOwner, SavedStateRegistryOwner {
 
 class JellyPlayDreamService : DreamService() {
 
-    // Koin singles (wave 8B — Hilt removal): resolved lazily straight from
+    // Koin singles (Hilt removal): resolved lazily straight from
     // the application container, same deferred timing the EntryPoint-backed
     // fields had.
     private val koin by lazy { org.koin.mp.KoinPlatform.getKoin()!! }

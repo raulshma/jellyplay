@@ -4,7 +4,7 @@ import com.raulshma.jellyplay.core.model.CacheIdentity
 import kotlinx.coroutines.flow.SharedFlow
 
 /**
- * Wave 15B seam (wasmJs target of `core:data`): the identity surface
+ *  seam (wasmJs target of `core:data`): the identity surface
  * `SeerrRepositoryImpl` and [SessionCacheRegistry] need from the session —
  * cache identity reads plus the transition stream the registry reacts to —
  * WITHOUT the JVM-bound machinery [HomeSession] is built on (the OkHttp
@@ -65,7 +65,7 @@ interface SessionIdentityProvider {
  * against. One half being absent is represented by a null identity (see the
  * [SessionIdentityProvider] classifiers), not by a partial value.
  *
- * Moved verbatim out of jvmShared `HomeSession.kt` (wave 15B) — the
+ * Moved verbatim out of jvmShared `HomeSession.kt` — the
  * classifier types must be visible to commonMain [SessionCacheRegistry]
  * subscribers; the classifying HomeSession itself stays JVM-bound.
  */
@@ -80,7 +80,7 @@ data class SessionIdentity(val serverId: String, val userId: String)
  * like `MediaRepositoryImpl`'s SWR privacy clear need it after the session
  * flow has already moved to `null`.
  *
- * Moved verbatim out of jvmShared `HomeSession.kt` (wave 15B).
+ * Moved verbatim out of jvmShared `HomeSession.kt`.
  */
 sealed interface HomeSessionTransition {
     /** The identity in effect before this transition; `null` on [SignedIn]. */

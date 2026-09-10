@@ -33,7 +33,7 @@ data class StorageBreakdown(
  * (Android keeps the verbatim Context bodies; desktop walks its own
  * downloads/http-cache roots), the download-mount enumeration to
  * [StorageMountsProvider], and the auto-download scheduler poke to
- * [AutoDownloadSync] — Wave 2 binds the actuals at the Koin edge.
+ * [AutoDownloadSync] —  binds the actuals at the Koin edge.
  */
 class StorageSettingsViewModel(
     private val projections: com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections,

@@ -14,7 +14,7 @@ import org.koin.core.context.startKoin
 import org.koin.core.context.stopKoin
 
 /**
- * Phase C4 smoke: databaseDaosModule over desktopDatabaseModule resolves the
+ *  smoke: databaseDaosModule over desktopDatabaseModule resolves the
  * database singleton and a working DAO (local KoinApplication, not the
  * global context).
  */

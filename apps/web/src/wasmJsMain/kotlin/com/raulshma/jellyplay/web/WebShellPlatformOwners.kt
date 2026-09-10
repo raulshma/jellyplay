@@ -13,7 +13,7 @@ import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 
 /**
  * THE one ViewModelStoreOwner/LifecycleOwner provisioning path for the web
- * shell (wave 15C). `ComposeViewport` provisions NEITHER local (wave 15B
+ * shell. `ComposeViewport` provisions NEITHER local (a
  * spike: CMP 1.11.1's ui-wasm-js klib contains zero LocalViewModelStoreOwner
  * refs and ComposeViewport wires no owners), and `koinViewModel()` —
  * RequestsScreen's default parameter — hard-errors without the former. This

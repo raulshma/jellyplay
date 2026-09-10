@@ -6,10 +6,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * App-scoped holder for the PIN/biometric lock flag (wave 20E) — the single
+ * App-scoped holder for the PIN/biometric lock flag — the single
  * source of truth for **"is the app unlocked right now"**.
  *
- * Before wave 20E this flag lived as a compose-local `mutableStateOf` field on
+ * This flag used to live as a compose-local `mutableStateOf` field on
  * `MainActivity`, which meant only MainActivity's own gate could read it. The
  * media notification's content intent, however, opens `PlayerActivity` **by
  * class name** (`MediaSessionController`'s session-activity PendingIntent) —
@@ -102,7 +102,7 @@ class AppLockState {
 }
 
 /**
- * Pure decision helpers for the app PIN/biometric gate (wave 20E) — kept as a
+ * Pure decision helpers for the app PIN/biometric gate — kept as a
  * standalone object so the predicate and the redirect rule are unit-testable
  * on the JVM without any Android types.
  *

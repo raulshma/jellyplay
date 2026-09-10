@@ -14,7 +14,7 @@ import kotlinx.io.IOException
  * of WebConnectFlow.kt into WebConnectFailurePolicy.kt so this source set can
  * reach them. Until this landed, the KDoc itself admitted the classification
  * was "statically unverifiable" from the repo's lanes; the tests below pin
- * the LOGIC exactly as shipped (byte-for-byte the wave 12C code). What they
+ * the LOGIC exactly as shipped (byte-for-byte the code). What they
  * deliberately do NOT pin: the browsers' actual rejection wording — that
  * stays the real-server browser pass's job (tools/e2e/web-verify.mjs). The
  * Chromium/Firefox/WebKit fragments asserted here are the taxonomy's INPUTS,

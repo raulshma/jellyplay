@@ -112,9 +112,9 @@ import org.koin.compose.koinInject
 import java.util.concurrent.atomic.AtomicReference
 
 /**
- * Desktop nav root (Phase X "desktop nav v1"): session-gated shell over the
+ * Desktop nav root ( "desktop nav v1"): session-gated shell over the
  * shared feature conveyor. Signed-out users get [DesktopSignedOutAuthHost]
- * (the shared auth section; wave 19A retired the legacy DesktopSignInPane
+ * (the shared auth section; retired the legacy DesktopSignInPane
  * with its cut-list); a live session renders the NavigationRail + NavDisplay
  * scaffold below.
  *
@@ -124,25 +124,25 @@ import java.util.concurrent.atomic.AtomicReference
  *  - LiveTvChannelPlayer — the live-TV surface has no desktop engine host;
  *  - SubtitleTester — androidMain-only, no commonMain section at all.
  *
- * The metadata editor went live with the wave 18B store promotion:
+ * The metadata editor went live with the store promotion:
  * StreamingSubtitleStoreImpl moved to jvmShared with a desktop binding in
  * desktopDataModule (appdata-backed), so [editorSection] below renders
  * Route.MetadataEditor — the details screen's edit action opens the shared
  * EditorScreen (admin-gated, like Android).
  *
- * VIDEO went live with wave 9A on WINDOWS (SwingPanel/HWND mpv surface) and
- * with wave 12B wherever the mpv software-render surface smoke-passes
+ * VIDEO went live on WINDOWS (SwingPanel/HWND mpv surface) and
+ * wherever the mpv software-render surface smoke-passes
  * (DesktopSoftwareVideoPane, no child window); the per-session engine resolves
  * through PlayerEngineFactory (desktopPlayerModule); OSes with neither surface
  * story keep the dead-end guard.
  *
- * The AUDIO player went live with wave 9B real audio:
+ * The AUDIO player went live with the real-audio engine:
  * [audioPlayerSection] registers Route.AudioPlayer + Route.Ambient, so music
  * track clicks (every music screen pushes Route.AudioPlayer(trackId)) open
  * the now-playing screen over the real desktop audio core —
  * DesktopAudioQueueManager in desktopPlayerModule.
  *
- * Home went live with the wave 8B desktop wiring: the four WorkManager/
+ * Home went live with the desktop wiring: the four WorkManager/
  * widget-backed HomeViewModel ctor deps (PlaybackSyncScheduler,
  * TvWatchNextScheduler, ContinueWatchingBroadcaster, LibrarySyncHook) gained
  * honest no-op desktop definitions in desktopDataModule, so [homeSection]
@@ -154,7 +154,7 @@ import java.util.concurrent.atomic.AtomicReference
  * detail route (search results, requests/calendar → SeerrDetail, person/
  * cast/collection drill-ins), and [authSection] backs the settings
  * Server/UserManagement pushes (AddServer/ServerList/Login/QuickConnect/
- * UserSelection). Since wave 19A the SAME section is the sign-in flow:
+ * UserSelection). Since the SAME section is the sign-in flow:
  * [DesktopSignedOutAuthHost] registers it while signed out, so desktop signs
  * in through the shared screens (Quick Connect, remembered-user picker,
  * add-server discovery included) — here the section only serves signed-in
@@ -167,20 +167,20 @@ import java.util.concurrent.atomic.AtomicReference
  * their Seerr/Arr/datastore ctor deps are all Koin-native).
  *
  * Music went live next (Wave wC) — browse-only at first, and fully playable
- * since wave 9B: the last unresolved music ctor dep (AudioQueueFacade) binds
+ * since: the last unresolved music ctor dep (AudioQueueFacade) binds
  * to the shared DefaultAudioQueueFacade over the desktop
  * DesktopAudioQueueManager (audio-only MpvDesktopEngine behind it), so
  * [musicSection] renders below with its full browse/albums/artists/genres/
  * playlists cluster AND play/enqueue/instant-mix actions drive real playback.
  * Track clicks navigate to the live Route.AudioPlayer (registered by
- * [audioPlayerSection] above). Since wave 21B the music error-feedback seam
+ * [audioPlayerSection] above). Since the music error-feedback seam
  * has a host here too, and since the shared UserMessageHost wave that host
  * is the seam itself: the shell snackbar serves BOTH the DesktopMusicMessageBus
  * relay and the shared UserMessageBus (whose messages desktop previously
  * dropped) through one collector — one surface shared with the dead-end guard
  * below.
  *
- * First-run onboarding gate (wave 21B): once an authenticated session enters
+ * First-run onboarding gate: once an authenticated session enters
  * [DesktopNavScaffold], a one-shot read of the persisted `onboarding_completed`
  * flag (AppRuntimeStateStore.isOnboardingCompleted) pushes Route.Onboarding
  * for a not-yet-onboarded user — the Android JellyPlayApp gate's order and
@@ -191,7 +191,7 @@ import java.util.concurrent.atomic.AtomicReference
  *   one-line note + log path in the About dialog — deliberately minimal, this
  *   is a diagnostics pointer, not an error UI.
  * @param windowRef the ComposeWindow handle (Main.kt's AWT ref), consumed
- *   ONLY by the wave-13B session harness (screenshots + key injection).
+ *   ONLY by the session harness (screenshots + key injection).
  *   The parameter is always supplied; the ref's CONTENT is null until the
  *   window is composed.
  */
@@ -210,7 +210,7 @@ internal fun DesktopAppRoot(
     val authRepository: AuthRepository = koinInject()
     val isAuthenticated by authRepository.isAuthenticated.collectAsState(initial = false)
 
-    // Wave 13B real-server E2E session harness (DesktopSessionHarness KDoc):
+    //  real-server E2E session harness (DesktopSessionHarness KDoc):
     // composes NOTHING unless jellyplay.harness.enabled=true — the host is a
     // bare LaunchedEffect, and it lives HERE (not in DesktopNavScaffold)
     // because the harness performs the login itself and must keep running
@@ -224,8 +224,8 @@ internal fun DesktopAppRoot(
         )
     }
 
-    // Wave 22F native-dialog harness (DesktopNativeDialogHarness KDoc): the
-    // audit-F9 gate for the wave-20 AWT FileDialog flows — composes NOTHING
+    // Native-dialog harness (DesktopNativeDialogHarness KDoc): a no-op gate
+    // for the AWT FileDialog flows — composes NOTHING
     // unless jellyplay.dialogpass.enabled=true. Server-free by design (the
     // settings backup round trip is local-prefs-only), so it needs no login
     // and no fixture.
@@ -244,7 +244,7 @@ internal fun DesktopAppRoot(
 
     when {
         !sessionRestoreDone -> SessionRestoreSplash()
-        // Wave 19A: the signed-out gate is the SHARED auth flow now (see
+        //THE SIGNED-OUT GATE IS THE SHARED AUTH FLOW NOW (SEE
         // DesktopSignedOutAuthHost) — the legacy DesktopSignInPane pane is
         // retired with its v1 cut-list.
         !isAuthenticated -> DesktopSignedOutAuthHost()
@@ -258,8 +258,8 @@ internal fun DesktopAppRoot(
             title = { Text("JellyPlay") },
             text = {
                 Column {
-                    Text("KMP desktop shell (Phase X desktop nav v1). Android app unaffected.")
-                    // Wave 10A crash scaffold: the previous session's crash
+                    Text("KMP desktop shell. Android app unaffected.")
+                    //  crash scaffold: the previous session's crash
                     // marker, if any (Main.kt consumed it at boot). One line +
                     // the log path — no link, no error styling; users copy the
                     // path out of this text when filing a report.
@@ -311,7 +311,7 @@ private fun DesktopNavScaffold(
         menuRefreshRequests.collect { refreshRegistry.refreshActive() }
     }
 
-    // Wave 13B session harness: publish the live back stack (nav3 is the
+    //  session harness: publish the live back stack (nav3 is the
     // source of truth) so DesktopSessionHarness can push the player route and
     // assert pops after Esc injection. Provider form reads the CURRENT tab's
     // stack; attaching here is a lambda store, no behavior for normal boots.
@@ -322,7 +322,7 @@ private fun DesktopNavScaffold(
         true
     }
 
-    // Wave 12B: wire the software-surface prober before any route guard reads
+    //WIRE THE SOFTWARE-SURFACE PROBER BEFORE ANY ROUTE GUARD READS
     // it (the Route.VideoPlayer entry registration below asks it while the
     // entry provider graph is built; the guard derives the same predicate
     // from the graph's ledger). The probe itself is lazy and cached
@@ -337,7 +337,7 @@ private fun DesktopNavScaffold(
     }
 
     // App-level composition locals the shared screens read. Network status is
-    // LIVE (wave 21B): the flow comes from :core:data's DesktopNetworkMonitor
+    // LIVE: the flow comes from :core:data's DesktopNetworkMonitor
     // (desktopDataModule single — NetworkInterface probing with a 15 s
     // re-probe and a synchronous construction-time seed), so offline banners
     // now reflect real connectivity. Server health stays a static Unknown —
@@ -428,7 +428,7 @@ private fun DesktopNavScaffold(
         }
     }
 
-    // First-run onboarding gate (wave 21B): the persisted
+    // First-run onboarding gate: the persisted
     // `onboarding_completed` flag is read ONCE per scaffold composition —
     // i.e. once per authenticated session entry — and a not-yet-onboarded
     // session gets the shared wizard pushed (the same Route.Onboarding the
@@ -459,7 +459,7 @@ private fun DesktopNavScaffold(
     // this shell's present adapter (withDismissAction, matching the Android
     // collector this seam replaces).
     val sharedUserMessageBus: UserMessageBus = koinInject()
-    // Music message-bus host (wave 21B): the desktop MusicMessageBus actual
+    // Music message-bus host: the desktop MusicMessageBus actual
     // is a buffering relay (DesktopMusicMessageBus, desktopMusicMessageBus
     // Module), mapped onto UserMessage.Error — the severity Android's own
     // bridge (AppMusicMessageBus) gives the same messages. The is-check (not
@@ -545,8 +545,8 @@ private fun DesktopNavScaffold(
             host = shellHost,
             registry = sectionRegistry,
         ) {
-            // …player-video, wave 9A conveyor — live where a surface story
-            // exists: the commonMain VideoPlayerScreen renders the wave-12B
+            // …player-video, a conveyor — live where a surface story
+            // exists: the commonMain VideoPlayerScreen renders the
             // software-render pane wherever its probe smoke-passed (primary —
             // the video sits inside the compose tree, so controls and clicks
             // work), falling back to the SwingPanel/HWND mpv surface, and the
@@ -578,16 +578,16 @@ private fun DesktopNavScaffold(
             // there is anything to pop (nav3's predictive back is
             // Android-only; this is the whole desktop story).
             //
-            // Wave 14E deterministic media-key delivery: this preview is the
+            // Deterministic media-key delivery: this preview is the
             // TOPMOST key-input chain, so it receives EVERY key with or
             // without any Compose focus owner (the null-focus fallback; ESC
-            // has worked here since wave 13B). When the video player route is
+            // has worked here since then). When the video player route is
             // current, every non-back key is offered to the player screen's
             // OWN handler through DesktopPlayerKeyBridge — the screen stays
             // the single interpreter of media-key semantics (this shell never
             // decodes a media key), and the sink declines when the focused
             // dispatch chain owns the key or a sheet is open, so a key is
-            // interpreted exactly once either way. This closes the wave-14D
+            // interpreted exactly once either way. This closes the
             // flap gap: a SPACE/arrow/M/F/J/L pressed (or injected) while the
             // AWT/Compose focus shuffle left the player Box focus-less used
             // to die in this Row's fallback; now it reaches the player

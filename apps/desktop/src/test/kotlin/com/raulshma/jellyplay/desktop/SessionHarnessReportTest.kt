@@ -11,7 +11,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Wave 13B session harness — pins the shape of the hand-rolled
+ *  session harness — pins the shape of the hand-rolled
  * `<logs>/session-harness.json` payload (SessionHarnessReport.toJson): the
  * runner script greps `overallPass` and humans read step details out of it,
  * so the JSON must stay parseable and carry the documented keys. Parsing via

@@ -14,7 +14,7 @@ import kotlinx.coroutines.withContext
  * Shared font infrastructure for libass-based subtitle rendering on both the
  * ExoPlayer (ass-media) and mpv backends.
  *
- * (Wave 8C: renamed from `FontProvider` — the commonMain [FontProvider] seam
+ * (renamed from `FontProvider` — the commonMain [FontProvider] seam
  * interface took the old name; this class is its Android actual and keeps the
  * Android-only surface: Typeface cache, libass fonts dir, TTF parsing.) Ensures a fonts directory containing
  * the bundled fallback [subfont.ttf] exists, and optionally installs a
