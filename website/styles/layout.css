@@ -1,3 +1,25 @@
+/* ── Skip Link ── */
+
+.skip-link {
+  position: fixed;
+  top: -56px;
+  left: 16px;
+  z-index: 3000;
+  background: var(--md-sys-color-primary);
+  color: var(--md-sys-color-on-primary);
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  font-weight: 600;
+  padding: 12px 20px;
+  border-radius: 8px;
+  text-decoration: none;
+  transition: top 0.2s var(--jp-ease-spring);
+}
+
+.skip-link:focus {
+  top: 12px;
+}
+
 /* ── Container ── */
 
 .container {
@@ -63,19 +85,36 @@
   margin-bottom: 56px;
 }
 
-.section-title {
-  font-family: 'Outfit', sans-serif;
-  font-size: clamp(1.75rem, 4vw, 2.5rem);
+.section-eyebrow {
+  display: inline-block;
+  font-family: var(--font-body);
+  font-size: 0.6875rem;
   font-weight: 700;
-  color: var(--jp-color-white);
-  line-height: 1.2;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--md-sys-color-primary);
+  background: var(--jp-primary-alpha-10);
+  border: 1px solid var(--jp-primary-alpha-20);
+  border-radius: 9999px;
+  padding: 5px 14px;
+  margin-bottom: 20px;
+}
+
+/* headline-large from JellyPlayTypography (34/42, Bold) */
+.section-title {
+  font-family: var(--font-display);
+  font-size: clamp(1.625rem, 3.5vw, 2.125rem);
+  font-weight: 700;
+  color: var(--md-sys-color-on-surface);
+  line-height: 1.25;
   margin-bottom: 16px;
 }
 
+/* body-large from JellyPlayTypography (16/24) */
 .section-subtitle {
-  font-family: 'Inter', sans-serif;
-  color: var(--jp-lavender-alpha-70);
-  font-size: 1.125rem;
+  font-family: var(--font-body);
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: 1rem;
   line-height: 1.6;
   max-width: 600px;
   margin-left: auto;

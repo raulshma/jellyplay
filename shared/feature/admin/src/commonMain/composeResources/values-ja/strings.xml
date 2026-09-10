@@ -22,6 +22,14 @@
     <string name="admin_scanning">スキャン中…</string>
     <string name="admin_scan_now">今すぐスキャン</string>
     <string name="admin_select_all">すべて選択</string>
+
+    <string name="admin_sort_default">デフォルト</string>
+    <string name="admin_sort_name_asc">名前（A–Z）</string>
+    <string name="admin_sort_name_desc">名前（Z–A）</string>
+    <string name="admin_sort_largest">最大</string>
+    <string name="admin_sort_smallest">最小</string>
+    <string name="admin_sort_type">種類</string>
+    <string name="admin_sort_date">日付</string>
     <string name="admin_media_types">メディアの種類</string>
     <string name="admin_dry_run">ドライラン（プレビューのみ）</string>
 
@@ -131,8 +139,8 @@
 
     <!-- Statistics -->
     <string name="admin_user_statistics_title">ユーザー統計</string>
-    <string name="admin_watched_more">今月は%1$s%%多く視聴しました</string>
-    <string name="admin_watched_less">今月は%1$s%%少なく視聴しました</string>
+    <string name="admin_watched_more">今月は%1$s%多く視聴しました</string>
+    <string name="admin_watched_less">今月は%1$s%少なく視聴しました</string>
     <string name="admin_duration_vs_last">%1$s（先月は%2$s）</string>
     <string name="admin_content_breakdown">コンテンツの内訳</string>
     <string name="admin_by_genre">ジャンル別</string>
@@ -303,7 +311,7 @@
     <string name="admin_n_items">%1$d件</string>
     <string name="admin_n_lines">%1$d行</string>
     <string name="admin_scanning_library">ライブラリをスキャン中</string>
-    <string name="admin_scan_progress_pct">スキャン中 %1$d%%</string>
+    <string name="admin_scan_progress_pct">スキャン中 %1$d%</string>
 
     <!-- Misc UI batch3 -->
     <string name="admin_quick_access">クイックアクセス</string>
@@ -394,4 +402,6 @@
     <string name="user_stats_export_shared">エクスポートしました</string>
 
     <string name="admin_plugin_config_unavailable">プラグイン設定はこのプラットフォームでは利用できません。</string>
+
+    <string name="admin_no_delete_permission">お使いのアカウントにはコンテンツを削除する権限がありません。サーバー管理者に連絡してください。</string>
 </resources>

@@ -11,7 +11,7 @@ import org.koin.core.module.Module
 import org.koin.dsl.module
 
 /**
- * Android platform Koin module (docs/kmp-migration-plan.md §Phase C4).
+ * Android platform Koin module (docs/kmp-migration-plan.md).
  * Byte-for-byte the legacy Hilt DatabaseModule wiring: Android Keystore
  * TokenCipher, "jellyplay.db" name, full migration chain, destructive
  * fallback on downgrade, WAL journal mode.

@@ -23,7 +23,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
 
 /**
- * Request plumbing base for the Phase W wasm Seerr / Radarr / Sonarr / TMDB
+ * Request plumbing base for the wasm Seerr / Radarr / Sonarr / TMDB
  * clients — the wasm counterpart of the jvmShared OkHttp
  * `JsonRequestClient`/`parseJsonRequest`/`parseUnitRequest` plumbing
  * (`ApiResponseParsing.kt`), re-shaped for these seams' stateless per-call

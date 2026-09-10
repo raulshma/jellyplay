@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.json.JSONArray
@@ -92,6 +93,32 @@ class ScheduledTasksRealtimeChannelTest {
             webSocketClient.sendMessageWithDataString("ScheduledTasksInfoStart", any())
         }
         job.cancel()
+    }
+
+    @Test
+    fun `collector leaving while the socket is still down cancels the deferred subscribe`() = runTest {
+        val channel = createChannel()
+        val job = launch { channel.tasks.first() }
+        runCurrent()
+
+        // The collector goes away while the socket is still down; the
+        // WhileSubscribed grace (5s) then tears the shared upstream down and
+        // awaitClose runs. The deferred wait-for-socket job runs on the
+        // channel's scope — NOT the flow's context — so it must be cancelled
+        // by awaitClose, or it would later send ScheduledTasksInfoStart with
+        // no owner left to send the matching Stop.
+        job.cancel()
+        advanceTimeBy(5_001)
+        runCurrent()
+
+        // The socket comes up after the collector is gone: the abandoned
+        // deferred Start must NOT fire.
+        connected.value = true
+        runCurrent()
+
+        verify(exactly = 0) {
+            webSocketClient.sendMessageWithDataString("ScheduledTasksInfoStart", any())
+        }
     }
 
     @Test

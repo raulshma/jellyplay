@@ -11,6 +11,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.raulshma.jellyplay.core.datastore.ParsedCache
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
+import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.model.CheckFrequency
 import com.raulshma.jellyplay.core.model.LibraryNotificationConfig
 import com.raulshma.jellyplay.core.model.NewsletterSectionType
@@ -126,11 +127,8 @@ class NotificationStore constructor(
         newsletterSectionOrder = readNewsletterSectionOrder(prefs),
     )
 
-    private fun readCheckFrequency(prefs: Preferences): CheckFrequency = try {
-        CheckFrequency.valueOf(prefs[Keys.NOTIFICATIONS_CHECK_FREQUENCY] ?: CheckFrequency.EVERY_6_HOURS.name)
-    } catch (_: Exception) {
-        CheckFrequency.EVERY_6_HOURS
-    }
+    private fun readCheckFrequency(prefs: Preferences): CheckFrequency =
+        prefs[Keys.NOTIFICATIONS_CHECK_FREQUENCY].toEnumOrNull() ?: CheckFrequency.EVERY_6_HOURS
 
     private fun readNotificationLibraryConfigs(prefs: Preferences): Map<String, LibraryNotificationConfig> {
         val raw = prefs[Keys.NOTIFICATIONS_LIBRARY_CONFIGS]
@@ -182,9 +180,7 @@ class NotificationStore constructor(
         dataStore.edit { prefs ->
             val current = NotificationPreferences(
                 enabled = prefs[Keys.NOTIFICATIONS_ENABLED] ?: false,
-                checkFrequency = try {
-                    CheckFrequency.valueOf(prefs[Keys.NOTIFICATIONS_CHECK_FREQUENCY] ?: CheckFrequency.EVERY_6_HOURS.name)
-                } catch (_: Exception) { CheckFrequency.EVERY_6_HOURS },
+                checkFrequency = prefs[Keys.NOTIFICATIONS_CHECK_FREQUENCY].toEnumOrNull() ?: CheckFrequency.EVERY_6_HOURS,
                 quietHoursEnabled = prefs[Keys.NOTIFICATIONS_QUIET_HOURS_ENABLED] ?: false,
                 quietHoursStart = prefs[Keys.NOTIFICATIONS_QUIET_HOURS_START] ?: 1380,
                 quietHoursEnd = prefs[Keys.NOTIFICATIONS_QUIET_HOURS_END] ?: 420,

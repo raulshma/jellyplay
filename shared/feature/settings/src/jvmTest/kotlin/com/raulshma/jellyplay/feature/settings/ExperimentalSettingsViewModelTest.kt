@@ -75,7 +75,7 @@ class ExperimentalSettingsViewModelTest {
     }
 
     private fun viewModel() =
-        ExperimentalSettingsViewModel(store, projections, appearanceStore, editor)
+        ExperimentalSettingsViewModel(store, projections, AdvancedSettingsGate(appearanceStore, editor), editor)
 
     @Test
     fun `preferences exposes the experimental projection flow`() = runTest {

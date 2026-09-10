@@ -14,7 +14,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Wave 14C: the mpv `af`-chain builder pin for the desktop audio effects —
+ *: the mpv `af`-chain builder pin for the desktop audio effects —
  * the Android→mpv filter parity table in [DesktopAudioEffectChain] is only
  * as good as these strings. Every case cites the Android application path
  * (`AudioEffectsProcessor` / `AudioEffectChain` / the Android MPV engine's

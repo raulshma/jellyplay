@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.io.TempDir
 
 /**
- * [MpvSoftwareRenderEngine] contract behavior — the wave-12B sw-render engine
+ * [MpvSoftwareRenderEngine] contract behavior — the sw-render engine
  * subclassing the HWND engine. Cases mirror [MpvDesktopEngineTest] where they
  * apply; the source is a synthetic VIDEO clip (the surface story only exists
  * for video), generated with the host's ffmpeg into a temp dir instead of the

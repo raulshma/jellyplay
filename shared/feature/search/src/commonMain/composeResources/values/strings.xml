@@ -48,7 +48,7 @@
     <string name="search_filter_tags">Tags</string>
     <string name="search_filter_minimum_rating">Minimum Rating</string>
     <string name="search_filter_any">Any</string>
-    <string name="search_filter_rating_plus">%1$.1f+</string>
+    <string name="search_filter_rating_plus">%1$s+</string>
     <string name="search_apply_filters">Apply Filters</string>
 
     <!-- Sort (parity with Library's sort options) -->

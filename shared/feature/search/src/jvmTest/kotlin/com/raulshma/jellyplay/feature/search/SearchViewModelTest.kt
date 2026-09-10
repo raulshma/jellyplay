@@ -15,6 +15,7 @@ import com.raulshma.jellyplay.core.model.LibraryFilters
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.SearchResult
+import com.raulshma.jellyplay.core.model.UserDataChange
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
@@ -29,6 +30,7 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
@@ -446,6 +448,65 @@ class SearchViewModelTest {
         }
     }
 
+    // ── Deferred refresh (user-data changes while off-screen) ───────────────
+
+    /** Driven by the deferred-refresh tests; collected by the VM for its lifetime. */
+    private val userDataEvents = MutableSharedFlow<UserDataChange>(extraBufferCapacity = 16)
+
+    @Test
+    fun `userData change while inactive defers the paged refresh to the next entry`() = runTest(mainDispatcher) {
+        every { mediaRepository.userDataChanges } returns userDataEvents
+        coEvery { mediaRepository.searchPaged(any(), any()) } returns
+            flowOf(androidx.paging.PagingData.empty<com.raulshma.jellyplay.core.model.MediaItem>())
+        viewModel = SearchViewModel(
+            mediaRepository, userDataMutator, imageUrlProvider, seerrRepository, seerrRequestDelegate,
+            mediaSearchEngine, offlineRepository, searchFiltersStore, mediaDownloadActions,
+        )
+        val pagedJob = launch { viewModel.pagedResults.collect { } }
+        try {
+            viewModel.search("breaking")
+            advanceUntilIdle()
+            coVerify(exactly = 1) { mediaRepository.searchPaged(any(), any()) }
+
+            // A write confirmed while the screen is NOT on screen only marks stale.
+            viewModel.deferredRefresher.onScreenActiveChanged(false)
+            userDataEvents.emit(UserDataChange("user-1", listOf("m1")))
+            advanceUntilIdle()
+            coVerify(exactly = 1) { mediaRepository.searchPaged(any(), any()) }
+
+            // Re-entry fires the single deferred regeneration.
+            viewModel.deferredRefresher.onScreenActiveChanged(true)
+            advanceUntilIdle()
+            coVerify(exactly = 2) { mediaRepository.searchPaged(any(), any()) }
+        } finally {
+            pagedJob.cancel()
+        }
+    }
+
+    @Test
+    fun `userData change while active does not regenerate the pager`() = runTest(mainDispatcher) {
+        every { mediaRepository.userDataChanges } returns userDataEvents
+        coEvery { mediaRepository.searchPaged(any(), any()) } returns
+            flowOf(androidx.paging.PagingData.empty<com.raulshma.jellyplay.core.model.MediaItem>())
+        viewModel = SearchViewModel(
+            mediaRepository, userDataMutator, imageUrlProvider, seerrRepository, seerrRequestDelegate,
+            mediaSearchEngine, offlineRepository, searchFiltersStore, mediaDownloadActions,
+        )
+        val pagedJob = launch { viewModel.pagedResults.collect { } }
+        try {
+            viewModel.search("breaking")
+            advanceUntilIdle()
+
+            // Silent contract: no mid-scroll pager swap for on-screen events.
+            viewModel.deferredRefresher.onScreenActiveChanged(true)
+            userDataEvents.emit(UserDataChange("user-1", listOf("m1")))
+            advanceUntilIdle()
+            coVerify(exactly = 1) { mediaRepository.searchPaged(any(), any()) }
+        } finally {
+            pagedJob.cancel()
+        }
+    }
+
     // ── Search history mutations ───────────────────────────────────────
 
     @Test
@@ -538,7 +599,7 @@ class SearchViewModelTest {
     }
 
     @Test
-    fun `clearRequestResult nulls the exposed result`() = runTest(mainDispatcher) {
+    fun `dismissSeerrRequestDialog nulls the exposed result and closes the dialog`() = runTest(mainDispatcher) {
         coEvery {
             seerrRequestDelegate.requestMedia(
                 mediaType = any(), tmdbId = any(), seasons = any(),
@@ -550,43 +611,47 @@ class SearchViewModelTest {
         advanceUntilIdle()
         assertNotNull(viewModel.seerrSnapshot.value.requestResult)
 
-        viewModel.clearRequestResult()
+        viewModel.dismissSeerrRequestDialog()
         advanceUntilIdle()
 
         assertNull(viewModel.seerrSnapshot.value.requestResult)
+        assertNull(viewModel.seerrSnapshot.value.dialogItem)
     }
 
     @Test
-    fun `loadSeerrServiceDetails folds sonarr servers for tv`() = runTest(mainDispatcher) {
+    fun `openSeerrRequestDialog for tv folds sonarr servers and opens the dialog`() = runTest(mainDispatcher) {
         val sonarr = SeerrSonarrServiceDetail(id = 1, name = "Sonarr")
         coEvery { seerrRequestDelegate.fetchServiceDetails("tv") } returns SeerrServiceDetailsResult(
             sonarrServers = listOf(sonarr),
         )
         backgroundScope.launch { viewModel.seerrSnapshot.collect { } }
 
-        viewModel.loadSeerrServiceDetails("tv")
+        coEvery { seerrRequestDelegate.fetchTvDetails(any()) } returns null
+        viewModel.openSeerrRequestDialog(SeerrSearchItem(id = 5, mediaType = "tv"))
         advanceUntilIdle()
 
         assertEquals(listOf(sonarr), viewModel.seerrSnapshot.value.sonarrServers)
         assertFalse(viewModel.seerrSnapshot.value.isLoadingServices)
+        assertNotNull(viewModel.seerrSnapshot.value.dialogItem)
     }
 
     @Test
-    fun `loadSeerrServiceDetails folds radarr servers for movie`() = runTest(mainDispatcher) {
+    fun `openSeerrRequestDialog for movie folds radarr servers and opens the dialog`() = runTest(mainDispatcher) {
         val radarr = SeerrRadarrServiceDetail(id = 2, name = "Radarr")
         coEvery { seerrRequestDelegate.fetchServiceDetails("movie") } returns SeerrServiceDetailsResult(
             radarrServers = listOf(radarr),
         )
         backgroundScope.launch { viewModel.seerrSnapshot.collect { } }
 
-        viewModel.loadSeerrServiceDetails("movie")
+        viewModel.openSeerrRequestDialog(SeerrSearchItem(id = 6, mediaType = "movie"))
         advanceUntilIdle()
 
         assertEquals(listOf(radarr), viewModel.seerrSnapshot.value.radarrServers)
+        assertNotNull(viewModel.seerrSnapshot.value.dialogItem)
     }
 
     @Test
-    fun `loadTvSeasons populates tvSeasons from delegate`() = runTest(mainDispatcher) {
+    fun `openSeerrRequestDialog for tv populates tvSeasons from delegate`() = runTest(mainDispatcher) {
         val tvDetails = SeerrTvDetails(
             id = 123,
             seasons = listOf(SeerrSeason(seasonNumber = 1, name = "Season 1")),
@@ -594,15 +659,16 @@ class SearchViewModelTest {
         coEvery { seerrRequestDelegate.fetchTvDetails(123) } returns tvDetails
         backgroundScope.launch { viewModel.seerrSnapshot.collect { } }
 
-        viewModel.loadTvSeasons(123)
+        viewModel.openSeerrRequestDialog(SeerrSearchItem(id = 123, mediaType = "tv"))
         advanceUntilIdle()
 
         assertEquals(listOf(SeerrSeason(seasonNumber = 1, name = "Season 1")), viewModel.seerrSnapshot.value.tvSeasons)
+        assertNotNull(viewModel.seerrSnapshot.value.dialogItem)
         assertEquals(false, viewModel.seerrSnapshot.value.tvIsAnime)
     }
 
     @Test
-    fun `loadTvSeasons flags anime shows via tmdb keyword`() = runTest(mainDispatcher) {
+    fun `openSeerrRequestDialog for tv flags anime shows via tmdb keyword`() = runTest(mainDispatcher) {
         val tvDetails = SeerrTvDetails(
             id = 123,
             seasons = listOf(SeerrSeason(seasonNumber = 1, name = "Season 1")),
@@ -611,7 +677,7 @@ class SearchViewModelTest {
         coEvery { seerrRequestDelegate.fetchTvDetails(123) } returns tvDetails
         backgroundScope.launch { viewModel.seerrSnapshot.collect { } }
 
-        viewModel.loadTvSeasons(123)
+        viewModel.openSeerrRequestDialog(SeerrSearchItem(id = 123, mediaType = "tv"))
         advanceUntilIdle()
 
         assertEquals(true, viewModel.seerrSnapshot.value.tvIsAnime)

@@ -14,7 +14,7 @@ kotlin {
         namespace = "com.raulshma.jellyplay.shared.feature.auth"
         compileSdk = 37
         minSdk = 28
-        // Compose-resources packaging (wave-21 device-pass finding): with the
+        // Compose-resources packaging (device-pass finding): with the
         // AGP-9 KMP library plugin, android resources are OFF by default, so
         // copyAndroidMainComposeResourcesToAndroidAssets never runs and the
         // app APK ships this module's Res accessors with NO backing .cvr
@@ -86,7 +86,7 @@ kotlin {
         getByName("androidMain").dependencies {
             // Documented shared→legacy :core:ui androidMain edge (library/
             // livetv/admin/calendar/downloads/settings/onboarding/arrqueue
-            // precedents; dies at Phase X): the local-network seam actuals
+            // precedents; dies at ): the local-network seam actuals
             // bridge the legacy LocalNetworkAccess object, which keeps the
             // Android 17 permission logic (and its MainActivity consumer) in
             // one place.

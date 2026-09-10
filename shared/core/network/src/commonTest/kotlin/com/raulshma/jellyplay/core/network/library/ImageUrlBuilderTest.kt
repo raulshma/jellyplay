@@ -69,7 +69,7 @@ class ImageUrlBuilderTest {
 
     @Test
     fun `compact 32-hex ids normalize to the dashed sdk form`() {
-        // Wave 13C harness finding: Jellyfin 10.11 /Items responses carry
+        //  harness finding: Jellyfin 10.11 /Items responses carry
         // compact 32-hex ids; the builder must still emit the dashed URL the
         // JVM SDK produces (the server accepts both path forms).
         assertEquals(

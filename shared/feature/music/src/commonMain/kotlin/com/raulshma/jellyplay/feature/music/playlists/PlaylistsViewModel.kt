@@ -1,11 +1,11 @@
 package com.raulshma.jellyplay.feature.music.playlists
 
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.model.Playlist
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 
 class PlaylistsViewModel(
-    private val mediaRepository: MediaRepository,
+    private val playlistRepository: PlaylistRepository,
 ) : JellyPlayViewModel() {
 
     private val _playlists = composeState<List<Playlist>>(emptyList())
@@ -31,7 +31,7 @@ class PlaylistsViewModel(
         launch {
             _isLoading.value = true
             _error.value = null
-            mediaRepository.getPlaylists(limit = 100)
+            playlistRepository.getPlaylists(limit = 100)
                 .onSuccess { _playlists.value = it }
                 .onFailure { _error.value = it.message }
             _isLoading.value = false
@@ -67,7 +67,7 @@ class PlaylistsViewModel(
         launch {
             _isMutating.value = true
             _error.value = null
-            mediaRepository.createPlaylist(name.trim(), overview.trim().ifBlank { null })
+            playlistRepository.createPlaylist(name.trim(), overview.trim().ifBlank { null })
                 .onSuccess {
                     _dialogState.value = PlaylistDialogState.None
                     load()
@@ -82,7 +82,7 @@ class PlaylistsViewModel(
         launch {
             _isMutating.value = true
             _error.value = null
-            mediaRepository.updatePlaylist(
+            playlistRepository.updatePlaylist(
                 playlistId = playlistId,
                 name = name.trim(),
                 overview = overview.trim().ifBlank { null },
@@ -100,7 +100,7 @@ class PlaylistsViewModel(
         launch {
             _isMutating.value = true
             _error.value = null
-            mediaRepository.deletePlaylist(playlist.id)
+            playlistRepository.deletePlaylist(playlist.id)
                 .onSuccess {
                     _dialogState.value = PlaylistDialogState.None
                     load()

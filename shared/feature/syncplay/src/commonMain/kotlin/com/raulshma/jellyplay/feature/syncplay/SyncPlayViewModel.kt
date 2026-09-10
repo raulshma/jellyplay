@@ -2,7 +2,7 @@ package com.raulshma.jellyplay.feature.syncplay
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.SyncPlayRepository
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayEvent
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
 import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore
@@ -65,7 +65,7 @@ data class SyncPlayUiState(
  * of which screen is foreground.
  */
 class SyncPlayViewModel(
-    private val mediaRepository: MediaRepository,
+    private val syncPlayRepository: SyncPlayRepository,
     private val syncPlayManager: SyncPlayManager,
     private val syncPlayCastStore: SyncPlayCastStore,
 ) : JellyPlayViewModel() {
@@ -86,7 +86,7 @@ class SyncPlayViewModel(
     fun loadGroups() {
         launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
-            mediaRepository.getSyncPlayGroups()
+            syncPlayRepository.getSyncPlayGroups()
                 .onSuccess { result ->
                     _uiState.update { state ->
                         val currentGroup = if (state.isInGroup) state.currentGroup else null
@@ -185,11 +185,11 @@ class SyncPlayViewModel(
     fun createGroup(name: String) {
         launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
-            mediaRepository.createSyncPlayGroup(name)
+            syncPlayRepository.createSyncPlayGroup(name)
                 .onSuccess {
                     _uiState.update { it.copy(showCreateDialog = false) }
                     delay(500)
-                    val updatedGroups = mediaRepository.getSyncPlayGroups().getOrElse { emptyList() }
+                    val updatedGroups = syncPlayRepository.getSyncPlayGroups().getOrElse { emptyList() }
                     val newGroup = updatedGroups.find { it.groupName == name }
                     if (newGroup != null) {
                         _uiState.update { it.copy(groups = updatedGroups) }
@@ -270,40 +270,40 @@ class SyncPlayViewModel(
         launch {
             val group = _uiState.value.currentGroup ?: return@launch
             if (group.isPlaying) {
-                mediaRepository.syncPlayPause()
+                syncPlayRepository.syncPlayPause()
             } else {
-                mediaRepository.syncPlayUnpause()
+                syncPlayRepository.syncPlayUnpause()
             }
         }
     }
 
     fun seekTo(positionTicks: Long) {
         launch {
-            mediaRepository.syncPlaySeek(positionTicks)
+            syncPlayRepository.syncPlaySeek(positionTicks)
         }
     }
 
     fun stop() {
         launch {
-            mediaRepository.syncPlayStop()
+            syncPlayRepository.syncPlayStop()
         }
     }
 
     fun setRepeatMode(mode: SyncPlayRepeatMode) {
         launch {
-            mediaRepository.syncPlaySetRepeatMode(mode)
+            syncPlayRepository.syncPlaySetRepeatMode(mode)
         }
     }
 
     fun setShuffleMode(mode: SyncPlayShuffleMode) {
         launch {
-            mediaRepository.syncPlaySetShuffleMode(mode)
+            syncPlayRepository.syncPlaySetShuffleMode(mode)
         }
     }
 
     fun setIgnoreWait(ignore: Boolean) {
         launch {
-            mediaRepository.syncPlaySetIgnoreWait(ignore)
+            syncPlayRepository.syncPlaySetIgnoreWait(ignore)
         }
     }
 
@@ -313,7 +313,7 @@ class SyncPlayViewModel(
 
     fun refreshGroups() {
         launch {
-            mediaRepository.getSyncPlayGroups()
+            syncPlayRepository.getSyncPlayGroups()
                 .onSuccess { groups -> _uiState.update { it.copy(groups = groups) } }
                 .onFailure { }
         }
@@ -321,7 +321,7 @@ class SyncPlayViewModel(
 
     private suspend fun loadCurrentGroup() {
         val groupId = syncPlayManager.activeGroupId ?: return
-        mediaRepository.getSyncPlayInfo(groupId)
+        syncPlayRepository.getSyncPlayInfo(groupId)
             .onSuccess { currentGroup -> _uiState.update { it.copy(currentGroup = currentGroup) } }
             .onFailure { _uiState.update { it.copy(currentGroup = null) } }
     }

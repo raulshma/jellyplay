@@ -11,11 +11,14 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrTvDetails
 import com.raulshma.jellyplay.core.model.seerr.SeerrKeyword
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.coVerifyOrder
 import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import kotlin.test.assertEquals
@@ -26,6 +29,7 @@ import kotlin.test.assertSame
 import kotlin.test.assertTrue
 import kotlin.test.Test
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class SeerrRequestStateHolderTest {
 
     private val delegate: SeerrRequestDelegate = mockk(relaxed = true)
@@ -291,6 +295,113 @@ class SeerrRequestStateHolderTest {
 
         assertTrue(called)
         coVerify { delegate.prefetchDetails(1, "movie") }
+    }
+    // endregion
+
+    // region openRequestDialog / dismissRequestDialog
+    @Test
+    fun `openRequestDialog for tv sets dialogItem and fires the full cascade`() = runTest {
+        val seasons = listOf(SeerrSeason(seasonNumber = 1, name = "S1"))
+        coEvery { delegate.fetchServiceDetails("tv") } returns
+            SeerrServiceDetailsResult(sonarrServers = listOf(SeerrSonarrServiceDetail(id = 2, name = "S")))
+        coEvery { delegate.fetchTvDetails(42) } returns SeerrTvDetails(seasons = seasons)
+        val h = holder(this)
+        val item = SeerrSearchItem(id = 42, mediaType = "tv")
+
+        h.openRequestDialog(item)
+        advanceUntilIdle()
+
+        val snap = h.snap()
+        assertSame(item, snap.dialogItem)
+        assertEquals(2, snap.sonarrServers.single().id)
+        assertEquals(seasons, snap.tvSeasons)
+        // Cascade order: service details load before the season list.
+        coVerifyOrder {
+            delegate.fetchServiceDetails("tv")
+            delegate.fetchTvDetails(42)
+        }
+    }
+
+    @Test
+    fun `openRequestDialog tv mixed case still loads seasons and forwards type verbatim`() = runTest {
+        coEvery { delegate.fetchServiceDetails("TV") } returns SeerrServiceDetailsResult()
+        coEvery { delegate.fetchTvDetails(7) } returns null
+        val h = holder(this)
+
+        h.openRequestDialog(SeerrSearchItem(id = 7, mediaType = "TV"))
+        advanceUntilIdle()
+
+        // The mediaType reaches the service-details load EXACTLY as the item
+        // carried it; only the season gate is case-insensitive.
+        coVerify { delegate.fetchServiceDetails("TV") }
+        coVerify { delegate.fetchTvDetails(7) }
+        assertEquals("TV", h.snap().dialogItem?.mediaType)
+    }
+
+    @Test
+    fun `openRequestDialog for movie fires service details only`() = runTest {
+        coEvery { delegate.fetchServiceDetails("movie") } returns
+            SeerrServiceDetailsResult(radarrServers = listOf(SeerrRadarrServiceDetail(id = 1, name = "R")))
+        val h = holder(this)
+        val item = SeerrSearchItem(id = 9, mediaType = "movie")
+
+        h.openRequestDialog(item)
+        advanceUntilIdle()
+
+        assertSame(item, h.snap().dialogItem)
+        coVerify { delegate.fetchServiceDetails("movie") }
+        coVerify(exactly = 0) { delegate.fetchTvDetails(any()) }
+    }
+
+    @Test
+    fun `dismissRequestDialog clears dialogItem then requestResult in that order`() = runTest {
+        coEvery { delegate.requestMedia(any(), any(), any(), any(), any(), any(), any()) } returns
+            Result.failure(RuntimeException("nope"))
+        coEvery { delegate.fetchServiceDetails("movie") } returns SeerrServiceDetailsResult()
+        val h = holder(this)
+        val item = SeerrSearchItem(id = 3, mediaType = "movie")
+        h.openRequestDialog(item)
+        advanceUntilIdle()
+        h.requestMedia(item)
+        advanceUntilIdle()
+
+        // Live collection so dismiss's two writes are observed as separate
+        // emissions — the item drops FIRST, the result banner SECOND.
+        val emissions = mutableListOf<SeerrRequestSnapshot>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            h.snapshot.collect { emissions += it }
+        }
+        advanceUntilIdle()
+        emissions.clear()
+
+        h.dismissRequestDialog()
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf(
+                SeerrRequestSnapshot(requestResult = SeerrRequestResult(error = "nope")),
+                SeerrRequestSnapshot(),
+            ),
+            emissions,
+        )
+    }
+
+    @Test
+    fun `requestMedia leaves dialogItem untouched`() = runTest {
+        coEvery { delegate.fetchServiceDetails("tv") } returns SeerrServiceDetailsResult()
+        coEvery { delegate.fetchTvDetails(4) } returns null
+        coEvery { delegate.requestMedia(any(), any(), any(), any(), any(), any(), any()) } returns
+            Result.success(mockk(relaxed = true))
+        val h = holder(this)
+        val item = SeerrSearchItem(id = 4, mediaType = "tv")
+        h.openRequestDialog(item)
+        advanceUntilIdle()
+
+        h.requestMedia(item)
+        advanceUntilIdle()
+
+        assertSame(item, h.snap().dialogItem)
+        assertEquals(true, h.snap().requestResult?.success)
     }
     // endregion
 }

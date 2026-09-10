@@ -8,7 +8,7 @@ import com.sun.jna.Structure
 
 /**
  * JNA binding for the subset of libmpv's `client.h` API that
- * [com.raulshma.jellyplay.desktop.player.MpvDesktopEngine] uses (Phase V2).
+ * [com.raulshma.jellyplay.desktop.player.MpvDesktopEngine] uses.
  * Constant values were verified against the mpv-dev `include/mpv/client.h`
  * shipped with the libmpv used for development (mpv v0.41 era, client API 2.x).
  *
@@ -56,14 +56,8 @@ object MpvLib {
     const val END_FILE_REASON_ERROR = 3
     const val END_FILE_REASON_REDIRECT = 4
 
-    // ── mpv_error (subset the engine maps to the EngineError taxonomy) ──────
-    const val ERROR_LOADING_FAILED = -13
-    const val ERROR_AO_INIT_FAILED = -14
-    const val ERROR_VO_INIT_FAILED = -15
-    const val ERROR_NOTHING_TO_PLAY = -16
-    const val ERROR_UNKNOWN_FORMAT = -17
-    const val ERROR_UNSUPPORTED = -18
-    const val ERROR_NOT_IMPLEMENTED = -19
+    // mpv_error codes live in shared MpvErrorTaxonomy (player-video engine/);
+    // this binding hands the raw int to it unchanged.
 
     private val CANDIDATE_NAMES = listOf("libmpv-2", "mpv-2", "mpv")
 
@@ -197,7 +191,7 @@ object MpvLib {
 
     /** Reads a NODE property into a plain Kotlin value (String/Boolean/Long/Double/List/Map). */
     fun readNode(ctx: Pointer, name: String): Any? {
-        // Wave 17B: raw memory + manual offsets, NOT the MpvNode Structure.
+        // Raw memory + manual offsets, NOT the MpvNode Structure.
         // mpv writes the node tree in C layout and two things broke the old
         // Structure path: top-level arrays arrive as MPV_FORMAT_NODE_ARRAY
         // (format 7 — the old `when` matched only generic NODE), and JNA's

@@ -1,5 +1,7 @@
 @file:OptIn(ExperimentalWasmDsl::class)
 
+import java.util.zip.GZIPOutputStream
+
 import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
 
 plugins {
@@ -9,14 +11,14 @@ plugins {
 }
 
 kotlin {
-    // Phase W web shell (docs/kmp-migration-plan.md §Phase W): single
+    //  web shell (docs/kmp-migration-plan.md §): single
     // wasmJs/browser target proving the shared DI stacks on wasm. The Ktor
     // wasm network seam (W.1 chunks 1-3) is wired here and the Coil wasm
     // image engine (W.4) is wired since the repo-wide coil 3.4.0 pin
     // (libs.versions.toml version note): 3.5.0's wasmJs klibs are Kotlin-
-    // 2.4-ABI and silently skipped by our 2.3.21 loader. Wave 11B adds the
+    // 2.4-ABI and silently skipped by our 2.3.21 loader. This module adds the
     // real navigation shell (WebAppRoot over the JB fork's NavDisplay).
-    // Wave 15C: first FEATURE screen — `entry<Route.Requests>` renders the
+    // First FEATURE screen — `entry<Route.Requests>` renders the
     // shared RequestsScreen (15B's wasm target) with the requests DI slice.
     wasmJs {
         browser {
@@ -26,7 +28,7 @@ kotlin {
                 outputFileName = "webapp.js"
             }
         }
-        // Wave 13C: the main binary must be EXECUTABLE for webpack to produce
+        // The main binary must be EXECUTABLE for webpack to produce
         // the servable bundle (build/kotlin-webpack/wasmJs/
         // developmentExecutable) the CDP verification lane
         // (tools/e2e/web-verify.mjs) drives. Without this only the
@@ -45,12 +47,12 @@ kotlin {
                 implementation(libs.jb.compose.foundation)
                 implementation(libs.jb.compose.material3)
 
-                // Phase W stack: model (shared value types),
-                // designsystem (JellyPlayTheme), ui (wave 11B: shared
+                //  stack: model (shared value types),
+                // designsystem (JellyPlayTheme), ui (shared
                 // composition locals + nav wiring; the wasm target is
-                // machine-verified green since wave 11A), datastore
+                // machine-verified green since then), datastore
                 // (datastoreCommonModule + webDatastoreModule DI), network
-                // (networkWasmModule — Phase W.1 chunk 3: AtomicSessionState
+                // (networkWasmModule — .1 chunk 3: AtomicSessionState
                 // + WasmClientIdentity + the three Ktor wasm clients +
                 // AuthApiClient/LibraryApiClient/PlaybackApiClient bindings).
                 // Deliberately absent: paging-compose (spike w-10C §1 proves
@@ -63,22 +65,22 @@ kotlin {
                 implementation(project(":shared:core:ui"))
                 implementation(project(":shared:core:datastore"))
                 implementation(project(":shared:core:network"))
-                // Wave 15C: dataWasmModule (the requests repo slice —
+                // dataWasmModule (the requests repo slice —
                 // SeerrRepository/ArrRepository over the wasm clients) is
                 // imported into Main.kt's startKoin, hence the direct edge.
                 implementation(project(":shared:core:data"))
-                // Wave 15C: the FIRST shared feature screen renders here —
+                // The first shared feature screen renders here —
                 // WebAppRoot's `entry<Route.Requests>` composes
                 // RequestsScreen (VM ctor deps: SeerrRepository +
                 // ArrRepository from dataWasmModule above, ExperimentalStore
-                // from datastoreCommonModule). Waves 16A/16C add the second
+                // from datastoreCommonModule). Later lanes add the second
                 // and third: `entry<Route.UpcomingCalendar>` (calendarModule)
                 // and `entry<Route.SeerrDetail>` (detailsModule). The
                 // KoinModuleRegistrationGuardTest's web forward allowlist
                 // pins exactly these three registrations.
                 implementation(project(":shared:feature:requests"))
                 implementation(project(":shared:feature:calendar"))
-                // Wave 16C: the THIRD shared feature screen on web —
+                // The third shared feature screen on web —
                 // WebAppRoot's `entry<Route.SeerrDetail>` composes the shared
                 // SeerrDetailScreen (details' wasmJs target; the MediaDetail
                 // cluster stays jvmShared/off-web) and Main.kt registers
@@ -94,7 +96,7 @@ kotlin {
                 // engine compiles against the real contract.
                 implementation(project(":shared:core:player-contract"))
 
-                // Phase W.4 DONE (was BLOCKED at coil 3.5.0 whose wasmJs
+                // DONE (was BLOCKED at coil 3.5.0 whose wasmJs
                 // klibs are Kotlin-2.4-ABI, unreadable by this repo's Kotlin
                 // 2.3.21 klib loader). The pins moved to 3.4.0 — the last
                 // Kotlin-2.3-built release line (Central's kotlin-tooling-
@@ -113,14 +115,14 @@ kotlin {
                 // TRANSITIVE implementation dep of shared/core/network, which
                 // does not leak onto our compile classpath.
                 implementation(libs.ktor.client.js)
-                // Wave 12C (WebConnectFlow): ktor-client-core is needed to
+                // (WebConnectFlow): ktor-client-core is needed to
                 // CLASSIFY transport failures typed there / in ktor-io
                 // (HttpRequestTimeoutException, IOException) for the connect
                 // form's error lines — the same taxonomy the wasm network
                 // classifier uses. Direct edge for the same leak reason as
                 // ktor-client-js above (implementation dep of core/network).
                 implementation(libs.ktor.client.core)
-                // Wave 16C (WebMediaRepositoryNarrow): PagingData appears in
+                // (WebMediaRepositoryNarrow): PagingData appears in
                 // MediaRepository's paged-member signatures — a direct edge
                 // for the same leak reason as ktor-client-js above (paging-
                 // common is an implementation dep of shared/core/data, so it
@@ -129,7 +131,7 @@ kotlin {
                 implementation(libs.paging.common)
 
                 implementation(libs.koin.core)
-                // Wave 15C: the koin-compose runtime behind the requests
+                // The koin-compose runtime behind the requests
                 // entry's `koinViewModel()` (RequestsScreen's default
                 // parameter, compiled inside the feature klib). Explicit
                 // edges rather than relying on the feature module's
@@ -138,7 +140,7 @@ kotlin {
                 // screens bring their own koin-compose edges). Both
                 // artifacts are ABI-safe on this repo's Kotlin 2.3.21 loader
                 // (4.2.2 wasm klibs require only stdlib 2.3.20; verified in
-                // the wave 15B spike before the catalog entries landed).
+                // the spike before the catalog entries landed).
                 implementation(libs.koin.compose)
                 implementation(libs.koin.compose.viewmodel)
                 implementation(libs.kotlinx.coroutines.core)
@@ -156,14 +158,19 @@ kotlin {
             }
         }
 
-        // Minimal wasmJs test source set (the module's first): pure-logic
-        // canary only — kotlin("test") on the Kotlin-provided Node runner
-        // (wasmJsNodeTest; no browser/CDP infra in unit tests). See
-        // src/wasmJsTest/.../WebShellPureHelpersTest.kt for what is asserted
-        // and why the connect-flow classifier stays out of reach (private).
+        // Minimal wasmJs test source set: pure-logic unit tests — kotlin("test")
+        // executed on the karma/webpack browser lane (wasmJsBrowserTest; there
+        // is no wasmJsNodeTest here — only browser{} is configured on the
+        // target — and ChromeHeadless runs it fine on the dev machines and CI).
+        // See src/wasmJsTest/.../WebShellPureHelpersTest.kt for what is
+        // asserted and WebConnectFailurePolicyTest for the connect-flow
+        // failure taxonomy (extracted from WebConnectFlow.kt to be testable).
         val wasmJsTest by getting {
             dependencies {
                 implementation(kotlin("test"))
+                // runTest wrapper for the suspend controller/repository tests
+                // — kotlin.test rejects `suspend @Test` on wasmJs outright.
+                implementation(libs.coroutines.test)
             }
         }
     }
@@ -185,4 +192,98 @@ configurations.all {
             .using(module(libs.jb.navigation3.ui.get().toString()))
             .because("google navigation3-ui has no web artifacts; JB fork publishes the wasm klib")
     }
+}
+
+// ---------------------------------------------------------------------------
+// Production-bundle precompression + binaryen status.
+//
+// Deliberately NO binaryenArgs override: KGP 2.3.21 already seeds
+// every BinaryenExec task with an aggressive default pipeline (verified by
+// disassembling kotlin-gradle-plugin-2.3.21: BinaryenExec's constructor
+// copies BinaryenConfig.binaryenArgs), namely
+//   --enable-gc --enable-reference-types --enable-exception-handling
+//   --enable-bulk-memory --enable-nontrapping-float-to-int --closed-world
+//   --no-inline=... (x3) --inline-functions-with-loops --traps-never-happen
+//   --fast-math --type-ssa -O3 --gufa -O3 --type-merging -O3 -Oz
+// which already exceeds the suggested -O3/--shrink-level=2/
+// --closed-world tuning. There is no ADD-only argument left worth risk.
+//
+// kmp-release.yml zips build/dist/wasmJs/productionExecutable
+// verbatim, so self-hosters who unzip it lose every byte of wire
+// compression unless their server compresses on the fly. This task writes
+// sibling <name>.gz sidecars for every *.wasm / *.js / *.css in the
+// distribution (originals untouched) so a static file server can serve
+// them with zero per-request cost:
+//   nginx:  gzip_static on;      caddy:  file_server precompressed
+// (GH-Pages-style hosts without gzip_static simply ignore the extras.)
+// Wired BOTH ways: a finalizer of wasmJsBrowserDistribution (local runs get
+// the sidecars automatically) and a dependsOn from the task itself, so the
+// standalone `./gradlew :apps:web:precompressWasmDist` invocation the
+// release lane uses builds the distribution first when it is not there
+// yet. Always re-runs (gzip of a rebuilt dist is cheap; a cached PASS
+// would serve stale sidecars after an incremental rebuild) — same policy
+// as :app:verifyPhoneDebugComposeResources.
+// ---------------------------------------------------------------------------
+abstract class PrecompressWasmDistTask : DefaultTask() {
+    /** apps/web/build/dist/wasmJs/productionExecutable — what wasmJsBrowserDistribution emits. */
+    @get:Internal
+    abstract val distDir: DirectoryProperty
+
+    @TaskAction
+    fun compress() {
+        val dir = distDir.get().asFile
+        if (!dir.isDirectory) {
+            throw GradleException(
+                "precompressWasmDist: distribution directory $dir does not exist — " +
+                    "run :apps:web:wasmJsBrowserDistribution first"
+            )
+        }
+        // Orphaned sidecars from a previous run (source dropped or renamed by
+        // an incremental rebuild) must not ship in the release zip.
+        var removed = 0
+        dir.walkTopDown()
+            .filter { it.isFile && it.name.endsWith(".gz") }
+            .forEach { sidecar ->
+                val source = sidecar.resolveSibling(sidecar.name.removeSuffix(".gz"))
+                if (!source.isFile) {
+                    sidecar.delete()
+                    removed++
+                }
+            }
+        var written = 0
+        dir.walkTopDown()
+            .filter { it.isFile && !it.name.endsWith(".gz") && it.extension in setOf("wasm", "js", "css") }
+            .forEach { file ->
+                val target = file.resolveSibling("${file.name}.gz")
+                file.inputStream().use { input ->
+                    GZIPOutputStream(target.outputStream().buffered()).use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                written++
+            }
+        if (written == 0) {
+            throw GradleException(
+                "precompressWasmDist: no *.wasm/*.js/*.css found under $dir — " +
+                    "distribution layout changed?"
+            )
+        }
+        logger.lifecycle(
+            "precompressWasmDist: wrote $written .gz sidecar(s) under $dir" +
+                (if (removed > 0) ", removed $removed orphaned sidecar(s)" else "")
+        )
+    }
+}
+
+val precompressWasmDist = tasks.register<PrecompressWasmDistTask>("precompressWasmDist") {
+    group = "build"
+    description = "gzip sidecars (*.wasm/*.js/*.css -> <name>.gz) inside the production wasm " +
+        "distribution — for self-hosters serving them via nginx gzip_static / Caddy precompressed."
+    dependsOn("wasmJsBrowserDistribution")
+    distDir.set(layout.buildDirectory.dir("dist/wasmJs/productionExecutable"))
+    outputs.upToDateWhen { false }
+}
+
+tasks.named("wasmJsBrowserDistribution") {
+    finalizedBy(precompressWasmDist)
 }

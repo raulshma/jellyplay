@@ -14,7 +14,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 
 /**
- * SPIKE RESULT (wave 15B, evidence in the KDoc of [ProvidePlatformLocalsFallback]):
+ * SPIKE RESULT (evidence in the KDoc of [ProvidePlatformLocalsFallback]):
  * CMP 1.11.1's `ComposeViewport` (the web shell entry) provisions NEITHER a
  * `ViewModelStoreOwner` NOR a `LifecycleOwner`, and Koin 4.2.2's
  * `koinViewModel()` hard-errors without the former. This wrapper is the
@@ -29,7 +29,7 @@ import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
  * two the Activity/window already provide the locals, so this wrapper IS a
  * pass-through).
  *
- * ONE TRUTH ON WEB (updated wave 15C): the web shell now provisions
+ * ONE TRUTH ON WEB (updated): the web shell now provisions
  * page-scoped owners at its composition ROOT — apps/web's
  * ProvideWebShellViewModelOwners, wired in Main.kt — so on the shell path
  * this wrapper's check finds a non-null LocalViewModelStoreOwner and passes

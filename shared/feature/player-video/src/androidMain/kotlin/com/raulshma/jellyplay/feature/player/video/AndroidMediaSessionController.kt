@@ -17,7 +17,7 @@ import com.raulshma.jellyplay.core.data.playback.PlaybackSessionManager
  * for the VOD player. Extracted from [VideoPlayerViewModel], continuing the
  * collaborator pattern established by [SubtitleManager] / [PlayerCastController].
  *
- * (Wave 8C: renamed from `MediaSessionController` — the commonMain
+ * (renamed from `MediaSessionController` — the commonMain
  * [MediaSessionController] seam interface took the old name; the ViewModel
  * constructs this class through [AndroidMediaSessionFactory].)
  *

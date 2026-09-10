@@ -11,7 +11,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -25,23 +24,21 @@ import androidx.paging.compose.collectAsLazyPagingItems
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaQuickActionScope
 import com.raulshma.jellyplay.core.model.MediaType
-import com.raulshma.jellyplay.core.model.quickActions
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
+import com.raulshma.jellyplay.core.ui.components.DeferredRefreshEffect
 import com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
 import com.raulshma.jellyplay.core.ui.components.LocalMediaQuickActionController
 import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
 import com.raulshma.jellyplay.core.ui.components.LocalServerHealth
-import com.raulshma.jellyplay.core.ui.components.MediaQuickActionHost
 import com.raulshma.jellyplay.core.ui.components.PosterCard
-import com.raulshma.jellyplay.core.ui.components.QuickAction
-import com.raulshma.jellyplay.core.ui.components.RemoveDownloadConfirmHost
+import com.raulshma.jellyplay.core.ui.components.QuickActionAdapter
+import com.raulshma.jellyplay.core.ui.components.QuickActionIntakeHost
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
-import com.raulshma.jellyplay.core.ui.components.progressFraction
-import com.raulshma.jellyplay.core.ui.components.rememberMediaQuickActionController
-import com.raulshma.jellyplay.core.ui.components.rememberRemoveDownloadState
+import com.raulshma.jellyplay.core.model.progressFraction
+import com.raulshma.jellyplay.core.ui.components.rememberQuickActionIntake
 import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
@@ -66,6 +63,9 @@ fun StudioDetailScreen(
     val items = viewModel.items.collectAsLazyPagingItems()
     val networkStatus by LocalNetworkStatus.current.collectAsStateWithLifecycle()
     val serverHealth by LocalServerHealth.current.collectAsStateWithLifecycle()
+
+    DeferredRefreshEffect(viewModel.deferredRefresher)
+
     val headerStatus = resolveHeaderStatus(
         isLoading = items.loadState.refresh is LoadState.Loading,
         hasError = items.loadState.refresh is LoadState.Error,
@@ -73,58 +73,44 @@ fun StudioDetailScreen(
         serverHealth = serverHealth,
     )
 
-    // Item awaiting a remove-download confirm from the quick-action menu.
-    // Hoisted so the dialog survives the card leaving composition while open.
-    val removeDownloadState = rememberRemoveDownloadState()
-
-    // Collected (not read as a .value snapshot inside the resolve lambda) so
-    // the resolver is rebuilt when the downloaded set changes — a download
-    // completing flips the card's Download↔Remove-download action without
-    // waiting for an unrelated recomposition. The set is distinct-collapsed
-    // upstream, so active transfers don't churn it.
+    // Collected (not read as a .value snapshot inside the intake's
+    // isDownloaded lambda) so the resolver is rebuilt when the downloaded set
+    // changes — a download completing flips the card's Download↔Remove-download
+    // action without waiting for an unrelated recomposition. The set is
+    // distinct-collapsed upstream, so active transfers don't churn it.
     val downloadedIds by viewModel.downloadedIds.collectAsStateWithLifecycle()
 
-    // Long-press / TV-Menu quick actions for studio cards. Download /
-    // Remove download ride the same intake as the library grid (#147).
-    val quickActionController = rememberMediaQuickActionController(
-        resolveActions = remember(viewModel, downloadedIds) {
-            { item: MediaItem ->
-                item.quickActions(
-                    MediaQuickActionScope.LIBRARY,
-                    includeDownload = true,
-                    isDownloaded = downloadedIds.contains(item.id),
-                )
-            }
+    // Long-press / TV-Menu quick actions for studio cards, on the shared
+    // intake (core/ui — see QuickActionIntake). Download / Remove download
+    // ride the same intake as the library grid (#147).
+    val quickActionIntake = rememberQuickActionIntake(
+        scope = MediaQuickActionScope.LIBRARY,
+        includeDownload = true,
+        isDownloaded = remember(downloadedIds) {
+            { item: MediaItem -> downloadedIds.contains(item.id) }
         },
-        executeAction = remember(viewModel, onItemClick) {
-            { item: MediaItem, action: QuickAction ->
-                when (action) {
-                    QuickAction.PLAY -> onItemClick(item.id)
-                    QuickAction.MARK_WATCHED -> viewModel.markItemPlayed(item, true)
-                    QuickAction.MARK_UNWATCHED -> viewModel.markItemPlayed(item, false)
-                    QuickAction.DOWNLOAD -> viewModel.downloadItem(item, onOpenDetail = onItemClick)
-                    QuickAction.REMOVE_DOWNLOAD -> removeDownloadState.request(item)
-                    QuickAction.DETAILS -> onItemClick(item.id)
-                    else -> Unit
-                }
-            }
+        adapter = remember(viewModel, onItemClick) {
+            QuickActionAdapter(
+                onPlay = { item -> onItemClick(item.id) },
+                onOpenDetail = { item -> onItemClick(item.id) },
+                onMarkPlayed = viewModel::markItemPlayed,
+                onDownload = { item -> viewModel.downloadItem(item, onOpenDetail = onItemClick) },
+                onRemoveDownload = viewModel::removeItemDownload,
+            )
         },
     )
-    // TV-only: the card currently holding D-pad focus, so the Menu key can open
-    // its quick actions.
-    var tvFocusedItem by remember { mutableStateOf<MediaItem?>(null) }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .onDpadKey(
                 onMenu = {
-                    tvFocusedItem?.let { quickActionController.show(it) }
+                    quickActionIntake.openFocusedItem()
                     true
                 },
             ),
     ) {
-        CompositionLocalProvider(LocalMediaQuickActionController provides quickActionController) {
+        CompositionLocalProvider(LocalMediaQuickActionController provides quickActionIntake.controller) {
         JellyPlayScreenScaffold(
             title = studioName,
             onBack = onBack,
@@ -174,7 +160,7 @@ fun StudioDetailScreen(
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                             modifier = Modifier.fillMaxSize(),
                             contentType = { "mediaItem" },
-                            onFocusedIndexChange = { index -> items[index]?.let { tvFocusedItem = it } },
+                            onFocusedIndexChange = { index -> items[index]?.let { quickActionIntake.tvFocusedItem = it } },
                         ) { index, itemModifier ->
                             val item = items[index]
                             if (item != null) {
@@ -218,12 +204,8 @@ fun StudioDetailScreen(
         } // close scaffold content lambda
         } // close CompositionLocalProvider
     } // close Box
-    MediaQuickActionHost(quickActionController)
-
-    // Remove-download confirm: quick-action removal only ever deletes the
-    // local download — the server copy is untouched.
-    RemoveDownloadConfirmHost(
-        state = removeDownloadState,
-        onConfirmRemove = { viewModel.removeItemDownload(it) },
-    )
+    // Quick-action sheet + remove-download confirm — the shared intake hosts
+    // both (removal only ever deletes the local download; the server copy is
+    // untouched).
+    QuickActionIntakeHost(quickActionIntake)
 } // close StudioDetailScreen

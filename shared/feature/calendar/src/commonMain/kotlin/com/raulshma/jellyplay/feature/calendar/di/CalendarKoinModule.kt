@@ -7,7 +7,7 @@ import org.koin.dsl.module
 
 /**
  * Koin construction owner for the calendar feature (docs/kmp-migration-plan.md
- * §Phase V3 conveyor). The HiltViewModel/@Inject annotations were stripped at
+ *  conveyor). The HiltViewModel/@Inject annotations were stripped at
  * the move — Koin is the single constructor owner (one framework per type).
  * Unlike every earlier conveyor module, ALL three ctor deps are already
  * Koin-native in the shared graph — no platform interop edges at all:

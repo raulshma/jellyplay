@@ -5,7 +5,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 
 /**
- * Pure, commonMain wire helpers for the Phase W wasm Seerr/TMDB client —
+ * Pure, commonMain wire helpers for the wasm Seerr/TMDB client —
  * every byte-level convention of the jvmShared `SeerrApiClientImpl`
  * (OkHttp) extracted so the wasm client consumes them unchanged and
  * commonTest can pin them. The jvmShared impl keeps its own private copies;

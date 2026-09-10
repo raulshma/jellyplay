@@ -32,7 +32,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -76,7 +75,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.rememberArtworkColors
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.formatDurationMs
 import com.raulshma.jellyplay.core.ui.tv.RequestOrRestoreFocus
-import com.raulshma.jellyplay.core.ui.tv.components.DpadSlider
+import kotlinx.coroutines.flow.StateFlow
 
 /**
  * Full-screen remote-control companion for an active "Play On" (Jellyfin remote
@@ -88,19 +87,28 @@ import com.raulshma.jellyplay.core.ui.tv.components.DpadSlider
  * shared [com.raulshma.jellyplay.core.data.cast.CastManager] the video player
  * reads. Reusing CompanionDashboard directly is unsafe: it is hard-coupled to
  * VideoPlayerViewModel / CastManager types and Play On is walled off from
- * CastManager by design (see PlayOnController).
+ * CastManager by design.
  *
- * The ViewModel is the activity-scoped singleton the mini bar already holds
- * (both sites resolve through the same LocalViewModelStoreOwner + Koin store
- * key), so state stays in sync with no param threading.
+ * State arrives through the explicit shell seam: [playOn] is the ONE
+ * controller instance MainContent constructs (JellyPlayApp) and threads
+ * through MainNavDisplay's route entry — the same instance the persistent
+ * mini bar and the device sheet read. The former `koinViewModel()` default
+ * resolved a second reference by convention (it held only while both sites
+ * sat under MainActivity's ViewModelStoreOwner); hosting this screen
+ * anywhere else would have silently forked its state.
  */
 @Composable
 fun PlayOnCompanionScreen(
     onBack: () -> Unit,
+    playOn: PlayOnViewModel,
     modifier: Modifier = Modifier,
-    viewModel: PlayOnViewModel = org.koin.compose.viewmodel.koinViewModel(),
 ) {
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    // Low-frequency slice only (connection, metadata, play/pause): the
+    // per-tick position/duration/volume streams pass to the leaf rows below
+    // as narrow flows, so the ~1 Hz cast position tick recomposes just those
+    // rows — not this screen root (same leaf-collection rule as the video
+    // player's CompanionControlBar / ChapterPickerBinder binders).
+    val uiState by playOn.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     // Land initial focus on the play/pause transport button so the first D-pad press
@@ -229,38 +237,42 @@ fun PlayOnCompanionScreen(
             }
 
             CompanionSeekRow(
-                positionMs = uiState.positionMs,
-                durationMs = uiState.durationMs,
-                onSeek = viewModel::castSeekTo,
+                positionMsFlow = playOn.positionMsFlow,
+                durationMsFlow = playOn.durationMsFlow,
+                onSeek = playOn::castSeekTo,
             )
 
             CompanionTransportRow(
                 isPlaying = uiState.isPlaying,
                 playFocusRequester = playFocusRequester,
                 onPlayPause = {
-                    if (uiState.isPlaying) viewModel.castPause() else viewModel.castPlay()
+                    if (uiState.isPlaying) playOn.castPause() else playOn.castPlay()
                 },
                 onSeekBack = {
-                    val target = (uiState.positionMs - SEEK_BACK_MS).coerceAtLeast(0L)
-                    viewModel.castSeekTo(target)
+                    // Click-time reads off the narrow flows — the seek delta
+                    // needs the live position, which no longer rides uiState.
+                    // The seek row above keeps them subscribed (hot) on this
+                    // screen, so `.value` is current.
+                    val target = (playOn.positionMsFlow.value - SEEK_BACK_MS).coerceAtLeast(0L)
+                    playOn.castSeekTo(target)
                 },
                 onSeekForward = {
-                    val max = uiState.durationMs.coerceAtLeast(0L)
-                    val target = (uiState.positionMs + SEEK_FORWARD_MS).coerceAtMost(max)
-                    viewModel.castSeekTo(target)
+                    val max = playOn.durationMsFlow.value.coerceAtLeast(0L)
+                    val target = (playOn.positionMsFlow.value + SEEK_FORWARD_MS).coerceAtMost(max)
+                    playOn.castSeekTo(target)
                 },
-                onPrevious = viewModel::castPreviousTrack,
-                onNext = viewModel::castNextTrack,
+                onPrevious = playOn::castPreviousTrack,
+                onNext = playOn::castNextTrack,
             )
 
             CompanionVolumeRow(
-                volume = uiState.volume,
-                onVolume = viewModel::setCastVolume,
+                volumeFlow = playOn.volumeFlow,
+                onVolume = playOn::setCastVolume,
             )
 
             CompanionFooter(
-                onStop = { viewModel.castStop(context) },
-                onDisconnect = { viewModel.disconnect(context) },
+                onStop = { playOn.castStop(context) },
+                onDisconnect = { playOn.disconnect(context) },
             )
         }
     }
@@ -311,27 +323,30 @@ private fun CompanionHeader(
 
 @Composable
 private fun CompanionSeekRow(
-    positionMs: Long,
-    durationMs: Long,
+    positionMsFlow: StateFlow<Long>,
+    durationMsFlow: StateFlow<Long>,
     onSeek: (Long) -> Unit,
 ) {
-    // Local mirror so dragging doesn't fight the server push; committed on release
-    // — same pattern as PlayOnMiniBar.
-    var seekPos by remember(positionMs) { mutableFloatStateOf(positionMs.toFloat()) }
-    LaunchedEffect(positionMs) { seekPos = positionMs.toFloat() }
+    // The ~1 Hz cast position tick is collected at this row — inside
+    // [PlayOnCastSeekSlider] for the thumb and here for the time labels —
+    // instead of arriving as pre-collected Longs from the screen root, so
+    // the per-tick recomposition stays confined to this row (same rule as
+    // the video player's CompanionControlBar / ChapterPickerBinder binders).
+    // The seek slider itself (collection + drag arbitration) is the shared
+    // [PlayOnCastSeekSlider]; the labels read the server position.
+    val positionMs by positionMsFlow.collectAsStateWithLifecycle()
+    val durationMs by durationMsFlow.collectAsStateWithLifecycle()
 
-    val range = 0f..durationMs.toFloat().coerceAtLeast(1f)
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .focusGroup()
             .padding(horizontal = 24.dp, vertical = 12.dp),
     ) {
-        DpadSlider(
-            value = seekPos.coerceIn(range),
-            onValueChange = { seekPos = it },
-            onValueChangeFinished = { onSeek(seekPos.toLong()) },
-            valueRange = range,
+        PlayOnCastSeekSlider(
+            positionMsFlow = positionMsFlow,
+            durationMsFlow = durationMsFlow,
+            onSeek = onSeek,
             colors = companionSliderColors(),
         )
         Row(
@@ -435,9 +450,12 @@ private fun CompanionTransportRow(
 
 @Composable
 private fun CompanionVolumeRow(
-    volume: Float,
+    volumeFlow: StateFlow<Float>,
     onVolume: (Float) -> Unit,
 ) {
+    // Volume rides the same play-state push as the position tick; the flow
+    // is collected inside the shared leaf slider below, so volume updates
+    // recompose only this row. Same rule as [CompanionSeekRow].
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -452,10 +470,9 @@ private fun CompanionVolumeRow(
             modifier = Modifier.size(20.dp),
         )
         Spacer(Modifier.width(12.dp))
-        DpadSlider(
-            value = volume,
-            onValueChange = onVolume,
-            valueRange = 0f..1f,
+        PlayOnCastVolumeSlider(
+            volumeFlow = volumeFlow,
+            onVolume = onVolume,
             colors = companionSliderColors(),
             modifier = Modifier.fillMaxWidth(),
         )

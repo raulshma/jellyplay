@@ -48,6 +48,9 @@ import com.composables.icons.tabler.outline.ChevronRight
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.DownloadQuality
 import com.raulshma.jellyplay.core.model.MediaStream
+import com.raulshma.jellyplay.core.model.StorageBytesUnit
+import com.raulshma.jellyplay.core.model.formatFixed
+import com.raulshma.jellyplay.core.model.toStorageBytesValue
 import com.raulshma.jellyplay.core.ui.adaptive.LocalJellyPlayUi
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
@@ -81,11 +84,12 @@ import org.jetbrains.compose.resources.pluralStringResource
  * download-quality chip row and an external-subtitle multi-select list.
  *
  * Driven by [DetailContentState.downloadPicker] (visibility / quality /
- * [SubtitleSelection]); the confirm action hands off to
- * [DetailContentCallbacks.onDownloadClick] (→ [DetailViewModel.startDownload]),
- * which reads the pending values and runs the cellular-size gate before the
- * transfer. Quality maps to `maxBitrate` via `qualityToMaxBitrate`; subtitle
- * selection narrows the external subtitles bundled offline
+ * [SubtitleSelection]); the confirm action hands off to the
+ * [DetailContentCallbacks.download] bundle's `onDownloadClick` (→
+ * [DetailViewModel.startDownload]), which reads the pending values and runs
+ * the cellular-size gate before the transfer. Quality maps to `maxBitrate`
+ * via `qualityToMaxBitrate`; subtitle selection narrows the external
+ * subtitles bundled offline
  * ([SubtitleSelection.All] = every deliverable subtitle).
  *
  * Cellular-warning flow is unchanged: if the cellular threshold is hit, this
@@ -109,19 +113,17 @@ internal fun DownloadPickerSheet(
     val availableBytes by produceState(initialValue = 0L, isAudio) {
         value = availableStorageProvider(isAudio)
     }
-    val fileSizeText = fileSize?.let { size ->
-        when {
-            size >= 1_000_000_000 -> stringResource(Res.string.detail_size_gb, size / 1_000_000_000.0)
-            size >= 1_000_000 -> stringResource(Res.string.detail_size_mb, size / 1_000_000.0)
-            size >= 1_000 -> stringResource(Res.string.detail_size_kb, size / 1_000.0)
-            else -> stringResource(Res.string.detail_size_b, size)
-        }
-    } ?: stringResource(Res.string.detail_size_unknown)
-    val availableText = when {
-        availableBytes >= 1_000_000_000 -> stringResource(Res.string.detail_size_gb, availableBytes / 1_000_000_000.0)
-        availableBytes >= 1_000_000 -> stringResource(Res.string.detail_size_mb, availableBytes / 1_000_000.0)
-        else -> stringResource(Res.string.detail_size_kb, availableBytes / 1_000_000.0)
-    }
+    // The one storage-byte table (ByteFormatter) picks the band and scales the
+    // number; this localized wrapper keeps the per-unit string resources —
+    // declared unifying delta: sizes switch from ÷1000 to the ÷1024 house
+    // convention, and the available-space line gains the bytes band it used to
+    // funnel into "0.0 KB". The number itself is formatted in Kotlin via
+    // formatFixed: compose-resources' stringResource only substitutes
+    // positional %n$s/%n$d placeholders, so a %1$.1f resource leaks the raw
+    // specifier into the UI (issue #158).
+    val fileSizeText = fileSize?.let { size -> localizedStorageSize(size) }
+        ?: stringResource(Res.string.detail_size_unknown)
+    val availableText = localizedStorageSize(availableBytes)
     val enoughSpace = fileSize == null || fileSize <= availableBytes
 
     // All-subtitle indices, used to resolve SubtitleSelection.All to the full
@@ -307,6 +309,24 @@ internal fun DownloadPickerSheet(
                 }
             }
         }
+    }
+}
+
+/**
+ * Localized half of the storage-byte table: [toStorageBytesValue] picks the
+ * band and scales the value; this wrapper keeps the per-unit string resources
+ * (so translations survive) and formats the number with the house
+ * [formatFixed] — string resources can't carry `%f` placeholders because
+ * compose-resources only substitutes `%n$s`/`%n$d` (issue #158).
+ */
+@Composable
+private fun localizedStorageSize(bytes: Long): String {
+    val (value, unit) = bytes.toStorageBytesValue()
+    return when (unit) {
+        StorageBytesUnit.B -> stringResource(Res.string.detail_size_b, value.toLong())
+        StorageBytesUnit.KB -> stringResource(Res.string.detail_size_kb, formatFixed(value, 1))
+        StorageBytesUnit.MB -> stringResource(Res.string.detail_size_mb, formatFixed(value, 1))
+        StorageBytesUnit.GB -> stringResource(Res.string.detail_size_gb, formatFixed(value, 1))
     }
 }
 

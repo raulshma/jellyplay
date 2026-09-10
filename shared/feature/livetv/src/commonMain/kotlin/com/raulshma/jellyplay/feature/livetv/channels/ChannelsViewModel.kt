@@ -1,12 +1,13 @@
 package com.raulshma.jellyplay.feature.livetv.channels
 
 import androidx.compose.runtime.Immutable
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
 import com.raulshma.jellyplay.core.data.playback.VideoMiniPlayerState
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import com.raulshma.jellyplay.feature.livetv.LiveTvLoad
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -22,7 +23,7 @@ data class ChannelsUiState(
 )
 
 class ChannelsViewModel(
-    private val mediaRepository: MediaRepository,
+    private val mediaRepository: LiveTvRepository,
     private val imageUrlProvider: ImageUrlProvider,
     private val appRuntimeStateStore: AppRuntimeStateStore,
     videoMiniPlayerState: VideoMiniPlayerState,
@@ -49,18 +50,17 @@ class ChannelsViewModel(
 
     fun loadChannels() {
         launch {
-            _uiState.update { it.copy(isLoading = true, error = null) }
-            mediaRepository.getLiveTvChannels(limit = 100)
-                .onSuccess { channels ->
+            LiveTvLoad.load(
+                start = { _uiState.update { it.copy(isLoading = true, error = null) } },
+                fetch = { mediaRepository.getLiveTvChannels(limit = 100) },
+                onSuccess = { channels ->
                     val favorites = appRuntimeStateStore.state.value.favoriteChannels
-                    val sorted = if (favorites.isEmpty()) {
-                        channels
-                    } else {
-                        channels.sortedByDescending { it.id in favorites }
+                    _uiState.update {
+                        it.copy(channels = favoritesFirst(channels, favorites), isLoading = false)
                     }
-                    _uiState.update { it.copy(channels = sorted, isLoading = false) }
-                }
-                .onFailure { e -> _uiState.update { it.copy(error = e.message, isLoading = false) } }
+                },
+                onFailure = { e -> _uiState.update { it.copy(error = e.message, isLoading = false) } },
+            )
         }
     }
 
@@ -69,25 +69,28 @@ class ChannelsViewModel(
             val current = appRuntimeStateStore.state.value.favoriteChannels
             val updated = if (channelId in current) current - channelId else current + channelId
             appRuntimeStateStore.setFavoriteChannels(updated)
-            val favorites = updated
             _uiState.update { state ->
-                val sorted = if (favorites.isEmpty()) {
-                    state.channels
-                } else {
-                    state.channels.sortedByDescending { it.id in favorites }
-                }
-                state.copy(channels = sorted)
+                state.copy(channels = favoritesFirst(state.channels, updated))
             }
         }
     }
+
+    /**
+     * Stable partition, not an O(n log n) sort: favorites lead in server
+     * order, then the rest — identical output to the old (stable)
+     * `sortedByDescending { it.id in favorites }`, O(n) instead.
+     */
+    private fun favoritesFirst(
+        channels: List<LiveTvChannel>,
+        favorites: Set<String>,
+    ): List<LiveTvChannel> =
+        if (favorites.isEmpty()) channels
+        else channels.partition { it.id in favorites }.let { (fav, rest) -> fav + rest }
 
     fun setNowPlayingChannelId(channelId: String?) {
         _nowPlayingChannelId.value = channelId
     }
 
-    fun getImageUrl(itemId: String, imageTag: String?): String {
-        return if (imageTag != null) {
-            imageUrlProvider.getImageUrl(itemId)
-        } else ""
-    }
+    fun getImageUrl(itemId: String, imageTag: String?): String =
+        imageUrlProvider.getImageUrlOrNull(itemId, imageTag)
 }

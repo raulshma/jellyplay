@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.feature.newsletter
 
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.NewsletterRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.notification.NotificationStore
 import com.raulshma.jellyplay.core.model.NewsletterSectionType
@@ -15,7 +15,7 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
 class NewsletterViewModel(
-    private val mediaRepository: MediaRepository,
+    private val newsletterRepository: NewsletterRepository,
     private val imageUrlProvider: ImageUrlProvider,
     private val notificationStore: NotificationStore,
     authRepository: AuthRepository,
@@ -77,7 +77,7 @@ class NewsletterViewModel(
                 .atStartOfDay()
                 .format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
 
-            mediaRepository.getNewsletterData(sinceDate)
+            newsletterRepository.getNewsletterData(sinceDate)
                 .onSuccess { data ->
                     val prefs = notificationStore.notification.value
                     val resolvedOrder = prefs.newsletterSectionOrder
@@ -125,8 +125,8 @@ class NewsletterViewModel(
         }
         launch {
             val result = when (action) {
-                NewsletterSendAction.SEND_NOW -> mediaRepository.sendNewsletter()
-                NewsletterSendAction.SEND_TEST -> mediaRepository.sendTestNewsletter()
+                NewsletterSendAction.SEND_NOW -> newsletterRepository.sendNewsletter()
+                NewsletterSendAction.SEND_TEST -> newsletterRepository.sendTestNewsletter()
             }
             _uiState.update {
                 it.copy(

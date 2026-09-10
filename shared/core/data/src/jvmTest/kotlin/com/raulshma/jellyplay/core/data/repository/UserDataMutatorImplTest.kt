@@ -27,9 +27,12 @@ import kotlin.test.assertTrue
  * optimistic rewrite). Pins:
  *  - the write seam per direction (markPlayed/markUnplayed, toggleFavorite,
  *    markSeasonPlayed);
- *  - the optimistic pass ordering: containers → provider item rewrite →
- *    residual series-catalogue drop (episodes only, never other items);
- *  - [UserDataMutator.FlipMode.Silent] suppresses the whole optimistic pass;
+ *  - the post-success refresh pass ordering: containers → provider item
+ *    rewrite → residual series-catalogue drop (episodes only, never other
+ *    items);
+ *  - [UserDataMutator.FlipMode.Silent] skips the caller-container rewrite but
+ *    still aligns the provider session (open detail screens must not serve
+ *    the pre-write state until a WS echo arrives);
  *  - a failed write performs no optimistic patching;
  *  - the resume-clearing rule in [AppliedMutation.patch] (both played
  *    directions clear the resume point; a favorite flip preserves it);
@@ -127,7 +130,7 @@ class UserDataMutatorImplTest {
     }
 
     @Test
-    fun `Silent mode writes without any optimistic pass`() = runTest {
+    fun `Silent mode skips the container rewrite but still aligns the provider session`() = runTest {
         coEvery { mediaRepository.markPlayed("ep-1") } returns Result.success(Unit)
         var patched = false
         val container = UserDataContainer { _, _ -> patched = true }
@@ -135,8 +138,20 @@ class UserDataMutatorImplTest {
         val result = mutator.setPlayed("ep-1", played = true, containers = listOf(container), mode = UserDataMutator.FlipMode.Silent)
 
         assertTrue(result.isSuccess)
+        // The grid's silent contract: no in-place container flip.
         assertFalse(patched)
-        coVerify(exactly = 0) { mediaDetailProvider.applyOptimisticItemState(any(), any(), any()) }
+        // But an open detail session (e.g. under the player) must still see
+        // the flip — the provider pass runs in both modes.
+        coVerify(exactly = 1) { mediaDetailProvider.applyOptimisticItemState(itemId = "ep-1", isFavorite = null, isPlayed = true) }
+    }
+
+    @Test
+    fun `Silent mode still drops the residual series catalogue`() = runTest {
+        coEvery { mediaRepository.markPlayed("ep-1") } returns Result.success(Unit)
+
+        mutator.setPlayed("ep-1", played = true, containers = emptyList(), mode = UserDataMutator.FlipMode.Silent, seriesId = "series-1")
+
+        verify(exactly = 1) { mediaDetailProvider.invalidate("series-1") }
     }
 
     // ── setFavorite ─────────────────────────────────────────────────────

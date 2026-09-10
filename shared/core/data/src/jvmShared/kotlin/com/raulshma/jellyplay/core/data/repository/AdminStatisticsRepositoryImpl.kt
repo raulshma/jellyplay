@@ -1,6 +1,10 @@
 package com.raulshma.jellyplay.core.data.repository
 
+import com.raulshma.jellyplay.core.concurrency.mapConcurrent
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.log.Log
+import com.raulshma.jellyplay.core.data.util.TimeSource
+import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.database.dao.AuditLogDao
 import com.raulshma.jellyplay.core.database.dao.ScanStateDao
 import com.raulshma.jellyplay.core.database.entity.MediaAuditLogEntity
@@ -25,7 +29,6 @@ import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -34,7 +37,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
@@ -61,6 +63,12 @@ class AdminStatisticsRepositoryImpl constructor(
      * precedent).
      */
     private val labels: AdminStatisticsLabelProvider,
+    /**
+     * Clock seam for the audit-log retention window (the 90-day
+     * `deleteOlderThan` cutoff) and the cleanup-entry `timestamp` stamp —
+     * injectable so a fake clock pins the retention decision in tests.
+     */
+    private val timeSource: TimeSource,
 ) : AdminStatisticsRepository {
 
     /**
@@ -80,40 +88,51 @@ class AdminStatisticsRepositoryImpl constructor(
 
     private suspend fun cleanupOldAuditLogs() {
         try {
-            val ninetyDaysAgo = System.currentTimeMillis() - 90L * 24 * 60 * 60 * 1000
+            val ninetyDaysAgo = timeSource.nowEpochMillis() - 90L * 24 * 60 * 60 * 1000
             auditLogDao.deleteOlderThan(ninetyDaysAgo)
         } catch (e: Exception) {
             Log.d("AdminStats", "Failed to cleanup old audit logs", e)
         }
     }
 
-    override suspend fun getAllUsersWithStatistics(): Result<List<UserStatistics>> = runCatching {
-        val pluginAvailable = _pluginStatus.value == PlaybackReportingStatus.AVAILABLE
+    /**
+     * The plugin-gate fold shared by every plugin-derived list fetch —
+     * `if (pluginAvailable) call().getOrDefault(emptyList()) else emptyList()`
+     * used to appear inline at each site, hand-syncing the AVAILABLE check
+     * against [_pluginStatus]. Takes the CALLER-CAPTURED flag, not a live
+     * read: a page's gates must stay internally consistent — the detail
+     * page's group gate and its member fetches see ONE status even if an
+     * admin refresh flips [_pluginStatus] mid-load (the captured-local
+     * semantics the inline ladders had). [call] is a plain (non-suspend)
+     * lambda parameter invoked from the inline body, so suspend api calls
+     * are legal at each call site.
+     */
+    private suspend inline fun <T> whenPlugin(available: Boolean, call: () -> Result<List<T>>): List<T> =
+        if (available) {
+            call().getOrDefault(emptyList())
+        } else {
+            emptyList()
+        }
 
+    override suspend fun getAllUsersWithStatistics(): Result<List<UserStatistics>> = runCatchingRethrowingCancellation {
+        // One capture for the whole page — see [whenPlugin]'s KDoc.
+        val pluginAvailable = _pluginStatus.value == PlaybackReportingStatus.AVAILABLE
         coroutineScope {
             val usersDeferred = async { apiClient.getUsers().getOrThrow() }
             val sessionsDeferred = async { apiClient.getSessions().getOrDefault(emptyList()) }
-            val pluginDeferred = async {
-                if (pluginAvailable) {
-                    apiClient.getPlaybackReportingUserActivity(days = 30).getOrDefault(emptyList())
-                } else emptyList()
-            }
+            val pluginDeferred = async { whenPlugin(pluginAvailable) { apiClient.getPlaybackReportingUserActivity(days = 30) } }
 
             val users = usersDeferred.await()
             val activeUserIds = sessionsDeferred.await().map { it.userId }.toSet()
             val pluginMap = pluginDeferred.await().associateBy { it.userId }
 
-            users.map { user ->
-                async {
-                    statsSemaphore.withPermit {
-                        buildUserStatistics(
-                            user = user,
-                            isActive = activeUserIds.contains(user.id),
-                            pluginData = pluginMap[user.id],
-                        )
-                    }
-                }
-            }.awaitAll()
+            statsSemaphore.mapConcurrent(users) { user ->
+                buildUserStatistics(
+                    user = user,
+                    isActive = activeUserIds.contains(user.id),
+                    totalWatchTimeSec = pluginMap[user.id]?.totalTime ?: 0L,
+                )
+            }
         }
     }
 
@@ -138,23 +157,42 @@ class AdminStatisticsRepositoryImpl constructor(
         )
     }
 
+    /**
+     * The ONE [UserStatistics] builder for both pages — the per-user list and
+     * the detail page's `statistics` field (an inline copy of this body that
+     * had already drifted once: it omitted `isCurrentlyActive` and had its
+     * own verbatim completion-rate math). The completion rate
+     * (`movieTotal = unplayed + played; played/total else 0`) lives here
+     * exactly once.
+     *
+     *  - [isActive] is the session-derived "currently playing" flag. Only
+     *    the LIST path has a session source; the detail page has never
+     *    fetched sessions and nothing on it renders the field (the active
+     *    badge and the active-count header are list-screen reads), so the
+     *    detail path deliberately takes the `false` default — preserving the
+     *    pre-builder detail output exactly.
+     *  - [totalWatchTimeSec] is the already-resolved watch time: the list
+     *    path passes the plugin's per-user total (`?: 0L`), the detail path
+     *    its plugin-then-computed fallback ladder.
+     *  - [counts] lets the detail path reuse the [UserPlayCounts] it already
+     *    fetched for its type breakdown instead of re-firing the four-call
+     *    fan-out; null fetches here.
+     */
     private suspend fun buildUserStatistics(
         user: JellyfinUser,
-        isActive: Boolean,
-        pluginData: com.raulshma.jellyplay.core.model.PlaybackReportingActivity?,
+        isActive: Boolean = false,
+        totalWatchTimeSec: Long = 0L,
+        counts: UserPlayCounts? = null,
     ): UserStatistics {
-        val userId = user.id
-
-        val stats = fetchUserPlayCounts(userId)
+        val stats = counts ?: fetchUserPlayCounts(user.id)
         val moviePlayed = stats.moviePlayed
         val episodePlayed = stats.episodePlayed
         val songPlayed = stats.songPlayed
-        val movieUnplayed = stats.movieUnplayed
-        val movieTotal = movieUnplayed + moviePlayed
+        val movieTotal = stats.movieUnplayed + moviePlayed
         val completionRate = if (movieTotal > 0) moviePlayed.toFloat() / movieTotal else 0f
 
         return UserStatistics(
-            userId = userId,
+            userId = user.id,
             userName = user.name,
             userAvatarTag = user.primaryImageTag,
             isAdmin = user.isAdmin,
@@ -162,14 +200,17 @@ class AdminStatisticsRepositoryImpl constructor(
             moviePlayCount = moviePlayed,
             episodePlayCount = episodePlayed,
             songPlayCount = songPlayed,
-            totalWatchTimeSec = pluginData?.totalTime ?: 0L,
+            totalWatchTimeSec = totalWatchTimeSec,
             lastSeen = user.lastActivityDate,
             completionRate = completionRate,
             isCurrentlyActive = isActive,
         )
     }
 
-    override suspend fun getUserDetailStatistics(userId: String, page: Int, pageSize: Int): Result<UserDetailPage> = runCatching {
+    override suspend fun getUserDetailStatistics(userId: String, page: Int, pageSize: Int): Result<UserDetailPage> = runCatchingRethrowingCancellation {
+        // One capture for the whole page (every gate below reads it — the
+        // group gate's non-null deferred bundle IS itself the downstream
+        // gate, so the members must see the SAME flag; see [whenPlugin]).
         val pluginAvailable = _pluginStatus.value == PlaybackReportingStatus.AVAILABLE
 
         // User lookup, played page, and plugin chart are independent round-trips
@@ -193,10 +234,7 @@ class AdminStatisticsRepositoryImpl constructor(
                 ).getOrDefault(Pair(0, emptyList()))
             }
             val pluginChartDeferred = async {
-                if (pluginAvailable) {
-                    apiClient.getPlaybackReportingPlayActivity(days = 30, dataType = "count", filter = userId)
-                        .getOrDefault(emptyList())
-                } else emptyList()
+                whenPlugin(pluginAvailable) { apiClient.getPlaybackReportingPlayActivity(days = 30, dataType = "count", filter = userId) }
             }
             user = userDeferred.await()
             playedResult = playedDeferred.await()
@@ -243,7 +281,6 @@ class AdminStatisticsRepositoryImpl constructor(
         val moviePlayedCount = counts.moviePlayed
         val episodePlayedCount = counts.episodePlayed
         val songPlayedCount = counts.songPlayed
-        val movieUnplayed = counts.movieUnplayed
 
         val typeBreakdown = listOf(
             ContentBreakdown(
@@ -270,18 +307,10 @@ class AdminStatisticsRepositoryImpl constructor(
         val breakdowns: BreakdownResults
         val enhancedDeferreds: EnhancedDeferreds?
         coroutineScope {
-            val genreDeferred = async {
-                if (pluginAvailable) apiClient.getPlaybackReportingBreakdown("Genre", days = 30, filter = userId).getOrDefault(emptyList()) else emptyList()
-            }
-            val methodDeferred = async {
-                if (pluginAvailable) apiClient.getPlaybackReportingBreakdown("PlaybackMethod", days = 30, filter = userId).getOrDefault(emptyList()) else emptyList()
-            }
-            val deviceDeferred = async {
-                if (pluginAvailable) apiClient.getPlaybackReportingBreakdown("ClientName", days = 30, filter = userId).getOrDefault(emptyList()) else emptyList()
-            }
-            val activityDeferred = async {
-                if (pluginAvailable) apiClient.getPlaybackReportingUserActivity(days = 30).getOrDefault(emptyList()) else emptyList()
-            }
+            val genreDeferred = async { whenPlugin(pluginAvailable) { apiClient.getPlaybackReportingBreakdown("Genre", days = 30, filter = userId) } }
+            val methodDeferred = async { whenPlugin(pluginAvailable) { apiClient.getPlaybackReportingBreakdown("PlaybackMethod", days = 30, filter = userId) } }
+            val deviceDeferred = async { whenPlugin(pluginAvailable) { apiClient.getPlaybackReportingBreakdown("ClientName", days = 30, filter = userId) } }
+            val activityDeferred = async { whenPlugin(pluginAvailable) { apiClient.getPlaybackReportingUserActivity(days = 30) } }
             val watchDeferred = async { computeWatchTimeBreakdown(userId) }
             enhancedDeferreds = if (pluginAvailable) {
                 EnhancedDeferreds(
@@ -330,12 +359,6 @@ class AdminStatisticsRepositoryImpl constructor(
         val pluginActivity = breakdowns.pluginActivity
         val watchTimeBreakdown = breakdowns.watchTime
 
-        val moviePlayed = moviePlayedCount
-        val episodePlayed = episodePlayedCount
-        val songPlayed = songPlayedCount
-        val movieTotal = movieUnplayed + moviePlayed
-        val completionRate = if (movieTotal > 0) moviePlayed.toFloat() / movieTotal else 0f
-
         val userPluginActivity = pluginActivity.firstOrNull { it.userId == userId }
         var totalWatchTimeSec = userPluginActivity?.totalTime ?: 0L
 
@@ -345,105 +368,25 @@ class AdminStatisticsRepositoryImpl constructor(
 
         // enhancedDeferreds is non-null exactly when the plugin wave launched
         // (same pluginAvailable gate), so the null check is the plugin gate.
-        val enhancedData = enhancedDeferreds?.let { deferreds ->
-            val weeklyUserData = deferreds.weeklyActivity.await().firstOrNull { it.userId == userId }
-            var weeklyWatchTimeSec = weeklyUserData?.totalTime ?: 0L
-            var monthlyWatchTimeSec = userPluginActivity?.totalTime ?: 0L
-
-            if (weeklyWatchTimeSec == 0L) weeklyWatchTimeSec = watchTimeBreakdown.last7DaysSeconds
-            if (monthlyWatchTimeSec == 0L) monthlyWatchTimeSec = watchTimeBreakdown.last30DaysSeconds
-
-            val streakData = deferreds.sixMonthCount.await()
-            val viewingStreak = calculateViewingStreak(streakData)
-
-            // pluginChart already holds the identical 30-day/count/userId
-            // series — reusing it drops a duplicate round-trip per load.
-            val pluginTrend = pluginChart.sortedBy { it.date }
-            val trendData = if (pluginTrend.isNotEmpty() && pluginTrend.any { it.value > 0 }) pluginTrend else fallbackTrendData
-            val activeDays = trendData.count { it.value > 0 }.coerceAtLeast(1)
-            val averageDailyMinutes = if (monthlyWatchTimeSec > 0) {
-                (monthlyWatchTimeSec / 60 / activeDays).toInt()
-            } else 0
-
-            val currentMonthMinutes = monthlyWatchTimeSec / 60
-            val previousMonthMinutes = watchTimeBreakdown.previous30DaysSeconds / 60
-            val percentageChange = if (previousMonthMinutes > 0) {
-                ((currentMonthMinutes - previousMonthMinutes).toFloat() / previousMonthMinutes.toFloat()) * 100f
-            } else if (currentMonthMinutes > 0) 100f else 0f
-
-            val musicGenres = deferreds.musicGenreBreakdown.await()
-            val musicArtists = deferreds.musicArtistBreakdown.await()
-            val musicItems = deferreds.musicTopItems.await()
-            val audioCount = deferreds.audioPlayCount.await()
-
-                val musicTopTracks = musicItems.second.map { item ->
-                    com.raulshma.jellyplay.core.model.UserTopItem(
-                        itemId = item.id,
-                        name = item.name,
-                        type = item.mediaType.name,
-                        playCount = item.playCount,
-                        posterBlurHash = item.blurHashes.primary,
-                        seriesName = item.album,
-                        runtimeTicks = item.runTimeTicks ?: 0,
-                    )
-                }
-
-                val genrePieData = genreBreakdown.take(8)
-
-                EnhancedStatistics(
-                    weeklyWatchTimeSec = weeklyWatchTimeSec,
-                    monthlyWatchTimeSec = monthlyWatchTimeSec,
-                    viewingStreak = viewingStreak,
-                    trendData = trendData,
-                    averageDailyMinutes = averageDailyMinutes,
-                    monthlyComparison = com.raulshma.jellyplay.core.model.MonthlyComparison(
-                        currentMonthMinutes = currentMonthMinutes,
-                        previousMonthMinutes = previousMonthMinutes,
-                        percentageChange = percentageChange,
-                    ),
-                    musicStats = com.raulshma.jellyplay.core.model.MusicStatistics(
-                        totalListeningHours = musicItems.second.sumOf { (it.runTimeTicks ?: 0L) / 10_000_000L * it.playCount.coerceAtLeast(1) } / 3600f,
-                        topArtists = musicArtists.take(5),
-                        topGenres = musicGenres.take(5),
-                        topTracks = musicTopTracks.take(5),
-                    ),
-                    genrePieData = genrePieData,
-                )
-        } ?: run {
-            EnhancedStatistics(
-                weeklyWatchTimeSec = watchTimeBreakdown.last7DaysSeconds,
-                monthlyWatchTimeSec = watchTimeBreakdown.last30DaysSeconds,
-                viewingStreak = com.raulshma.jellyplay.core.model.ViewingStreak(),
-                trendData = fallbackTrendData,
-                averageDailyMinutes = if (watchTimeBreakdown.last30DaysSeconds > 0 && fallbackTrendData.isNotEmpty()) {
-                    (watchTimeBreakdown.last30DaysSeconds / 60 / fallbackTrendData.count { it.value > 0 }.coerceAtLeast(1)).toInt()
-                } else 0,
-                monthlyComparison = com.raulshma.jellyplay.core.model.MonthlyComparison(
-                    currentMonthMinutes = watchTimeBreakdown.last30DaysSeconds / 60,
-                    previousMonthMinutes = watchTimeBreakdown.previous30DaysSeconds / 60,
-                    percentageChange = if (watchTimeBreakdown.previous30DaysSeconds > 0) {
-                        ((watchTimeBreakdown.last30DaysSeconds - watchTimeBreakdown.previous30DaysSeconds).toFloat() / watchTimeBreakdown.previous30DaysSeconds.toFloat()) * 100f
-                    } else if (watchTimeBreakdown.last30DaysSeconds > 0) 100f else 0f,
-                ),
-                musicStats = com.raulshma.jellyplay.core.model.MusicStatistics(),
-                genrePieData = emptyList(),
-            )
-        }
+        val enhancedData = buildEnhancedStatistics(
+            userId = userId,
+            deferreds = enhancedDeferreds,
+            userPluginActivity = userPluginActivity,
+            pluginChart = pluginChart,
+            fallbackTrendData = fallbackTrendData,
+            watchTimeBreakdown = watchTimeBreakdown,
+            genreBreakdown = genreBreakdown,
+        )
 
         UserDetailPage(
             user = user,
-            statistics = UserStatistics(
-                userId = userId,
-                userName = user.name,
-                userAvatarTag = user.primaryImageTag,
-                isAdmin = user.isAdmin,
-                totalPlayCount = moviePlayed + episodePlayed + songPlayed,
-                moviePlayCount = moviePlayed,
-                episodePlayCount = episodePlayed,
-                songPlayCount = songPlayed,
+            // The shared builder (see its KDoc for the isCurrentlyActive
+            // decision): watch time is the plugin-then-computed ladder above,
+            // counts are the already-fetched pair used by the type breakdown.
+            statistics = buildUserStatistics(
+                user = user,
                 totalWatchTimeSec = totalWatchTimeSec,
-                completionRate = completionRate,
-                lastSeen = user.lastActivityDate,
+                counts = counts,
             ),
             topItems = topItems,
             topItemsTotalCount = playedResult.first,
@@ -464,7 +407,7 @@ class AdminStatisticsRepositoryImpl constructor(
         )
     }
 
-    override suspend fun detectStaleMedia(config: MediaCleanupConfig): Result<String> = runCatching {
+    override suspend fun detectStaleMedia(config: MediaCleanupConfig): Result<String> = runCatchingRethrowingCancellation {
         val scanId = java.util.UUID.randomUUID().toString()
         scanStateDao.insert(
             ScanStateEntity(
@@ -478,7 +421,7 @@ class AdminStatisticsRepositoryImpl constructor(
         scanId
     }
 
-    override suspend fun detectWatchedMedia(config: MediaCleanupConfig): Result<String> = runCatching {
+    override suspend fun detectWatchedMedia(config: MediaCleanupConfig): Result<String> = runCatchingRethrowingCancellation {
         val scanId = java.util.UUID.randomUUID().toString()
         scanStateDao.insert(
             ScanStateEntity(
@@ -492,31 +435,49 @@ class AdminStatisticsRepositoryImpl constructor(
         scanId
     }
 
+    /**
+     * Stale-media scan as a [runScan] config: one paged `getStaleItems` pass
+     * whose continuation rule is `page full && startIndex < server total`,
+     * progress clamped to the server total, and every raw row mapped 1:1 to
+     * a stub (the label formatting pinned by the test suite).
+     */
     private suspend fun runStaleMediaScan(scanId: String, config: MediaCleanupConfig) {
-        try {
-            val allResults = mutableListOf<MediaItemStub>()
-            var startIndex = 0
-            val pageSize = 200
-            var hasMore = true
-
-            while (hasMore) {
-                val result = apiClient.getStaleItems(
-                    daysThreshold = config.daysThreshold,
-                    includeNeverPlayed = config.includeNeverPlayed,
-                    includeItemTypes = config.includeItemTypes.toList(),
-                    startIndex = startIndex,
-                    limit = pageSize,
-                    useDateAdded = config.useDateAdded,
-                ).getOrDefault(Pair(0, emptyList()))
-
-                val items = result.second.map { staleItem ->
+        val pageSize = 200
+        var startIndex = 0
+        var pageStartIndex = 0
+        var hasMore = true
+        runScan(
+            scanId = scanId,
+            fetchNextPage = {
+                if (!hasMore) {
+                    null
+                } else {
+                    pageStartIndex = startIndex
+                    val result = apiClient.getStaleItems(
+                        daysThreshold = config.daysThreshold,
+                        includeNeverPlayed = config.includeNeverPlayed,
+                        includeItemTypes = config.includeItemTypes.toList(),
+                        startIndex = startIndex,
+                        limit = pageSize,
+                        useDateAdded = config.useDateAdded,
+                    ).getOrDefault(Pair(0, emptyList()))
+                    startIndex += pageSize
+                    hasMore = result.second.size >= pageSize && startIndex < result.first
+                    result
+                }
+            },
+            mapRows = { rows ->
+                rows.map { staleItem ->
                     val dateStr = if (config.useDateAdded) staleItem.dateAdded else staleItem.lastPlayedDate
                     val formattedDate = dateStr?.take(10)
                     val neverPlayed = staleItem.daysSincePlay <= 0 && staleItem.playCount == 0
                     val addedAgoText = staleItem.dateAdded?.let { added ->
                         try {
                             val addedDate = java.time.LocalDate.parse(added.take(10))
-                            val days = java.time.temporal.ChronoUnit.DAYS.between(addedDate, java.time.LocalDate.now())
+                            val days = java.time.temporal.ChronoUnit.DAYS.between(
+                                addedDate,
+                                timeSource.today(java.time.ZoneId.systemDefault()),
+                            )
                             when {
                                 days < 1 -> labels.addedToday()
                                 days == 1L -> labels.addedOneDayAgo()
@@ -551,60 +512,43 @@ class AdminStatisticsRepositoryImpl constructor(
                         },
                     )
                 }
-                allResults.addAll(items)
-
-                // Targeted progress write; 0 affected rows = scan row deleted
-                // (cancelled) — stop without the full-row read.
-                if (scanStateDao.updateProgress(
-                        scanId = scanId,
-                        progress = minOf(startIndex + result.second.size, result.first),
-                        total = result.first,
-                        itemsFound = allResults.size,
-                    ) == 0
-                ) {
-                    return
-                }
-
-                startIndex += pageSize
-                hasMore = result.second.size >= pageSize && startIndex < result.first
-            }
-
-            val entity = scanStateDao.getById(scanId) ?: return
-            scanStateDao.update(
-                entity.copy(
-                    status = ScanPhase.COMPLETED.name,
-                    progress = entity.total,
-                    itemsFound = allResults.size,
-                    resultJson = json.encodeToString(ListSerializer(MediaItemStub.serializer()), allResults),
-                )
-            )
-        } catch (e: Exception) {
-            val entity = scanStateDao.getById(scanId)
-            if (entity != null) {
-                scanStateDao.update(entity.copy(status = ScanPhase.FAILED.name))
-            }
-        }
+            },
+            progressOf = { page, _, foundSoFar ->
+                Triple(minOf(pageStartIndex + page.second.size, page.first), page.first, foundSoFar)
+            },
+        )
     }
 
+    /**
+     * Watched-media scan as a [runScan] config: a per-user cursor flattened
+     * into the single page stream (a short page advances to the next user),
+     * the partial-watch filter + cross-user dedup in [mapRows], and progress
+     * reported as the running found count against a live-computed total.
+     */
     private suspend fun runWatchedMediaScan(scanId: String, config: MediaCleanupConfig) {
-        try {
-            val allResults = mutableListOf<MediaItemStub>()
-            // Seen-id set alongside allResults so dedup is O(1) per item instead
-            // of O(n) via allResults.any{}. Without this the .mapNotNull below
-            // is O(total_watched_items²) because allResults grows every
-            // iteration. First-occurrence wins, identical to the previous
-            // allResults.any{} semantics — output ordering is irrelevant here
-            // (results are persisted as JSON and the UI doesn't depend on
-            // insertion order).
-            val seenItemIds = HashSet<String>()
-            val users = apiClient.getUsers().getOrDefault(emptyList())
-            val pageSize = 200
-
-            for (user in users) {
-                var startIndex = 0
-                var hasMore = true
-
-                while (hasMore) {
+        val pageSize = 200
+        // The user list is fetched lazily inside the fetch closure so a throw
+        // on it lands in [runScan]'s catch → FAILED tail, exactly where the
+        // hand-rolled loop's getUsers() (inside its try) put it.
+        var users: List<JellyfinUser>? = null
+        var userIndex = 0
+        var startIndex = 0
+        // Seen-id set alongside the mapped results so dedup is O(1) per item
+        // instead of O(n) via a results.any{}. Without this the .mapNotNull
+        // below is O(total_watched_items²) because the results grow every
+        // iteration. First-occurrence wins, identical to the previous
+        // results.any{} semantics — output ordering is irrelevant here
+        // (results are persisted as JSON and the UI doesn't depend on
+        // insertion order).
+        val seenItemIds = HashSet<String>()
+        runScan(
+            scanId = scanId,
+            fetchNextPage = {
+                val list = users ?: apiClient.getUsers().getOrDefault(emptyList()).also { users = it }
+                val user = list.getOrNull(userIndex)
+                if (user == null) {
+                    null
+                } else {
                     val result = apiClient.getWatchedItems(
                         userId = user.id,
                         includeItemTypes = config.includeItemTypes.toList(),
@@ -613,48 +557,102 @@ class AdminStatisticsRepositoryImpl constructor(
                         startIndex = startIndex,
                         limit = pageSize,
                     ).getOrDefault(Pair(0, emptyList()))
-
-                    val items = result.second
-                        .filter { if (!config.includePartiallyWatched) it.completionPct >= 0.9f else true }
-                        .mapNotNull { watched ->
-                            if (!seenItemIds.add(watched.itemId)) return@mapNotNull null
-                            val lastPlayedStr = watched.lastPlayedDate?.take(10)
-                            MediaItemStub(
-                                itemId = watched.itemId,
-                                name = watched.name,
-                                type = watched.type,
-                                sizeText = formatSize(watched.sizeBytes),
-                                detail = buildString {
-                                    append("${watched.playCount} plays")
-                                    if (watched.completionPct < 1f) {
-                                        append(" · ${(watched.completionPct * 100).toInt()}%")
-                                    }
-                                },
-                                seriesName = watched.seriesName,
-                                seasonName = watched.seasonName,
-                                seasonNumber = watched.seasonNumber,
-                                episodeNumber = watched.episodeNumber,
-                                dateText = lastPlayedStr?.let { "Played $it" },
-                            )
-                        }
-
-                    allResults.addAll(items)
-
-                    // Targeted progress write; 0 affected rows = scan row
-                    // deleted (cancelled) — stop without the full-row read.
-                    if (scanStateDao.updateProgress(
-                            scanId = scanId,
-                            progress = allResults.size,
-                            total = allResults.size + (result.first.coerceAtLeast(0) - items.size),
-                            itemsFound = allResults.size,
-                        ) == 0
-                    ) {
-                        return
+                    if (result.second.size >= pageSize) {
+                        startIndex += pageSize
+                    } else {
+                        userIndex++
+                        startIndex = 0
                     }
-
-                    startIndex += pageSize
-                    hasMore = result.second.size >= pageSize
+                    result
                 }
+            },
+            mapRows = { rows ->
+                rows
+                    .filter { if (!config.includePartiallyWatched) it.completionPct >= 0.9f else true }
+                    .mapNotNull { watched ->
+                        if (!seenItemIds.add(watched.itemId)) return@mapNotNull null
+                        val lastPlayedStr = watched.lastPlayedDate?.take(10)
+                        MediaItemStub(
+                            itemId = watched.itemId,
+                            name = watched.name,
+                            type = watched.type,
+                            sizeText = formatSize(watched.sizeBytes),
+                            detail = buildString {
+                                append(labels.playsCount(watched.playCount))
+                                if (watched.completionPct < 1f) {
+                                    append(" · ${(watched.completionPct * 100).toInt()}%")
+                                }
+                            },
+                            seriesName = watched.seriesName,
+                            seasonName = watched.seasonName,
+                            seasonNumber = watched.seasonNumber,
+                            episodeNumber = watched.episodeNumber,
+                            dateText = lastPlayedStr?.let { labels.playedDate(it) },
+                        )
+                    }
+            },
+            progressOf = { page, keptCount, foundSoFar ->
+                Triple(foundSoFar, foundSoFar + (page.first.coerceAtLeast(0) - keptCount), foundSoFar)
+            },
+        )
+    }
+
+    /**
+     * Shared chassis of the two cleanup scans (the ~90-line structural twins
+     * [runStaleMediaScan] / [runWatchedMediaScan]): page-by-page accumulation,
+     * a targeted progress write after every page (0 affected rows = the scan
+     * row was deleted, i.e. cancelled — stop without the full-row read), the
+     * completion upsert, and the catch → FAILED tail. The scans differ only
+     * in configuration:
+     *  - [fetchNextPage] yields the next raw page (`totalHint` to rows); a
+     *    null return ends the loop — each scan folds its own continuation
+     *    rule (stale: full page + server total; watched: per-user cursors)
+     *    into the closure.
+     *  - [mapRows] converts one raw page to the persisted stubs (the watched
+     *    scan's partial-watch filter + dedup live here).
+     *  - [progressOf] derives `(progress, total, itemsFound)` for the targeted
+     *    write from the raw page, this page's kept count, and the running
+     *    found count — the two scans' accounting rules differ and stay theirs.
+     */
+    private suspend fun <R> runScan(
+        scanId: String,
+        fetchNextPage: suspend () -> Pair<Int, List<R>>?,
+        mapRows: (List<R>) -> List<MediaItemStub>,
+        progressOf: (page: Pair<Int, List<R>>, keptCount: Int, foundSoFar: Int) -> Triple<Int, Int, Int>,
+    ) {
+        try {
+            val allResults = mutableListOf<MediaItemStub>()
+            while (true) {
+                val page = fetchNextPage() ?: break
+                val items = mapRows(page.second)
+                // Retain at most MAX_SCAN_RESULTS stubs: without the
+                // cap the scan accumulates the whole server library in memory
+                // and then serializes it as one JSON blob — on a 50k-item
+                // server a transient double allocation (list + multi-MB
+                // string) on this background worker. Truncation past the cap
+                // is accepted behavior for these explicit admin actions (the
+                // cleanup UI already reads the audit log at LIMIT 500);
+                // progressOf still sees the full raw page, so the progress
+                // accounting is unchanged.
+                val room = MAX_SCAN_RESULTS - allResults.size
+                allResults.addAll(if (room >= items.size) items else items.take(room))
+
+                // Targeted progress write; 0 affected rows = scan row deleted
+                // (cancelled) — stop without the full-row read.
+                val (progress, total, itemsFound) = progressOf(page, items.size, allResults.size)
+                if (scanStateDao.updateProgress(
+                        scanId = scanId,
+                        progress = progress,
+                        total = total,
+                        itemsFound = itemsFound,
+                    ) == 0
+                ) {
+                    return
+                }
+
+                // Cap reached — stop paging; every further page would only be
+                // fetched to be discarded.
+                if (allResults.size >= MAX_SCAN_RESULTS) break
             }
 
             val entity = scanStateDao.getById(scanId) ?: return
@@ -678,7 +676,7 @@ class AdminStatisticsRepositoryImpl constructor(
         scanStateDao.observeProgress(scanId).map { row ->
             if (row == null) ScanProgress()
             else ScanProgress(
-                phase = runCatching { ScanPhase.valueOf(row.status) }.getOrDefault(ScanPhase.IDLE),
+                phase = row.status.toEnumOrNull() ?: ScanPhase.IDLE,
                 scanned = row.progress,
                 total = row.total,
                 itemsFound = row.itemsFound,
@@ -694,7 +692,7 @@ class AdminStatisticsRepositoryImpl constructor(
         itemNameMap: Map<String, String>,
         actionType: CleanupActionType,
         config: MediaCleanupConfig,
-    ): Result<AuditLogEntry> = runCatching {
+    ): Result<AuditLogEntry> = runCatchingRethrowingCancellation {
         val currentUser = apiClient.currentUser.first()
         val adminId = currentUser?.id ?: ""
         val adminName = currentUser?.name ?: ""
@@ -713,7 +711,7 @@ class AdminStatisticsRepositoryImpl constructor(
 
         val entry = AuditLogEntry(
             id = java.util.UUID.randomUUID().toString(),
-            timestamp = System.currentTimeMillis(),
+            timestamp = timeSource.nowEpochMillis(),
             adminUserId = adminId,
             adminUserName = adminName,
             actionType = actionType,
@@ -753,7 +751,7 @@ class AdminStatisticsRepositoryImpl constructor(
                     timestamp = entity.timestamp,
                     adminUserId = entity.adminUserId,
                     adminUserName = entity.adminUserName,
-                    actionType = runCatching { CleanupActionType.valueOf(entity.actionType) }.getOrDefault(CleanupActionType.STALE_REMOVAL),
+                    actionType = entity.actionType.toEnumOrNull() ?: CleanupActionType.STALE_REMOVAL,
                     configSnapshot = entity.configJson,
                     itemCount = entity.itemCount,
                     itemDetails = runCatching {
@@ -772,7 +770,7 @@ class AdminStatisticsRepositoryImpl constructor(
     }
 
     private fun buildFallbackActivityChart(items: List<com.raulshma.jellyplay.core.model.MediaItem>): List<com.raulshma.jellyplay.core.model.PlaybackActivityPoint> {
-        val now = java.time.LocalDate.now()
+        val now = timeSource.today(java.time.ZoneId.systemDefault())
         val dateCounts = mutableMapOf<String, Long>()
         for (i in 0 until 30) {
             val date = now.minusDays(i.toLong())
@@ -790,14 +788,13 @@ class AdminStatisticsRepositoryImpl constructor(
         }
     }
 
-    private data class WatchTimeBreakdown(
-        val totalSeconds: Long,
-        val last30DaysSeconds: Long,
-        val last7DaysSeconds: Long,
-        val previous30DaysSeconds: Long,
-    )
-
-    private suspend fun computeWatchTimeBreakdown(userId: String): WatchTimeBreakdown {
+    /**
+     * The fetched half of the watch-time breakdown (the window math lives in
+     * [StatisticsMath.computeWatchTimeBreakdown]): one paged played-items
+     * call, `today` resolved through the clock seam, and the whole body
+     * guarded by the original catch-to-zeros tail.
+     */
+    private suspend fun computeWatchTimeBreakdown(userId: String): StatisticsMath.WatchTimeBreakdown {
         return try {
             val items = apiClient.getItemsWithUserData(
                 userId = userId,
@@ -806,45 +803,14 @@ class AdminStatisticsRepositoryImpl constructor(
                 sortOrder = "Descending",
                 startIndex = 0,
                 limit = 500,
-            ).getOrDefault(Pair(0, emptyList()))
+            ).getOrDefault(Pair(0, emptyList())).second
 
-            val now = java.time.LocalDate.now()
-            var totalSec = 0L
-            var last30Sec = 0L
-            var last7Sec = 0L
-            var prev30Sec = 0L
-
-            for (item in items.second) {
-                val runtimeSec = (item.runTimeTicks ?: 0L) / 10_000_000L
-                if (runtimeSec == 0L) continue
-                val plays = item.playCount.coerceAtLeast(1)
-                totalSec += runtimeSec * plays
-
-                val lastPlayed = item.lastPlayedDate?.take(10) ?: continue
-                val playedDate = try { java.time.LocalDate.parse(lastPlayed) } catch (_: Exception) { continue }
-                val daysAgo = java.time.temporal.ChronoUnit.DAYS.between(playedDate, now)
-
-                if (daysAgo <= 30) {
-                    val recentPlays = if (plays == 1) 1 else maxOf(1, plays * 30 / (daysAgo.toInt() + 30))
-                    last30Sec += runtimeSec * recentPlays
-                }
-                if (daysAgo <= 7) {
-                    val recentPlays = if (plays == 1) 1 else maxOf(1, plays * 7 / (daysAgo.toInt() + 7))
-                    last7Sec += runtimeSec * recentPlays
-                }
-                if (daysAgo in 31..60) {
-                    prev30Sec += runtimeSec * plays
-                }
-            }
-
-            WatchTimeBreakdown(
-                totalSeconds = totalSec,
-                last30DaysSeconds = last30Sec.coerceAtMost(totalSec),
-                last7DaysSeconds = last7Sec.coerceAtMost(totalSec),
-                previous30DaysSeconds = prev30Sec.coerceAtMost(totalSec - last30Sec).coerceAtLeast(0L),
+            StatisticsMath.computeWatchTimeBreakdown(
+                items = items.map { StatisticsMath.WatchTimeItem(it.runTimeTicks, it.playCount, it.lastPlayedDate) },
+                today = timeSource.today(java.time.ZoneId.systemDefault()),
             )
         } catch (_: Exception) {
-            WatchTimeBreakdown(0L, 0L, 0L, 0L)
+            StatisticsMath.WatchTimeBreakdown(0L, 0L, 0L, 0L)
         }
     }
 
@@ -855,7 +821,7 @@ class AdminStatisticsRepositoryImpl constructor(
         val method: List<com.raulshma.jellyplay.core.model.ContentBreakdown>,
         val device: List<com.raulshma.jellyplay.core.model.ContentBreakdown>,
         val pluginActivity: List<com.raulshma.jellyplay.core.model.PlaybackReportingActivity>,
-        val watchTime: WatchTimeBreakdown,
+        val watchTime: StatisticsMath.WatchTimeBreakdown,
     )
 
     /**
@@ -882,51 +848,145 @@ class AdminStatisticsRepositoryImpl constructor(
         val genrePieData: List<com.raulshma.jellyplay.core.model.ContentBreakdown> = emptyList(),
     )
 
-    private fun calculateViewingStreak(activityData: List<com.raulshma.jellyplay.core.model.PlaybackActivityPoint>): com.raulshma.jellyplay.core.model.ViewingStreak {
-        val activeDates = activityData
-            .filter { it.value > 0 }
-            .map { it.date }
-            .toSet()
-
-        if (activeDates.isEmpty()) {
-            return com.raulshma.jellyplay.core.model.ViewingStreak()
+    /**
+     * The enhanced half of [getUserDetailStatistics], built once for both
+     * gates: [deferreds] non-null is the plugin wave (its awaits feed the
+     * weekly/streak/music figures), null is the no-plugin fallback — the same
+     * builder with the plugin inputs absent. The watch-time fallbacks, the
+     * average-daily and the month-comparison math were duplicated across the
+     * two former branches; they live here exactly once.
+     */
+    private suspend fun buildEnhancedStatistics(
+        userId: String,
+        deferreds: EnhancedDeferreds?,
+        userPluginActivity: PlaybackReportingActivity?,
+        pluginChart: List<PlaybackActivityPoint>,
+        fallbackTrendData: List<PlaybackActivityPoint>,
+        watchTimeBreakdown: StatisticsMath.WatchTimeBreakdown,
+        genreBreakdown: List<ContentBreakdown>,
+    ): EnhancedStatistics {
+        var weeklyWatchTimeSec = if (deferreds != null) {
+            deferreds.weeklyActivity.await().firstOrNull { it.userId == userId }?.totalTime ?: 0L
+        } else {
+            watchTimeBreakdown.last7DaysSeconds
+        }
+        var monthlyWatchTimeSec = if (deferreds != null) {
+            userPluginActivity?.totalTime ?: 0L
+        } else {
+            watchTimeBreakdown.last30DaysSeconds
         }
 
-        val today = java.time.LocalDate.now()
-        var currentStreak = 0
-        var streakStartDate: String? = null
+        // Plugin totals of 0 fall back to the computed breakdown (a no-op on
+        // the fallback path, whose values already are the breakdown's).
+        if (weeklyWatchTimeSec == 0L) weeklyWatchTimeSec = watchTimeBreakdown.last7DaysSeconds
+        if (monthlyWatchTimeSec == 0L) monthlyWatchTimeSec = watchTimeBreakdown.last30DaysSeconds
 
-        var checkDate = today
-        while (activeDates.contains(formatDate(checkDate))) {
-            currentStreak++
-            streakStartDate = formatDate(checkDate)
-            checkDate = checkDate.minusDays(1)
+        val viewingStreak = if (deferreds != null) {
+            calculateViewingStreak(deferreds.sixMonthCount.await())
+        } else {
+            com.raulshma.jellyplay.core.model.ViewingStreak()
         }
 
-        val sortedDates = activeDates.sorted()
-        var longestStreak = 0
-        var tempStreak = 1
-        for (i in 1 until sortedDates.size) {
-            try {
-                val prev = java.time.LocalDate.parse(sortedDates[i - 1])
-                val curr = java.time.LocalDate.parse(sortedDates[i])
-                if (java.time.temporal.ChronoUnit.DAYS.between(prev, curr) == 1L) {
-                    tempStreak++
-                } else {
-                    longestStreak = maxOf(longestStreak, tempStreak)
-                    tempStreak = 1
-                }
-            } catch (_: Exception) {
-                longestStreak = maxOf(longestStreak, tempStreak)
-                tempStreak = 1
+        val trendData = if (deferreds != null) {
+            // pluginChart already holds the identical 30-day/count/userId
+            // series — reusing it drops a duplicate round-trip per load.
+            val pluginTrend = pluginChart.sortedBy { it.date }
+            if (pluginTrend.isNotEmpty() && pluginTrend.any { it.value > 0 }) pluginTrend else fallbackTrendData
+        } else {
+            fallbackTrendData
+        }
+
+        // The fallback path additionally requires a non-empty trend before it
+        // reports an average; the plugin path averages over ≥1 active day.
+        val averageDailyMinutes = if (deferreds != null || trendData.isNotEmpty()) {
+            computeAverageDailyMinutes(monthlyWatchTimeSec, trendData)
+        } else {
+            0
+        }
+
+        val currentMonthMinutes = monthlyWatchTimeSec / 60
+        val previousMonthMinutes = watchTimeBreakdown.previous30DaysSeconds / 60
+
+        val musicStats: com.raulshma.jellyplay.core.model.MusicStatistics
+        val genrePieData: List<ContentBreakdown>
+        if (deferreds != null) {
+            val musicGenres = deferreds.musicGenreBreakdown.await()
+            val musicArtists = deferreds.musicArtistBreakdown.await()
+            val musicItems = deferreds.musicTopItems.await()
+            // Joined for parity with the previous sequential await; the count
+            // itself is not surfaced.
+            deferreds.audioPlayCount.await()
+
+            val musicTopTracks = musicItems.second.map { item ->
+                com.raulshma.jellyplay.core.model.UserTopItem(
+                    itemId = item.id,
+                    name = item.name,
+                    type = item.mediaType.name,
+                    playCount = item.playCount,
+                    posterBlurHash = item.blurHashes.primary,
+                    seriesName = item.album,
+                    runtimeTicks = item.runTimeTicks ?: 0,
+                )
             }
-        }
-        longestStreak = maxOf(longestStreak, tempStreak)
 
-        return com.raulshma.jellyplay.core.model.ViewingStreak(
-            currentStreak = currentStreak,
-            longestStreak = longestStreak,
-            streakStartDate = streakStartDate,
+            musicStats = com.raulshma.jellyplay.core.model.MusicStatistics(
+                totalListeningHours = musicItems.second.sumOf { (it.runTimeTicks ?: 0L) / 10_000_000L * it.playCount.coerceAtLeast(1) } / 3600f,
+                topArtists = musicArtists.take(5),
+                topGenres = musicGenres.take(5),
+                topTracks = musicTopTracks.take(5),
+            )
+            genrePieData = genreBreakdown.take(8)
+        } else {
+            musicStats = com.raulshma.jellyplay.core.model.MusicStatistics()
+            genrePieData = emptyList()
+        }
+
+        return EnhancedStatistics(
+            weeklyWatchTimeSec = weeklyWatchTimeSec,
+            monthlyWatchTimeSec = monthlyWatchTimeSec,
+            viewingStreak = viewingStreak,
+            trendData = trendData,
+            averageDailyMinutes = averageDailyMinutes,
+            monthlyComparison = com.raulshma.jellyplay.core.model.MonthlyComparison(
+                currentMonthMinutes = currentMonthMinutes,
+                previousMonthMinutes = previousMonthMinutes,
+                percentageChange = computePercentageChange(currentMonthMinutes, previousMonthMinutes),
+            ),
+            musicStats = musicStats,
+            genrePieData = genrePieData,
         )
+    }
+
+    /** Minutes per active trend day (at least one day), 0 when nothing was watched. */
+    private fun computeAverageDailyMinutes(monthlyWatchTimeSec: Long, trendData: List<PlaybackActivityPoint>): Int =
+        if (monthlyWatchTimeSec > 0) {
+            (monthlyWatchTimeSec / 60 / trendData.count { it.value > 0 }.coerceAtLeast(1)).toInt()
+        } else {
+            0
+        }
+
+    /** Month-over-month delta in percent; a first non-zero month reads as +100%. */
+    private fun computePercentageChange(currentMonthMinutes: Long, previousMonthMinutes: Long): Float =
+        if (previousMonthMinutes > 0) {
+            ((currentMonthMinutes - previousMonthMinutes).toFloat() / previousMonthMinutes.toFloat()) * 100f
+        } else if (currentMonthMinutes > 0) {
+            100f
+        } else {
+            0f
+        }
+
+    /** Clock-resolving delegate to the pure [StatisticsMath.calculateViewingStreak]. */
+    private fun calculateViewingStreak(activityData: List<com.raulshma.jellyplay.core.model.PlaybackActivityPoint>): com.raulshma.jellyplay.core.model.ViewingStreak =
+        StatisticsMath.calculateViewingStreak(activityData, timeSource.today(java.time.ZoneId.systemDefault()))
+
+    companion object {
+        /**
+         * Upper bound on the stubs a cleanup scan retains (and serializes
+         * into one `scan_state` row) — see [runScan]. Two orders of magnitude
+         * above the audit-log LIMIT 500 the cleanup UI already reads
+         * ([AuditLogDao.getAll]), and far beyond any actionable manual
+         * selection; only >5k-item explicit admin scans are truncated.
+         */
+        private const val MAX_SCAN_RESULTS = 5_000
     }
 }

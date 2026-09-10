@@ -42,9 +42,9 @@ internal data object WebInputProbe : NavKey
 private const val PROBE_ROW_COUNT = 18
 
 /**
- * E2E INPUT DELIVERY PROBE (wave 17A): a minimal, deterministic click target
+ * E2E INPUT DELIVERY PROBE: a minimal, deterministic click target
  * lattice for tools/e2e/input-probe.mjs — the re-runnable repro for the
- * "CMP-wasm input dead-region below y≈600" ticket (wave 17A verdict: NO
+ * "CMP-wasm input dead-region below y≈600" ticket (verdict: NO
  * dead region exists — the report was crash-contaminated; measured evidence
  * in docs/e2e/web-input-dead-region.md). Reached ONLY via
  * `?e2eRoute=inputprobe` (parsed in Main.kt); [WebAppRoot] short-circuits to

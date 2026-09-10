@@ -24,9 +24,9 @@ import org.koin.core.module.Module
 import org.koin.dsl.module
 
 /**
- * Web platform Koin module (docs/kmp-migration-plan.md §Phase W): the four
+ * Web platform Koin module (docs/kmp-migration-plan.md §): the four
  * named preference DataStores, persisted to `window.localStorage`, plus the
- * credential stores. Wave 16B scope change: ONLY the Seerr credential store
+ * credential stores.  scope change: ONLY the Seerr credential store
  * is persistent now — [SeerrSecureCredentialsStore] binds to
  * [LocalStorageSecureKeyValueStorage] (localStorage-backed; see that class
  * for the why + the honest XSS caveat: cookie auth is browser-impossible, so
@@ -35,7 +35,7 @@ import org.koin.dsl.module
  * platform modules the Jellyfin — credential stores KEEP the web v1
  * session-memory cut ([WasmSecureKeyValueStorage], empty every boot).
  *
- * §Phase W spike outcome (recorded per plan): androidx.datastore 1.2.1 DOES
+ * § spike outcome (recorded per plan): androidx.datastore 1.2.1 DOES
  * ship a fully usable wasmJs surface for custom persistence — `Storage<T>` /
  * `StorageConnection<T>` (readScope/writeScope/coordinator),
  * `createSingleProcessCoordinator`, `PreferencesSerializer` (proto
@@ -78,7 +78,7 @@ fun webDatastoreModule(): Module = module {
         webPreferencesDataStore("subtitle_provider_prefs")
     }
 
-    // Wave 16B: the ONLY persistent credential store on web — the API key is
+    // The ONLY persistent credential store on web — the API key is
     // the sole Seerr auth that can function in a browser (Cookie is a
     // fetch-forbidden header), and it is user-entered config, so it persists
     // via localStorage. See [LocalStorageSecureKeyValueStorage] for the full

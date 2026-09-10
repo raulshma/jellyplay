@@ -51,7 +51,7 @@ fun BackupSettingsScreen(
     val messenger = rememberSettingsMessenger()
 
     // SAF/native pickers behind the platform seam: Android returns the SAF
-    // launcher facade, desktop (wave 20C) an AWT FileDialog facade — both
+    // launcher facade, desktop an AWT FileDialog facade — both
     // deliver opaque uri strings straight into the ViewModel below.
     val backupPicker = rememberBackupFilePicker(
         onExportUriSelected = { viewModel.exportSettings(it) },
@@ -66,28 +66,24 @@ fun BackupSettingsScreen(
         tag = "backup_init",
     )
 
-    // When a backup is picked and decoded, navigate to the full-screen diff.
-    // The ViewModel stages `pendingImport` without writing; the preview screen
-    // performs the actual restore (all or per-category). The pending state is
-    // consumed atomically: navigation is attempted first and the pending is
-    // cleared only after the navigate call returns, so a failed navigation
-    // does not drop the staged file (user can retry). A duplicate launch for
-    // the same uri is suppressed via the `lastNavigatedUri` guard — without it
-    // returning to this screen would re-trigger the pending that was never
-    // cleared on failure.
-    // Use a one-shot event id to allow re-picking the *same* file.
+    // When a backup is picked, navigate to the full-screen diff. The ViewModel
+    // only stages the picked uri (nothing is read or written); the preview
+    // screen re-reads the file and performs the actual restore (all or
+    // per-category). The staged signal is consumed atomically: navigation is
+    // attempted first and the stage is cleared only after the navigate call
+    // returns, so a failed navigation does not drop the staged file (user can
+    // retry). Use a one-shot event id to allow re-picking the *same* file.
     // The previous `lastNavigatedUri == raw` guard permanently suppressed the
     // same uri after first navigation (review finding). Instead, clear the guard
-    // when pending becomes null so a new PendingImport with the same uri can
+    // when the stage becomes null so a re-stage with the same uri can
     // re-fire after `cancelImport()` + re-pick.
     val lastNavigatedUri = remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(viewModel.pendingImport) {
-        val pending = viewModel.pendingImport
-        if (pending == null) {
+    LaunchedEffect(viewModel.stagedImportUri) {
+        val raw = viewModel.stagedImportUri
+        if (raw == null) {
             lastNavigatedUri.value = null
             return@LaunchedEffect
         }
-        val raw = pending.uri.toString()
         if (raw == lastNavigatedUri.value) return@LaunchedEffect
         lastNavigatedUri.value = raw
         try {

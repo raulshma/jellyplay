@@ -9,14 +9,14 @@ import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * The atomic-session flow trio of `JellyfinApiEngine` (jvmShared), extracted
- * for the Phase W wasm auth client: `currentServer` / `currentUser` as
+ * for the wasm auth client: `currentServer` / `currentUser` as
  * separate StateFlows plus the combined [session] published as ONE atomic
  * value, so a session transition is observed as a single step (stable pair →
  * stable pair, or →/from null) — never the synthetic `(newServer, oldUser)`
  * intermediate that `combine(currentServer, currentUser)` produces across a
  * two-step publish.
  *
- * Public since Phase W chunk 2: ONE instance is shared by the auth, library
+ * Public since chunk 2: ONE instance is shared by the auth, library
  * and playback wasm clients (the auth client publishes, the others derive
  * per-request base URL + token), so the DI module constructs it and hands it
  * to all three — internal would leak through their constructors.

@@ -5,6 +5,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import com.raulshma.jellyplay.core.ui.components.PullToRefreshBox
+import com.raulshma.jellyplay.core.ui.components.DeferredRefreshEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -56,6 +57,8 @@ fun MusicHomeScreen(
     val sections = uiState.sections
     val isLoading = uiState.isLoading
     val error = uiState.error
+
+    DeferredRefreshEffect(viewModel.deferredRefresher)
     val backgroundColorState = rememberScreenBackgroundColorState()
     val scope = rememberCoroutineScope()
 

@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.worker
 
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.repository.DownloadFailurePolicy
 import com.raulshma.jellyplay.core.data.repository.DownloadStates
 import com.raulshma.jellyplay.core.data.repository.Outcome
@@ -77,7 +78,7 @@ class DownloadTransferRunner(
      * Swallows all failures to 0 — a failed probe must not abort the transfer.
      */
     suspend fun probeContentSize(url: String, accessToken: String?): Long =
-        runCatching {
+        runCatchingRethrowingCancellation {
             val response = client.execute(TransferRequest(url, head = true, accessToken = accessToken))
             val size = if (response.code in 200..299) response.totalSize ?: 0L else 0L
             response.close()
@@ -282,7 +283,7 @@ class DownloadTransferRunner(
                             val progress = if (effectiveTotalSize > 0) {
                                 (downloadedBytes * 100 / effectiveTotalSize).toInt()
                             } else 0
-                            runCatching {
+                            runCatchingRethrowingCancellation {
                                 updateForeground(
                                     entity.name, progress, downloadedBytes,
                                     effectiveTotalSize, speedBytesPerSec, notificationId,

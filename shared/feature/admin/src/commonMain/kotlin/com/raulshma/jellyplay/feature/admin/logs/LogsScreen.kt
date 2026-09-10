@@ -73,6 +73,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.StatusColors
 import com.raulshma.jellyplay.core.model.ActivityLogEntry
 import com.raulshma.jellyplay.core.model.ActivityLogSeverity
 import com.raulshma.jellyplay.core.model.LogFile
+import com.raulshma.jellyplay.core.model.formatBytes
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.animation.lazyItemPlacementSpec
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
@@ -226,7 +227,7 @@ fun LogsScreen(
                         entries = filteredEntries,
                         isLiveActive = state.isLiveStreamActive,
                         liveEntryIds = state.liveEntryIds,
-                        isLoadingMore = false,
+                        isLoadingMore = state.isLoadingMoreActivity,
                         onLoadMore = { viewModel.loadMoreActivity() },
                         bottomPadding = adaptiveInfo.bottomPadding(isTv),
                         listFocusRequester = listFocusRequester,
@@ -458,7 +459,11 @@ private fun LogFileItem(file: LogFile, onClick: () -> Unit) {
                     if (file.size > 0) {
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            formatFileSize(file.size),
+                            // The one storage-byte table (ByteFormatter): the
+                            // local integer-KB/no-GB variant is gone — declared
+                            // unifying delta, KB now renders one-decimal and
+                            // GB-band sizes stop collapsing into MB.
+                            file.size.formatBytes(),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -635,12 +640,6 @@ private fun ActivityEntryItem(entry: ActivityLogEntry, isNew: Boolean = false) {
             }
         }
     }
-}
-
-private fun formatFileSize(bytes: Long): String = when {
-    bytes < 1024 -> "$bytes B"
-    bytes < 1024 * 1024 -> "${bytes / 1024} KB"
-    else -> "${"%.1f".format(bytes / (1024.0 * 1024.0))} MB"
 }
 
 private val LOG_LEVEL_REGEX = Regex("\\b(ERROR|FATAL|WARN|WARNING|INFO|DEBUG|TRACE)\\b", RegexOption.IGNORE_CASE)

@@ -184,6 +184,31 @@ class CastManagerTest {
     }
 
     @Test
+    fun `loadMedia routes to the active DLNA strategy`() {
+        castPreference.value = SyncPlayCastSlice(defaultCastingStrategy = CastingStrategy.PREFER_DLNA)
+        val manager = manager()
+        every { dlnaCastStrategy.loadMedia(any(), any(), any(), any()) } returns true
+        // relaxUnitFun covers only Unit members; the handoff gate reads this
+        // val after any successful transport load — production DLNA uses the
+        // CastStrategy default (false, the transport never owns the listener).
+        every { dlnaCastStrategy.ownsExternalListener } returns false
+        val item = MediaItem.Builder().setMediaId("id").setUri("http://server/Videos/1/stream").build()
+
+        manager.loadMedia(item, 0L, mockk())
+
+        verify(exactly = 1) { dlnaCastStrategy.loadMedia(item, 0L, any(), any()) }
+    }
+
+    @Test
+    fun `loadMedia on the Google strategy without a cast player is a silent no-op`() {
+        val manager = manager()
+        val item = MediaItem.Builder().setMediaId("id").setUri("http://server/stream").build()
+
+        // No CastPlayer exists under Robolectric — must not throw.
+        manager.loadMedia(item, 0L, mockk())
+    }
+
+    @Test
     fun `connect switches to the device's strategy and stops the previous discovery`() {
         val manager = manager()
 

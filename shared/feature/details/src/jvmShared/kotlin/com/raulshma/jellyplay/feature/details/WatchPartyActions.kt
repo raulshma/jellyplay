@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.feature.details
 
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.SyncPlayRepository
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -34,7 +34,7 @@ internal class WatchPartyActions(
     private val session: StateFlow<DetailSession?>,
     private val messages: MutableSharedFlow<DetailMessage>,
     private val strings: DetailStrings,
-    private val mediaRepository: MediaRepository,
+    private val syncPlayRepository: SyncPlayRepository,
     private val syncPlayManager: SyncPlayManager,
 ) {
     /**
@@ -43,7 +43,7 @@ internal class WatchPartyActions(
      * constructor.
      */
     class Factory constructor(
-        private val mediaRepository: MediaRepository,
+        private val syncPlayRepository: SyncPlayRepository,
         private val syncPlayManager: SyncPlayManager,
     ) {
         fun create(
@@ -56,7 +56,7 @@ internal class WatchPartyActions(
             session = session,
             messages = messages,
             strings = strings,
-            mediaRepository = mediaRepository,
+            syncPlayRepository = syncPlayRepository,
             syncPlayManager = syncPlayManager,
         )
     }
@@ -88,7 +88,7 @@ internal class WatchPartyActions(
      * shared queue. The group is created from [title], recovered from the
      * server's group list by name (create returns no id), joined (which also
      * connects the WebSocket), and finally seeded with the item via
-     * [MediaRepository.syncPlaySetNewQueue] at [startPositionTicks] = 0 (a
+     * [SyncPlayRepository.syncPlaySetNewQueue] at [startPositionTicks] = 0 (a
      * fresh group start).
      *
      * Group recovery disambiguates by id: the existing group ids are snapshotted
@@ -113,18 +113,18 @@ internal class WatchPartyActions(
         // can pick the freshly-created group even if a same-named group already
         // exists — create returns no id, so a name collision would otherwise
         // join a stale group and orphan the new one.
-        val priorGroupIds = mediaRepository.getSyncPlayGroups().getOrNull().orEmpty()
+        val priorGroupIds = syncPlayRepository.getSyncPlayGroups().getOrNull().orEmpty()
             .map { it.groupId }
             .toSet()
 
         // 1. Create the group (no id is returned).
-        mediaRepository.createSyncPlayGroup(title)
+        syncPlayRepository.createSyncPlayGroup(title)
             .onFailure { return fail(it) }
 
         // 2. Recover the new group by name, preferring one not in the prior
         //    snapshot; fall back to the first name match (mirrors
         //    SyncPlayViewModel.createGroup when the snapshot is unavailable).
-        val groupId = mediaRepository.getSyncPlayGroups()
+        val groupId = syncPlayRepository.getSyncPlayGroups()
             .getOrElse { return fail(it) }
             .let { groups ->
                 groups.firstOrNull { it.groupName == title && it.groupId !in priorGroupIds }
@@ -138,7 +138,7 @@ internal class WatchPartyActions(
             .onFailure { return fail(it) }
 
         // 4. Push the item into the shared queue at position 0 (fresh start).
-        mediaRepository.syncPlaySetNewQueue(
+        syncPlayRepository.syncPlaySetNewQueue(
             itemIds = listOf(itemId),
             playingItemId = itemId,
             mediaSourceId = mediaSourceId,

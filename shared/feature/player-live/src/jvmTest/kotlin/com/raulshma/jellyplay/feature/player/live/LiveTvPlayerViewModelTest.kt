@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.feature.player.live
 
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
@@ -47,7 +47,7 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class LiveTvPlayerViewModelTest {
 
-    private lateinit var liveTvRepo: MediaRepository
+    private lateinit var liveTvRepo: LiveTvRepository
     private lateinit var playbackRepo: PlaybackRepository
     private lateinit var appRuntimeStateStore: AppRuntimeStateStore
     private lateinit var playbackStore: PlaybackStore
@@ -65,7 +65,7 @@ class LiveTvPlayerViewModelTest {
     @BeforeTest
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
-        liveTvRepo = mockk<MediaRepository>(relaxed = true)
+        liveTvRepo = mockk<LiveTvRepository>(relaxed = true)
         playbackRepo = mockk(relaxed = true)
         appRuntimeStateStore = mockk(relaxed = true)
         playbackStore = mockk(relaxed = true)
@@ -90,7 +90,7 @@ class LiveTvPlayerViewModelTest {
         every { fakeEngine.durationMs } returns MutableStateFlow(-1L)
         every { fakeEngine.errorMessage } returns MutableStateFlow(null)
         // Read by the state collector on the ERROR path (transcode-reasons
-        // detail merge) — first exercised by the wave-19C PiP auto-exit test.
+        // detail merge) — first exercised by the PiP auto-exit test.
         every { fakeEngine.errorDetail } returns MutableStateFlow(null)
         every { fakeEngine.load(any()) } answers { capturedRequests.add(firstArg()) }
 
@@ -383,7 +383,7 @@ class LiveTvPlayerViewModelTest {
         assertNull(vm.state.value.currentChannel)
     }
 
-    // ── Deferred zaps (wave 20D): a zap during the channel-list load is
+    // ── Deferred zaps: a zap during the channel-list load is
     // queued, not dropped — PiP SKIP maps to a zap, so SKIP used to no-op
     // while the list was loading. The gate pattern below parks
     // getLiveTvChannels mid-flight so the zap provably arrives inside the
@@ -560,7 +560,7 @@ class LiveTvPlayerViewModelTest {
     }
 
     /**
-     * Recording fake of the wave-19C live PiP seam: captures the calls the VM
+     * Recording fake of the live PiP seam: captures the calls the VM
      * makes so the seam assertions below read as plain list checks.
      */
     private class FakePip : PipController {
@@ -695,7 +695,7 @@ class LiveTvPlayerViewModelTest {
     }
 
     private fun createVm(pip: PipController? = null): LiveTvPlayerViewModel = LiveTvPlayerViewModel(
-        mediaRepository = liveTvRepo,
+        liveTvRepository = liveTvRepo,
         playbackRepository = playbackRepo,
         appRuntimeStateStore = appRuntimeStateStore,
         playbackStore = playbackStore,

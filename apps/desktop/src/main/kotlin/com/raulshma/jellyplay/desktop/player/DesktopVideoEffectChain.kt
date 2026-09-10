@@ -6,7 +6,7 @@ import kotlin.math.roundToInt
 
 /**
  * The desktop mpv `vf` (video filter chain) builder for the player's
- * video-effects sheet (wave 17B) — the video twin of wave 14C's
+ * video-effects sheet — the video twin of the
  * [DesktopAudioEffectChain], and the mpv-side twin of the Android
  * `MpvPlayerEngine.applyVideoFilters` half. Pure functions, no mpv handle:
  * [MpvDesktopEngine] applies the produced string as the runtime `vf`
@@ -18,7 +18,7 @@ import kotlin.math.roundToInt
  * The Android MPV engine's `applyVideoFilters` was the semantics source;
  * every filter was verified present in the bundled libmpv before committing
  * to it (binary scan of `tools/mpv/libmpv-2.dll` for the filter-name
- * strings + the live `vf` property probe in the wave-17B engine tests —
+ * strings + the live `vf` property probe in the engine tests —
  * `eq`, `unsharp`, lavfi `gblur` all resolve).
  *
  * | Shared effect ([VideoEffectsConfig]) | mpv equivalent (this chain) | Notes |
@@ -32,7 +32,7 @@ import kotlin.math.roundToInt
  * | gaussianBlur (0..10, 0 off) | `lavfi=[gblur=sigma=<blur/2>]` | sigma halved to keep the 0..10 slider sensible, Android's exact rule |
  * | rotationDegrees (−180..180) | NOT a filter — `video-rotate` property (see [rotationDegrees]) | rounded to the nearest 90° and normalized to 0..359; mpv rotates the whole output, filters cannot |
  *
- * Every number is formatted with [Locale.ROOT] — the wave-14C review lesson:
+ * Every number is formatted with [Locale.ROOT] — the review lesson:
  * `String.format` under a comma-decimal locale produces `0,5` and mpv
  * rejects the whole chain write.
  */

@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.StateFlow
 
 /**
  * Android adapter over the Hilt-owned legacy `core:data` PipController
- * singleton (wave 8C seam): the same instance the app's PlayerActivity
+ * singleton (seam): the same instance the app's PlayerActivity
  * injects, so VM writes and Activity reads observe one state. Maps the
  * commonMain [PipTransport] wrapper onto the legacy fun-interface and
  * `(width, height)` aspect pairs onto [Rational]; the source-rect hint is

@@ -62,6 +62,7 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.feature.livetv.formatLiveTvTime
+import com.raulshma.jellyplay.feature.livetv.liveProgressFraction
 import com.raulshma.jellyplay.feature.livetv.generated.resources.Res
 import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_cancel_recording
 import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_channel_live
@@ -139,7 +140,7 @@ internal fun ChannelDetailContent(
             }
         } else {
             val airingId = current?.id
-            items(items = state.programs, key = { it.id }) { program ->
+            items(items = state.programs, key = { it.id }, contentType = { "program" }) { program ->
                 ProgramTimelineRow(
                     program = program,
                     isAiring = program.id == airingId,
@@ -455,15 +456,11 @@ private fun ProgramTimelineRow(
 
 /**
  * Live progress fraction (0..1) of a program, derived from its start/end ISO
- * strings. Computed once per composition (no periodic tick — refresh on open
- * only per the design decision).
+ * strings through the shared [liveProgressFraction] fold (which parses
+ * offset-less timestamps leniently — the C10 unification). Computed once per
+ * composition (no periodic tick — refresh on open only per the design
+ * decision); unparseable/non-positive spans render as 0f.
  */
 @Composable
-private fun rememberLiveProgress(program: LiveTvProgram): Float {
-    val now = Instant.now()
-    val start = program.startDate?.let { runCatching { Instant.parse(it) }.getOrNull() } ?: return 0f
-    val end = program.endDate?.let { runCatching { Instant.parse(it) }.getOrNull() } ?: return 0f
-    val total = end.epochSecond - start.epochSecond
-    return if (total <= 0) 0f
-    else (((now.epochSecond - start.epochSecond).toFloat() / total)).coerceIn(0f, 1f)
-}
+private fun rememberLiveProgress(program: LiveTvProgram): Float =
+    liveProgressFraction(program, Instant.now()) ?: 0f

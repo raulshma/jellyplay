@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.feature.livetv.recordings
 
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.LiveTvRecording
 import io.mockk.coEvery
@@ -30,7 +30,7 @@ class RecordingsViewModelTest {
     // has no access to that module (search/music conveyor port pattern).
     private val mainDispatcher = StandardTestDispatcher()
 
-    private lateinit var mediaRepository: MediaRepository
+    private lateinit var mediaRepository: LiveTvRepository
     private lateinit var imageUrlProvider: ImageUrlProvider
     private lateinit var viewModel: RecordingsViewModel
 
@@ -160,12 +160,18 @@ class RecordingsViewModelTest {
         assertEquals(null, viewModel.uiState.value.pendingDelete)
     }
 
+    // The null-tag policy itself lives on the interface default now (pinned
+    // in ImageUrlProviderImplTest); this pins the VM forwarding both tag
+    // shapes through it instead of re-deciding the fold.
+
     @Test
-    fun getImageUrl_without_a_tag_returns_empty_and_with_one_delegates() {
-        every { imageUrlProvider.getImageUrl("r1") } returns "http://img/r1"
+    fun getImageUrl_forwards_both_tag_shapes_to_the_interface_fold() {
+        every { imageUrlProvider.getImageUrlOrNull("r1", null) } returns ""
+        every { imageUrlProvider.getImageUrlOrNull("r1", "tag") } returns "http://img/r1"
 
         assertEquals("", viewModel.getImageUrl("r1", null))
         assertEquals("http://img/r1", viewModel.getImageUrl("r1", "tag"))
-        verify(exactly = 1) { imageUrlProvider.getImageUrl("r1") }
+        verify(exactly = 1) { imageUrlProvider.getImageUrlOrNull("r1", null) }
+        verify(exactly = 1) { imageUrlProvider.getImageUrlOrNull("r1", "tag") }
     }
 }

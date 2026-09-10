@@ -37,6 +37,14 @@ import androidx.room.PrimaryKey
         Index(value = ["seriesId", "mediaType"]),
         Index(value = ["seasonId", "mediaType"]),
         Index(value = ["mediaType", "createdAt"]),
+        // Ordered range index for OfflineMediaDao.getDownloadedEpisodes (the offline
+        // home's Continue Watching / Next Up source): that query filters
+        // `mediaType = 'EPISODE'` and orders by
+        // `seriesId, seasonNumber, episodeNumber`, and none of the indices
+        // above serves that WHERE + ORDER BY combination, so SQLite sorted up
+        // to 2000 joined rows on EVERY re-emission (any write to offline_media
+        // or playback_state re-runs the flow). See MIGRATION_52_53.
+        Index(value = ["mediaType", "seriesId", "seasonNumber", "episodeNumber"]),
     ],
 )
 data class OfflineMediaEntity(

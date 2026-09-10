@@ -69,7 +69,7 @@
     <string name="detail_option_edit">Modifica</string>
     <string name="detail_option_share">Condividi</string>
     <string name="detail_option_downloading">Download…</string>
-    <string name="detail_option_downloading_percent">Download (%1$d%%)</string>
+    <string name="detail_option_downloading_percent">Download (%1$d%)</string>
     <string name="detail_option_download">Scarica</string>
     <string name="detail_option_downloading_series">Download della serie…</string>
     <string name="detail_option_download_series">Scarica serie</string>
@@ -162,9 +162,9 @@
     <string name="detail_not_enough_storage">Spazio di archiviazione insufficiente.</string>
 
     <!-- ── File-size formatting ─────────────────────────────────────────── -->
-    <string name="detail_size_gb">%1$.1f GB</string>
-    <string name="detail_size_mb">%1$.1f MB</string>
-    <string name="detail_size_kb">%1$.1f KB</string>
+    <string name="detail_size_gb">%1$s GB</string>
+    <string name="detail_size_mb">%1$s MB</string>
+    <string name="detail_size_kb">%1$s KB</string>
     <string name="detail_size_b">%1$d B</string>
     <string name="detail_size_unknown">Sconosciuto</string>
 

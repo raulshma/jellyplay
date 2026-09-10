@@ -41,7 +41,7 @@ fun List<OfflineMediaItem>.toFilteredLibraryItems(filters: LibraryFilters): List
 
     val sorted = when (filters.sortBy) {
         SortOption.SORT_NAME, SortOption.ALBUM, SortOption.ALBUM_ARTIST ->
-            mapped.sortedBy { (_, item) -> item.name.lowercase() }
+            mapped.sortedByCachedKey { (_, item) -> item.name.lowercase() }
         SortOption.YEAR_DESC, SortOption.PREMIERE_DATE ->
             mapped.sortedByDescending { (_, item) -> item.year ?: Int.MIN_VALUE }
         SortOption.YEAR_ASC ->

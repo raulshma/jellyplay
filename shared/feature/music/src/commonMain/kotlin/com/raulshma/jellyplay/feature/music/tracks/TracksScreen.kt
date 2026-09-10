@@ -54,7 +54,7 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.ui.util.safeItemKey
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
-import com.raulshma.jellyplay.feature.music.albums.MusicSortOption
+import com.raulshma.jellyplay.feature.music.collection.MusicSortOption
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -65,6 +65,7 @@ fun TracksScreen(
 ) {
     val tracks = viewModel.tracks.collectAsLazyPagingItems()
     val networkStatus by LocalNetworkStatus.current.collectAsStateWithLifecycle()
+    val selectedSort by viewModel.selectedSort.collectAsStateWithLifecycle()
     val headerStatus = resolveHeaderStatus(
         isLoading = tracks.loadState.refresh is LoadState.Loading,
         hasError = tracks.loadState.refresh is LoadState.Error,
@@ -92,7 +93,7 @@ fun TracksScreen(
                     modifier = Modifier.then(sortFocusState.focusModifier).tvFocusIndicator(sortFocusState, CircleShape),
                 ) {
                     Text(
-                        text = stringResource(viewModel.selectedSort.labelRes),
+                        text = stringResource(selectedSort.labelRes),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
@@ -185,7 +186,9 @@ fun TracksScreen(
                                         artist = track.albumArtist,
                                         album = track.album,
                                         duration = track.runTimeTicks?.let { ticks ->
-                                            com.raulshma.jellyplay.core.ui.components.formatDurationMs(ticks / 10_000)
+                                            remember(ticks) {
+                                                com.raulshma.jellyplay.core.ui.components.formatDurationMs(ticks / 10_000)
+                                            }
                                         },
                                         imageUrl = imageUrl,
                                         onClick = onClick,

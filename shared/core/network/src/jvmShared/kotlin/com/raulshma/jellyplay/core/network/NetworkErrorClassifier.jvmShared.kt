@@ -6,7 +6,7 @@ import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 
 /**
- * JVM/Android actual of the Phase W retry-classifier seam (see
+ * JVM/Android actual of the retry-classifier seam (see
  * RetryPolicy.kt in commonMain). The checks are verbatim from the pre-split
  * jvmShared RetryPolicy.isRetryable `when` block — androidMain and jvmMain
  * both see this source set through jvmShared, so one actual serves both

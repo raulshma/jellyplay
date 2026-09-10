@@ -15,7 +15,7 @@ package com.raulshma.jellyplay.core.network.api
  * [isAccessDenied] is set for HTTP 401/403 so callers can branch into a dedicated
  * "you don't have access" UX instead of showing a generic network-error string.
  *
- * C3 split (docs/kmp-migration-plan.md §Phase C3): only the pure, commonMain-safe
+ * Split (see docs/kmp-migration-plan.md): only the pure, commonMain-safe
  * classification lives in this file so wasm consumers can build `ApiException`s
  * from HTTP statuses. The java.net/Jellyfin-SDK throwable classifiers
  * (`fromJellyfin`, `fromNetwork`) are companion EXTENSION functions in

@@ -23,7 +23,7 @@ import kotlinx.coroutines.test.runTest
  * injected clock. **Zero mockk instances** — the coordinator's behaviour is
  * assertable without any engine mock because it only decides, never executes.
  *
- * Ported to jvmTest (kotlin.test) with the wave-7C review round: the suite
+ * Ported to jvmTest (kotlin.test) with the review round: the suite
  * was dropped with the androidMain testFixtures even though the coordinator
  * itself moved to commonMain — the common-pure [FakeMediaEngine] twin in
  * this source set replaces the deleted fixture.

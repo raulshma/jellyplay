@@ -30,7 +30,7 @@ kotlin {
             testTask {
                 // commonTest suites run via jvmTest; the wasmJs browser test
                 // run needs a local Chrome/Chromium (karma) and stays opt-in
-                // until Phase W wires a headless wasm test lane — without this
+                // until wires a headless wasm test lane — without this
                 // guard, `gradlew build`/`check` would fail on Chrome-less
                 // machines that previously ran no wasm tests at all.
                 enabled = false
@@ -44,7 +44,7 @@ kotlin {
         // JVM-semantics code shared verbatim by android + desktop: every
         // OkHttp / Jellyfin-SDK implementation, the failover router, the
         // subtitle providers and the realtime WebSocket plumbing. Wasm gets a
-        // pure-Kotlin HTTP stack when its consumers ship (plan §Phase W).
+        // pure-Kotlin HTTP stack when its consumers ship.
         // NOTE: the websocket event currency stays org.json —
         // WebSocketEvent.data is consumed as JSONObject by legacy :core:data
         // (RemoteControlReceiver / SyncPlayManager), which must keep compiling
@@ -58,6 +58,10 @@ kotlin {
 
         getByName("commonMain").dependencies {
             api(project(":shared:core:model"))
+            // runCatchingRethrowingCancellation around every suspend fetch —
+            // the helper lives below this module on purpose (repositories,
+            // workers and the wasm stack cross the same seam).
+            implementation(project(":shared:core:concurrency"))
             implementation(libs.kotlinx.serialization.json)
             // suspend/Flow surface of the api client interfaces + OkHttpConfig's
             // StateFlow.
@@ -80,9 +84,10 @@ kotlin {
             // anywhere in the repo — Koin constructs every type). The
             // dependency only keeps those annotations compiling.
             implementation(libs.javax.inject)
-            // dagger.Lazy ctor params on JellyfinApiEngine (deferred SDK +
-            // OkHttp construction off the synchronous Hilt graph).
-            implementation(libs.dagger)
+            // (The plain dagger artifact that used to sit here
+            // existed only to source dagger.Lazy for JellyfinApiEngine's ctor
+            // — replaced by the local api/LazyProvider.kt fun interface. No
+            // other dagger artifact exists in the repo.)
         }
         getByName("jvmMain").dependencies {
             // Real org.json for the desktop target (see jvmShared note above);
@@ -90,7 +95,7 @@ kotlin {
             implementation(libs.org.json)
         }
         getByName("wasmJsMain").dependencies {
-            // Phase W chunk 1 (wasm transport + auth client): the Ktor stack
+            //  chunk 1 (wasm transport + auth client): the Ktor stack
             // is confined to wasmJsMain so nothing leaks into the android/jvm
             // compile paths — commonMain stays transport-pure and keeps using
             // the jvmShared OkHttp + Jellyfin-SDK impls. The Js engine ships a
@@ -102,7 +107,7 @@ kotlin {
             // networkWasmModule (Koin construction owner on wasm, mirroring
             // networkJvmModule's role for android/jvm).
             implementation(libs.koin.core)
-            // Wave 21C: localStorage access for the persistent device id
+            // localStorage access for the persistent device id
             // (`persistedOrRandomDeviceId` in WasmIdentity.kt) — the same
             // klib the datastore module's Seerr credential store uses; the
             // network stack reads/writes `jellyplay/device-id` directly

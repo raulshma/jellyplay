@@ -2,7 +2,7 @@ package com.raulshma.jellyplay.core.data.util
 
 /**
  * Seam for the legacy `:core:data` `BuildConfig.DEBUG` flag
- * (docs/kmp-migration-plan.md §Phase C4 part 2): common code in
+ * (docs/kmp-migration-plan.md part 2): common code in
  * `:shared:core:data` cannot read an Android library's generated
  * `BuildConfig`, so moved call sites read [debugBuild] instead.
  *

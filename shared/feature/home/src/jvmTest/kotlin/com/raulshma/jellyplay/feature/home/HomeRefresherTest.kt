@@ -4,6 +4,7 @@ import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
+import com.raulshma.jellyplay.core.data.sync.SyncStatusStateHolder
 import com.raulshma.jellyplay.core.data.usecase.OrderHomeSectionsUseCase
 import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.data.widget.ContinueWatchingBroadcaster
@@ -56,6 +57,7 @@ import java.time.ZoneId
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Direct [HomeRefresher] tests — the suite this extraction exists to enable:
@@ -117,7 +119,7 @@ class HomeRefresherTest {
     /**
      * Fake for the refresher's `awaitOutboxDrained` seam: counts invocations
      * and (while [drainGate] is set) parks, so GoingOnline tests can observe
-     * the handshake mid-flight — flag up, loader up, fetch not yet started.
+     * the handshake mid-flight — loader up, fetch not yet started.
      */
     private var drainCalls = 0
     private var drainGate: CompletableDeferred<Unit>? = null
@@ -172,7 +174,13 @@ class HomeRefresherTest {
             offlineModeManager = offlineModeManager,
             awaitOutboxDrained = {
                 drainCalls++
-                drainGate?.await()
+                // Mirror the real SyncStatusStateHolder gate: it gives up
+                // after the holder's drain cap so the handshake fetch
+                // proceeds against a still-un-synced server. Pinned here
+                // because the slow-sync handshake behavior depends on it.
+                val gate = drainGate
+                if (gate == null) true
+                else withTimeoutOrNull(SyncStatusStateHolder.OUTBOX_DRAIN_WAIT_MS) { gate.await() } != null
             },
             sectionPrefsProvider = {
                 HomeSectionPrefs(
@@ -336,7 +344,7 @@ class HomeRefresherTest {
     }
 
     @Test
-    fun userDataChange_withinMinRefreshInterval_isThrottled() = runTest {
+    fun userDataChange_withinMinRefreshInterval_isDeferredNotFetched() = runTest {
         coEvery {
             mediaRepository.getHomeSections(any(), any())
         } returns Result.success(HomeSectionsResult(sections = emptyList()))
@@ -346,13 +354,18 @@ class HomeRefresherTest {
         runCurrent()
 
         // lastRefreshTime is the priming fetch's 1_000; a change 5s later sits
-        // inside the 60s user-data throttle window → no forced fetch.
+        // inside the 60s user-data throttle window → no IMMEDIATE forced
+        // fetch (it is deferred to throttle expiry — pinned by
+        // userDataChange_withinThrottleWindow_isDeferredToExpiry_notDropped).
         fakeTimeSource.nowMs = 6_000L
         userDataEvents.tryEmit(UserDataChange(userId = "u1", itemIds = listOf("i1")))
         advanceTimeBy(1_000)
         runCurrent()
 
         coVerify(exactly = 0) { mediaRepository.getHomeSections(any(), force = true) }
+        // The echo armed the user-data deferral timer — stop() must cancel it
+        // or runTest's advance-until-idle teardown never converges.
+        refresher.stop()
     }
 
     @Test
@@ -427,7 +440,11 @@ class HomeRefresherTest {
     }
 
     @Test
-    fun goingOnline_drainsOutboxBeforeCappedFetch_thenClearsFlags() = runTest {
+    fun goingOnline_drainsOutboxBeforeCappedFetch_thenClearsLoader() = runTest {
+        // The going-online busy flag itself is OfflineModeManager's now
+        // (armed on the toggle, cleared at the ONLINE emission — pinned by
+        // GoingOnlineFlagTest); what this suite pins is the handshake the
+        // ONLINE emission triggers: full-screen loader, drain, capped fetch.
         coEvery { mediaRepository.getHomeSections(any(), any()) } returns Result.success(
             HomeSectionsResult(
                 sections = listOf(section(HomeSectionType.CONTINUE_WATCHING, items = listOf(item("cw1")))),
@@ -442,12 +459,11 @@ class HomeRefresherTest {
         every { offlineModeManager.toggleManualOffline() } answers { offlineModeFlow.value = OfflineMode.ONLINE }
 
         refresher.request(RefreshTrigger.GoingOnline)
-        runCurrent() // flag raised → manager toggled → ONLINE emission starts the handshake
+        runCurrent() // manager toggled → ONLINE emission starts the handshake
 
-        // Mid-handshake: busy flag + full-screen loader up, drain in flight,
-        // and the fetch strictly NOT started (it must wait for the drain so
-        // Continue Watching reflects the server's post-sync state).
-        assertTrue(refresher.state.value.isGoingOnline)
+        // Mid-handshake: full-screen loader up, drain in flight, and the
+        // fetch strictly NOT started (it must wait for the drain so Continue
+        // Watching reflects the server's post-sync state).
         assertTrue(refresher.state.value.isLoading)
         assertEquals(1, drainCalls)
         coVerify(exactly = 0) { mediaRepository.getHomeSections(any(), any()) }
@@ -455,7 +471,6 @@ class HomeRefresherTest {
         drainGate!!.complete(Unit)
         runCurrent()
 
-        assertFalse(refresher.state.value.isGoingOnline)
         assertFalse(refresher.state.value.isLoading)
         coVerify(exactly = 1) { mediaRepository.getHomeSections(any(), any()) }
         assertTrue(refresher.state.value.sections.isNotEmpty())
@@ -463,9 +478,11 @@ class HomeRefresherTest {
     }
 
     @Test
-    fun goingOnline_fetchTimeout_clearsFlagsInsteadOfHanging() = runTest {
+    fun goingOnline_fetchTimeout_clearsLoaderInsteadOfHanging() = runTest {
         // Regression pin: a hung getHomeSections call previously parked the
-        // handshake forever, leaving isGoingOnline (and the loader) stuck on.
+        // handshake forever, leaving the full-screen loader stuck on. (The
+        // busy flag no longer depends on this cap — the manager clears it at
+        // the ONLINE emission, before the fetch starts.)
         coEvery { mediaRepository.getHomeSections(any(), any()) } coAnswers {
             CompletableDeferred<Result<HomeSectionsResult>>().await() // never completes
         }
@@ -478,39 +495,12 @@ class HomeRefresherTest {
 
         refresher.request(RefreshTrigger.GoingOnline)
         runCurrent()
-        assertTrue(refresher.state.value.isGoingOnline, "isGoingOnline must be observable while the fetch hangs")
+        assertTrue(refresher.state.value.isLoading, "the loader must be up while the fetch hangs")
 
         advanceTimeBy(31_000) // past GOING_ONLINE_TIMEOUT_MS
         runCurrent()
 
-        assertFalse(refresher.state.value.isGoingOnline)
         assertFalse(refresher.state.value.isLoading)
-        refresher.stop()
-    }
-
-    @Test
-    fun goingOnline_toggleNeverLands_fallbackClearsFlag() = runTest {
-        // Regression pin: toggleManualOffline() is a fire-and-forget
-        // preference write on the manager's own scope — if that write is
-        // lost, the mode flow never emits ONLINE and the observer's
-        // handshake (whose finally clears the flag) never runs. The
-        // request's own fallback must clear the busy flag instead of
-        // leaving the Go Online spinner on until restart. The relaxed mock
-        // leaves toggleManualOffline() as a no-op — exactly that scenario.
-        val refresher = buildRefresher()
-        runCurrent()
-
-        offlineModeFlow.value = OfflineMode.OFFLINE_MANUAL
-        runCurrent()
-
-        refresher.request(RefreshTrigger.GoingOnline)
-        runCurrent()
-        assertTrue(refresher.state.value.isGoingOnline)
-
-        advanceTimeBy(31_000) // past GOING_ONLINE_TIMEOUT_MS
-        runCurrent()
-
-        assertFalse(refresher.state.value.isGoingOnline)
         refresher.stop()
     }
 
@@ -551,9 +541,228 @@ class HomeRefresherTest {
         runCurrent()
 
         assertFalse(refresher.state.value.isLoading)
-        assertFalse(refresher.state.value.isGoingOnline)
         coVerify(exactly = 1) { mediaRepository.getHomeSections(any(), any()) }
         assertTrue(refresher.state.value.sections.isNotEmpty())
+        refresher.stop()
+    }
+
+    @Test
+    fun slowSync_drainCompletingAfterHandshakeFetch_refreshesHomeWithoutPullToRefresh() = runTest {
+        // The user-reported symptom: offline→online with a SLOW sync. The
+        // handshake's 8s drain cap expires and the handshake fetch paints the
+        // PRE-sync server snapshot; when the drain then completes during the
+        // handshake's re-await, a second forced fetch must drop the loader on
+        // POST-sync data — without waiting for the periodic tick or a
+        // pull-to-refresh.
+        coEvery { mediaRepository.getHomeSections(any(), any()) } returns Result.success(
+            HomeSectionsResult(
+                sections = listOf(section(HomeSectionType.CONTINUE_WATCHING, items = listOf(item("pre-sync")))),
+            ),
+        )
+        val refresher = buildRefresher()
+        runCurrent()
+
+        offlineModeFlow.value = OfflineMode.OFFLINE_MANUAL
+        runCurrent() // ONLINE→offline: content dropped
+        drainGate = CompletableDeferred() // sync (outbox drain) in flight, slow
+        offlineModeFlow.value = OfflineMode.ONLINE
+        runCurrent() // handshake starts: loader up, drain parked, no fetch yet
+
+        assertEquals(1, drainCalls)
+        coVerify(exactly = 0) { mediaRepository.getHomeSections(any(), any()) }
+
+        // The drain wait times out (OUTBOX_DRAIN_WAIT_MS = 8s); the capped
+        // handshake fetch runs against the still-un-synced server and stamps
+        // lastRefreshTime on the way through.
+        advanceTimeBy(8_500)
+        fakeTimeSource.nowMs += 8_500
+        runCurrent()
+        coVerify(exactly = 1) { mediaRepository.getHomeSections(any(), force = true) }
+        assertEquals("pre-sync", refresher.state.value.sections.single().items.single().id)
+
+        // The sync completes 12s later, inside the handshake's re-await: the
+        // drainer announces the confirmed write (synthetic user-data push) and
+        // the repo now serves post-sync data.
+        coEvery { mediaRepository.getHomeSections(any(), any()) } returns Result.success(
+            HomeSectionsResult(
+                sections = listOf(section(HomeSectionType.CONTINUE_WATCHING, items = listOf(item("post-sync")))),
+            ),
+        )
+        drainGate!!.complete(Unit)
+        fakeTimeSource.nowMs += 12_000
+        advanceTimeBy(1_100) // the re-await resumes; its forced fetch lands
+        runCurrent()
+
+        // Post-sync data must be on screen and the loader cleared, WITHOUT a
+        // pull-to-refresh. This fake's drain completion emits no user-data
+        // echo; in production the drain's completion push races this refetch
+        // — while the bypass flag is still armed (until the refetch lands)
+        // the echo forces one extra idempotent, mutex-serialized fetch, and
+        // after it lands the throttle defers the echo instead.
+        assertFalse(refresher.state.value.isLoading)
+        coVerify(exactly = 2) { mediaRepository.getHomeSections(any(), force = true) }
+        assertEquals("post-sync", refresher.state.value.sections.single().items.single().id)
+        refresher.stop()
+    }
+
+    @Test
+    fun slowSync_beyondReAwaitCap_drainEchoBypassesThrottle_andRefreshes() = runTest {
+        // The band beyond the handshake's patience: the drain is STILL pending
+        // when the re-await gives up (sync takes minutes), so no second fetch
+        // runs under the loader. When the sync finally lands, its echo arrives
+        // inside the 60s user-data throttle window (the pre-sync fetches just
+        // stamped the clock) — it must bypass the throttle, or the home keeps
+        // showing pre-sync sections until a pull-to-refresh.
+        coEvery { mediaRepository.getHomeSections(any(), any()) } returns Result.success(
+            HomeSectionsResult(
+                sections = listOf(section(HomeSectionType.CONTINUE_WATCHING, items = listOf(item("pre-sync")))),
+            ),
+        )
+        val refresher = buildRefresher()
+        runCurrent()
+
+        offlineModeFlow.value = OfflineMode.OFFLINE_MANUAL
+        runCurrent()
+        drainGate = CompletableDeferred() // never completes during the handshake
+        offlineModeFlow.value = OfflineMode.ONLINE
+        runCurrent()
+
+        // Drain wait times out (8s), capped fetch paints pre-sync, re-await
+        // times out too (8s more): handshake gives up, loader cleared, bypass
+        // flag armed.
+        advanceTimeBy(17_000)
+        fakeTimeSource.nowMs += 17_000
+        runCurrent()
+        coVerify(exactly = 1) { mediaRepository.getHomeSections(any(), force = true) }
+        assertFalse(refresher.state.value.isLoading)
+        assertEquals("pre-sync", refresher.state.value.sections.single().items.single().id)
+
+        // The sync lands 12s later: echo inside the throttle window, repo now
+        // serves post-sync data.
+        coEvery { mediaRepository.getHomeSections(any(), any()) } returns Result.success(
+            HomeSectionsResult(
+                sections = listOf(section(HomeSectionType.CONTINUE_WATCHING, items = listOf(item("post-sync")))),
+            ),
+        )
+        drainGate!!.complete(Unit)
+        fakeTimeSource.nowMs += 12_000
+        userDataEvents.tryEmit(UserDataChange(userId = "u1", itemIds = listOf("i1")))
+        advanceTimeBy(1_100) // past the 1s user-data debounce
+        runCurrent()
+
+        coVerify(exactly = 2) { mediaRepository.getHomeSections(any(), force = true) }
+        assertEquals("post-sync", refresher.state.value.sections.single().items.single().id)
+        refresher.stop()
+    }
+
+    @Test
+    fun slowSync_identityTransitionDuringHandshake_doesNotArmBypassForNextIdentity() = runTest {
+        // A sign-out landing while the handshake is parked on the drain wait
+        // resets the raced-sync flag and bumps the identity epoch; when the
+        // drain then times out, the handshake must NOT re-arm the bypass —
+        // the fetch it still runs paints for the NEXT identity, which raced
+        // nothing. That identity's first echo must therefore stay inside the
+        // 60s user-data throttle (deferred), not force an immediate fetch.
+        coEvery { mediaRepository.getHomeSections(any(), any()) } returns Result.success(
+            HomeSectionsResult(
+                sections = listOf(section(HomeSectionType.CONTINUE_WATCHING, items = listOf(item("next-user")))),
+            ),
+        )
+        val refresher = buildRefresher()
+        runCurrent()
+
+        offlineModeFlow.value = OfflineMode.OFFLINE_MANUAL
+        runCurrent() // ONLINE→offline: content dropped
+        drainGate = CompletableDeferred() // sync (outbox drain) in flight, slow
+        offlineModeFlow.value = OfflineMode.ONLINE
+        runCurrent() // handshake starts: parked on the drain wait
+
+        assertEquals(1, drainCalls)
+        // Sign-out lands mid-drain-wait (the handshake survives it — it runs
+        // in the offline-mode collector, which identity triggers cancel).
+        refresher.request(RefreshTrigger.SignedOut)
+        runCurrent()
+
+        // Both the drain wait (8s) and the re-await (8s more) time out; the
+        // handshake's fetch still runs and the loader still clears, but the
+        // bypass must NOT be armed.
+        advanceTimeBy(17_000)
+        fakeTimeSource.nowMs += 17_000
+        runCurrent()
+        coVerify(exactly = 1) { mediaRepository.getHomeSections(any(), force = true) }
+        assertFalse(refresher.state.value.isLoading)
+
+        // The next identity's echo lands well inside the 60s throttle window —
+        // WITHOUT the epoch guard the stale flag would bypass the throttle
+        // and force an immediate second fetch.
+        fakeTimeSource.nowMs = 30_000L
+        userDataEvents.tryEmit(UserDataChange(userId = "u2", itemIds = listOf("i1")))
+        advanceTimeBy(1_100) // past the 1s user-data debounce
+        runCurrent()
+        coVerify(exactly = 1) { mediaRepository.getHomeSections(any(), force = true) }
+        refresher.stop()
+    }
+
+    @Test
+    fun userDataChange_withinThrottleWindow_isDeferredToExpiry_notDropped() = runTest {
+        // The final echo of a playback session (position save / markPlayed)
+        // lands <60s after the last refresh — exactly when the user leaves the
+        // player for Home. Dropping it stranded Continue Watching / Next Up at
+        // mid-playback state until the periodic loop's non-forced fetch worked
+        // through the cache TTLs (~1-2min) or a pull-to-refresh. The change
+        // must instead be deferred to throttle expiry.
+        coEvery {
+            mediaRepository.getHomeSections(any(), any())
+        } returns Result.success(HomeSectionsResult(sections = emptyList()))
+        val refresher = buildRefresher()
+        runCurrent()
+        refresher.fetchOnce()
+        runCurrent()
+
+        // Inside the 60s user-data throttle window (lastRefreshTime = 1_000).
+        fakeTimeSource.nowMs = 30_000L
+        userDataEvents.tryEmit(UserDataChange(userId = "u1", itemIds = listOf("i1")))
+        advanceTimeBy(1_100)
+        runCurrent()
+        // No immediate fetch — the throttle still bounds the cadence.
+        coVerify(exactly = 0) { mediaRepository.getHomeSections(any(), force = true) }
+
+        // Past the throttle expiry the deferred fetch fires on its own.
+        advanceTimeBy(31_500)
+        runCurrent()
+        coVerify(exactly = 1) { mediaRepository.getHomeSections(any(), force = true) }
+        refresher.stop()
+    }
+
+    @Test
+    fun pendingUserDataChange_flushOnStart_bypassesThrottle() = runTest {
+        // Return-to-Home promptness: a change armed while backgrounded (or
+        // deferred behind the player) must fetch IMMEDIATELY on start — the
+        // user is looking at the screen now, so the anti-spam throttle does
+        // not apply. The throttle previously dropped this flush too whenever
+        // the last refresh was <60s ago.
+        coEvery {
+            mediaRepository.getHomeSections(any(), any())
+        } returns Result.success(HomeSectionsResult(sections = emptyList()))
+        val refresher = buildRefresher()
+        runCurrent()
+        refresher.fetchOnce()
+        runCurrent()
+
+        refresher.stop()
+        runCurrent()
+        // Inside the throttle window (lastRefreshTime = 1_000): the change
+        // arms the pending flag, no fetch while backgrounded.
+        fakeTimeSource.nowMs = 30_000L
+        userDataEvents.tryEmit(UserDataChange(userId = "u1", itemIds = listOf("i1")))
+        advanceTimeBy(1_100)
+        runCurrent()
+        coVerify(exactly = 0) { mediaRepository.getHomeSections(any(), force = true) }
+
+        // Return to the screen: immediate forced fetch despite the window.
+        refresher.start()
+        runCurrent()
+        coVerify(exactly = 1) { mediaRepository.getHomeSections(any(), force = true) }
         refresher.stop()
     }
 
@@ -580,16 +789,15 @@ class HomeRefresherTest {
 
         // Production path: the manager flips the mode and the refresher's own
         // observer reacts — cached online sections + discover rows + the *arr
-        // row dropped, going-online spinner (if any) cleared. The
-        // offline→online side of this transition (including the spontaneous
-        // flavour) is pinned by
+        // row dropped. The going-online flag is the manager's and never
+        // crosses this seam. The offline→online side of this transition
+        // (including the spontaneous flavour) is pinned by
         // wentOnlineSpontaneously_drainsOutboxBeforeFetch_andRepopulatesSections.
         offlineModeFlow.value = OfflineMode.OFFLINE_MANUAL
         runCurrent()
         assertTrue(refresher.state.value.sections.isEmpty())
         assertTrue(refresher.state.value.discoverSections.isEmpty())
         assertTrue(refresher.state.value.recentlyGrabbed.isEmpty())
-        assertFalse(refresher.state.value.isGoingOnline)
         refresher.stop()
     }
 

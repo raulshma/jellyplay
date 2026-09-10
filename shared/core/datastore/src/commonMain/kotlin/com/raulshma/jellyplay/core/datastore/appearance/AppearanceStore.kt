@@ -10,6 +10,7 @@ import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
+import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.model.AppFontScale
 import com.raulshma.jellyplay.core.model.ColorBlindMode
 import com.raulshma.jellyplay.core.model.ColorStyle
@@ -135,11 +136,8 @@ class AppearanceStore constructor(
         handMode = readHandMode(prefs),
     )
 
-    private fun readThemeMode(prefs: Preferences): ThemeMode = try {
-        ThemeMode.valueOf(prefs[Keys.THEME_MODE] ?: ThemeMode.SYSTEM.name)
-    } catch (_: Exception) {
-        ThemeMode.SYSTEM
-    }
+    private fun readThemeMode(prefs: Preferences): ThemeMode =
+        prefs[Keys.THEME_MODE].toEnumOrNull() ?: ThemeMode.SYSTEM
 
     /**
      * Resolves the active theme style. Falls back to the legacy single-purpose
@@ -156,41 +154,23 @@ class AppearanceStore constructor(
         }
     }
 
-    private fun readContrastLevel(prefs: Preferences): ContrastLevel = try {
-        ContrastLevel.valueOf(prefs[Keys.CONTRAST_LEVEL] ?: ContrastLevel.DEFAULT.name)
-    } catch (_: Exception) {
-        ContrastLevel.DEFAULT
-    }
+    private fun readContrastLevel(prefs: Preferences): ContrastLevel =
+        prefs[Keys.CONTRAST_LEVEL].toEnumOrNull() ?: ContrastLevel.DEFAULT
 
-    private fun readColorStyle(prefs: Preferences): ColorStyle = try {
-        ColorStyle.valueOf(prefs[Keys.COLOR_STYLE] ?: ColorStyle.TONAL_SPOT.name)
-    } catch (_: Exception) {
-        ColorStyle.TONAL_SPOT
-    }
+    private fun readColorStyle(prefs: Preferences): ColorStyle =
+        prefs[Keys.COLOR_STYLE].toEnumOrNull() ?: ColorStyle.TONAL_SPOT
 
-    private fun readDateFormat(prefs: Preferences): DateFormatPreference = try {
-        DateFormatPreference.valueOf(prefs[Keys.DATE_FORMAT_PREFERENCE] ?: DateFormatPreference.SYSTEM.name)
-    } catch (_: Exception) {
-        DateFormatPreference.SYSTEM
-    }
+    private fun readDateFormat(prefs: Preferences): DateFormatPreference =
+        prefs[Keys.DATE_FORMAT_PREFERENCE].toEnumOrNull() ?: DateFormatPreference.SYSTEM
 
-    private fun readFontScale(prefs: Preferences): AppFontScale = try {
-        AppFontScale.valueOf(prefs[Keys.APP_FONT_SCALE] ?: AppFontScale.DEFAULT.name)
-    } catch (_: Exception) {
-        AppFontScale.DEFAULT
-    }
+    private fun readFontScale(prefs: Preferences): AppFontScale =
+        prefs[Keys.APP_FONT_SCALE].toEnumOrNull() ?: AppFontScale.DEFAULT
 
-    private fun readColorBlindMode(prefs: Preferences): ColorBlindMode = try {
-        ColorBlindMode.valueOf(prefs[Keys.COLOR_BLIND_MODE] ?: ColorBlindMode.NONE.name)
-    } catch (_: Exception) {
-        ColorBlindMode.NONE
-    }
+    private fun readColorBlindMode(prefs: Preferences): ColorBlindMode =
+        prefs[Keys.COLOR_BLIND_MODE].toEnumOrNull() ?: ColorBlindMode.NONE
 
-    private fun readHandMode(prefs: Preferences): HandMode = try {
-        HandMode.valueOf(prefs[Keys.HAND_MODE] ?: HandMode.RIGHT.name)
-    } catch (_: Exception) {
-        HandMode.RIGHT
-    }
+    private fun readHandMode(prefs: Preferences): HandMode =
+        prefs[Keys.HAND_MODE].toEnumOrNull() ?: HandMode.RIGHT
 
     // ------------------------------------------------------------------
     // Setters

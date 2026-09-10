@@ -62,11 +62,11 @@
     <string name="library_photo_start_slideshow">スライドショーを開始</string>
     <string name="library_photo_stop_slideshow">スライドショーを停止</string>
     <!-- %1$d = brightness as integer percent -->
-    <string name="library_photo_brightness">明るさ %1$d%%</string>
+    <string name="library_photo_brightness">明るさ %1$d%</string>
     <!-- %1$d = contrast as integer percent -->
-    <string name="library_photo_contrast">コントラスト %1$d%%</string>
+    <string name="library_photo_contrast">コントラスト %1$d%</string>
     <!-- %1$d = saturation as integer percent -->
-    <string name="library_photo_saturation">彩度 %1$d%%</string>
+    <string name="library_photo_saturation">彩度 %1$d%</string>
     <string name="library_photo_failed_to_load">写真を読み込めませんでした</string>
     <!-- ── Photo viewer icon content descriptions (TalkBack) ───────────── -->
     <string name="library_cd_close">閉じる</string>

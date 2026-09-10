@@ -23,7 +23,7 @@ import org.koin.core.module.Module
 import org.koin.dsl.module
 
 /**
- * Android platform pick of the Koin-owned data layer (Phase C4 part 2).
+ * Android platform pick of the Koin-owned data layer (part 2).
  * Holds the Context-shaped definitions: the connectivity/offline seams
  * (NetworkMonitor / OfflineModeManager), the LruCache-based image-URL
  * memoiser, and the MediaExtractor metadata probe; everything else resolves
@@ -59,7 +59,7 @@ fun androidDataModule(context: Context): Module {
         single<LocalStreamProbe> { MediaExtractorLocalStreamProbe() }
 
         // V3 downloads conveyor: the deferred MediaRepository edge of the
-        // Koin-owned DownloadRepositoryImpl. Since the Phase X MediaRepository
+        // Koin-owned DownloadRepositoryImpl. Since the MediaRepository
         // cluster flip this resolves Koin's own MediaRepositoryImpl single
         // (dataJvmModule) — the former Hilt-interop hop is gone, and the
         // desktop counterpart in desktopDataModule is now real too.

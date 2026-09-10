@@ -56,10 +56,10 @@
     <string name="music_open">Open</string>
 
     <!-- Counts -->
-    <string name="music_items_count">%d items</string>
-    <string name="music_tracks_count">%d Tracks</string>
+    <string name="music_items_count">%1$d items</string>
+    <string name="music_tracks_count">%1$d Tracks</string>
     <string name="music_one_track">1 Track</string>
-    <string name="music_playlist_tracks_count">%d tracks</string>
+    <string name="music_playlist_tracks_count">%1$d tracks</string>
 
     <!-- Home sections -->
     <string name="music_player_screens">Player Screens</string>

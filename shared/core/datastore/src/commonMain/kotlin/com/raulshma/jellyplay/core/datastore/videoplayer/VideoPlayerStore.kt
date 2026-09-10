@@ -11,6 +11,7 @@ import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.raulshma.jellyplay.core.datastore.ParsedCache
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
+import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.model.GestureIndicatorSide
 import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.OrientationMode
@@ -89,7 +90,7 @@ class VideoPlayerStore constructor(
         val VIDEO_SHOW_PLAYBACK_METADATA = booleanPreferencesKey("video_show_playback_metadata")
         val VIDEO_PRELOAD_BUFFER_SIZE = stringPreferencesKey("video_preload_buffer_size")
         // The direct-play video byte-cache cap (VideoStreamCache's LRU bound),
-        // added on the F-23 follow-up — never string-typed in the legacy store,
+        // added in a later change — never string-typed in the legacy store,
         // so the read below uses plain `prefs[key] ?: default`.
         val VIDEO_CACHE_SIZE_MB = intPreferencesKey("video_cache_size_mb")
         val SHOW_CLOCK_IN_PLAYER = booleanPreferencesKey("show_clock_in_player")
@@ -171,23 +172,14 @@ class VideoPlayerStore constructor(
         },
     )
 
-    private fun readOrientation(prefs: Preferences): OrientationMode = try {
-        OrientationMode.valueOf(prefs[Keys.VIDEO_DEFAULT_ORIENTATION] ?: OrientationMode.SENSOR_LANDSCAPE.name)
-    } catch (_: Exception) {
-        OrientationMode.SENSOR_LANDSCAPE
-    }
+    private fun readOrientation(prefs: Preferences): OrientationMode =
+        prefs[Keys.VIDEO_DEFAULT_ORIENTATION].toEnumOrNull() ?: OrientationMode.SENSOR_LANDSCAPE
 
-    private fun readGestureIndicatorSide(prefs: Preferences): GestureIndicatorSide = try {
-        GestureIndicatorSide.valueOf(prefs[Keys.VIDEO_GESTURE_INDICATOR_SIDE] ?: GestureIndicatorSide.OPPOSITE.name)
-    } catch (_: Exception) {
-        GestureIndicatorSide.OPPOSITE
-    }
+    private fun readGestureIndicatorSide(prefs: Preferences): GestureIndicatorSide =
+        prefs[Keys.VIDEO_GESTURE_INDICATOR_SIDE].toEnumOrNull() ?: GestureIndicatorSide.OPPOSITE
 
-    private fun readPreloadBufferSize(prefs: Preferences): PreloadBufferSize = try {
-        PreloadBufferSize.valueOf(prefs[Keys.VIDEO_PRELOAD_BUFFER_SIZE] ?: PreloadBufferSize.MEDIUM.name)
-    } catch (_: Exception) {
-        PreloadBufferSize.MEDIUM
-    }
+    private fun readPreloadBufferSize(prefs: Preferences): PreloadBufferSize =
+        prefs[Keys.VIDEO_PRELOAD_BUFFER_SIZE].toEnumOrNull() ?: PreloadBufferSize.MEDIUM
 
     /**
      * Reads the per-`MediaSegmentType` skip behaviour map. When the JSON
@@ -205,9 +197,9 @@ class VideoPlayerStore constructor(
             return try {
                 val stored = PreferenceCodec.json.decodeFromString<Map<String, String>>(raw)
                 val parsed = stored.mapNotNull { (typeStr, behaviorStr) ->
-                    try {
-                        MediaSegmentType.valueOf(typeStr) to SegmentBehavior.valueOf(behaviorStr)
-                    } catch (_: Exception) { null }
+                    val type = typeStr.toEnumOrNull<MediaSegmentType>() ?: return@mapNotNull null
+                    val behavior = behaviorStr.toEnumOrNull<SegmentBehavior>() ?: return@mapNotNull null
+                    type to behavior
                 }.toMap()
                 // Merge: defaults fill in any types not explicitly saved, stored values override
                 SegmentBehavior.DEFAULT_BEHAVIORS + parsed

@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.feature.player.video
 
 /**
- * Audio-lifecycle seam for the video player (wave 8C): audio-focus
+ * Audio-lifecycle seam for the video player: audio-focus
  * (duck/restore, pause on permanent loss) + becoming-noisy auto-pause. The
  * androidMain actual ([AndroidVideoPlayerAudio], module androidMain) wraps
  * the legacy `core:data` [PlayerAudioLifecycle][com.raulshma.jellyplay.core.data.playback.PlayerAudioLifecycle]

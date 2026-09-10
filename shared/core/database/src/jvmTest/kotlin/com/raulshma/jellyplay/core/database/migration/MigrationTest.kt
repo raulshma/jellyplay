@@ -1018,6 +1018,46 @@ class MigrationTest {
         }
     }
 
+    /**
+     * Verifies the v52→v53 migration adds the `offline_media` covering index
+     * for [com.raulshma.jellyplay.core.database.dao.OfflineMediaDao.getDownloadedEpisodes]
+     * (the offline home's Continue Watching / Next Up source: filter
+     * `mediaType = 'EPISODE'`, order by seriesId/seasonNumber/episodeNumber) —
+     * under Room's generated index name and with the exact column order the
+     * ORDER BY needs, so Room's post-migration schema validation accepts the
+     * migrated database. The starting schema is executed from the exported
+     * `52.json` (see [execSchema]) — the exact tables, indices and view Room
+     * generated at v52 — so a drift between [MIGRATION_52_53]'s SQL and the
+     * real v52 shape fails loudly here instead of only on device.
+     */
+    @Test
+    fun migrateV52_53_addsEpisodeOrderingCoveringIndex() {
+        openRawDatabase(52) { db ->
+            execSchema(db, 52)
+
+            MIGRATION_52_53.migrate(db)
+
+            // The index exists under Room's generated name.
+            db.prepare(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' " +
+                    "AND tbl_name = 'offline_media' " +
+                    "AND name = 'index_offline_media_mediaType_seriesId_seasonNumber_episodeNumber'"
+            ).use { c ->
+                assertTrue(c.step())
+                assertEquals(1L, c.getLong(0))
+            }
+            // …with the exact column order the query's ORDER BY needs.
+            db.prepare(
+                "SELECT name FROM pragma_index_info('index_offline_media_mediaType_seriesId_seasonNumber_episodeNumber')"
+            ).use { c ->
+                val columns = mutableListOf<String>()
+                while (c.step()) columns.add(c.getText(0))
+                assertEquals(listOf("mediaType", "seriesId", "seasonNumber", "episodeNumber"), columns)
+            }
+            db.close()
+        }
+    }
+
     private fun openWithMigrations(): JellyPlayDatabase {
         val tokenCipher = JvmTokenCipher.forTestingWithPersistentKey()
         val db = Room.databaseBuilder<JellyPlayDatabase>(dbFile.absolutePath)

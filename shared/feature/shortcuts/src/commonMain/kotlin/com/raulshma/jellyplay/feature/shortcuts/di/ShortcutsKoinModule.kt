@@ -7,7 +7,7 @@ import org.koin.dsl.module
 
 /**
  * Koin construction owner for the Shortcuts feature (docs/kmp-migration-plan.md
- * §Phase V3 feature conveyor). The HiltViewModel/@Inject annotations were
+ *  feature conveyor). The HiltViewModel/@Inject annotations were
  * stripped at the move — Koin is the single constructor owner (one framework
  * per type). The single ctor dep (AuthRepository) was already Koin-native on
  * BOTH platforms before this feature moved: it resolves from dataJvmModule.

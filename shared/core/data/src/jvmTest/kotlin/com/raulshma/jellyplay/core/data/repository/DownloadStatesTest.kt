@@ -72,6 +72,13 @@ class DownloadStatesTest {
     }
 
     @Test
+    fun `keepsResumeBytes true only for PAUSED, matching the resumeByteOffset rule`() {
+        assertTrue(DownloadStates.keepsResumeBytes(DownloadStatus.PAUSED.name))
+        listOf(DownloadStatus.FAILED, DownloadStatus.PENDING, DownloadStatus.COMPLETED, DownloadStatus.CANCELLED)
+            .forEach { assertFalse(DownloadStates.keepsResumeBytes(it.name), it.name) }
+    }
+
+    @Test
     fun `resumeByteOffset preserves bytes for PAUSED and resets everything else`() {
         // PAUSED keeps the contiguous prefix (single-connection Range resume).
         assertEquals(1_048_576L, DownloadStates.resumeByteOffset(DownloadStatus.PAUSED.name, 1_048_576L))

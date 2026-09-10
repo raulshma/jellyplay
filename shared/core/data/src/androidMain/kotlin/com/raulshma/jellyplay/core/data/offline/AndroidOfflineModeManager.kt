@@ -40,6 +40,11 @@ class AndroidOfflineModeManager(
     private val _offlineMode = MutableStateFlow(OfflineMode.ONLINE)
     override val offlineMode: StateFlow<OfflineMode> = _offlineMode.asStateFlow()
 
+    // The going-online busy flag, built over this manager's own mode flow so
+    // its clears ride the same emissions this class derives.
+    private val goingOnlineFlag = GoingOnlineFlag(scope, _offlineMode)
+    override val goingOnline: StateFlow<Boolean> = goingOnlineFlag.goingOnline
+
     override val isOffline: Boolean get() = _offlineMode.value != OfflineMode.ONLINE
 
     override val networkStatus: StateFlow<NetworkStatus> = networkMonitor.networkStatus
@@ -94,6 +99,9 @@ class AndroidOfflineModeManager(
 
     override fun toggleManualOffline() {
         val currentManual = networkOfflineStore.networkOffline.value.manualOfflineEnabled
+        // The snapshot (not a mode guess) decides the arm — see
+        // GoingOnlineFlag.armIfGoingOnline.
+        goingOnlineFlag.armIfGoingOnline(currentManual)
         scope.launch {
             networkOfflineStore.setManualOffline(!currentManual)
         }

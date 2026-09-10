@@ -12,7 +12,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Pins [DesktopStartupPerf]'s measurement contract (wave 12A baseline
+ * Pins [DesktopStartupPerf]'s measurement contract (baseline
  * scaffold): marks are always-on AtomicLong writes, disk output happens ONLY
  * when a `jellyplay.perf.*` property is present, the flush fires from
  * whichever of window-shown / first-frame lands LAST once BOTH marks exist
@@ -127,7 +127,11 @@ class DesktopStartupPerfTest {
     fun flushedJsonCarriesAllFieldsWithNullsForMissingMarks() {
         val dir = newLogsDir()
         System.setProperty(DesktopStartupPerf.PROP_PERSIST, "true")
-        val boot = 1_000_000_000_000L
+        // The boot mark must come from the same nanoTime regime the unmarked
+        // marks (windowShown stamps System.nanoTime()) read: a fixed constant
+        // can sit in the future of a freshly-started JVM/VM and turn the
+        // window-shown delta negative.
+        val boot = System.nanoTime()
         val perf = DesktopStartupPerf(logsDirNio = dir, bootT0Nanos = boot)
 
         perf.markWindowShown()

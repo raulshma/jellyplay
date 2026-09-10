@@ -7,7 +7,7 @@ import java.io.File
 import java.io.FilenameFilter
 
 /**
- * Desktop actual of the [rememberSubtitleUploadPicker] seam (wave 20C): the
+ * Desktop actual of the [rememberSubtitleUploadPicker] seam: the
  * SAF open-document launcher becomes the shared AWT dialog ([pickAwtFile],
  * LOAD mode) shown straight from the select-file click
  * (rememberDocumentPicker precedent in VideoPlayerScreenSeams.jvm.kt —

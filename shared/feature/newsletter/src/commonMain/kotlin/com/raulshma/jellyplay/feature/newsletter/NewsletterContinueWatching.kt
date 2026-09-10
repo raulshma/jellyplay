@@ -34,6 +34,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.RatingColors
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.progressFraction
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.formatDurationFromTicks
 import com.raulshma.jellyplay.core.ui.components.formatRemainingTimeFromTicks
@@ -84,9 +85,7 @@ private fun ContinueWatchingCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val progress = if (item.runTimeTicks != null && item.playbackPositionTicks != null && item.runTimeTicks!! > 0) {
-        (item.playbackPositionTicks!!.toFloat() / item.runTimeTicks!!).coerceIn(0f, 1f)
-    } else 0f
+    val progress = item.progressFraction() ?: 0f
 
     val remainingText = if (item.runTimeTicks != null && item.playbackPositionTicks != null) {
         remember(item.runTimeTicks, item.playbackPositionTicks) {

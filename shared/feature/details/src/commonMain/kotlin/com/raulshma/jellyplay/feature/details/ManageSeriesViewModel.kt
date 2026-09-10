@@ -299,7 +299,7 @@ class ManageSeriesViewModel internal constructor(
     // ── Helpers ───────────────────────────────────────────────────────────
 
     private fun groupBySeason(episodes: List<ArrSeriesEpisode>): Map<Int, List<ArrSeriesEpisode>> {
-        // Wave 16C purification: `toSortedMap` is JVM-stdlib. A sorted-entries
+        //  purification: `toSortedMap` is JVM-stdlib. A sorted-entries
         // LinkedHashMap iterates in exactly the seasonComparator() order the
         // SortedMap had, so consumers see an identical sequence.
         return episodes.groupBy { it.seasonNumber }

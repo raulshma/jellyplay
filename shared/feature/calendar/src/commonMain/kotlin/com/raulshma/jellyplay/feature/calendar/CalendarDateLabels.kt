@@ -4,7 +4,7 @@ import kotlinx.datetime.LocalDate
 import kotlinx.datetime.YearMonth
 
 /**
- * Locale seam for the calendar's human-readable date labels (wave 16A): the
+ * Locale seam for the calendar's human-readable date labels: the
  * two reads that have no multiplatform formatter in kotlinx-datetime —
  * java.text-style pattern formatting ("EEE, MMM d" / "MMMM yyyy") — moved
  * behind expect/actual so commonMain stays wasm-clean. Same template as

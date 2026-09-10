@@ -3,7 +3,7 @@ package com.raulshma.jellyplay.feature.details
 /**
  * Web actual of [languageDisplayName] over `Intl.DisplayNames`
  * (type:'language') — same approach as core:player-contract's
- * LanguageDisplayName.wasmJs.kt (wave 12D), replicated module-locally because
+ * LanguageDisplayName.wasmJs.kt, replicated module-locally because
  * that expect is `internal` to its module.
  *
  * Behavior contract: ANY failure returns null (never throws) — unsupported

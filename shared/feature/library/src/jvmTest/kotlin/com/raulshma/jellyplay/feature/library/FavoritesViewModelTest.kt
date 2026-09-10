@@ -19,6 +19,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -49,6 +50,12 @@ class FavoritesViewModelTest {
     private lateinit var imageUrlProvider: ImageUrlProvider
     private lateinit var viewModel: FavoritesViewModel
 
+    /** Driven by the deferred-refresh tests; collected by the VM for its lifetime. */
+    private val userDataEvents =
+        kotlinx.coroutines.flow.MutableSharedFlow<com.raulshma.jellyplay.core.model.UserDataChange>(
+            extraBufferCapacity = 16,
+        )
+
     @BeforeTest
     fun setUp() {
         Dispatchers.setMain(mainDispatcher)
@@ -56,6 +63,10 @@ class FavoritesViewModelTest {
         userDataMutator = mockk(relaxed = true)
         mediaDownloadActions = mockk(relaxed = true)
         imageUrlProvider = mockk(relaxed = true)
+        // BEFORE construction: the deferred refresher reads the flow in its
+        // initializer — a stub after would hand it the relaxed default (a
+        // dead mock flow that never emits).
+        every { mediaRepository.userDataChanges } returns userDataEvents
         viewModel = FavoritesViewModel(
             mediaRepository = mediaRepository,
             userDataMutator = userDataMutator,
@@ -141,6 +152,82 @@ class FavoritesViewModelTest {
 
         assertTrue(firstPage.isCompleted)
         coVerify(exactly = 1) { mediaRepository.getFavoritesPaged(mediaTypes = null) }
+    }
+
+    // ── Deferred refresh (user-data changes while off-screen) ───────────────
+
+    @Test
+    fun `userData change while inactive defers the refresh to the next entry`() = runTest {
+        stubFavoritesPaged()
+        // Keep the paging pipeline alive for the whole test (cachedIn shares it).
+        val collector = launch { viewModel.pagedItems.collect {} }
+        advanceUntilIdle()
+        coVerify(exactly = 1) { mediaRepository.getFavoritesPaged(any()) }
+
+        // A write confirmed while the grid is NOT on screen only marks stale.
+        viewModel.deferredRefresher.onScreenActiveChanged(false)
+        userDataEvents.emit(com.raulshma.jellyplay.core.model.UserDataChange("user-1", listOf("m1")))
+        advanceUntilIdle()
+        coVerify(exactly = 1) { mediaRepository.getFavoritesPaged(any()) }
+
+        // Re-entry fires the single deferred regeneration.
+        viewModel.deferredRefresher.onScreenActiveChanged(true)
+        advanceUntilIdle()
+        coVerify(exactly = 2) { mediaRepository.getFavoritesPaged(any()) }
+        collector.cancel()
+    }
+
+    @Test
+    fun `userData change while active does not regenerate the pager`() = runTest {
+        stubFavoritesPaged()
+        val collector = launch { viewModel.pagedItems.collect {} }
+        advanceUntilIdle()
+
+        viewModel.deferredRefresher.onScreenActiveChanged(true)
+        userDataEvents.emit(com.raulshma.jellyplay.core.model.UserDataChange("user-1", listOf("m1")))
+        advanceUntilIdle()
+
+        // Silent contract: no mid-scroll pager swap for on-screen events.
+        coVerify(exactly = 1) { mediaRepository.getFavoritesPaged(any()) }
+        collector.cancel()
+    }
+
+    @Test
+    fun `an active-screen event still refreshes on the next re-entry`() = runTest {
+        stubFavoritesPaged()
+        val collector = launch { viewModel.pagedItems.collect {} }
+        advanceUntilIdle()
+
+        // The event lands while the grid IS on screen: no immediate regen,
+        // but the pending flag is armed — the change must not be lost to the
+        // TTL (an external write, e.g. an outbox adoption, has no in-place
+        // patch to heal it).
+        viewModel.deferredRefresher.onScreenActiveChanged(true)
+        userDataEvents.emit(com.raulshma.jellyplay.core.model.UserDataChange("user-1", listOf("m1")))
+        advanceUntilIdle()
+        coVerify(exactly = 1) { mediaRepository.getFavoritesPaged(any()) }
+
+        viewModel.deferredRefresher.onScreenActiveChanged(false)
+        viewModel.deferredRefresher.onScreenActiveChanged(true)
+        advanceUntilIdle()
+
+        coVerify(exactly = 2) { mediaRepository.getFavoritesPaged(any()) }
+        collector.cancel()
+    }
+
+    @Test
+    fun `re-entry without pending changes does not regenerate the pager`() = runTest {
+        stubFavoritesPaged()
+        val collector = launch { viewModel.pagedItems.collect {} }
+        advanceUntilIdle()
+
+        viewModel.deferredRefresher.onScreenActiveChanged(true)
+        viewModel.deferredRefresher.onScreenActiveChanged(false)
+        viewModel.deferredRefresher.onScreenActiveChanged(true)
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { mediaRepository.getFavoritesPaged(any()) }
+        collector.cancel()
     }
 
     @Test

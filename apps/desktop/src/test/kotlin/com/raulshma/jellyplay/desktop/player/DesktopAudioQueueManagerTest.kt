@@ -337,6 +337,69 @@ class DesktopAudioQueueManagerTest {
         assertEquals("zz", h.manager.currentPlayingItemId.value)
     }
 
+    // ── now-playing metadata (NowPlayingTracker adoption) ──────────────────
+    // The six metadata flows are the tracker's StateFlow instances re-exposed
+    // by reference, so every assertion below reads the tracker's output
+    // through the manager's unchanged property surface.
+
+    @Test
+    fun playPublishesTheFullDetailMetadataShape() {
+        val h = newHarness()
+        h.manager.play("a")
+
+        // Detail path: the ONE publish that writes all six fields — the
+        // artist id and the server image url exist only here.
+        assertEquals("a", h.manager.currentPlayingItemId.value)
+        assertEquals("Track a", h.manager.title.value)
+        assertEquals("Artist of a", h.manager.artist.value)
+        assertEquals("artist-a", h.manager.artistId.value)
+        assertEquals("Album a", h.manager.album.value)
+        assertEquals("img://a", h.manager.albumArtUrl.value, "art comes from the repository image url")
+    }
+
+    @Test
+    fun queueTransitionPublishesQueueItemMetadataAndPreservesArtistId() {
+        val h = newHarness()
+        val sparse = item("b").copy(album = null, imageUrl = null)
+        h.manager.playQueue(listOf(item("a"), sparse), startIndex = 0)
+        assertEquals("artist-a", h.manager.artistId.value)
+
+        h.engine.simulateEnded() // natural auto-advance onto the sparse row
+
+        assertEquals("b", h.manager.currentPlayingItemId.value)
+        assertEquals("Track b", h.manager.title.value)
+        assertEquals("Artist of b", h.manager.artist.value)
+        assertEquals("", h.manager.album.value, "null album coalesces to empty (publishQueueItem shape)")
+        assertEquals("", h.manager.albumArtUrl.value, "null image url coalesces to empty")
+        assertEquals(
+            "artist-a",
+            h.manager.artistId.value,
+            "queue transitions leave artistId untouched — AudioQueueItem carries none, so the " +
+                "previous track's survives until the next detail publish",
+        )
+    }
+
+    @Test
+    fun stopAndReleaseClearsDisplayMetadataAndKeepsArtistId() {
+        val h = newHarness()
+        h.manager.play("a")
+        assertEquals("artist-a", h.manager.artistId.value)
+
+        h.manager.stopAndRelease()
+
+        assertNull(h.manager.currentPlayingItemId.value)
+        assertEquals("", h.manager.title.value)
+        assertEquals("", h.manager.artist.value)
+        assertEquals("", h.manager.album.value)
+        assertEquals("", h.manager.albumArtUrl.value)
+        assertEquals(
+            "artist-a",
+            h.manager.artistId.value,
+            "declared delta of the tracker adoption: clear() never resets artistId (Android's stop " +
+                "behaved identically pre-extraction; the former desktop hand-rolled reset cleared it)",
+        )
+    }
+
     // ── queue mutations around playback ───────────────────────────────────
 
     @Test
@@ -739,7 +802,7 @@ class DesktopAudioQueueManagerTest {
         assertEquals(0L, h.manager.currentPosition.value, "poll reconciles to the engine state after the clamp")
     }
 
-    // ── effects wiring (wave 14C): state → engine af config ──────────────
+    // ── effects wiring: state → engine af config ──────────────
 
     @Test
     fun engineCreationPushesInitialEffectsSnapshotAndMutationsRepush() {
@@ -802,7 +865,7 @@ class DesktopAudioQueueManagerTest {
         assertEquals(EqualizerPreset.FLAT, h.effects.equalizerPreset.value)
     }
 
-    // ── next-item prefetch (wave 14C: "pre-warm is next-item-only") ──────
+    // ── next-item prefetch ("pre-warm is next-item-only") ──────
 
     @Test
     fun prefetchResolvesTheNextItemBehindCurrentWithoutLoadingTheEngine() {

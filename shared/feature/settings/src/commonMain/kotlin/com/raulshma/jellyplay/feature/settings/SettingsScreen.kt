@@ -1,12 +1,16 @@
 package com.raulshma.jellyplay.feature.settings
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -27,6 +31,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -51,28 +56,33 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.graphicsLayer
+import com.raulshma.jellyplay.core.ui.animation.pressScaleValue
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKey
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKeyEvent
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.debounce
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.flow.map
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.material3.DockedSearchBar
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.SearchBarDefaults
 import androidx.compose.material3.TextButton
 import androidx.compose.ui.focus.onFocusEvent
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
+import coil3.compose.AsyncImage
+import androidx.compose.ui.layout.ContentScale
+import com.raulshma.jellyplay.core.network.library.buildUserImageUrl
+import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.ui.components.TopBarStyle
 import com.raulshma.jellyplay.core.ui.components.SettingListItem
 import com.raulshma.jellyplay.core.ui.components.SettingToggleItem
@@ -90,6 +100,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.groupedItemContainerColor
 import com.raulshma.jellyplay.core.designsystem.theme.hairlineBorderColor
 import com.raulshma.jellyplay.core.designsystem.theme.lightModeHairlineBorder
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsLightTheme
+import com.raulshma.jellyplay.core.designsystem.theme.settingsGroupContainerColor
 import com.raulshma.jellyplay.core.model.SettingsScreenPreferences
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.ContrastLevel
@@ -101,6 +112,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
+import com.raulshma.jellyplay.core.ui.feedback.rememberConfirmHaptic
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
@@ -110,11 +122,13 @@ import com.raulshma.jellyplay.core.ui.tv.TvFocusDefaults
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.Color
 import com.raulshma.jellyplay.core.ui.settingssearch.ResolvedSettingsItem
-import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchMatcher
+import com.raulshma.jellyplay.core.ui.settingssearch.settingsSearchResults
 import com.raulshma.jellyplay.core.ui.components.ExpressiveChipContainer
 import androidx.compose.ui.graphics.Brush
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
+import org.jetbrains.compose.resources.PluralStringResource
+import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
@@ -180,6 +194,15 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_pin_
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_playback
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_playback_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_power_user_mode
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_power_user_mode_desc
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_no_matches_hint
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_clear_query
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_filter_all
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_browse_categories
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_quick_actions
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_server_settings
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_switch_user_action
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_whats_new
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_privacy_data
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_privacy_data_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_recents_title
@@ -220,25 +243,113 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_watc
 
 private val LocalAnimateSettingsEntrance = staticCompositionLocalOf { false }
 
-// Registry ids of the screensaver (dream) group rendered on the main Settings screen. When a
-// settings-search result for one of these is tapped, the click sets lastClickedSettingId so the
-// group expands and highlights the matching row (there is no dedicated screensaver screen).
-private val SCREENSAVER_GROUP_IDS = setOf(
-    "screensaver_show_title",
-    "screensaver_categories",
-    "screensaver_slideshow_interval",
-    "screensaver_ken_burns",
-    "screensaver_transition_style",
-)
-
 // Search-result ids that are destructive *actions* rather than settings (open a
 // confirm dialog instead of navigating). These are deliberately excluded from the
 // "recent settings" list — recents track navigable settings the user revisits, not
-// one-off sign-out actions.
+// one-off sign-out actions. Kept as a hand list on purpose: what makes these two
+// ids actions is semantics (a destructive confirm), not a derivable structural
+// property of their catalog declarations.
 private val ACTION_ONLY_IDS = setOf("logout", "sign_out_from_server")
 
 // Dream-screen pickers (slideshow interval, transition style) flow through the shared
 // `PickerState` dispatcher rather than a screen-local sealed dialog enum.
+
+/**
+ * What a settings-search result tap does — the effect vocabulary
+ * [settingsResultClickAction] decides between and the composable performs.
+ */
+internal sealed class SettingsSearchResultAction {
+    /**
+     * Navigate into a sub-screen; [route] carries the tapped id already baked
+     * in as the deep-link highlight target.
+     */
+    class NavigateToScreen(val route: Route) : SettingsSearchResultAction()
+
+    /**
+     * Open the sign-out confirm dialog; [fromServer] selects the title,
+     * message and the eventual log-out variant.
+     */
+    class OpenSignOutDialog(val fromServer: Boolean) : SettingsSearchResultAction()
+
+    /** Launch the host-indirected setup wizard. */
+    object OpenSetupWizard : SettingsSearchResultAction()
+
+    /**
+     * No navigation — an on-screen target (the screensaver rows) reveals
+     * itself through the pending highlight alone.
+     */
+    object NoOp : SettingsSearchResultAction()
+}
+
+/**
+ * The pure decision behind a search-result (or recent-setting) tap on this
+ * screen: [action] is the effect to perform, [pendingHighlightId] the id to
+ * mark for the TV re-entry focus policy (`null` for the management
+ * exemptions and the destructive actions), [enableAdvanced] whether the
+ * advanced toggle must flip on first, and [recordRecent] whether the id
+ * enters the recent-settings list (pure actions like logout never do).
+ */
+internal data class SettingsSearchResultClick(
+    val action: SettingsSearchResultAction,
+    val pendingHighlightId: String? = null,
+    val enableAdvanced: Boolean = false,
+    val recordRecent: Boolean = true,
+)
+
+/**
+ * Decides [SettingsSearchResultClick] for the tapped result. The destructive
+ * account actions open their confirm dialogs (`logout` directly,
+ * `sign_out_from_server` through the bare-`Route.Settings` branch); the other
+ * bare-Settings targets are this screen's own rows (the screensaver group)
+ * and only reveal themselves via the pending highlight; the setup wizard
+ * keeps its host indirection; everything else navigates with the id baked
+ * into the route, marking the pending highlight except for Server/User
+ * Management, which the old per-route dispatch never marked (unknown
+ * highlight ids are no-ops downstream — `rememberHighlightScrollIndex`
+ * resolves them to -1). The destructive [ACTION_ONLY_IDS] never enter the
+ * recent-settings list, and an advanced result auto-enables advanced
+ * settings when they are off.
+ */
+internal fun settingsResultClickAction(
+    id: String,
+    route: Route,
+    isAdvanced: Boolean,
+    showAdvancedSettings: Boolean,
+): SettingsSearchResultClick {
+    val click = when {
+        id == "logout" -> SettingsSearchResultClick(
+            action = SettingsSearchResultAction.OpenSignOutDialog(fromServer = false),
+        )
+        route == Route.Settings -> {
+            if (id == "sign_out_from_server") {
+                SettingsSearchResultClick(
+                    action = SettingsSearchResultAction.OpenSignOutDialog(fromServer = true),
+                )
+            } else {
+                SettingsSearchResultClick(
+                    action = SettingsSearchResultAction.NoOp,
+                    pendingHighlightId = id,
+                )
+            }
+        }
+        route == Route.Onboarding -> SettingsSearchResultClick(
+            action = SettingsSearchResultAction.OpenSetupWizard,
+            pendingHighlightId = "setup_wizard",
+        )
+        else -> SettingsSearchResultClick(
+            action = SettingsSearchResultAction.NavigateToScreen(route.withHighlightSettingId(id)),
+            pendingHighlightId = if (route is Route.ServerManagement || route is Route.UserManagement) {
+                null
+            } else {
+                id
+            },
+        )
+    }
+    return click.copy(
+        enableAdvanced = isAdvanced && !showAdvancedSettings,
+        recordRecent = id !in ACTION_ONLY_IDS,
+    )
+}
 
 /**
  * Bundles the navigation actions passed into [SettingsScreen] (and
@@ -297,12 +408,34 @@ private fun SearchResultsColumn(
     )
 }
 
+private fun highlightText(
+    text: String,
+    query: String,
+    highlightColor: Color,
+): androidx.compose.ui.text.AnnotatedString {
+    val trimmed = query.trim()
+    if (trimmed.isEmpty()) return androidx.compose.ui.text.AnnotatedString(text)
+    val index = text.indexOf(trimmed, ignoreCase = true)
+    if (index < 0) return androidx.compose.ui.text.AnnotatedString(text)
+    return buildAnnotatedString {
+        append(text.substring(0, index))
+        withStyle(
+            SpanStyle(
+                color = highlightColor,
+                fontWeight = FontWeight.Bold,
+            )
+        ) {
+            append(text.substring(index, index + trimmed.length))
+        }
+        append(text.substring(index + trimmed.length))
+    }
+}
+
 /**
  * A single resolved settings-search result row, shared by the live search results
  * and the recent-settings list so both render identically (leading icon, title,
  * subtitle, category/advanced pills, chevron, expressive list shape, TV focus) and
- * share one tap handler. Extracted from the inline result row so the two lists can
- * not drift in appearance or click behavior.
+ * share one tap handler.
  */
 @Composable
 private fun SettingsSearchResultRow(
@@ -310,6 +443,7 @@ private fun SettingsSearchResultRow(
     index: Int,
     count: Int,
     advancedBadgeLabel: String,
+    query: String = "",
     onClick: () -> Unit,
 ) {
     val shape = com.raulshma.jellyplay.core.designsystem.theme.expressiveListShape(index, count, innerRadius = 0.dp)
@@ -317,7 +451,7 @@ private fun SettingsSearchResultRow(
     ListItem(
         headlineContent = {
             Text(
-                text = item.title,
+                text = highlightText(item.title, query, MaterialTheme.colorScheme.primary),
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Medium,
                 color = MaterialTheme.colorScheme.onSurface,
@@ -325,7 +459,7 @@ private fun SettingsSearchResultRow(
         },
         supportingContent = {
             Text(
-                text = item.subtitle,
+                text = highlightText(item.subtitle, query, MaterialTheme.colorScheme.primary),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -400,6 +534,125 @@ private fun SettingsSearchResultRow(
     )
 }
 
+@Composable
+private fun SettingsCategoryChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val focusState = rememberTvFocusState(focusedScale = 1.05f)
+    Surface(
+        onClick = onClick,
+        shape = CircleShape,
+        color = if (selected) MaterialTheme.colorScheme.primaryContainer else groupedItemContainerColor(darkAlpha = 0.4f),
+        border = BorderStroke(
+            width = 1.dp,
+            color = if (selected) MaterialTheme.colorScheme.primary else hairlineBorderColor(),
+        ),
+        modifier = modifier
+            .then(focusState.focusModifier)
+            .tvFocusIndicator(focusState, CircleShape),
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+            color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+        )
+    }
+}
+
+private data class QuickCategory(
+    val title: String,
+    val icon: ImageVector,
+    val route: Route,
+)
+
+@Composable
+private fun SettingsQuickCategoriesGrid(
+    onNavigate: (Route) -> Unit,
+    onDismissSearch: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val categories = listOf(
+        QuickCategory(stringResource(Res.string.settings_appearance), Tabler.Outline.Palette, Route.AppearanceSettings()),
+        QuickCategory(stringResource(Res.string.settings_playback), Tabler.Outline.PlayerPlay, Route.PlaybackSettings()),
+        QuickCategory(stringResource(Res.string.settings_audio_player), Tabler.Outline.Headphones, Route.AudioSettings()),
+        QuickCategory(stringResource(Res.string.settings_language_subtitles), Tabler.Outline.Subtitles, Route.LanguageSettings()),
+        QuickCategory(stringResource(Res.string.settings_downloads_storage), Tabler.Outline.Download, Route.StorageSettings()),
+        QuickCategory(stringResource(Res.string.settings_security), Tabler.Outline.ShieldLock, Route.SecuritySettings()),
+        QuickCategory(stringResource(Res.string.settings_server_management), Tabler.Outline.Server, Route.ServerManagement(null)),
+        QuickCategory(stringResource(Res.string.settings_browse_favorites), Tabler.Outline.Heart, Route.Favorites),
+    )
+
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        categories.chunked(2).forEach { rowPair ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                rowPair.forEach { cat ->
+                    val catFocusState = rememberTvFocusState(focusedScale = 1.02f)
+                    Surface(
+                        onClick = {
+                            onDismissSearch()
+                            onNavigate(cat.route)
+                        },
+                        shape = ShapeCache.smooth16,
+                        color = groupedItemContainerColor(darkAlpha = 0.45f),
+                        border = BorderStroke(1.dp, hairlineBorderColor().copy(alpha = 0.6f)),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(56.dp)
+                            .then(catFocusState.focusModifier)
+                            .tvFocusIndicator(catFocusState, ShapeCache.smooth16)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clip(ShapeCache.smooth10)
+                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(
+                                    imageVector = cat.icon,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(17.dp),
+                                )
+                            }
+                            Spacer(Modifier.width(10.dp))
+                            Text(
+                                text = cat.title,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                    }
+                }
+                if (rowPair.size == 1) {
+                    Spacer(Modifier.weight(1f))
+                }
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun SettingsScreen(
@@ -438,13 +691,13 @@ fun SettingsScreen(
     var lastClickedSettingId by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) {
         if (isTv) {
-            kotlinx.coroutines.delay(150)
+            delay(TV_INITIAL_FOCUS_DELAY_MS)
             if (isFirstTvEntry) {
                 searchFocusRequester.tryRequestFocus()
                 isFirstTvEntry = false
             } else {
                 if (lastClickedSettingId != null) {
-                    kotlinx.coroutines.delay(1000)
+                    delay(TV_HIGHLIGHT_REFOCUS_DELAY_MS)
                     lastClickedSettingId = null
                 } else {
                     listFocusRequester.tryRequestFocus()
@@ -463,29 +716,75 @@ fun SettingsScreen(
     val advLabel = stringResource(Res.string.settings_advanced_badge)
     val advancedEnabledMessage = stringResource(Res.string.settings_advanced_enabled)
 
-    var searchQuery by remember { mutableStateOf("") }
-    var isSearchActive by remember { mutableStateOf(false) }
     var isSearchFocused by remember { mutableStateOf(false) }
     var showSignOutConfirm by remember { mutableStateOf(false) }
     var signOutFromServer by remember { mutableStateOf(false) }
     var activeDialog by remember { mutableStateOf<PickerState<*>?>(null) }
 
-    // Debounced + off-main-thread fuzzy search. Each keystroke only re-runs the
-    // matcher after a short quiet period, and the whole pipeline — the catalog
-    // resolve included — runs on Dispatchers.Default so typing stays smooth on
-    // low-end devices (the resolve is one blocking compose-resources read per
-    // catalog entry when cold; see SettingsSearchCatalog.resolved). Matching
-    // and the rendered results both reflect the user's language.
+    // The search panel's five loose state pieces (query / active / category
+    // filter / display list / recents) and their interactions — open → type →
+    // filter → tap-through → dismiss, recents add/dedupe/clear — live on the
+    // JVM-testable holder ([SettingsSearchPanelState]); this composable only
+    // performs the effects (focus requests, VM persistence).
+    val searchPanel = remember {
+        SettingsSearchPanelState(
+            recordRecentSink = viewModel::recordSettingUsed,
+            clearRecentsSink = viewModel::clearRecentSettings,
+        )
+    }
+
+    // Shared search-exit path: dismiss the panel and hand focus back to the
+    // main list (TV focus policy depends on the list regaining focus).
+    fun dismissSearchAndRefocus() {
+        searchPanel.dismiss()
+        listFocusRequester.tryRequestFocus()
+    }
+
+    // Highlight-then-navigate choreography for this screen's rows — the same
+    // dispatch onResultClick runs for search results: mark the pending TV
+    // re-entry highlight, then inject the id as the route's deep-link target.
+    val openSetting: (String, (String) -> Route) -> Unit = { id, buildRoute ->
+        lastClickedSettingId = id
+        onNavigate(buildRoute(id).withHighlightSettingId(id))
+    }
+
+    // Section scaffold: one lazy item wrapped in the staggered entrance. The
+    // (phone, tv) steps derive from the ordered SETTINGS_ENTRANCE_SECTIONS
+    // list — pinned by SettingsEntranceStepsTest to equal the hand-typed
+    // literals this replaced — so inserting a section renumbers the followers
+    // automatically.
+    fun LazyListScope.settingsSection(
+        key: String,
+        content: @Composable () -> Unit,
+    ) {
+        val steps = requireNotNull(settingsEntranceStep(key)) {
+            "undeclared settings entrance section '$key' — add it to SETTINGS_ENTRANCE_SECTIONS"
+        }
+        item(key = key) {
+            AnimatedSettingsEntrance(if (isTv) steps.tv else steps.phone) { content() }
+        }
+    }
+
+    // Shared core/ui settings-search pipeline over this module's catalog
+    // (the same `settingsSearchResults` feature/home consumes through the
+    // provider seam): debounced, distinct-until-changed, matched off the main
+    // thread against the platform-filtered, locale-resolved catalog — and
+    // short-circuited on blank queries, so an empty search bar never pays the
+    // 258-item resolve.
     val filteredItems by produceState(
         initialValue = emptyList<ResolvedSettingsItem>(),
-        searchQuery,
+        searchPanel.searchQuery,
     ) {
-        snapshotFlow { searchQuery }
-            .debounce(120)
-            .distinctUntilChanged()
-            .map { SettingsSearchMatcher.search(it, SettingsSearchCatalog.resolved()) }
-            .flowOn(Dispatchers.Default)
+        settingsSearchResults(snapshotFlow { searchPanel.searchQuery }, SettingsSearchCatalog)
             .collect { value = it }
+    }
+
+    val availableCategories = remember(filteredItems) {
+        filteredItems.map { it.category }.distinct()
+    }
+
+    val displayItems = remember(filteredItems, searchPanel.selectedCategory) {
+        searchPanel.displayItems(filteredItems)
     }
 
     // The last-used setting ids (most-recent first), resolved back to renderable
@@ -496,16 +795,19 @@ fun SettingsScreen(
     // this producer itself runs on the composition dispatcher
     // (SettingsSearchCatalog.recentItems owns the Default hop).
     val recentIds by viewModel.recentSettingIds.collectAsStateWithLifecycle()
+    // Re-seed the holder's recents mirror whenever the store emits — the
+    // ReorderState re-sync shape (the store owns persistence; the mirror is
+    // display state).
+    LaunchedEffect(recentIds) { searchPanel.submitRecents(recentIds) }
     val recentItems by produceState(
         initialValue = emptyList<ResolvedSettingsItem>(),
-        recentIds,
+        searchPanel.recentIds,
     ) {
-        value = SettingsSearchCatalog.recentItems(recentIds)
+        value = SettingsSearchCatalog.recentItems(searchPanel.recentIds)
     }
 
-    JellyPlayBackHandler(enabled = isSearchActive) {
-        isSearchActive = false
-        searchQuery = ""
+    JellyPlayBackHandler(enabled = searchPanel.isSearchActive) {
+        dismissSearchAndRefocus()
     }
 
     com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold(
@@ -524,57 +826,30 @@ fun SettingsScreen(
         }
 
         // Shared tap handler for both the live search results and the recent
-        // settings list: flips the advanced toggle on if needed, dispatches the
-        // navigation, records the setting as recently used (skipping pure
-        // actions like logout), then collapses the search panel. Extracted so the
-        // two lists never drift in click behavior. Navigation is the same
-        // one-liner as the home header search: inject the matched id as the
-        // route's deep-link highlight target. Only the non-navigate special
-        // cases (sign-out dialogs, the on-screen screensaver group, the
-        // host-indirected setup wizard) keep bespoke branches.
+        // settings list: the branching lives in the pure
+        // [settingsResultClickAction] (pinned by jvmTest); this reduction only
+        // performs the decided effects, records the setting as recently used
+        // when the decision says so, then collapses the search panel.
         val onResultClick: (ResolvedSettingsItem) -> Unit = { item ->
-            if (item.isAdvanced && !preferences.showAdvancedSettings) {
-                viewModel.setShowAdvancedSettings(true)
+            val click = settingsResultClickAction(item.id, item.route, item.isAdvanced, preferences.showAdvancedSettings)
+            if (click.enableAdvanced) {
+                viewModel.edit { scope -> scope.appearance.setShowAdvancedSettings(true) }
                 messenger?.info(advancedEnabledMessage)
             }
-            if (item.id == "logout") {
-                signOutFromServer = false
-                showSignOutConfirm = true
-            } else {
-                when (item.route) {
-                    Route.Settings -> {
-                        // Bare-settings targets live on this screen: the
-                        // sign-out-from-server action opens the confirm dialog,
-                        // screensaver rows reveal their group.
-                        if (item.id == "sign_out_from_server") {
-                            signOutFromServer = true
-                            showSignOutConfirm = true
-                        } else {
-                            lastClickedSettingId = item.id
-                        }
-                    }
-                    Route.Onboarding -> {
-                        lastClickedSettingId = "setup_wizard"
-                        onSetupWizard()
-                    }
-                    else -> {
-                        // Entries into sub-screens mark a pending highlight for
-                        // the TV re-entry focus policy — except Server/User
-                        // Management, which the old per-route dispatch never
-                        // marked. Unknown highlight ids are no-ops downstream
-                        // (rememberHighlightScrollIndex resolves them to -1).
-                        if (item.route !is Route.ServerManagement && item.route !is Route.UserManagement) {
-                            lastClickedSettingId = item.id
-                        }
-                        onNavigate(item.route.withHighlightSettingId(item.id))
-                    }
+            click.pendingHighlightId?.let { lastClickedSettingId = it }
+            when (val action = click.action) {
+                is SettingsSearchResultAction.OpenSignOutDialog -> {
+                    signOutFromServer = action.fromServer
+                    showSignOutConfirm = true
                 }
+                is SettingsSearchResultAction.NavigateToScreen -> onNavigate(action.route)
+                SettingsSearchResultAction.OpenSetupWizard -> onSetupWizard()
+                SettingsSearchResultAction.NoOp -> {}
             }
-            if (item.id !in ACTION_ONLY_IDS) viewModel.recordSettingUsed(item.id)
+            if (click.recordRecent) searchPanel.recordRecent(item.id)
             // Dismiss search after navigation has been dispatched so the main
             // settings list doesn't briefly reveal during the transition.
-            isSearchActive = false
-            searchQuery = ""
+            searchPanel.dismiss()
         }
 
         // Admin session polling is tied to screen visibility so it only runs
@@ -600,182 +875,340 @@ fun SettingsScreen(
                     .fillMaxSize()
                     .statusBarsPadding()
             ) {
-                // Floating Toolbar / Search Bar Section (MD3 expressive DockedSearchBar)
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(
-                            start = adaptiveInfo.contentPadding(LocalTvMode.current),
-                            end = adaptiveInfo.contentPadding(LocalTvMode.current),
-                            top = 16.dp,
-                            bottom = 8.dp
-                        )
-                ) {
-                    if (isTv && !isSearchActive) {
-                        SettingsTvCollapsedSearchRow(
-                            onSearchClicked = {
-                                isSearchActive = true
-                                coroutineScope.launch {
-                                    kotlinx.coroutines.delay(100)
-                                    searchFocusRequester.tryRequestFocus()
-                                }
-                            },
-                            searchBoxFocusRequester = searchFocusRequester
-                        )
-                    } else {
-                        DockedSearchBar(
-                            inputField = {
-                            SearchBarDefaults.InputField(
-                                query = searchQuery,
-                                onQueryChange = { searchQuery = it },
-                                onSearch = { },
-                                expanded = isSearchActive,
-                                onExpandedChange = { expanded ->
-                                    if (!isTv) {
-                                        isSearchActive = expanded
+                // Search Bar / Navigation Header
+                if (!searchPanel.isSearchActive) {
+                    if (isTv) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(
+                                    start = adaptiveInfo.contentPadding(LocalTvMode.current),
+                                    end = adaptiveInfo.contentPadding(LocalTvMode.current),
+                                    top = 16.dp,
+                                    bottom = 8.dp
+                                )
+                        ) {
+                            SettingsTvCollapsedSearchRow(
+                                onSearchClicked = {
+                                    searchPanel.open()
+                                    coroutineScope.launch {
+                                        delay(SEARCH_FIELD_FOCUS_DELAY_MS)
+                                        searchFocusRequester.tryRequestFocus()
                                     }
                                 },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .focusRequester(searchFocusRequester)
-                                    .onFocusEvent { isSearchFocused = it.isFocused }
-
-                                    .onDpadKeyEvent(
-                                        onSelect = { e ->
-                                            if (!isSearchActive && e.isKeyUp) {
-                                                isSearchActive = true
-                                                true
-                                            } else false
-                                        },
-                                        onLeft = {
-                                            leadingFocusRequester.tryRequestFocus()
-                                            true
-                                        },
-                                        onRight = {
-                                            trailingFocusRequester.tryRequestFocus()
-                                            true
-                                        },
-                                        onBack = { e ->
-                                            if (e.isKeyUp) {
-                                                isSearchActive = false
-                                                searchQuery = ""
-                                                listFocusRequester.tryRequestFocus()
-                                            }
-                                            true
-                                        },
-                                    ),
-                                placeholder = {
-                                    Text(
-                                        stringResource(Res.string.settings_search_placeholder),
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                },
-                                leadingIcon = {
-                                    SettingsIconButton(
-                                        onClick = {
-                                            if (isSearchActive) {
-                                                isSearchActive = false
-                                                searchQuery = ""
-                                            } else {
-                                                onBack()
-                                            }
-                                        },
-                                        icon = if (isSearchActive) Tabler.Outline.ArrowLeft else Tabler.Outline.Search,
-                                        contentDescription = searchBackCd,
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                                        iconSize = 20.dp,
-                                        modifier = Modifier
-                                            .focusRequester(leadingFocusRequester)
-                                            .onDpadKey(
-                                                onRight = {
-                                                    searchFocusRequester.tryRequestFocus()
-                                                    true
-                                                },
-                                            )
-                                    )
-                                },
-                                trailingIcon = {
-                                    if (searchQuery.isNotBlank() || isSearchActive) {
-                                        SettingsIconButton(
-                                            onClick = { searchQuery = "" },
-                                            icon = Tabler.Outline.X,
-                                            contentDescription = clearSearchCd,
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                                            iconSize = 18.dp,
-                                            modifier = Modifier
-                                                .focusRequester(trailingFocusRequester)
-                                                .onDpadKey(
-                                                    onLeft = {
-                                                        searchFocusRequester.tryRequestFocus()
-                                                        true
-                                                    },
-                                                )
-                                        )
-                                    }
-                                },
+                                searchBoxFocusRequester = searchFocusRequester
                             )
-                        },
-                        expanded = isSearchActive,
-                        onExpandedChange = { expanded ->
-                            if (!isTv) {
-                                isSearchActive = expanded
+                        }
+                    } else {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(
+                                    start = adaptiveInfo.contentPadding(LocalTvMode.current),
+                                    end = adaptiveInfo.contentPadding(LocalTvMode.current),
+                                    top = 16.dp,
+                                    bottom = 8.dp
+                                ),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            SettingsIconButton(
+                                onClick = onBack,
+                                icon = Tabler.Outline.ArrowLeft,
+                                contentDescription = searchBackCd,
+                                modifier = Modifier.size(44.dp),
+                            )
+                            Surface(
+                                onClick = {
+                                    searchPanel.open()
+                                    coroutineScope.launch {
+                                        delay(SEARCH_FIELD_FOCUS_DELAY_MS)
+                                        searchFocusRequester.tryRequestFocus()
+                                    }
+                                },
+                                shape = CircleShape,
+                                color = groupedItemContainerColor(darkAlpha = 0.4f),
+                                border = BorderStroke(1.dp, hairlineBorderColor()),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(46.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(horizontal = 16.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Tabler.Outline.Search,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Text(
+                                        text = stringResource(Res.string.settings_search_placeholder),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
                             }
-                        },
+                        }
+                    }
+                } else {
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .then(
-                                if (isSearchFocused && isTv) {
-                                    Modifier.shadow(
-                                        elevation = TvFocusDefaults.GlowElevation,
-                                        shape = ShapeCache.smooth16,
-                                        clip = false,
-                                        ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = TvFocusDefaults.GlowAmbientAlpha),
-                                        spotColor = MaterialTheme.colorScheme.primary.copy(alpha = TvFocusDefaults.GlowSpotAlpha),
-                                    )
-                                } else {
-                                    Modifier
-                                }
-                            )
-                            .border(
-                                width = if (isSearchFocused && isTv) TvFocusDefaults.BorderWidth else 1.dp,
-                                color = if (isSearchFocused && isTv) MaterialTheme.colorScheme.primary else hairlineBorderColor(),
-                                shape = ShapeCache.smooth16
+                            .padding(
+                                start = adaptiveInfo.contentPadding(LocalTvMode.current),
+                                end = adaptiveInfo.contentPadding(LocalTvMode.current),
+                                top = 16.dp,
+                                bottom = 8.dp
                             ),
-                        shape = ShapeCache.smooth16,
-                        colors = SearchBarDefaults.colors(
-                            containerColor = groupedItemContainerColor(darkAlpha = 0.4f),
-                        ),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        SettingsIconButton(
+                            onClick = { dismissSearchAndRefocus() },
+                            icon = Tabler.Outline.ArrowLeft,
+                            contentDescription = searchBackCd,
+                            iconSize = 20.dp,
+                            modifier = Modifier
+                                .focusRequester(leadingFocusRequester)
+                                .onDpadKey(
+                                    onRight = {
+                                        searchFocusRequester.tryRequestFocus()
+                                        true
+                                    }
+                                )
+                        )
+
+                        Surface(
+                            shape = ShapeCache.smooth16,
+                            color = groupedItemContainerColor(darkAlpha = 0.4f),
+                            border = BorderStroke(
+                                width = if (isSearchFocused && isTv) TvFocusDefaults.BorderWidth else 1.dp,
+                                color = if (isSearchFocused && isTv) MaterialTheme.colorScheme.primary else hairlineBorderColor()
+                            ),
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(48.dp)
+                                .then(
+                                    if (isSearchFocused && isTv) {
+                                        Modifier.shadow(
+                                            elevation = TvFocusDefaults.GlowElevation,
+                                            shape = ShapeCache.smooth16,
+                                            clip = false,
+                                            ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = TvFocusDefaults.GlowAmbientAlpha),
+                                            spotColor = MaterialTheme.colorScheme.primary.copy(alpha = TvFocusDefaults.GlowSpotAlpha),
+                                        )
+                                    } else Modifier
+                                )
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(horizontal = 14.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Tabler.Outline.Search,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                    modifier = Modifier.size(18.dp)
+                                )
+
+                                Box(
+                                    modifier = Modifier.weight(1f),
+                                    contentAlignment = Alignment.CenterStart
+                                ) {
+                                    if (searchPanel.searchQuery.isEmpty()) {
+                                        Text(
+                                            text = stringResource(Res.string.settings_search_placeholder),
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                        )
+                                    }
+                                    BasicTextField(
+                                        value = searchPanel.searchQuery,
+                                        onValueChange = { searchPanel.onQueryChange(it) },
+                                        singleLine = true,
+                                        textStyle = MaterialTheme.typography.bodyMedium.copy(
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        ),
+                                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .focusRequester(searchFocusRequester)
+                                            .onFocusEvent { isSearchFocused = it.isFocused }
+                                            .onDpadKeyEvent(
+                                                onLeft = {
+                                                    leadingFocusRequester.tryRequestFocus()
+                                                    true
+                                                },
+                                                onRight = {
+                                                    if (searchPanel.searchQuery.isNotEmpty()) {
+                                                        trailingFocusRequester.tryRequestFocus()
+                                                        true
+                                                    } else false
+                                                },
+                                                onBack = { e ->
+                                                    if (e.isKeyUp) {
+                                                        dismissSearchAndRefocus()
+                                                    }
+                                                    true
+                                                }
+                                            )
+                                    )
+                                }
+
+                                if (searchPanel.searchQuery.isNotEmpty()) {
+                                    SettingsIconButton(
+                                        onClick = { searchPanel.clearQuery() },
+                                        icon = Tabler.Outline.X,
+                                        contentDescription = clearSearchCd,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                        iconSize = 18.dp,
+                                        modifier = Modifier
+                                            .focusRequester(trailingFocusRequester)
+                                            .onDpadKey(
+                                                onLeft = {
+                                                    searchFocusRequester.tryRequestFocus()
+                                                    true
+                                                }
+                                            )
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (searchPanel.isSearchActive) {
+                    if (availableCategories.isNotEmpty()) {
+                        LazyRow(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 8.dp),
+                            contentPadding = PaddingValues(horizontal = adaptiveInfo.contentPadding(LocalTvMode.current)),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            item(key = "cat_all") {
+                                SettingsCategoryChip(
+                                    label = stringResource(Res.string.settings_filter_all),
+                                    selected = searchPanel.selectedCategory == null,
+                                    onClick = { searchPanel.selectAllCategories() },
+                                )
+                            }
+                            items(availableCategories, key = { it }) { cat ->
+                                SettingsCategoryChip(
+                                    label = cat,
+                                    selected = searchPanel.selectedCategory == cat,
+                                    onClick = { searchPanel.toggleCategory(cat) },
+                                )
+                            }
+                        }
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
                     ) {
                         when {
-                            filteredItems.isNotEmpty() -> {
+                            searchPanel.searchQuery.isNotBlank() && displayItems.isNotEmpty() -> {
                                 SearchResultsColumn(
-                                    onBack = {
-                                        isSearchActive = false
-                                        searchQuery = ""
-                                        listFocusRequester.tryRequestFocus()
-                                    },
+                                    onBack = { dismissSearchAndRefocus() }
                                 ) {
-                                    itemsIndexed(filteredItems, key = { _, item -> item.id }) { index, item ->
+                                    itemsIndexed(displayItems, key = { _, item -> item.id }, contentType = { _, _ -> "searchResult" }) { index, item ->
                                         SettingsSearchResultRow(
                                             item = item,
+                                            query = searchPanel.searchQuery,
                                             index = index,
-                                            count = filteredItems.size,
+                                            count = displayItems.size,
                                             advancedBadgeLabel = advLabel,
                                             onClick = { onResultClick(item) },
                                         )
                                     }
                                 }
                             }
-                            // Empty query: surface the last-used settings instead of a dead-end
-                            // "no matches" message. Same row rendering and click behavior as live
-                            // results, plus a header row with a Clear affordance.
-                            searchQuery.isBlank() && recentItems.isNotEmpty() -> {
+                            searchPanel.searchQuery.isNotBlank() && displayItems.isEmpty() -> {
+                                LazyColumn(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(horizontal = adaptiveInfo.contentPadding(LocalTvMode.current)),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                                    contentPadding = PaddingValues(vertical = 24.dp)
+                                ) {
+                                    item(key = "no_matches_banner") {
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(24.dp)
+                                        ) {
+                                            Surface(
+                                                shape = CircleShape,
+                                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                                modifier = Modifier.size(56.dp)
+                                            ) {
+                                                Box(contentAlignment = Alignment.Center) {
+                                                    Icon(
+                                                        imageVector = Tabler.Outline.Search,
+                                                        contentDescription = null,
+                                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        modifier = Modifier.size(28.dp)
+                                                    )
+                                                }
+                                            }
+                                            Spacer(Modifier.height(16.dp))
+                                            Text(
+                                                text = stringResource(Res.string.settings_no_matches),
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                            Spacer(Modifier.height(6.dp))
+                                            Text(
+                                                text = stringResource(Res.string.settings_no_matches_hint),
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                textAlign = TextAlign.Center
+                                            )
+                                            if (searchPanel.selectedCategory != null) {
+                                                Spacer(Modifier.height(12.dp))
+                                                TextButton(onClick = { searchPanel.selectAllCategories() }) {
+                                                    Text(stringResource(Res.string.settings_filter_all))
+                                                }
+                                            }
+                                        }
+                                    }
+                                    item(key = "categories_header") {
+                                        Text(
+                                            text = stringResource(Res.string.settings_browse_categories),
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 4.dp, vertical = 4.dp)
+                                        )
+                                    }
+                                    item(key = "categories_grid") {
+                                        SettingsQuickCategoriesGrid(
+                                            onNavigate = onNavigate,
+                                            onDismissSearch = { dismissSearchAndRefocus() }
+                                        )
+                                    }
+                                }
+                            }
+                            searchPanel.searchQuery.isBlank() && recentItems.isNotEmpty() -> {
                                 SearchResultsColumn(
-                                    onBack = {
-                                        isSearchActive = false
-                                        searchQuery = ""
-                                        listFocusRequester.tryRequestFocus()
-                                    },
+                                    onBack = { dismissSearchAndRefocus() }
                                 ) {
                                     item(key = "recents_header") {
                                         Row(
@@ -791,43 +1224,85 @@ fun SettingsScreen(
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                 fontWeight = FontWeight.SemiBold,
                                             )
-                                            TextButton(onClick = { viewModel.clearRecentSettings() }) {
+                                            TextButton(onClick = { searchPanel.clearRecents() }) {
                                                 Text(stringResource(Res.string.settings_clear_recents))
                                             }
                                         }
                                     }
-                                    itemsIndexed(recentItems, key = { _, item -> item.id }) { index, item ->
+                                    itemsIndexed(recentItems, key = { _, item -> item.id }, contentType = { _, _ -> "recentResult" }) { index, item ->
                                         SettingsSearchResultRow(
                                             item = item,
+                                            query = "",
                                             index = index,
                                             count = recentItems.size,
                                             advancedBadgeLabel = advLabel,
                                             onClick = { onResultClick(item) },
                                         )
                                     }
+                                    item(key = "browse_cats_header") {
+                                        Text(
+                                            text = stringResource(Res.string.settings_browse_categories),
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(start = 4.dp, end = 4.dp, top = 16.dp, bottom = 8.dp)
+                                        )
+                                    }
+                                    item(key = "browse_cats_grid") {
+                                        SettingsQuickCategoriesGrid(
+                                            onNavigate = onNavigate,
+                                            onDismissSearch = { dismissSearchAndRefocus() }
+                                        )
+                                    }
                                 }
                             }
                             else -> {
-                                Box(
+                                LazyColumn(
                                     modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(32.dp),
-                                    contentAlignment = Alignment.Center
+                                        .fillMaxSize()
+                                        .padding(horizontal = adaptiveInfo.contentPadding(LocalTvMode.current)),
+                                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                                    contentPadding = PaddingValues(vertical = 16.dp)
                                 ) {
-                                    Text(
-                                        text = stringResource(
-                                            if (searchQuery.isBlank()) Res.string.settings_search_hint
-                                            else Res.string.settings_no_matches
-                                        ),
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
+                                    item(key = "browse_header") {
+                                        Text(
+                                            text = stringResource(Res.string.settings_browse_categories),
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 4.dp, vertical = 4.dp)
+                                        )
+                                    }
+                                    item(key = "browse_grid") {
+                                        SettingsQuickCategoriesGrid(
+                                            onNavigate = onNavigate,
+                                            onDismissSearch = { dismissSearchAndRefocus() }
+                                        )
+                                    }
+                                    item(key = "hint") {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(16.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                text = stringResource(Res.string.settings_search_hint),
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                                textAlign = TextAlign.Center
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
                     }
-                    }
-                }
+                } else {
 
                 CompositionLocalProvider(LocalAnimateSettingsEntrance provides animateEntrance) {
                     LazyColumn(
@@ -852,526 +1327,457 @@ fun SettingsScreen(
                             bottom = adaptiveInfo.bottomPadding(LocalTvMode.current),
                         ),
                     ) {
-                        item(key = "profile") {
-                            AnimatedSettingsEntrance(0) {
-                                if (userName.isNotBlank()) {
-                                    SettingsProfileBanner(
-                                        userName = userName,
-                                        serverAddress = currentServerAddress,
-                                        isAdmin = viewModel.currentUser?.isAdmin == true,
-                                        showAdvanced = preferences.showAdvancedSettings,
-                                        onToggleAdvanced = { viewModel.setShowAdvancedSettings(!preferences.showAdvancedSettings) },
-                                        onNewsletterClick = onNewsletterClick,
-                                        onUserManagementClick = { onNavigate(Route.UserManagement(null)) },
-                                        onServerManagementClick = { onNavigate(Route.ServerManagement(null)) },
-                                    )
-                                }
+                        settingsSection("profile") {
+                            if (userName.isNotBlank()) {
+                                SettingsProfileBanner(
+                                    userName = userName,
+                                    currentUser = viewModel.currentUser,
+                                    serverAddress = currentServerAddress,
+                                    isAdmin = viewModel.currentUser?.isAdmin == true,
+                                    onNewsletterClick = onNewsletterClick,
+                                    onUserManagementClick = { onNavigate(Route.UserManagement(null)) },
+                                    onServerManagementClick = { onNavigate(Route.ServerManagement(null)) },
+                                )
                             }
                         }
 
-                        item(key = "active_devices") {
-                            AnimatedSettingsEntrance(1) {
-                                if (viewModel.currentUser?.isAdmin == true && viewModel.activeSessions.isNotEmpty()) {
-                                    ActiveDevicesRow(
-                                        sessions = viewModel.activeSessions,
-                                        serverAddress = currentServerAddress,
-                                        onSendMessage = viewModel::sendMessageToSession,
-                                    )
-                                }
+                        settingsSection("power_user_mode") {
+                            PowerUserModeCard(
+                                checked = preferences.showAdvancedSettings,
+                                onCheckedChange = { viewModel.edit { scope -> scope.appearance.setShowAdvancedSettings(it) } },
+                            )
+                        }
+
+                        settingsSection("active_devices") {
+                            if (viewModel.currentUser?.isAdmin == true && viewModel.activeSessions.isNotEmpty()) {
+                                ActiveDevicesRow(
+                                    sessions = viewModel.activeSessions,
+                                    serverAddress = currentServerAddress,
+                                    onSendMessage = viewModel::sendMessageToSession,
+                                )
                             }
                         }
 
-                        item(key = "account") {
-                            AnimatedSettingsEntrance(2) {
-                                SettingsGroup(
-                                    icon = Tabler.Outline.User,
-                                    title = stringResource(Res.string.settings_account),
-                                    summary = { stringResource(Res.string.settings_signed_in_as_name, userName) },
-                                    badge = {
-                                        RoleBadge(isAdmin = viewModel.currentUser?.isAdmin == true)
+                        settingsSection("account") {
+                            SettingsGroup(
+                                icon = Tabler.Outline.User,
+                                title = stringResource(Res.string.settings_account),
+                                summary = { stringResource(Res.string.settings_signed_in_as_name, userName) },
+                                badge = {
+                                    RoleBadge(isAdmin = viewModel.currentUser?.isAdmin == true)
+                                },
+                                initiallyExpanded = false,
+                            ) {
+                                // Row count derived from the account group
+                                // declaration — the four declared ids are
+                                // exactly the rows rendered here.
+                                val accountCount = SettingsScreenGroups.account.itemIds.size
+                                SettingListItem(
+                                    icon = Tabler.Outline.Server,
+                                    title = stringResource(Res.string.settings_server_management),
+                                    subtitle = stringResource(Res.string.settings_server_management_subtitle),
+                                    index = 0, count = accountCount,
+                                    onClick = { openSetting("server_management") { Route.ServerManagement(it) } },
+                                )
+                                SettingListItem(
+                                    icon = Tabler.Outline.Users,
+                                    title = stringResource(Res.string.settings_switch_user),
+                                    subtitle = stringResource(Res.string.settings_switch_user_subtitle),
+                                    index = 1, count = accountCount,
+                                    onClick = { openSetting("user_management") { Route.UserManagement(it) } },
+                                )
+                                SettingListItem(
+                                    icon = Tabler.Outline.Logout,
+                                    title = stringResource(Res.string.settings_sign_out),
+                                    subtitle = stringResource(Res.string.settings_sign_out_subtitle),
+                                    index = 2, count = accountCount,
+                                    isDestructive = true,
+                                    onClick = {
+                                        signOutFromServer = false
+                                        showSignOutConfirm = true
                                     },
-                                    initiallyExpanded = false,
-                                ) {
-                                    SettingListItem(
-                                        icon = Tabler.Outline.Server,
-                                        title = stringResource(Res.string.settings_server_management),
-                                        subtitle = stringResource(Res.string.settings_server_management_subtitle),
-                                        index = 0, count = 4,
-                                        onClick = {
-                                            lastClickedSettingId = "server_management"
-                                            onNavigate(Route.ServerManagement(lastClickedSettingId))
-                                        },
-                                    )
-                                    SettingListItem(
-                                        icon = Tabler.Outline.Users,
-                                        title = stringResource(Res.string.settings_switch_user),
-                                        subtitle = stringResource(Res.string.settings_switch_user_subtitle),
-                                        index = 1, count = 4,
-                                        onClick = {
-                                            lastClickedSettingId = "user_management"
-                                            onNavigate(Route.UserManagement(lastClickedSettingId))
-                                        },
-                                    )
-                                    SettingListItem(
-                                        icon = Tabler.Outline.Logout,
-                                        title = stringResource(Res.string.settings_sign_out),
-                                        subtitle = stringResource(Res.string.settings_sign_out_subtitle),
-                                        index = 2, count = 4,
-                                        isDestructive = true,
-                                        onClick = {
-                                            signOutFromServer = false
-                                            showSignOutConfirm = true
-                                        },
-                                    )
-                                    SettingListItem(
-                                        icon = Tabler.Outline.Logout,
-                                        title = stringResource(Res.string.settings_sign_out_from_server),
-                                        subtitle = stringResource(Res.string.settings_sign_out_from_server_subtitle),
-                                        index = 3, count = 4,
-                                        isDestructive = true,
-                                        onClick = {
-                                            signOutFromServer = true
-                                            showSignOutConfirm = true
-                                        },
-                                    )
-                                }
+                                )
+                                SettingListItem(
+                                    icon = Tabler.Outline.Logout,
+                                    title = stringResource(Res.string.settings_sign_out_from_server),
+                                    subtitle = stringResource(Res.string.settings_sign_out_from_server_subtitle),
+                                    index = 3, count = accountCount,
+                                    isDestructive = true,
+                                    onClick = {
+                                        signOutFromServer = true
+                                        showSignOutConfirm = true
+                                    },
+                                )
                             }
                         }
 
-                        item(key = "activity") {
-                            AnimatedSettingsEntrance(3) {
-                                val pendingCount = viewModel.pendingRequestCount.collectAsStateWithLifecycle().value
-                                SettingsGroup(
-                                    icon = Tabler.Outline.Activity,
-                                    title = stringResource(Res.string.settings_activity_insights),
-                                    summary = { stringResource(Res.string.settings_activity_insights_subtitle) },
-                                    badge = if (pendingCount > 0) {
-                                        {
-                                            Box(
-                                                modifier = Modifier
-                                                    .clip(CircleShape)
-                                                    .background(MaterialTheme.colorScheme.primaryContainer)
-                                                    .padding(horizontal = 8.dp, vertical = 2.dp)
-                                            ) {
-                                                Text(
-                                                    text = "$pendingCount pending",
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                                )
-                                            }
+                        settingsSection("activity") {
+                            val pendingCount = viewModel.pendingRequestCount.collectAsStateWithLifecycle().value
+                            SettingsGroup(
+                                icon = Tabler.Outline.Activity,
+                                title = stringResource(Res.string.settings_activity_insights),
+                                summary = { stringResource(Res.string.settings_activity_insights_subtitle) },
+                                badge = if (pendingCount > 0) {
+                                    {
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(CircleShape)
+                                                .background(MaterialTheme.colorScheme.primaryContainer)
+                                                .padding(horizontal = 8.dp, vertical = 2.dp)
+                                        ) {
+                                            Text(
+                                                text = "$pendingCount pending",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            )
                                         }
-                                    } else null,
-                                    initiallyExpanded = false,
-                                ) {
-                                    val insightsCount = 5
-                                    SettingListItem(
-                                        icon = Tabler.Outline.Heart,
-                                        title = stringResource(Res.string.settings_browse_favorites),
-                                        subtitle = stringResource(Res.string.settings_browse_favorites_subtitle),
-                                        index = 0, count = insightsCount,
-                                        onClick = {
-                                            lastClickedSettingId = "favorites"
-                                            onNavigate(Route.Favorites)
-                                        },
-                                    )
-                                    SettingListItem(
-                                        icon = Tabler.Outline.ChartBar,
-                                        title = stringResource(Res.string.settings_watch_history_heatmap),
-                                        subtitle = stringResource(Res.string.settings_watch_history_heatmap_subtitle),
-                                        index = 1, count = insightsCount,
-                                        onClick = {
-                                            lastClickedSettingId = "watch_progress_heatmap"
-                                            onNavigate(Route.WatchProgressHeatmap)
-                                        },
-                                    )
-                                    SettingListItem(
-                                        icon = Tabler.Outline.Database,
-                                        title = stringResource(Res.string.settings_activity_queue),
-                                        subtitle = stringResource(Res.string.settings_activity_queue_subtitle),
-                                        index = 2, count = insightsCount,
-                                        onClick = {
-                                            lastClickedSettingId = "activity_queue"
-                                            onNavigate(Route.ArrQueue)
-                                        },
-                                    )
-                                    SettingListItem(
-                                        icon = Tabler.Outline.CalendarEvent,
-                                        title = stringResource(Res.string.settings_upcoming),
-                                        subtitle = stringResource(Res.string.settings_upcoming_subtitle),
-                                        index = 3, count = insightsCount,
-                                        onClick = {
-                                            lastClickedSettingId = "upcoming"
-                                            onNavigate(Route.UpcomingCalendar)
-                                        },
-                                    )
-                                    SettingListItem(
-                                        icon = Tabler.Outline.Inbox,
-                                        title = stringResource(Res.string.settings_requests),
-                                        subtitle = stringResource(Res.string.settings_requests_subtitle),
-                                        index = 4, count = insightsCount,
-                                        trailingText = pendingCount.takeIf { it > 0 }?.toString(),
-                                        onClick = {
-                                            lastClickedSettingId = "requests"
-                                            onNavigate(Route.Requests)
-                                        },
-                                    )
-                                }
-                            }
-                        }
-
-                        item(key = "system") {
-                            AnimatedSettingsEntrance(4) {
-                                val activeSessionCount = viewModel.activeSessions.size
-                                SettingsGroup(
-                                    icon = Tabler.Outline.Adjustments,
-                                    title = stringResource(Res.string.settings_system),
-                                    summary = { stringResource(Res.string.settings_system_subtitle) },
-                                    badge = if (viewModel.currentUser?.isAdmin == true && activeSessionCount > 0) {
-                                        {
-                                            Box(
-                                                modifier = Modifier
-                                                    .clip(CircleShape)
-                                                    .background(MaterialTheme.colorScheme.secondaryContainer)
-                                                    .padding(horizontal = 8.dp, vertical = 2.dp)
-                                            ) {
-                                                Text(
-                                                    text = "$activeSessionCount active",
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                                )
-                                            }
-                                        }
-                                    } else null,
-                                    initiallyExpanded = false,
-                                ) {
-                                    val systemCount = if (viewModel.currentUser?.isAdmin == true) 3 else 2
-                                    var systemIndex = 0
-                                    if (viewModel.currentUser?.isAdmin == true) {
-                                        SettingListItem(
-                                            icon = Tabler.Outline.Shield,
-                                            title = stringResource(Res.string.settings_admin_dashboard),
-                                            subtitle = stringResource(Res.string.settings_admin_dashboard_subtitle),
-                                            index = systemIndex++, count = systemCount,
-                                            onClick = {
-                                                lastClickedSettingId = "admin_dashboard"
-                                                onNavigate(Route.AdminDashboard)
-                                            },
-                                        )
                                     }
+                                } else null,
+                                initiallyExpanded = false,
+                            ) {
+                                // Row count derived from the activity-insights
+                                // group declaration.
+                                val insightsCount = SettingsScreenGroups.activityInsights.itemIds.size
+                                SettingListItem(
+                                    icon = Tabler.Outline.Heart,
+                                    title = stringResource(Res.string.settings_browse_favorites),
+                                    subtitle = stringResource(Res.string.settings_browse_favorites_subtitle),
+                                    index = 0, count = insightsCount,
+                                    onClick = { openSetting("favorites") { Route.Favorites } },
+                                )
+                                SettingListItem(
+                                    icon = Tabler.Outline.ChartBar,
+                                    title = stringResource(Res.string.settings_watch_history_heatmap),
+                                    subtitle = stringResource(Res.string.settings_watch_history_heatmap_subtitle),
+                                    index = 1, count = insightsCount,
+                                    onClick = { openSetting("watch_progress_heatmap") { Route.WatchProgressHeatmap } },
+                                )
+                                SettingListItem(
+                                    icon = Tabler.Outline.Database,
+                                    title = stringResource(Res.string.settings_activity_queue),
+                                    subtitle = stringResource(Res.string.settings_activity_queue_subtitle),
+                                    index = 2, count = insightsCount,
+                                    onClick = { openSetting("activity_queue") { Route.ArrQueue } },
+                                )
+                                SettingListItem(
+                                    icon = Tabler.Outline.CalendarEvent,
+                                    title = stringResource(Res.string.settings_upcoming),
+                                    subtitle = stringResource(Res.string.settings_upcoming_subtitle),
+                                    index = 3, count = insightsCount,
+                                    onClick = { openSetting("upcoming") { Route.UpcomingCalendar } },
+                                )
+                                SettingListItem(
+                                    icon = Tabler.Outline.Inbox,
+                                    title = stringResource(Res.string.settings_requests),
+                                    subtitle = stringResource(Res.string.settings_requests_subtitle),
+                                    index = 4, count = insightsCount,
+                                    trailingText = pendingCount.takeIf { it > 0 }?.toString(),
+                                    onClick = { openSetting("requests") { Route.Requests } },
+                                )
+                            }
+                        }
+
+                        settingsSection("system") {
+                            val activeSessionCount = viewModel.activeSessions.size
+                            SettingsGroup(
+                                icon = Tabler.Outline.Adjustments,
+                                title = stringResource(Res.string.settings_system),
+                                summary = { stringResource(Res.string.settings_system_subtitle) },
+                                badge = if (viewModel.currentUser?.isAdmin == true && activeSessionCount > 0) {
+                                    {
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(CircleShape)
+                                                .background(MaterialTheme.colorScheme.secondaryContainer)
+                                                .padding(horizontal = 8.dp, vertical = 2.dp)
+                                        ) {
+                                            Text(
+                                                text = "$activeSessionCount active",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                            )
+                                        }
+                                    }
+                                } else null,
+                                initiallyExpanded = false,
+                            ) {
+                                // Row count derived from the system-core group
+                                // declaration: the admin-dashboard row drops for
+                                // non-admins, every other declared row renders.
+                                val systemCount = SettingsScreenGroups.systemCore.items.count { item ->
+                                    item.id != "admin_dashboard" || viewModel.currentUser?.isAdmin == true
+                                }
+                                var systemIndex = 0
+                                if (viewModel.currentUser?.isAdmin == true) {
                                     SettingListItem(
-                                        icon = Tabler.Outline.Wand,
-                                        title = stringResource(Res.string.settings_setup_wizard),
-                                        subtitle = stringResource(Res.string.settings_setup_wizard_subtitle),
+                                        icon = Tabler.Outline.Shield,
+                                        title = stringResource(Res.string.settings_admin_dashboard),
+                                        subtitle = stringResource(Res.string.settings_admin_dashboard_subtitle),
                                         index = systemIndex++, count = systemCount,
-                                        onClick = {
-                                            lastClickedSettingId = "setup_wizard"
-                                            onSetupWizard()
-                                        },
+                                        onClick = { openSetting("admin_dashboard") { Route.AdminDashboard } },
                                     )
                                 }
-                            }
-                        }
-
-                        item(key = "item_appearance") {
-                            AnimatedSettingsEntrance(4) {
                                 SettingListItem(
-                                    icon = Tabler.Outline.Palette,
-                                    title = stringResource(Res.string.settings_appearance),
-                                    subtitle = buildAppearanceSummary(preferences),
-                                    index = 0, count = 1,
+                                    icon = Tabler.Outline.Wand,
+                                    title = stringResource(Res.string.settings_setup_wizard),
+                                    subtitle = stringResource(Res.string.settings_setup_wizard_subtitle),
+                                    index = systemIndex++, count = systemCount,
                                     onClick = {
-                                        lastClickedSettingId = "appearance"
-                                        onNavigate(Route.AppearanceSettings(lastClickedSettingId))
+                                        lastClickedSettingId = "setup_wizard"
+                                        onSetupWizard()
                                     },
                                 )
                             }
                         }
 
-                        item(key = "item_playback") {
-                            AnimatedSettingsEntrance(5) {
-                                SettingListItem(
-                                    icon = Tabler.Outline.PlayerPlay,
-                                    title = stringResource(Res.string.settings_playback),
-                                    subtitle = stringResource(Res.string.settings_playback_subtitle, preferences.preferredPlayer.displayName),
-                                    index = 0, count = 1,
-                                    onClick = {
-                                        lastClickedSettingId = "playback"
-                                        onNavigate(Route.PlaybackSettings(lastClickedSettingId))
-                                    },
-                                )
-                            }
+                        settingsSection("item_appearance") {
+                            SettingListItem(
+                                icon = Tabler.Outline.Palette,
+                                title = stringResource(Res.string.settings_appearance),
+                                subtitle = appearanceSummarySubtitle(preferences),
+                                index = 0, count = 1,
+                                onClick = { openSetting("appearance") { Route.AppearanceSettings(it) } },
+                            )
                         }
 
-                        item(key = "item_audio") {
-                            AnimatedSettingsEntrance(6) {
-                                SettingListItem(
-                                    icon = Tabler.Outline.Music,
-                                    title = stringResource(Res.string.settings_audio_player),
-                                    subtitle = stringResource(Res.string.settings_default_speed_value, if (preferences.audioDefaultSpeed == 1.0f) "1x" else "${preferences.audioDefaultSpeed}x"),
-                                    index = 0, count = 1,
-                                    onClick = {
-                                        lastClickedSettingId = "audio"
-                                        onNavigate(Route.AudioSettings(lastClickedSettingId))
-                                    },
-                                )
-                            }
+                        settingsSection("item_playback") {
+                            SettingListItem(
+                                icon = Tabler.Outline.PlayerPlay,
+                                title = stringResource(Res.string.settings_playback),
+                                subtitle = stringResource(Res.string.settings_playback_subtitle, preferences.preferredPlayer.displayName),
+                                index = 0, count = 1,
+                                onClick = { openSetting("playback") { Route.PlaybackSettings(it) } },
+                            )
                         }
 
-                        item(key = "item_language") {
-                            AnimatedSettingsEntrance(7) {
-                                SettingListItem(
-                                    icon = Tabler.Outline.Language,
-                                    title = stringResource(Res.string.settings_language_subtitles),
-                                    subtitle = stringResource(Res.string.settings_language_subtitle, preferences.preferredAudioLanguage ?: stringResource(Res.string.settings_lang_default)),
-                                    index = 0, count = 1,
-                                    onClick = {
-                                        lastClickedSettingId = "language"
-                                        onNavigate(Route.LanguageSettings(lastClickedSettingId))
-                                    },
-                                )
-                            }
+                        settingsSection("item_audio") {
+                            SettingListItem(
+                                icon = Tabler.Outline.Music,
+                                title = stringResource(Res.string.settings_audio_player),
+                                subtitle = stringResource(Res.string.settings_default_speed_value, if (preferences.audioDefaultSpeed == 1.0f) "1x" else "${preferences.audioDefaultSpeed}x"),
+                                index = 0, count = 1,
+                                onClick = { openSetting("audio") { Route.AudioSettings(it) } },
+                            )
                         }
 
-                        item(key = "item_notifications") {
-                            AnimatedSettingsEntrance(8) {
+                        settingsSection("item_language") {
+                            SettingListItem(
+                                icon = Tabler.Outline.Language,
+                                title = stringResource(Res.string.settings_language_subtitles),
+                                subtitle = stringResource(Res.string.settings_language_subtitle, preferences.preferredAudioLanguage ?: stringResource(Res.string.settings_lang_default)),
+                                index = 0, count = 1,
+                                onClick = { openSetting("language") { Route.LanguageSettings(it) } },
+                            )
+                        }
+
+                        // No desktop notification backend exists (the
+                        // NotificationSync seam no-ops there) — entry + screen
+                        // stay Android-only.
+                        if (settingsCapabilities.supportsNotifications) {
+                            settingsSection("item_notifications") {
                                 val notifPrefs = preferences.notificationPreferences
                                 SettingListItem(
                                     icon = Tabler.Outline.Bell,
                                     title = stringResource(Res.string.settings_notifications),
                                     subtitle = if (notifPrefs.enabled) stringResource(Res.string.settings_notifications_checking, notifPrefs.checkFrequency.displayName.lowercase()) else stringResource(Res.string.settings_disabled),
                                     index = 0, count = 1,
-                                    onClick = {
-                                        lastClickedSettingId = "notifications"
-                                        onNavigate(Route.NotificationSettings(lastClickedSettingId))
-                                    },
+                                    onClick = { openSetting("notifications") { Route.NotificationSettings(it) } },
                                 )
                             }
                         }
 
-                        item(key = "item_storage") {
-                            AnimatedSettingsEntrance(9) {
-                                SettingListItem(
-                                    icon = Tabler.Outline.Database,
-                                    title = stringResource(Res.string.settings_downloads_storage),
-                                    subtitle = stringResource(Res.string.settings_cache_subtitle, viewModel.cacheSizeMb),
-                                    index = 0, count = 1,
-                                    onClick = {
-                                        lastClickedSettingId = "storage"
-                                        onNavigate(Route.StorageSettings(lastClickedSettingId))
-                                    },
-                                )
-                            }
-                        }
-                                        item(key = "item_security") {
-                            AnimatedSettingsEntrance(10) {
-                                SettingListItem(
-                                    icon = Tabler.Outline.Lock,
-                                    title = stringResource(Res.string.settings_security),
-                                    subtitle = when {
-                                        preferences.pinLockEnabled && preferences.biometricLockEnabled -> stringResource(Res.string.settings_pin_biometric_on)
-                                        preferences.biometricLockEnabled -> stringResource(Res.string.settings_biometric_on)
-                                        preferences.pinLockEnabled -> stringResource(Res.string.settings_pin_on)
-                                        else -> stringResource(Res.string.settings_lock_off)
-                                    },
-                                    index = 0, count = 1,
-                                    onClick = {
-                                        lastClickedSettingId = "security"
-                                        onNavigate(Route.SecuritySettings(lastClickedSettingId))
-                                    },
-                                )
-                            }
+                        settingsSection("item_storage") {
+                            SettingListItem(
+                                icon = Tabler.Outline.Database,
+                                title = stringResource(Res.string.settings_downloads_storage),
+                                subtitle = stringResource(Res.string.settings_cache_subtitle, viewModel.cacheSizeMb),
+                                index = 0, count = 1,
+                                onClick = { openSetting("storage") { Route.StorageSettings(it) } },
+                            )
                         }
 
-                        item(key = "item_privacy_data") {
-                            AnimatedSettingsEntrance(11) {
-                                SettingListItem(
-                                    icon = Tabler.Outline.ShieldLock,
-                                    title = stringResource(Res.string.settings_privacy_data),
-                                    subtitle = stringResource(Res.string.settings_privacy_data_subtitle),
-                                    index = 0, count = 1,
-                                    onClick = {
-                                        lastClickedSettingId = "privacy_data"
-                                        onNavigate(Route.PrivacyData(lastClickedSettingId))
-                                    },
-                                )
-                            }
+                        settingsSection("item_security") {
+                            SettingListItem(
+                                icon = Tabler.Outline.Lock,
+                                title = stringResource(Res.string.settings_security),
+                                subtitle = when {
+                                    preferences.pinLockEnabled && preferences.biometricLockEnabled -> stringResource(Res.string.settings_pin_biometric_on)
+                                    preferences.biometricLockEnabled -> stringResource(Res.string.settings_biometric_on)
+                                    preferences.pinLockEnabled -> stringResource(Res.string.settings_pin_on)
+                                    else -> stringResource(Res.string.settings_lock_off)
+                                },
+                                index = 0, count = 1,
+                                onClick = { openSetting("security") { Route.SecuritySettings(it) } },
+                            )
                         }
 
-                        item(key = "item_backup") {
-                            AnimatedSettingsEntrance(12) {
-                                SettingListItem(
-                                    icon = Tabler.Outline.DatabaseExport,
-                                    title = stringResource(Res.string.settings_backup_restore),
-                                    subtitle = stringResource(Res.string.settings_backup_restore_subtitle),
-                                    index = 0, count = 1,
-                                    onClick = {
-                                        lastClickedSettingId = "backup"
-                                        onNavigate(Route.BackupSettings(lastClickedSettingId))
-                                    },
-                                )
-                            }
+                        settingsSection("item_privacy_data") {
+                            SettingListItem(
+                                icon = Tabler.Outline.ShieldLock,
+                                title = stringResource(Res.string.settings_privacy_data),
+                                subtitle = stringResource(Res.string.settings_privacy_data_subtitle),
+                                index = 0, count = 1,
+                                onClick = { openSetting("privacy_data") { Route.PrivacyData(it) } },
+                            )
+                        }
+
+                        settingsSection("item_backup") {
+                            SettingListItem(
+                                icon = Tabler.Outline.DatabaseExport,
+                                title = stringResource(Res.string.settings_backup_restore),
+                                subtitle = stringResource(Res.string.settings_backup_restore_subtitle),
+                                index = 0, count = 1,
+                                onClick = { openSetting("backup") { Route.BackupSettings(it) } },
+                            )
                         }
 
                         if (isTv) {
-                            item(key = "group_screensaver") {
-                                AnimatedSettingsEntrance(13) {
-                                    SettingsGroup(
-                                        icon = Tabler.Outline.Moon,
-                                        title = stringResource(Res.string.settings_screensaver),
-                                        summary = {
-                                            val cats = preferences.dreamImageCategories
-                                            remember(cats) {
-                                                cats.joinToString(", ") { it.name.lowercase().replaceFirstChar { c -> c.uppercase() } }
+                            settingsSection("group_screensaver") {
+                                SettingsGroup(
+                                    icon = Tabler.Outline.Moon,
+                                    title = stringResource(Res.string.settings_screensaver),
+                                    summary = {
+                                        val cats = preferences.dreamImageCategories
+                                        remember(cats) {
+                                            cats.joinToString(", ") { it.name.lowercase().replaceFirstChar { c -> c.uppercase() } }
+                                        }
+                                    },
+                                    initiallyExpanded = lastClickedSettingId in SettingsScreenGroups.systemScreensaver.itemIdSet,
+                                ) {
+                                    // Row count derived from the screensaver group
+                                    // declaration — the five declared dream rows are
+                                    // exactly the rows rendered here.
+                                    val dreamTotal = SettingsScreenGroups.systemScreensaver.itemIds.size
+                                    val slideshowIntervalTitle = stringResource(Res.string.settings_slideshow_interval)
+                                    val transitionStyleTitle = stringResource(Res.string.settings_transition_style)
+                                    val transitionCrossfadeLabel = stringResource(Res.string.settings_transition_crossfade)
+                                    val transitionSlideLabel = stringResource(Res.string.settings_transition_slide)
+                                    val transitionNoneLabel = stringResource(Res.string.settings_transition_none)
+                                    SettingToggleItem(
+                                        icon = Tabler.Outline.Typography,
+                                        title = stringResource(Res.string.settings_show_title),
+                                        subtitle = if (preferences.dreamShowTitle) stringResource(Res.string.settings_display_media_title) else stringResource(Res.string.settings_hide_media_title),
+                                        checked = preferences.dreamShowTitle,
+                                        index = 0, count = dreamTotal,
+                                        highlighted = lastClickedSettingId == "screensaver_show_title",
+                                        onCheckedChange = { viewModel.edit { scope -> scope.screensaver.setDreamShowTitle(it) } },
+                                    )
+                                    val categoryMovies = stringResource(Res.string.settings_category_movies)
+                                    val categoryTv = stringResource(Res.string.settings_category_tv)
+                                    val categoryMusic = stringResource(Res.string.settings_category_music)
+                                    SettingListItem(
+                                        icon = Tabler.Outline.Movie,
+                                        title = stringResource(Res.string.settings_categories),
+                                        subtitle = stringResource(Res.string.settings_categories_subtitle),
+                                        trailingText = remember(preferences.dreamImageCategories, categoryMovies, categoryTv, categoryMusic) {
+                                            preferences.dreamImageCategories.joinToString(", ") {
+                                                when (it) {
+                                                    DreamImageCategory.MOVIES -> categoryMovies
+                                                    DreamImageCategory.SERIES -> categoryTv
+                                                    DreamImageCategory.MUSIC -> categoryMusic
+                                                }
                                             }
                                         },
-                                        initiallyExpanded = lastClickedSettingId in SCREENSAVER_GROUP_IDS,
-                                    ) {
-                                        val dreamTotal = 5
-                                        val slideshowIntervalTitle = stringResource(Res.string.settings_slideshow_interval)
-                                        val transitionStyleTitle = stringResource(Res.string.settings_transition_style)
-                                        val transitionCrossfadeLabel = stringResource(Res.string.settings_transition_crossfade)
-                                        val transitionSlideLabel = stringResource(Res.string.settings_transition_slide)
-                                        val transitionNoneLabel = stringResource(Res.string.settings_transition_none)
-                                        SettingToggleItem(
-                                            icon = Tabler.Outline.Typography,
-                                            title = stringResource(Res.string.settings_show_title),
-                                            subtitle = if (preferences.dreamShowTitle) stringResource(Res.string.settings_display_media_title) else stringResource(Res.string.settings_hide_media_title),
-                                            checked = preferences.dreamShowTitle,
-                                            index = 0, count = dreamTotal,
-                                            highlighted = lastClickedSettingId == "screensaver_show_title",
-                                            onCheckedChange = { viewModel.setDreamShowTitle(it) },
-                                        )
-                                        val categoryMovies = stringResource(Res.string.settings_category_movies)
-                                        val categoryTv = stringResource(Res.string.settings_category_tv)
-                                        val categoryMusic = stringResource(Res.string.settings_category_music)
-                                        SettingListItem(
-                                            icon = Tabler.Outline.Movie,
-                                            title = stringResource(Res.string.settings_categories),
-                                            subtitle = stringResource(Res.string.settings_categories_subtitle),
-                                            trailingText = remember(preferences.dreamImageCategories, categoryMovies, categoryTv, categoryMusic) {
-                                                preferences.dreamImageCategories.joinToString(", ") {
-                                                    when (it) {
-                                                        DreamImageCategory.MOVIES -> categoryMovies
-                                                        DreamImageCategory.SERIES -> categoryTv
-                                                        DreamImageCategory.MUSIC -> categoryMusic
-                                                    }
-                                                }
-                                            },
-                                            index = 1, count = dreamTotal,
-                                            highlighted = lastClickedSettingId == "screensaver_categories",
-                                            onClick = {
-                                                val allCats = DreamImageCategory.entries.toSet()
-                                                val current = preferences.dreamImageCategories
-                                                val next = if (current.size == allCats.size) {
-                                                    setOf(DreamImageCategory.MOVIES)
-                                                } else {
-                                                    val cycle = allCats.toList()
-                                                    val nextIndex = current.size
-                                                    cycle.take(nextIndex + 1).toSet()
-                                                }
-                                                viewModel.setDreamImageCategories(next)
-                                            },
-                                        )
-                                        SettingListItem(
-                                            icon = Tabler.Outline.Stopwatch,
-                                            title = stringResource(Res.string.settings_slideshow_interval),
-                                            subtitle = stringResource(Res.string.settings_slideshow_interval_subtitle),
-                                            trailingText = "${preferences.dreamSlideshowIntervalMs / 1000}s",
-                                            index = 2, count = dreamTotal,
-                                            highlighted = lastClickedSettingId == "screensaver_slideshow_interval",
-                                            onClick = {
-                                                activeDialog = PickerState.List(
-                                                    title = slideshowIntervalTitle,
-                                                    items = listOf(5_000L, 10_000L, 15_000L, 30_000L, 60_000L),
-                                                    label = { "${it / 1000}s" },
-                                                    isSelected = { it == preferences.dreamSlideshowIntervalMs },
-                                                    onSelect = { viewModel.setDreamSlideshowIntervalMs(it) },
-                                                )
-                                            },
-                                        )
-                                        SettingToggleItem(
-                                            icon = Tabler.Outline.Wand,
-                                            title = stringResource(Res.string.settings_ken_burns),
-                                            subtitle = if (preferences.dreamKenBurnsEnabled) stringResource(Res.string.settings_ken_burns_on) else stringResource(Res.string.settings_ken_burns_off),
-                                            checked = preferences.dreamKenBurnsEnabled,
-                                            index = 3, count = dreamTotal,
-                                            highlighted = lastClickedSettingId == "screensaver_ken_burns",
-                                            onCheckedChange = { viewModel.setDreamKenBurnsEnabled(it) },
-                                        )
-                                        SettingListItem(
-                                            icon = Tabler.Outline.ArrowRight,
-                                            title = stringResource(Res.string.settings_transition_style),
-                                            subtitle = preferences.dreamTransitionStyle.name,
-                                            trailingText = preferences.dreamTransitionStyle.name,
-                                            index = 4, count = dreamTotal,
-                                            highlighted = lastClickedSettingId == "screensaver_transition_style",
-                                            onClick = {
-                                                val labels = mapOf(
-                                                    DreamTransitionStyle.CROSSFADE to transitionCrossfadeLabel,
-                                                    DreamTransitionStyle.SLIDE to transitionSlideLabel,
-                                                    DreamTransitionStyle.NONE to transitionNoneLabel,
-                                                )
-                                                activeDialog = PickerState.List(
-                                                    title = transitionStyleTitle,
-                                                    items = DreamTransitionStyle.entries,
-                                                    label = { labels[it] ?: it.name },
-                                                    isSelected = { it == preferences.dreamTransitionStyle },
-                                                    onSelect = { viewModel.setDreamTransitionStyle(it) },
-                                                )
-                                            },
-                                        )
-                                    }
+                                        index = 1, count = dreamTotal,
+                                        highlighted = lastClickedSettingId == "screensaver_categories",
+                                        onClick = {
+                                            val allCats = DreamImageCategory.entries.toSet()
+                                            val current = preferences.dreamImageCategories
+                                            val next = if (current.size == allCats.size) {
+                                                setOf(DreamImageCategory.MOVIES)
+                                            } else {
+                                                val cycle = allCats.toList()
+                                                val nextIndex = current.size
+                                                cycle.take(nextIndex + 1).toSet()
+                                            }
+                                            viewModel.edit { scope -> scope.screensaver.setDreamImageCategories(next) }
+                                        },
+                                    )
+                                    SettingListItem(
+                                        icon = Tabler.Outline.Stopwatch,
+                                        title = stringResource(Res.string.settings_slideshow_interval),
+                                        subtitle = stringResource(Res.string.settings_slideshow_interval_subtitle),
+                                        trailingText = "${preferences.dreamSlideshowIntervalMs / 1000}s",
+                                        index = 2, count = dreamTotal,
+                                        highlighted = lastClickedSettingId == "screensaver_slideshow_interval",
+                                        onClick = {
+                                            activeDialog = PickerState.List(
+                                                title = slideshowIntervalTitle,
+                                                items = listOf(5_000L, 10_000L, 15_000L, 30_000L, 60_000L),
+                                                label = { "${it / 1000}s" },
+                                                isSelected = { it == preferences.dreamSlideshowIntervalMs },
+                                                onSelect = { viewModel.edit { scope -> scope.screensaver.setDreamSlideshowIntervalMs(it) } },
+                                            )
+                                        },
+                                    )
+                                    SettingToggleItem(
+                                        icon = Tabler.Outline.Wand,
+                                        title = stringResource(Res.string.settings_ken_burns),
+                                        subtitle = if (preferences.dreamKenBurnsEnabled) stringResource(Res.string.settings_ken_burns_on) else stringResource(Res.string.settings_ken_burns_off),
+                                        checked = preferences.dreamKenBurnsEnabled,
+                                        index = 3, count = dreamTotal,
+                                        highlighted = lastClickedSettingId == "screensaver_ken_burns",
+                                        onCheckedChange = { viewModel.edit { scope -> scope.screensaver.setDreamKenBurnsEnabled(it) } },
+                                    )
+                                    SettingListItem(
+                                        icon = Tabler.Outline.ArrowRight,
+                                        title = stringResource(Res.string.settings_transition_style),
+                                        subtitle = preferences.dreamTransitionStyle.name,
+                                        trailingText = preferences.dreamTransitionStyle.name,
+                                        index = 4, count = dreamTotal,
+                                        highlighted = lastClickedSettingId == "screensaver_transition_style",
+                                        onClick = {
+                                            val labels = mapOf(
+                                                DreamTransitionStyle.CROSSFADE to transitionCrossfadeLabel,
+                                                DreamTransitionStyle.SLIDE to transitionSlideLabel,
+                                                DreamTransitionStyle.NONE to transitionNoneLabel,
+                                            )
+                                            activeDialog = PickerState.List(
+                                                title = transitionStyleTitle,
+                                                items = DreamTransitionStyle.entries,
+                                                label = { labels[it] ?: it.name },
+                                                isSelected = { it == preferences.dreamTransitionStyle },
+                                                onSelect = { viewModel.edit { scope -> scope.screensaver.setDreamTransitionStyle(it) } },
+                                            )
+                                        },
+                                    )
                                 }
                             }
                         }
 
-                        item(key = "item_experimental") {
-                            AnimatedSettingsEntrance(if (isTv) 14 else 13) {
-                                SettingListItem(
-                                    icon = Tabler.Outline.Flask,
-                                    title = stringResource(Res.string.settings_experimental),
-                                    subtitle = buildExperimentalSummary(preferences),
-                                    index = 0, count = 1,
-                                    onClick = {
-                                        lastClickedSettingId = "experimental"
-                                        onNavigate(Route.ExperimentalSettings(lastClickedSettingId))
-                                    },
-                                )
-                            }
+                        settingsSection("item_experimental") {
+                            SettingListItem(
+                                icon = Tabler.Outline.Flask,
+                                title = stringResource(Res.string.settings_experimental),
+                                subtitle = experimentalSummarySubtitle(preferences),
+                                index = 0, count = 1,
+                                onClick = { openSetting("experimental") { Route.ExperimentalSettings(it) } },
+                            )
                         }
 
-                        item(key = "item_integrations") {
-                            AnimatedSettingsEntrance(if (isTv) 15 else 14) {
-                                SettingListItem(
-                                    icon = Tabler.Outline.PlugConnected,
-                                    title = stringResource(Res.string.settings_integrations),
-                                    subtitle = stringResource(Res.string.settings_integrations_subtitle),
-                                    index = 0, count = 1,
-                                    onClick = {
-                                        lastClickedSettingId = "integrations"
-                                        onNavigate(Route.Integrations(lastClickedSettingId))
-                                    },
-                                )
-                            }
+                        settingsSection("item_integrations") {
+                            SettingListItem(
+                                icon = Tabler.Outline.PlugConnected,
+                                title = stringResource(Res.string.settings_integrations),
+                                subtitle = stringResource(Res.string.settings_integrations_subtitle),
+                                index = 0, count = 1,
+                                onClick = { openSetting("integrations") { Route.Integrations(it) } },
+                            )
                         }
 
-                        item(key = "item_about") {
-                            AnimatedSettingsEntrance(if (isTv) 16 else 15) {
-                                SettingListItem(
-                                    icon = Tabler.Outline.InfoCircle,
-                                    title = stringResource(Res.string.settings_about),
-                                    subtitle = stringResource(Res.string.settings_about_subtitle),
-                                    index = 0, count = 1,
-                                    onClick = {
-                                        lastClickedSettingId = "about"
-                                        onNavigate(Route.About)
-                                    },
-                                )
-                            }
+                        settingsSection("item_about") {
+                            SettingListItem(
+                                icon = Tabler.Outline.InfoCircle,
+                                title = stringResource(Res.string.settings_about),
+                                subtitle = stringResource(Res.string.settings_about_subtitle),
+                                index = 0, count = 1,
+                                onClick = { openSetting("about") { Route.About } },
+                            )
                         }
                     }
+                }
                 }
             }
         }
@@ -1402,182 +1808,333 @@ fun SettingsScreen(
     }
 }
 
+// ---------------------------------------------------------------------------
+// Landing-page summary builders — string-assembly policy freed from
+// composition so SettingsSummariesTest (jvmTest) can pin which prefs appear,
+// in what order, the separator, and the contrast-suffix casing without a
+// composer. The builders emit renderable PARTS (resource identity + args,
+// never resolved text): the Compose compiler forbids `stringResource` calls
+// inside non-inline lambdas, so resolution cannot ride a plain resolver
+// lambda — instead the screen resolves each part at composition through the
+// inline `map` below ([SettingsSummaryPart.resolveAtComposition]) and hands
+// the rendered tokens to the pure [joinSummaryTokens] join. Recomposition
+// stays correct: every resource read happens at composition time.
+// ---------------------------------------------------------------------------
+
+/** One renderable piece of a landing-page summary row subtitle. */
+internal sealed interface SettingsSummaryPart {
+    /** Pre-composed literal text (the Title-cased theme-mode name). */
+    data class Literal(val text: String) : SettingsSummaryPart
+
+    /** A plain string-resource token. */
+    data class Token(val resource: StringResource) : SettingsSummaryPart
+
+    /** A formatted string-resource token (the contrast suffix with its cased label). */
+    data class Formatted(val resource: StringResource, val arg: String) : SettingsSummaryPart
+
+    /** A plural resource carrying its own count (features-enabled). */
+    data class Plural(val resource: PluralStringResource, val count: Int) : SettingsSummaryPart
+}
+
+/**
+ * Appearance row subtitle parts: theme mode first (Title-cased enum name),
+ * then the Dynamic / OLED / contrast / Performance tokens for the enabled
+ * prefs. The contrast token suffixes the Title-cased enum name (`Medium
+ * contrast`, `High contrast`) and only appears off-DEFAULT.
+ */
+internal fun appearanceSummaryParts(preferences: SettingsScreenPreferences): List<SettingsSummaryPart> = buildList {
+    add(SettingsSummaryPart.Literal(preferences.themeMode.name.lowercase().replaceFirstChar { it.uppercase() }))
+    if (preferences.dynamicTheming) add(SettingsSummaryPart.Token(Res.string.settings_dynamic_token))
+    if (preferences.oledMode) add(SettingsSummaryPart.Token(Res.string.settings_oled_token))
+    if (preferences.contrastLevel != ContrastLevel.DEFAULT) add(
+        SettingsSummaryPart.Formatted(
+            Res.string.settings_contrast_suffix,
+            preferences.contrastLevel.name.lowercase().replaceFirstChar { it.uppercase() },
+        ),
+    )
+    if (preferences.performanceMode) add(SettingsSummaryPart.Token(Res.string.settings_performance_token))
+}
+
+/**
+ * Experimental row subtitle parts: the early-access placeholder token when
+ * nothing is enabled, otherwise the "%d feature(s) enabled" plural over the
+ * count.
+ */
+internal fun experimentalSummaryParts(preferences: SettingsScreenPreferences): List<SettingsSummaryPart> {
+    val count = preferences.enabledExperimentalFeatures.size
+    return listOf(
+        if (count == 0) SettingsSummaryPart.Token(Res.string.settings_early_access_features)
+        else SettingsSummaryPart.Plural(Res.plurals.settings_features_enabled, count),
+    )
+}
+
+/** Joins rendered summary tokens with the summary separator policy (", "). */
+internal fun joinSummaryTokens(rendered: List<String>): String = rendered.joinToString(", ")
+
+/** Resolves a summary part at composition; called from the inline `map` lambdas below. */
 @Composable
-private fun buildAppearanceSummary(preferences: SettingsScreenPreferences): String {
-    val parts = mutableListOf<String>()
-    parts.add(preferences.themeMode.name.lowercase().replaceFirstChar { it.uppercase() })
-    if (preferences.dynamicTheming) parts.add(stringResource(Res.string.settings_dynamic_token))
-    if (preferences.oledMode) parts.add(stringResource(Res.string.settings_oled_token))
-    if (preferences.contrastLevel != ContrastLevel.DEFAULT) parts.add(stringResource(Res.string.settings_contrast_suffix, preferences.contrastLevel.name.lowercase().replaceFirstChar { it.uppercase() }))
-    if (preferences.performanceMode) parts.add(stringResource(Res.string.settings_performance_token))
-    return parts.joinToString(", ")
+private fun SettingsSummaryPart.resolveAtComposition(): String = when (this) {
+    is SettingsSummaryPart.Literal -> text
+    is SettingsSummaryPart.Token -> stringResource(resource)
+    is SettingsSummaryPart.Formatted -> stringResource(resource, arg)
+    is SettingsSummaryPart.Plural -> pluralStringResource(resource, count, count)
 }
 
 @Composable
-private fun buildExperimentalSummary(preferences: SettingsScreenPreferences): String {
-    val count = preferences.enabledExperimentalFeatures.size
-    return if (count == 0) stringResource(Res.string.settings_early_access_features)
-    else pluralStringResource(Res.plurals.settings_features_enabled, count, count)
-}
+private fun appearanceSummarySubtitle(preferences: SettingsScreenPreferences): String =
+    joinSummaryTokens(appearanceSummaryParts(preferences).map { it.resolveAtComposition() })
+
+@Composable
+private fun experimentalSummarySubtitle(preferences: SettingsScreenPreferences): String =
+    joinSummaryTokens(experimentalSummaryParts(preferences).map { it.resolveAtComposition() })
 
 @Composable
 private fun SettingsProfileBanner(
     userName: String,
+    currentUser: UserInfo?,
     serverAddress: String?,
     isAdmin: Boolean,
-    showAdvanced: Boolean,
-    onToggleAdvanced: () -> Unit,
     onNewsletterClick: () -> Unit,
     onUserManagementClick: () -> Unit,
     onServerManagementClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
-        shape = ShapeCache.smooth24,
-        color = if (LocalIsLightTheme.current) MaterialTheme.colorScheme.surfaceContainerLowest else MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.85f),
-        tonalElevation = 3.dp,
-        shadowElevation = 4.dp,
-        border = BorderStroke(
-            width = 1.dp,
-            color = hairlineBorderColor()
-        ),
-        modifier = modifier.fillMaxWidth()
+    val avatarUrl = remember(serverAddress, currentUser) {
+        if (!serverAddress.isNullOrBlank() && currentUser != null) {
+            val url = buildUserImageUrl(
+                baseUrl = serverAddress,
+                userId = currentUser.id,
+                imageType = "Primary",
+                maxWidth = 160,
+                tag = currentUser.primaryImageTag,
+            )
+            url.ifBlank { null }
+        } else null
+    }
+
+    val isLight = LocalIsLightTheme.current
+    val isTv = LocalTvMode.current
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .then(if (isLight) Modifier.shadow(2.dp, ShapeCache.smooth24) else Modifier)
+            .clip(ShapeCache.smooth24)
+            .background(settingsGroupContainerColor())
+            .lightModeHairlineBorder(ShapeCache.smooth24)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+        // Profile Info Row
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
+            // Avatar (Clean circle without flashy border)
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+                contentAlignment = Alignment.Center,
             ) {
-                Box(
+                if (avatarUrl != null) {
+                    AsyncImage(
+                        model = avatarUrl,
+                        contentDescription = userName,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                } else {
+                    Text(
+                        text = if (userName.isNotBlank()) userName.take(1).uppercase() else "U",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
+
+            Spacer(Modifier.width(12.dp))
+
+            // Name, Role & Server Status
+            Column(modifier = Modifier.weight(1f)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Text(
+                        text = userName,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    RoleBadge(
+                        isAdmin = isAdmin,
+                        horizontalPadding = 6.dp,
+                        verticalPadding = 1.dp,
+                    )
+                }
+
+                Spacer(Modifier.height(3.dp))
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                     modifier = Modifier
-                        .size(46.dp)
                         .clip(CircleShape)
-                        .background(
-                            Brush.linearGradient(
-                                colors = listOf(
-                                    MaterialTheme.colorScheme.primary,
-                                    MaterialTheme.colorScheme.tertiary
-                                )
-                            )
+                        .then(
+                            if (!isTv) Modifier.clickable(onClick = onServerManagementClick)
+                            else Modifier,
                         )
-                        .padding(2.dp)
+                        .padding(vertical = 1.dp),
                 ) {
                     Box(
                         modifier = Modifier
-                            .fillMaxSize()
+                            .size(6.dp)
                             .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primaryContainer),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            text = if (userName.isNotBlank()) userName.take(1).uppercase() else "U",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        )
-                    }
-                }
-
-                Spacer(Modifier.width(12.dp))
-
-                Column(modifier = Modifier.weight(1f)) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Text(
-                            text = userName,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        RoleBadge(
-                            isAdmin = isAdmin,
-                            horizontalPadding = 7.dp,
-                            verticalPadding = 1.dp,
-                        )
-                    }
-
-                    Spacer(Modifier.height(2.dp))
-
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(5.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(7.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFF4CAF50))
-                        )
-                        Text(
-                            text = serverAddress?.takeIf { it.isNotBlank() } ?: stringResource(Res.string.settings_connected_server),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                }
-
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(2.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    SettingsIconButton(
-                        onClick = onUserManagementClick,
-                        icon = Tabler.Outline.Users,
-                        contentDescription = stringResource(Res.string.settings_switch_user),
+                            .background(Color(0xFF4CAF50)),
                     )
-                    SettingsIconButton(
-                        onClick = onNewsletterClick,
-                        icon = Tabler.Outline.Mail,
-                        contentDescription = stringResource(Res.string.settings_newsletter_cd),
+                    Text(
+                        text = serverAddress?.takeIf { it.isNotBlank() } ?: stringResource(Res.string.settings_connected_server),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
             }
 
-            ExpressiveChipContainer(
-                onClick = onToggleAdvanced,
-                containerColor = if (showAdvanced) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.75f) else MaterialTheme.colorScheme.surfaceContainer,
-                forceActive = showAdvanced,
-                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
-                modifier = Modifier.fillMaxWidth()
+            // Trailing Action Icons
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(
-                    imageVector = Tabler.Outline.AdjustmentsHorizontal,
-                    contentDescription = null,
-                    tint = if (showAdvanced) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(16.dp)
+                SettingsIconButton(
+                    onClick = onUserManagementClick,
+                    icon = Tabler.Outline.Users,
+                    contentDescription = stringResource(Res.string.settings_switch_user),
+                    iconSize = 19.dp,
                 )
-                Text(
-                    text = stringResource(Res.string.settings_power_user_mode),
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = if (showAdvanced) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.weight(1f),
+                SettingsIconButton(
+                    onClick = onNewsletterClick,
+                    icon = Tabler.Outline.News,
+                    contentDescription = stringResource(Res.string.settings_newsletter_cd),
+                    iconSize = 19.dp,
                 )
-                CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 0.dp) {
-                    Switch(
-                        checked = showAdvanced,
-                        onCheckedChange = { onToggleAdvanced() },
-                        modifier = Modifier.scale(0.75f),
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
-                            checkedTrackColor = MaterialTheme.colorScheme.primary,
-                            uncheckedThumbColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                            uncheckedTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                        )
-                    )
-                }
             }
+        }
+    }
+}
+
+/**
+ * Compact hero-styled toggle card for Power User Mode. Visually contiguous with the profile
+ * banner above it and the [SettingsGroup] cards below — same smooth24 container,
+ * [settingsGroupContainerColor] fill, hairline border and light-mode shadow — but a single
+ * compact row: the group-header icon tile (tints primary while enabled) and a shrunken switch
+ * instead of a full-height ListItem, so the toggle reads as part of the hero cluster rather
+ * than a detached list row.
+ */
+@Composable
+private fun PowerUserModeCard(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val isLight = LocalIsLightTheme.current
+    val tvFocusState = rememberTvFocusState(focusedScale = 1.02f)
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val pressScale by animateFloatAsState(
+        targetValue = pressScaleValue(isPressed, 0.98f),
+        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
+        label = "powerUserPressScale",
+    )
+    val confirmHaptic = rememberConfirmHaptic()
+
+    val iconTint by animateColorAsState(
+        targetValue = if (checked) MaterialTheme.colorScheme.primary
+        else MaterialTheme.colorScheme.onSurfaceVariant,
+        animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
+        label = "powerUserIconTint",
+    )
+    val iconTileColor by animateColorAsState(
+        targetValue = if (checked) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f),
+        animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
+        label = "powerUserIconTile",
+    )
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .then(if (isLight) Modifier.shadow(2.dp, ShapeCache.smooth24) else Modifier)
+            .graphicsLayer {
+                scaleX = pressScale
+                scaleY = pressScale
+            }
+            .clip(ShapeCache.smooth24)
+            .background(settingsGroupContainerColor())
+            .lightModeHairlineBorder(ShapeCache.smooth24)
+            .then(tvFocusState.focusModifier)
+            .tvFocusIndicator(tvFocusState, ShapeCache.smooth24)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+            ) {
+                confirmHaptic()
+                onCheckedChange(!checked)
+            }
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(30.dp)
+                .clip(ShapeCache.smooth12)
+                .background(iconTileColor),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Tabler.Outline.AdjustmentsHorizontal,
+                contentDescription = null,
+                tint = iconTint,
+                modifier = Modifier.size(17.dp),
+            )
+        }
+
+        Spacer(Modifier.width(10.dp))
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = stringResource(Res.string.settings_power_user_mode),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(Modifier.height(1.dp))
+            Text(
+                text = stringResource(Res.string.settings_power_user_mode_desc),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+
+        Spacer(Modifier.width(8.dp))
+
+        // The row itself is the tap target; the switch is a display-only affordance shrunk
+        // below M3's 48dp minimum so the card stays one compact row tall.
+        CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 0.dp) {
+            Switch(
+                checked = checked,
+                onCheckedChange = null,
+                modifier = Modifier.scale(0.8f),
+            )
         }
     }
 }
@@ -1594,20 +2151,28 @@ private fun RoleBadge(
     horizontalPadding: androidx.compose.ui.unit.Dp = 8.dp,
     verticalPadding: androidx.compose.ui.unit.Dp = 2.dp,
 ) {
-    val container = if (isAdmin) MaterialTheme.colorScheme.tertiaryContainer
-    else MaterialTheme.colorScheme.secondaryContainer
+    val container = if (isAdmin) MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f)
+    else MaterialTheme.colorScheme.surfaceContainerHighest
     val onContainer = if (isAdmin) MaterialTheme.colorScheme.onTertiaryContainer
-    else MaterialTheme.colorScheme.onSecondaryContainer
-    Box(
+    else MaterialTheme.colorScheme.onSurfaceVariant
+    Row(
         modifier = modifier
             .clip(CircleShape)
             .background(container)
-            .padding(horizontal = horizontalPadding, vertical = verticalPadding)
+            .padding(horizontal = horizontalPadding, vertical = verticalPadding),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
+        Icon(
+            imageVector = if (isAdmin) Tabler.Outline.Shield else Tabler.Outline.User,
+            contentDescription = null,
+            tint = onContainer,
+            modifier = Modifier.size(11.dp),
+        )
         Text(
             text = stringResource(if (isAdmin) Res.string.settings_admin_badge else Res.string.settings_member_badge),
             style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Bold,
+            fontWeight = FontWeight.Medium,
             color = onContainer,
         )
     }

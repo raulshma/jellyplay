@@ -15,6 +15,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import com.raulshma.jellyplay.core.datastore.ParsedCache
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
+import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.model.ContinueWatchingClickBehavior
 import com.raulshma.jellyplay.core.model.HomeLayoutPreset
 import com.raulshma.jellyplay.core.model.HomeMode
@@ -422,13 +423,11 @@ class HomeDiscoveryStore constructor(
             hideTopHeaderOnScroll = readBool(prefs, hideTopHeaderOnScrollKey, false),
         )
 
-        private fun readHomeMode(prefs: Preferences): HomeMode = try {
-            HomeMode.valueOf(prefs[homeModeKey] ?: HomeMode.VIDEO.name)
-        } catch (_: Exception) { HomeMode.VIDEO }
+        private fun readHomeMode(prefs: Preferences): HomeMode =
+            prefs[homeModeKey].toEnumOrNull() ?: HomeMode.VIDEO
 
-        private fun readContinueWatchingClickBehavior(prefs: Preferences): ContinueWatchingClickBehavior = try {
-            ContinueWatchingClickBehavior.valueOf(prefs[continueWatchingClickBehaviorKey] ?: ContinueWatchingClickBehavior.DETAILS.name)
-        } catch (_: Exception) { ContinueWatchingClickBehavior.DETAILS }
+        private fun readContinueWatchingClickBehavior(prefs: Preferences): ContinueWatchingClickBehavior =
+            prefs[continueWatchingClickBehaviorKey].toEnumOrNull() ?: ContinueWatchingClickBehavior.DETAILS
 
         private fun readEnabledHomeSectionTypes(prefs: Preferences): Set<HomeSectionType> = cachedJson(
             raw = prefs[enabledSectionTypesKey],

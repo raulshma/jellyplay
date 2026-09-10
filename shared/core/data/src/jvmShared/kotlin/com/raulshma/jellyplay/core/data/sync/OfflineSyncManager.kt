@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.sync
 
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.DownloadArtifacts
@@ -7,6 +8,7 @@ import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineDownloadWriter
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.database.dao.OfflineMediaDao
 import com.raulshma.jellyplay.core.database.dao.SyncBaselineDao
 import com.raulshma.jellyplay.core.database.entity.SyncBaselineEntity
@@ -15,6 +17,8 @@ import com.raulshma.jellyplay.core.model.OfflineSyncState
 import com.raulshma.jellyplay.core.model.ResyncBatchProgress
 import com.raulshma.jellyplay.core.model.ResyncCheckResult
 import com.raulshma.jellyplay.core.model.ResyncItemProgress
+import com.raulshma.jellyplay.core.concurrency.mapConcurrent
+import com.raulshma.jellyplay.core.data.util.SQLITE_HOST_VARIABLE_CHUNK_SIZE
 import com.raulshma.jellyplay.core.model.ResyncCategory
 import com.raulshma.jellyplay.core.model.ResyncOptions
 import com.raulshma.jellyplay.core.model.ResyncPhase
@@ -25,14 +29,11 @@ import com.raulshma.jellyplay.core.model.SyncStatus
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import java.io.File
 
@@ -78,6 +79,12 @@ class OfflineSyncManager(
     private val offlineModeManager: OfflineModeManager,
     private val playbackRepository: PlaybackRepository,
     private val appScope: CoroutineScope,
+    /**
+     * Clock seam for the freshness decisions: the [SYNC_TTL_MS] gate compares
+     * the persisted `lastSyncedAt` against NOW, and the post-resync baseline
+     * write stamps the same clock — a fake pins the TTL ladder in tests.
+     */
+    private val timeSource: TimeSource,
 ) {
     private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -87,7 +94,7 @@ class OfflineSyncManager(
     init {
         // Clear any `syncChecking=1` markers left by a process death mid-check
         // so they don't render as a stuck "checking…" badge forever.
-        ioScope.launch { runCatching { syncBaselineDao.clearAllCheckingFlags() } }
+        ioScope.launch { runCatchingRethrowingCancellation { syncBaselineDao.clearAllCheckingFlags() } }
     }
 
     // ── Decision orchestration (check / resync) ───────────────────────────────
@@ -118,7 +125,7 @@ class OfflineSyncManager(
             return ResyncCheckResult(itemId, OfflineSyncState(SyncStatus.UNKNOWN))
         }
 
-        val now = System.currentTimeMillis()
+        val now = timeSource.nowEpochMillis()
         val lastSynced = baseline.lastSyncedAt
         if (!force && lastSynced != null && now - lastSynced < SYNC_TTL_MS) {
             return ResyncCheckResult(itemId, baseline.toOfflineSyncState())
@@ -191,12 +198,10 @@ class OfflineSyncManager(
         if (itemIds.isEmpty()) return@withContext emptyList()
         // Chunked like SeenMediaRepositoryImpl's IN queries: Android SQLite caps
         // a statement at 999 bound params, and the item list is uncapped.
-        val baselinesById = itemIds.chunked(BASELINE_QUERY_CHUNK_SIZE)
+        val baselinesById = itemIds.chunked(SQLITE_HOST_VARIABLE_CHUNK_SIZE)
             .flatMap { syncBaselineDao.getBaselines(it) }
             .associateBy { it.id }
-        itemIds.map { id ->
-            async { checkPermits.withPermit { checkForUpdates(id, force, baselinesById[id]) } }
-        }.awaitAll()
+        checkPermits.mapConcurrent(itemIds) { checkForUpdates(it, force, baselinesById[it]) }
     }
 
     /**
@@ -392,7 +397,7 @@ class OfflineSyncManager(
                     mediaSourceId = freshBaseline.mediaSourceId,
                     mediaSizeBytes = freshBaseline.mediaSizeBytes,
                     state = recheck.state,
-                    lastSyncedAt = System.currentTimeMillis(),
+                    lastSyncedAt = timeSource.nowEpochMillis(),
                     error = false,
                 )
             )
@@ -542,8 +547,6 @@ class OfflineSyncManager(
         const val SYNC_TTL_MS = 60L * 60 * 1000
         // Caps concurrent detail fetches during a batch check.
         private val checkPermits = Semaphore(permits = 4)
-        // SQLite allows at most 999 bound params per statement; stay safely under.
-        private const val BASELINE_QUERY_CHUNK_SIZE = 900
     }
 }
 

@@ -7,7 +7,7 @@ import org.koin.dsl.module
 
 /**
  * Koin construction owner for the onboarding wizard (docs/kmp-migration-plan.md
- * §Phase V3 conveyor). The HiltViewModel/@Inject annotations were stripped at
+ *  conveyor). The HiltViewModel/@Inject annotations were stripped at
  * the move — Koin is the single constructor owner (one framework per type).
  * All four ctor deps are Koin-native on BOTH platforms (calendar/requests
  * class — zero Hilt interop):

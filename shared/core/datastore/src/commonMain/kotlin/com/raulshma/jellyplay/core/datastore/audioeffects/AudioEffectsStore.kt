@@ -11,6 +11,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.raulshma.jellyplay.core.datastore.ParsedCache
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
+import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.EqualizerPreset
 import com.raulshma.jellyplay.core.model.EqualizerSettings
@@ -95,37 +96,17 @@ class AudioEffectsStore constructor(
         }
         return AudioEffectsSlice(
             dialogueBoostEnabled = PreferenceCodec.readBool(prefs, Keys.DIALOGUE_BOOST_ENABLED, "dialogue_boost_enabled", false),
-            dialogueBoostStrength = try {
-                EffectStrength.valueOf(prefs[Keys.DIALOGUE_BOOST_STRENGTH] ?: EffectStrength.MODERATE.name)
-            } catch (_: Exception) {
-                EffectStrength.MODERATE
-            },
+            dialogueBoostStrength = prefs[Keys.DIALOGUE_BOOST_STRENGTH].toEnumOrNull() ?: EffectStrength.MODERATE,
             equalizerEnabled = PreferenceCodec.readBool(prefs, Keys.EQUALIZER_ENABLED, "equalizer_enabled", false),
             equalizerSettings = equalizerSettings ?: EqualizerSettings(),
-            equalizerPreset = try {
-                EqualizerPreset.valueOf(prefs[Keys.EQUALIZER_PRESET] ?: EqualizerPreset.FLAT.name)
-            } catch (_: Exception) {
-                EqualizerPreset.FLAT
-            },
+            equalizerPreset = prefs[Keys.EQUALIZER_PRESET].toEnumOrNull() ?: EqualizerPreset.FLAT,
             nightModeEnabled = PreferenceCodec.readBool(prefs, Keys.NIGHT_MODE_ENABLED, "night_mode_enabled", false),
-            nightModeStrength = try {
-                EffectStrength.valueOf(prefs[Keys.NIGHT_MODE_STRENGTH] ?: EffectStrength.MODERATE.name)
-            } catch (_: Exception) {
-                EffectStrength.MODERATE
-            },
+            nightModeStrength = prefs[Keys.NIGHT_MODE_STRENGTH].toEnumOrNull() ?: EffectStrength.MODERATE,
             bassBoostEnabled = PreferenceCodec.readBool(prefs, Keys.BASS_BOOST_ENABLED, "bass_boost_enabled", false),
-            bassBoostStrength = try {
-                EffectStrength.valueOf(prefs[Keys.BASS_BOOST_STRENGTH] ?: EffectStrength.MODERATE.name)
-            } catch (_: Exception) {
-                EffectStrength.MODERATE
-            },
+            bassBoostStrength = prefs[Keys.BASS_BOOST_STRENGTH].toEnumOrNull() ?: EffectStrength.MODERATE,
             virtualizerEnabled = PreferenceCodec.readBool(prefs, Keys.VIRTUALIZER_ENABLED, "virtualizer_enabled", false),
             virtualizerStrength = PreferenceCodec.readInt(prefs, Keys.VIRTUALIZER_STRENGTH, "virtualizer_strength", 500),
-            reverbPreset = try {
-                ReverbPreset.valueOf(prefs[Keys.REVERB_PRESET] ?: ReverbPreset.NONE.name)
-            } catch (_: Exception) {
-                ReverbPreset.NONE
-            },
+            reverbPreset = prefs[Keys.REVERB_PRESET].toEnumOrNull() ?: ReverbPreset.NONE,
             lrBalance = PreferenceCodec.readFloat(prefs, Keys.LR_BALANCE, "lr_balance", 0f),
             autoEqByGenre = PreferenceCodec.readBool(prefs, Keys.AUTO_EQ_BY_GENRE, "auto_eq_by_genre", false),
             pitchSemitones = PreferenceCodec.readFloat(prefs, Keys.PITCH_SEMITONES, "pitch_semitones", 0f),

@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.music.playlists
 
 import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.model.PlaylistItem
 import com.raulshma.jellyplay.core.ui.components.UndoableAction
 import com.raulshma.jellyplay.core.ui.components.undoActionChannel
@@ -11,6 +12,7 @@ import kotlinx.coroutines.flow.receiveAsFlow
 
 class PlaylistDetailViewModel(
     private val mediaRepository: MediaRepository,
+    private val playlistRepository: PlaylistRepository,
     private val audioQueueFacade: AudioQueueFacade,
 ) : JellyPlayViewModel() {
 
@@ -43,14 +45,14 @@ class PlaylistDetailViewModel(
             _isLoading.value = true
             _error.value = null
             if (playlistName == null) {
-                val itemsDeferred = async { mediaRepository.getPlaylistItems(playlistId, limit = 200) }
+                val itemsDeferred = async { playlistRepository.getPlaylistItems(playlistId, limit = 200) }
                 val nameDeferred = async { mediaRepository.getMediaDetail(playlistId, force = force) }
                 itemsDeferred.await()
                     .onSuccess { _items.value = it }
                     .onFailure { _error.value = it.message }
                 nameDeferred.await().onSuccess { _playlistName.value = it.item.name }
             } else {
-                mediaRepository.getPlaylistItems(playlistId, limit = 200)
+                playlistRepository.getPlaylistItems(playlistId, limit = 200)
                     .onSuccess {
                         _items.value = it
                         _playlistName.value = playlistName
@@ -86,7 +88,7 @@ class PlaylistDetailViewModel(
         launch {
             _isMutating.value = true
             _error.value = null
-            mediaRepository.removeItemsFromPlaylist(currentId, listOf(entryId))
+            playlistRepository.removeItemsFromPlaylist(currentId, listOf(entryId))
                 .onFailure { _error.value = it.message ?: "Failed to remove from playlist" }
                 .onSuccess {
                     _undoActions.trySend(
@@ -108,7 +110,7 @@ class PlaylistDetailViewModel(
         launch {
             _isMutating.value = true
             _error.value = null
-            mediaRepository.addItemsToPlaylist(currentId, listOf(item.id))
+            playlistRepository.addItemsToPlaylist(currentId, listOf(item.id))
                 .onSuccess { load(currentId, playlistName) }
                 .onFailure { _error.value = it.message ?: "Failed to restore to playlist" }
             _isMutating.value = false
@@ -141,7 +143,7 @@ class PlaylistDetailViewModel(
         launch {
             _isMutating.value = true
             _error.value = null
-            mediaRepository.movePlaylistItem(currentId, entryId, newIndex)
+            playlistRepository.movePlaylistItem(currentId, entryId, newIndex)
                 .onFailure {
                     _error.value = it.message ?: "Failed to reorder playlist"
                     // Roll back to the server's authoritative order.

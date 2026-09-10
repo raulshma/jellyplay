@@ -9,7 +9,7 @@ import coil3.PlatformContext
  *
  * Android keeps the original Coil+Palette pipeline verbatim. Desktop returns
  * null until its classifier lands with the desktop shell polish pass (plan
- * §Phase V1/V2); callers already render the fallback color.
+ * §/V2); callers already render the fallback color.
  */
 internal expect suspend fun extractDominantColor(context: PlatformContext, imageUrl: String): Color?
 

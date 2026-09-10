@@ -1,8 +1,8 @@
 package com.raulshma.jellyplay.core.datastore
 
 /**
- * wasm actual is a placeholder: web v1 ships no PIN lock (plan §Phase W scope
- * cut) and the stdlib exposes no synchronous PBKDF2. Phase W either gates the
+ * wasm actual is a placeholder: web v1 ships no PIN lock (a scope
+ * cut) and the stdlib exposes no synchronous PBKDF2. The client either gates the
  * PIN feature off at the UI layer or ports hashing to WebCrypto — until then
  * every call throws rather than silently downgrading to a weak hash.
  */

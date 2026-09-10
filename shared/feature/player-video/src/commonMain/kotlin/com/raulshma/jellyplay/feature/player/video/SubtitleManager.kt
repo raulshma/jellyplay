@@ -1,8 +1,10 @@
 package com.raulshma.jellyplay.feature.player.video
 
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStore
+import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleFormatCatalog
 import com.raulshma.jellyplay.core.data.repository.SubtitleProviderRepository
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaStream
@@ -85,17 +87,17 @@ data class MediaDetailRefresh(
  *
  * File reads (`queryFileSizeBytes` / `readAndEncode`) live here because they
  * only need the [SubtitleContentGateway] seam; they are private to this
- * class. (Wave 8C: moved to commonMain — SAF/document Uri params are strings
+ * class. (moved to commonMain — SAF/document Uri params are strings
  * at the API boundary, so the screens keep the string forms end to end.)
  */
 internal class SubtitleManager(
-    /** Content-URI IO seam (wave 8C): androidMain impl reads via ContentResolver. */
+    /** Content-URI IO seam: androidMain impl reads via ContentResolver. */
     private val contentGateway: SubtitleContentGateway,
     private val playbackRepository: PlaybackRepository,
     private val mediaRepository: MediaRepository,
     private val subtitleProviderRepository: SubtitleProviderRepository,
     private val streamingSubtitleStore: StreamingSubtitleStore,
-    /** User-feedback seam (wave 8C): androidMain bridge posts to the legacy UserMessageBus. */
+    /** User-feedback seam: androidMain bridge posts to the legacy UserMessageBus. */
     private val userMessageBus: PlayerVideoMessageBus,
     private val scope: CoroutineScope,
     private val addExternalSubtitle: (SubtitleSource) -> Unit,
@@ -531,13 +533,7 @@ internal class SubtitleManager(
 
     fun addLocalSubtitle(uri: String, fileName: String) {
         val ext = fileName.substringAfterLast('.', "").lowercase()
-        val codec = when (ext) {
-            "srt" -> "srt"
-            "ass", "ssa" -> "ass"
-            "vtt" -> "vtt"
-            "ttml", "dfxp" -> "ttml"
-            else -> null
-        }
+        val codec = SubtitleFormatCatalog.codecForExtension(ext)
 
         val label = fileName.substringBeforeLast('.').ifBlank { "Local subtitle" }
         val source = SubtitleSource(
@@ -598,6 +594,30 @@ internal class SubtitleManager(
         providerSearchJob?.cancel()
         remoteSubtitlesJob?.cancel()
         _state.value = SubtitleState()
+    }
+
+    /**
+     * The single subtitle-hub open cascade: optionally reset the
+     * search/cultures slice first ([resetFirst] — the overflow "Subtitles"
+     * entry's "stale results don't leak across items" reset), then run the
+     * three loads in the screen's historical order — [loadRemoteSubtitles],
+     * [loadSubtitleCultures], [loadConfiguredProviders].
+     *
+     * Formerly hand-copied at three `VideoPlayerScreen` sites (the Tracks-tab
+     * click, the overflow click, and the sheet router's LaunchedEffect),
+     * which double-fetched the server-default list on every open: the click
+     * cascade ran, then the router effect cancelled and re-fetched. The
+     * router's LaunchedEffect is now the sheet's SINGLE load trigger — the
+     * click sites only route — so one open costs one remote request.
+     * Declared timing delta: the fetch starts at sheet COMPOSITION rather
+     * than at click (a sub-frame delta; the hub's loading spinner already
+     * covers the in-flight window).
+     */
+    fun openSubtitleHub(resetFirst: Boolean) {
+        if (resetFirst) resetSubtitleManagerState()
+        loadRemoteSubtitles()
+        loadSubtitleCultures()
+        loadConfiguredProviders()
     }
 
     /**
@@ -772,7 +792,7 @@ internal class SubtitleManager(
                     ensureActive()
                     fileResult.fold(
                         onSuccess = { file ->
-                            val codec = codecForFormat(file.format)
+                            val codec = SubtitleFormatCatalog.codecForExtension(file.format)
                             // Persist durably (filesDir, survives replay) so the
                             // subtitle is usable on-device even when the server is
                             // unreachable. The returned SavedSubtitle resolves to
@@ -798,7 +818,7 @@ internal class SubtitleManager(
                                 url = durableFile.toURI().toString(),
                                 label = result.displayName,
                                 language = result.language,
-                                mimeType = mimeForCodec(codec),
+                                mimeType = SubtitleFormatCatalog.mapCodecToMime(codec),
                                 codec = codec,
                                 isDefault = false,
                                 isForced = result.isForced,
@@ -823,7 +843,7 @@ internal class SubtitleManager(
                             // local durable copy). Failure here is NOT fatal — the
                             // durable on-device copy still backs the side-load and
                             // survives replay via the streaming-subtitle store.
-                            // KMP seam (wave 8C): java.util.Base64 replaces
+                            // KMP seam: java.util.Base64 replaces
                             // android.util.Base64.NO_WRAP — identical output.
                             val base64 = java.util.Base64.getEncoder().encodeToString(file.bytes)
                             val preUploadExternalIndices = getMediaStreams().externalSubtitleIndices()
@@ -895,22 +915,6 @@ internal class SubtitleManager(
         }
     }
 
-    private fun codecForFormat(format: String?): String? = when (format?.lowercase()) {
-        "srt", "subrip" -> "srt"
-        "ass", "ssa" -> "ass"
-        "vtt", "webvtt" -> "vtt"
-        "ttml", "dfxp" -> "ttml"
-        else -> null
-    }
-
-    private fun mimeForCodec(codec: String?): String? = when (codec) {
-        "srt" -> "application/x-subrip"
-        "ass" -> "text/x-ssa"
-        "vtt" -> "text/vtt"
-        "ttml" -> "application/ttml+xml"
-        else -> null
-    }
-
     /**
      * Seeds [SubtitleState.defaultSearchLanguage] from the user's preferred
      * subtitle language (ISO 639-2/3). The former projection lived in
@@ -939,30 +943,39 @@ internal class SubtitleManager(
         val itemId = getCurrentItemId() ?: return
         _state.update { it.copy(isUploadingSubtitle = true) }
         scope.launch {
-            val result = runCatching {
-                withContext(Dispatchers.IO) {
-                    val size = queryFileSizeBytes(uri)
-                    if (size in 1..MAX_SUBTITLE_UPLOAD_BYTES) {
-                        // Expected path: a real subtitle file well under the cap.
-                        readAndEncode(uri)
-                    } else if (size > MAX_SUBTITLE_UPLOAD_BYTES) {
-                        throw java.io.IOException("Subtitle file is too large (${size / 1024} KB). Limit is ${MAX_SUBTITLE_UPLOAD_BYTES / 1024} KB.")
-                    } else {
-                        // SIZE unknown (some providers return 0/null) — read the file
-                        // but reject it if it is genuinely empty. A 0-byte pick is
-                        // never a usable subtitle and would surface as a confusing
-                        // server error after Base64-encoding an empty string.
-                        val bytes = readBytes(uri)
-                        if (bytes.isEmpty()) {
-                            throw java.io.IOException("Selected subtitle file is empty")
+            // Cancellation-rethrowing variants: the suspending stages here (the
+            // IO read and the server upload) must propagate
+            // CancellationException — a bare runCatching/mapCatching would mask
+            // structured cancellation as a failed upload. The spinner reset
+            // rides a finally around the upload block alone: it lands as soon
+            // as the upload settles (the old fall-through position) and still
+            // fires on the cancelled path the rethrow introduced.
+            val result = try {
+                runCatchingRethrowingCancellation {
+                    val base64 = withContext(Dispatchers.IO) {
+                        val size = queryFileSizeBytes(uri)
+                        if (size in 1..MAX_SUBTITLE_UPLOAD_BYTES) {
+                            // Expected path: a real subtitle file well under the cap.
+                            readAndEncode(uri)
+                        } else if (size > MAX_SUBTITLE_UPLOAD_BYTES) {
+                            throw java.io.IOException("Subtitle file is too large (${size / 1024} KB). Limit is ${MAX_SUBTITLE_UPLOAD_BYTES / 1024} KB.")
+                        } else {
+                            // SIZE unknown (some providers return 0/null) — read the file
+                            // but reject it if it is genuinely empty. A 0-byte pick is
+                            // never a usable subtitle and would surface as a confusing
+                            // server error after Base64-encoding an empty string.
+                            val bytes = readBytes(uri)
+                            if (bytes.isEmpty()) {
+                                throw java.io.IOException("Selected subtitle file is empty")
+                            }
+                            java.util.Base64.getEncoder().encodeToString(bytes)
                         }
-                        java.util.Base64.getEncoder().encodeToString(bytes)
                     }
+                    playbackRepository.uploadSubtitle(itemId, base64, fileName, language, isForced, isHearingImpaired).getOrThrow()
                 }
-            }.mapCatching { base64 ->
-                playbackRepository.uploadSubtitle(itemId, base64, fileName, language, isForced, isHearingImpaired).getOrThrow()
+            } finally {
+                _state.update { it.copy(isUploadingSubtitle = false) }
             }
-            _state.update { it.copy(isUploadingSubtitle = false) }
             result.onSuccess {
                 // Refresh media detail so the uploaded track surfaces in the
                 // subtitle track list — same approach as downloadSubtitle().

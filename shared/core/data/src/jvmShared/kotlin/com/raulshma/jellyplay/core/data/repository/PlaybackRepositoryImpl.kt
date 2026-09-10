@@ -20,8 +20,10 @@ import com.raulshma.jellyplay.core.model.ResolvedPlayback
 import com.raulshma.jellyplay.core.model.TtlCache
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.data.log.Log
+import com.raulshma.jellyplay.core.data.concurrency.SingleFlightFetcher
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import java.util.concurrent.atomic.AtomicLong
 
 class PlaybackRepositoryImpl(
     private val apiClient: JellyfinApiClient,
@@ -35,6 +37,19 @@ class PlaybackRepositoryImpl(
     private val homeSession: HomeSession,
     /** Registers the segments cache for wholesale clears on identity change. */
     private val sessionCacheRegistry: SessionCacheRegistry,
+    /**
+     * Playback-position writes (a delivered or staged STOP) mutate the same
+     * served fields as a played/favorite flip (resume position, Continue
+     * Watching, episode rows), so the stop path purges the repository's
+     * user-data caches through the same seam those writes use.
+     */
+    private val mediaCacheInvalidation: MediaRepositoryCacheInvalidation,
+    /**
+     * Deferred cross-repository edge: the stop path announces confirmed
+     * position writes on the user-data-change flow so open screens heal even
+     * without a WS echo. Lazy keeps the construction graph acyclic.
+     */
+    private val mediaRepository: Lazy<MediaRepository>,
 ) : PlaybackRepository {
 
     private val segmentsCache = TtlCache<List<MediaSegment>>(
@@ -42,36 +57,44 @@ class PlaybackRepositoryImpl(
         ttlMs = SEGMENTS_CACHE_TTL_MS,
     )
 
+    // Single-flight dedup for the segments read (the MediaRepositoryImpl
+    // detail-cache pattern): a player surface that opens the same item from
+    // two entry points near-simultaneously previously fired two full
+    // getMediaSegments + intro/credit fallback waves, because TtlCache's
+    // get-check-put is not atomic. The epoch is shared with
+    // [invalidateSegmentsCache] so a per-item invalidation mid-flight also
+    // vetoes the racing fetch's write-back.
+    private val segmentsEpoch = AtomicLong(0L)
+    private val segmentsFetcher = SingleFlightFetcher(segmentsCache, segmentsEpoch)
+
     init {
         sessionCacheRegistry.registerCaches("playback", segmentsCache)
+        // Doctrine parity with MediaRepositoryImpl's DetailCacheGroup (see its
+        // registryCaches KDoc): the registry's plain wholesale clear reclaims
+        // the previous identity's segments entries, but only the epoch bump
+        // expressed here can stop an in-flight previous-identity fetch from
+        // writing its (now stale) result back into the just-cleared cache —
+        // where it would sit pinned for the full TTL if the user switches
+        // back to that identity.
+        sessionCacheRegistry.registerAction("playback-identity-clear") {
+            segmentsEpoch.incrementAndGet()
+        }
     }
 
-    override suspend fun reportPlaybackStart(info: PlaybackStartInfo): Result<Unit> {
-        // Offline (or a transient HTTP failure): stage the event so the
-        // PlaybackSyncWorker can replay it on reconnect. Report success back
-        // to the caller so it does not double-enqueue or surface an error UI.
-        if (offlineModeManager.isOffline) {
+    override suspend fun reportPlaybackStart(info: PlaybackStartInfo): Result<Unit> = reportOrStage(
+        stage = {
             outbox.enqueueStart(
                 itemId = info.itemId,
                 sessionId = info.sessionId,
                 playMethod = info.playMethod,
                 startPositionTicks = info.startPositionTicks,
             )
-            return Result.success(Unit)
-        }
-        return apiClient.reportPlaybackStart(info.itemId, info.sessionId, info.playMethod)
-            .onFailure {
-                outbox.enqueueStart(
-                    itemId = info.itemId,
-                    sessionId = info.sessionId,
-                    playMethod = info.playMethod,
-                    startPositionTicks = info.startPositionTicks,
-                )
-            }
-    }
+        },
+        send = { apiClient.reportPlaybackStart(info.itemId, info.sessionId, info.playMethod) },
+    )
 
-    override suspend fun reportPlaybackProgress(progress: PlaybackProgress): Result<Unit> {
-        if (offlineModeManager.isOffline) {
+    override suspend fun reportPlaybackProgress(progress: PlaybackProgress): Result<Unit> = reportOrStage(
+        stage = {
             outbox.enqueueProgress(
                 itemId = progress.itemId,
                 sessionId = progress.sessionId,
@@ -80,45 +103,78 @@ class PlaybackRepositoryImpl(
                 playMethod = progress.playMethod,
                 mediaSourceId = progress.mediaSourceId,
             )
-            return Result.success(Unit)
-        }
-        return apiClient.reportPlaybackProgress(
-            progress.itemId,
-            progress.sessionId,
-            progress.positionTicks,
-            progress.isPaused,
-            progress.playMethod,
-        ).onFailure {
-            outbox.enqueueProgress(
-                itemId = progress.itemId,
-                sessionId = progress.sessionId,
-                positionTicks = progress.positionTicks,
-                isPaused = progress.isPaused,
-                playMethod = progress.playMethod,
-                mediaSourceId = progress.mediaSourceId,
+        },
+        send = {
+            apiClient.reportPlaybackProgress(
+                progress.itemId,
+                progress.sessionId,
+                progress.positionTicks,
+                progress.isPaused,
+                progress.playMethod,
             )
-        }
-    }
+        },
+    )
 
     override suspend fun reportPlaybackStopped(
         itemId: String,
         sessionId: String,
         positionTicks: Long,
     ): Result<Unit> {
+        // Pre-send purge pairs with the post-send one below — the same double
+        // eviction the played/favorite wrapper runs around its write: a home
+        // fetch in flight across the send must not repopulate the stale rows
+        // after the post-send purge.
+        mediaCacheInvalidation.invalidateForUserDataChange(itemId)
+        val result = reportOrStage(
+            stage = { outbox.enqueueStop(itemId, sessionId, positionTicks) },
+            send = {
+                apiClient.reportPlaybackStopped(itemId, sessionId, positionTicks).onSuccess {
+                    // A delivered STOP supersedes any pending START/PROGRESS/STOP for
+                    // this item — the server now has the authoritative final position.
+                    // Scoped to telemetry only: a pending PLAYED/UNPLAYED flip is an
+                    // orthogonal user intent and must still drain.
+                    outbox.deletePlaybackTelemetryForItem(itemId)
+                }
+            },
+        )
+        // The item's resume position changed (or is pending in the outbox, in
+        // which case the local mirror already reflects it): purge the caches
+        // that serve it — the item's detail cluster and its series' episode
+        // catalogue — so no surface shows the pre-playback position until the
+        // TTL expires. Deliberately NOT the per-tick progress reports: those
+        // change nothing queryable until the session ends, and purging on
+        // every 10s tick would thrash the caches. The home sections cache is
+        // also untouched here (scroll/flicker-sensitive; it heals through the
+        // announcement below + the consumer's throttled forced refresh).
+        mediaCacheInvalidation.invalidateForUserDataChange(itemId)
+        // A delivered STOP is a confirmed user-data write (the resume point
+        // moved): announce it on the same flow server WS pushes use, so home
+        // heals even when the socket is down. Offline-staged stops announce
+        // through the outbox drain instead (which already does).
+        if (!offlineModeManager.isOffline && result.isSuccess) {
+            mediaRepository.value.notifyUserDataChanged(listOf(itemId))
+        }
+        return result
+    }
+
+    /**
+     * Stage-or-send shared by the three telemetry reports: offline, [stage]
+     * enqueues the event so the PlaybackSyncWorker can replay it on reconnect
+     * and success is reported back so the caller does not double-enqueue or
+     * surface an error UI; online, [send] reports straight through and the
+     * SAME [stage] payload is enqueued only on failure — the enqueue argument
+     * list is declared exactly once, at the [stage] parameter.
+     */
+    private suspend fun reportOrStage(
+        stage: suspend () -> Unit,
+        send: suspend () -> Result<Unit>,
+    ): Result<Unit> {
         if (offlineModeManager.isOffline) {
-            outbox.enqueueStop(itemId, sessionId, positionTicks)
+            stage()
             return Result.success(Unit)
         }
-        val result = apiClient.reportPlaybackStopped(itemId, sessionId, positionTicks)
-        if (result.isSuccess) {
-            // A delivered STOP supersedes any pending START/PROGRESS/STOP for
-            // this item — the server now has the authoritative final position.
-            // Scoped to telemetry only: a pending PLAYED/UNPLAYED flip is an
-            // orthogonal user intent and must still drain.
-            outbox.deletePlaybackTelemetryForItem(itemId)
-        } else {
-            outbox.enqueueStop(itemId, sessionId, positionTicks)
-        }
+        val result = send()
+        if (result.isFailure) stage()
         return result
     }
 
@@ -323,76 +379,70 @@ class PlaybackRepositoryImpl(
     override suspend fun fetchActiveTranscodeReasons(itemId: String): List<String> =
         apiClient.fetchActiveTranscodeReasons(itemId).getOrDefault(emptyList())
 
-    override suspend fun getMediaSegments(itemId: String): Result<List<MediaSegment>> {
-        val identity = homeSession.cacheIdentity()
-        val cached = segmentsCache.get(identity, itemId)
-        if (cached != null) {
-            return Result.success(cached)
-        }
+    override suspend fun getMediaSegments(itemId: String): Result<List<MediaSegment>> =
+        segmentsFetcher.getOrFetchStorable({ homeSession.cacheIdentity() }, itemId) {
+            val segmentsResult = apiClient.getMediaSegments(itemId)
+            val segments = segmentsResult.getOrDefault(emptyList())
+            if (segments.isNotEmpty()) {
+                return@getOrFetchStorable Result.success(segments) to true
+            }
 
-        val segmentsResult = apiClient.getMediaSegments(itemId)
-        val segments = segmentsResult.getOrDefault(emptyList())
-        if (segments.isNotEmpty()) {
-            segmentsCache.put(identity, itemId, segments)
-            return Result.success(segments)
-        }
+            // Distinguish "API succeeded and returned no segments" (cache the
+            // fallback so repeated player opens don't re-hit the legacy endpoints)
+            // from "API failed" (do not cache — a transient network error must not
+            // be masked as "no segments" for the cache TTL, or the next call would
+            // skip the retry and serve an empty list for 5 minutes).
+            val cacheFallback = segmentsResult.isSuccess
 
-        // Distinguish "API succeeded and returned no segments" (cache the
-        // fallback so repeated player opens don't re-hit the legacy endpoints)
-        // from "API failed" (do not cache — a transient network error must not
-        // be masked as "no segments" for the cache TTL, or the next call would
-        // skip the retry and serve an empty list for 5 minutes).
-        val cacheFallback = segmentsResult.isSuccess
+            coroutineScope {
+                val introDeferred = async { apiClient.getIntroTimestamps(itemId).getOrNull() }
+                val creditDeferred = async { apiClient.getCreditTimestamps(itemId).getOrNull() }
+                val introResult = introDeferred.await()
+                val creditResult = creditDeferred.await()
 
-        return coroutineScope {
-            val introDeferred = async { apiClient.getIntroTimestamps(itemId).getOrNull() }
-            val creditDeferred = async { apiClient.getCreditTimestamps(itemId).getOrNull() }
-            val introResult = introDeferred.await()
-            val creditResult = creditDeferred.await()
-
-            val fallbackSegments = mutableListOf<MediaSegment>()
-            introResult?.let { ts ->
-                if (ts.hasIntro) {
-                    fallbackSegments.add(
-                        MediaSegment(
-                            id = "legacy-intro-${ts.itemId}",
-                            itemId = ts.itemId,
-                            type = MediaSegmentType.INTRO,
-                            startTicks = ts.introStartTicks,
-                            endTicks = ts.introEndTicks,
+                val fallbackSegments = mutableListOf<MediaSegment>()
+                introResult?.let { ts ->
+                    if (ts.hasIntro) {
+                        fallbackSegments.add(
+                            MediaSegment(
+                                id = "legacy-intro-${ts.itemId}",
+                                itemId = ts.itemId,
+                                type = MediaSegmentType.INTRO,
+                                startTicks = ts.introStartTicks,
+                                endTicks = ts.introEndTicks,
+                            )
                         )
-                    )
+                    }
                 }
-            }
-            creditResult?.let { ts ->
-                if (ts.hasCredits) {
-                    fallbackSegments.add(
-                        MediaSegment(
-                            id = "legacy-outro-${ts.itemId}",
-                            itemId = ts.itemId,
-                            type = MediaSegmentType.OUTRO,
-                            startTicks = ts.creditStartTicks,
-                            endTicks = ts.creditEndTicks,
+                creditResult?.let { ts ->
+                    if (ts.hasCredits) {
+                        fallbackSegments.add(
+                            MediaSegment(
+                                id = "legacy-outro-${ts.itemId}",
+                                itemId = ts.itemId,
+                                type = MediaSegmentType.OUTRO,
+                                startTicks = ts.creditStartTicks,
+                                endTicks = ts.creditEndTicks,
+                            )
                         )
-                    )
+                    }
                 }
+                // Only cache on a successful (empty) segments call: the store
+                // flag vetoes exactly this flight's write-back when the
+                // segments API itself failed, leaving the cache untouched so
+                // the next call retries the API instead of serving a stale
+                // "empty" — and no concurrent item's flight is affected.
+                Result.success(fallbackSegments) to cacheFallback
             }
-            // Only cache on a successful (empty) segments call. When the
-            // segments API itself failed, leave the cache untouched so the
-            // next call retries the API instead of serving a stale "empty".
-            if (cacheFallback) {
-                segmentsCache.put(identity, itemId, fallbackSegments)
-            }
-            Result.success(fallbackSegments)
         }
-    }
 
     override fun invalidateSegmentsCache(itemId: String) {
         // Snapshot read: this is a best-effort single-item eviction from a
         // non-suspend context; identity switches clear the cache wholesale
         // via SessionCacheRegistry regardless of which identity an entry was
-        // keyed under.
-        segmentsCache.remove(homeSession.cacheIdentitySnapshot(), itemId)
+        // keyed under. invalidate() also bumps the epoch, so an in-flight
+        // segments fetch cannot re-pin the evicted entry.
+        segmentsFetcher.invalidate(homeSession.cacheIdentitySnapshot(), itemId)
     }
 
     override suspend fun getRemoteSubtitles(itemId: String): Result<List<RemoteSubtitleInfo>> =

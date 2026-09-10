@@ -157,7 +157,8 @@ class JellyfinRemotePlayCastStrategyTest {
         runBlocking { strategy.refreshPlaybackState() }
 
         assertEquals(180L, strategy.positionMs.value)
-        assertEquals(2_400_000L, strategy.durationMs.value)
+        // Jellyfin ticks -> ms is /10_000: 2_400_000_000 ticks = 240 s.
+        assertEquals(240_000L, strategy.durationMs.value)
         assertTrue(strategy.isPlaying.value)
         assertEquals(0.8f, strategy.volume.value)
         assertEquals("Song", strategy.nowPlayingTitle.value)
@@ -358,7 +359,7 @@ class JellyfinRemotePlayCastStrategyTest {
 
         awaitTrue {
             strategy.discoveredDevices.value.any {
-                it.id == "s1" && it.name == "TV (other-de - alice" && it.strategyName == "jellyfin"
+                it.id == "s1" && it.name == "TV (other-de) - alice" && it.strategyName == "jellyfin"
             }
         }
         assertTrue(strategy.isAvailable.value)

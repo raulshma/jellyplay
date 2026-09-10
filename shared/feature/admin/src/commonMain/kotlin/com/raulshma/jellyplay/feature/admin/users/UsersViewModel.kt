@@ -4,6 +4,7 @@ import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.data.repository.AdminRepository
 import com.raulshma.jellyplay.core.model.ManagedUser
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import com.raulshma.jellyplay.feature.admin.AdminLoad
 
 data class UsersState(
     val isLoading: Boolean = true,
@@ -54,11 +55,17 @@ class UsersViewModel(
     private suspend fun loadInto(refreshing: Boolean) {
         // Access control is enforced by AdminRouteContainer before this screen
         // is reached; the server still 403s as a backstop if state is stale.
-        if (!refreshing) {
-            _state.value = _state.value.copy(isLoading = true, error = null)
-        }
-        adminRepository.getUsersOverview()
-            .onSuccess { overview ->
+        // Flavour start (see AdminLoad): the cold load raises the pair, a
+        // refresh raises nothing here (its isRefreshing was already raised by
+        // the caller, and a shown error is deliberately kept).
+        AdminLoad.load(
+            start = {
+                if (!refreshing) {
+                    _state.value = _state.value.copy(isLoading = true, error = null)
+                }
+            },
+            fetch = { adminRepository.getUsersOverview() },
+            onSuccess = { overview ->
                 _state.value = _state.value.copy(
                     users = overview.users,
                     currentUserId = overview.currentUserId,
@@ -67,14 +74,16 @@ class UsersViewModel(
                     isRefreshing = false,
                     error = null,
                 )
-            }.onFailure { e ->
+            },
+            onFailure = { e ->
                 Log.e("Users", "Failed to fetch users", e)
                 _state.value = _state.value.copy(
                     error = e.message,
                     isLoading = false,
                     isRefreshing = false,
                 )
-            }
+            },
+        )
     }
 
     fun showCreateDialog() {

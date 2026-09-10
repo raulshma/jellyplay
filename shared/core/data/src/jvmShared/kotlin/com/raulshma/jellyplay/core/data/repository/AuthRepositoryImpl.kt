@@ -12,9 +12,12 @@ import com.raulshma.jellyplay.core.model.QuickConnectInfo
 import com.raulshma.jellyplay.core.model.QuickConnectState
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
+import com.raulshma.jellyplay.core.model.normalizeServerAddress
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.network.websocket.JellyfinWebSocketClient
 import com.raulshma.jellyplay.core.data.repository.withTransaction
+import com.raulshma.jellyplay.core.data.util.TimeSource
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -25,6 +28,8 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import com.raulshma.jellyplay.core.data.log.Log
 import androidx.collection.LruCache
 import kotlinx.serialization.json.Json
@@ -45,10 +50,29 @@ class AuthRepositoryImpl constructor(
      * `ServerIdentityStore`; never cancelled for this singleton).
      */
     private val externalScope: CoroutineScope,
+    /** Clock seam for the persisted `lastConnected` stamps. */
+    private val timeSource: TimeSource,
 ) : AuthRepository, RealtimeConnection {
 
     private companion object {
         private val folderIdsCache = LruCache<String, List<String>>(16)
+
+        /**
+         * The network half
+         * of session restore must not gate the first real frame on a live
+         * round trip. Address selection probes sequentially (5 s callTimeout
+         * per address) and the restore-time token check is an authenticated
+         * GET behind apiResultWithRetry on a 15 s connect timeout — with the
+         * server unreachable that held the Android system splash / the
+         * desktop "Restoring session…" pane for potentially tens of seconds.
+         * Each network stage now waits at most this long inside
+         * [restoreSession]; past it the gate releases with the DB-restored
+         * session kept (the exact outcome a non-401 validation failure
+         * already produces) and the stage re-runs on the application scope,
+         * where a definitive 401 still tears the session down through the
+         * isAuthenticated flow the shell already collects.
+         */
+        private const val RESTORE_NETWORK_STAGE_TIMEOUT_MS = 2_000L
     }
 
     override val servers: Flow<List<ServerInfo>> = serverDao.getAllServers().map { entities ->
@@ -68,11 +92,11 @@ class AuthRepositoryImpl constructor(
      * switchUser) produced, briefly reporting authenticated for an identity
      * that never existed. Never combine the two separate flows back.
      */
-    override val isAuthenticated: Flow<Boolean> = apiClient.session
+    override val isAuthenticated: StateFlow<Boolean> = apiClient.session
         .map { it != null }
         .stateIn(externalScope, SharingStarted.WhileSubscribed(5_000), false)
 
-    override val currentServerUsers: Flow<List<UserInfo>> =
+    override val currentServerUsers: StateFlow<List<UserInfo>> =
         apiClient.currentServer.flatMapLatest { server ->
             server?.id?.let { sid ->
                 userDao.getUsersForServer(sid).map { list ->
@@ -103,47 +127,25 @@ class AuthRepositoryImpl constructor(
         }
     }
 
-    override suspend fun switchServer(serverId: String): Result<Unit> = runCatching {
+    override suspend fun switchServer(serverId: String): Result<Unit> = runCatchingRethrowingCancellation {
         val serverEntity = serverDao.getServerById(serverId) ?: return Result.success(Unit)
-        val server = serverEntity.toServerInfo()
-        apiClient.disconnect()
-        apiClient.setServer(server)
-        // Prefer the primary when reachable, else fail over to an alternate so
-        // a server tapped while away from its LAN address still connects.
-        // Defensive: a probe crash must not fail the switch — the primary
-        // address still works as before.
-        runCatching { apiClient.selectReachableAddress() }
-
+        // The remembered user: the most recently connected one, else the
+        // server row's quick-sign-in user. Resolution stays here — it is
+        // switchServer's one genuine divergence from switchUser.
         val userEntity = userDao.getMostRecentUserForServer(serverId)
             ?: serverEntity.userId?.let { userDao.getUserById(it) }
-
-        if (userEntity != null) {
-            val user = userEntity.toUserInfo(server.address)
-            apiClient.setUser(user)
-            // Guard against re-arming a revoked token: without this, tapping
-            // a saved server adopts the dead stored token, the app lands on a
-            // cached ghost home whose live calls all 401, and the next cold
-            // start clears the session again — a server-screen/home bounce
-            // loop. A rejected token fails the switch so the login screen
-            // asks for credentials instead.
-            if (storedTokenRejected()) {
-                Log.w("AuthRepository", "switchServer: stored token for ${userEntity.name} rejected (401)")
-                apiClient.disconnect()
-                return Result.failure(sessionExpired())
-            }
-            serverIdentityStore.setActiveSession(serverId, userEntity.userId)
-            database.withTransaction {
-                serverDao.updateServer(serverEntity.copy(lastConnected = System.currentTimeMillis()))
-                userDao.updateUser(userEntity.copy(lastConnected = System.currentTimeMillis()))
-            }
+        // `return` (non-local through the inline wrapper) is load-bearing:
+        // as a trailing expression the helper's Result would be Unit-coerced
+        // by the wrapper's T = Unit inference and a rejected token would
+        // surface as success.
+        return adoptPersistedSession(serverEntity, userEntity, caller = "switchServer") { remembered ->
+            serverDao.updateServer(serverEntity.copy(lastConnected = timeSource.nowEpochMillis()))
+            userDao.updateUser(remembered.copy(lastConnected = timeSource.nowEpochMillis()))
         }
     }
 
-    override suspend fun addServerAddress(serverId: String, address: String): Result<Unit> = runCatching {
-        val normalizedAddress = address.trim().trimEnd('/').let {
-            if (it.startsWith("http://") || it.startsWith("https://")) it
-            else "https://$it"
-        }
+    override suspend fun addServerAddress(serverId: String, address: String): Result<Unit> = runCatchingRethrowingCancellation {
+        val normalizedAddress = normalizeServerAddress(address)
         val serverEntity = serverDao.getServerById(serverId)
             ?: return Result.failure(Exception("Server not found"))
         if (serverEntity.address == normalizedAddress) {
@@ -167,7 +169,7 @@ class AuthRepositoryImpl constructor(
         )
     }
 
-    override suspend fun removeServerAddress(serverId: String, address: String): Result<Unit> = runCatching {
+    override suspend fun removeServerAddress(serverId: String, address: String): Result<Unit> = runCatchingRethrowingCancellation {
         val serverEntity = serverDao.getServerById(serverId)
             ?: return Result.failure(Exception("Server not found"))
         val currentAlternates = serverEntity.alternateAddresses?.let {
@@ -181,9 +183,11 @@ class AuthRepositoryImpl constructor(
         )
     }
 
-    override suspend fun switchServerAddress(serverId: String, address: String): Result<Unit> = runCatching {
+    override suspend fun switchServerAddress(serverId: String, address: String): Result<Unit> = runCatchingRethrowingCancellation {
         val serverEntity = serverDao.getServerById(serverId)
             ?: return Result.failure(Exception("Server not found"))
+        // No scheme defaulting here, unlike [normalizeServerAddress]: the
+        // address must match a stored (already-schemed) alternate as written.
         val normalizedAddress = address.trim().trimEnd('/')
         val currentAlternates = serverEntity.alternateAddresses?.let {
             runCatching { json.decodeFromString<List<String>>(it) }.getOrDefault(emptyList())
@@ -215,10 +219,7 @@ class AuthRepositoryImpl constructor(
         username: String,
         password: String,
     ): Result<UserInfo> {
-        val normalizedAddress = serverAddress.trim().trimEnd('/').let {
-            if (it.startsWith("http://") || it.startsWith("https://")) it
-            else "https://$it"
-        }
+        val normalizedAddress = normalizeServerAddress(serverAddress)
         val serverFromDb = serverDao.getServerByAddress(normalizedAddress)
 
         val existingServerInfo = serverFromDb?.toServerInfo()
@@ -251,10 +252,7 @@ class AuthRepositoryImpl constructor(
         serverAddress: String,
         secret: String,
     ): Result<UserInfo> {
-        val normalizedAddress = serverAddress.trim().trimEnd('/').let {
-            if (it.startsWith("http://") || it.startsWith("https://")) it
-            else "https://$it"
-        }
+        val normalizedAddress = normalizeServerAddress(serverAddress)
         val serverFromDb = serverDao.getServerByAddress(normalizedAddress)
 
         val existingServerInfo = serverFromDb?.toServerInfo()
@@ -274,7 +272,7 @@ class AuthRepositoryImpl constructor(
     override suspend fun authorizeQuickConnect(code: String): Result<Boolean> =
         apiClient.authorizeQuickConnect(code)
 
-    override suspend fun restoreSession(): Result<Unit> = runCatching {
+    override suspend fun restoreSession(): Result<Unit> = runCatchingRethrowingCancellation {
         val serverId: String? = serverIdentityStore.activeServerId.first()
         val userId: String? = serverIdentityStore.activeUserId.first()
         if (serverId != null && userId != null) {
@@ -284,24 +282,24 @@ class AuthRepositoryImpl constructor(
                 // release builds and can be used for cross-session correlation.
                 Log.w("AuthRepository", "restoreSession: server not found in DB")
                 serverIdentityStore.setActiveSession("", "")
-                return@runCatching
+                return@runCatchingRethrowingCancellation
             }
             val server = serverEntity.toServerInfo()
             apiClient.setServer(server)
-            // Address failover: if the primary (e.g. a LAN URL) is unreachable
-            // but an alternate answers (e.g. the outside URL), route all
-            // traffic to the alternate BEFORE the API client is created, so
-            // the very first request already uses a working address. When no
-            // alternates exist this is a no-op and offline/cached use is
-            // unchanged. Re-selection runs again periodically (health monitor)
-            // and switches back to the primary once it is reachable.
-            runCatching { apiClient.selectReachableAddress() }
+            // Address failover rationale lives on
+            // [selectReachableAddressDefensively]. The probes are
+            // sequential network calls, so the wait is bounded — on timeout
+            // the gate below releases on the primary address and selection
+            // re-runs off the gate in the deferred pass.
+            val addressSelected = tryRestoreNetworkStage {
+                selectReachableAddressDefensively()
+            }
 
             val userEntity = userDao.getUserById(userId)
             if (userEntity == null) {
                 Log.w("AuthRepository", "restoreSession: user not found in DB")
                 serverIdentityStore.setActiveUser("")
-                return@runCatching
+                return@runCatchingRethrowingCancellation
             }
             val token = tokenCipher.decrypt(userEntity.accessToken)
             if (token != null) {
@@ -323,13 +321,69 @@ class AuthRepositoryImpl constructor(
                         } ?: emptyList(),
                     )
                 )
-                validateRestoredSession()
+                // The token check is a live authenticated GET — bound it
+                // the same way. On timeout the restored session stands exactly
+                // as a successful (or non-401-failed) validation leaves it, so
+                // the first-frame gate releases with the session kept.
+                val validationCompleted = tryRestoreNetworkStage {
+                    validateRestoredSession()
+                }
+                if (!addressSelected || !validationCompleted) {
+                    launchDeferredRestoreValidation(addressSelected, validationCompleted)
+                }
             } else {
                 Log.w("AuthRepository", "restoreSession: no access token for active user")
             }
         }
     }.onFailure { e ->
         Log.e("AuthRepository", "restoreSession failed", e)
+    }
+
+    /**
+     * Runs one restore-time network stage bounded by
+     * [RESTORE_NETWORK_STAGE_TIMEOUT_MS]. Returns whether the stage completed
+     * within the bound — false on timeout (the stage is abandoned mid-flight),
+     * leaving the caller to re-run it in the deferred pass.
+     */
+    private suspend fun tryRestoreNetworkStage(stage: suspend () -> Unit): Boolean =
+        withTimeoutOrNull(RESTORE_NETWORK_STAGE_TIMEOUT_MS) {
+            stage()
+            true
+        } ?: false
+
+    /**
+     * Deferred validation pass on the application scope — never
+     * cancelled for this singleton. A definitive 401 here funnels through
+     * validateRestoredSession's disconnect + clearSession, the same teardown
+     * the shell already observes through isAuthenticated flipping false, so
+     * a late rejection swaps shell → login a few frames later instead of
+     * holding the splash hostage to it.
+     */
+    private fun launchDeferredRestoreValidation(addressSelected: Boolean, validationCompleted: Boolean) {
+        externalScope.launch {
+            if (!addressSelected) {
+                // Bounded like the gated pass above: an unreachable server's
+                // probes must not suspend forever on the app-lifetime scope —
+                // that would starve the deferred 401 validation below.
+                withTimeoutOrNull(RESTORE_NETWORK_STAGE_TIMEOUT_MS) {
+                    selectReachableAddressDefensively()
+                }
+            }
+            if (!validationCompleted) {
+                // Unguarded, a DataStore failure inside clearSession()
+                // surfaces as an unhandled exception on the app-lifetime
+                // scope. Unlike the gated pass this stage is not
+                // timeout-bounded: nothing suspends on its completion (the
+                // shell has long since left the splash), and this pass is the
+                // last chance for a definitive 401 verdict — abandoning it on
+                // a slow server would lose that teardown until the next cold
+                // start.
+                runCatchingRethrowingCancellation { validateRestoredSession() }
+                    .onFailure { e ->
+                        Log.w("AuthRepository", "Deferred session validation failed", e)
+                    }
+            }
+        }
     }
 
     /**
@@ -370,10 +424,93 @@ class AuthRepositoryImpl constructor(
      * network/5xx failures keep the session so offline use is unchanged.
      */
     private suspend fun storedTokenRejected(): Boolean {
-        val rejected = runCatching { apiClient.getCurrentUser().exceptionOrNull() }
+        val rejected = runCatchingRethrowingCancellation { apiClient.getCurrentUser().exceptionOrNull() }
             .getOrNull() as? com.raulshma.jellyplay.core.network.api.ApiException
             ?: return false
         return rejected.httpCode == 401
+    }
+
+    /**
+     * Address failover shared by every session-adoption path: prefer the
+     * primary when reachable, else fail over to an alternate so a server
+     * tapped while away from its LAN address still connects (traffic is
+     * routed to the alternate before any request fires). With no alternates
+     * this is a no-op and offline/cached use is unchanged; re-selection runs
+     * again periodically (health monitor) and switches back to the primary
+     * once it is reachable.
+     *
+     * Defensive: a probe crash must not fail the adoption — the primary
+     * address still works as before. A cancelled caller must still cancel:
+     * the probe is a suspend network call, so the wrapper rethrows
+     * cancellation instead of parking it in a discarded Result.
+     */
+    private suspend fun selectReachableAddressDefensively() {
+        runCatchingRethrowingCancellation { apiClient.selectReachableAddress() }
+    }
+
+    /**
+     * The shared session-establishment choreography behind [switchServer]
+     * and [switchUser] — the steps both used to hand-copy:
+     *
+     *  1. `apiClient.disconnect()` — drop any live session first (one atomic
+     *     null publish, never a synthetic `(newServer, oldUser)`
+     *     intermediate).
+     *  2. `setServer` with the entity's [ServerInfo] projection.
+     *  3. Best-effort address failover ([selectReachableAddressDefensively]).
+     *  4. `setUser` with the entity's decrypted-token [UserInfo] projection.
+     *  5. The stored-token 401 guard: a token the server definitively
+     *     rejects must not establish a session — see [storedTokenRejected].
+     *     A rejected token disconnects and fails the switch with
+     *     [sessionExpired] so the login screen asks for credentials instead
+     *     of bouncing through a cached ghost home. [caller] only names the
+     *     site in the rejection log line.
+     *  6. `serverIdentityStore.setActiveSession(server.id, user.userId)` +
+     *     the `lastConnected` stamps in ONE `database.withTransaction` —
+     *     the stamps are the callers' one genuine divergence, so
+     *     [persistStamps] receives the resolved non-null user and runs
+     *     inside the transaction (switchServer stamps both rows; switchUser
+     *     additionally re-binds the server row's quick-sign-in
+     *     `userId`/`accessToken`).
+     *
+     * A null [userEntity] (switchServer on a server with no remembered
+     * user) still runs steps 1-3 — the client lands pointed at the new
+     * server — and then stops: no user to adopt, nothing to stamp, success.
+     *
+     * [restoreSession] deliberately does NOT ride this spine: its network
+     * stages are timeout-bounded BETWEEN the steps (address selection
+     * before the user is resolved, token validation after `setUser`, each
+     * with a deferred re-run off the application scope), its 401 reaction
+     * is a teardown (`disconnect` + `clearSession`, with restore still
+     * succeeding) rather than a failed Result, and it neither re-writes the
+     * identity store (it is the SOURCE of the active selection) nor stamps
+     * `lastConnected`. Folding it here would change ordering/timing
+     * semantics, so it shares only the truly verbatim failover body
+     * ([selectReachableAddressDefensively]).
+     */
+    private suspend fun adoptPersistedSession(
+        serverEntity: ServerEntity,
+        userEntity: UserEntity?,
+        caller: String,
+        persistStamps: suspend (UserEntity) -> Unit,
+    ): Result<Unit> {
+        val server = serverEntity.toServerInfo()
+        apiClient.disconnect()
+        apiClient.setServer(server)
+        selectReachableAddressDefensively()
+        if (userEntity == null) return Result.success(Unit)
+        apiClient.setUser(userEntity.toUserInfo(server.address))
+        // Guard against re-arming a revoked token: without this, tapping a
+        // saved server or user adopts the dead stored token, the app lands on
+        // a cached ghost home whose live calls all 401, and the next cold
+        // start clears the session again — a server-screen/home bounce loop.
+        if (storedTokenRejected()) {
+            Log.w("AuthRepository", "$caller: stored token for ${userEntity.name} rejected (401)")
+            apiClient.disconnect()
+            return Result.failure(sessionExpired())
+        }
+        serverIdentityStore.setActiveSession(server.id, userEntity.userId)
+        database.withTransaction { persistStamps(userEntity) }
+        return Result.success(Unit)
     }
 
     override suspend fun refreshCurrentUser(): Result<UserInfo> {
@@ -448,31 +585,20 @@ class AuthRepositoryImpl constructor(
         serverIdentityStore.clearSession()
     }
 
-    override suspend fun switchUser(userId: String): Result<Unit> = runCatching {
+    override suspend fun switchUser(userId: String): Result<Unit> = runCatchingRethrowingCancellation {
         val userEntity = userDao.getUserById(userId) ?: return Result.success(Unit)
         val server = serverDao.getServerById(userEntity.serverId) ?: return Result.success(Unit)
-        apiClient.disconnect()
-        apiClient.setServer(server.toServerInfo())
-        // Re-run endpoint selection so the user's first request does not race
-        // a dead primary address.
-        runCatching { apiClient.selectReachableAddress() }
-        apiClient.setUser(userEntity.toUserInfo(server.address))
-        // Same revoked-token guard as switchServer: a stored token the server
-        // 401s must not establish a session — the login screen needs to ask
-        // for credentials, not bounce through a ghost home.
-        if (storedTokenRejected()) {
-            Log.w("AuthRepository", "switchUser: stored token for ${userEntity.name} rejected (401)")
-            apiClient.disconnect()
-            return Result.failure(sessionExpired())
-        }
-        serverIdentityStore.setActiveSession(server.id, userId)
-        database.withTransaction {
-            userDao.updateUser(userEntity.copy(lastConnected = System.currentTimeMillis()))
+        // Same load-bearing `return` as switchServer — see its comment.
+        return adoptPersistedSession(server, userEntity, caller = "switchUser") { remembered ->
+            // Stamp divergence vs switchServer: switching user also re-binds
+            // the server row's quick-sign-in pointer (userId + accessToken)
+            // to the newly adopted user.
+            userDao.updateUser(remembered.copy(lastConnected = timeSource.nowEpochMillis()))
             serverDao.updateServer(
                 server.copy(
-                    userId = userId,
-                    accessToken = userEntity.accessToken,
-                    lastConnected = System.currentTimeMillis(),
+                    userId = remembered.userId,
+                    accessToken = remembered.accessToken,
+                    lastConnected = timeSource.nowEpochMillis(),
                 )
             )
         }
@@ -535,7 +661,7 @@ class AuthRepositoryImpl constructor(
             isAdmin = user.isAdmin,
             canDeleteContent = user.canDeleteContent,
             enabledFolderIds = json.encodeToString(user.enabledFolderIds),
-            lastConnected = System.currentTimeMillis(),
+            lastConnected = timeSource.nowEpochMillis(),
         )
         database.withTransaction {
             userDao.insertUser(userEntity)
@@ -546,7 +672,7 @@ class AuthRepositoryImpl constructor(
                     address = server.address,
                     userId = user.id,
                     accessToken = tokenCipher.encrypt(user.accessToken),
-                    lastConnected = System.currentTimeMillis(),
+                    lastConnected = timeSource.nowEpochMillis(),
                     alternateAddresses = preservedAlternateAddresses,
                 )
             )

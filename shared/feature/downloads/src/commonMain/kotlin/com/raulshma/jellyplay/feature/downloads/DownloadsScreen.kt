@@ -69,6 +69,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.ui.components.LocalFloatingNavOffset
@@ -78,6 +79,7 @@ import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.raulshma.jellyplay.core.data.repository.DownloadProgress
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.ResyncCategory
@@ -91,6 +93,7 @@ import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import kotlinx.coroutines.flow.StateFlow
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.feature.downloads.generated.resources.Res
@@ -171,6 +174,15 @@ fun DownloadsScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val downloads = uiState.downloads
+    // Live per-row progress, collected ONCE into a State whose .value is
+    // never read at this level. Collecting here subscribes the upstream
+    // (that's intended — it keeps the tick hot); only RECOMPOSITION is
+    // deferred: just the DOWNLOADING rows' item lambdas read .value below,
+    // so a 2 s progress tick re-executes those row scopes alone and this
+    // ~1,400-line body stays put (same deferred hot-read pattern as
+    // VideoPlayerScreen's ChapterPickerBinder / SleepTimerSheetBinder
+    // leaves).
+    val progressById = viewModel.progressById.collectAsStateWithLifecycle()
     val networkStatus by com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus.current.collectAsStateWithLifecycle()
     val headerStatus = com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus(
         isLoading = uiState.isLoading,
@@ -218,27 +230,32 @@ fun DownloadsScreen(
 
     val selectionMode = uiState.selectionMode
     val selectedIds = uiState.selectedIds
-    // Action-bar predicates: a bulk control is enabled only when the current
-    // selection actually contains an item of the matching status, so the bar
-    // never offers a no-op (e.g. Pause with only paused items selected).
+    // Action-bar predicates folded into the pure [DownloadActions] admission
+    // table: a bulk control is enabled only when the current selection (or the
+    // full list, for the global actions) actually contains an item the action
+    // admits, so the bar never offers a no-op (e.g. Pause with only paused
+    // items selected).
     val selectedItems = remember(selectionMode, downloads, selectedIds) {
         if (selectionMode) downloads.filter { it.id in selectedIds } else emptyList()
     }
-    val hasPauseable = remember(selectedItems) { selectedItems.any { it.status == DownloadStatus.DOWNLOADING } }
-    val hasResumable = remember(selectedItems) { selectedItems.any { it.status == DownloadStatus.PAUSED } }
-    val hasCancellable = remember(selectedItems) {
-        selectedItems.any {
-            it.status == DownloadStatus.PENDING ||
-                it.status == DownloadStatus.QUEUED ||
-                it.status == DownloadStatus.DOWNLOADING ||
-                it.status == DownloadStatus.PAUSED
-        }
+    val hasPauseable = remember(downloads, selectedIds) {
+        DownloadActions.supports(DownloadBulkAction.PAUSE, downloads, selectedIds, DownloadActionScope.Selected)
+    }
+    val hasResumable = remember(downloads, selectedIds) {
+        DownloadActions.supports(DownloadBulkAction.RESUME, downloads, selectedIds, DownloadActionScope.Selected)
+    }
+    val hasCancellable = remember(downloads, selectedIds) {
+        DownloadActions.supports(DownloadBulkAction.CANCEL, downloads, selectedIds, DownloadActionScope.Selected)
     }
     // Global action predicates: the app-bar Pause All / Retry all failed
     // buttons are only enabled when the matching status exists anywhere in the
     // list, so neither offers a no-op (mirrors the selection-bar predicates).
-    val hasAnyDownloading = remember(downloads) { downloads.any { it.status == DownloadStatus.DOWNLOADING } }
-    val hasAnyFailed = remember(downloads) { downloads.any { it.status == DownloadStatus.FAILED } }
+    val hasAnyDownloading = remember(downloads) {
+        DownloadActions.supports(DownloadBulkAction.PAUSE, downloads, emptySet(), DownloadActionScope.All)
+    }
+    val hasAnyFailed = remember(downloads) {
+        DownloadActions.supports(DownloadBulkAction.RETRY_FAILED, downloads, emptySet(), DownloadActionScope.All)
+    }
 
     val backgroundColorState = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState()
 
@@ -264,7 +281,7 @@ fun DownloadsScreen(
             if (hasAnyDownloading) {
                 val pauseFocus = rememberTvFocusState()
                 IconButton(
-                    onClick = { viewModel.pauseAll() },
+                    onClick = { viewModel.applyBulkAction(DownloadBulkAction.PAUSE, DownloadActionScope.All) },
                     modifier = Modifier
                         .then(pauseFocus.focusModifier)
                         .tvFocusIndicator(pauseFocus, CircleShape),
@@ -278,7 +295,7 @@ fun DownloadsScreen(
             if (hasAnyFailed) {
                 val retryFocus = rememberTvFocusState()
                 IconButton(
-                    onClick = { viewModel.retryAllFailed() },
+                    onClick = { viewModel.applyBulkAction(DownloadBulkAction.RETRY_FAILED, DownloadActionScope.All) },
                     modifier = Modifier
                         .then(retryFocus.focusModifier)
                         .tvFocusIndicator(retryFocus, CircleShape),
@@ -331,14 +348,15 @@ fun DownloadsScreen(
             )
         },
     ) {
-        if (uiState.totalStorageBytes > 0) {
-            Text(
-                stringResource(Res.string.downloads_storage_used, viewModel.formatBytes(uiState.totalStorageBytes)),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = adaptiveInfo.contentPadding(isTv), end = adaptiveInfo.contentPadding(isTv), bottom = 8.dp),
-            )
-        }
+        // "Storage used" rides the live progress tick (bytes accumulate
+        // mid-transfer), so it is collected INSIDE this leaf — the screen
+        // body above is not invalidated per tick, only this one Text. Same
+        // `totalStorageBytes > 0` visibility rule the inline Text had.
+        DownloadsStorageUsedText(
+            totalStorageBytes = viewModel.totalStorageBytes,
+            formatBytes = viewModel::formatBytes,
+            horizontalPadding = adaptiveInfo.contentPadding(isTv),
+        )
 
         if (downloads.isEmpty()) {
             com.raulshma.jellyplay.core.ui.components.ScreenEmptyState(
@@ -398,6 +416,15 @@ fun DownloadsScreen(
                         }
                     }
                     itemsIndexed(items = downloads, key = { _, it -> it.id }, contentType = { _, _ -> "downloadItem" }) { index, download ->
+                        // Hot read scoped to the only rows that move: just the
+                        // DOWNLOADING rows' lambdas subscribe to the live
+                        // progress map, so a tick re-executes those item
+                        // lambdas only — never the enclosing screen body.
+                        val liveProgress = if (download.status == DownloadStatus.DOWNLOADING) {
+                            progressById.value[download.id]
+                        } else {
+                            null
+                        }
                         DownloadItemRow(
                             // Deferred draw-phase read of the shared entrance
                             // progress: alpha + a slide of 1/10 of the row
@@ -409,6 +436,7 @@ fun DownloadsScreen(
                                 slideDivisor = 10f,
                             ),
                             item = download,
+                            liveProgress = liveProgress,
                             formatBytes = formatBytes,
                             formatSpeed = formatSpeed,
                             formatEta = formatEta,
@@ -429,11 +457,11 @@ fun DownloadsScreen(
                                     onPlayOffline(download.mediaItemId, download.mediaType)
                                 }
                             },
-                            onCancel = { viewModel.cancelDownload(download) },
-                            onPause = { viewModel.pauseDownload(download) },
-                            onResume = { viewModel.resumeDownload(download) },
+                            onCancel = { viewModel.applyBulkAction(DownloadBulkAction.CANCEL, DownloadActionScope.Item(download.id)) },
+                            onPause = { viewModel.applyBulkAction(DownloadBulkAction.PAUSE, DownloadActionScope.Item(download.id)) },
+                            onResume = { viewModel.applyBulkAction(DownloadBulkAction.RESUME, DownloadActionScope.Item(download.id)) },
                             onDelete = { pendingDelete = download },
-                            onRetry = { viewModel.retryDownload(download) },
+                            onRetry = { viewModel.applyBulkAction(DownloadBulkAction.RETRY_FAILED, DownloadActionScope.Item(download.id)) },
                             onMoveToFront = { viewModel.moveToFront(download) },
                             onLowerPriority = { viewModel.lowerPriority(download) },
                             onToggleSelection = { viewModel.toggleSelection(download) },
@@ -450,9 +478,9 @@ fun DownloadsScreen(
                         hasCancellable = hasCancellable,
                         onSelectAll = { viewModel.selectAll() },
                         onClear = { viewModel.clearSelection() },
-                        onPause = { viewModel.pauseSelected() },
-                        onResume = { viewModel.resumeSelected() },
-                        onCancel = { viewModel.cancelSelected() },
+                        onPause = { viewModel.applyBulkAction(DownloadBulkAction.PAUSE, DownloadActionScope.Selected) },
+                        onResume = { viewModel.applyBulkAction(DownloadBulkAction.RESUME, DownloadActionScope.Selected) },
+                        onCancel = { viewModel.applyBulkAction(DownloadBulkAction.CANCEL, DownloadActionScope.Selected) },
                         onBulkDelete = { pendingBulkDelete = true },
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
@@ -496,7 +524,7 @@ fun DownloadsScreen(
             dismissText = stringResource(Res.string.downloads_cancel),
             icon = Tabler.Outline.Trash,
             tone = ConfirmTone.DESTRUCTIVE,
-            onConfirm = { viewModel.deleteSelected() },
+            onConfirm = { viewModel.applyBulkAction(DownloadBulkAction.DELETE, DownloadActionScope.Selected) },
             onDismiss = { pendingBulkDelete = false },
         )
     }
@@ -548,6 +576,12 @@ fun DownloadsScreen(
 private fun DownloadItemRow(
     item: DownloadItem,
     modifier: Modifier = Modifier,
+    /**
+     * Live byte/speed override from the progress split (see the screen's
+     * progressById) — present while this row is in flight, null otherwise,
+     * in which case the item's own (already current) fields render.
+     */
+    liveProgress: DownloadProgress?,
     formatBytes: (Long) -> String,
     formatSpeed: (Long) -> String,
     formatEta: (Long, Long, Long) -> String,
@@ -565,8 +599,13 @@ private fun DownloadItemRow(
     onLowerPriority: () -> Unit,
     onToggleSelection: () -> Unit,
 ) {
+    // Merge once at the top: the live values while the row ticks, the item's
+    // structural values otherwise (statuses outside the in-flight set never
+    // tick, so their structural bytes are always current).
+    val downloadedBytes = liveProgress?.downloadedBytes ?: item.downloadedBytes
+    val speedBytesPerSec = liveProgress?.speedBytesPerSec ?: item.speedBytesPerSec
     val progress = if (item.totalSizeBytes > 0) {
-        item.downloadedBytes.toFloat() / item.totalSizeBytes
+        downloadedBytes.toFloat() / item.totalSizeBytes
     } else 0f
     val animatedProgress by animateFloatAsState(
         targetValue = progress,
@@ -685,9 +724,9 @@ private fun DownloadItemRow(
                             modifier = Modifier.fillMaxWidth(),
                         )
                         Spacer(Modifier.height(2.dp))
-                        val sizeText = "${formatBytes(item.downloadedBytes)} / ${formatBytes(item.totalSizeBytes.coerceAtLeast(1))}"
-                        val speedText = formatSpeed(item.speedBytesPerSec)
-                        val etaText = formatEta(item.downloadedBytes, item.totalSizeBytes, item.speedBytesPerSec)
+                        val sizeText = "${formatBytes(downloadedBytes)} / ${formatBytes(item.totalSizeBytes.coerceAtLeast(1))}"
+                        val speedText = formatSpeed(speedBytesPerSec)
+                        val etaText = formatEta(downloadedBytes, item.totalSizeBytes, speedBytesPerSec)
                         Text(
                             buildString {
                                 append(sizeText)
@@ -707,7 +746,7 @@ private fun DownloadItemRow(
                     }
                     DownloadStatus.COMPLETED -> {
                         Text(
-                            formatBytes(item.downloadedBytes),
+                            formatBytes(downloadedBytes),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -869,6 +908,30 @@ private fun DownloadActionButton(
                 tint = tint,
             )
         }
+    }
+}
+
+/**
+ * "Storage used" header line, as a narrow binder (VideoPlayerScreen's
+ * ChapterPickerBinder pattern): the total rides the live download-progress
+ * tick — bytes accumulate mid-transfer — so the StateFlow is collected
+ * INSIDE this leaf. Only this Text recomposes per tick; the downloads screen
+ * body that hosts it does not.
+ */
+@Composable
+private fun DownloadsStorageUsedText(
+    totalStorageBytes: StateFlow<Long>,
+    formatBytes: (Long) -> String,
+    horizontalPadding: Dp,
+) {
+    val totalStorage by totalStorageBytes.collectAsStateWithLifecycle()
+    if (totalStorage > 0) {
+        Text(
+            stringResource(Res.string.downloads_storage_used, formatBytes(totalStorage)),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = horizontalPadding, end = horizontalPadding, bottom = 8.dp),
+        )
     }
 }
 

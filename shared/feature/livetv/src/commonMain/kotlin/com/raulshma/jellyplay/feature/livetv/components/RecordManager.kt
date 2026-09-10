@@ -1,14 +1,24 @@
 package com.raulshma.jellyplay.feature.livetv.components
 
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import org.jetbrains.compose.resources.stringResource
 import com.raulshma.jellyplay.core.model.LiveTvProgram
+import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
+import com.raulshma.jellyplay.core.ui.components.ConfirmTone
+import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
 import com.raulshma.jellyplay.feature.livetv.generated.resources.Res
+import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_action_cancel
 import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_action_close
 import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_action_done
 import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_action_ok
@@ -16,14 +26,18 @@ import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_cancel_r
 import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_cancel_series
 import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_record_failed
 import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_record_once
+import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_record_program_prompt
 import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_record_series
+import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_record_single_timer_note
 import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_record_success
 import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_recording_in_progress
 import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_scheduling_timer
+import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_will_be_recorded
 
 /**
- * State machine for the unified record/cancel flow shared by the Programs,
- * Guide and Schedule tabs. Mirrors jellyfin-web's `recordinghelper`
+ * State machine for the unified record/cancel flow, driven by [RecordActions]
+ * outcomes and shared by the Programs tab (choice flow) and the Guide/EPG tab
+ * (single-timer confirm flow). Mirrors jellyfin-web's `recordinghelper`
  * `toggleRecording`: if no timer exists offer Record / Record Series; if a
  * timer exists offer Cancel / Cancel Series.
  */
@@ -32,10 +46,12 @@ sealed interface RecordDialogState {
     data object Idle : RecordDialogState
     /** Awaiting the user's record/cancel decision for [program]. */
     data class AwaitingChoice(val program: LiveTvProgram) : RecordDialogState
+    /** The EPG grid's simple confirm: record a single timer for [program]. */
+    data class Confirm(val program: LiveTvProgram) : RecordDialogState
     /** Record/cancel request is in flight. */
     data object Requesting : RecordDialogState
-    /** The action completed successfully. */
-    data object Success : RecordDialogState
+    /** The action completed successfully; [programName] names the recorded program when known. */
+    data class Success(val programName: String? = null) : RecordDialogState
     /** The action failed. */
     data class Error(val message: String) : RecordDialogState
 }
@@ -102,17 +118,48 @@ fun RecordDialog(
                 },
             )
         }
+        is RecordDialogState.Confirm -> ConfirmDialog(
+            title = stringResource(Res.string.livetv_record_program_prompt),
+            message = state.program.name,
+            confirmText = stringResource(Res.string.livetv_record_once),
+            dismissText = stringResource(Res.string.livetv_action_cancel),
+            tone = ConfirmTone.NEUTRAL,
+            onConfirm = { onRecordOnce(state.program) },
+            onDismiss = onDismiss,
+            content = {
+                state.program.episodeTitle?.takeIf { it.isNotBlank() }?.let {
+                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Text(
+                    stringResource(Res.string.livetv_record_single_timer_note),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            },
+        )
         RecordDialogState.Requesting -> AlertDialog(
             onDismissRequest = onDismiss,
             title = { Text(stringResource(Res.string.livetv_recording_in_progress)) },
-            text = { Text(stringResource(Res.string.livetv_scheduling_timer)) },
+            text = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    JellyPlayLoadingIndicator()
+                    Spacer(Modifier.width(12.dp))
+                    Text(stringResource(Res.string.livetv_scheduling_timer))
+                }
+            },
             confirmButton = {},
             dismissButton = {},
         )
-        RecordDialogState.Success -> AlertDialog(
+        is RecordDialogState.Success -> AlertDialog(
             onDismissRequest = onDismiss,
             title = { Text(stringResource(Res.string.livetv_record_success)) },
-            text = { Text(stringResource(Res.string.livetv_record_success)) },
+            text = {
+                Text(
+                    state.programName
+                        ?.let { stringResource(Res.string.livetv_will_be_recorded, it) }
+                        ?: stringResource(Res.string.livetv_record_success),
+                )
+            },
             confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(Res.string.livetv_action_done)) } },
             dismissButton = {},
         )

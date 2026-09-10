@@ -42,6 +42,7 @@ subprojects {
         apply(plugin = "org.jetbrains.kotlinx.kover")
     }
 
+
     // Centralized Compose compiler configuration. Every module that applies the
     // Kotlin Compose plugin gets the same stability config (immutable JDK value
     // types like java.time.Instant) and, when opted in via -PenableComposeMetrics,
@@ -90,6 +91,24 @@ subprojects {
 val ciRun = providers.environmentVariable("CI").map { it == "true" }.getOrElse(false)
 
 subprojects {
+    // Test workers inherit Gradle's 512m default heap. That stalled the
+    // settings suite (mockk's per-call kotlin-reflect value-class walk
+    // allocates heavily) and OOM'd core:data's Robolectric workers into
+    // cascading NoClassDefFoundError failures — both looked like hung or
+    // broken tests. Every module that owns test tasks gets the same bump.
+    listOf(
+        "org.jetbrains.kotlin.multiplatform",
+        "org.jetbrains.kotlin.jvm",
+        "com.android.library",
+        "com.android.application",
+        "com.android.test",
+    ).forEach { plugin ->
+        pluginManager.withPlugin(plugin) {
+            tasks.withType<Test>().configureEach {
+                maxHeapSize = "2g"
+            }
+        }
+    }
     listOf(
         "org.jetbrains.kotlin.multiplatform",
         "org.jetbrains.kotlin.jvm",

@@ -1,7 +1,24 @@
 package com.raulshma.jellyplay.core.ui.navigation
 
 import androidx.compose.runtime.Immutable
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.navigation3.runtime.NavKey
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.Bolt
+import com.composables.icons.tabler.outline.Calendar
+import com.composables.icons.tabler.outline.DeviceTv
+import com.composables.icons.tabler.outline.Disc
+import com.composables.icons.tabler.outline.Download
+import com.composables.icons.tabler.outline.Flame
+import com.composables.icons.tabler.outline.Home
+import com.composables.icons.tabler.outline.Library
+import com.composables.icons.tabler.outline.Mail
+import com.composables.icons.tabler.outline.Movie
+import com.composables.icons.tabler.outline.Search
+import com.composables.icons.tabler.outline.Settings
+import com.composables.icons.tabler.outline.Shield
+import com.composables.icons.tabler.outline.Stack
+import com.composables.icons.tabler.outline.Users
 import com.raulshma.jellyplay.core.ui.animation.NavRouteClass
 import kotlinx.serialization.Serializable
 
@@ -545,6 +562,66 @@ interface HighlightableRoute {
 }
 
 /**
+ * One top-level destination's render facts: the persisted customization
+ * [key], the [icon] every shell renders for it, and the desktop-rail label +
+ * [railGroup]. This registry is the single home for destination facts — the
+ * former per-shell parallel tables (the Android `routeToIcon` when-with its
+ * silent Home fallback, and the desktop `DESKTOP_RAIL_ITEMS` label/icon/group
+ * list) both derive from it, so a new top-level route registers its facts
+ * exactly once.
+ *
+ * Icon note: the two shells previously disagreed on two routes (Library:
+ * `Stack2` on phone vs `Library` on desktop; Shortcuts: `Apps` vs `Bolt`).
+ * The registry unifies on the desktop set — a visual-only change on the
+ * phone bar/drawer.
+ *
+ * Per-mode bar labels and order (the video vs music bottom-bar maps below)
+ * stay separate: their vocabulary is legitimately context-specific ("Browse"
+ * on the music bar, "Music" on the rail).
+ */
+data class NavDestination(
+    val route: Route,
+    val key: String,
+    val icon: ImageVector,
+    val railLabel: String,
+    val railGroup: NavDestinationGroup,
+)
+
+/** The rail's visual clusters — a spacer renders between consecutive groups. */
+enum class NavDestinationGroup { Browsing, Tools, System }
+
+/**
+ * Every top-level nav destination, in customization-UI display order (the
+ * same order the persisted-vocabulary table below locks in — that table is
+ * derived from this registry, so the two cannot drift).
+ */
+val NAV_DESTINATIONS: List<NavDestination> = listOf(
+    NavDestination(Route.Home, "Home", Tabler.Outline.Home, "Home", NavDestinationGroup.Browsing),
+    NavDestination(Route.Library, "Library", Tabler.Outline.Library, "Library", NavDestinationGroup.Browsing),
+    NavDestination(Route.Search, "Search", Tabler.Outline.Search, "Search", NavDestinationGroup.Browsing),
+    NavDestination(Route.LiveTv, "LiveTv", Tabler.Outline.DeviceTv, "Live TV", NavDestinationGroup.Browsing),
+    NavDestination(Route.MusicBrowse, "MusicBrowse", Tabler.Outline.Disc, "Music", NavDestinationGroup.Browsing),
+    NavDestination(Route.Shortcuts, "Shortcuts", Tabler.Outline.Bolt, "Shortcuts", NavDestinationGroup.Tools),
+    NavDestination(Route.Downloads, "Downloads", Tabler.Outline.Download, "Downloads", NavDestinationGroup.Browsing),
+    NavDestination(Route.Newsletter, "Newsletter", Tabler.Outline.Mail, "Newsletter", NavDestinationGroup.Browsing),
+    NavDestination(Route.WatchProgressHeatmap, "WatchProgressHeatmap", Tabler.Outline.Flame, "Insights", NavDestinationGroup.Browsing),
+    NavDestination(Route.SyncPlay, "SyncPlay", Tabler.Outline.Users, "SyncPlay", NavDestinationGroup.Browsing),
+    NavDestination(Route.Requests, "Requests", Tabler.Outline.Movie, "Requests", NavDestinationGroup.Tools),
+    NavDestination(Route.UpcomingCalendar, "UpcomingCalendar", Tabler.Outline.Calendar, "Calendar", NavDestinationGroup.Tools),
+    NavDestination(Route.ArrQueue, "ArrQueue", Tabler.Outline.Stack, "Arr Queue", NavDestinationGroup.Tools),
+    NavDestination(Route.Settings, "Settings", Tabler.Outline.Settings, "Settings", NavDestinationGroup.System),
+    NavDestination(Route.AdminDashboard, "AdminDashboard", Tabler.Outline.Shield, "Admin", NavDestinationGroup.System),
+)
+
+/** Route → registry row; shells resolve their display order through this lookup. */
+val NAV_DESTINATION_BY_ROUTE: Map<Route, NavDestination> =
+    NAV_DESTINATIONS.associateBy { it.route }
+
+/** The destination's registry icon; non-registered (detail) routes fall back to Home. */
+val Route.navIcon: ImageVector
+    get() = NAV_DESTINATION_BY_ROUTE[this]?.icon ?: Tabler.Outline.Home
+
+/**
  * The stable string key a top-level [Route] is persisted under in the
  * nav-customization preferences (`hiddenNavItems` / `navItemOrder`).
  *
@@ -556,27 +633,13 @@ interface HighlightableRoute {
  * independent of class identity; values match what previous releases stored,
  * so existing installs keep their configuration.
  *
- * Single source of truth: [CUSTOMIZABLE_TOP_LEVEL_ROUTES] is derived from this
- * map, so the key vocabulary and the customizable-route enumeration cannot
- * drift apart.
+ * Single source of truth: derived from the [NAV_DESTINATIONS] registry (one
+ * row per route carries its key), and [CUSTOMIZABLE_TOP_LEVEL_ROUTES] derives
+ * from this map — the key vocabulary and the customizable-route enumeration
+ * cannot drift apart.
  */
-private val NAV_KEYS_BY_ROUTE: Map<Route, String> = linkedMapOf(
-    Route.Home to "Home",
-    Route.Library to "Library",
-    Route.Search to "Search",
-    Route.LiveTv to "LiveTv",
-    Route.MusicBrowse to "MusicBrowse",
-    Route.Shortcuts to "Shortcuts",
-    Route.Downloads to "Downloads",
-    Route.Newsletter to "Newsletter",
-    Route.WatchProgressHeatmap to "WatchProgressHeatmap",
-    Route.SyncPlay to "SyncPlay",
-    Route.Requests to "Requests",
-    Route.UpcomingCalendar to "UpcomingCalendar",
-    Route.ArrQueue to "ArrQueue",
-    Route.Settings to "Settings",
-    Route.AdminDashboard to "AdminDashboard",
-)
+private val NAV_KEYS_BY_ROUTE: Map<Route, String> =
+    linkedMapOf(*NAV_DESTINATIONS.map { it.route to it.key }.toTypedArray())
 
 val Route.navKey: String
     get() = NAV_KEYS_BY_ROUTE[this]

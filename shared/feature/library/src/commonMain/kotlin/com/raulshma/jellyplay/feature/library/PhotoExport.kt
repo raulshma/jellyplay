@@ -2,7 +2,7 @@ package com.raulshma.jellyplay.feature.library
 
 /**
  * Platform seam for exporting the currently viewed photo (docs/kmp-migration-plan.md
- * §Phase V3 library conveyor). Android saves into MediaStore ("gallery") and
+ *  library conveyor). Android saves into MediaStore ("gallery") and
  * shares through FileProvider + ACTION_SEND — those bodies moved verbatim from
  * the legacy PhotoViewerViewModel into the androidMain actual; desktop has no
  * gallery or share sheet yet, so [isSupported] is false there and the viewer

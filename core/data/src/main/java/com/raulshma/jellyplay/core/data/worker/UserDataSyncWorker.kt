@@ -4,7 +4,9 @@ import android.content.Context
 import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import com.raulshma.jellyplay.core.data.repository.MediaRepositoryImpl
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
+import com.raulshma.jellyplay.core.data.repository.MediaCacheInvalidator
+import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import com.raulshma.jellyplay.core.model.HomeSectionQuery
@@ -28,11 +30,12 @@ import kotlinx.coroutines.flow.firstOrNull
 class UserDataSyncWorker(
     context: Context,
     params: WorkerParameters,
-    // The concrete impl (same Gradle module) so the worker can reach the
-    // module-internal wholesale invalidateCaches — plan 08 demoted it off the
-    // public MediaRepository interface; the identity observer in the impl is
-    // its only other caller.
-    private val mediaRepository: MediaRepositoryImpl,
+    // Reads (the home-sections refetch) go through the public interface; the
+    // wholesale invalidateCaches is deliberately off it (plan 08) and arrives
+    // through the narrow [MediaCacheInvalidator] port — both Koin-bound to
+    // the same MediaRepositoryImpl single, so the drop hits the same caches.
+    private val mediaRepository: MediaRepository,
+    private val cacheInvalidator: MediaCacheInvalidator,
     private val playbackStore: PlaybackStore,
     private val serverIdentityStore: ServerIdentityStore,
 ) : CoroutineWorker(context, params) {
@@ -44,8 +47,8 @@ class UserDataSyncWorker(
         val activeUserId = serverIdentityStore.activeUserId.firstOrNull()
         if (activeUserId.isNullOrBlank()) return Result.success()
 
-        return runCatching {
-            mediaRepository.invalidateCaches()
+        return runCatchingRethrowingCancellation {
+            cacheInvalidator.invalidateCaches()
             // Re-fetch home sections to repopulate the cache with fresh user-data.
             // Only success/failure matters here; the sections themselves are
             // consumed elsewhere from the repopulated cache.

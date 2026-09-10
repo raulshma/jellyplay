@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.home.di
 
 import com.raulshma.jellyplay.core.data.sync.SyncStatusStateHolderFactory
+import com.raulshma.jellyplay.feature.home.HomeStores
 import com.raulshma.jellyplay.feature.home.HomeRefresherFactory
 import com.raulshma.jellyplay.feature.home.HomeViewModel
 import org.koin.compose.viewmodel.dsl.viewModel
@@ -24,7 +25,7 @@ import org.koin.dsl.module
  *    Koin singles in androidCoreDataModule / the app module on Android,
  *    honest no-op defs in desktopDataModule on desktop. All resolve on BOTH
  *    platforms — desktop renders homeSection in the rail (live since the
- *    wave 8B desktop wiring).
+ *     desktop wiring).
  */
 val homeModule: Module = module {
     single {
@@ -61,10 +62,12 @@ val homeModule: Module = module {
             offlineRepository = get(),
             offlineModeManager = get(),
             newsletterTriggerManager = get(),
-            homeDiscoveryStore = get(),
-            appearanceStore = get(),
-            experimentalStore = get(),
-            playbackStore = get(),
+            prefs = HomeStores(
+                homeDiscovery = get(),
+                appearance = get(),
+                experimental = get(),
+                playback = get(),
+            ),
             preferencesEditor = get(),
             seerrRequestDelegate = get(),
             seerrPreferencesStore = get(),

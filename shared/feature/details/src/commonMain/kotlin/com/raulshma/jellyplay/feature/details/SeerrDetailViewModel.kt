@@ -207,9 +207,15 @@ class SeerrDetailViewModel constructor(
         }
     }
 
-    fun loadServiceDetails(mediaType: String) = seerrRequestState.loadServiceDetails(mediaType)
+    /**
+     * Opens the Seerr request dialog for [item]: the item plus the open
+     * cascade (service details, TV seasons for tv) are owned by the holder —
+     * the screen's dialog renders from the snapshot's `dialogItem`.
+     */
+    fun openRequestDialog(item: SeerrSearchItem) = seerrRequestState.openRequestDialog(item)
 
-    fun loadTvSeasons(tmdbId: Int) = seerrRequestState.loadTvSeasons(tmdbId)
+    /** Closes the dialog and clears the last request result (holder-owned ordering). */
+    fun dismissRequestDialog() = seerrRequestState.dismissRequestDialog()
 
     fun toggleSeason(tvId: Int, seasonNumber: Int) {
         if (_uiState.value.selectedSeasonNumber == seasonNumber) {
@@ -269,8 +275,6 @@ class SeerrDetailViewModel constructor(
             },
         )
     }
-
-    fun clearRequestResult() = seerrRequestState.clearRequestResult()
 
     fun getSeerrPosterUrl(path: String?): String? = buildPosterUrl(path)
 

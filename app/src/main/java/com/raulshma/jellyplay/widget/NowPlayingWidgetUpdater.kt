@@ -1,10 +1,10 @@
 package com.raulshma.jellyplay.widget
 
-import android.appwidget.AppWidgetManager
-import android.content.ComponentName
 import android.content.Context
 import android.graphics.Bitmap
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
+import com.raulshma.jellyplay.widget.skeleton.updateAllProviderWidgets
+import com.raulshma.jellyplay.widget.skeleton.widgetIdsFor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -29,6 +29,10 @@ import kotlinx.coroutines.launch
  * don't run at all — [NowPlayingWidget.onEnabled] / [onDeleted] /
  * [onDisabled] / [onAppWidgetOptionsChanged] call [onWidgetPresenceChanged]
  * to (re)start or stop us.
+ *
+ * What to push, and what the last push retained, is decided by
+ * [WidgetPushGate]; this class keeps the flow collection, the manager
+ * re-reads and the RemoteViews submission.
  */
 class NowPlayingWidgetUpdater (
     private val context: Context,
@@ -37,27 +41,23 @@ class NowPlayingWidgetUpdater (
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var metadataJob: Job? = null
     private var positionJob: Job? = null
-    private var lastArtwork: Bitmap? = null
-    private var lastItemId: String? = null
-
-    // Read/written from both the metadata and position collectors, which run
-    // as separate coroutines on the Dispatchers.Default pool — volatile so a
-    // position-tick thread always sees the metadata push that just landed.
-    // Compared via [sameRenderAs], never structural equals (see below).
-    @Volatile private var lastPushedRender: WidgetPushSnapshot? = null
+    private val pushGate = WidgetPushGate()
 
     fun start() {
         if (metadataJob?.isActive == true) return
-        val appWidgetManager = AppWidgetManager.getInstance(context)
-        val componentName = ComponentName(context, NowPlayingWidget::class.java)
-        val ids = appWidgetManager.getAppWidgetIds(componentName)
-        if (ids.isEmpty()) {
+        // The helper returns the ids it refreshed; the return is this
+        // site's presence check — nothing pinned means stay dormant.
+        val boundWidgetIds = updateAllProviderWidgets(
+            context = context,
+            providerClass = NowPlayingWidget::class.java,
+            updateAppWidget = { manager, id ->
+                NowPlayingWidget.updateAppWidget(context, manager, id)
+            },
+        )
+        if (boundWidgetIds.isEmpty()) {
             // Nothing pinned: stay dormant. The widget provider's
             // onEnabled/onAppWidgetOptionsChanged re-kicks us when one lands.
             return
-        }
-        for (id in ids) {
-            NowPlayingWidget.updateAppWidget(context, appWidgetManager, id)
         }
         metadataJob = scope.launch { observeMetadata() }
         positionJob = scope.launch { observePosition() }
@@ -70,9 +70,7 @@ class NowPlayingWidgetUpdater (
      */
     fun onWidgetPresenceChanged() {
         scope.launch {
-            val hasWidgets = AppWidgetManager.getInstance(context)
-                .getAppWidgetIds(ComponentName(context, NowPlayingWidget::class.java))
-                .isNotEmpty()
+            val hasWidgets = widgetIdsFor(context, NowPlayingWidget::class.java).isNotEmpty()
             if (hasWidgets) {
                 start()
             } else {
@@ -86,9 +84,7 @@ class NowPlayingWidgetUpdater (
         positionJob?.cancel()
         metadataJob = null
         positionJob = null
-        lastArtwork = null
-        lastItemId = null
-        lastPushedRender = null
+        pushGate.reset()
     }
 
     private suspend fun observeMetadata() {
@@ -109,15 +105,17 @@ class NowPlayingWidgetUpdater (
                     old.isPlaying == new.isPlaying
             }
             .collectLatest { snapshot ->
-                if (snapshot.itemId != lastItemId) {
-                    lastItemId = snapshot.itemId
-                    lastArtwork = null
-                }
                 val art = loadArtwork(snapshot.artUrl)
-                if (art != null) {
-                    lastArtwork = art
+                // The snapshot is re-read AFTER the artwork load — the manager
+                // may have moved on while the poster downloaded, and the pushed
+                // render wins over the metadata that triggered the load.
+                val pushed = NowPlayingWidgetRenderer.readPushSnapshot(audioPlaybackManager)
+                when (val decision = pushGate.decideOnMetadata(snapshot.itemId, art, pushed)) {
+                    is WidgetPushGate.Decision.Full -> pushUpdate(pushed, decision.albumArt)
+                    // The metadata source always pushes; Partial/Skip are the
+                    // position ticker's answers.
+                    else -> Unit
                 }
-                pushUpdate(readPushSnapshot(), lastArtwork)
             }
     }
 
@@ -150,19 +148,14 @@ class NowPlayingWidgetUpdater (
     private fun pushPositionUpdate() {
         // Position-only path: sends a partial RemoteViews (position label +
         // progress bar) instead of re-parceling the artwork bitmap and
-        // re-wiring click intents at 1 Hz.
-        val snapshot = readPushSnapshot()
-        val last = lastPushedRender
-        // The partial RemoteViews cannot re-render title/subtitle/artwork/
-        // empty-state — if any of those moved, defer to the metadata
-        // collector's full push instead of ticking the progress bar under
-        // stale metadata (the ticker can win the race while that collector
-        // is still loading the new artwork).
-        if (last?.sameNonPositionRenderAs(snapshot) != true) return
-        // Otherwise guarded by render equality so no redundant partial push
-        // crosses the binder.
-        if (last.sameRenderAs(snapshot)) return
-        lastPushedRender = snapshot
+        // re-wiring click intents at 1 Hz. The gate's
+        // [WidgetPushGate.decideOnPositionTick] (over
+        // [shouldPushPartialPosition]) holds the partial-vs-full race guard:
+        // defer to the metadata collector's full push whenever the partial
+        // couldn't re-render what moved, and suppress redundant pushes by
+        // render equality.
+        val snapshot = NowPlayingWidgetRenderer.readPushSnapshot(audioPlaybackManager)
+        if (pushGate.decideOnPositionTick(snapshot) != WidgetPushGate.Decision.Partial) return
 
         NowPlayingWidget.updateAllWidgetsPosition(
             context = context,
@@ -177,71 +170,13 @@ class NowPlayingWidgetUpdater (
         return WidgetImageLoader.loadPoster(context, url, cornerRadiusDp = 12f)
     }
 
-    /**
-     * Everything a full widget push renders, read from the manager in one
-     * pass. Also the sole input to the render-equality guards, so those
-     * guards and the pushes can never disagree about which values were
-     * observed.
-     */
-    private fun readPushSnapshot(): WidgetPushSnapshot = WidgetPushSnapshot(
-        title = audioPlaybackManager.title.value,
-        subtitle = audioPlaybackManager.artist.value.ifBlank { null },
-        isPlaying = audioPlaybackManager.isPlaying.value,
-        positionMs = audioPlaybackManager.currentPosition.value,
-        durationMs = audioPlaybackManager.duration.value,
-        artUrl = audioPlaybackManager.albumArtUrl.value,
-        isEmptyState = audioPlaybackManager.currentPlayingItemId.value == null,
-    )
-
     private fun pushUpdate(snapshot: WidgetPushSnapshot, albumArt: Bitmap?) {
-        lastPushedRender = snapshot
         NowPlayingWidget.updateAllWidgets(
             context = context,
-            title = snapshot.title,
-            subtitle = snapshot.subtitle,
-            isPlaying = snapshot.isPlaying,
+            snapshot = snapshot,
             albumArt = albumArt,
-            positionMs = snapshot.positionMs,
-            durationMs = snapshot.durationMs,
-            isEmptyState = snapshot.isEmptyState,
         )
     }
-
-    /**
-     * Equality key for the last pushed widget render — see [pushPositionUpdate].
-     * Position and duration are bucketed to whole seconds because the partial
-     * push ticks at 1 Hz anyway.
-     */
-    private fun WidgetPushSnapshot.sameRenderAs(other: WidgetPushSnapshot): Boolean =
-        title == other.title &&
-            subtitle == other.subtitle &&
-            isPlaying == other.isPlaying &&
-            positionMs / 1_000L == other.positionMs / 1_000L &&
-            durationMs / 1_000L == other.durationMs / 1_000L &&
-            artUrl == other.artUrl &&
-            isEmptyState == other.isEmptyState
-
-    /**
-     * Equality on everything the position-only partial push cannot render.
-     * [isPlaying] stays out of it: the partial push renders it into the
-     * position label ("Paused ·"), and the transport icon correction rides
-     * the metadata collector's full push.
-     */
-    private fun WidgetPushSnapshot.sameNonPositionRenderAs(other: WidgetPushSnapshot): Boolean =
-        title == other.title &&
-            subtitle == other.subtitle &&
-            artUrl == other.artUrl &&
-            isEmptyState == other.isEmptyState
-
-    private data class WidgetPushSnapshot(
-        val title: String,
-        val subtitle: String?,
-        val isPlaying: Boolean,
-        val positionMs: Long,
-        val durationMs: Long,
-        val artUrl: String?,
-        val isEmptyState: Boolean,
-    )
 
     private data class MetadataSnapshot(
         val itemId: String?,

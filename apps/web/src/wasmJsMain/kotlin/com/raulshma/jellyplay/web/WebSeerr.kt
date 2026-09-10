@@ -32,21 +32,18 @@ import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
 import com.raulshma.jellyplay.core.datastore.SeerrSecureCredentialsStore
 import com.raulshma.jellyplay.core.model.seerr.SeerrAuthMethod
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /**
- * Seerr credentials orchestration for the web shell (wave 16B) — the web
+ * Seerr credentials orchestration for the web shell — the web
  * counterpart of `SeerrSettingsViewModel`, cut down to what a browser can
  * actually do: server URL + API key entry. The ViewModel's cookie login
  * paths (Jellyfin/LOCAL) are deliberately ABSENT, not merely hidden: a
  * browser tab cannot set the `Cookie` request header (fetch-forbidden) nor
  * read `Set-Cookie`, so cookie credentials can never function here (see
  * SeerrWireSupport's WASM BROWSER CAVEAT and Main.kt's SEERR-ON-WEB
- * HONESTY). API-key mode is the only web-viable auth, and since wave 16B the
+ * HONESTY). API-key mode is the only web-viable auth, and since the
  * key persists across reloads via [LocalStorageSecureKeyValueStorage].
  *
  * Call order mirrors `SeerrSettingsViewModel.testApiKeyConnection` exactly:
@@ -74,8 +71,9 @@ internal class WebSeerrController(
     private val seerrRepository: SeerrRepository,
 ) {
     // Post-click work that must OUTLIVE the pane (see SIDE-EFFECT OWNERSHIP).
-    // Same lifetime discipline as WebConnectController.sideEffectScope.
-    private val sideEffectScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    // Same lifetime discipline as WebConnectController.sideEffectScope — the
+    // shared shape lives in [WebSideEffectScope].
+    private val sideEffectScope = WebSideEffectScope()
 
     /** Field-seeding snapshot read by [WebSeerrPane]'s hydration effect. */
     data class CredsState(val serverUrl: String, val apiKey: String)
@@ -113,7 +111,7 @@ internal class WebSeerrController(
      * Failures degrade silently (session-only persistence).
      */
     fun saveLater(serverUrl: String, apiKey: String) {
-        sideEffectScope.launch { persist(serverUrl, apiKey) }
+        sideEffectScope.launchDegrading { persist(serverUrl, apiKey) }
     }
 
     /**
@@ -149,7 +147,7 @@ internal class WebSeerrController(
      * `SeerrSettingsViewModel.disconnect`'s store-level reset. Fire-and-forget.
      */
     fun disconnectLater() {
-        sideEffectScope.launch {
+        sideEffectScope.launchDegrading {
             try {
                 seerrPreferencesStore.disconnect()
             } catch (_: Exception) {
@@ -172,7 +170,7 @@ internal class WebSeerrController(
 }
 
 /**
- * Seerr credentials pane (wave 16B): the first place web users can make the
+ * Seerr credentials pane: the first place web users can make the
  * requests feature work — server URL + API key, persist + test + disconnect.
  * All feedback is plain inline Text (no Scaffold/snackbar host; window.alert
  * is banned — same rules as WebConnectFlow), and every control is

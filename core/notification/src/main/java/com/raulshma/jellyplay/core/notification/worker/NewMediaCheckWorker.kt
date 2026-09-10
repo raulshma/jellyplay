@@ -7,6 +7,7 @@ import android.os.Build
 import androidx.core.content.ContextCompat
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
+import com.raulshma.jellyplay.core.concurrency.mapConcurrent
 import com.raulshma.jellyplay.core.data.repository.SeenMediaRecord
 import com.raulshma.jellyplay.core.data.repository.SeenMediaRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
@@ -15,12 +16,8 @@ import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.NotificationPreferences
 import com.raulshma.jellyplay.core.notification.dispatcher.NotificationDispatcher
 import com.raulshma.jellyplay.core.notification.scheduler.NotificationScheduler
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
 import java.io.IOException
 import java.net.SocketTimeoutException
 import java.util.Calendar
@@ -93,17 +90,16 @@ class NewMediaCheckWorker(
         // forever by a stale row. See SeenMediaRepository.reconcileAgainstLiveItemIds.
         val liveItemIds = ConcurrentHashMap.newKeySet<String>()
 
-        val newItemsByLibrary = coroutineScope {
-            enabledFolders.map { folder ->
-                async {
-                    if (isStopped) return@async null
-
-                    fetchGate.withPermit {
-                        fetchFolderNewItems(folder, prefs, isFirstScan, liveItemIds)
-                    }
-                }
-            }.awaitAll()
-        }.filterNotNull().toMap()
+        // A null from the transform means "worker stopped" (fetchFolderNewItems
+        // also returns null for "nothing new") — a caller policy, dropped here
+        // via filterNotNull rather than treated as a failure.
+        val newItemsByLibrary = fetchGate
+            .mapConcurrent(enabledFolders) { folder ->
+                if (isStopped) null
+                else fetchFolderNewItems(folder, prefs, isFirstScan, liveItemIds)
+            }
+            .filterNotNull()
+            .toMap()
 
         val thirtyDaysAgo = System.currentTimeMillis() - THIRTY_DAYS_MS
         seenMediaRepository.pruneOlderThan(thirtyDaysAgo)

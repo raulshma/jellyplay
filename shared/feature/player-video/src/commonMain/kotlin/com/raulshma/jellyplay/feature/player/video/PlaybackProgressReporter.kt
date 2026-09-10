@@ -9,6 +9,8 @@ import com.raulshma.jellyplay.core.ui.viewmodel.StateFlowHandle
 
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
+import com.raulshma.jellyplay.feature.player.video.engine.SegmentCalculator
+import com.raulshma.jellyplay.feature.player.video.engine.SegmentCalculatorInput
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -42,6 +44,8 @@ internal class PlaybackProgressReporter(
     private var endedNoNextTriggered = false
     private var watchedThresholdTriggered = false
     private var cachedDurationMs: Long = 0L
+    private var cachedState: VideoPlayerUiState? = null
+    private var cachedSegmentInput: SegmentCalculatorInput? = null
 
     fun startPositionTracking() {
         positionJob?.cancel()
@@ -49,6 +53,8 @@ internal class PlaybackProgressReporter(
         endedNoNextTriggered = false
         watchedThresholdTriggered = false
         cachedDurationMs = 0L
+        cachedState = null
+        cachedSegmentInput = null
         val engine = getMediaEngine() ?: return
         positionJob = scope.launch {
             var lastPos = Long.MIN_VALUE
@@ -103,8 +109,19 @@ internal class PlaybackProgressReporter(
         // to the previous `uiState.value.copy(currentPosition = ...)` form:
         // the copy was only ever read, never emitted to a StateFlow.
         val state = uiState.value
-        val seg = state.computeActiveSegment(currentPositionMs) ?: return
-        val behavior = state.behaviorForType(seg.type)
+        var input = cachedSegmentInput
+        // uiState is a low-frequency stream (position/duration live on
+        // dedicated ViewModel flows), so an instance-identity check rebuilds
+        // the segment input only when a segment-relevant field can actually
+        // have changed — the field list lives in [SegmentProjection], not
+        // duplicated here as a hand-maintained invalidation condition.
+        if (input == null || cachedState !== state) {
+            input = state.toSegmentInput()
+            cachedSegmentInput = input
+            cachedState = state
+        }
+        val seg = SegmentCalculator.computeActiveSegment(input, currentPositionMs) ?: return
+        val behavior = SegmentCalculator.behaviorForType(input, seg.type)
         if (behavior != SegmentBehavior.AUTO_SKIP) return
         if (seg.id in autoSkippedSegments) return
         autoSkippedSegments.add(seg.id)

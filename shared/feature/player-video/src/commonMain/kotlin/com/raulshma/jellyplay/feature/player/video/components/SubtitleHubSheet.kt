@@ -142,7 +142,7 @@ internal fun SubtitleHubSheet(
      */
     onUseSubtitle: (String) -> Boolean,
     isUploading: Boolean,
-    // KMP seam (wave 7C): the picked SAF document travels as its string form
+    // KMP seam: the picked SAF document travels as its string form
     // (android.net.Uri died with the commonMain move); the Android host
     // re-parses it at the call site.
     onUpload: (String, String, String?, Boolean, Boolean) -> Unit,

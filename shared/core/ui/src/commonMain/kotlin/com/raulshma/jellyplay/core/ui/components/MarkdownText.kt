@@ -16,7 +16,7 @@ import com.mikepenz.markdown.m3.markdownTypography
  * links (links route through the ambient `UriHandler`, opening in the
  * browser).
  *
- * Wave 21D collapsed the old expect/actual seam onto this ONE
+ *  collapsed the old expect/actual seam onto this ONE
  * implementation: while the catalog pin sat at 0.43.0 the mikepenz wasm
  * klibs were Kotlin-2.4-ABI (silently skipped by this repo's 2.3.21 klib
  * loader — spike w-10C class C), so wasm carried a home-grown

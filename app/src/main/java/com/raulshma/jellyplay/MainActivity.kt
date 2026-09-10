@@ -36,25 +36,25 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.core.view.WindowCompat
 import com.raulshma.jellyplay.R
 import com.raulshma.jellyplay.core.data.cast.withCastDiskReadsPermitted
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.data.remote.RemoteControlReceiver
 import com.raulshma.jellyplay.core.data.remote.RemoteNavigationBridge
 import com.raulshma.jellyplay.core.datastore.security.PinRateLimiter
 import com.raulshma.jellyplay.core.datastore.security.SecurityStore
-import com.raulshma.jellyplay.core.designsystem.theme.JellyPlayTheme
 import com.raulshma.jellyplay.core.ui.components.AuthChallengeScreen
 import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.core.ui.util.LocalNetworkAccess
-import com.raulshma.jellyplay.core.ui.components.BlueLightFilterBox
-import com.raulshma.jellyplay.core.ui.components.HandModeProvider
+import com.raulshma.jellyplay.core.ui.components.JellyPlayPreferenceTheme
 import com.raulshma.jellyplay.core.ui.components.rememberPreferenceDarkTheme
-import com.raulshma.jellyplay.core.ui.components.colorBlindFilter
 import com.raulshma.jellyplay.core.ui.tv.isTv
 import com.raulshma.jellyplay.di.KoinViewModelFactory
 import com.raulshma.jellyplay.navigation.JellyPlayApp
 import com.raulshma.jellyplay.shell.AppLockRedirect
 import com.raulshma.jellyplay.shell.AppLockState
+import com.raulshma.jellyplay.shell.PinGateController
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.koin.mp.KoinPlatform
 
@@ -63,22 +63,33 @@ class MainActivity : FragmentActivity() {
     private val viewModel: MainViewModel by viewModels { KoinViewModelFactory }
 
     // Cross-cutting shell infrastructure, resolved from the Koin container
-    // (wave 8B — Hilt removal) instead of re-exported through MainViewModel —
+    // instead of re-exported through MainViewModel —
     // the ViewModel exposes only the signals it owns plus the coordinator
-    // seam. Memoizing lazies preserve the old deferred field-inject timing.
-    private val userMessageBus: UserMessageBus by lazy { KoinPlatform.getKoin()!!.get() }
+    // seam. The four ShellInfra-bundled members
+    // became Lazy PROVIDERS (mirroring audioPlaybackManagerLazy below) so
+    // MainActivity.onCreate constructs none of them — JellyPlayApp resolves
+    // the bus/network pair at their composition branches and the
+    // remote-control pair inside their post-frame collection effects,
+    // keeping NetworkMonitor's connectivity-callback registration and the
+    // remote-control objects off the cold-start critical path (and out of
+    // auth/onboarding-only sessions entirely). Memoizing lazies preserve the
+    // old deferred field-inject timing.
+    private val userMessageBusLazy: kotlin.Lazy<UserMessageBus> =
+        lazy { KoinPlatform.getKoin()!!.get() }
     private val pinRateLimiter: PinRateLimiter by lazy { KoinPlatform.getKoin()!!.get() }
     private val securityStore: SecurityStore by lazy { KoinPlatform.getKoin()!!.get() }
     private val networkMonitor: NetworkMonitor by lazy { KoinPlatform.getKoin()!!.get() }
-    private val remoteNavigationBridge: RemoteNavigationBridge by lazy { KoinPlatform.getKoin()!!.get() }
-    private val remoteControlReceiver: RemoteControlReceiver by lazy { KoinPlatform.getKoin()!!.get() }
+    private val remoteNavigationBridgeLazy: kotlin.Lazy<RemoteNavigationBridge> =
+        lazy { KoinPlatform.getKoin()!!.get() }
+    private val remoteControlReceiverLazy: kotlin.Lazy<RemoteControlReceiver> =
+        lazy { KoinPlatform.getKoin()!!.get() }
     // Lazy deferral is load-bearing: the playback engine (AudioPlaybackManager
     // and its 14-dep graph) stays unbuilt for auth/onboarding-only sessions —
     // resolved only inside ShellInfra's authenticated branch (JellyPlayApp).
     private val audioPlaybackManagerLazy: kotlin.Lazy<AudioPlaybackManager> =
         lazy { KoinPlatform.getKoin()!!.get() }
 
-    // App-scoped lock flag (wave 20E): hoisted off the former compose-local
+    // App-scoped lock flag: hoisted off the former compose-local
     // `isPinUnlocked` mutableStateOf so PlayerActivity's redirect check (the
     // media-notification class-name-PendingIntent bypass fix) reads the SAME
     // flag this gate renders. Same resolution pattern as the shell infra
@@ -88,13 +99,25 @@ class MainActivity : FragmentActivity() {
     // change — instead of re-locking mid-session; see AppLockState KDoc).
     private val appLockState: AppLockState by lazy { KoinPlatform.getKoin()!!.get() }
 
-    private var backgroundedAt = 0L
+    // The PIN-attempt command fold (click-time lockout re-check, off-main
+    // verify, failure/success accounting) — composed here from the same Koin
+    // singletons the former inline `onPinEntered` body reached directly.
+    private val pinGateController: PinGateController by lazy {
+        PinGateController(
+            rateLimiter = pinRateLimiter,
+            appLockState = appLockState,
+            verifyPin = { pin -> securityStore.verifyPinOffMainThread(pin) },
+        )
+    }
 
-    // Set in onCreate before setContent: whether the one-time CastContext
-    // initialization succeeded. The hidden media-route button in setContent
-    // composes only on success so its setUpMediaRouteButton resolves the
-    // cached CastContext instead of re-triggering the Dynamite dex load.
-    private var castPreinitialized = false
+    // Flipped by the cast-init coroutine kicked off in onCreate just before
+    // setContent: whether the one-time CastContext initialization
+    // succeeded. Held as plain mutableStateOf — NOT remember-cached at the
+    // read site — so the hidden media-route button in setContent composes the
+    // moment it flips true (a frame or two after the first composition), and
+    // its setUpMediaRouteButton resolves the cached CastContext instead of
+    // re-triggering the Dynamite dex load.
+    private var castPreinitialized by mutableStateOf(false)
 
     private val requestNotificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -119,21 +142,14 @@ class MainActivity : FragmentActivity() {
         // in landscape with no control to unlock it. UNSPECIFIED follows the
         // system auto-rotate setting, matching the fresh-install default.
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-        // Initialize the Cast SDK here on Main — getSharedInstance is
-        // main-thread-only, so the old Dispatchers.Default prewarm always
-        // threw (silently swallowed), leaving the first composed frame to
-        // pay the full Dynamite dex load mid-composition. Running it in
-        // onCreate, before setContent and while the splash starting-window
-        // still covers the screen, hides that one-time cost; the dex reads
-        // are third-party and unavoidable, so debug StrictMode permits them.
-        // Every later getSharedInstance caller (the hidden route button
-        // below, CastManager, GoogleCastStrategy) hits the cached singleton.
-        castPreinitialized = packageManager.hasSystemFeature("com.google.android.gms.cast") &&
-            runCatching {
-                withCastDiskReadsPermitted {
-                    com.google.android.gms.cast.framework.CastContext.getSharedInstance(this)
-                }
-            }.isSuccess
+        // The one-time CastContext initialization (Dynamite dex load +
+        // hasSystemFeature binder call) used to run synchronously here, before
+        // setContent, putting both straight into TTID — the splash cannot
+        // release until onCreate + the first composition finish. It now runs
+        // in the coroutine kicked off just before setContent below;
+        // every later getSharedInstance caller (the hidden route button
+        // there, CastManager, GoogleCastStrategy) still hits the cached
+        // singleton.
         splashScreen.setKeepOnScreenCondition { viewModel.sessionCoordinator.isRestoring.value }
         // No custom setOnExitAnimationListener: the system default splash exit
         // is a clean cross-fade to the first composed frame. A manual listener
@@ -173,15 +189,16 @@ class MainActivity : FragmentActivity() {
         handleIncomingIntent(intent)
 
         // Bundled once here so the shell host's five cross-cutting services
-        // travel to JellyPlayApp → MainContent as one value; the
-        // AudioPlaybackManager stays lazy inside it (resolved only in the
-        // authenticated branch).
+        // travel to JellyPlayApp → MainContent as one value. All
+        // five are lazy providers — nothing below resolves any Koin single;
+        // each `.value` fires at the consumer's first real use (see
+        // ShellInfra's KDoc).
         val shellInfra = com.raulshma.jellyplay.shell.ShellInfra(
-            userMessageBus = userMessageBus,
-            networkStatus = networkMonitor.networkStatus,
+            userMessageBusLazy = userMessageBusLazy,
+            networkStatusLazy = lazy { networkMonitor.networkStatus },
             audioPlaybackManagerLazy = audioPlaybackManagerLazy,
-            remoteNavigationBridge = remoteNavigationBridge,
-            remoteControlReceiver = remoteControlReceiver,
+            remoteNavigationBridgeLazy = remoteNavigationBridgeLazy,
+            remoteControlReceiverLazy = remoteControlReceiverLazy,
         )
 
         // Pre-Android 13 per-app language: observe the saved language and apply
@@ -212,9 +229,31 @@ class MainActivity : FragmentActivity() {
             }
         }
 
+        // The CastContext init, kicked off here so it runs CONCURRENTLY
+        // with setContent instead of serially before it — onCreate (and thus
+        // TTID) no longer pays the Dynamite dex load + hasSystemFeature binder
+        // call. Still on Main (getSharedInstance is main-thread-only, the API
+        // has no off-thread variant), but on Dispatchers.Main — NOT
+        // Main.immediate, which would execute this body inline inside onCreate
+        // itself (there are no suspension points before the CastContext call)
+        // and reproduce today's serial cost — the posted task interleaves with
+        // the first composed frames, and castPreinitialized flips the hidden
+        // 1dp route button in one or two frames. The dex reads stay wrapped in
+        // withCastDiskReadsPermitted: the StrictMode permit is thread-scoped
+        // and the coroutine still runs on Main, so debug builds keep
+        // permitting exactly those third-party reads (release installs no
+        // policy either way).
+        lifecycleScope.launch(Dispatchers.Main) {
+            castPreinitialized = packageManager.hasSystemFeature("com.google.android.gms.cast") &&
+                runCatchingRethrowingCancellation {
+                    withCastDiskReadsPermitted {
+                        com.google.android.gms.cast.framework.CastContext.getSharedInstance(this@MainActivity)
+                    }
+                }.isSuccess
+        }
         setContent {
             val preferences by viewModel.preferences.collectAsStateWithLifecycle()
-            // The unlocked flag lives in the app-scoped holder (wave 20E) —
+            // The unlocked flag lives in the app-scoped holder —
             // collected here so the gate below recomposes exactly like the
             // former compose-local isPinUnlocked state did.
             val pinUnlocked by appLockState.unlocked.collectAsStateWithLifecycle()
@@ -222,12 +261,17 @@ class MainActivity : FragmentActivity() {
                 var pinVerifying by rememberSaveable { mutableStateOf(false) }
             val context = androidx.compose.ui.platform.LocalContext.current
 
-            // Hidden Cast media-route button, composed only when the onCreate
-            // CastContext prewarm succeeded — so setUpMediaRouteButton
-            // resolves the cached singleton and does no dex I/O. When Cast is
-            // unavailable the branch is skipped outright, matching the old
-            // fallback plain View (nothing references the invisible button).
-            if (remember { castPreinitialized }) {
+            // Hidden Cast media-route button, composed only once the onCreate
+            // cast-init coroutine (kicked off just before setContent)
+            // reports success — so setUpMediaRouteButton resolves the cached
+            // singleton and does no dex I/O. Reading castPreinitialized
+            // directly (no remember {}) subscribes this call site, so the
+            // button appears on the recomposition that lands the flip, a
+            // frame or two after the first composition. When Cast is
+            // unavailable (or not yet initialized) the branch is skipped
+            // outright, matching the old fallback plain View (nothing
+            // references the invisible button).
+            if (castPreinitialized) {
                 Box(
                     modifier = Modifier
                         .size(1.dp)
@@ -281,113 +325,67 @@ class MainActivity : FragmentActivity() {
                 )
             }
 
-            JellyPlayTheme(
+            JellyPlayPreferenceTheme(
+                preferences = preferences,
                 darkTheme = darkTheme,
-                dynamicColor = preferences.theme.dynamicTheming,
-                oledMode = preferences.theme.oledMode,
-                contrastLevel = preferences.contrastLevel,
                 isTv = isTv(),
-                performanceMode = preferences.performanceMode,
-                reduceMotion = preferences.reduceMotionEnabled,
-                accentColorSwatch = preferences.theme.accentColorSwatch,
-                colorStyle = preferences.theme.colorStyle,
-                themeVariant = preferences.themeVariant,
-                synthwaveAccent = preferences.synthwaveAccent,
-                soothingAccent = preferences.soothingAccent,
-                vividAccent = preferences.vividAccent,
-                auroraAccent = preferences.auroraAccent,
-                sakuraAccent = preferences.sakuraAccent,
-                vectorPopAccent = preferences.vectorPopAccent,
-                appFontScale = preferences.appFontScale,
             ) {
-                // Provide the motion/performance flags to the whole UI subtree in one place.
-                // JellyPlayTheme already uses these to pick its MotionScheme; providing them as
-                // CompositionLocals lets non-scheme animations (infinite loops, bespoke effects)
-                // honor both "Performance Mode" and "Reduce Motion" via LocalReducedMotion.
-                androidx.compose.runtime.CompositionLocalProvider(
-                    com.raulshma.jellyplay.core.ui.components.LocalPerformanceMode provides preferences.performanceMode,
-                    com.raulshma.jellyplay.core.ui.components.LocalReduceMotionEnabled provides preferences.reduceMotionEnabled,
-                    com.raulshma.jellyplay.core.ui.components.LocalReducedMotion provides
-                        (preferences.performanceMode || preferences.reduceMotionEnabled),
-                ) {
-                HandModeProvider(mode = preferences.handMode) {
-                    BlueLightFilterBox(
-                        enabled = preferences.blueLightFilterEnabled,
-                        strength = preferences.blueLightFilterStrength,
-                    ) {
-                        Box(
-                            modifier = Modifier.colorBlindFilter(preferences.colorBlindMode),
-                        ) {
-                            if (showLockScreen) {
-                                // Surface the rate-limit lockout to the user when present.
-                                val context = LocalContext.current
-                                val lockoutState = remember(preferences.pinLockoutUntilEpochMs) {
-                                    pinRateLimiter.getPinLockoutState()
-                                }
-                                val now = remember { System.currentTimeMillis() }
-                                val lockoutActive = lockoutState.isLockedOut && lockoutState.lockoutUntilEpochMs > now
-                                AuthChallengeScreen(
-                                    title = if (preferences.biometricLockEnabled && preferences.pinHash == null) stringResource(R.string.auth_title_biometric) else stringResource(R.string.auth_title_pin),
-                                    subtitle = stringResource(R.string.auth_subtitle),
-                                    pinHash = preferences.pinHash,
-                                    biometricEnabled = preferences.biometricLockEnabled,
-                                    enabled = !lockoutActive && !pinVerifying,
-                                    verifying = pinVerifying,
-                                    onPinEntered = { pin ->
-                                        if (pin.isEmpty()) {
-                                            appLockState.unlock()
-                                            pinError = null
-                                        } else if (preferences.pinHash != null) {
-                                            if (pinVerifying) return@AuthChallengeScreen
-                                            // Re-check the lockout at click time: the user
-                                            // may have triggered it on a previous attempt
-                                            // since the last composition. This counter read
-                                            // is cheap and stays on the caller thread.
-                                            val currentLockout = pinRateLimiter.getPinLockoutState()
-                                            val currentNow = System.currentTimeMillis()
-                                            if (currentLockout.isLockedOut && currentLockout.lockoutUntilEpochMs > currentNow) {
-                                                val remainingMs = currentLockout.lockoutUntilEpochMs - currentNow
-                                                pinError = formatLockoutMessage(context, remainingMs)
-                                                return@AuthChallengeScreen
-                                            }
-                                            // PBKDF2 verification is deliberately slow, so run
-                                            // it off the main thread; the success/failure
-                                            // accounting and optional hash upgrade follow it.
-                                            pinVerifying = true
-                                            lifecycleScope.launch {
-                                                val valid = securityStore.verifyPinOffMainThread(pin)
-                                                if (valid) {
-                                                    appLockState.unlock()
-                                                    pinError = null
-                                                    pinRateLimiter.resetPinLockout()
-                                                } else {
-                                                    val newState = pinRateLimiter.recordFailedPinAttempt()
-                                                    pinError = if (newState.isLockedOut) {
-                                                        formatLockoutMessage(context, newState.lockoutUntilEpochMs - System.currentTimeMillis())
-                                                    } else {
-                                                        context.getString(R.string.pin_incorrect)
-                                                    }
-                                                }
-                                                pinVerifying = false
-                                            }
-                                        }
-                                    },
-                                    onErrorClear = { pinError = null },
-                                    errorMessage = if (lockoutActive) {
-                                        formatLockoutMessage(context, lockoutState.lockoutUntilEpochMs - now)
-                                    } else {
-                                        pinError
-                                    },
-                                )
-                            } else {
-                                JellyPlayApp(
-                                    viewModel = viewModel,
-                                    infra = shellInfra,
-                                )
-                            }
-                        }
+                if (showLockScreen) {
+                    // Surface the rate-limit lockout to the user when present.
+                    val context = LocalContext.current
+                    val lockoutState = remember(preferences.pinLockoutUntilEpochMs) {
+                        pinRateLimiter.getPinLockoutState()
                     }
-                }
+                    val now = remember { System.currentTimeMillis() }
+                    val lockoutActive = lockoutState.isLockedOut && lockoutState.lockoutUntilEpochMs > now
+                    AuthChallengeScreen(
+                        title = if (preferences.biometricLockEnabled && preferences.pinHash == null) stringResource(R.string.auth_title_biometric) else stringResource(R.string.auth_title_pin),
+                        subtitle = stringResource(R.string.auth_subtitle),
+                        pinHash = preferences.pinHash,
+                        biometricEnabled = preferences.biometricLockEnabled,
+                        enabled = !lockoutActive && !pinVerifying,
+                        verifying = pinVerifying,
+                        onPinEntered = { pin ->
+                            // Both paths fold through the controller — it owns
+                            // the click-time lockout re-check and the
+                            // failure/success accounting.
+                            if (pin.isEmpty()) {
+                                // The empty-PIN shortcut shows no spinner (the old
+                                // inline path unlocked synchronously);
+                                // lifecycleScope's Main.immediate dispatch runs it
+                                // in this frame.
+                                lifecycleScope.launch {
+                                    pinGateController.submit(pin, onUnlocked = { pinError = null })
+                                }
+                            } else if (preferences.pinHash != null && !pinVerifying) {
+                                pinVerifying = true
+                                lifecycleScope.launch {
+                                    when (val outcome = pinGateController.submit(pin, onUnlocked = { pinError = null })) {
+                                        PinGateController.PinSubmitOutcome.Unlocked -> Unit
+                                        PinGateController.PinSubmitOutcome.Incorrect ->
+                                            pinError = context.getString(R.string.pin_incorrect)
+                                        is PinGateController.PinSubmitOutcome.LockedOut ->
+                                            pinError = PinGateController
+                                                .lockoutMessage(outcome.remainingMs)
+                                                .resolve(context)
+                                    }
+                                    pinVerifying = false
+                                }
+                            }
+                        },
+                        onErrorClear = { pinError = null },
+                        errorMessage = if (lockoutActive) {
+                            PinGateController.lockoutMessage(lockoutState.lockoutUntilEpochMs - now)
+                                .resolve(context)
+                        } else {
+                            pinError
+                        },
+                    )
+                } else {
+                    JellyPlayApp(
+                        viewModel = viewModel,
+                        infra = shellInfra,
+                    )
                 }
             }
         }
@@ -438,27 +436,29 @@ class MainActivity : FragmentActivity() {
         // (the shared singleton's activeCallbacks is PlayerActivity's engine, so
         // a pause here reached across Activities). LiveTV does not use it either
         // (it manages its own engine lifecycle), so there is nothing to pause.
-        // Only record backgrounding for the PIN auto-lock timer.
-        backgroundedAt = System.currentTimeMillis()
+        // Only record backgrounding for the PIN auto-lock timer — the stamp
+        // itself now lives in AppLockState (the lock family), not on this field.
+        appLockState.onBackgrounded(System.currentTimeMillis())
     }
 
     override fun onResume() {
         super.onResume()
 
-        if (backgroundedAt > 0L) {
-            val prefs = viewModel.preferences.value
-            if (AppLockRedirect.isGateConfigured(
-                    pinLockEnabled = prefs.pinLockEnabled,
-                    biometricLockEnabled = prefs.biometricLockEnabled,
-                ) && prefs.autoLockTimerMs > 0L
-            ) {
-                val elapsed = System.currentTimeMillis() - backgroundedAt
-                if (elapsed >= prefs.autoLockTimerMs) {
-                    appLockState.lock()
-                }
-            }
-            backgroundedAt = 0L
-        }
+        // The auto-lock-on-resume policy (gate configured + timer elapsed while
+        // backgrounded → relock) is folded into AppLockState.onResumed via
+        // AppLockRedirect.shouldRelock; this adapter only feeds it the same
+        // signals it always read at this point (current preferences + the
+        // resume-moment wall clock). onResumed consumes the background stamp
+        // unconditionally, exactly like the former `backgroundedAt = 0L` did.
+        val prefs = viewModel.preferences.value
+        appLockState.onResumed(
+            nowMs = System.currentTimeMillis(),
+            gateConfigured = AppLockRedirect.isGateConfigured(
+                pinLockEnabled = prefs.pinLockEnabled,
+                biometricLockEnabled = prefs.biometricLockEnabled,
+            ),
+            autoLockTimerMs = prefs.autoLockTimerMs,
+        )
     }
 
     override fun onStop() {
@@ -476,21 +476,14 @@ class MainActivity : FragmentActivity() {
 }
 
 /**
- * Formats a PIN-rate-limit lockout duration as a human-readable message.
- * Shows seconds when under a minute, otherwise minutes/hours.
+ * String-side twin of [PinGateController.lockoutMessage] — resolves the pure
+ * fold's buckets against the app resources (same `pin_lockout_*` strings the
+ * former in-activity formatter produced).
  */
-private fun formatLockoutMessage(context: Context, remainingMs: Long): String {
-    if (remainingMs <= 0L) return context.getString(R.string.pin_lockout_now)
-    val seconds = (remainingMs + 999L) / 1000L // round up so we never show 0s
-    return when {
-        seconds < 60 -> context.getString(R.string.pin_lockout_seconds, seconds)
-        seconds < 3600 -> context.getString(R.string.pin_lockout_minutes, seconds / 60)
-        seconds < 86400 -> {
-            val h = seconds / 3600
-            val m = (seconds % 3600) / 60
-            if (m == 0L) context.getString(R.string.pin_lockout_hours, h)
-            else context.getString(R.string.pin_lockout_hours_minutes, h, m)
-        }
-        else -> context.getString(R.string.pin_lockout_hours, seconds / 3600)
-    }
+private fun PinGateController.LockoutMessage.resolve(context: Context): String = when (this) {
+    is PinGateController.LockoutMessage.Now -> context.getString(R.string.pin_lockout_now)
+    is PinGateController.LockoutMessage.Seconds -> context.getString(R.string.pin_lockout_seconds, seconds)
+    is PinGateController.LockoutMessage.Minutes -> context.getString(R.string.pin_lockout_minutes, minutes)
+    is PinGateController.LockoutMessage.Hours -> context.getString(R.string.pin_lockout_hours, hours)
+    is PinGateController.LockoutMessage.HoursMinutes -> context.getString(R.string.pin_lockout_hours_minutes, hours, minutes)
 }

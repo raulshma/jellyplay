@@ -9,7 +9,7 @@ import java.io.File
 import java.io.FilenameFilter
 
 /**
- * Desktop (jvmMain) actual of the [EditorFilePicker] seam (wave 20A): the
+ * Desktop (jvmMain) actual of the [EditorFilePicker] seam: the
  * upload sheets' file-source rows open the native AWT FileDialog via the
  * shared [pickAwtFile] helper (:shared:core:ui jvmMain — the same modal
  * LOAD pattern every desktop picker seam uses) instead of no-op'ing.

@@ -26,8 +26,9 @@ data class WidgetDimensions(val width: Int, val height: Int)
  * @param context     used only to read the current orientation.
  * @param appWidgetId the widget whose options should be read.
  * @param defaultHeight fallback height when the reported value is `<= 0`
- *                      (e.g. 220 for continue-watching, 250 for recommendation
- *                      grids, 110 for the now-playing widget).
+ *                      (220 for continue-watching, 250 for recommendation
+ *                      grids, 110 for the now-playing widget — the per-widget
+ *                      constants live in [WidgetLayoutThresholds]).
  */
 fun computeWidgetDimensions(
     context: Context,
@@ -59,9 +60,12 @@ fun refreshWidgetDimensions(
 
 /**
  * Shared responsive rule of the recommendation grids: below these cell sizes
- * the title/subtitle container is hidden entirely.
+ * the title/subtitle container is hidden entirely. The breakpoints are
+ * single-homed in [WidgetLayoutThresholds].
  */
-fun WidgetDimensions.isTooSmallForText(): Boolean = height < 200 || width < 180
+fun WidgetDimensions.isTooSmallForText(): Boolean =
+    height < WidgetLayoutThresholds.GRID_CELL_TEXT_HIDE_HEIGHT_DP ||
+        width < WidgetLayoutThresholds.GRID_CELL_TEXT_HIDE_WIDTH_DP
 
 /**
  * Same dimension computation as [computeWidgetDimensions] but for callers that

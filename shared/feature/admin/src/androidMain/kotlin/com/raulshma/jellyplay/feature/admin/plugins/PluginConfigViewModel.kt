@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.raulshma.jellyplay.core.data.repository.AdminRepository
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import com.raulshma.jellyplay.feature.admin.AdminLoad
 import com.raulshma.jellyplay.feature.admin.generated.resources.Res
 import com.raulshma.jellyplay.feature.admin.generated.resources.admin_no_config_page
 import com.raulshma.jellyplay.feature.admin.users.detail.AdminUserMessage
@@ -42,18 +43,29 @@ class PluginConfigViewModel(
 
     private fun loadConfig(pluginId: String) {
         launch {
-            _state.value = _state.value.copy(isLoading = true, error = null)
-            prepareBridgeScript()
-            adminRepository.getPluginConfigPage(pluginId).onSuccess { page ->
-                if (page != null) {
-                    _state.value = _state.value.copy(configPageName = page.name, configPageHtml = page.html)
-                } else {
-                    _state.value = _state.value.copy(error = AdminUserMessage.Resource(Res.string.admin_no_config_page))
-                }
-            }.onFailure { e ->
-                Log.e("PluginConfig", "Failed to load config page", e)
-                _state.value = _state.value.copy(error = e.message?.let(AdminUserMessage::Raw))
-            }
+            AdminLoad.load(
+                start = { _state.value = _state.value.copy(isLoading = true, error = null) },
+                fetch = {
+                    // Bridge preparation precedes the page fetch (its legacy
+                    // position in the ladder).
+                    prepareBridgeScript()
+                    adminRepository.getPluginConfigPage(pluginId)
+                },
+                onSuccess = { page ->
+                    if (page != null) {
+                        _state.value = _state.value.copy(configPageName = page.name, configPageHtml = page.html)
+                    } else {
+                        _state.value = _state.value.copy(error = AdminUserMessage.Resource(Res.string.admin_no_config_page))
+                    }
+                },
+                onFailure = { e ->
+                    Log.e("PluginConfig", "Failed to load config page", e)
+                    _state.value = _state.value.copy(error = e.message?.let(AdminUserMessage::Raw))
+                },
+            )
+            // Final-update settle, the VM's legacy shape: the arms never touch
+            // the loading flag (including the no-page arm — its error shows
+            // under the same settling spinner).
             _state.value = _state.value.copy(isLoading = false)
         }
     }

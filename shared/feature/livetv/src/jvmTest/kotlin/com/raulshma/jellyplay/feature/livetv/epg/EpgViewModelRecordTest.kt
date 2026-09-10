@@ -1,8 +1,10 @@
 package com.raulshma.jellyplay.feature.livetv.epg
 
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
+import com.raulshma.jellyplay.core.data.util.SystemTimeSource
 import com.raulshma.jellyplay.core.model.EpgGuide
 import com.raulshma.jellyplay.core.model.LiveTvProgram
+import com.raulshma.jellyplay.feature.livetv.components.RecordDialogState
 import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
@@ -34,7 +36,7 @@ class EpgViewModelRecordTest {
 
     private val mainDispatcher = StandardTestDispatcher()
 
-    private lateinit var mediaRepository: MediaRepository
+    private lateinit var mediaRepository: LiveTvRepository
     private lateinit var viewModel: EpgViewModel
 
     @BeforeTest
@@ -44,7 +46,9 @@ class EpgViewModelRecordTest {
         coEvery { mediaRepository.getLiveTvGuide(any(), any(), any()) } returns Result.success(
             EpgGuide(channels = emptyList(), programs = emptyList())
         )
-        viewModel = EpgViewModel(mediaRepository)
+        // The real clock is fine here: this suite never advances the
+        // scheduler, so no time-derived behaviour is ever observed.
+        viewModel = EpgViewModel(mediaRepository, timeSource = SystemTimeSource(), gridDispatcher = mainDispatcher)
     }
 
     @AfterTest

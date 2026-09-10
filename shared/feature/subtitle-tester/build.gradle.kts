@@ -89,7 +89,7 @@ kotlin {
         // dormant state as every un-wired desktop route).
         getByName("androidMain").dependencies {
             // Largest documented shared→shared edge (was shared→legacy until
-            // the wave 7C player-video migration): the tester shares the
+            // the player-video migration): the tester shares the
             // player sheet's SubtitleStyleControls (799 LOC) and needs
             // PlayerEngineFactory + FontProvider — both Koin-owned singles in
             // shared/feature/player-video's androidPlayerVideoModule now.

@@ -1,17 +1,9 @@
 package com.raulshma.jellyplay.core.network.api
 
-import com.raulshma.jellyplay.core.model.HomeSectionQuery
-import com.raulshma.jellyplay.core.model.HomeSectionType
-import com.raulshma.jellyplay.core.model.LibraryFolder
-import com.raulshma.jellyplay.core.model.MediaItem
-import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.network.failover.ServerAddressRouter
-import io.mockk.coEvery
-import io.mockk.coVerify
 import io.mockk.mockk
-import io.mockk.spyk
 import kotlinx.coroutines.test.runTest
 import okhttp3.OkHttpClient
 import org.jellyfin.sdk.Jellyfin
@@ -19,21 +11,17 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
-import kotlin.test.assertTrue
 
 /**
- * Covers the home hot-path sub-call caches inside [LibraryApiClientImpl]
- * (`homeLatestMediaCache` / `homeSimilarCache`): back-to-back `getHomeSections`
- * calls with an identical query must not re-fan-out the underlying
- * `/Items/Latest` request, while `force = true` (pull-to-refresh) must bypass
- * the sub-cache and hit the server again.
+ * Covers the [LibraryApiClientImpl] behavior that needs a real engine: the
+ * favorite-flag cache hand-off between [LibraryApiClientImpl.setFavorite] and
+ * [LibraryApiClientImpl.toggleFavorite]. (The home-sections fetch
+ * choreography and its TTL sub-call caches moved to the commonMain
+ * `HomeSectionsFetcher` — pinned by `HomeSectionsFetcherTest` in commonTest.)
  *
  * Setup mirrors [AuthApiClientImplTest]: a real [JellyfinApiEngine] (mocked
- * Jellyfin SDK instance, real OkHttp) so the identity-keyed TtlCaches run for
- * real under a signed-in (server, user) pair. The client is a [spyk] whose
- * network leaf overrides are stubbed — the sub-cache wrapper logic itself
- * (`getLatestMediaForHome`) is the real code under test, and the underlying
- * [LibraryApiClientImpl.getLatestMedia] call count is the observable.
+ * Jellyfin SDK instance, real OkHttp) so the identity-keyed TtlCache runs for
+ * real under a signed-in (server, user) pair.
  */
 class LibraryApiClientImplTest {
 
@@ -54,91 +42,21 @@ class LibraryApiClientImplTest {
         serverId = "server-1",
     )
 
-    /** Latest Media only: the smallest query that still drives the sub-cache path. */
-    private val latestOnlyQuery = HomeSectionQuery(
-        enabledSections = setOf(HomeSectionType.LATEST_MEDIA),
-    )
-
     @BeforeTest
     fun setup() {
         val jellyfin = mockk<Jellyfin>(relaxed = true)
         engine = JellyfinApiEngine(
-            jellyfinLazy = dagger.Lazy { jellyfin },
-            okHttpClientLazy = dagger.Lazy { OkHttpClient() },
+            jellyfinLazy = LazyProvider { jellyfin },
+            okHttpClientLazy = LazyProvider { OkHttpClient() },
             deviceProfileProvider = DeviceProfileProvider(DesktopDeviceCodecCapabilities()),
             addressRouter = ServerAddressRouter(),
         )
-        // A signed-in (server, user) pair so the sub-caches key off a real
+        // A signed-in (server, user) pair so the favorite cache keys off a real
         // CacheIdentity instead of the pre-login UNKNOWN fallback.
         engine.updateServer(testServer)
         engine.updateUser(testUser)
 
-        client = spyk(LibraryApiClientImpl(engine, mockk(relaxed = true)))
-        coEvery { client.getLibraryFolders() } returns Result.success(
-            listOf(LibraryFolder(id = "movies", name = "Movies", collectionType = "movies")),
-        )
-        coEvery { client.getLatestMedia(any(), any()) } returns Result.success(
-            listOf(latestItem("movie-1")),
-        )
-    }
-
-    private fun latestItem(id: String) = MediaItem(
-        id = id,
-        name = "Latest $id",
-        mediaType = MediaType.MOVIE,
-    )
-
-    @Test
-    fun `identical back-to-back queries hit the latest-media sub-cache`() = runTest {
-        val first = client.getHomeSections(latestOnlyQuery)
-        val second = client.getHomeSections(latestOnlyQuery)
-
-        assertTrue(first.isSuccess)
-        assertTrue(second.isSuccess)
-        // The second call served the folder's latest-media row from the
-        // sub-cache instead of re-hitting /Items/Latest.
-        coVerify(exactly = 1) { client.getLatestMedia(any(), any()) }
-    }
-
-    @Test
-    fun `forced query bypasses the latest-media sub-cache`() = runTest {
-        val first = client.getHomeSections(latestOnlyQuery)
-        val forced = client.getHomeSections(latestOnlyQuery, force = true)
-
-        assertTrue(first.isSuccess)
-        assertTrue(forced.isSuccess)
-        // Pull-to-refresh re-issued the underlying request instead of serving
-        // the sub-cached row from the first call.
-        coVerify(exactly = 2) { client.getLatestMedia(any(), any()) }
-    }
-
-    @Test
-    fun `forced query leaves the sub-cache usable for subsequent normal reads`() = runTest {
-        client.getHomeSections(latestOnlyQuery)                    // populates: 1 fetch
-        client.getHomeSections(latestOnlyQuery, force = true)      // bypasses: 2 fetches
-        client.getHomeSections(latestOnlyQuery)                    // cache hit: still 2
-
-        coVerify(exactly = 2) { client.getLatestMedia(any(), any()) }
-    }
-
-    @Test
-    fun `forced query memoises the pulled rows for subsequent normal reads`() = runTest {
-        // The forced fetch must refresh the sub-cache, not just bypass its
-        // read: otherwise the next (non-forced) periodic refresh would serve
-        // the PRE-pull rows for up to the TTL and freshly-swiped content
-        // would visibly revert.
-        coEvery { client.getLatestMedia(any(), any()) } returnsMany listOf(
-            Result.success(listOf(latestItem("stale-row"))),
-            Result.success(listOf(latestItem("pulled-row"))),
-        )
-
-        client.getHomeSections(latestOnlyQuery)                // fetch 1: stale-row
-        client.getHomeSections(latestOnlyQuery, force = true)  // fetch 2: pulled-row
-
-        // No third fetch — and the served rows are the PULLED ones.
-        coVerify(exactly = 2) { client.getLatestMedia(any(), any()) }
-        val sections = client.getHomeSections(latestOnlyQuery).getOrThrow().sections
-        assertTrue(sections.any { it.items.any { item -> item.id == "pulled-row" } })
+        client = LibraryApiClientImpl(engine, mockk(relaxed = true))
     }
 
     private val favoriteItemId = FAVORITE_ITEM_ID
@@ -146,10 +64,17 @@ class LibraryApiClientImplTest {
     /**
      * Minimal recording [ApiClient]: the favorite paths run the REAL
      * `UserLibraryApi` over it (mockk can't proxy the final operations
-     * classes), with every request answered by an empty-object 200 whose
-     * `{}` body decodes to an all-defaults DTO.
+     * classes), with every request answered by a 200 whose body decodes to
+     * the DTO under test. Defaults to the all-defaults UserItemDataDto the
+     * favorite paths need; tests targeting other endpoints pass their own
+     * [responseBody].
      */
-    private class RecordingApiClient : org.jellyfin.sdk.api.client.ApiClient() {
+    private class RecordingApiClient(
+        private val responseBody: String = """
+            {"PlaybackPositionTicks":0,"PlayCount":0,"IsFavorite":false,
+            "Played":false,"Key":"k","ItemId":"$FAVORITE_ITEM_ID"}
+        """.trimIndent(),
+    ) : org.jellyfin.sdk.api.client.ApiClient() {
         val requests = mutableListOf<String>()
         override val baseUrl = "https://test.example.com"
         override val accessToken = "token-123"
@@ -171,13 +96,7 @@ class LibraryApiClientImplTest {
             requestBody: Any?,
         ): org.jellyfin.sdk.api.client.RawResponse {
             requests += "${method.name} $pathTemplate"
-            // UserItemDataDto has six REQUIRED fields, so the body must be
-            // complete (the favorite paths ignore the content anyway).
-            val body = """
-                {"PlaybackPositionTicks":0,"PlayCount":0,"IsFavorite":false,
-                "Played":false,"Key":"k","ItemId":"$FAVORITE_ITEM_ID"}
-            """.trimIndent()
-            return org.jellyfin.sdk.api.client.RawResponse(body.toByteArray(), 200, emptyMap())
+            return org.jellyfin.sdk.api.client.RawResponse(responseBody.toByteArray(), 200, emptyMap())
         }
     }
 
@@ -206,8 +125,65 @@ class LibraryApiClientImplTest {
         )
     }
 
+    @Test
+    fun `getContinueWatching drops played rows the server still reports resumable (#157)`() = runTest {
+        // /Items/Resume filters on PlaybackPositionTicks > 0 only — it does not
+        // exclude played items. A row with Played=true + a stale position is
+        // watched yet permanently resumable server-side; the client must drop
+        // it so a watched episode never occupies Continue Watching.
+        val api = RecordingApiClient(
+            responseBody = """
+                {"Items":[
+                    {"Id":"$POISONED_ITEM_ID","Name":"Poisoned","Type":"Movie",
+                     "UserData":{"PlaybackPositionTicks":5000000,"PlayCount":1,
+                                 "IsFavorite":false,"Played":true,"Key":"k1",
+                                 "ItemId":"$POISONED_ITEM_ID"}},
+                    {"Id":"$RESUMABLE_ITEM_ID","Name":"Resumable","Type":"Movie",
+                     "UserData":{"PlaybackPositionTicks":3000000,"PlayCount":0,
+                                 "IsFavorite":false,"Played":false,"Key":"k2",
+                                 "ItemId":"$RESUMABLE_ITEM_ID"}}
+                ],"TotalRecordCount":2,"StartIndex":0}
+            """.trimIndent(),
+        )
+        engine.updateApi(api)
+
+        val items = client.getContinueWatching(limit = 20).getOrThrow()
+
+        assertEquals(listOf("Resumable"), items.map { it.name })
+    }
+
+    @Test
+    fun `getContinueWatching with every row played yields an empty row, not a failure (#157)`() = runTest {
+        // All-played edge of the same filter: the row must collapse to empty
+        // (rendering "nothing to continue") rather than error or pass rows
+        // through because "everything was dropped".
+        val api = RecordingApiClient(
+            responseBody = """
+                {"Items":[
+                    {"Id":"$POISONED_ITEM_ID","Name":"Poisoned","Type":"Movie",
+                     "UserData":{"PlaybackPositionTicks":5000000,"PlayCount":1,
+                                 "IsFavorite":false,"Played":true,"Key":"k1",
+                                 "ItemId":"$POISONED_ITEM_ID"}},
+                    {"Id":"$RESUMABLE_ITEM_ID","Name":"Also Played","Type":"Episode",
+                     "UserData":{"PlaybackPositionTicks":3000000,"PlayCount":2,
+                                 "IsFavorite":false,"Played":true,"Key":"k2",
+                                 "ItemId":"$RESUMABLE_ITEM_ID"}}
+                ],"TotalRecordCount":2,"StartIndex":0}
+            """.trimIndent(),
+        )
+        engine.updateApi(api)
+
+        val items = client.getContinueWatching(limit = 20).getOrThrow()
+
+        assertEquals(emptyList(), items)
+    }
+
     private companion object {
         /** Real UUID: the favorite paths pass it through String.toUUID(). */
         const val FAVORITE_ITEM_ID = "2a2a2a2a-1111-4222-8222-333333333333"
+
+        /** Real UUIDs: the resume mapper reads Id through the same path. */
+        const val POISONED_ITEM_ID = "3b3b3b3b-1111-4333-8333-444444444444"
+        const val RESUMABLE_ITEM_ID = "4c4c4c4c-1111-4444-8444-555555555555"
     }
 }

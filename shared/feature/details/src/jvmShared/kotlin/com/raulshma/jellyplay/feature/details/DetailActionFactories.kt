@@ -11,6 +11,6 @@ package com.raulshma.jellyplay.feature.details
 internal class DetailActionFactories constructor(
     val downloads: DownloadLifecycleActions.Factory,
     val resync: ResyncActions.Factory,
-    val playlists: PlaylistActions.Factory,
+    val playlists: PlaylistTargets.Factory,
     val watchParty: WatchPartyActions.Factory,
 )

@@ -29,11 +29,8 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -45,6 +42,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Cast
 import com.composables.icons.tabler.outline.ChevronUp
@@ -56,7 +54,7 @@ import com.raulshma.jellyplay.R
 import com.raulshma.jellyplay.core.designsystem.theme.CastColors
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
-import com.raulshma.jellyplay.core.ui.tv.components.DpadSlider
+import kotlinx.coroutines.flow.StateFlow
 
 /**
  * Persistent transport bar shown while a "Play On" session is active. Two-row
@@ -67,7 +65,13 @@ import com.raulshma.jellyplay.core.ui.tv.components.DpadSlider
  *
  * Styled to match the floating navigation bar: translucent pill surface
  * (`surfaceContainer @ 0.65`, full-rounded), zero tonal/shadow elevation.
- * Pure-state — driven entirely by params.
+ * Low-frequency state (identity, connection, play/pause) arrives as plain
+ * params; the per-tick transport streams ([positionMsFlow], [durationMsFlow],
+ * [volumeFlow]) arrive as narrow StateFlows collected only at the leaf
+ * sliders that render them, so the ~1 Hz cast position tick recomposes just
+ * those sliders — never this bar's rows nor the app shell above it. Same
+ * leaf-collection rule as the video player's CompanionControlBar /
+ * ChapterPickerBinder binders.
  */
 @Composable
 fun PlayOnMiniBar(
@@ -76,9 +80,9 @@ fun PlayOnMiniBar(
     title: String,
     subtitle: String,
     isPlaying: Boolean,
-    positionMs: Long,
-    durationMs: Long,
-    volume: Float,
+    positionMsFlow: StateFlow<Long>,
+    durationMsFlow: StateFlow<Long>,
+    volumeFlow: StateFlow<Float>,
     onPlayPause: () -> Unit,
     onSeek: (Long) -> Unit,
     onVolume: (Float) -> Unit,
@@ -182,13 +186,10 @@ fun PlayOnMiniBar(
                         .focusGroup(),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    var seekPos by remember(positionMs) { mutableStateOf(positionMs.toFloat()) }
-                    LaunchedEffect(positionMs) { seekPos = positionMs.toFloat() }
-                    DpadSlider(
-                        value = seekPos,
-                        onValueChange = { seekPos = it },
-                        onValueChangeFinished = { onSeek(seekPos.toLong()) },
-                        valueRange = 0f..(durationMs.toFloat().coerceAtLeast(1f)),
+                    PlayOnCastSeekSlider(
+                        positionMsFlow = positionMsFlow,
+                        durationMsFlow = durationMsFlow,
+                        onSeek = onSeek,
                         colors = sliderColors(),
                         modifier = Modifier
                             .weight(1f)
@@ -203,10 +204,9 @@ fun PlayOnMiniBar(
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(18.dp),
                     )
-                    DpadSlider(
-                        value = volume,
-                        onValueChange = onVolume,
-                        valueRange = 0f..1f,
+                    PlayOnCastVolumeSlider(
+                        volumeFlow = volumeFlow,
+                        onVolume = onVolume,
                         colors = sliderColors(),
                         modifier = Modifier
                             .width(90.dp)

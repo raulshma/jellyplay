@@ -3,8 +3,12 @@ package com.raulshma.jellyplay.core.data.cast.dlna
 import android.content.Context
 import android.net.wifi.WifiManager
 import android.util.Log
+import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
 import com.raulshma.jellyplay.core.data.cast.CastDevice
+import com.raulshma.jellyplay.core.data.cast.CastMediaOptions
 import com.raulshma.jellyplay.core.data.cast.CastStrategy
+import com.raulshma.jellyplay.core.data.cast.withCastQueryParams
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.DlnaDeviceRef
 import kotlinx.coroutines.CoroutineScope
@@ -220,7 +224,7 @@ class DlnaCastStrategy(
         }
     }
 
-    fun play() {
+    override fun play() {
         val controlUrl = connectedDevice?.avTransportControlUrl ?: return
         scope.launch {
             UpnpControlPoint.play(controlUrl, client = okHttpClient)
@@ -228,7 +232,7 @@ class DlnaCastStrategy(
         }
     }
 
-    fun pause() {
+    override fun pause() {
         val controlUrl = connectedDevice?.avTransportControlUrl ?: return
         scope.launch {
             UpnpControlPoint.pause(controlUrl, client = okHttpClient)
@@ -244,7 +248,7 @@ class DlnaCastStrategy(
         }
     }
 
-    fun seekTo(positionMs: Long) {
+    override fun seekTo(positionMs: Long) {
         val controlUrl = connectedDevice?.avTransportControlUrl ?: return
         scope.launch {
             UpnpControlPoint.seek(controlUrl, positionMs = positionMs, client = okHttpClient)
@@ -280,7 +284,31 @@ class DlnaCastStrategy(
         }
     }
 
-    fun setRendererVolume(volume: Float) {
+    /**
+     * CastStrategy transport entry: folds the media item into the URL form
+     * [loadMedia]'s renderer call consumes. Returns false (no load issued,
+     * caller skips the state refresh) when the item carries no stream URI,
+     * matching the old CastManager.loadDlnaMedia early return.
+     */
+    override fun loadMedia(
+        mediaItem: MediaItem,
+        startPositionMs: Long,
+        listener: Player.Listener,
+        options: CastMediaOptions,
+    ): Boolean {
+        val url = mediaItem.localConfiguration?.uri?.toString() ?: return false
+        val title = mediaItem.mediaMetadata.title?.toString() ?: ""
+        // Track / quality selections are folded into the URL as Jellyfin query
+        // params — DLNA exposes no separate track-control channel.
+        loadMedia(
+            url = url.withCastQueryParams(options),
+            title = title,
+            positionMs = startPositionMs,
+        )
+        return true
+    }
+
+    override fun setRendererVolume(volume: Float) {
         val controlUrl = connectedDevice?.renderingControlUrl ?: return
         scope.launch {
             UpnpControlPoint.setVolume(controlUrl, volume = volume, client = okHttpClient)

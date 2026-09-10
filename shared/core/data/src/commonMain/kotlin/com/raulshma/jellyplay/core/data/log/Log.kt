@@ -2,7 +2,7 @@ package com.raulshma.jellyplay.core.data.log
 
 /**
  * Logging facade for data-layer code migrating off `android.util.Log`
- * (docs/kmp-migration-plan.md §Phase C4 part 2 — the "21 Log-only" portable
+ * (docs/kmp-migration-plan.md part 2 — the "21 Log-only" portable
  * files). Signature-for-signature mirror of the `android.util.Log` overloads
  * the legacy `:core:data` actually calls (d/i/w/e; no `v`/`wtf` call sites
  * exist), so migrated files keep their log statements verbatim and only the

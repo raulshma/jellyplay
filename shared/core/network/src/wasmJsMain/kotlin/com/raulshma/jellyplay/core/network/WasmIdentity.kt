@@ -10,7 +10,7 @@ import kotlinx.browser.localStorage
  * module-internal, so the network module carries its own copy. Used for the
  * probe fallback server id (matching `AuthApiClientImpl.probeServerInfo`'s
  * `UUID.randomUUID()` fallback) and as the GENERATOR for a fresh device id
- * when [persistedOrRandomDeviceId] finds none stored (wave 21C: the device id
+ * when [persistedOrRandomDeviceId] finds none stored (the device id
  * itself is now persisted across boots — no longer "random PER BOOT").
  */
 internal fun randomUuidV4(): String {
@@ -35,7 +35,7 @@ internal fun randomUuidV4(): String {
 }
 
 /**
- * The device id for this browser origin, stable across boots (wave 21C):
+ * The device id for this browser origin, stable across boots:
  * DIRECT localStorage under [WASM_DEVICE_ID_STORAGE_KEY], plain UUID string.
  *
  * WHY DIRECT localStorage AND NOT THE (by-now-existing) DATASTORE LAYER: the
@@ -44,7 +44,7 @@ internal fun randomUuidV4(): String {
  * the auth client first resolves — while the webDatastoreModule DataStores are
  * async (Flow/suspend reads); blocking-firstOrNull-style bridging would drag
  * the whole identity seam into coroutine plumbing for one 36-char string.
- * The precedent is the wave-16B Seerr-credential store
+ * The precedent is the Seerr-credential store
  * (`shared/core/datastore` LocalStorageSecureKeyValueStorage): direct
  * `kotlinx.browser.localStorage` access for a small config-tier value, with
  * the same failure behaviour — storage unavailable (disabled / private mode)

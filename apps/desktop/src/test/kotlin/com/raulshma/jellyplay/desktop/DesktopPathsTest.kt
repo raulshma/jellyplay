@@ -11,7 +11,7 @@ import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 /**
- * Pins [DesktopPaths.resolve]'s precedence table (wave 12A):
+ * Pins [DesktopPaths.resolve]'s precedence table:
  *
  *  1. `jellyplay.perf.dataDir` (system property, the perf harness's surgical
  *     override) wins over EVERYTHING and reroutes the whole tree under

@@ -24,20 +24,17 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import com.raulshma.jellyplay.core.ui.components.PullToRefreshBox
-import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -50,6 +47,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import org.koin.compose.viewmodel.koinViewModel
+import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
@@ -59,8 +57,6 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
-import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
-import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator
@@ -74,26 +70,18 @@ import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKey
+import com.raulshma.jellyplay.feature.livetv.isAiringAt
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import org.jetbrains.compose.resources.stringResource
+import com.raulshma.jellyplay.feature.livetv.components.RecordDialog
 import com.raulshma.jellyplay.feature.livetv.generated.resources.Res
-import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_action_cancel
-import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_action_done
-import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_action_ok
 import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_channel
 import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_epg_title
 import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_live
 import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_no_guide_available
 import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_record_once
-import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_record_program_prompt
-import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_record_schedule_failed
-import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_record_single_timer_note
-import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_record_success
-import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_recording_in_progress
-import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_scheduling_timer
-import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_will_be_recorded
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
@@ -122,6 +110,15 @@ fun EpgScreen(
 
     val backgroundColorState = rememberScreenBackgroundColorState()
     val focusRequester = remember { FocusRequester() }
+
+    // Guide auto-refresh is tied to screen visibility (same STARTED/STOP gate
+    // as the settings admin session polling): the 5-minute loop runs only
+    // while the EPG is foregrounded, not for the VM's whole lifetime in the
+    // back stack.
+    LifecycleStartEffect(Unit) {
+        viewModel.startAutoRefresh()
+        onStopOrDispose { viewModel.stopAutoRefresh() }
+    }
 
     JellyPlayScreenScaffold(
         title = stringResource(Res.string.livetv_epg_title),
@@ -155,7 +152,7 @@ fun EpgScreen(
                 ) {
                     EpgGrid(
                         gridData = viewModel.gridData,
-                        now = viewModel.now,
+                        now = viewModel.now.collectAsStateWithLifecycle(),
                         contentPadding = contentPad,
                         bottomPadding = bottomPad,
                         onProgramClick = onProgramClick,
@@ -170,62 +167,11 @@ fun EpgScreen(
     viewModel.recordDialog?.let { state ->
         RecordDialog(
             state = state,
-            onConfirm = { viewModel.confirmRecord() },
+            onRecordOnce = { viewModel.confirmRecord() },
+            onRecordSeries = {},
+            onCancelTimer = {},
+            onCancelSeries = {},
             onDismiss = { viewModel.dismissRecordDialog() },
-        )
-    }
-}
-
-@Composable
-private fun RecordDialog(
-    state: RecordDialogState,
-    onConfirm: () -> Unit,
-    onDismiss: () -> Unit,
-) {
-    when (state) {
-        is RecordDialogState.Confirm -> ConfirmDialog(
-            title = stringResource(Res.string.livetv_record_program_prompt),
-            message = state.program.name,
-            confirmText = stringResource(Res.string.livetv_record_once),
-            dismissText = stringResource(Res.string.livetv_action_cancel),
-            tone = ConfirmTone.NEUTRAL,
-            onConfirm = onConfirm,
-            onDismiss = onDismiss,
-            content = {
-                state.program.episodeTitle?.takeIf { it.isNotBlank() }?.let {
-                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                Text(
-                    stringResource(Res.string.livetv_record_single_timer_note),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            },
-        )
-        is RecordDialogState.Requesting -> AlertDialog(
-            onDismissRequest = onDismiss,
-            title = { Text(stringResource(Res.string.livetv_recording_in_progress)) },
-            text = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    JellyPlayLoadingIndicator()
-                    Spacer(Modifier.width(12.dp))
-                    Text(stringResource(Res.string.livetv_scheduling_timer))
-                }
-            },
-            confirmButton = {},
-            dismissButton = {},
-        )
-        is RecordDialogState.Success -> AlertDialog(
-            onDismissRequest = onDismiss,
-            title = { Text(stringResource(Res.string.livetv_record_success)) },
-            text = { Text(stringResource(Res.string.livetv_will_be_recorded, state.programName)) },
-            confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(Res.string.livetv_action_done)) } },
-        )
-        is RecordDialogState.Error -> AlertDialog(
-            onDismissRequest = onDismiss,
-            title = { Text(stringResource(Res.string.livetv_record_schedule_failed)) },
-            text = { Text(state.message) },
-            confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(Res.string.livetv_action_ok)) } },
         )
     }
 }
@@ -233,7 +179,10 @@ private fun RecordDialog(
 @Composable
 private fun EpgGrid(
     gridData: EpgGridData,
-    now: java.time.Instant,
+    // Held as a State (same idiom as KaraokeLyricsView's LongState) so the
+    // 30s now-tick never recomposes this grid or its channel rows: only the
+    // derived live-cell check and the now-line leaf below read it.
+    now: State<java.time.Instant>,
     contentPadding: androidx.compose.ui.unit.Dp,
     bottomPadding: androidx.compose.ui.unit.Dp,
     onProgramClick: (LiveTvProgram) -> Unit,
@@ -243,11 +192,6 @@ private fun EpgGrid(
     val density = LocalDensity.current
     val horizontalScrollState = rememberScrollState()
     val lazyListState = rememberLazyListState()
-    val nowOffsetDp = remember(now, gridData.windowStart) {
-        if (now < gridData.windowStart) 0f
-        else if (now > gridData.windowEnd) gridData.totalWidthDp
-        else now.offsetDp(gridData.windowStart)
-    }
     val channelColumnWidth = EpgGridLayout.CHANNEL_COLUMN_WIDTH
     val scope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
@@ -292,7 +236,6 @@ private fun EpgGrid(
                     totalWidthDp = gridData.totalWidthDp,
                     channelColumnWidth = channelColumnWidth,
                     horizontalScrollState = horizontalScrollState,
-                    nowOffsetDp = nowOffsetDp,
                 )
             }
 
@@ -326,34 +269,58 @@ private fun EpgGrid(
         // ── "Now" vertical indicator line ──
         // Rendered as an overlay across the full grid height, offset by the
         // current horizontal scroll so it tracks the current time accurately.
-        // The scroll value is read only inside the offset/graphicsLayer
-        // lambdas (layout/draw phase) so EPG scrolling never recomposes the
-        // grid; visibility is gated by a draw-phase alpha instead of the
-        // former composition-time range check.
-        if (now >= gridData.windowStart && now <= gridData.windowEnd) {
-            val channelColPx = with(density) { channelColumnWidth.toPx() }
-            val nowOffsetPx = with(density) { nowOffsetDp.dp.toPx() }
-            val totalWidthPx = with(density) { gridData.totalWidthDp.dp.toPx() }
-            Box(
-                modifier = Modifier
-                    .offset {
-                        val scrollPx = horizontalScrollState.value
-                        IntOffset(
-                            x = (channelColPx + nowOffsetPx - scrollPx).roundToInt(),
-                            y = 0,
-                        )
-                    }
-                    .graphicsLayer {
-                        val scrollPx = horizontalScrollState.value
-                        val xPx = channelColPx + nowOffsetPx - scrollPx
-                        alpha = if (xPx >= channelColPx && xPx <= channelColPx + totalWidthPx) 1f else 0f
-                    }
-                    .fillMaxHeight()
-                    .width(2.dp)
-                    .background(MaterialTheme.colorScheme.error.copy(alpha = 0.7f)),
-            )
-        }
+        // `now` is read only inside [NowIndicatorLine], so the 30s tick that
+        // moves the line recomposes just that leaf — never the channel rows
+        // or the time header above.
+        NowIndicatorLine(
+            now = now,
+            windowStart = gridData.windowStart,
+            windowEnd = gridData.windowEnd,
+            totalWidthDp = gridData.totalWidthDp,
+            channelColumnWidth = channelColumnWidth,
+            horizontalScrollState = horizontalScrollState,
+        )
     }
+}
+
+@Composable
+private fun NowIndicatorLine(
+    now: State<java.time.Instant>,
+    windowStart: java.time.Instant,
+    windowEnd: java.time.Instant,
+    totalWidthDp: Float,
+    channelColumnWidth: androidx.compose.ui.unit.Dp,
+    horizontalScrollState: androidx.compose.foundation.ScrollState,
+) {
+    val nowValue = now.value
+    if (nowValue < windowStart || nowValue > windowEnd) return
+
+    val density = LocalDensity.current
+    val channelColPx = with(density) { channelColumnWidth.toPx() }
+    val nowOffsetPx = with(density) { nowValue.offsetDp(windowStart).dp.toPx() }
+    val totalWidthPx = with(density) { totalWidthDp.dp.toPx() }
+    // The scroll value is read only inside the offset/graphicsLayer lambdas
+    // (layout/draw phase) so EPG scrolling never recomposes this leaf;
+    // visibility is gated by a draw-phase alpha instead of the former
+    // composition-time range check.
+    Box(
+        modifier = Modifier
+            .offset {
+                val scrollPx = horizontalScrollState.value
+                IntOffset(
+                    x = (channelColPx + nowOffsetPx - scrollPx).roundToInt(),
+                    y = 0,
+                )
+            }
+            .graphicsLayer {
+                val scrollPx = horizontalScrollState.value
+                val xPx = channelColPx + nowOffsetPx - scrollPx
+                alpha = if (xPx >= channelColPx && xPx <= channelColPx + totalWidthPx) 1f else 0f
+            }
+            .fillMaxHeight()
+            .width(2.dp)
+            .background(MaterialTheme.colorScheme.error.copy(alpha = 0.7f)),
+    )
 }
 
 @Composable
@@ -363,7 +330,6 @@ private fun TimeHeaderRow(
     totalWidthDp: Float,
     channelColumnWidth: androidx.compose.ui.unit.Dp,
     horizontalScrollState: androidx.compose.foundation.ScrollState,
-    nowOffsetDp: Float,
 ) {
     val markers = remember(windowStart, windowEnd) { buildTimeMarkers(windowStart, windowEnd) }
     Row(modifier = Modifier.fillMaxWidth()) {
@@ -411,7 +377,7 @@ private fun TimeHeaderRow(
 private fun ChannelProgramsRow(
     rowLayout: ChannelRowLayout,
     windowStart: java.time.Instant,
-    now: java.time.Instant,
+    now: State<java.time.Instant>,
     channelColumnWidth: androidx.compose.ui.unit.Dp,
     totalWidthDp: Float,
     horizontalScrollState: androidx.compose.foundation.ScrollState,
@@ -420,18 +386,19 @@ private fun ChannelProgramsRow(
     modifier: Modifier = Modifier,
 ) {
     // Derive the single currently-live program id for this row from `now`.
-    // The whole row recomposes on a 30s tick, but [ProgramCell] only re-reads
-    // this State via a derived check, so only the one cell whose live status
-    // actually flips is invalidated — not the entire program strip layout.
-    // `now` is held in a State so the derived value re-evaluates on each tick
-    // instead of capturing the parameter from the first composition.
-    val currentNow by rememberUpdatedState(now)
-    val liveProgramId by remember(rowLayout, windowStart) {
+    // `now` arrives as a State so the 30s tick never recomposes this row:
+    // the derived value re-evaluates on each tick and notifies readers only
+    // when the live program id actually flips — so just the one cell whose
+    // live status changes is invalidated, not the entire program strip.
+    // `now` is a remember key so a new State instance (e.g. VM swap) is not
+    // captured stale by the cached derived block.
+    val liveProgramId by remember(rowLayout, windowStart, now) {
         derivedStateOf {
+            // The shared airing predicate over the already-parsed layout
+            // Instants (non-null on both bounds → the same half-open
+            // [start, end) comparison this used to inline).
             val live = rowLayout.programLayouts.firstOrNull { layout ->
-                val s = layout.program.startInstant()
-                val e = layout.program.endInstant() ?: s
-                s != null && currentNow >= s && currentNow < (e ?: s)
+                isAiringAt(start = layout.start, end = layout.end, now = now.value)
             }
             live?.program?.id
         }

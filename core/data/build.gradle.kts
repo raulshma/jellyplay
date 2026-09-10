@@ -105,3 +105,12 @@ dependencies {
     testFixturesImplementation(libs.media3.exoplayer)
     testFixturesImplementation(libs.mockk)
 }
+
+// Run each test class in a fresh worker JVM. The suite mixes Robolectric
+// shadows, async receivers and coroutine scopes; a late in-flight coroutine
+// from one class can leak an uncaught exception into the *next* class's
+// kotlinx-coroutines-test TestScope on the same worker thread
+// (UncaughtExceptionsBeforeTest), which then fails an unrelated test.
+tasks.withType<Test>().configureEach {
+    forkEvery = 1
+}

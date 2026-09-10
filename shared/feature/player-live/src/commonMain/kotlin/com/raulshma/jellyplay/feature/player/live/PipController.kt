@@ -3,10 +3,10 @@ package com.raulshma.jellyplay.feature.player.live
 import kotlinx.coroutines.flow.StateFlow
 
 /**
- * PiP control seam for the live player (wave 19C): the member set
+ * PiP control seam for the live player: the member set
  * [LiveTvPlayerViewModel] actually drives so live playback mounted in the
  * app's dedicated PlayerActivity host can enter system Picture-in-Picture —
- * the same host VOD plays in. Shape mirrors the wave-8C `player-video`
+ * the same host VOD plays in. Shape mirrors the `player-video`
  * seam, but trimmed to live's usage (no pipHasNext: live has no "next
  * episode") and owned by this module so player-live keeps no dependency on
  * `player-video` (the only shared→shared feature edge so far is

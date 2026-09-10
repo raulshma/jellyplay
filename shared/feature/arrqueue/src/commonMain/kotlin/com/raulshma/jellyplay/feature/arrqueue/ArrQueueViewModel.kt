@@ -2,9 +2,12 @@ package com.raulshma.jellyplay.feature.arrqueue
 
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.State
+import com.raulshma.jellyplay.core.concurrency.DEFAULT_FANOUT_PARALLELISM
+import com.raulshma.jellyplay.core.concurrency.mapConcurrent
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
 import com.raulshma.jellyplay.core.model.ExperimentalFeature
+import com.raulshma.jellyplay.core.model.SelectionState
 import com.raulshma.jellyplay.core.model.arr.ArrQueueDeleteOptions
 import com.raulshma.jellyplay.core.model.arr.ArrQueueItem
 import com.raulshma.jellyplay.core.model.arr.ArrServiceKind
@@ -20,6 +23,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.sync.Semaphore
 
 /**
  * Inline action dialog shown for a queue row. Drives a small confirmation
@@ -42,12 +46,18 @@ data class ArrQueueUiState(
     val isLoading: Boolean = false,
     val error: String? = null,
     /** Stable row keys currently in selection mode. */
-    val selectedIds: Set<String> = emptySet(),
-    val selectionMode: Boolean = false,
+    val selection: SelectionState<String> = SelectionState(),
     val actionInProgress: Boolean = false,
     /** Inline action dialog to show, if any. */
     val pendingAction: ArrQueueAction? = null,
-)
+) {
+    /** Selection reads, delegated from the shared [SelectionState] algebra. */
+    val selectedIds: Set<String>
+        get() = selection.ids
+
+    val selectionMode: Boolean
+        get() = selection.active
+}
 
 class ArrQueueViewModel(
     private val arrRepository: ArrRepository,
@@ -110,23 +120,16 @@ class ArrQueueViewModel(
     // ── Selection ────────────────────────────────────────────────────────
 
     fun toggleSelection(item: ArrQueueItem) {
-        val key = item.rowKey
-        val current = _state.value.selectedIds
-        val next = if (key in current) current - key else current + key
-        _state.value = _state.value.copy(
-            selectedIds = next,
-            selectionMode = next.isNotEmpty(),
-        )
+        _state.value = _state.value.copy(selection = _state.value.selection.toggled(item.rowKey))
     }
 
     fun clearSelection() {
-        _state.value = _state.value.copy(selectedIds = emptySet(), selectionMode = false)
+        _state.value = _state.value.copy(selection = _state.value.selection.cleared())
     }
 
     fun selectAll() {
         _state.value = _state.value.copy(
-            selectedIds = _state.value.queue.map { it.rowKey }.toSet(),
-            selectionMode = true,
+            selection = _state.value.selection.selectAll(_state.value.queue.map { it.rowKey }),
         )
     }
 
@@ -178,6 +181,13 @@ class ArrQueueViewModel(
         }
     }
 
+    /**
+     * Bounds [deleteSelected]'s search-again fan-out — same idiom and width
+     * ([DEFAULT_FANOUT_PARALLELISM]) as WatchProgressHeatmapViewModel's
+     * resolveSemaphore and MusicHomeViewModel's fetchSemaphore.
+     */
+    private val searchSemaphore = Semaphore(DEFAULT_FANOUT_PARALLELISM)
+
     /** Bulk-delete every selected row. */
     fun deleteSelected(blocklist: Boolean, searchAgain: Boolean) {
         val selected = _state.value.queue.filter { it.rowKey in _state.value.selectedIds }
@@ -192,9 +202,17 @@ class ArrQueueViewModel(
             arrRepository.deleteQueueItems(selected, options)
                 .onSuccess {
                     if (searchAgain) {
-                        // Fire-and-forget per-item searches; grouped bulk
-                        // search is not exposed by the repository.
-                        selected.forEach { item ->
+                        // Per-item searches at bounded parallelism — a
+                        // 30-row selection used to pay 30 sequential
+                        // round-trips while actionInProgress blocked
+                        // further actions. mapConcurrent awaits every
+                        // search before returning, so clearSelection()
+                        // stays behind the whole fan-out exactly like the
+                        // old forEach; each searchForTmdb Result is
+                        // discarded per item (a failed search never aborts
+                        // the rest) and rows without a tmdbId are skipped.
+                        // Grouped bulk search is not exposed by the repository.
+                        searchSemaphore.mapConcurrent(selected) { item ->
                             item.tmdbId?.let { arrRepository.searchForTmdb(it, item.serverKind) }
                         }
                     }

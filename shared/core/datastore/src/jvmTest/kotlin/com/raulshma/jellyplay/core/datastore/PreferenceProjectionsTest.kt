@@ -13,13 +13,13 @@ import com.raulshma.jellyplay.core.model.ExperimentalPreferences
 import com.raulshma.jellyplay.core.model.LanguagePreferences
 import com.raulshma.jellyplay.core.model.NavigationCustomizationPreferences
 import com.raulshma.jellyplay.core.model.PlaybackPreferences
-import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.SecurityPreferences
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.SubtitlePreferences
 import com.raulshma.jellyplay.core.model.SyncPlayPreferences
 import com.raulshma.jellyplay.core.model.ThemeMode
 import com.raulshma.jellyplay.core.model.VideoPlayerPreferences
+import com.raulshma.jellyplay.core.model.platformEngineSupport
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -86,10 +86,18 @@ class PreferenceProjectionsTest {
 
     @Test
     fun `projections expose defaults before any write`() = runTest {
-        assertEquals(VideoPlayerPreferences(), projections.videoPlayerPreferences.first())
+        // The model's preferredPlayer default is the historical EXO_PLAYER;
+        // the read clamp surfaces the shipped default instead (desktop → MPV).
+        assertEquals(
+            VideoPlayerPreferences(preferredPlayer = platformEngineSupport.default),
+            projections.videoPlayerPreferences.first(),
+        )
         assertEquals(SecurityPreferences(), projections.securityPreferences.first())
         assertEquals(AppearancePreferences(), projections.appearancePreferences.first())
-        assertEquals(PlaybackPreferences(), projections.playbackPreferences.first())
+        assertEquals(
+            PlaybackPreferences(preferredPlayer = platformEngineSupport.default),
+            projections.playbackPreferences.first(),
+        )
         assertEquals(AudioPreferences(), projections.audioPreferences.first())
         assertEquals(SubtitlePreferences(), projections.subtitlePreferences.first())
         assertEquals(DownloadPreferences(), projections.downloadPreferences.first())
@@ -162,13 +170,16 @@ class PreferenceProjectionsTest {
     @Test
     fun `a playback preferred-player write reaches the video-player projection`() = runTest {
         // preferredPlayer is owned by PlaybackStore but read by the video-player
-        // surface — the projection must span stores.
+        // surface — the projection must span stores. On a single-engine
+        // platform (desktop/mpv) an unshipped write clamps to the shipped
+        // default instead of the raw value.
         val before = projections.videoPlayerPreferences.first().preferredPlayer
-        graph.playbackStore.setPreferredPlayer(
-            if (before == PlayerType.MPV) PlayerType.EXO_PLAYER else PlayerType.MPV,
+        val target = alternateShippedEngineOrProbe(before)
+        graph.playbackStore.setPreferredPlayer(target)
+        assertEquals(
+            clampedPreferredPlayer(target),
+            projections.videoPlayerPreferences.first().preferredPlayer,
         )
-        val after = projections.videoPlayerPreferences.first().preferredPlayer
-        assertNotEquals(before, after)
     }
 
     @Test

@@ -1,21 +1,29 @@
 package com.raulshma.jellyplay.feature.livetv.channeldetail
 
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
+import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import com.raulshma.jellyplay.feature.livetv.LiveTvLoad
+import com.raulshma.jellyplay.feature.livetv.components.RecordAction
+import com.raulshma.jellyplay.feature.livetv.components.RecordActions
+import com.raulshma.jellyplay.feature.livetv.components.RecordOutcome
+import com.raulshma.jellyplay.feature.livetv.isAiringAt
+import com.raulshma.jellyplay.feature.livetv.nowInstant
+import com.raulshma.jellyplay.feature.livetv.toInstantOrNull
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
-import java.time.Instant
 import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 class ChannelDetailViewModel(
-    private val mediaRepository: MediaRepository,
+    private val mediaRepository: LiveTvRepository,
     private val imageUrlProvider: ImageUrlProvider,
+    private val timeSource: TimeSource,
 ) : JellyPlayViewModel() {
 
     private val _uiState = stateFlow(ChannelDetailUiState())
@@ -33,31 +41,35 @@ class ChannelDetailViewModel(
     val messages: Flow<LiveTvUserMessage> = messageChannel.receiveAsFlow()
 
     fun loadChannel(channelId: String, channelName: String) {
-        _uiState.update { it.copy(channelId = channelId, channelName = channelName, isLoading = true, error = null) }
         launch {
             // 1. Channel meta (name/number/logo + currentProgram). limit matches
             //    ChannelsViewModel so channels beyond rank 50 are still found.
-            mediaRepository.getLiveTvChannels(limit = 100, addCurrentProgram = true)
-                .onSuccess { channels ->
+            //    A meta failure settles the error here and — via the returned
+            //    Result — skips leg 2 entirely.
+            val meta = LiveTvLoad.load(
+                start = {
+                    _uiState.update { it.copy(channelId = channelId, channelName = channelName, isLoading = true, error = null) }
+                },
+                fetch = { mediaRepository.getLiveTvChannels(limit = 100, addCurrentProgram = true) },
+                onSuccess = { channels ->
                     val channel = channels.firstOrNull { it.id == channelId }
                     if (channel != null) {
                         _uiState.update {
                             it.copy(
                                 channelName = channel.name.ifBlank { channelName },
                                 channelNumber = channel.number,
-                                channelLogoUrl = if (channel.imageTag != null) {
-                                    imageUrlProvider.getImageUrl(channelId)
-                                } else "",
+                                channelLogoUrl = imageUrlProvider.getImageUrlOrNull(channelId, channel.imageTag),
                                 channelBlurHash = channel.primaryBlurHash,
                                 currentProgram = channel.currentProgram,
                             )
                         }
                     }
-                }
-                .onFailure { e ->
+                },
+                onFailure = { e ->
                     _uiState.update { it.copy(isLoading = false, error = e.message ?: "Failed to load channel") }
-                    return@launch
-                }
+                },
+            )
+            if (meta.isFailure) return@launch
 
             // 2. Today's programs: now → end of day (local midnight).
             refreshPrograms(channelId, isInitialLoad = true)
@@ -75,25 +87,28 @@ class ChannelDetailViewModel(
      *   (initial-load semantics). Subsequent refreshes silently update the list.
      */
     private suspend fun refreshPrograms(channelId: String, isInitialLoad: Boolean = false) {
-        val now = OffsetDateTime.now()
+        // One injected-clock read drives both the request window and the
+        // ended/airing verdicts below, so the list can never disagree with
+        // the window it was fetched for.
+        val now = OffsetDateTime.ofInstant(timeSource.nowInstant(), ZoneId.systemDefault())
         val endOfDay = now.toLocalDate().plusDays(1).atStartOfDay(ZoneId.systemDefault()).toOffsetDateTime()
         val startIso = now.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
         val endIso = endOfDay.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
-        val nowInstant = Instant.now()
+        val nowInstant = now.toInstant()
 
         mediaRepository.getLiveTvPrograms(channelId, startIso, endIso)
             .onSuccess { all ->
+                // Both the ended-filter and the airing check read timestamps
+                // through the feature's shared lenient vocabulary (LiveTvTimeFormat)
+                // — offset-less server strings parse here too, so the two
+                // verdicts can no longer disagree (the C10 declared fix).
                 val upcoming = all
-                    .filter { p -> p.endDate?.let { runCatching { Instant.parse(it) }.getOrNull() }?.isAfter(nowInstant) ?: true }
+                    .filter { p -> p.endDate?.toInstantOrNull()?.isAfter(nowInstant) ?: true }
                     .sortedBy { p -> p.startDate ?: "" }
                 _uiState.update { it.copy(programs = upcoming, isLoading = false) }
                 // If the channel-meta currentProgram was null, resolve from the list.
                 if (_uiState.value.currentProgram == null) {
-                    val airing = upcoming.firstOrNull { p ->
-                        val s = p.startDate?.let { runCatching { Instant.parse(it) }.getOrNull() }
-                        val e = p.endDate?.let { runCatching { Instant.parse(it) }.getOrNull() }
-                        (s == null || !s.isAfter(nowInstant)) && (e == null || e.isAfter(nowInstant))
-                    }
+                    val airing = upcoming.firstOrNull { p -> isAiringAt(p, nowInstant) }
                     if (airing != null) _uiState.update { it.copy(currentProgram = airing) }
                 } else {
                     // Keep the hero in sync with the refreshed timer-state for the
@@ -113,62 +128,39 @@ class ChannelDetailViewModel(
     }
 
     // ── Recording actions ──
-    // Each schedules/cancels a timer then re-fetches today's program window so
-    // the Record ↔ Cancel button state follows the server's timer-state, and
-    // emits a one-shot message via [messageChannel] (matches the Programs tab).
+    // The shared [RecordActions] choreography, adapted to this tab's feedback
+    // surface: one-shot messages on [messageChannel] (success/canceled, Raw
+    // failure with the legacy fallback literals) and a re-fetch of today's
+    // program window after every successful action so the timer-state on each
+    // [LiveTvProgram] (and the Record ↔ Cancel button on the hero) follows the
+    // server.
+
+    private val recordActions = RecordActions(mediaRepository, scope) { outcome ->
+        when (outcome) {
+            is RecordOutcome.Success -> {
+                messageChannel.trySend(outcome.request.action.successMessage())
+                launch { refreshPrograms(_uiState.value.channelId) }
+            }
+            is RecordOutcome.Error ->
+                messageChannel.trySend(LiveTvUserMessage.Raw(outcome.message ?: outcome.request.action.failureFallback()))
+            is RecordOutcome.Requesting, RecordOutcome.Idle -> Unit
+        }
+    }
 
     fun recordProgram(program: LiveTvProgram) {
-        launch {
-            mediaRepository.createTimer(program.id)
-                .onSuccess {
-                    messageChannel.trySend(LiveTvUserMessage.RecordSuccess)
-                    refreshPrograms(_uiState.value.channelId)
-                }
-                .onFailure { e ->
-                    messageChannel.trySend(LiveTvUserMessage.Raw(e.message ?: "Failed to set recording"))
-                }
-        }
+        recordActions.recordOnce(program)
     }
 
     fun recordSeries(program: LiveTvProgram) {
-        launch {
-            mediaRepository.createSeriesTimer(program.id)
-                .onSuccess {
-                    messageChannel.trySend(LiveTvUserMessage.RecordSuccess)
-                    refreshPrograms(_uiState.value.channelId)
-                }
-                .onFailure { e ->
-                    messageChannel.trySend(LiveTvUserMessage.Raw(e.message ?: "Failed to set recording"))
-                }
-        }
+        recordActions.recordSeries(program)
     }
 
     fun cancelTimer(program: LiveTvProgram) {
-        val timerId = program.timerId ?: return
-        launch {
-            mediaRepository.cancelTimer(timerId)
-                .onSuccess {
-                    messageChannel.trySend(LiveTvUserMessage.RecordCanceled)
-                    refreshPrograms(_uiState.value.channelId)
-                }
-                .onFailure { e ->
-                    messageChannel.trySend(LiveTvUserMessage.Raw(e.message ?: "Failed to cancel recording"))
-                }
-        }
+        recordActions.cancelTimer(program)
     }
 
     fun cancelSeries(program: LiveTvProgram) {
-        val seriesTimerId = program.seriesTimerId ?: return
-        launch {
-            mediaRepository.cancelSeriesTimer(seriesTimerId)
-                .onSuccess {
-                    messageChannel.trySend(LiveTvUserMessage.RecordCanceled)
-                    refreshPrograms(_uiState.value.channelId)
-                }
-                .onFailure { e ->
-                    messageChannel.trySend(LiveTvUserMessage.Raw(e.message ?: "Failed to cancel recording"))
-                }
-        }
+        recordActions.cancelSeries(program)
     }
 
     /**
@@ -181,9 +173,25 @@ class ChannelDetailViewModel(
     fun getProgramBackdropUrl(program: LiveTvProgram): String {
         val directUrl = program.imageUrl
         return when {
-            program.imageTag != null -> imageUrlProvider.getImageUrl(program.id)
+            program.imageTag != null -> imageUrlProvider.getImageUrlOrNull(program.id, program.imageTag)
             directUrl != null -> directUrl
             else -> _uiState.value.channelLogoUrl
         }
     }
 }
+
+/** Timer creations announce success; cancels announce cancellation. */
+private fun RecordAction.successMessage(): LiveTvUserMessage =
+    if (this == RecordAction.RECORD_ONCE || this == RecordAction.RECORD_SERIES) {
+        LiveTvUserMessage.RecordSuccess
+    } else {
+        LiveTvUserMessage.RecordCanceled
+    }
+
+/** The failure fallback literals, kept byte-identical from the legacy bus call sites. */
+private fun RecordAction.failureFallback(): String =
+    if (this == RecordAction.RECORD_ONCE || this == RecordAction.RECORD_SERIES) {
+        "Failed to set recording"
+    } else {
+        "Failed to cancel recording"
+    }

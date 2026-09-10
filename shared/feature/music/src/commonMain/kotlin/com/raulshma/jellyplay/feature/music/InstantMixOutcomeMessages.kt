@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.music
 
 import androidx.compose.runtime.Composable
 import com.raulshma.jellyplay.core.data.playback.AudioQueueOutcome
+import com.raulshma.jellyplay.core.data.playback.InstantMixError
 import com.raulshma.jellyplay.feature.music.generated.resources.Res
 import com.raulshma.jellyplay.feature.music.generated.resources.music_mix_unavailable
 import org.jetbrains.compose.resources.StringResource
@@ -27,8 +28,22 @@ sealed interface MixErrorMessage {
 
 fun AudioQueueOutcome.toMixErrorMessage(): MixErrorMessage? = when (this) {
     AudioQueueOutcome.Empty -> MixErrorMessage.Resource(Res.string.music_mix_unavailable)
-    is AudioQueueOutcome.Failed -> MixErrorMessage.Raw(cause.message ?: "Failed to start Instant Mix")
+    is AudioQueueOutcome.Failed -> MixErrorMessage.Raw(cause.message ?: FAILED_TO_START_MIX)
     else -> null
+}
+
+/** Consumer-side fallback for failure causes that carry no message. */
+private const val FAILED_TO_START_MIX = "Failed to start Instant Mix"
+
+/**
+ * Same mapping for the shared [InstantMixStateHolder]'s error surface (the
+ * album/artist VMs fold holder state into their one `error` field): null
+ * stays null so a Started/Suppressed mix never touches the error channel.
+ */
+fun InstantMixError?.toMixErrorMessage(): MixErrorMessage? = when (this) {
+    InstantMixError.EmptyMix -> MixErrorMessage.Resource(Res.string.music_mix_unavailable)
+    is InstantMixError.Failed -> MixErrorMessage.Raw(message ?: FAILED_TO_START_MIX)
+    null -> null
 }
 
 @Composable

@@ -30,7 +30,7 @@ import org.koin.core.module.Module
 import org.koin.dsl.module
 
 /**
- * Koin construction owner for the migrated video player (wave 7C:
+ * Koin construction owner for the migrated video player (:
  * `:feature:player:video` + the absorbed `:feature:player:core` remains →
  * `shared/feature/player-video`). The engine stack, the session/subtitle
  * managers and the VideoPlayerViewModel/Screen monoliths live in this
@@ -53,15 +53,15 @@ import org.koin.dsl.module
  *
  * The ViewModel's six former legacy-Hilt ctor deps (PlaybackSessionManager,
  * CastManager, JellyfinRemotePlayCastStrategy, ActivePlayerController,
- * PipController, UserMessageBus) are wave-8C seam slots now: the legacy
+ * PipController, UserMessageBus) are seam slots now: the legacy
  * singletons are Koin-owned by the legacy :core:data's androidCoreDataModule
- * (since wave 8A) and are wrapped by the Android* adapters registered below —
+ * (since then) and are wrapped by the Android* adapters registered below —
  * the commonMain ViewModel never sees a legacy type. Every repository and
  * DataStore dep is Koin-native (dataJvmModule / datastoreCommonModule /
  * androidDataModule).
  */
 fun androidPlayerVideoModule(context: Context): Module = module {
-    // Wave 8C: the FontProvider/SubtitlePreviewRepository/PlayerEngineFactory
+    // The FontProvider/SubtitlePreviewRepository/PlayerEngineFactory
     // singles now register their commonMain seam interface (the ViewModel's
     // ctor slots are interface-typed) plus the concrete Android class for the
     // androidMain call sites (engines, overlay) — one instance, two keys.
@@ -86,8 +86,8 @@ fun androidPlayerVideoModule(context: Context): Module = module {
         )
     }
     single<PlayerEngineFactory> { get<AndroidPlayerEngineFactory>() }
-    // Wave 8C seam adapters around the legacy playback singletons
-    // (androidCoreDataModule since wave 8A). All lazy: deferral keeps the
+    //  seam adapters around the legacy playback singletons
+    // (androidCoreDataModule since then). All lazy: deferral keeps the
     // media3 graph off the startKoin path
     // until first resolution.
     single<VideoPlayerPlatform> { AndroidVideoPlayerPlatform(context, get()) }
@@ -101,6 +101,7 @@ fun androidPlayerVideoModule(context: Context): Module = module {
         VideoPlayerViewModel(
             platform = get(),
             mediaRepository = get(),
+            lyricsRepository = get(),
             playbackRepository = get(),
             subtitleProviderRepository = get(),
             streamingSubtitleStore = get(),

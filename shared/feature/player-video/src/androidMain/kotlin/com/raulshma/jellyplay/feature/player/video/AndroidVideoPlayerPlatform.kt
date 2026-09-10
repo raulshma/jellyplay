@@ -17,7 +17,7 @@ import com.raulshma.jellyplay.feature.player.video.trickplay.TrickplayController
 import com.raulshma.jellyplay.feature.player.video.trickplay.TrickplayManager
 
 /**
- * Android actual of the [VideoPlayerPlatform] aggregate seam (wave 8C): every
+ * Android actual of the [VideoPlayerPlatform] aggregate seam: every
  * member body is the exact code the commonMain-bound ViewModel /
  * PlayerSessionManager used to inline — moved verbatim, not re-modeled.
  * Captures the app [Context] plus the Hilt-owned legacy [CastManager] the
@@ -93,7 +93,7 @@ internal class AndroidVideoPlayerPlatform(
 /**
  * Android actual of the [OfflineMediaProbe] seam: the MediaMetadataRetriever
  * duration extraction and container→MIME mapping the offline load path used
- * inline (wave 8C move).
+ * inline (move).
  */
 private class AndroidOfflineMediaProbe : OfflineMediaProbe {
 

@@ -62,8 +62,10 @@ import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.formatBytes
+import com.raulshma.jellyplay.core.model.formatFixed
 import com.raulshma.jellyplay.core.model.legacy.UserPreferences
 import com.raulshma.jellyplay.core.model.isAudioType
+import com.raulshma.jellyplay.core.model.progressFraction
 import com.raulshma.jellyplay.core.model.seerr.SeerrRelatedVideo
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.seerr.TmdbImageUrls
@@ -76,7 +78,6 @@ import com.raulshma.jellyplay.core.ui.components.EpisodeWatchedTag
 import com.raulshma.jellyplay.core.ui.components.ExpandableText
 import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.components.SeerrMediaCard
-import com.raulshma.jellyplay.core.ui.components.progressFraction
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableItemRow
@@ -253,7 +254,7 @@ internal fun DetailContentBody(
                                 .clip(ShapeCache.smooth8)
                                 .then(seriesNavFocusState.focusModifier)
                                 .then(Modifier.tvFocusIndicator(seriesNavFocusState, ShapeCache.smooth8))
-                                .clickable { item.seriesId?.let(callbacks.onNavigateToSeries) }
+                                .clickable { item.seriesId?.let(callbacks.navigation.onNavigateToSeries) }
                                 .padding(vertical = 2.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
@@ -446,7 +447,7 @@ internal fun DetailContentBody(
                                     contentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.95f),
                                     enabled = genreNavEnabled,
                                     onClick = {
-                                        callbacks.onNavigate(
+                                        callbacks.navigation.onNavigate(
                                             com.raulshma.jellyplay.core.ui.navigation.Route.LibrarySection(
                                                 title = genre,
                                                 genre = genre,
@@ -476,7 +477,7 @@ internal fun DetailContentBody(
                                     containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
                                     contentColor = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.95f),
                                     onClick = {
-                                        callbacks.onNavigate(
+                                        callbacks.navigation.onNavigate(
                                             com.raulshma.jellyplay.core.ui.navigation.Route.LibrarySection(
                                                 title = tag.name,
                                                 tag = tag.name,
@@ -513,7 +514,7 @@ internal fun DetailContentBody(
                                         .then(
                                             if (studioNavEnabled) {
                                                 Modifier.clickable {
-                                                    callbacks.onNavigate(
+                                                    callbacks.navigation.onNavigate(
                                                         com.raulshma.jellyplay.core.ui.navigation.Route.StudioDetail(studio.id, studio.name),
                                                     )
                                                 }
@@ -595,8 +596,8 @@ internal fun DetailContentBody(
                         mediaStreams = source.mediaStreams,
                         selectedAudioIndex = state.selectedAudioIndex,
                         selectedSubtitleIndex = state.selectedSubtitleIndex,
-                        onAudioSelect = callbacks.onAudioSelect,
-                        onSubtitleSelect = callbacks.onSubtitleSelect,
+                        onAudioSelect = callbacks.playback.onAudioSelect,
+                        onSubtitleSelect = callbacks.playback.onSubtitleSelect,
                         preferences = state.preferences,
                     )
                 }
@@ -610,7 +611,7 @@ internal fun DetailContentBody(
                         mediaStreams = source.mediaStreams,
                         subtitles = if (state.capabilities.localSubtitleSelection) state.localSubtitles else emptyList(),
                         selectedSubtitleIndex = state.selectedLocalSubtitleIndex,
-                        onSelectSubtitle = callbacks.onSelectLocalSubtitle,
+                        onSelectSubtitle = callbacks.playback.onSelectLocalSubtitle,
                         horizontalPadding = bodyContentPad,
                     )
                 }
@@ -618,7 +619,7 @@ internal fun DetailContentBody(
                     LocalSubtitlePicker(
                         subtitles = state.localSubtitles,
                         selectedIndex = state.selectedLocalSubtitleIndex,
-                        onSelect = callbacks.onSelectLocalSubtitle,
+                        onSelect = callbacks.playback.onSelectLocalSubtitle,
                         modifier = Modifier.padding(horizontal = bodyContentPad),
                     )
                 }
@@ -677,10 +678,10 @@ internal fun DetailContentBody(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) { _, (index, chapter), focusModifier ->
                         val chapterImageUrl = remember(item.id, index, chapter.imageTag) {
-                            callbacks.getChapterImageUrl(item.id, index, chapter.imageTag)
+                            callbacks.artwork.getChapterImageUrl(item.id, index, chapter.imageTag)
                         }
                         val chapterClick = remember(chapter.startPositionTicks) {
-                            { callbacks.onPlayChapter(chapter.startPositionTicks) }
+                            { callbacks.playback.onPlayChapter(chapter.startPositionTicks) }
                         }
                         ChapterTile(
                             name = chapter.name,
@@ -711,9 +712,9 @@ internal fun DetailContentBody(
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     state.albumTracks.forEachIndexed { index, track ->
-                        val trackClick = remember(track.id) { { callbacks.onItemClick(track.id) } }
-                        val trackPlayClick = remember(track.id, index) { { callbacks.onPlayAlbumTrack(index); callbacks.onItemClick(track.id) } }
-                        val trackImageUrl = remember(track.id) { callbacks.getImageUrl(track.id) }
+                        val trackClick = remember(track.id) { { callbacks.navigation.onItemClick(track.id) } }
+                        val trackPlayClick = remember(track.id, index) { { callbacks.playback.onPlayAlbumTrack(index); callbacks.navigation.onItemClick(track.id) } }
+                        val trackImageUrl = remember(track.id) { callbacks.artwork.getImageUrl(track.id) }
                         FadingItem {
                             AlbumTrackItem(
                                 track = track,
@@ -736,9 +737,9 @@ internal fun DetailContentBody(
                         onPlayClick = {
                             val target = state.smartPlayTarget
                             val sourceId = null
-                            callbacks.onPlayClick(target.episode.id, sourceId, target.startPositionTicks)
+                            callbacks.playback.onPlayClick(target.episode.id, sourceId, target.startPositionTicks)
                         },
-                        onHideClick = callbacks.onHideDetailUpNext,
+                        onHideClick = callbacks.userData.onHideDetailUpNext,
                     )
                 }
             }
@@ -783,36 +784,36 @@ internal fun DetailContentBody(
                         episodes = filteredEpisodes,
                         fetchedSeasonIds = state.fetchedSeasonIds,
                         smartPlayTarget = state.smartPlayTarget,
-                        getImageUrl = callbacks.getImageUrl,
+                        getImageUrl = callbacks.artwork.getImageUrl,
                         currentItemId = if (item.mediaType == MediaType.EPISODE) item.id else null,
                         currentSeasonId = if (item.mediaType == MediaType.EPISODE) item.seasonId else null,
                         persistedSeasonId = state.persistedSeasonId,
                         onEpisodePlayClick = { episode ->
                             val sourceId = null
                             val startPos = episode.playbackPositionTicks ?: 0L
-                            callbacks.onPlayClick(episode.id, sourceId, startPos)
+                            callbacks.playback.onPlayClick(episode.id, sourceId, startPos)
                         },
                         onEpisodeDetailClick = { episode ->
-                            callbacks.onItemClick(episode.id)
+                            callbacks.navigation.onItemClick(episode.id)
                         },
-                        onEpisodeLongPress = callbacks.onMediaQuickActions,
-                        onFocusedEpisodeChange = callbacks.onFocusedMediaItem,
-                        onSeasonSelected = callbacks.onSeasonSelected,
-                        onSeasonPinned = callbacks.onSeasonPinned,
+                        onEpisodeLongPress = callbacks.screen.onMediaQuickActions,
+                        onFocusedEpisodeChange = callbacks.screen.onFocusedMediaItem,
+                        onSeasonSelected = callbacks.seasons.onSeasonSelected,
+                        onSeasonPinned = callbacks.seasons.onSeasonPinned,
                         hideEpisodeThumbnails = effectiveHideThumbnails,
                         episodesDescending = effectiveEpisodesDescending,
-                        onEpisodesDescendingChange = callbacks.onEpisodesDescendingChange,
+                        onEpisodesDescendingChange = callbacks.seasons.onEpisodesDescendingChange,
                         compactEpisodeList = state.preferences.compactEpisodeList,
-                        onCompactEpisodeListChange = callbacks.onCompactEpisodeListChange,
-                        onMarkSeasonPlayed = callbacks.onMarkSeasonPlayed,
-                        onMarkSeasonUnplayed = callbacks.onMarkSeasonUnplayed,
+                        onCompactEpisodeListChange = callbacks.seasons.onCompactEpisodeListChange,
+                        onMarkSeasonPlayed = callbacks.seasons.onMarkSeasonPlayed,
+                        onMarkSeasonUnplayed = callbacks.seasons.onMarkSeasonUnplayed,
                         // ── Episode parity: per-episode delete + local artwork ──
                         // Downloaded-episode set: for a LOCAL origin every episode is
                         // downloaded; for a REMOTE series we surface the loaded
                         // downloadedEpisodeIds (populated when the download sheet
                         // opened) so the trash badge matches the on-disk truth.
                         downloadedEpisodeIds = downloadedEpisodeIds,
-                        onEpisodeDeleteClick = { episode -> callbacks.onDeleteEpisode(episode.id) },
+                        onEpisodeDeleteClick = { episode -> callbacks.download.onDeleteEpisode(episode.id) },
                         // Resolve a downloaded episode thumbnail from DetailAssets before
                         // falling back to the server image url (which won't load offline).
                         getEpisodeLocalImagePath = { episode -> state.assets.episodeImages[episode.id] },
@@ -841,12 +842,12 @@ internal fun DetailContentBody(
                         contentPadding = PaddingValues(horizontal = bodyContentPad),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         onFocusedIndexChange = { index ->
-                            state.collectionItems.getOrNull(index)?.let(callbacks.onFocusedMediaItem)
+                            state.collectionItems.getOrNull(index)?.let(callbacks.screen.onFocusedMediaItem)
                         },
                     ) { _, collectionItem, focusModifier ->
-                            val collectionClick = remember(collectionItem.id) { { callbacks.onItemClick(collectionItem.id) } }
+                            val collectionClick = remember(collectionItem.id) { { callbacks.navigation.onItemClick(collectionItem.id) } }
                             val collectionProgress = collectionItem.progressFraction()
-                            val collectionImageUrl = remember(collectionItem.id) { callbacks.getImageUrl(collectionItem.id) }
+                            val collectionImageUrl = remember(collectionItem.id) { callbacks.artwork.getImageUrl(collectionItem.id) }
                             PosterCard(
                                 item = collectionItem,
                                 imageUrl = collectionImageUrl,
@@ -891,7 +892,7 @@ internal fun DetailContentBody(
                                         .clip(ShapeCache.smooth16)
                                         .then(seeAllFocusState.focusModifier)
                                         .then(Modifier.tvFocusIndicator(seeAllFocusState, ShapeCache.smooth16))
-                                        .clickable { callbacks.onSeeAllCast() }
+                                        .clickable { callbacks.navigation.onSeeAllCast() }
                                         .padding(horizontal = 8.dp, vertical = 4.dp),
                                 )
                             }
@@ -913,8 +914,8 @@ internal fun DetailContentBody(
                             horizontalArrangement = Arrangement.spacedBy(16.dp),
                         ) { _, person, focusModifier ->
                             if (personNavEnabled) {
-                                val personClick = remember(person.id) { { callbacks.onPersonClick(person.id) } }
-                                val personImageUrl = remember(person.id) { callbacks.getImageUrl(person.id) }
+                                val personClick = remember(person.id) { { callbacks.navigation.onPersonClick(person.id) } }
+                                val personImageUrl = remember(person.id) { callbacks.artwork.getImageUrl(person.id) }
                                 PersonItem(
                                     person = person,
                                     imageUrl = personImageUrl,
@@ -925,7 +926,7 @@ internal fun DetailContentBody(
                                 // Local portrait preferred, then server URL fallback.
                                 val localPortrait = state.assets.castImages[person.id]
                                 val personImageUrl = remember(person.id, localPortrait) {
-                                    localPortrait ?: callbacks.getImageUrl(person.id)
+                                    localPortrait ?: callbacks.artwork.getImageUrl(person.id)
                                 }
                                 com.raulshma.jellyplay.core.ui.components.OfflinePersonItem(
                                     person = person.toOfflinePersonInfo(),
@@ -943,7 +944,7 @@ internal fun DetailContentBody(
 
         StaggeredDetailSection(visible = showContent, delayIndex = 9) {
             if (state.relatedVideos.isNotEmpty()) {
-                VideosSection(videos = state.relatedVideos, onVideoClick = callbacks.onVideoClick)
+                VideosSection(videos = state.relatedVideos, onVideoClick = callbacks.seerr.onVideoClick)
             }
         }
 
@@ -991,11 +992,11 @@ internal fun DetailContentBody(
                         contentPadding = PaddingValues(horizontal = bodyContentPad),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         onFocusedIndexChange = { index ->
-                            moreLikeThis.getOrNull(index)?.let(callbacks.onFocusedMediaItem)
+                            moreLikeThis.getOrNull(index)?.let(callbacks.screen.onFocusedMediaItem)
                         },
                     ) { _, related, focusModifier ->
-                            val relatedClick = remember(related.id) { { callbacks.onItemClick(related.id) } }
-                            val relatedImageUrl = remember(related.id) { callbacks.getImageUrl(related.id) }
+                            val relatedClick = remember(related.id) { { callbacks.navigation.onItemClick(related.id) } }
+                            val relatedImageUrl = remember(related.id) { callbacks.artwork.getImageUrl(related.id) }
                             PosterCard(
                                 item = related,
                                 imageUrl = relatedImageUrl,
@@ -1023,8 +1024,8 @@ internal fun DetailContentBody(
                     keyPrefix = "seerr_rec",
                     contentType = "seerrRecItem",
                     items = state.seerrRecommendations,
-                    onSeerrRequest = callbacks.onSeerrRequest,
-                    onNavigate = callbacks.onNavigate,
+                    onSeerrRequest = callbacks.seerr.onSeerrRequest,
+                    onNavigate = callbacks.navigation.onNavigate,
                 )
             }
         }
@@ -1037,8 +1038,8 @@ internal fun DetailContentBody(
                     keyPrefix = "seerr_sim",
                     contentType = "seerrSimItem",
                     items = state.seerrSimilar,
-                    onSeerrRequest = callbacks.onSeerrRequest,
-                    onNavigate = callbacks.onNavigate,
+                    onSeerrRequest = callbacks.seerr.onSeerrRequest,
+                    onNavigate = callbacks.navigation.onNavigate,
                 )
             }
         }
@@ -1076,11 +1077,11 @@ internal fun DetailContentBody(
                     contentPadding = PaddingValues(horizontal = bodyContentPad),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     onFocusedIndexChange = { index ->
-                        extras.getOrNull(index)?.let(callbacks.onFocusedMediaItem)
+                        extras.getOrNull(index)?.let(callbacks.screen.onFocusedMediaItem)
                     },
                 ) { _, extra, focusModifier ->
-                    val extraClick = remember(extra.id) { { callbacks.onPlayExtra(extra) } }
-                    val extraImageUrl = remember(extra.id) { callbacks.getImageUrl(extra.id) }
+                    val extraClick = remember(extra.id) { { callbacks.playback.onPlayExtra(extra) } }
+                    val extraImageUrl = remember(extra.id) { callbacks.artwork.getImageUrl(extra.id) }
                     PosterCard(
                         item = extra,
                         imageUrl = extraImageUrl,
@@ -1121,12 +1122,12 @@ internal fun DetailContentBody(
                 SyncUpdateBanner(
                     syncState = state.detailContext?.syncState,
                     resyncState = state.resyncState,
-                    onClick = callbacks.onOpenResync,
+                    onClick = callbacks.download.onOpenResync,
                 )
                 DownloadInfoCard(
                     download = attachedDownload,
                     item = item,
-                    onClick = callbacks.onOpenDownloadDetails,
+                    onClick = callbacks.download.onOpenDownloadDetails,
                 )
             }
         }
@@ -1458,7 +1459,7 @@ private fun ReviewsSection(
                                 )
                                 review.authorDetails.rating?.let { rating ->
                                     Text(
-                                        text = stringResource(Res.string.detail_review_rating, rating),
+                                        text = stringResource(Res.string.detail_review_rating, formatFixed(rating, 1)),
                                         style = MaterialTheme.typography.labelMedium,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
@@ -1621,10 +1622,10 @@ internal fun UpNextSection(
                             )
                             .padding(8.dp),
                     )
-                    val t = target.startPositionTicks
-                    val rt = target.episode.runTimeTicks
-                    if (t > 0 && rt != null && rt > 0) {
-                        val progress = (t.toFloat() / rt).coerceIn(0f, 1f)
+                    // Smart-play resume math over the resolver's start position;
+                    // the > 0f check keeps the "no resume position" case barless.
+                    val progress = target.episode.progressFraction(target.startPositionTicks)
+                    if (progress != null && progress > 0f) {
                         Box(
                             modifier = Modifier
                                 .align(Alignment.BottomStart)

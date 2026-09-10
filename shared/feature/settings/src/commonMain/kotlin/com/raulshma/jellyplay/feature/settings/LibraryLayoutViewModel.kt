@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.settings
 
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
 import com.raulshma.jellyplay.core.datastore.PreferencesJson
 import com.raulshma.jellyplay.core.model.HomeLayoutConfig
@@ -34,6 +35,7 @@ class LibraryLayoutViewModel(
     private val homeDiscoveryStore: com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore,
     private val editor: PreferencesEditor,
     private val mediaRepository: MediaRepository,
+    private val playlistRepository: PlaylistRepository,
 ) : JellyPlayViewModel() {
 
     /**
@@ -147,7 +149,7 @@ class LibraryLayoutViewModel(
                             .items.map { PinnableOption(it.id, it.name) }
 
                     PinnedSectionType.PLAYLIST ->
-                        mediaRepository.getPlaylists(limit = 100).getOrDefault(emptyList())
+                        playlistRepository.getPlaylists(limit = 100).getOrDefault(emptyList())
                             .map { PinnableOption(it.id, it.name, "${it.itemCount} items") }
 
                     PinnedSectionType.GENRE ->

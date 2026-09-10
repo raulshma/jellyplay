@@ -3,10 +3,12 @@ package com.raulshma.jellyplay.feature.requests
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.snapshots.Snapshot
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
 import com.raulshma.jellyplay.core.model.ExperimentalFeature
+import com.raulshma.jellyplay.core.model.SelectionState
 import com.raulshma.jellyplay.core.model.arr.ArrDownloadSummary
 import com.raulshma.jellyplay.core.model.arr.ArrQueueDeleteOptions
 import com.raulshma.jellyplay.core.model.arr.ArrQueueItem
@@ -56,10 +58,16 @@ data class RequestsUiState(
     val searchQuery: String = "",
     val actionInProgress: Boolean = false,
     /** Selection-mode state for bulk approve/decline. */
-    val selectionMode: Boolean = false,
-    val selectedRequestIds: Set<Int> = emptySet(),
+    val selection: SelectionState<Int> = SelectionState(),
     val actionError: String? = null,
 ) {
+    /** Selection reads, delegated from the shared [SelectionState] algebra. */
+    val selectedRequestIds: Set<Int>
+        get() = selection.ids
+
+    val selectionMode: Boolean
+        get() = selection.active
+
     /** The filter-axis fields, bundled for hand-off to [RequestsFilterBar]. */
     val filters: RequestsFilterState
         get() = RequestsFilterState(
@@ -71,21 +79,6 @@ data class RequestsUiState(
             searchQuery = searchQuery,
         )
 }
-
-/**
- * The six request-filter fields that travel together from
- * [RequestsUiState] into [RequestsFilterBar]. Kept as a value so the bar's
- * signature is one parameter (plus the callbacks) rather than six loose ones.
- */
-@Immutable
-data class RequestsFilterState(
-    val filter: SeerrRequestFilter = SeerrRequestFilter.PENDING,
-    val mediaType: String? = null,
-    val sort: SeerrRequestSort = SeerrRequestSort.ADDED,
-    val sortDirection: String = "desc",
-    val showMyRequestsOnly: Boolean = false,
-    val searchQuery: String = "",
-)
 
 @OptIn(FlowPreview::class)
 class RequestsViewModel(
@@ -134,7 +127,9 @@ class RequestsViewModel(
         launch {
             seerrRepository.getRequestCount().onSuccess { count ->
                 if (count.pending == 0 && _state.value.filter == SeerrRequestFilter.PENDING) {
-                    _state.value = _state.value.copy(filter = SeerrRequestFilter.ALL)
+                    // Reset path: nothing pending → land on ALL (same write
+                    // algebra as the setters; page is still at 1 pre-first-load).
+                    _state.value = _state.value.withFilterState { it.withFilter(SeerrRequestFilter.ALL) }
                 }
             }
             loadRequests(refresh = true)
@@ -191,75 +186,112 @@ class RequestsViewModel(
         }
     }
 
+    /** Per-request media-details enrichment; rides the shared [enrichEach] choreography. */
     private fun enrichRequests(requests: List<SeerrRequestItem>) {
-        requests.forEach { request ->
-            val tmdbId = request.media.tmdbId
-            if (_state.value.mediaInfo.containsKey(tmdbId)) return@forEach
+        // tmdb ids collide across the movie/tv namespaces (movie 603 ≠ tv 603),
+        // so the fan-out key is the (tmdbId, isMovie) pair — one fetch per
+        // distinct pair, each hitting its OWN endpoint. mediaInfo stays
+        // tmdbId-keyed (the read side's shape), so same-id-different-type
+        // requests still overwrite one another on the write — the pre-fold
+        // behaviour, now at least fed by both correct fetches.
+        val distinctPairs = requests
+            .map { it.media.tmdbId to it.type.equals("movie", ignoreCase = true) }
+            .distinct()
+        enrichEach(
+            ids = distinctPairs,
+            skip = { (tmdbId, _) -> tmdbId in _state.value.mediaInfo },
+            fetch = { (tmdbId, isMovie) ->
+                if (isMovie) {
+                    seerrRepository.getMovieDetails(tmdbId).getOrNull()?.let {
+                        RequestMediaInfo(
+                            title = it.title,
+                            posterUrl = it.posterUrl,
+                            overview = it.overview,
+                            year = it.releaseDate?.take(4)?.toIntOrNull(),
+                        )
+                    }
+                } else {
+                    seerrRepository.getTvDetails(tmdbId).getOrNull()?.let {
+                        RequestMediaInfo(
+                            title = it.name,
+                            posterUrl = it.posterUrl,
+                            overview = it.overview,
+                            year = it.firstAirDate?.take(4)?.toIntOrNull(),
+                        )
+                    }
+                }
+            },
+            merge = { (tmdbId, _), info -> copy(mediaInfo = mediaInfo + (tmdbId to info)) },
+        )
+    }
 
+    /**
+     * The one enrichment choreography, shared by [enrichRequests] and
+     * [enrichDownloadProgress]: one launch per id in [ids] ([skip] drops
+     * already-cached ones at fan-out time), bounded by [enrichSemaphore], with
+     * per-item failures swallowed — [fetch] maps them to null. Each completion
+     * folds its payload through [merge] inside [updateState]'s atomic
+     * snapshot, so completions landing concurrently accumulate instead of
+     * losing one another's map writes.
+     */
+    private fun <Id, T> enrichEach(
+        ids: List<Id>,
+        skip: (Id) -> Boolean = { false },
+        fetch: suspend (Id) -> T?,
+        merge: RequestsUiState.(Id, T) -> RequestsUiState,
+    ) {
+        ids.forEach { id ->
+            if (skip(id)) return@forEach
             launch {
                 enrichSemaphore.withPermit {
-                    val info = if (request.type.equals("movie", ignoreCase = true)) {
-                        seerrRepository.getMovieDetails(tmdbId).getOrNull()?.let {
-                            RequestMediaInfo(
-                                title = it.title,
-                                posterUrl = it.posterUrl,
-                                overview = it.overview,
-                                year = it.releaseDate?.take(4)?.toIntOrNull(),
-                            )
-                        }
-                    } else {
-                        seerrRepository.getTvDetails(tmdbId).getOrNull()?.let {
-                            RequestMediaInfo(
-                                title = it.name,
-                                posterUrl = it.posterUrl,
-                                overview = it.overview,
-                                year = it.firstAirDate?.take(4)?.toIntOrNull(),
-                            )
-                        }
-                    }
-
-                    info?.let {
-                        val current = _state.value.mediaInfo.toMutableMap()
-                        current[tmdbId] = it
-                        _state.value = _state.value.copy(mediaInfo = current)
-                    }
+                    val payload = fetch(id) ?: return@withPermit
+                    updateState { it.merge(id, payload) }
                 }
             }
         }
     }
 
     /**
-     * Enriches each request with its direct *arr download progress, mirroring
-     * [enrichRequests]'s semaphore-bounded pattern. No-op when the
-     * [ExperimentalFeature.DIRECT_ARR_INTEGRATION] flag is off. Per-tmdb
+     * Atomic read-modify-write of the ui state: the whole [transform] runs in
+     * a single mutable snapshot, so two completions interleaving between
+     * another writer's read and write both land — the bare
+     * `_state.value = _state.value.copy(...)` this replaces silently dropped
+     * whichever completion lost that race. [removeQueueItem]'s two-key
+     * eviction rides the same path.
+     */
+    private fun updateState(transform: (RequestsUiState) -> RequestsUiState) {
+        Snapshot.withMutableSnapshot { _state.value = transform(_state.value) }
+    }
+
+    /**
+     * Enriches each distinct request tmdbId with its direct *arr download
+     * progress + full queue row (no-op when the
+     * [ExperimentalFeature.DIRECT_ARR_INTEGRATION] flag is off). Per-tmdb
      * failures are swallowed (the *arr repository already degrades to null);
-     * a missing download simply leaves the map untouched and the bottom sheet
-     * falls back to Seerr's raw `downloadStatus` text.
+     * a missing download simply leaves the maps untouched and the bottom
+     * sheet falls back to Seerr's raw `downloadStatus` text.
      */
     private fun enrichDownloadProgress(requests: List<SeerrRequestItem>) {
         if (!directArrEnabled.value) return
         val distinctTmdbIds = requests.mapNotNull { it.media.tmdbId.takeIf { id -> id != 0 } }.distinct()
         if (distinctTmdbIds.isEmpty()) return
-
-        distinctTmdbIds.forEach { tmdbId ->
-            launch {
-                enrichSemaphore.withPermit {
-                    val item = arrRepository.getQueueForTmdb(tmdbId) ?: return@withPermit
-                    val summary = ArrDownloadSummary(
-                        status = item.status,
-                        percent = item.percent,
-                        sizeLeft = item.sizeLeft,
-                        timeLeft = item.timeLeft,
-                    )
-                    _state.value = _state.value.let { s ->
-                        s.copy(
-                            downloadProgress = s.downloadProgress + (tmdbId to summary),
-                            queueItems = s.queueItems + (tmdbId to item),
+        enrichEach(
+            ids = distinctTmdbIds,
+            fetch = { tmdbId -> arrRepository.getQueueForTmdb(tmdbId) },
+            merge = { tmdbId, item ->
+                copy(
+                    downloadProgress = downloadProgress + (
+                        tmdbId to ArrDownloadSummary(
+                            status = item.status,
+                            percent = item.percent,
+                            sizeLeft = item.sizeLeft,
+                            timeLeft = item.timeLeft,
                         )
-                    }
-                }
-            }
-        }
+                        ),
+                    queueItems = queueItems + (tmdbId to item),
+                )
+            },
+        )
     }
 
     /**
@@ -284,7 +316,7 @@ class RequestsViewModel(
                         arrRepository.searchForTmdb(tmdbId, kind)
                     }
                     // Drop the cached progress + item; refresh re-populates if still present.
-                    _state.value = _state.value.let { s ->
+                    updateState { s ->
                         s.copy(
                             downloadProgress = s.downloadProgress - tmdbId,
                             queueItems = s.queueItems - tmdbId,
@@ -307,69 +339,57 @@ class RequestsViewModel(
         }
     }
 
-    fun setFilter(filter: SeerrRequestFilter) {
-        _state.value = _state.value.copy(filter = filter, currentPage = 1)
-        loadRequests(refresh = true)
+    /**
+     * Single write path for the filter axes: applies [transform] through the
+     * [RequestsFilterState] algebra (which carries the page-1 reset) and —
+     * unless [refresh] is suppressed — reloads immediately. [setSearchQuery]
+     * passes refresh=false; its reload rides the 400 ms debounce in [init].
+     */
+    private fun updateFilters(
+        refresh: Boolean = true,
+        transform: (RequestsFilterState) -> RequestsFilterState,
+    ) {
+        _state.value = _state.value.withFilterState(transform)
+        if (refresh) loadRequests(refresh = true)
     }
 
-    fun setSort(sort: SeerrRequestSort) {
-        _state.value = _state.value.copy(sort = sort, currentPage = 1)
-        loadRequests(refresh = true)
-    }
+    fun setFilter(filter: SeerrRequestFilter) = updateFilters { it.withFilter(filter) }
 
-    fun toggleSortDirection() {
-        val newDir = if (_state.value.sortDirection == "desc") "asc" else "desc"
-        _state.value = _state.value.copy(sortDirection = newDir, currentPage = 1)
-        loadRequests(refresh = true)
-    }
+    fun setSort(sort: SeerrRequestSort) = updateFilters { it.withSort(sort) }
 
-    fun setMediaType(mediaType: String?) {
-        _state.value = _state.value.copy(mediaType = mediaType, currentPage = 1)
-        loadRequests(refresh = true)
-    }
+    fun toggleSortDirection() = updateFilters { it.withSortDirectionToggled() }
 
-    fun toggleMyRequestsOnly() {
-        val newValue = !_state.value.showMyRequestsOnly
-        _state.value = _state.value.copy(showMyRequestsOnly = newValue, currentPage = 1)
-        loadRequests(refresh = true)
-    }
+    fun setMediaType(mediaType: String?) = updateFilters { it.withMediaType(mediaType) }
+
+    fun toggleMyRequestsOnly() = updateFilters { it.withMyRequestsOnlyToggled() }
 
     /**
-     * Updates the free-text [searchQuery]. The actual request is fired on a
+     * Updates the free-text [query]. The actual request is fired on a
      * 400ms debounce (collected in [init]) so each keystroke doesn't hit the
      * Seerr API. Clears back to page 1.
      */
-    fun setSearchQuery(query: String) {
-        _state.value = _state.value.copy(searchQuery = query, currentPage = 1)
-    }
+    fun setSearchQuery(query: String) = updateFilters(refresh = false) { it.withSearchQuery(query) }
 
     fun clearSearch() {
         if (_state.value.searchQuery.isBlank()) return
-        _state.value = _state.value.copy(searchQuery = "", currentPage = 1)
-        loadRequests(refresh = true)
+        updateFilters { it.withSearchQuery("") }
     }
 
     // ── Bulk selection ──────────────────────────────────────────────────────
 
     /** Toggles [request]'s membership in the selection; enters selection mode on first pick. */
     fun toggleSelection(request: SeerrRequestItem) {
-        val current = _state.value.selectedRequestIds
-        val next = if (request.id in current) current - request.id else current + request.id
-        _state.value = _state.value.copy(
-            selectedRequestIds = next,
-            selectionMode = next.isNotEmpty(),
-        )
+        _state.value = _state.value.copy(selection = _state.value.selection.toggled(request.id))
     }
 
     fun selectAll() {
         _state.value = _state.value.copy(
-            selectedRequestIds = _state.value.requests.map { it.id }.toSet(),
-            selectionMode = true,
+            selection = _state.value.selection.selectAll(_state.value.requests.map { it.id }),
         )
     }
 
     fun clearSelection() {
-        _state.value = _state.value.copy(selectedRequestIds = emptySet(), selectionMode = false)
+        _state.value = _state.value.copy(selection = _state.value.selection.cleared())
     }
 
     /** Approves every selected request; clears selection + refreshes on completion. */
@@ -390,7 +410,10 @@ class RequestsViewModel(
         launch {
             _state.value = _state.value.copy(actionInProgress = true, actionError = null)
             ids.forEach { id -> action(id) }
-            _state.value = _state.value.copy(actionInProgress = false, selectedRequestIds = emptySet(), selectionMode = false)
+            _state.value = _state.value.copy(
+                actionInProgress = false,
+                selection = _state.value.selection.cleared(),
+            )
             loadRequests(refresh = true)
         }
     }
@@ -411,55 +434,33 @@ class RequestsViewModel(
         }
     }
 
-    fun approveRequest(requestId: Int) {
+    /**
+     * Shared body for the five single-request actions (the one-request
+     * generalization of [runBulk]'s shape): flips [RequestsUiState.actionInProgress],
+     * runs [action], refreshes the list on success and surfaces the failure
+     * message on [RequestsUiState.actionError]; the busy flag drops after
+     * either outcome. The success payload (e.g. the approved request) is
+     * deliberately ignored.
+     */
+    private fun runRequestAction(action: suspend () -> Result<*>) {
         launch {
             _state.value = _state.value.copy(actionInProgress = true, actionError = null)
-            seerrRepository.approveRequest(requestId)
+            action()
                 .onSuccess { loadRequests(refresh = true) }
                 .onFailure { _state.value = _state.value.copy(actionError = it.message) }
             _state.value = _state.value.copy(actionInProgress = false)
         }
     }
 
-    fun declineRequest(requestId: Int) {
-        launch {
-            _state.value = _state.value.copy(actionInProgress = true, actionError = null)
-            seerrRepository.declineRequest(requestId)
-                .onSuccess { loadRequests(refresh = true) }
-                .onFailure { _state.value = _state.value.copy(actionError = it.message) }
-            _state.value = _state.value.copy(actionInProgress = false)
-        }
-    }
+    fun approveRequest(requestId: Int) = runRequestAction { seerrRepository.approveRequest(requestId) }
 
-    fun retryRequest(requestId: Int) {
-        launch {
-            _state.value = _state.value.copy(actionInProgress = true, actionError = null)
-            seerrRepository.retryRequest(requestId)
-                .onSuccess { loadRequests(refresh = true) }
-                .onFailure { _state.value = _state.value.copy(actionError = it.message) }
-            _state.value = _state.value.copy(actionInProgress = false)
-        }
-    }
+    fun declineRequest(requestId: Int) = runRequestAction { seerrRepository.declineRequest(requestId) }
 
-    fun deleteRequest(requestId: Int) {
-        launch {
-            _state.value = _state.value.copy(actionInProgress = true, actionError = null)
-            seerrRepository.deleteRequest(requestId)
-                .onSuccess { loadRequests(refresh = true) }
-                .onFailure { _state.value = _state.value.copy(actionError = it.message) }
-            _state.value = _state.value.copy(actionInProgress = false)
-        }
-    }
+    fun retryRequest(requestId: Int) = runRequestAction { seerrRepository.retryRequest(requestId) }
 
-    fun removeFromService(mediaId: Int, is4k: Boolean) {
-        launch {
-            _state.value = _state.value.copy(actionInProgress = true, actionError = null)
-            seerrRepository.deleteMedia(mediaId, is4k)
-                .onSuccess { loadRequests(refresh = true) }
-                .onFailure { _state.value = _state.value.copy(actionError = it.message) }
-            _state.value = _state.value.copy(actionInProgress = false)
-        }
-    }
+    fun deleteRequest(requestId: Int) = runRequestAction { seerrRepository.deleteRequest(requestId) }
+
+    fun removeFromService(mediaId: Int, is4k: Boolean) = runRequestAction { seerrRepository.deleteMedia(mediaId, is4k) }
 
     fun clearActionError() {
         _state.value = _state.value.copy(actionError = null)

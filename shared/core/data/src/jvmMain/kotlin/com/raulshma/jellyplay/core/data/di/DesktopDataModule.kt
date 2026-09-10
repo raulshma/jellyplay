@@ -23,13 +23,16 @@ import com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStore
 import com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStoreImpl
 import com.raulshma.jellyplay.core.data.update.AppUpdateRepository
 import com.raulshma.jellyplay.core.data.update.AppUpdateRepositoryImpl
-import com.raulshma.jellyplay.core.data.util.DesktopImageUrlProvider
+import com.raulshma.jellyplay.core.data.util.ImageUrlProviderImpl
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.data.util.DataBuildFlags
 import com.raulshma.jellyplay.core.data.widget.ContinueWatchingBroadcaster
 import com.raulshma.jellyplay.core.data.widget.LibrarySyncHook
 import com.raulshma.jellyplay.core.data.worker.DesktopAutoDownloadScheduler
 import com.raulshma.jellyplay.core.data.worker.DesktopDownloadManager
+import com.raulshma.jellyplay.core.data.worker.DesktopPlaybackSyncScheduler
+import com.raulshma.jellyplay.core.data.worker.PlaybackOutboxDrainer
+import com.raulshma.jellyplay.core.data.worker.PlaybackOutboxDrainerImpl
 import com.raulshma.jellyplay.core.data.worker.PlaybackSyncScheduler
 import com.raulshma.jellyplay.core.data.worker.TvWatchNextScheduler
 import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
@@ -40,10 +43,10 @@ import org.koin.core.module.Module
 import org.koin.dsl.module
 
 /**
- * Desktop platform pick of the Koin-owned data layer (Phase C4 part 2).
+ * Desktop platform pick of the Koin-owned data layer (part 2).
  * Holds the always-connected connectivity seams, the LinkedHashMap-based
  * image-URL memoiser, the (unsupported, badge-less) desktop stream
- * probe, and the file-backed StreamingSubtitleStore (wave 18B); everything
+ * probe, and the file-backed StreamingSubtitleStore; everything
  * else resolves from [dataJvmModule].
  *
  * V3 downloads conveyor: also holds the desktop actuals of the portable
@@ -51,7 +54,7 @@ import org.koin.dsl.module
  * DesktopDownloadManager (the DownloadEnqueueCoordinator actual: enqueue =
  * transfer-loop kick, cancelWork = cooperative stop), no-op notification /
  * image-preload surfaces, the desktop DownloadIntake, and the 6 h
- * auto-download loop. Since the Phase X MediaRepository cluster flip the
+ * auto-download loop. Since the MediaRepository cluster flip the
  * MediaRepositoryAccess actual is REAL (Koin owns MediaRepositoryImpl on
  * desktop too) — series downloads and auto-download work end-to-end.
  */
@@ -61,7 +64,7 @@ fun desktopDataModule(dataDir: Path): Module {
     // possibly as early as single construction, so the flag must be set when
     // the module function runs. Desktop defaults to debug logging on unless
     // `jellyplay.debug=false` is set on the JVM command line (desktop app
-    // builds arrive at Phase V1; jvmTest smoke tests get verbose logs).
+    // builds arrive at ; jvmTest smoke tests get verbose logs).
     DataBuildFlags.debugBuild = System.getProperty("jellyplay.debug")?.toBoolean() ?: true
 
     return module {
@@ -75,7 +78,9 @@ fun desktopDataModule(dataDir: Path): Module {
         }
 
         single<ImageUrlProvider> {
-            DesktopImageUrlProvider(
+            // The shared jvmShared impl — the desktop twin (DesktopImageUrlProvider)
+            // was deleted once the policy lived in one class next to the interface.
+            ImageUrlProviderImpl(
                 playbackRepository = get(),
                 appearanceStore = get(),
             )
@@ -83,7 +88,7 @@ fun desktopDataModule(dataDir: Path): Module {
 
         single<LocalStreamProbe> { DesktopLocalStreamProbe() }
 
-        // Phase X admin flip: desktop actual of the admin-statistics label
+        //  admin flip: desktop actual of the admin-statistics label
         // seam — base-locale English literals (see the object's kdoc for the
         // accepted locale delta). The Android actual lives in the app
         // composition root (androidAdminSeamsModule) over legacy core:data
@@ -98,7 +103,7 @@ fun desktopDataModule(dataDir: Path): Module {
 
         single<OfflineImagePreloader> { OfflineImagePreloader { /* no shared preload cache on desktop */ } }
 
-        // Phase X MediaRepository cluster flip: MediaRepository is now
+        //  MediaRepository cluster flip: MediaRepository is now
         // Koin-owned on desktop too (dataJvmModule's MediaRepositoryImpl
         // single), so this accessor is real — desktop SERIES downloads and
         // the auto-download scheduler went live with the flip. Previously the
@@ -169,31 +174,58 @@ fun desktopDataModule(dataDir: Path): Module {
             )
         }
 
-        // ── Home conveyor desktop actuals (wave 8B): the four WorkManager/ ──
-        // widget-backed HomeViewModel ctor deps have no desktop machinery
-        // behind them, so these are honest no-ops mirroring the Android impls'
-        // shapes (Android: PlaybackSyncScheduler/TvWatchNextScheduler live in
-        // androidCoreDataModule, ContinueWatchingBroadcaster/LibrarySyncHook
-        // in the app's androidAppModule).
-        //  - PlaybackSyncScheduler: Android drains the playback-progress
-        //    offline outbox via WorkManager; desktop stages rows into the
-        //    same outbox (manual offline toggle or a transient HTTP
-        //    failure) but ships no drain machinery — the WorkManager
-        //    worker is Android-side per plan §Phase C4 — so staged rows
-        //    sit. 17C's real network probe changes nothing here: staging
-        //    keys off the manual offline mode, never the network seam.
+        // ── Home conveyor desktop actuals: the four WorkManager/ ──
+        // widget-backed HomeViewModel ctor deps have their desktop actuals
+        // here (Android: PlaybackSyncScheduler lives in
+        // androidCoreDataModule, TvWatchNextScheduler too,
+        // ContinueWatchingBroadcaster/LibrarySyncHook in the app's
+        // androidAppModule).
+        //  - PlaybackSyncScheduler: REAL since the playback-outbox drainer
+        //    moved into shared jvmShared — DesktopPlaybackSyncScheduler runs
+        //    drainer.drainOnce(0) at startup, on every Offline→Online
+        //    transition, and on SyncStatusStateHolder's manual "sync now"
+        //    (see its class KDoc for the declared behaviour delta: desktop
+        //    staged outbox rows now actually drain; no periodic backstop).
+        //    Android overrides the interface with the WorkManager-backed
+        //    PlaybackSyncSchedulerImpl in androidCoreDataModule — the two
+        //    platform modules never load together, and Android constructs its
+        //    worker-scoped drainer per worker (no Koin single here would fit;
+        //    setForeground lives on the running CoroutineWorker).
         //  - TvWatchNextScheduler: the Android TV "Watch Next" OS row has no
         //    desktop equivalent.
         //  - ContinueWatchingBroadcaster: refreshes the Android app widget's
         //    RemoteViews service; no widgets on desktop.
         //  - LibrarySyncHook: fans a library scan out to Android's
         //    auto-download drain + widget refresh; both are no-ops here.
-        single<PlaybackSyncScheduler> {
-            object : PlaybackSyncScheduler {
-                override fun enqueuePeriodic() {}
-                override fun enqueueNow() {}
-            }
+        single<PlaybackOutboxDrainer.UserDataSyncTrigger> {
+            // No WorkManager user-data worker on desktop: the drain tail's
+            // synchronous cache-invalidate + notifyUserDataChanged fan-out
+            // already refreshes the open UI; the 12h async warm-refetch stays
+            // Android-only.
+            PlaybackOutboxDrainer.UserDataSyncTrigger { }
         }
+        single<PlaybackOutboxDrainer> {
+            PlaybackOutboxDrainerImpl(
+                outbox = get(),
+                playbackRepository = get(),
+                offlineModeManager = get(),
+                playedStateSync = get(),
+                offlineRepository = get(),
+                mediaRepository = get(),
+                cacheInvalidator = get(),
+                userDataSyncTrigger = get(),
+                // Desktop has no notification surface for a headless drain.
+                notifier = PlaybackOutboxDrainer.Notifier.NONE,
+            )
+        }
+        single {
+            DesktopPlaybackSyncScheduler(
+                drainer = get(),
+                networkMonitor = get(),
+                scope = get(DatastoreQualifiers.applicationScope),
+            )
+        }
+        single<PlaybackSyncScheduler> { get<DesktopPlaybackSyncScheduler>() }
         single<TvWatchNextScheduler> {
             object : TvWatchNextScheduler {
                 override fun scheduleRefresh() {}
@@ -210,7 +242,7 @@ fun desktopDataModule(dataDir: Path): Module {
             }
         }
 
-        // ── Streaming-subtitle store (wave 18B promotion) ────────────────────
+        // ── Streaming-subtitle store (promotion) ────────────────────
         // The impl moved out of the legacy Android-Hilt-owned :core:data shim
         // into jvmShared, so desktop gets the real file-backed store, not a
         // stub. baseDir is the appdata dir — the desktop twin of Android's

@@ -10,7 +10,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * Pins the jvmShared actual of the Phase W [isRetryableNetworkError] seam
+ * Pins the jvmShared actual of the [isRetryableNetworkError] seam
  * (android + desktop share it through jvmShared). The generic-IOException
  * branch is deliberately listed last — `ConnectException` etc. are its
  * subtypes, so reordering the `when` would change nothing semantically but

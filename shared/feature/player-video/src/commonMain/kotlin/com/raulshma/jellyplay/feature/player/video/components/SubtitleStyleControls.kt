@@ -878,7 +878,7 @@ private fun FreeFormColorPickerDialog(
     )
 }
 
-// KMP seam (wave 7C): android.graphics.Color's HSV pair, replaced by pure-
+// KMP seam: android.graphics.Color's HSV pair, replaced by pure-
 // Kotlin twins so the free-form color picker stays commonMain. Identical
 // math: hue [0..360), saturation/value [0..1], alpha fixed at 255 (the old
 // HSVToColor(hsv) single-arg overload's default).

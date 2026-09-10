@@ -23,7 +23,8 @@ class LiveTvApiClientImpl @Inject constructor(
     private val engine: JellyfinApiEngine,
 ) : LiveTvApiClient {
 
-    private fun userIdUuid() = engine.currentUser.value?.id?.toUUID()
+    /** Nullable user-id UUID via the engine's atomic-session accessor. */
+    private fun userIdUuid() = engine.currentUserId()?.toUUID()
 
     override suspend fun getLiveTvChannels(
         startIndex: Int,
@@ -39,7 +40,7 @@ class LiveTvApiClientImpl @Inject constructor(
             addCurrentProgram = addCurrentProgram,
             enableFavoriteSorting = enableFavoriteSorting,
             isFavorite = isFavorite,
-            fields = listOf(ItemFields.OVERVIEW, ItemFields.PRIMARY_IMAGE_ASPECT_RATIO),
+            fields = LIST_ITEM_FIELDS,
         ).content.items.map { it.toLiveTvChannel() }
     }
 
@@ -59,7 +60,7 @@ class LiveTvApiClientImpl @Inject constructor(
             isKids = filters.isKids,
             isSports = filters.isSports,
             enableTotalRecordCount = false,
-            fields = listOf(ItemFields.OVERVIEW, ItemFields.CHANNEL_INFO, ItemFields.PRIMARY_IMAGE_ASPECT_RATIO),
+            fields = LIST_ITEM_FIELDS + ItemFields.CHANNEL_INFO,
         ).content.items.map { it.toLiveTvProgram(now) }
     }
 

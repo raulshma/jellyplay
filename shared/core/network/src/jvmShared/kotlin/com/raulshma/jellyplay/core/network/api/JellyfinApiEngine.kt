@@ -1,8 +1,7 @@
 package com.raulshma.jellyplay.core.network.api
 
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.model.ActiveSession
-import com.raulshma.jellyplay.core.model.MediaItem
-import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.network.RetryPolicy
@@ -21,7 +20,6 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import org.jellyfin.sdk.Jellyfin
 import org.jellyfin.sdk.api.client.ApiClient
-import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.ClientCapabilitiesDto
 import org.jellyfin.sdk.model.api.GeneralCommandType
 import org.jellyfin.sdk.model.api.MediaType as SdkMediaType
@@ -30,16 +28,19 @@ import javax.inject.Singleton
 
 @Singleton
 class JellyfinApiEngine @Inject constructor(
-    // dagger.Lazy defers construction of both the Jellyfin SDK instance and
-    // the shared OkHttpClient off the synchronous Hilt graph: MainViewModel's
+    // LazyProvider ctor params (the local seam in LazyProvider.kt — this used
+    // to be dagger.Lazy, back when a Hilt graph constructed this class)
+    // defer construction of both the Jellyfin SDK instance and the shared
+    // OkHttpClient off the synchronous Koin graph: MainViewModel's
     // constructor chain resolves this engine on the main thread before
-    // setContent, and provideJellyfin/provideOkHttpClient both do real work
-    // (DataStore-backed device-id read, PackageManager binder call, disk cache
-    // mkdirs). First .get() happens inside suspend repository code well after
-    // ServerIdentityStore.identity (Eagerly-started) has populated, so the
-    // runBlocking fallback in provideJellyfin never fires on the main thread.
-    private val jellyfinLazy: dagger.Lazy<Jellyfin>,
-    private val okHttpClientLazy: dagger.Lazy<OkHttpClient>,
+    // setContent, and the Jellyfin/OkHttpClient Koin definitions both do
+    // real work (DataStore-backed device-id read, PackageManager binder
+    // call, disk cache mkdirs). First .get() happens inside suspend
+    // repository code well after ServerIdentityStore.identity (Eagerly-
+    // started) has populated, so the ensureDeviceId() runBlocking fallbacks
+    // in the platform network modules never fire on the main thread.
+    private val jellyfinLazy: LazyProvider<Jellyfin>,
+    private val okHttpClientLazy: LazyProvider<OkHttpClient>,
     private val deviceProfileProvider: DeviceProfileProvider,
     private val addressRouter: ServerAddressRouter,
 ) {
@@ -72,7 +73,7 @@ class JellyfinApiEngine @Inject constructor(
     @Volatile
     private var _api: ApiClient? = null
 
-    // C3 note: internal since the Phase C3 audit — referenced only inside this
+    // Internal — referenced only inside this
     // module (core/data reads currentServer/currentUser/okHttpClient, never the
     // raw ApiClient). The ported tests land in this module's jvmTest, where
     // internal stays visible.
@@ -104,9 +105,34 @@ class JellyfinApiEngine @Inject constructor(
         }
     }
 
-    // C3 note: internal — see the note on [api].
+    // Internal — see the note on [api].
     internal fun requireApi(): ApiClient =
         _api ?: throw IllegalStateException("Not connected to server")
+
+    /**
+     * The authenticated user's id, throwing when no session is established —
+     * the engine-side twin of the wasm support's `requireCurrentUser()`
+     * (message-aligned: "Not authenticated"). Reads the ATOMIC [session]
+     * value, never the separate [currentUser] flow alone: a user published
+     * without a server is no identity (see [publishSession]), and the
+     * hand-rolled `currentUser.value?.id ?: throw` guards this replaces
+     * would have treated it as one. Internal like [requireApi] — referenced
+     * only inside this module, and the ported tests land in its jvmTest
+     * where internal stays visible.
+     */
+    internal fun requireUserId(): String =
+        session.value?.user?.id ?: throw IllegalStateException("Not authenticated")
+
+    /**
+     * The authenticated user's id or null — the nullable pass-through the
+     * clients' optional `userId` parameters want. Same atomic [session]
+     * source and rationale as [requireUserId]; re-invoked per use, so
+     * freshness is the caller's. Divergence, deliberate: the realtime
+     * user-data channel keeps its own per-event `currentUser.value?.id`
+     * read — its guards key on the user flow the websocket session was
+     * opened under, not on the atomic session value.
+     */
+    internal fun currentUserId(): String? = session.value?.user?.id
 
     fun updateServer(server: ServerInfo?) {
         _currentServer.value = server
@@ -157,28 +183,27 @@ class JellyfinApiEngine @Inject constructor(
      */
     private fun rebuildApiFor(address: String) {
         if (_api == null) return
-        val user = _currentUser.value
-        _api = user?.let { jellyfin.createApi(baseUrl = address, accessToken = it.accessToken) }
-        if (user != null) {
-            // updateUser (not a raw assignment) so the combined session flow
-            // republishes the pair with the mirrored address.
-            updateUser(user.copy(serverAddress = address))
-        }
+        // No user yet → no token to preserve; keep the existing client rather
+        // than nulling it. A live client must not die merely because an
+        // address flap raced the session seeding (updateServer → updateApi →
+        // updateUser is not atomic) — the next address change after the user
+        // lands performs the retarget.
+        val user = _currentUser.value ?: return
+        _api = jellyfin.createApi(baseUrl = address, accessToken = user.accessToken)
+        // updateUser (not a raw assignment) so the combined session flow
+        // republishes the pair with the mirrored address.
+        updateUser(user.copy(serverAddress = address))
     }
 
     suspend fun <T> apiResult(block: suspend () -> T): Result<T> =
-        runCatching { withContext(Dispatchers.IO) { block() } }
-            .recoverCatching {
-                // CancellationException must propagate so structured concurrency
-                // (parent coroutine cancellation) is not masked as a Result.failure.
-                // runCatching captures it (Kotlin stdlib behaviour); rethrow here before
-                // wrapping into ApiException, mirroring SeerrApiClientImpl.
-                if (it is kotlinx.coroutines.CancellationException) throw it
-                // Wrap into a typed ApiException carrying a pre-classified retryable flag.
-                // The friendly message is still produced by JellyfinErrorMapper so existing
-                // consumers reading `.message` see the same user-facing text.
-                throw ApiException.fromJellyfin(it)
-            }
+        // The shared helper rethrows CancellationException before the recovery
+        // mapping sees it, so structured cancellation is never masked as a
+        // Result.failure. The recoverCatching's only remaining job is the typed
+        // wrap: an ApiException carrying a pre-classified retryable flag. The
+        // friendly message is still produced by JellyfinErrorMapper so existing
+        // consumers reading `.message` see the same user-facing text.
+        runCatchingRethrowingCancellation { withContext(Dispatchers.IO) { block() } }
+            .recoverCatching { throw ApiException.fromJellyfin(it) }
 
     suspend fun <T> apiResultWithRetry(
         maxRetries: Int = RetryPolicy.DEFAULT_MAX_RETRIES,
@@ -192,46 +217,18 @@ class JellyfinApiEngine @Inject constructor(
             // an alternate and the retry transparently uses it. Throttled so
             // a burst of parallel failures triggers one probe round, not N.
             if (e is ApiException && e.isRetryable && e.httpCode == null && addressRouter.hasAlternates) {
-                // Swallow probe errors but never cancellation — the caller's
-                // cancellation must keep propagating through the retry path.
-                runCatching { addressRouter.reselectActiveEndpoint(minIntervalMs = RESELECT_THROTTLE_MS) }
-                    .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
+                // Swallow probe errors but never cancellation — the shared
+                // helper rethrows the caller's cancellation; the Result of a
+                // best-effort probe is dropped.
+                runCatchingRethrowingCancellation {
+                    addressRouter.reselectActiveEndpoint(minIntervalMs = RESELECT_THROTTLE_MS)
+                }
             }
         }
     }
 
     val currentMaxParentalRating: Int?
         get() = _currentUser.value?.maxParentalAgeRating
-
-    fun ratingToAge(rating: String): Int? = when (rating.uppercase()) {
-        "G", "TV-Y", "TV-G" -> 0
-        "PG", "TV-Y7", "TV-PG" -> 7
-        "PG-13", "TV-14" -> 13
-        "R", "TV-MA" -> 17
-        "NC-17" -> 18
-        else -> null
-    }
-
-    /**
-     * Selector-based parental-rating filter applied on raw values (e.g. DTOs)
-     * before they are mapped to [MediaItem].
-     */
-    fun <T> List<T>.filterByParentalRating(officialRatingOf: (T) -> String?): List<T> {
-        val max = currentMaxParentalRating ?: return this
-        return filter { item ->
-            officialRatingOf(item)?.let { rating ->
-                ratingToAge(rating)?.let { age -> age <= max }
-            } != false
-        }
-    }
-
-    /**
-     * The standard tail of every library listing call: parental-rate the raw
-     * DTOs, then map to [MediaItem] — one shared shape instead of a
-     * filter+map pair repeated per call site.
-     */
-    fun List<BaseItemDto>.toFilteredMediaItems(): List<MediaItem> =
-        filterByParentalRating { it.officialRating }.map { it.toMediaItem() }
 
     val cachedCapabilities by lazy {
         ClientCapabilitiesDto(

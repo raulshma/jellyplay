@@ -6,6 +6,10 @@ import com.raulshma.jellyplay.core.model.ExternalUrl
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.ImageBlurHashes
 import com.raulshma.jellyplay.core.model.LibraryFolder
+import com.raulshma.jellyplay.core.model.LyricsLine
+import com.raulshma.jellyplay.core.model.LyricsResult
+import com.raulshma.jellyplay.core.model.LyricsSource
+import com.raulshma.jellyplay.core.model.LyricsWord
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
@@ -19,7 +23,7 @@ import com.raulshma.jellyplay.core.model.Studio
 import com.raulshma.jellyplay.core.model.TrickplayInfo
 
 /**
- * Wire → core.model mappers for the Phase W wasm library/playback clients.
+ * Wire → core.model mappers for the wasm library/playback clients.
  * Every mapped field, fallback and tick conversion mirrors the jvmShared
  * `JellyfinDtoMappers` + the inline mappings in `LibraryApiClientImpl`
  * field-for-field; deviations are limited to the two documented wasm deltas:
@@ -308,8 +312,10 @@ internal fun BaseItemDtoWire.toCollectionSummary() = CollectionSummary(
 )
 
 /**
- * The engine's rating→age table, verbatim (`JellyfinApiEngine.ratingToAge`);
- * unknown ratings map to null = "no opinion".
+ * The canonical rating→age table (unknown ratings map to null = "no
+ * opinion"). Both platform parental-filter tails resolve ratings through it
+ * (jvmShared: the SDK-typed `toFilteredMediaItems` mapper tail over
+ * [filterByParentalRating]; wasm: the client's own call of the same).
  */
 internal fun parentalRatingAge(rating: String): Int? = when (rating.uppercase()) {
     "G", "TV-Y", "TV-G" -> 0
@@ -321,9 +327,8 @@ internal fun parentalRatingAge(rating: String): Int? = when (rating.uppercase())
 }
 
 /**
- * The engine's client-side parental-rating filter, verbatim semantics
- * (`JellyfinApiEngine.filterByParentalRating`): no max rating → unfiltered;
- * an unrated/unknown-rating item passes (`!= false` keeps it).
+ * The client-side parental-rating filter, verbatim semantics: no max rating →
+ * unfiltered; an unrated/unknown-rating item passes (`!= false` keeps it).
  */
 internal fun <T : MediaItem> List<T>.filterByParentalRating(maxParentalRating: Int?): List<T> {
     val max = maxParentalRating ?: return this
@@ -383,4 +388,44 @@ private val ITEM_SORT_BY_TOKENS: Map<String, String> = buildMap {
         }
         put(enumName.lowercase(), serial)
     }
+}
+
+/**
+ * Maps the wire lyric DTO to [LyricsResult]: per-line start/end times derived
+ * from the next line (clamped non-negative), per-word cues sliced out of the
+ * line text, and [LyricsSource.UNKNOWN] exactly when no lines parsed. Formerly
+ * a private twin of this exact body inside `KtorWasmLibraryApiClient`; the
+ * jvmShared `LyricsApi` keeps its own SDK-typed copy because its input is the
+ * deserialized `org.jellyfin.sdk.model.api.LyricDto`, which commonMain cannot
+ * see.
+ */
+internal fun LyricsDtoWire.toLyricsResult(): LyricsResult {
+    val lines = lyrics.mapIndexedNotNull { idx, line ->
+        val startMs = line.start?.let { it / 10_000 } ?: 0L
+        val nextStartMs = if (idx + 1 < lyrics.size) {
+            lyrics[idx + 1].start?.div(10_000) ?: startMs
+        } else startMs
+        val text = line.text
+        val words = line.cues?.map { cue ->
+            // Wire cue offsets are server-authored and not trusted: clamp
+            // both ends into the line text (end below start degrades to an
+            // empty slice) instead of letting substring throw on out-of-
+            // range positions.
+            val start = cue.position.coerceIn(0, text.length)
+            val end = cue.endPosition.coerceIn(start, text.length)
+            LyricsWord(
+                timeMs = cue.start / 10_000,
+                text = text.substring(start, end),
+                durationMs = ((cue.end ?: cue.start) - cue.start) / 10_000,
+            )
+        }.orEmpty()
+        LyricsLine(
+            timeMs = startMs,
+            text = text,
+            durationMs = (nextStartMs - startMs).coerceAtLeast(0L),
+            words = words,
+        )
+    }
+    val source = if (lines.isEmpty()) LyricsSource.UNKNOWN else LyricsSource.EXTERNAL
+    return LyricsResult(lines = lines, source = source)
 }

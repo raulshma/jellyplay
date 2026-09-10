@@ -13,6 +13,7 @@ import com.raulshma.jellyplay.core.data.repository.DownloadEnqueueCoordinator
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.DownloadStorageLayoutContract
 import com.raulshma.jellyplay.core.data.repository.LyricsRepository
+import com.raulshma.jellyplay.core.data.repository.LyricsRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.LocalStreamProbe
 import com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
@@ -79,9 +80,9 @@ import org.koin.core.context.stopKoin
  * engine — delegate, transfer machinery, in-process manager, auto-download
  * loop) IS resolved since the conveyor moved it into this module; the
  * MediaRepository edge was a documented throwing-lazy on desktop until the
- * Phase X cluster flip made it real.
+ *  cluster flip made it real.
  *
- * The Phase X MediaRepository cluster flip moved the last Hilt-owned cluster
+ * The MediaRepository cluster flip moved the last Hilt-owned cluster
  * here — MediaRepository(+ its PlayedStateSync / cache-invalidation /
  * LyricsRepository views), UserDataMutator, MediaSearchEngine,
  * OfflineFirstItemResolver and OfflinePlaybackFacade all resolve on desktop.
@@ -89,7 +90,7 @@ import org.koin.core.context.stopKoin
  * PlaybackSourceResolverImpl into this module Uri-free (`File.toURI()`), so
  * the provider and its concrete impl resolve on desktop too.
  *
- * The admin flip (Wave wB) followed: AdminRepository and
+ * The admin flip followed: AdminRepository and
  * AdminStatisticsRepository (label seam satisfied by the desktop
  * English-literals actual) resolve on desktop too — the desktop settings +
  * admin nav sections ride on that.
@@ -185,7 +186,7 @@ class DataKoinModulesTest {
             assertResolves<DesktopDownloadManager>(koin)
             assertResolves<DesktopAutoDownloadScheduler>(koin)
 
-            // ── Home conveyor desktop actuals (wave 8B) ────────────────────
+            // ── Home conveyor desktop actuals ────────────────────
             // The four WorkManager/widget-backed HomeViewModel ctor deps are
             // honest no-ops on desktop (see desktopDataModule); assert each
             // resolves so the desktop home wiring never rides on a missing
@@ -195,7 +196,7 @@ class DataKoinModulesTest {
             assertResolves<ContinueWatchingBroadcaster>(koin)
             assertResolves<LibrarySyncHook>(koin)
 
-            // ── Phase X MediaRepository cluster flip ─────────────────────────
+            // ──  MediaRepository cluster flip ─────────────────────────
             // The last Hilt-owned data cluster, now Koin-owned on BOTH
             // platforms. MediaDetailProvider and its concrete impl resolve
             // since the playback-flips wave moved PlaybackSourceResolverImpl
@@ -206,8 +207,8 @@ class DataKoinModulesTest {
                 "MediaRepositoryCacheInvalidation must alias the MediaRepository single (one cache set, not two)",
             )
             assertTrue(
-                koin.get<LyricsRepository>() === mediaRepository,
-                "LyricsRepository must alias the MediaRepository single (MediaRepository extends it)",
+                koin.get<LyricsRepository>() is LyricsRepositoryImpl,
+                "LyricsRepository resolves to the extracted lyrics engine (no longer a MediaRepository view)",
             )
             assertResolves<PlayedStateSync>(koin)
             assertResolves<UserDataMutator>(koin)
@@ -218,7 +219,7 @@ class DataKoinModulesTest {
             assertResolves<MediaDetailProvider>(koin)
             assertResolves<UnifiedMediaDetailProviderImpl>(koin)
 
-            // ── Admin flip (Wave wB) ──────────────────────────────────────
+            // ── Admin flip ──────────────────────────────────────
             // Both admin repositories resolve on desktop: every ctor dep is
             // Koin-native (API client/engine + realtime channels from
             // networkJvmModule, DAOs from databaseDaosModule, Json from

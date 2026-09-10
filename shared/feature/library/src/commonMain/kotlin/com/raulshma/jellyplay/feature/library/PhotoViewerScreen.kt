@@ -37,6 +37,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.smoothCornerShape
+import com.raulshma.jellyplay.core.model.formatBytes
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -105,6 +106,13 @@ import com.raulshma.jellyplay.feature.library.generated.resources.library_photo_
 import com.raulshma.jellyplay.feature.library.generated.resources.library_photo_start_slideshow
 import com.raulshma.jellyplay.feature.library.generated.resources.library_photo_stop_slideshow
 import com.raulshma.jellyplay.feature.library.generated.resources.library_reset
+
+// Filmstrip thumbnails all share the same 6dp smooth-corner shape; a single
+// file-level val avoids allocating a fresh AbsoluteSmoothCornerShape per item
+// on every recomposition (the same rationale as ShapeCache — kept local here
+// rather than as a ShapeCache entry because that would wrap it in
+// SynthwaveDynamicShape and square these corners in synthwave mode).
+private val filmstripThumbShape = smoothCornerShape(6.dp)
 
 @Composable
 fun PhotoViewerScreen(
@@ -781,13 +789,11 @@ private fun PhotoInfoOverlay(
                     val mediaSource = detail.mediaSources.firstOrNull()
                     if (mediaSource != null) {
                         InfoRow("File", mediaSource.name)
-                        InfoRow("Size", mediaSource.size?.let { bytes ->
-                            when {
-                                bytes >= 1_000_000_000 -> "%.1f GB".format(bytes / 1_000_000_000.0)
-                                bytes >= 1_000_000 -> "%.1f MB".format(bytes / 1_000_000.0)
-                                else -> "%.1f KB".format(bytes / 1_000.0)
-                            }
-                        })
+                        // The one storage-byte table (ByteFormatter) — declared
+                        // unifying delta: this site's ÷1000 ladder (and its
+                        // "%.1f KB" floor for sub-KB sizes) is gone, sizes now
+                        // render on the ÷1024 house convention.
+                        InfoRow("Size", mediaSource.size?.formatBytes())
                         mediaSource.mediaStreams.firstOrNull { it.width != null && it.height != null }?.let { stream ->
                             InfoRow("Resolution", "${stream.width} x ${stream.height}")
                         }
@@ -875,6 +881,7 @@ private fun PhotoFilmstrip(
             itemsIndexed(
                 items = siblings,
                 key = { _, item -> item.id },
+                contentType = { _, _ -> "photo_thumbnail" },
             ) { index, item ->
                 val isSelected = index == currentIndex
                 val interactionSource = remember { MutableInteractionSource() }
@@ -886,7 +893,7 @@ private fun PhotoFilmstrip(
                     modifier = Modifier
                         .animateItem(placementSpec = placementSpec)
                         .size(if (isHighlighted) 64.dp else 52.dp)
-                        .clip(smoothCornerShape(6.dp))
+                        .clip(filmstripThumbShape)
                         .background(Color.DarkGray.copy(alpha = 0.5f))
                         .clickable(
                             interactionSource = interactionSource,
@@ -905,7 +912,7 @@ private fun PhotoFilmstrip(
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .clip(smoothCornerShape(6.dp))
+                                .clip(filmstripThumbShape)
                                 .background(
                                     if (isFocused) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
                                     else MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)

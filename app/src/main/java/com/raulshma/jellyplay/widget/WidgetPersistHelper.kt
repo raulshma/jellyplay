@@ -1,11 +1,11 @@
 package com.raulshma.jellyplay.widget
 
-import android.appwidget.AppWidgetManager
-import android.content.ComponentName
 import android.content.Context
+import com.raulshma.jellyplay.R
 import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
 import com.raulshma.jellyplay.core.model.LibraryWidgetItem
 import com.raulshma.jellyplay.core.model.SeerrWidgetItem
+import com.raulshma.jellyplay.widget.skeleton.updateAllProviderWidgets
 import kotlinx.coroutines.flow.first
 
 internal object WidgetPersistHelper {
@@ -14,36 +14,76 @@ internal object WidgetPersistHelper {
         context: Context,
         store: WidgetDataStore,
         items: List<LibraryWidgetItem>,
-        versionBumpOnly: Boolean,
     ) {
-        val previous = store.libraryWidgetItems.first()
-        val previousVersion = store.libraryWidgetVersion.first()
-        val now = System.currentTimeMillis()
-        val version = if (versionBumpOnly) previousVersion + 1L else now
-        if (!versionBumpOnly && sameContentById(previous, items) { it.itemId }) {
-            store.setLibraryWidgetItems(items, previousVersion, now)
-            return
-        }
-        store.setLibraryWidgetItems(items, version, now)
-        notifyLibraryWidgets(context)
+        persistItems(
+            context = context,
+            items = items,
+            posterUrls = items.map { it.posterUrl },
+            previous = store.libraryWidgetItems.first(),
+            idExtractor = { it.itemId },
+            write = { store.setLibraryWidgetItems(items) },
+            notify = {
+                // Re-render every bound widget, then mark its grid stale so
+                // the remote adapter re-reads the fresh rows.
+                updateAllProviderWidgets(
+                    context = context,
+                    providerClass = LibraryRecommendationsWidget::class.java,
+                    updateAppWidget = { manager, id ->
+                        LibraryRecommendationsWidget.updateAppWidget(context, manager, id)
+                    },
+                    notifyGridViewId = R.id.lr_widget_grid,
+                )
+            },
+        )
     }
 
     suspend fun persistSeerrItems(
         context: Context,
         store: WidgetDataStore,
         items: List<SeerrWidgetItem>,
-        versionBumpOnly: Boolean,
     ) {
-        val previous = store.seerrWidgetItems.first()
-        val previousVersion = store.seerrWidgetVersion.first()
-        val now = System.currentTimeMillis()
-        val version = if (versionBumpOnly) previousVersion + 1L else now
-        if (!versionBumpOnly && sameContentById(previous, items) { it.tmdbId }) {
-            store.setSeerrWidgetItems(items, previousVersion, now)
-            return
+        persistItems(
+            context = context,
+            items = items,
+            posterUrls = items.map { it.posterUrl },
+            previous = store.seerrWidgetItems.first(),
+            idExtractor = { it.tmdbId },
+            write = { store.setSeerrWidgetItems(items) },
+            notify = {
+                // Same fan-out as the library flavour, over the Seerr grid.
+                updateAllProviderWidgets(
+                    context = context,
+                    providerClass = SeerrRecommendationsWidget::class.java,
+                    updateAppWidget = { manager, id ->
+                        SeerrRecommendationsWidget.updateAppWidget(context, manager, id)
+                    },
+                    notifyGridViewId = R.id.sr_widget_grid,
+                )
+            },
+        )
+    }
+
+    /**
+     * The persist choreography both widget flavours share: prewarm the poster
+     * cache, always write the rows, and re-render the bound widgets only when
+     * the item id set actually changed — an unchanged id set cannot render
+     * differently, so the launcher round-trip is skipped. The previous rows
+     * are read by the caller so each store's accessors stay out of this core.
+     */
+    private suspend fun <T> persistItems(
+        context: Context,
+        items: List<T>,
+        posterUrls: List<String?>,
+        previous: List<T>,
+        idExtractor: (T) -> Any,
+        write: suspend () -> Unit,
+        notify: () -> Unit,
+    ) {
+        WidgetImageLoader.prewarmPosters(context, posterUrls)
+        write()
+        if (!sameContentById(previous, items, idExtractor)) {
+            notify()
         }
-        store.setSeerrWidgetItems(items, version, now)
-        notifySeerrWidgets(context)
     }
 
     private fun <T> sameContentById(
@@ -54,27 +94,5 @@ internal object WidgetPersistHelper {
         if (previous.size != next.size) return false
         val prevIds = previous.map(idExtractor).toSet()
         return next.all { idExtractor(it) in prevIds }
-    }
-
-    private fun notifyLibraryWidgets(context: Context) {
-        val manager = AppWidgetManager.getInstance(context)
-        val component = ComponentName(context, LibraryRecommendationsWidget::class.java)
-        val ids = manager.getAppWidgetIds(component)
-        if (ids.isEmpty()) return
-        for (id in ids) {
-            LibraryRecommendationsWidget.updateAppWidget(context, manager, id)
-        }
-        manager.notifyAppWidgetViewDataChanged(ids, com.raulshma.jellyplay.R.id.lr_widget_grid)
-    }
-
-    private fun notifySeerrWidgets(context: Context) {
-        val manager = AppWidgetManager.getInstance(context)
-        val component = ComponentName(context, SeerrRecommendationsWidget::class.java)
-        val ids = manager.getAppWidgetIds(component)
-        if (ids.isEmpty()) return
-        for (id in ids) {
-            SeerrRecommendationsWidget.updateAppWidget(context, manager, id)
-        }
-        manager.notifyAppWidgetViewDataChanged(ids, com.raulshma.jellyplay.R.id.sr_widget_grid)
     }
 }

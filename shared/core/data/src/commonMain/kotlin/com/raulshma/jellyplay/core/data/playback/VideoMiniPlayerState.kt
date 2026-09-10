@@ -27,7 +27,7 @@ import kotlinx.coroutines.launch
  * V3 livetv conveyor: moved into :shared:core:data commonMain (Koin-owned —
  * the @Singleton/@Inject annotations were stripped at the move, one framework
  * per type); all consumers resolve the Koin single directly (the Hilt-era
- * DataModule bridge left with the wave-8 extinction).
+ * DataModule bridge left with the extinction).
  */
 @Stable
 class VideoMiniPlayerState {

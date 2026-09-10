@@ -393,6 +393,9 @@ private fun LastRunRow(last: TaskExecutionInfo) {
  * "just now" / "Xm ago" / "Xh ago" / "Xd ago", falling back to a localized date.
  * Returns null if the string can't be parsed.
  */
+// Main-thread-only (Compose row rendering), so a single shared instance is safe.
+private val relativeTimeDateFormat = java.text.SimpleDateFormat("MMM d, yyyy", java.util.Locale.getDefault())
+
 private fun formatRelativeTime(iso: String?): String? {
     if (iso.isNullOrBlank()) return null
     return try {
@@ -404,8 +407,7 @@ private fun formatRelativeTime(iso: String?): String? {
             duration.toHours() < 24 -> "${duration.toHours()}h ago"
             duration.toDays() < 7 -> "${duration.toDays()}d ago"
             else -> {
-                val formatter = java.text.SimpleDateFormat("MMM d, yyyy", java.util.Locale.getDefault())
-                formatter.format(java.util.Date.from(start.toInstant()))
+                relativeTimeDateFormat.format(java.util.Date.from(start.toInstant()))
             }
         }
     } catch (_: Exception) {

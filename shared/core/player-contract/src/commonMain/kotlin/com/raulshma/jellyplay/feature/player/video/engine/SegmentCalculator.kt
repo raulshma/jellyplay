@@ -14,7 +14,9 @@ import com.raulshma.jellyplay.core.model.SegmentBehavior
  * a throwaway `VideoPlayerUiState` per segment-boundary change.
  *
  * All functions are pure: same [SegmentCalculatorInput] + position → same
- * output. No caching, no mutation, no allocation beyond the result.
+ * output. No caching, no mutation, no allocation beyond the result (the one
+ * memo in this cluster — normalized chapter names — lives on the input, once
+ * per input build, not per call).
  *
  * Tick conversion: 1 ms == 10_000 ticks (Jellyfin's runTimeTicks unit).
  */
@@ -56,16 +58,35 @@ object SegmentCalculator {
         type: MediaSegmentType,
     ): Boolean {
         if (behaviorForType(input, type) == SegmentBehavior.IGNORE) return false
-        val seg = computeActiveSegment(input, positionMs)
-        return seg != null && seg.type == type
+        return isInSegmentType(input, computeActiveSegment(input, positionMs), type)
+    }
+
+    /**
+     * Precomputed-segment variant: the caller supplies the active segment from
+     * a single [computeActiveSegment] scan so callers that need several
+     * type verdicts per position (the overlay projection) do not re-run the
+     * scan per verdict.
+     */
+    fun isInSegmentType(
+        input: SegmentCalculatorInput,
+        activeSegment: MediaSegment?,
+        type: MediaSegmentType,
+    ): Boolean {
+        if (behaviorForType(input, type) == SegmentBehavior.IGNORE) return false
+        return activeSegment != null && activeSegment.type == type
     }
 
     fun segmentEndTicksForType(
         input: SegmentCalculatorInput,
         positionMs: Long,
         type: MediaSegmentType,
+    ): Long? = segmentEndTicksForType(computeActiveSegment(input, positionMs), type)
+
+    private fun segmentEndTicksForType(
+        activeSegment: MediaSegment?,
+        type: MediaSegmentType,
     ): Long? {
-        val seg = computeActiveSegment(input, positionMs) ?: return null
+        val seg = activeSegment ?: return null
         if (seg.type != type) return null
         return seg.endTicks
     }
@@ -82,12 +103,31 @@ object SegmentCalculator {
     fun shouldShowUpNext(
         input: SegmentCalculatorInput,
         positionMs: Long,
+    ): Boolean = shouldShowUpNextInternal(input, positionMs) {
+        computeActiveSegment(input, positionMs)
+    }
+
+    /**
+     * Precomputed-segment variant: the caller supplies the active segment from
+     * a single [computeActiveSegment] scan so the outro-near-end branch does
+     * not re-run the scan.
+     */
+    fun shouldShowUpNext(
+        input: SegmentCalculatorInput,
+        positionMs: Long,
+        activeSegment: MediaSegment?,
+    ): Boolean = shouldShowUpNextInternal(input, positionMs) { activeSegment }
+
+    private fun shouldShowUpNextInternal(
+        input: SegmentCalculatorInput,
+        positionMs: Long,
+        activeSegment: () -> MediaSegment?,
     ): Boolean {
         if (input.autoplayCancelled) return false
         if (input.isInSyncPlaySession) return false
         if (!input.hasNextEpisode) return false
         if (input.seriesId == null) return false
-        if (isOutroNearEnd(input, positionMs)) return true
+        if (isOutroNearEnd(input, activeSegment())) return true
         if (input.durationMs > 0 && positionMs >= (input.durationMs - UP_NEXT_PRE_ROLL_MS)) return true
         return false
     }
@@ -95,8 +135,13 @@ object SegmentCalculator {
     fun isOutroNearEnd(
         input: SegmentCalculatorInput,
         positionMs: Long,
+    ): Boolean = isOutroNearEnd(input, computeActiveSegment(input, positionMs))
+
+    private fun isOutroNearEnd(
+        input: SegmentCalculatorInput,
+        activeSegment: MediaSegment?,
     ): Boolean {
-        val outroEnd = segmentEndTicksForType(input, positionMs, MediaSegmentType.OUTRO) ?: return false
+        val outroEnd = segmentEndTicksForType(activeSegment, MediaSegmentType.OUTRO) ?: return false
         val durationTicks = input.durationMs * 10_000
         if (durationTicks <= 0) return false
         val remainingMs = (durationTicks - outroEnd).coerceAtLeast(0) / 10_000
@@ -125,7 +170,9 @@ object SegmentCalculator {
         val idx = input.chapters.indexOfLast { it.startPositionTicks <= posTicks }
         if (idx < 0) return null
         val chapter = input.chapters[idx]
-        val name = chapter.name.lowercase().trim()
+        // Pre-normalized per input build (memoized on the input), so the hot
+        // per-tick path does not re-lowercase the chapter name on every scan.
+        val name = input.normalizedChapterNames[idx]
         for (type in MediaSegmentType.SEGMENT_PRIORITY) {
             val names = CHAPTER_NAME_MAP[type] ?: continue
             val isMatch = names.any { keyword ->

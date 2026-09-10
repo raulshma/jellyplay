@@ -8,7 +8,8 @@ import androidx.work.WorkerFactory
 import androidx.work.WorkerParameters
 import androidx.work.testing.TestListenableWorkerBuilder
 import androidx.work.testing.WorkManagerTestInitHelper
-import com.raulshma.jellyplay.core.data.repository.MediaRepositoryImpl
+import com.raulshma.jellyplay.core.data.repository.MediaCacheInvalidator
+import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
@@ -47,7 +48,8 @@ import org.robolectric.annotation.Config
 class UserDataSyncWorkerTest {
 
     private lateinit var context: Context
-    private val mediaRepository: MediaRepositoryImpl = mockk(relaxed = true)
+    private val mediaRepository: MediaRepository = mockk(relaxed = true)
+    private val cacheInvalidator: MediaCacheInvalidator = mockk(relaxed = true)
     private val playbackStore: PlaybackStore = mockk()
     private val serverIdentityStore: ServerIdentityStore = mockk()
 
@@ -75,6 +77,7 @@ class UserDataSyncWorkerTest {
                     appContext,
                     workerParameters,
                     mediaRepository,
+                    cacheInvalidator,
                     playbackStore,
                     serverIdentityStore,
                 )
@@ -94,7 +97,7 @@ class UserDataSyncWorkerTest {
         val result = buildWorker().doWork()
 
         assertTrue(result is ListenableWorker.Result.Success)
-        coVerify(exactly = 0) { mediaRepository.invalidateCaches() }
+        coVerify(exactly = 0) { cacheInvalidator.invalidateCaches() }
         coVerify(exactly = 0) { mediaRepository.getHomeSections(any(), any()) }
     }
 
@@ -105,7 +108,7 @@ class UserDataSyncWorkerTest {
         val result = buildWorker().doWork()
 
         assertTrue(result is ListenableWorker.Result.Success)
-        coVerify(exactly = 0) { mediaRepository.invalidateCaches() }
+        coVerify(exactly = 0) { cacheInvalidator.invalidateCaches() }
     }
 
     @Test
@@ -128,7 +131,7 @@ class UserDataSyncWorkerTest {
 
         assertTrue(result is ListenableWorker.Result.Success)
         coVerifyOrder {
-            mediaRepository.invalidateCaches()
+            cacheInvalidator.invalidateCaches()
             mediaRepository.getHomeSections(capture(querySlot), any())
         }
         assertEquals(setOf(HomeSectionType.CONTINUE_WATCHING, HomeSectionType.NEXT_UP), querySlot.captured.enabledSections)

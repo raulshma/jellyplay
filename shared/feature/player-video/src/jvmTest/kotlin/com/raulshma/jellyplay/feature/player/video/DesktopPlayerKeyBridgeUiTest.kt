@@ -30,14 +30,14 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * Wave 14E desktop compose UI test for the deterministic media-key delivery
- * ([DesktopPlayerKeyBridge] + the shell's preview forward). The wave-14D
+ * Desktop compose UI test for the deterministic media-key delivery
+ * ([DesktopPlayerKeyBridge] + the shell's preview forward). The
  * merged-tree live pass proved the focus grab recovers per loss but the AWT
  * flap still leaves focus-less GAPS in which a SPACE died at the shell's
  * Row — so focus-based delivery alone can never be deterministic. The fix:
  * the scaffold preview (which in the REAL window receives EVERY key, with or
  * without a focus owner, through the null-focus fallback — ESC has worked
- * there since wave 13B) offers non-back keys to the player screen's OWN
+ * there since then) offers non-back keys to the player screen's OWN
  * handler through the bridge when Route.VideoPlayer is current.
  *
  * Topology (mirrors [PlayerKeyboardFocusGrabUiTest]): the outer Box's
@@ -92,7 +92,7 @@ class DesktopPlayerKeyBridgeUiTest {
 
     /**
      * The shell's preview stand-in: the exact forward shape of
-     * DesktopNavScaffold.onPreviewKeyEvent (wave 14E).
+     * DesktopNavScaffold.onPreviewKeyEvent.
      */
     private fun Modifier.shellPreviewModifier(): Modifier = this.onPreviewKeyEvent { event ->
         if (event.type != KeyEventType.KeyDown) {

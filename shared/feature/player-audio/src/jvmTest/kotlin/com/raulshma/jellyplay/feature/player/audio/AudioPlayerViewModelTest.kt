@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.data.playback.AudioQueueManager
 import com.raulshma.jellyplay.core.data.playback.SleepTimerManager
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.datastore.audio.AudioSlice
 import com.raulshma.jellyplay.core.datastore.audio.AudioStore
 import com.raulshma.jellyplay.core.datastore.audioeffects.AudioEffectsSlice
@@ -46,6 +47,7 @@ class AudioPlayerViewModelTest {
     private lateinit var audioStore: AudioStore
     private lateinit var audioEffectsStore: AudioEffectsStore
     private lateinit var mediaRepository: MediaRepository
+    private lateinit var playlistRepository: PlaylistRepository
     private lateinit var userDataMutator: com.raulshma.jellyplay.core.data.repository.UserDataMutator
     private lateinit var downloadRepository: DownloadRepository
     private lateinit var downloadIntake: DownloadIntake
@@ -64,6 +66,7 @@ class AudioPlayerViewModelTest {
         audioStore = mockk(relaxed = true)
         audioEffectsStore = mockk(relaxed = true)
         mediaRepository = mockk(relaxed = true)
+        playlistRepository = mockk(relaxed = true)
         userDataMutator = mockk(relaxed = true)
         downloadRepository = mockk(relaxed = true)
         downloadIntake = mockk(relaxed = true)
@@ -82,6 +85,7 @@ class AudioPlayerViewModelTest {
             audioStore = audioStore,
             audioEffectsStore = audioEffectsStore,
             mediaRepository = mediaRepository,
+            playlistRepository = playlistRepository,
             userDataMutator = userDataMutator,
             downloadRepository = downloadRepository,
             downloadIntake = downloadIntake,

@@ -1,12 +1,11 @@
 package com.raulshma.jellyplay.core.data.repository
 
-import com.raulshma.jellyplay.core.data.repository.withTransaction
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 import com.raulshma.jellyplay.core.data.sync.toOfflineSyncState
 import com.raulshma.jellyplay.core.data.sync.toOfflineSyncUpdate
+import com.raulshma.jellyplay.core.data.util.SQLITE_HOST_VARIABLE_CHUNK_SIZE
+import com.raulshma.jellyplay.core.data.util.TimeSource
+import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.database.JellyPlayDatabase
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
 import com.raulshma.jellyplay.core.database.dao.OfflineMediaDao
@@ -29,6 +28,9 @@ import com.raulshma.jellyplay.core.model.OfflinePersonInfo
 import com.raulshma.jellyplay.core.model.OfflineSyncState
 import com.raulshma.jellyplay.core.model.OfflineSyncUpdate
 import java.io.File
+import java.time.Instant
+import java.time.OffsetDateTime
+import java.time.ZoneId
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -50,23 +52,13 @@ import androidx.collection.LruCache
 const val MIN_OFFLINE_SEARCH_LENGTH: Int = 2
 
 /**
- * Batch size for `WHERE mediaItemId IN (...)` download lookups. SQLite's
- * legacy host-variable cap is 999 (Android < 12); the whole-library episode
- * paths can exceed that, so ids are chunked below it.
- */
-private const val MAX_SQLITE_HOST_VARIABLES = 900
-
-private val MEDIA_TYPE_BY_NAME: Map<String, MediaType> = MediaType.entries.associateBy { it.name }
-private val DOWNLOAD_STATUS_BY_NAME: Map<String, DownloadStatus> = DownloadStatus.entries.associateBy { it.name }
-
-/**
  * Joins a metadata row's model with its `downloads` row (null when absent) —
  * the shape every download-aware read path projects: path + status + byte
  * counters, all defaulting when there is no download.
  */
 private fun OfflineMediaItem.withDownload(download: DownloadEntity?): OfflineMediaItem = copy(
     downloadPath = download?.downloadPath,
-    downloadStatus = download?.status?.let { DOWNLOAD_STATUS_BY_NAME[it] },
+    downloadStatus = download?.status.toEnumOrNull(),
     downloadedBytes = download?.downloadedBytes ?: 0L,
     totalSizeBytes = download?.totalSizeBytes ?: 0L,
 )
@@ -78,7 +70,24 @@ class OfflineRepositoryImpl constructor(
     private val syncBaselineDao: SyncBaselineDao,
     private val downloadDao: DownloadDao,
     private val database: JellyPlayDatabase,
+    /** Clock seam for the `lastPlayedDate` stamps (updatePlaybackProgress / applyPlayedState). */
+    private val timeSource: TimeSource,
 ) : OfflineRepository {
+
+    /**
+     * The shared deletion choreography (see the class KDoc for the six-step
+     * ordering spec) — the one implementation behind this repo's three delete
+     * scopes and DownloadRepositoryImpl.cleanupDownloadFiles. Only the DAO
+     * query + metadata delete targets differ per scope, so they stay at the
+     * call sites.
+     */
+    private val deletionCore = OfflineDeletionCore(
+        database = database,
+        downloadDao = downloadDao,
+        offlineMediaDao = offlineMediaDao,
+        playbackStateDao = playbackStateDao,
+        syncBaselineDao = syncBaselineDao,
+    )
 
     /**
      * Per-item artwork memo (see [ArtworkInputKey]): maps item id to its
@@ -236,7 +245,7 @@ class OfflineRepositoryImpl constructor(
         if (ids.isEmpty()) {
             flowOf(emptyMap())
         } else {
-            combine(ids.chunked(MAX_SQLITE_HOST_VARIABLES).map { chunk ->
+            combine(ids.chunked(SQLITE_HOST_VARIABLE_CHUNK_SIZE).map { chunk ->
                 downloadDao.getDownloadsByMediaItemIdsFlow(chunk)
                     .map { list -> list.associateBy { it.mediaItemId } }
             }) { maps -> maps.reduce { acc, map -> acc + map } }
@@ -256,14 +265,14 @@ class OfflineRepositoryImpl constructor(
         if (ids.isEmpty()) {
             flowOf(emptyMap())
         } else {
-            combine(ids.chunked(MAX_SQLITE_HOST_VARIABLES).map { chunk ->
+            combine(ids.chunked(SQLITE_HOST_VARIABLE_CHUNK_SIZE).map { chunk ->
                 query(chunk, OFFLINE_WATCHED_THRESHOLD_PERCENT)
                     .map { rows -> rows.associate { it.groupedId to it.unplayedCount } }
             }) { maps -> maps.reduce { acc, map -> acc + map } }
         }
 
     private suspend fun downloadsByItemIds(ids: List<String>): Map<String, DownloadEntity> =
-        ids.chunked(MAX_SQLITE_HOST_VARIABLES)
+        ids.chunked(SQLITE_HOST_VARIABLE_CHUNK_SIZE)
             .flatMap { downloadDao.getDownloadsByMediaItemIds(it) }
             .associateBy { it.mediaItemId }
 
@@ -322,45 +331,15 @@ class OfflineRepositoryImpl constructor(
 
     override suspend fun deleteOfflineItem(id: String) {
         val download = downloadDao.getDownloadByMediaItemId(id)
-        // Capture the row + its artifact dir before the DB delete so the cast
-        // images written beside the download at fetch time can be pruned
-        // afterward. Reference counting keeps a person's shared image when
-        // another offline item still references them — a person can appear
-        // across many movies/episodes and the `personId`-keyed image serves
-        // all of them.
-        val entity = offlineMediaDao.getById(id)
-        val parentDir = download?.takeIf { it.downloadPath.isNotBlank() }
-            ?.let { File(it.downloadPath).parentFile }
-        download?.let {
-            if (it.downloadPath.isNotBlank()) {
-                val file = File(it.downloadPath)
-                if (file.exists()) file.delete()
-                DownloadArtifacts.cleanup(parentDir, it.mediaItemId)
-            }
-        }
-        database.withTransaction {
-            download?.let { downloadDao.deleteDownloadById(it.id) }
-            offlineMediaDao.deleteById(id)
-            playbackStateDao.deleteById(id)
-            syncBaselineDao.deleteById(id)
-        }
-        // The deleted row's artifacts (and possibly its whole dir) are gone;
-        // cached local artwork paths for it and its series siblings would
-        // dangle until process death. Deletes are rare — a full evict is
-        // cheap and the next read re-resolves from disk.
-        artworkMemoCache.evictAll()
-        // Prune cast images after the row is gone so the reference scan only
-        // counts surviving rows.
-        cleanupOrphanedCastArtwork(
-            parentDirs = listOfNotNull(parentDir),
-            candidateCastIds = entity?.let(::castIdsOf).orEmpty(),
+        deletionCore.delete(
+            downloads = listOfNotNull(download),
+            deleteMetadataRows = {
+                offlineMediaDao.deleteById(id)
+                playbackStateDao.deleteById(id)
+                syncBaselineDao.deleteById(id)
+            },
+            evictArtworkMemo = { artworkMemoCache.evictAll() },
         )
-        cleanupOrphans()
-    }
-
-    private suspend fun offlineMediaById(downloads: List<DownloadEntity>): Map<String, OfflineMediaEntity> {
-        if (downloads.isEmpty()) return emptyMap()
-        return offlineMediaDao.getByIds(downloads.map { it.mediaItemId }).associateBy { it.id }
     }
 
     override suspend fun deleteOfflineSeries(seriesId: String) {
@@ -372,108 +351,44 @@ class OfflineRepositoryImpl constructor(
             downloadDao.getDownloadsForSeries(seriesId) +
             downloadDao.getDownloadsForSeriesViaOfflineMedia(seriesId)
         ).distinctBy { it.id }
-        deleteArtifactsParallel(downloads)
-        // Series-scoped artwork (${seriesId}_poster.jpg / _backdrop.jpg) lives
-        // beside each downloaded episode; prune it from every episode dir now
-        // that no row references the series anymore.
-        val episodeDirs = downloads
-            .asSequence()
-            .mapNotNull { it.downloadPath.takeIf { p -> p.isNotBlank() } }
-            .mapNotNull { File(it).parentFile }
-            .distinct()
-            .toList()
-        episodeDirs.forEach { DownloadArtifacts.cleanupSeriesArtwork(it, seriesId) }
-        // Capture the deleted episodes' cast ids before the rows are removed so
-        // the cast images written beside each episode at fetch time can be
-        // pruned afterward (reference scan runs post-delete).
-        val mediaById = offlineMediaById(downloads)
-        val deletedCastIds = downloads.mapNotNull { mediaById[it.mediaItemId] }
-            .flatMap(::castIdsOf)
-            .distinct()
-        database.withTransaction {
-            val ids = downloads.map { it.id }
-            if (ids.isNotEmpty()) downloadDao.deleteDownloadsByIds(ids)
-            offlineMediaDao.deleteBySeriesId(seriesId)
-            playbackStateDao.deleteBySeriesId(seriesId)
-            syncBaselineDao.deleteBySeriesId(seriesId)
-        }
-        // Series-scoped artwork cleanup above removed episode-dir artifacts
-        // the memo may still resolve to — drop it and re-resolve from disk.
-        artworkMemoCache.evictAll()
-        cleanupOrphanedCastArtwork(episodeDirs, deletedCastIds)
-        cleanupOrphans()
+        deletionCore.delete(
+            downloads = downloads,
+            deleteMetadataRows = {
+                offlineMediaDao.deleteBySeriesId(seriesId)
+                playbackStateDao.deleteBySeriesId(seriesId)
+                syncBaselineDao.deleteBySeriesId(seriesId)
+            },
+            evictArtworkMemo = { artworkMemoCache.evictAll() },
+            // Series-scoped artwork (${seriesId}_poster.jpg / _backdrop.jpg) lives
+            // beside each downloaded episode; prune it from every episode dir now
+            // that no row references the series anymore.
+            cleanupSeriesArtwork = { dirs -> dirs.forEach { DownloadArtifacts.cleanupSeriesArtwork(it, seriesId) } },
+        )
     }
 
     override suspend fun deleteOfflineSeason(seasonId: String) {
+        // Same recovery join as the series scope, per season — see deleteOfflineSeries.
         val downloads = (
             downloadDao.getDownloadsForSeason(seasonId) +
             downloadDao.getDownloadsForSeasonViaOfflineMedia(seasonId)
         ).distinctBy { it.id }
-        deleteArtifactsParallel(downloads)
-        // Capture the season's episode dirs + cast ids before the rows are
-        // removed so the cast images can be pruned afterward. The reference
-        // scan runs post-delete and counts only surviving rows, so a person
-        // still referenced by a sibling season's row keeps their shared image.
-        val episodeDirs = downloads
-            .asSequence()
-            .mapNotNull { it.downloadPath.takeIf { p -> p.isNotBlank() } }
-            .mapNotNull { File(it).parentFile }
-            .distinct()
-            .toList()
-        val mediaById = offlineMediaById(downloads)
-        val deletedCastIds = downloads.mapNotNull { mediaById[it.mediaItemId] }
-            .flatMap(::castIdsOf)
-            .distinct()
-        database.withTransaction {
-            val ids = downloads.map { it.id }
-            if (ids.isNotEmpty()) downloadDao.deleteDownloadsByIds(ids)
-            offlineMediaDao.deleteBySeasonId(seasonId)
-            playbackStateDao.deleteBySeasonId(seasonId)
-            syncBaselineDao.deleteBySeasonId(seasonId)
-        }
-        // Deleted episode artifacts may have served as this series' cached
-        // artwork source — drop the memo and re-resolve from disk.
-        artworkMemoCache.evictAll()
-        cleanupOrphanedCastArtwork(episodeDirs, deletedCastIds)
-        cleanupOrphans()
+        deletionCore.delete(
+            downloads = downloads,
+            deleteMetadataRows = {
+                offlineMediaDao.deleteBySeasonId(seasonId)
+                playbackStateDao.deleteBySeasonId(seasonId)
+                syncBaselineDao.deleteBySeasonId(seasonId)
+            },
+            evictArtworkMemo = { artworkMemoCache.evictAll() },
+        )
     }
 
-    /**
-     * Deletes downloaded artifact files concurrently (was a serial per-episode
-     * `File.delete()` + `cleanup()` loop — for a 100-episode series that was
-     * 100+ serial FS syscalls). Runs on Dispatchers.IO; the subsequent DB
-     * transaction does not depend on the file deletion result.
-     *
-     * Each download's per-item poster/backdrop are scoped by [DownloadEntity.mediaItemId]
-     * so deleting one item's artifacts never clobbers another item's images in
-     * the shared flat downloads dir. Cast images are pruned separately via
-     * [cleanupOrphanedCastArtwork] (they are keyed by `personId`, not `mediaItemId`).
-     */
-    private suspend fun deleteArtifactsParallel(downloads: List<DownloadEntity>) {
-        val nonBlank = downloads.filter { it.downloadPath.isNotBlank() }
-        if (nonBlank.isEmpty()) return
-        coroutineScope {
-            nonBlank.map { entity ->
-                async(Dispatchers.IO) {
-                    val file = File(entity.downloadPath)
-                    if (file.exists()) file.delete()
-                    DownloadArtifacts.cleanup(file.parentFile, entity.mediaItemId)
-                }
-            }.awaitAll()
-        }
-    }
+    override suspend fun cleanupOrphans() = deletionCore.pruneOrphans()
 
-    override suspend fun cleanupOrphans() {
-        // Remove orphaned season/series metadata rows, then any playback /
-        // baseline rows whose metadata row just disappeared (or drifted from
-        // older data). One transaction so a concurrent read never sees a
-        // half-cleaned state.
-        database.withTransaction {
-            offlineMediaDao.cleanupOrphans()
-            playbackStateDao.deleteUnreferenced()
-            syncBaselineDao.deleteUnreferenced()
-        }
-    }
+    /** Wall-clock `lastPlayedDate` stamp: the injected [timeSource]'s instant rendered in the
+     *  system zone — the exact `OffsetDateTime.now()` shape the column has always carried. */
+    private fun offsetNow(): OffsetDateTime =
+        OffsetDateTime.ofInstant(Instant.ofEpochMilli(timeSource.nowEpochMillis()), ZoneId.systemDefault())
 
     override suspend fun updatePlaybackProgress(
         itemId: String,
@@ -490,7 +405,7 @@ class OfflineRepositoryImpl constructor(
             positionTicks = positionTicks,
             percentage = percentage.coerceIn(0.0, 100.0),
             isPlayed = isPlayed,
-            lastPlayedDate = java.time.OffsetDateTime.now().toString(),
+            lastPlayedDate = offsetNow().toString(),
         )
     }
 
@@ -505,7 +420,7 @@ class OfflineRepositoryImpl constructor(
         playbackStateDao.applyPlayedStateToHierarchy(
             itemId = itemId,
             isPlayed = isPlayed,
-            lastPlayedDate = if (isPlayed) java.time.OffsetDateTime.now().toString() else null,
+            lastPlayedDate = if (isPlayed) offsetNow().toString() else null,
         )
     }
 
@@ -901,51 +816,6 @@ class OfflineRepositoryImpl constructor(
         File(dir, filename).takeIf { it.exists() }?.absolutePath
 
     /**
-     * Cast ids carried by [item]'s persisted `peopleJson`, decoded via [decodeCast].
-     * Empty when the row has no cast column (older downloads) so cast cleanup is a
-     * no-op for them.
-     */
-    private fun castIdsOf(item: OfflineMediaEntity): List<String> =
-        decodeCast(item.peopleJson).map { it.id }
-
-    /**
-     * Prunes the cast-image files for [candidateCastIds] from every [parentDirs],
-     * keeping any person still referenced by a *surviving* offline row. A person
-     * can appear across many movies/episodes and the `personId`-keyed image file
-     * serves all of them, so a file is deleted only when its person is no longer
-     * referenced anywhere. **Must be called after the deleted rows are removed
-     * from the DB** so [offlineMediaDao.getAllPeopleJson] reflects only surviving
-     * references — otherwise the just-deleted rows would still count as references
-     * and nothing would be pruned.
-     */
-    private suspend fun cleanupOrphanedCastArtwork(
-        parentDirs: List<File>,
-        candidateCastIds: List<String>,
-    ) {
-        if (parentDirs.isEmpty() || candidateCastIds.isEmpty()) return
-        val stillReferenced = referencedPersonIds()
-        val orphans = candidateCastIds.filter { it !in stillReferenced }
-        if (orphans.isEmpty()) return
-        parentDirs.forEach { DownloadArtifacts.cleanupCastArtwork(it, orphans) }
-    }
-
-    /**
-     * Person ids that still appear in any surviving offline row's `peopleJson`.
-     * A coarse scan over the decoded cast is sufficient: Jellyfin person ids are
-     * stable UUIDs, so membership means the person is still referenced and their
-     * shared image file must be kept. Reflects the post-delete state because it
-     * is called after the deletion transaction commits.
-     */
-    private suspend fun referencedPersonIds(): Set<String> {
-        val rows = offlineMediaDao.getAllPeopleJson()
-        return buildSet {
-            for (row in rows) {
-                for (person in decodeCast(row.peopleJson)) add(person.id)
-            }
-        }
-    }
-
-    /**
      * The directory used to locate cast-image artifacts for [item]. Cast images
      * are written beside the item's media file (movies/standalone) or beside a
      * downloaded episode's media file (series, which have no media file of their
@@ -994,7 +864,7 @@ class OfflineRepositoryImpl constructor(
     }
 
     private fun safeMediaTypeOf(name: String): MediaType =
-        MEDIA_TYPE_BY_NAME[name] ?: MediaType.UNKNOWN
+        name.toEnumOrNull() ?: MediaType.UNKNOWN
 
     /**
      * Maps a metadata + playback join row to the UI model. Playback fields come

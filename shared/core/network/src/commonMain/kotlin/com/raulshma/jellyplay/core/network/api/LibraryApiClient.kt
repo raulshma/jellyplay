@@ -13,7 +13,6 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.Playlist
 import com.raulshma.jellyplay.core.model.PlaylistItem
-import com.raulshma.jellyplay.core.model.RecommendationResult
 import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.Studio
 
@@ -29,6 +28,16 @@ interface LibraryApiClient {
          */
         force: Boolean = false,
     ): Result<HomeSectionsResult>
+
+    /**
+     * Drops the home hot-path sub-call caches (per-folder latest media,
+     * per-seed similar items) so the next [getHomeSections] fetch re-hits the
+     * server for those rows. Their entries carry per-item UserData, so a
+     * watched/favorite/progress write calling this purges the pre-write rows
+     * instead of letting them serve stale badges for the sub-call TTL. Best-
+     * effort and synchronous — a no-op before any home fetch has memoised.
+     */
+    fun invalidateHomeSubcallCaches()
 
     suspend fun getLatestMedia(parentId: String, limit: Int = 16): Result<List<MediaItem>>
     suspend fun getNextUp(limit: Int = 20, enableRewatching: Boolean = false, maxDays: Int = 0): Result<List<MediaItem>>
@@ -130,13 +139,6 @@ interface LibraryApiClient {
     suspend fun getAlbumTracks(albumId: String): Result<List<MediaItem>>
     suspend fun getSimilarItems(itemId: String, limit: Int = 12): Result<List<MediaItem>>
     suspend fun getInstantMix(itemId: String, limit: Int = 100): Result<List<MediaItem>>
-    suspend fun getRecommendations(
-        limit: Int = 20,
-        // Pre-fetched seed items (e.g. Continue Watching + Next Up already loaded
-        // by getHomeSections). When non-empty the implementation reuses them as
-        // seeds instead of re-fetching; when empty it fetches its own.
-        seeds: List<MediaItem> = emptyList(),
-    ): Result<RecommendationResult>
     suspend fun getItemsByPerson(personId: String, limit: Int = 50): Result<List<MediaItem>>
     suspend fun getThemeSongs(itemId: String): Result<List<MediaItem>>
     suspend fun getSeasons(seriesId: String): Result<List<MediaItem>>

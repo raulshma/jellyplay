@@ -5,11 +5,11 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
+import com.raulshma.jellyplay.feature.livetv.toInstantOrNull
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
-import java.time.format.DateTimeParseException
 import java.time.temporal.ChronoUnit
 
 /**
@@ -45,15 +45,28 @@ data class EpgGridData(
     val isEmpty: Boolean get() = rows.isEmpty()
 }
 
+/**
+ * A program with its timestamps already parsed ([start] is never null —
+ * programs with unparseable start times are dropped before this is built).
+ */
+@Immutable
+data class TimedProgram(
+    val program: LiveTvProgram,
+    val start: Instant,
+    val end: Instant,
+)
+
 @Immutable
 data class EpgChannelRow(
     val channel: LiveTvChannel,
-    val programs: List<LiveTvProgram>,
+    val timedPrograms: List<TimedProgram>,
 )
 
 @Immutable
 data class ProgramLayout(
     val program: LiveTvProgram,
+    val start: Instant,
+    val end: Instant,
     val startOffsetDp: Float,
     val widthDp: Float,
 )
@@ -87,15 +100,20 @@ fun buildEpgGridData(
 ): EpgGridData {
     val byChannel = programs.groupBy { it.channelId }
     val rows = channels.map { channel ->
+        val timed = (byChannel[channel.id] ?: emptyList())
+            .mapNotNull { program ->
+                val start = program.startInstant() ?: return@mapNotNull null
+                TimedProgram(
+                    program = program,
+                    start = start,
+                    end = program.endInstant() ?: start,
+                )
+            }
+            .filter { it.end > windowStart && it.start < windowEnd }
+            .sortedBy { it.start.toEpochMilli() }
         EpgChannelRow(
             channel = channel,
-            programs = (byChannel[channel.id] ?: emptyList())
-                .filter { program ->
-                    val s = program.startInstant() ?: return@filter false
-                    val e = program.endInstant() ?: s
-                    e > windowStart && s < windowEnd
-                }
-                .sortedBy { it.startInstant()?.toEpochMilli() ?: Long.MAX_VALUE },
+            timedPrograms = timed,
         )
     }
     return EpgGridData(
@@ -122,16 +140,16 @@ fun layoutChannelRow(
     row: EpgChannelRow,
     gridData: EpgGridData,
 ): ChannelRowLayout {
-    val layouts = row.programs.mapNotNull { program ->
-        val start = program.startInstant() ?: return@mapNotNull null
-        val end = program.endInstant() ?: start
-        val clampedStart = maxOf(start, gridData.windowStart)
-        val clampedEnd = minOf(end, gridData.windowEnd)
+    val layouts = row.timedPrograms.mapNotNull { timed ->
+        val clampedStart = maxOf(timed.start, gridData.windowStart)
+        val clampedEnd = minOf(timed.end, gridData.windowEnd)
         if (clampedEnd <= clampedStart) return@mapNotNull null
         val startMinutes = ChronoUnit.MINUTES.between(gridData.windowStart, clampedStart).toFloat()
         val durationMinutes = ChronoUnit.MINUTES.between(clampedStart, clampedEnd).toFloat()
         ProgramLayout(
-            program = program,
+            program = timed.program,
+            start = timed.start,
+            end = timed.end,
             startOffsetDp = startMinutes * EpgGridLayout.DP_PER_MINUTE,
             widthDp = durationMinutes * EpgGridLayout.DP_PER_MINUTE,
         )
@@ -168,37 +186,19 @@ fun Instant.offsetDp(windowStart: Instant): Float =
 // Date parsing helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-private val ISO_PARSER: DateTimeFormatter = DateTimeFormatter.ISO_DATE_TIME
-
 private val TIME_HEADER_FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
 /**
  * Parse the loose ISO-8601 timestamp produced by `BaseItemDto.startDate.toString()`.
  * Returns `null` on parse failure — callers should treat missing timestamps as
- * "skip this program" rather than crash.
+ * "skip this program" rather than crash. The lenient parse itself is the
+ * feature's one canonical ladder,
+ * [com.raulshma.jellyplay.feature.livetv.toInstantOrNull].
  */
 fun LiveTvProgram.startInstant(): Instant? = startDate?.toInstantOrNull()
 
 fun LiveTvProgram.endInstant(): Instant? =
     endDate?.toInstantOrNull() ?: startDate?.toInstantOrNull()
-
-fun String.toInstantOrNull(): Instant? = try {
-    // ISO_DATE_TIME handles offsets and, when absent, falls back to UTC via
-    // LocalDateTime parsing. The Jellyfin SDK emits both forms depending on
-    // server version, so we try ISO first then fall back to LocalDateTime.
-    Instant.from(ISO_PARSER.parse(this))
-} catch (_: DateTimeParseException) {
-    null
-} catch (_: java.time.DateTimeException) {
-    // Instant.from() throws DateTimeException (not DateTimeParseException)
-    // when the parsed TemporalAccessor lacks zone/offset info — e.g. a bare
-    // LocalDateTime string. Fall back to assuming UTC.
-    try {
-        LocalDateTime.parse(this).toInstant(ZoneOffset.UTC)
-    } catch (_: DateTimeParseException) {
-        null
-    }
-}
 
 /** Format an [Instant] for the time-header (e.g. "14:30"). */
 fun Instant.formatTimeHeader(): String {

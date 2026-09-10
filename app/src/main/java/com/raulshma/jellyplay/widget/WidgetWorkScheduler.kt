@@ -1,14 +1,18 @@
 package com.raulshma.jellyplay.widget
 
+import android.appwidget.AppWidgetProvider
 import android.content.Context
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
+import androidx.work.ListenableWorker
 import androidx.work.NetworkType
-import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.OneTimeWorkRequest
+import androidx.work.PeriodicWorkRequest
 import androidx.work.WorkManager
+import com.raulshma.jellyplay.widget.skeleton.widgetIdsFor
 import java.time.Duration
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Enqueue helpers for the home-screen recommendations widget workers.
@@ -39,15 +43,48 @@ class WidgetWorkSchedulerImpl (
     private val context: Context,
 ) : WidgetWorkScheduler {
 
-    // In-process cooldown timestamps for the manual refresh entry points.
-    // Previously these were persisted in a second DataStore file
-    // (`widget_cooldown`); the rest of the app uses a single UserPreferences
-    // DataStore, so the second file doubled the DataStore actor/IO machinery
-    // for what amounts to two Long timestamps. The 5-second cooldown only
-    // matters within the live process — losing it across process death just
-    // means one extra refresh is allowed, which is acceptable.
-    private val lastLibraryRefreshAt = java.util.concurrent.atomic.AtomicLong(0L)
-    private val lastSeerrRefreshAt = java.util.concurrent.atomic.AtomicLong(0L)
+    /**
+     * One widget kind's scheduling identity: the provider whose bound
+     * instances gate the periodic schedule, the worker that refreshes the
+     * cache, its unique-work names + tag (stable — the unique names are
+     * WorkManager's match/cancel key), and the in-process cooldown slot for
+     * the manual one-shot.
+     *
+     * In-process cooldowns only (the rest of the app uses a single
+     * UserPreferences DataStore, and a second persisted file doubled the
+     * DataStore actor/IO machinery for two Long timestamps). The 5-second
+     * cooldown only matters within the live process — losing it across
+     * process death just means one extra refresh is allowed, which is
+     * acceptable.
+     */
+    private class Flavour(
+        val providerClass: Class<out AppWidgetProvider>,
+        val workerClass: Class<out ListenableWorker>,
+        val uniquePeriodicName: String,
+        val uniqueOneshotName: String,
+        val workTag: String,
+        val cooldownSlot: AtomicLong,
+    )
+
+    private val libraryFlavour = Flavour(
+        providerClass = LibraryRecommendationsWidget::class.java,
+        workerClass = LibraryRecommendationsWidgetWorker::class.java,
+        uniquePeriodicName = LibraryRecommendationsWidgetWorker.UNIQUE_PERIODIC_NAME,
+        uniqueOneshotName = LibraryRecommendationsWidgetWorker.UNIQUE_ONESHOT_NAME,
+        workTag = LibraryRecommendationsWidgetWorker.WORK_TAG,
+        cooldownSlot = AtomicLong(0L),
+    )
+
+    private val seerrFlavour = Flavour(
+        providerClass = SeerrRecommendationsWidget::class.java,
+        workerClass = SeerrRecommendationsWidgetWorker::class.java,
+        uniquePeriodicName = SeerrRecommendationsWidgetWorker.UNIQUE_PERIODIC_NAME,
+        uniqueOneshotName = SeerrRecommendationsWidgetWorker.UNIQUE_ONESHOT_NAME,
+        workTag = SeerrRecommendationsWidgetWorker.WORK_TAG,
+        cooldownSlot = AtomicLong(0L),
+    )
+
+    private val flavours = listOf(libraryFlavour, seerrFlavour)
 
     override fun enqueuePeriodic() {
         // Skip the periodic schedule when no widget of either kind is bound.
@@ -56,93 +93,80 @@ class WidgetWorkSchedulerImpl (
         // overhead (2 WorkManager DB writes + 2 scheduler reads). On devices
         // with no widgets installed this avoids scheduling two periodic
         // workers that would otherwise fire every 6 h for nothing.
-        val appWidgetManager = android.appwidget.AppWidgetManager.getInstance(context)
-        val hasLibraryWidget = appWidgetManager
-            .getAppWidgetIds(android.content.ComponentName(context, LibraryRecommendationsWidget::class.java))
-            .isNotEmpty()
-        val hasSeerrWidget = appWidgetManager
-            .getAppWidgetIds(android.content.ComponentName(context, SeerrRecommendationsWidget::class.java))
-            .isNotEmpty()
-        if (!hasLibraryWidget && !hasSeerrWidget) return
+        val bound = flavours.map { flavour ->
+            flavour to widgetIdsFor(context, flavour.providerClass).isNotEmpty()
+        }
+        if (bound.none { it.second }) return
 
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)
             .setRequiresBatteryNotLow(true)
             .build()
 
-        val libraryRequest = PeriodicWorkRequestBuilder<LibraryRecommendationsWidgetWorker>(REFRESH_PERIOD, REFRESH_FLEX)
-            .setConstraints(constraints)
-            .addTag(LibraryRecommendationsWidgetWorker.WORK_TAG)
-            .build()
-
-        val seerrRequest = PeriodicWorkRequestBuilder<SeerrRecommendationsWidgetWorker>(REFRESH_PERIOD, REFRESH_FLEX)
-            .setConstraints(constraints)
-            .addTag(SeerrRecommendationsWidgetWorker.WORK_TAG)
-            .build()
-
         WorkManager.getInstance(context).apply {
-            if (hasLibraryWidget) {
+            for ((flavour, present) in bound) {
+                if (!present) continue
                 enqueueUniquePeriodicWork(
-                    LibraryRecommendationsWidgetWorker.UNIQUE_PERIODIC_NAME,
+                    flavour.uniquePeriodicName,
                     ExistingPeriodicWorkPolicy.KEEP,
-                    libraryRequest,
-                )
-            }
-            if (hasSeerrWidget) {
-                enqueueUniquePeriodicWork(
-                    SeerrRecommendationsWidgetWorker.UNIQUE_PERIODIC_NAME,
-                    ExistingPeriodicWorkPolicy.KEEP,
-                    seerrRequest,
+                    PeriodicWorkRequest.Builder(flavour.workerClass, REFRESH_PERIOD, REFRESH_FLEX)
+                        .setConstraints(constraints)
+                        .addTag(flavour.workTag)
+                        .build(),
                 )
             }
         }
     }
 
-    override suspend fun refreshLibraryNow(): Boolean {
-        if (!claimRefreshSlot(lastLibraryRefreshAt)) return false
+    override suspend fun refreshLibraryNow(): Boolean = refreshNow(libraryFlavour)
+
+    override suspend fun refreshSeerrNow(): Boolean = refreshNow(seerrFlavour)
+
+    private suspend fun refreshNow(flavour: Flavour): Boolean {
+        if (!claimRefreshSlot(flavour.cooldownSlot)) return false
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)
             .build()
-        val request = OneTimeWorkRequestBuilder<LibraryRecommendationsWidgetWorker>()
+        val request = OneTimeWorkRequest.Builder(flavour.workerClass)
             .setConstraints(constraints)
-            .addTag(LibraryRecommendationsWidgetWorker.WORK_TAG)
+            .addTag(flavour.workTag)
             .build()
         WorkManager.getInstance(context).enqueueUniqueWork(
-            LibraryRecommendationsWidgetWorker.UNIQUE_ONESHOT_NAME,
+            flavour.uniqueOneshotName,
             ExistingWorkPolicy.REPLACE,
             request,
         )
-        return true
-    }
-
-    override suspend fun refreshSeerrNow(): Boolean {
-        if (!claimRefreshSlot(lastSeerrRefreshAt)) return false
-        val constraints = Constraints.Builder()
-            .setRequiredNetworkType(NetworkType.CONNECTED)
-            .build()
-        val request = OneTimeWorkRequestBuilder<SeerrRecommendationsWidgetWorker>()
-            .setConstraints(constraints)
-            .addTag(SeerrRecommendationsWidgetWorker.WORK_TAG)
-            .build()
-        WorkManager.getInstance(context).enqueueUniqueWork(
-            SeerrRecommendationsWidgetWorker.UNIQUE_ONESHOT_NAME,
-            ExistingWorkPolicy.REPLACE,
-            request,
-        )
-        return true
-    }
-
-    private suspend fun claimRefreshSlot(lastRefreshAt: java.util.concurrent.atomic.AtomicLong): Boolean {
-        val now = System.currentTimeMillis()
-        val last = lastRefreshAt.get()
-        if (last > 0L && now - last < COOLDOWN_MS) return false
-        lastRefreshAt.set(now)
         return true
     }
 
     companion object {
         private val REFRESH_PERIOD: Duration = Duration.ofHours(6)
         private val REFRESH_FLEX: Duration = Duration.ofMinutes(30)
-        private const val COOLDOWN_MS = 5_000L
+    }
+}
+
+/**
+ * Manual-refresh cooldown window, in-process only — two triggers inside it
+ * collapse to one enqueued one-shot (see the Flavour KDoc above).
+ */
+internal const val COOLDOWN_MS = 5_000L
+
+/**
+ * Atomically claims [lastRefreshAt]'s cooldown slot as of [nowMs] (a test
+ * seam; production passes the wall clock). The former get()-then-set() let
+ * two triggers inside the window both pass: both read the same stale stamp,
+ * then both stamped. The `compareAndSet` closes that gap — only the thread
+ * whose CAS from the observed stamp lands wins and stamps; the loser's CAS
+ * fails, its re-read finds the fresh stamp inside [COOLDOWN_MS], and it is
+ * suppressed without restamping.
+ */
+internal fun claimRefreshSlot(
+    lastRefreshAt: AtomicLong,
+    nowMs: Long = System.currentTimeMillis(),
+): Boolean {
+    while (true) {
+        val last = lastRefreshAt.get()
+        if (last > 0L && nowMs - last < COOLDOWN_MS) return false
+        if (lastRefreshAt.compareAndSet(last, nowMs)) return true
     }
 }

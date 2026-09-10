@@ -10,7 +10,7 @@ import coil3.request.SuccessResult
 import coil3.request.allowHardware
 import coil3.size.Size as CoilSize
 
-/** Original Coil+Palette pipeline, byte-for-byte (plan §V1: replace androidx.palette). */
+/** Original Coil+Palette pipeline, byte-for-byte (replaces androidx.palette). */
 internal actual suspend fun extractDominantColor(context: PlatformContext, imageUrl: String): Color? {
     val loader = SingletonImageLoader.get(context)
     val request = ImageRequest.Builder(context)

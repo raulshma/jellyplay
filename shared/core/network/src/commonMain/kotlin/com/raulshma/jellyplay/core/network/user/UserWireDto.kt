@@ -5,7 +5,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 
 /**
- * Wire DTOs for the Phase W wasm user-management client (UserApiClient on
+ * Wire DTOs for the wasm user-management client (UserApiClient on
  * wasmJs), mirroring the Jellyfin SDK schema PascalCase-for-PascalCase.
  *
  * DTO ORGANIZATION CHOICE (documented): these live in their own `user/`

@@ -2,7 +2,7 @@ package com.raulshma.jellyplay.core.network
 
 /**
  * localStorage key under which the wasm network stack persists the device id
- * (wave 21C): a PLAIN UUID v4 string, no encoding — unlike the Seerr creds
+ *: a PLAIN UUID v4 string, no encoding — unlike the Seerr creds
  * store's Base64-of-UTF8 values, the only writer here is our own generator
  * (the wasm `randomUuidV4` in WasmIdentity.kt; ASCII hex + hyphens), so there
  * is nothing to decode and a foreign/corrupt entry is simply regenerated over
@@ -36,7 +36,7 @@ internal fun isCanonicalUuidV4Text(value: String): Boolean {
 }
 
 /**
- * Pure decision core of the persistent wasm device identity (wave 21C):
+ * Pure decision core of the persistent wasm device identity:
  * a stored value that passes [isCanonicalUuidV4Text] is returned VERBATIM
  * (same device id across browser reloads — the server's device list stops
  * growing one entry per reload); anything else (absent, storage-unavailable

@@ -12,6 +12,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import kotlin.test.AfterTest
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -660,15 +661,45 @@ class OfflineMediaDaoTest {
     }
 
     @Test
-    fun `getAllPeopleJson returns id and peopleJson for every row`() = runTest {
-        offlineMediaDao.upsert(createMedia(id = "m1").copy(peopleJson = """[{"name":"Alice"}]"""))
-        offlineMediaDao.upsert(createMedia(id = "m2"))
+    fun `isPersonReferenced matches a person id stored in any row's peopleJson`() = runTest {
+        offlineMediaDao.upsert(createMedia(id = "m1").copy(peopleJson = """[{"id":"person-1","name":"Alice"}]"""))
+        offlineMediaDao.upsert(createMedia(id = "m2")) // null blob — never matches
+        offlineMediaDao.upsert(createMedia(id = "m3").copy(peopleJson = """[{"id":"person-9","name":"Bob"}]"""))
 
-        val rows = offlineMediaDao.getAllPeopleJson()
+        assertTrue(offlineMediaDao.isPersonReferenced(personReferenceLikePattern("person-1")))
+        assertFalse(offlineMediaDao.isPersonReferenced(personReferenceLikePattern("person-2")))
+    }
 
-        assertEquals(2, rows.size)
-        assertEquals("""[{"name":"Alice"}]""", rows.first { it.id == "m1" }.peopleJson)
-        assertNull(rows.first { it.id == "m2" }.peopleJson)
+    @Test
+    fun `isPersonReferenced does not match a longer id containing the candidate as substring`() = runTest {
+        // Quote delimiting: "person-1" must not be "referenced" merely because
+        // "person-12" is — inside the longer id the adjacent character is a
+        // digit, not the closing quote the pattern demands.
+        offlineMediaDao.upsert(createMedia(id = "m1").copy(peopleJson = """[{"id":"person-12","name":"Alice"}]"""))
+
+        assertFalse(offlineMediaDao.isPersonReferenced(personReferenceLikePattern("person-1")))
+        assertTrue(offlineMediaDao.isPersonReferenced(personReferenceLikePattern("person-12")))
+    }
+
+    @Test
+    fun `isPersonReferenced anchors on the id key and ignores the same text in other fields`() = runTest {
+        // "person-1" appears only as a NAME value here, never as an id.
+        offlineMediaDao.upsert(
+            createMedia(id = "m1").copy(peopleJson = """[{"id":"person-9","name":"person-1"}]"""),
+        )
+
+        assertFalse(offlineMediaDao.isPersonReferenced(personReferenceLikePattern("person-1")))
+    }
+
+    @Test
+    fun `isPersonReferenced escapes LIKE wildcards in the person id`() = runTest {
+        // A literal '%' / '_' in the id must match literally, not as wildcards:
+        // the row references "a%b", so an (unescaped) "a_b" pattern would match
+        // it via '_' — the escaped pattern must not.
+        offlineMediaDao.upsert(createMedia(id = "m1").copy(peopleJson = """[{"id":"a%b","name":"Alice"}]"""))
+
+        assertTrue(offlineMediaDao.isPersonReferenced(personReferenceLikePattern("a%b")))
+        assertFalse(offlineMediaDao.isPersonReferenced(personReferenceLikePattern("a_b")))
     }
 
     @Test

@@ -6,8 +6,8 @@ import org.koin.core.module.Module
 import org.koin.dsl.module
 
 /**
- * Koin construction owner for the audio player (wave 7A conveyor move from
- * `:feature:player:audio`; docs/kmp-migration-plan.md §Phase V3). The
+ * Koin construction owner for the audio player (conveyor move from
+ * `:feature:player:audio`; docs/kmp-migration-plan.md ). The
  * HiltViewModel/@Inject annotations were stripped at the move — Koin is the
  * single constructor owner (one framework per type). Ctor deps split four
  * ways:
@@ -15,7 +15,7 @@ import org.koin.dsl.module
  *    [com.raulshma.jellyplay.core.data.playback.AudioEffectsManager] are the
  *    shared playback contracts the legacy Hilt AudioPlaybackManager single
  *    implements; androidCoreDataModule aliases them onto that manager since
- *    wave 8A (the former app Hilt-interop bridge died with wave 8B);
+ *    the former app Hilt-interop bridge died with the conveyor move);
  *  - the module-local AudioPlayerEngine / AudioPlayerCast seams are bridged
  *    the same way (app-side `androidAppInteropAdaptersModule` delegate
  *    adapters over the Koin-owned AudioPlaybackManager / CastManager —
@@ -24,7 +24,7 @@ import org.koin.dsl.module
  *    UserDataMutator / DownloadRepository / DownloadIntake (shared data
  *    cluster) and PreferenceProjections / AudioStore / AudioEffectsStore
  *    (shared datastore) resolve from the shared-module graph;
- *  - desktop: LIVE since wave 9B real audio — apps/desktop's
+ *  - desktop: LIVE since the real-audio engine — apps/desktop's
  *    desktopPlayerModule binds all four playback/cast deps:
  *    [com.raulshma.jellyplay.core.data.playback.AudioQueueManager] +
  *    [AudioPlayerEngine] over the shared DesktopAudioQueueManager single
@@ -44,6 +44,7 @@ val playerAudioModule: Module = module {
             audioStore = get(),
             audioEffectsStore = get(),
             mediaRepository = get(),
+            playlistRepository = get(),
             userDataMutator = get(),
             downloadRepository = get(),
             downloadIntake = get(),

@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.feature.player.video
 
 /**
- * One-shot user-feedback seam for the video player (wave 8C): the exact
+ * One-shot user-feedback seam for the video player: the exact
  * member set [VideoPlayerViewModel] and [SubtitleManager] call on the legacy
  * Android-only `UserMessageBus`. Messages are already-resolved [String]s at
  * the call sites; resource-backed messages go through the

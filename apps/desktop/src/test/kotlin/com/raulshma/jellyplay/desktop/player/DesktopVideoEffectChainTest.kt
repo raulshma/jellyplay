@@ -7,7 +7,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Wave 17B: the mpv `vf`-chain builder pin for the desktop video effects —
+ *: the mpv `vf`-chain builder pin for the desktop video effects —
  * the shared-effect → mpv filter parity table in [DesktopVideoEffectChain] is
  * only as good as these strings. Every case cites the Android MPV engine's
  * `applyVideoFilters` application path it mirrors (stage order, inclusion

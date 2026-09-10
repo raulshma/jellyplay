@@ -45,7 +45,7 @@ internal class HomeRefresherFactory constructor(
     fun create(
         scope: CoroutineScope,
         offlineModeManager: OfflineModeManager,
-        awaitOutboxDrained: suspend () -> Unit,
+        awaitOutboxDrained: suspend () -> Boolean,
         sectionPrefsProvider: () -> HomeSectionPrefs,
         seerrPreferencesProvider: () -> SeerrPreferences,
         discoverEnabledProvider: () -> Boolean,

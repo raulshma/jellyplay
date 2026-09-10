@@ -8,7 +8,7 @@ import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import com.raulshma.jellyplay.feature.player.video.trickplay.TrickplayController
 
 /**
- * Aggregate platform seam for the video player session cluster (wave 8C):
+ * Aggregate platform seam for the video player session cluster:
  * every Android-only capability the commonMain
  * [VideoPlayerViewModel]/[PlayerSessionManager]/[SubtitleManager] cluster
  * needs behind one injectable object, so the ViewModel's constructor keeps a
@@ -88,7 +88,7 @@ interface SubtitleContentGateway {
 }
 
 /**
- * Offline-media probe seam for [PlayerSessionManager.loadOffline] (wave 8C):
+ * Offline-media probe seam for [PlayerSessionManager.loadOffline]:
  * duration extraction from a local media file and container→MIME mapping were
  * `android.media.MediaMetadataRetriever` + media3 `MimeTypes` constants.
  * The Android actual ([AndroidOfflineMediaProbe], module androidMain) runs

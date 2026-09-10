@@ -20,7 +20,7 @@ package com.raulshma.jellyplay.core.database.crypto
  * Platform implementations: Android keeps the key in the Android Keystore
  * (hardware-backed where available); desktop stores a generated key file under
  * the OS user directory (replaced by an OS-keychain-backed provider if the
- * desktop security work in Phase V1 calls for it).
+ * desktop security work calls for it).
  */
 interface TokenCipher {
     fun encrypt(plaintext: String?): String?

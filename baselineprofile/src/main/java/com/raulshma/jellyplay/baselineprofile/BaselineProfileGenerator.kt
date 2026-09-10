@@ -38,6 +38,16 @@ class BaselineProfileGenerator {
             // visible (e.g. onboarding, music-mode, or TV form factor).
             openLibraryTab()
 
+            // Best-effort navigation passes over the remaining surfaces.
+            // Each is guarded so a missing node (onboarding, not signed
+            // in, music-mode, or TV form factor) can never fail profile
+            // generation — the profile just stays as narrow as the
+            // device allows.
+            openSearchTab()
+            openSettings()
+            openDetailsCard()
+            openAudioSection()
+
             // Return to home and let everything settle before the profile
             // snapshot is taken.
             device.pressBack()
@@ -85,3 +95,68 @@ private const val libraryTabLabel = "Library"
 private const val scrollSteps = 20
 private const val HOME_SCROLL_ITERATIONS = 3
 private const val LIBRARY_SCROLL_ITERATIONS = 2
+
+/**
+ * Taps a node by text or content-desc if present, waits for the
+ * destination to settle, then backs out. Returns without touching
+ * anything when the node isn't on screen.
+ */
+private fun MacrobenchmarkScope.tapAndWait(label: String) {
+    val node = device.findObject(By.text(label))
+        ?: device.findObject(By.desc(label))
+        ?: return
+    try {
+        node.click()
+        device.waitForIdle()
+        device.pressBack()
+        device.waitForIdle()
+    } catch (_: Exception) {
+        // Node vanished mid-gesture or navigation failed — skip the pass.
+    }
+}
+
+/**
+ * Opens the Search tab (phone bottom-nav label mirrors
+ * [com.raulshma.jellyplay.core.ui.navigation.VIDEO_TOP_LEVEL_ROUTES])
+ * so SearchScreen + the text-field focus pipeline are warmed.
+ */
+private fun MacrobenchmarkScope.openSearchTab() {
+    tapAndWait(searchTabLabel)
+}
+
+/**
+ * Opens Settings via its toolbar/drawer entry (content-desc or visible
+ * label) so SettingsScreen's LazyColumn and preference rows are warmed.
+ */
+private fun MacrobenchmarkScope.openSettings() {
+    tapAndWait(settingsLabel)
+}
+
+/**
+ * Best-effort Details pass: taps the center of the screen inside the
+ * library grid, which opens a media details card when the device is
+ * signed in and the grid has content. A no-op tap elsewhere.
+ */
+private fun MacrobenchmarkScope.openDetailsCard() {
+    try {
+        device.click(device.displayWidth / 2, device.displayHeight / 2)
+        device.waitForIdle()
+        device.pressBack()
+        device.waitForIdle()
+    } catch (_: Exception) {
+        // Tap landed on nothing or navigation failed — skip the pass.
+    }
+}
+
+/**
+ * Best-effort Audio pass: the music-mode bottom-nav "Browse" tab
+ * (mirrors MUSIC_TOP_LEVEL_ROUTES) is the only statically reachable
+ * audio surface. Skips silently on video-mode devices.
+ */
+private fun MacrobenchmarkScope.openAudioSection() {
+    tapAndWait(audioBrowseTabLabel)
+}
+
+private const val searchTabLabel = "Search"
+private const val settingsLabel = "Settings"
+private const val audioBrowseTabLabel = "Browse"

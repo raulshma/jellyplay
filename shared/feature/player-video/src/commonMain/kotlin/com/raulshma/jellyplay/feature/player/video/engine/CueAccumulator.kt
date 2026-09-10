@@ -41,10 +41,16 @@ internal fun isPathologicalCueBatch(count: Int): Boolean = count > MAX_INCOMING_
  *  - The list stays sorted by startTimeUs and is capped to the most recent
  *    [MAX_ACCUMULATED_CUES] entries.
  *
- * Extracted to a top-level internal function so the merge logic is unit-
- * testable without an ExoPlayer instance.
+ * Extracted to a top-level function so the merge logic is unit-testable
+ * without an ExoPlayer instance.
+ *
+ * Public (not internal) because the desktop `MpvDesktopEngine` adapter folds
+ * its mpv `sub-text` observations through this same merge (its former private
+ * mirror is deleted). Consumers stay the engine adapters and the accumulator
+ * test; this is not a stable API surface (the `PlaybackVolumePolicy`
+ * precedent).
  */
-internal fun mergeAccumulatedCues(
+fun mergeAccumulatedCues(
     existing: List<TimedCue>,
     incoming: List<TimedCue>,
 ): List<TimedCue> {

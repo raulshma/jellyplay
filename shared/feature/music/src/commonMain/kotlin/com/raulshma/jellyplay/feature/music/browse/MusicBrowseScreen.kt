@@ -47,7 +47,7 @@ import com.raulshma.jellyplay.feature.music.generated.resources.music_no_playlis
 import com.raulshma.jellyplay.feature.music.generated.resources.music_no_tracks_found
 import com.raulshma.jellyplay.feature.music.generated.resources.music_playlists
 import com.raulshma.jellyplay.feature.music.generated.resources.music_tracks
-import com.raulshma.jellyplay.feature.music.albums.MusicSortOption
+import com.raulshma.jellyplay.feature.music.collection.MusicSortOption
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.paging.LoadState
 import androidx.paging.compose.collectAsLazyPagingItems

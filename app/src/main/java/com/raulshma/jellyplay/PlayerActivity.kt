@@ -9,7 +9,6 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
-import android.graphics.Rect
 import android.graphics.drawable.Icon
 import android.os.Build
 import android.os.Bundle
@@ -35,7 +34,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
-import com.raulshma.jellyplay.core.data.playback.PipAction
 import com.raulshma.jellyplay.core.data.playback.PipController
 import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
 import com.raulshma.jellyplay.core.datastore.security.SecurityStore
@@ -56,7 +54,7 @@ import org.koin.mp.KoinPlatform
 
 /**
  * Dedicated host Activity for fullscreen playback — VOD ([VideoPlayerScreen])
- * and, since wave 19C, Live TV ([LivePlayerScreen]; the host table moved live
+ * and, since then, Live TV ([LivePlayerScreen]; the host table moved live
  * out of the nav shell so system PiP serves it — see [PlaybackHostRouter]).
  *
  * Introduced so that system Picture-in-Picture floats over the browse UI
@@ -69,9 +67,13 @@ import org.koin.mp.KoinPlatform
  * The PiP apparatus (param builder, remote actions, lifecycle coordination) is
  * ported from the former single-Activity implementation so the feature set is
  * preserved: RemoteActions (play/pause/skip/next), auto-enter on home, auto-exit
- * on END/ERROR, source-rect hint, aspect-ratio clamp. Both hosts feed it
+ * on END/ERROR, source-rect hint, aspect-ratio clamp. The pure halves beside
+ * this Activity: [PipLifecyclePolicy] owns the ordering machine and param
+ * folds, [PipActionSet] owns the remote-action decision tables (the action-set
+ * fold and the broadcast id codec); this class keeps only Android wiring.
+ * Both hosts feed it
  * through the same legacy `core:data` PipController singleton — VOD's VM via
- * the wave-8C player-video seam, live's VM via the wave-19C player-live seam
+ * the player-video seam, live's VM via the player-live seam
  * (SKIP remote actions map to channel zap for live) — so every collector below
  * serves both variants unchanged.
  *
@@ -80,7 +82,7 @@ import org.koin.mp.KoinPlatform
  * open-play-PiP flow.
  *
  * Because the media notification opens this host by class name (bypassing
- * MainActivity), it enforces the app PIN/biometric gate itself (wave 20E):
+ * MainActivity), it enforces the app PIN/biometric gate itself:
  * `onCreate`/`onNewIntent` redirect to MainActivity while a lock is
  * configured and the app-scoped AppLockState says locked — see
  * [redirectToLockGateIfNeeded].
@@ -93,7 +95,7 @@ class PlayerActivity : FragmentActivity() {
     // activeCallbacks slot with no owner identity, so a second host pausing
     // here would reach across Activities into this activity's engine. Keep it
     // that way until per-host engine scoping lands (see Plan 01/02).
-    // Resolved from the Koin container (wave 8B — Hilt removal).
+    // Resolved from the Koin container (Hilt removal).
     private val playerLifecycleManager: PlayerLifecycleManager by lazy { KoinPlatform.getKoin()!!.get() }
 
     private val pipController: PipController by lazy { KoinPlatform.getKoin()!!.get() }
@@ -116,7 +118,7 @@ class PlayerActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // PIN/biometric gate (wave 20E) — FIRST, before any window styling,
+        // PIN/biometric gate — FIRST, before any window styling,
         // playback setup or setContent: while a lock is configured and the
         // app is locked, no player UI may compose. The media notification's
         // content intent opens this activity by class name, so this host must
@@ -277,15 +279,16 @@ class PlayerActivity : FragmentActivity() {
 
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
-        // gates auto-entry on `!isControlsLocked` so swiping home while
-        // the lock overlay is up doesn't yank the user into PiP, and on
-        // `!isScreenOffOrLocked()` because several OEMs fire this callback for
-        // the power button too — entering PiP behind the keyguard arms the
-        // dismiss/finish machinery while nothing can observe it, and unlock
-        // then lands on the browse UI with the player gone (issue #145).
-        if (pipController.shouldAutoEnterPip.value &&
-            !pipController.isControlsLocked &&
-            !isScreenOffOrLocked()
+        // Auto-enter guard lives in PipLifecyclePolicy.userLeaveAutoEnter:
+        // `!isControlsLocked` so swiping home while the lock overlay is up
+        // doesn't yank the user into PiP, and `!isScreenOffOrLocked()` because
+        // several OEMs fire this callback for the power button too (issue
+        // #145). Deliberately no isPlaying term — the fallback below adds it.
+        if (PipLifecyclePolicy.onUserLeaveHint(
+                shouldAutoEnter = pipController.shouldAutoEnterPip.value,
+                controlsLocked = pipController.isControlsLocked,
+                screenOffOrLocked = isScreenOffOrLocked(),
+            ) == PipLifecyclePolicy.Action.EnterPip
         ) {
             enterPipMode()
         }
@@ -294,24 +297,29 @@ class PlayerActivity : FragmentActivity() {
     // Reliability fallback for PiP auto-entry: onUserLeaveHint is not reliably
     // fired on all OEMs/API levels for gesture "slide up to home". When this
     // activity loses the top-resumed position during active playback, enter PiP
-    // using the same guard predicate.
+    // — PipLifecyclePolicy.topResumedLossAutoEnter is the same guard predicate
+    // PLUS the isPlaying term (the documented divergence between the two
+    // hand-copied guards).
     override fun onTopResumedActivityChanged(isTopResumed: Boolean) {
         super.onTopResumedActivityChanged(isTopResumed)
-        if (isTopResumed && justExitedPip) {
-            justExitedPip = false
-            playerLifecycleManager.onActivityResume()
-        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
-            !isTopResumed &&
-            !isInPictureInPictureMode &&
-            pipController.shouldAutoEnterPip.value &&
-            pipController.isPlaying.value &&
-            !pipController.isControlsLocked &&
+        val decision = PipLifecyclePolicy.onTopResumedChanged(
+            isTopResumed = isTopResumed,
+            inPip = isInPictureInPictureMode,
+            apiSupportsAutoEnter = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S,
+            shouldAutoEnter = pipController.shouldAutoEnterPip.value,
+            isPlaying = pipController.isPlaying.value,
+            controlsLocked = pipController.isControlsLocked,
             // Same lock guard as onUserLeaveHint: the keyguard stealing the
             // top-resumed position is not a "leave" worth auto-PiP for
             // (issue #145).
-            !isScreenOffOrLocked()
-        ) {
-            enterPipMode()
+            screenOffOrLocked = isScreenOffOrLocked(),
+            justExitedPip = justExitedPip,
+        )
+        justExitedPip = decision.justExitedPip
+        when (decision.action) {
+            PipLifecyclePolicy.Action.Resume -> playerLifecycleManager.onActivityResume()
+            PipLifecyclePolicy.Action.EnterPip -> enterPipMode()
+            else -> {}
         }
     }
 
@@ -322,13 +330,13 @@ class PlayerActivity : FragmentActivity() {
     // gesture is irrelevant in the floating window) and restores it on expand.
     private var savedBrightness: Float = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
 
-    // ── PIN/biometric lock gate (wave 20E) ─────────────────────────────────
+    // ── PIN/biometric lock gate ─────────────────────────────────
     //
     // Closes the media-notification bypass: the video MediaSession pins its
     // session-activity PendingIntent to this class BY NAME
     // (AndroidMediaSessionController), so a notification tap while the app is
     // locked used to reach full playback (video since the dedicated-host
-    // split, live TV too since wave 19C) without ever hitting MainActivity's
+    // split, live TV too since then) without ever hitting MainActivity's
     // lock gate. When a gate is configured and the app-scoped AppLockState
     // says locked, this host hands off to MainActivity — whose own gate then
     // renders AuthChallengeScreen — and finishes before composing anything.
@@ -357,12 +365,18 @@ class PlayerActivity : FragmentActivity() {
         // lands — warm-process callers return from the cached snapshot
         // without disk IO — bounded by a timeout so a pathological read can
         // never wedge cold start (timeout handling: fail CLOSED, see below).
+        // The Application's IO prewarm hydrates
+        // this same persisted slice off main at process start, so in the
+        // common case the read below is an instant memory replay — the
+        // runBlocking + timeout stays exactly as the fail-closed safety net
+        // for the cold-start race the prewarm cannot fully close (this
+        // activity can beat the prewarm coroutine to the CPU).
         val persisted = runBlocking {
             withTimeoutOrNull(APP_LOCK_GATE_READ_TIMEOUT_MS) {
                 securityStore.firstPersistedSecurity()
             }
         }
-        // Fail CLOSED on a timed-out read (reviewer D, wave 20 fix round):
+        // Fail CLOSED on a timed-out read:
         // falling back to the `.security` StateFlow seed would re-open the
         // cold-start race this read exists to close whenever the read is
         // merely slow. Treating "unknown" as gate-configured still lets an
@@ -397,7 +411,7 @@ class PlayerActivity : FragmentActivity() {
 
     /**
      * Set the first time [redirectToLockGateIfNeeded] fired — the onResume /
-     * PiP-expand re-checks (reviewer D, wave 20 fix round) must not launch a
+     * PiP-expand re-checks must not launch a
      * SECOND MainActivity handoff for the same redirect: after onCreate or
      * onNewIntent redirects, the activity still walks its lifecycle through
      * onResume while finishing.
@@ -424,6 +438,9 @@ class PlayerActivity : FragmentActivity() {
 
     private fun onPipModeChanged(isInPictureInPictureMode: Boolean) {
         if (isInPictureInPictureMode) {
+            // Entry touches none of the dismiss machinery (registration, bar
+            // show and brightness stash below are execution, not policy) and
+            // none of the policy's state — no policy call here.
             registerPipActionReceiver()
             refreshPipActions()
             // Exit immersive mode on PiP entry so the system's gesture-nav
@@ -447,7 +464,7 @@ class PlayerActivity : FragmentActivity() {
                 screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
             }
         } else {
-            // PiP-expand gate re-check (reviewer D, wave 20 fix round): some
+            // PiP-expand gate re-check: some
             // OEMs keep the activity RESUMED through the whole PiP session,
             // so the onResume re-check may not re-fire on expand — consult
             // the gate here too (idempotent via lockGateRedirected; the
@@ -461,43 +478,27 @@ class PlayerActivity : FragmentActivity() {
             window.attributes = window.attributes.apply {
                 screenBrightness = savedBrightness
             }
-            // Leaving PiP fires for BOTH expand-to-fullscreen and dismiss. The
-            // two are distinguished by lifecycle state at this callback:
-            //
-            //  - Expand: the activity resumes, so state is >= STARTED here (and
-            //    onResume follows). Arm justExitedPip so onStop can still finish
-            //    on a later dismiss (covers the ordering where this callback fires
-            //    before onStop). onResume clears it for a genuine expand.
-            //
-            //  - Dismiss (close icon / swipe-away): on some OEMs onStop fires
-            //    BEFORE this callback (observed: onStop at isInPipMode=true,
-            //    screenOff=false, justExitedPip=false — so onStop's dismiss arm
-            //    misses — then this callback at state=CREATED). When state <
-            //    STARTED the activity is already past onStop and will not resume,
-            //    so finish here directly. This drives onDestroy → onDispose →
-            //    viewModel.release() (engine stop + playback-stop report) — the
-            //    same teardown as back-close.
-            //
-            //  - Dismiss with background audio enabled (screen interactive):
-            //    only the PiP window closes. The activity stays alive (stopped,
-            //    behind the revealed MainActivity) so its ViewModel, engine and
-            //    media session are never torn down — playback keeps running
-            //    exactly like the fullscreen→home minimise path, and the Media3
-            //    service's now-playing notification remains. Reopening via the
-            //    notification / app icon restarts this stopped instance into
-            //    fullscreen at the live position (same-item onNewIntent does not
-            //    re-initialize). If the keyguard or a screen-off lands inside
-            //    the dismissal transition, fall back to the finish path — that
-            //    is issue #145's lock-dismiss territory where the dismiss
-            //    machinery must stay deterministic.
-            if (!lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
-                justExitedPip = false
-                if (!keepPlayerAliveAfterPipDismiss() && !isFinishing) finish()
-            } else if (!lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
-                // Arm only when the dismissal should tear down; a keep-alive
-                // dismissal leaves justExitedPip clear so onStop skips finish.
-                justExitedPip = !keepPlayerAliveAfterPipDismiss()
-            }
+            // Leaving PiP fires for BOTH expand-to-fullscreen and dismiss; the
+            // two are distinguished by lifecycle state at this callback and
+            // the whole dismiss/expand fold (arm justExitedPip vs finish
+            // directly vs keep-alive no-op — including the OEM ordering where
+            // this callback fires before onStop, and the background-audio /
+            // keyguard branches) lives in PipLifecyclePolicy.pipExited — its
+            // KDoc carries the full OEM-ordering spec.
+            val decision = PipLifecyclePolicy.pipExited(
+                phase = when {
+                    lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) ->
+                        PipLifecyclePolicy.Phase.RESUMED
+                    lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED) ->
+                        PipLifecyclePolicy.Phase.STARTED_NOT_RESUMED
+                    else -> PipLifecyclePolicy.Phase.BELOW_STARTED
+                },
+                keepPlayerAlive = keepPlayerAliveAfterPipDismiss(),
+                isFinishing = isFinishing,
+                justExitedPip = justExitedPip,
+            )
+            justExitedPip = decision.justExitedPip
+            if (decision.action == PipLifecyclePolicy.Action.Finish) finish()
         }
         pipController.setPipMode(isInPictureInPictureMode)
     }
@@ -522,14 +523,20 @@ class PlayerActivity : FragmentActivity() {
 
     override fun onPause() {
         super.onPause()
-        if (!isInPictureInPictureMode || isScreenOffOrLocked()) {
+        // PipLifecyclePolicy.onPause: pause unless this is a minimise into PiP
+        // with an interactive screen (that minimise keeps playing).
+        if (PipLifecyclePolicy.onPause(
+                inPip = isInPictureInPictureMode,
+                screenOffOrLocked = isScreenOffOrLocked(),
+            ) == PipLifecyclePolicy.Action.Pause
+        ) {
             playerLifecycleManager.onActivityPause()
         }
     }
 
     override fun onResume() {
         super.onResume()
-        // Gate re-check on every resume (reviewer D, wave 20 fix round): the
+        // Gate re-check on every resume: the
         // gate otherwise runs only at intent-delivery moments (onCreate /
         // onNewIntent), but a live PiP window survives MainActivity's
         // auto-lock — expanding it returns here with the holder already
@@ -540,36 +547,38 @@ class PlayerActivity : FragmentActivity() {
         // redirect so the player lifecycle hook (and its DI graph) never
         // runs while locked.
         if (!lockGateRedirected && redirectToLockGateIfNeeded()) return
-        justExitedPip = false
-        playerLifecycleManager.onActivityResume()
+        // Genuine expand: clear the dismiss arm + resume the player lifecycle
+        // (PipLifecyclePolicy.onResume).
+        val decision = PipLifecyclePolicy.onResume(justExitedPip)
+        justExitedPip = decision.justExitedPip
+        if (decision.action == PipLifecyclePolicy.Action.Resume) {
+            playerLifecycleManager.onActivityResume()
+        }
     }
 
     override fun onStop() {
         super.onStop()
-        if (justExitedPip) {
-            // Dismiss fallback for the ordering where onPipModeChanged(false)
-            // fires BEFORE onStop (state was >= STARTED at the callback, so it
-            // armed justExitedPip instead of finishing). On OEMs where onStop
-            // fires first, onPipModeChanged(false) finishes directly at
-            // state < STARTED. finish() here drives the same onDestroy →
-            // onDispose → release() teardown as back-close. With background
-            // audio enabled the dismissal keeps the player alive instead (the
-            // arming site already skips arming; this re-check covers a keyguard
-            // landing between the callback and onStop), so only the PiP window
-            // closes and playback continues from the notification.
-            justExitedPip = false
-            if (!keepPlayerAliveAfterPipDismiss() && !isFinishing) finish()
-        } else if (isInPictureInPictureMode) {
-            // Distinguish screen-lock (pause so audio doesn't leak with bg audio
-            // OFF) from app-minimise (keep playing). onStop
-            // is the right hook: during PiP the activity is already PAUSED, so
-            // onPause can't reliably see the screen-off state; by onStop the
-            // keyguard / non-interactive flags have settled. onActivityPause is
-            // itself a no-op when backgroundVideoAudioEnabled is ON.
-            if (isScreenOffOrLocked()) {
-                playerLifecycleManager.onActivityPause()
-            }
-            // Else: plain minimise while in PiP — intentionally keep playing.
+        // The discharge point of the dismiss protocol (PipLifecyclePolicy —
+        // class KDoc has the OEM-ordering spec): an armed justExitedPip
+        // finishes (the keep-alive re-check covers a keyguard landing between
+        // the callback and this stop); an unarmed stop while in PiP pauses
+        // only for screen-lock/keyguard so audio doesn't leak with background
+        // audio OFF — by onStop the keyguard / non-interactive flags have
+        // settled, and onActivityPause is itself a no-op when background
+        // audio is ON. A plain minimise while in PiP intentionally keeps
+        // playing.
+        val decision = PipLifecyclePolicy.onStop(
+            inPip = isInPictureInPictureMode,
+            screenOffOrLocked = isScreenOffOrLocked(),
+            keepPlayerAlive = keepPlayerAliveAfterPipDismiss(),
+            isFinishing = isFinishing,
+            justExitedPip = justExitedPip,
+        )
+        justExitedPip = decision.justExitedPip
+        when (decision.action) {
+            PipLifecyclePolicy.Action.Finish -> finish()
+            PipLifecyclePolicy.Action.Pause -> playerLifecycleManager.onActivityPause()
+            else -> {}
         }
     }
 
@@ -620,27 +629,36 @@ class PlayerActivity : FragmentActivity() {
         includeActions: Boolean,
     ): PictureInPictureParams = PictureInPictureParams.Builder().apply {
         val ratio = pipController.pipAspectRatio.value ?: Rational(16, 9)
-        setAspectRatio(clampAspectRatio(ratio))
+        val clamped = PipLifecyclePolicy.clampAspectRatio(ratio.numerator, ratio.denominator)
+        setAspectRatio(Rational(clamped.first, clamped.second))
         pipController.pipSourceRect?.let { src ->
-            if (isValidSourceRect(src)) setSourceRectHint(src)
+            if (PipLifecyclePolicy.isValidSourceRect(
+                    left = src.left,
+                    top = src.top,
+                    right = src.right,
+                    bottom = src.bottom,
+                    windowWidth = window.decorView.width,
+                    windowHeight = window.decorView.height,
+                )
+            ) {
+                setSourceRectHint(src)
+            }
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val autoEnter = if (preArm && !isScreenOffOrLocked()) {
-                pipController.shouldAutoEnterPip.value && pipController.isPlaying.value
+            // PipLifecyclePolicy.systemAutoEnterEnabled — deliberately no
+            // controls-lock term (that system-side flag never gated on it).
+            val autoEnter = if (preArm) {
+                PipLifecyclePolicy.systemAutoEnterEnabled(
+                    shouldAutoEnter = pipController.shouldAutoEnterPip.value,
+                    isPlaying = pipController.isPlaying.value,
+                    screenOffOrLocked = isScreenOffOrLocked(),
+                )
             } else false
             setAutoEnterEnabled(autoEnter)
             setSeamlessResizeEnabled(autoEnter)
         }
         if (includeActions) setActions(buildPipActions())
     }.build()
-
-    private fun isValidSourceRect(src: Rect): Boolean {
-        if (src.width() <= 0 || src.height() <= 0) return false
-        if (src.left < 0 || src.top < 0) return false
-        val w = window.decorView.width
-        val h = window.decorView.height
-        return w <= 0 || h <= 0 || (src.right <= w && src.bottom <= h)
-    }
 
     private fun applyPipParams(includeActions: Boolean) {
         if (!isPipCapable()) return
@@ -649,38 +667,20 @@ class PlayerActivity : FragmentActivity() {
             .onFailure { Log.w(TAG, "PiP setPictureInPictureParams failed", it) }
     }
 
-    private fun buildPipActions(): List<RemoteAction> {
-        val isPlaying = pipController.isPlaying.value
-        val hasNext = pipController.pipHasNext
-        val actions = mutableListOf<RemoteAction>()
-
-        actions += pipRemoteAction(
-            id = PIP_ACTION_SKIP_BACK,
-            icon = android.R.drawable.ic_media_rew,
-            title = getString(R.string.pip_rewind),
-        )
-        actions += pipRemoteAction(
-            id = if (isPlaying) PIP_ACTION_PAUSE else PIP_ACTION_PLAY,
-            icon = if (isPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play,
-            title = if (isPlaying) getString(R.string.media_pause) else getString(R.string.media_play),
-        )
-        actions += pipRemoteAction(
-            id = PIP_ACTION_SKIP_FORWARD,
-            icon = android.R.drawable.ic_media_ff,
-            title = getString(R.string.pip_forward),
-        )
-        if (hasNext) {
-            actions += pipRemoteAction(
-                id = PIP_ACTION_NEXT,
-                icon = android.R.drawable.ic_media_next,
-                title = getString(R.string.pip_next),
+    private fun buildPipActions(): List<RemoteAction> =
+        PipActionSet.actionSpecs(
+            isPlaying = pipController.isPlaying.value,
+            hasNext = pipController.pipHasNext,
+        ).map { spec ->
+            pipRemoteAction(
+                id = PipActionSet.idFor(spec.action),
+                icon = spec.iconRes,
+                title = getString(spec.titleRes),
             )
         }
-        return actions
-    }
 
     private fun pipRemoteAction(id: Int, icon: Int, title: String): RemoteAction {
-        val intent = Intent(PIP_ACTION_BROADCAST).putExtra(PIP_ACTION_EXTRA, id)
+        val intent = Intent(PipActionSet.PIP_ACTION_BROADCAST).putExtra(PipActionSet.PIP_ACTION_EXTRA, id)
         val pi = PendingIntent.getBroadcast(
             this,
             id,
@@ -704,16 +704,9 @@ class PlayerActivity : FragmentActivity() {
         if (pipActionReceiver != null) return
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
-                if (intent?.action != PIP_ACTION_BROADCAST) return
-                val id = intent.getIntExtra(PIP_ACTION_EXTRA, -1)
-                val action = when (id) {
-                    PIP_ACTION_PLAY -> PipAction.PLAY
-                    PIP_ACTION_PAUSE -> PipAction.PAUSE
-                    PIP_ACTION_SKIP_FORWARD -> PipAction.SKIP_FORWARD
-                    PIP_ACTION_SKIP_BACK -> PipAction.SKIP_BACKWARD
-                    PIP_ACTION_NEXT -> PipAction.NEXT
-                    else -> return
-                }
+                if (intent?.action != PipActionSet.PIP_ACTION_BROADCAST) return
+                val action = PipActionSet.actionForId(intent.getIntExtra(PipActionSet.PIP_ACTION_EXTRA, -1))
+                    ?: return
                 val transport = pipController.pipTransport
                 if (transport == null) {
                     Log.w(TAG, "PiP action $action dropped: pipTransport is null")
@@ -726,7 +719,7 @@ class PlayerActivity : FragmentActivity() {
         ContextCompat.registerReceiver(
             this,
             receiver,
-            IntentFilter(PIP_ACTION_BROADCAST),
+            IntentFilter(PipActionSet.PIP_ACTION_BROADCAST),
             ContextCompat.RECEIVER_NOT_EXPORTED,
         )
         pipActionReceiver = receiver
@@ -737,25 +730,8 @@ class PlayerActivity : FragmentActivity() {
         pipActionReceiver = null
     }
 
-    private fun clampAspectRatio(ratio: Rational): Rational {
-        val min = Rational(100, 239)
-        val max = Rational(239, 100)
-        return when {
-            ratio < min -> min
-            ratio > max -> max
-            else -> ratio
-        }
-    }
-
     companion object {
         const val TAG = "PlayerActivity"
-        const val PIP_ACTION_BROADCAST = "com.raulshma.jellyplay.PIP_ACTION"
-        const val PIP_ACTION_EXTRA = "pip_action_id"
-        const val PIP_ACTION_PLAY = 1
-        const val PIP_ACTION_PAUSE = 2
-        const val PIP_ACTION_SKIP_FORWARD = 3
-        const val PIP_ACTION_SKIP_BACK = 4
-        const val PIP_ACTION_NEXT = 5
 
         // Upper bound for the persisted-security-slice read in the lock-gate
         // check (see redirectToLockGateIfNeeded) — a pathological DataStore

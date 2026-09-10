@@ -5,7 +5,7 @@ import androidx.compose.runtime.remember
 import com.raulshma.jellyplay.core.ui.platform.pickAwtFile
 
 /**
- * Desktop actual of the [BackupFilePicker] seam (wave 20C): the SAF
+ * Desktop actual of the [BackupFilePicker] seam: the SAF
  * create/open-document pair becomes the shared AWT dialog ([pickAwtFile]) —
  * SAVE for the export target (pre-filled with the suggested file name, so
  * the common `jellyplay-settings.json` default shows up in the name box

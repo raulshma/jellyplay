@@ -64,9 +64,8 @@ class LibraryRecommendationsWidgetWorkerTest {
         every { authRepository.currentServer } returns currentServer
         every { widgetDataStore.widgetConfig } returns widgetConfig
         every { widgetDataStore.continueWatching } returns continueWatching
-        // The persist helper reads the current snapshot/version before writing.
+        // The persist helper reads the current snapshot before writing.
         every { widgetDataStore.libraryWidgetItems } returns MutableStateFlow(emptyList())
-        every { widgetDataStore.libraryWidgetVersion } returns MutableStateFlow(0L)
         coEvery { authRepository.restoreSession() } returns Result.success(Unit)
     }
 
@@ -97,7 +96,7 @@ class LibraryRecommendationsWidgetWorkerTest {
     private fun verifyPersistedOnce(): List<LibraryWidgetItem> {
         val items = persistedItems()
         coVerify(exactly = 1) {
-            widgetDataStore.setLibraryWidgetItems(capture(items), any(), any())
+            widgetDataStore.setLibraryWidgetItems(capture(items))
         }
         return items.captured
     }
@@ -109,7 +108,7 @@ class LibraryRecommendationsWidgetWorkerTest {
         val result = createWorker().doWork()
 
         assertTrue(result is WorkResult.Success)
-        coVerify(exactly = 0) { widgetDataStore.setLibraryWidgetItems(any(), any(), any()) }
+        coVerify(exactly = 0) { widgetDataStore.setLibraryWidgetItems(any()) }
     }
 
     @Test
@@ -172,7 +171,7 @@ class LibraryRecommendationsWidgetWorkerTest {
         val result = createWorker().doWork()
 
         assertTrue(result is WorkResult.Success)
-        coVerify(exactly = 0) { widgetDataStore.setLibraryWidgetItems(any(), any(), any()) }
+        coVerify(exactly = 0) { widgetDataStore.setLibraryWidgetItems(any()) }
     }
 
     @Test
@@ -231,7 +230,7 @@ class LibraryRecommendationsWidgetWorkerTest {
         // The failed favorites fetch falls through the getOrDefault empty
         // path, which deliberately keeps the last good widget snapshot.
         assertTrue(result is WorkResult.Success)
-        coVerify(exactly = 0) { widgetDataStore.setLibraryWidgetItems(any(), any(), any()) }
+        coVerify(exactly = 0) { widgetDataStore.setLibraryWidgetItems(any()) }
     }
 
     private fun server() = ServerInfo(

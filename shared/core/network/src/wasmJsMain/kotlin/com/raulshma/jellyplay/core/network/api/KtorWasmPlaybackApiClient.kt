@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.network.api
 
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.model.CreditTimestamps
 import com.raulshma.jellyplay.core.model.IntroTimestamps
 import com.raulshma.jellyplay.core.model.LiveStreamOption
@@ -32,7 +33,7 @@ import com.raulshma.jellyplay.core.network.playback.wireName
 import io.ktor.client.HttpClient
 
 /**
- * Phase W chunk 2: the wasmJs [PlaybackApiClient] — a hand-rolled Ktor
+ *  chunk 2: the wasmJs [PlaybackApiClient] — a hand-rolled Ktor
  * replacement for the jvmShared `PlaybackApiClientImpl` (Jellyfin SDK +
  * OkHttp). Endpoint paths, request bodies, the playback-mode flag table and
  * mapping semantics mirror the JVM implementation; the URL builders
@@ -42,7 +43,7 @@ import io.ktor.client.HttpClient
  * wasm v1 deltas vs the JVM impl (documented, none affect JVM):
  *  - No DeviceProfile sent with `PlaybackInfo` (JVM picks codec-aware /
  *    "direct play all" profiles per mode; wasm defers codec negotiation to
- *    HtmlVideoEngine, a later Phase W chunk). The enable-allow flag table
+ *    HtmlVideoEngine, a later chunk). The enable-allow flag table
  *    and bitrate cap still honor [PlaybackMode]/[LiveStreamOption] via
  *    [resolveWasmPlaybackFlags].
  *  - No failover router: URLs derive from the atomic session's current
@@ -308,7 +309,7 @@ class KtorWasmPlaybackApiClient(
     override suspend fun getMediaSegments(itemId: String): Result<List<MediaSegment>> =
         apiResultWithRetry {
             val server = requireConnectedServer()
-            val segments = runCatching {
+            val segments = runCatchingRethrowingCancellation {
                 getJson<MediaSegmentQueryResultDtoWire>(
                     url = apiUrl(server.address, "/MediaSegments/$itemId"),
                     accessToken = currentToken(),

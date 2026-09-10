@@ -1,24 +1,13 @@
 package com.raulshma.jellyplay.widget
 
-import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
-import android.appwidget.AppWidgetProvider
-import android.content.ComponentName
 import android.content.Context
-import android.content.Intent
-import android.net.Uri
-import android.os.Bundle
-import android.widget.RemoteViews
-import com.raulshma.jellyplay.MainActivity
 import com.raulshma.jellyplay.R
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.LibraryRecommendationsSource
+import com.raulshma.jellyplay.widget.skeleton.GridWidgetRequestCodes
+import com.raulshma.jellyplay.widget.skeleton.GridWidgetUi
+import com.raulshma.jellyplay.widget.skeleton.updateRecommendationGridWidget
 import org.koin.mp.KoinPlatform
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.launch
 
 /**
  * Home-screen widget that surfaces personalized recommendations from
@@ -32,13 +21,19 @@ import kotlinx.coroutines.launch
  *     remote adapter and reads the cached list straight from
  *     [com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore.libraryWidgetItems] — no network in the
  *     widget process.
- *   * Tapping a cell launches [MainActivity] with a `jellyfin://media/{id}`
+ *   * Tapping a cell launches the app with a `jellyfin://media/{id}`
  *     deep link, which is parsed by
  *     [com.raulshma.jellyplay.deeplink.DeepLinkHandler] and routed to
  *     the media detail screen.
+ *
+ * The refresh-scope/goAsync choreography, the lifecycle overrides and the
+ * `onReceive` refresh fold are shared with the Seerr grid via
+ * [GridWidgetProvider]; the `updateAppWidget` wiring rides the widget
+ * skeleton (`updateRecommendationGridWidget`, parameterized by this widget's
+ * 7_400_0xx request-code namespace).
  */
 /**
- * Koin accessors (wave 8B — Hilt removal): resolved straight from the
+ * Koin accessors (Hilt removal): resolved straight from the
  * application container, same try/catch shape the EntryPoint call used.
  */
 private fun koinWidgetDataStore(): com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore =
@@ -47,73 +42,23 @@ private fun koinWidgetDataStore(): com.raulshma.jellyplay.core.datastore.widget.
 private fun koinWidgetWorkScheduler(): WidgetWorkScheduler =
     KoinPlatform.getKoin()!!.get()
 
-class LibraryRecommendationsWidget : AppWidgetProvider() {
+class LibraryRecommendationsWidget : GridWidgetProvider() {
 
-    private val refreshScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    override val gridViewId: Int = R.id.lr_widget_grid
 
-    override fun onUpdate(
-        context: Context,
-        appWidgetManager: AppWidgetManager,
-        appWidgetIds: IntArray,
-    ) {
-        for (id in appWidgetIds) {
-            updateAppWidget(context, appWidgetManager, id)
-        }
-        triggerInitialRefresh(context)
-    }
+    override val refreshAction: String = ACTION_REFRESH
 
-    override fun onAppWidgetOptionsChanged(
+    override fun updateWidget(
         context: Context,
         appWidgetManager: AppWidgetManager,
         appWidgetId: Int,
-        newOptions: Bundle
     ) {
-        super.onAppWidgetOptionsChanged(context, appWidgetManager, appWidgetId, newOptions)
         updateAppWidget(context, appWidgetManager, appWidgetId)
-        appWidgetManager.notifyAppWidgetViewDataChanged(appWidgetId, R.id.lr_widget_grid)
     }
 
-    override fun onEnabled(context: Context) {
-        super.onEnabled(context)
-        triggerInitialRefresh(context)
+    override suspend fun refreshNow(context: Context) {
+        koinWidgetWorkScheduler().refreshLibraryNow()
     }
-
-    override fun onDisabled(context: Context?) {
-        super.onDisabled(context)
-        refreshScope.cancel()
-    }
-
-    private fun triggerInitialRefresh(context: Context) {
-        val pending = goAsync()
-        refreshScope.launch {
-            try {
-                widgetScheduler(context).refreshLibraryNow()
-            } finally {
-                pending.finish()
-            }
-        }
-    }
-
-    override fun onReceive(context: Context, intent: Intent) {
-        super.onReceive(context, intent)
-        if (intent.action == ACTION_REFRESH) {
-            val appWidgetManager = AppWidgetManager.getInstance(context)
-            val componentName = ComponentName(context, LibraryRecommendationsWidget::class.java)
-            val ids = appWidgetManager.getAppWidgetIds(componentName)
-            appWidgetManager.notifyAppWidgetViewDataChanged(ids, R.id.lr_widget_grid)
-            val pending = goAsync()
-            refreshScope.launch {
-                try {
-                    widgetScheduler(context).refreshLibraryNow()
-                } finally {
-                    pending.finish()
-                }
-            }
-        }
-    }
-
-    private fun widgetScheduler(context: Context): WidgetWorkScheduler =
-        koinWidgetWorkScheduler()
 
     companion object {
         const val ACTION_REFRESH = "com.raulshma.jellyplay.widget.ACTION_REFRESH_LIBRARY"
@@ -127,71 +72,29 @@ class LibraryRecommendationsWidget : AppWidgetProvider() {
             appWidgetManager: AppWidgetManager,
             appWidgetId: Int,
         ) {
-            val views = RemoteViews(context.packageName, R.layout.library_recommendations_widget)
-            views.setTextViewText(R.id.lr_widget_subtitle, readSourceLabel(context, appWidgetId))
-
-            // Apply responsive rules
-            val dims = widgetDimensionsFromOptions(context, appWidgetManager.getAppWidgetOptions(appWidgetId), 250)
-            if (dims != null) {
-                val height = dims.height
-
-                if (height < 130) {
-                    views.setViewVisibility(R.id.lr_widget_header, android.view.View.GONE)
-                } else {
-                    views.setViewVisibility(R.id.lr_widget_header, android.view.View.VISIBLE)
-                    if (height < 180) {
-                        views.setViewVisibility(R.id.lr_widget_subtitle, android.view.View.GONE)
-                        views.setViewVisibility(R.id.lr_widget_refresh, android.view.View.GONE)
-                    } else {
-                        views.setViewVisibility(R.id.lr_widget_subtitle, android.view.View.VISIBLE)
-                        views.setViewVisibility(R.id.lr_widget_refresh, android.view.View.VISIBLE)
-                    }
-                }
-            }
-
-            val openApp = PendingIntent.getActivity(
-                context,
-                REQUEST_CODE_HEADER,
-                WidgetDeepLinks.openAppIntent(context),
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            updateRecommendationGridWidget(
+                context = context,
+                appWidgetManager = appWidgetManager,
+                appWidgetId = appWidgetId,
+                subtitleText = readSourceLabel(context, appWidgetId),
+                ui = GridWidgetUi(
+                    layoutRes = R.layout.library_recommendations_widget,
+                    headerViewId = R.id.lr_widget_header,
+                    headerTextContainerViewId = R.id.lr_widget_header_text_container,
+                    subtitleViewId = R.id.lr_widget_subtitle,
+                    refreshViewId = R.id.lr_widget_refresh,
+                    gridViewId = R.id.lr_widget_grid,
+                    emptyViewId = R.id.lr_widget_empty,
+                    refreshAction = ACTION_REFRESH,
+                    refreshBroadcastTarget = LibraryRecommendationsWidget::class.java,
+                    serviceClass = LibraryRecommendationsWidgetService::class.java,
+                    requestCodes = GridWidgetRequestCodes(
+                        header = REQUEST_CODE_HEADER,
+                        refresh = REQUEST_CODE_REFRESH,
+                        item = REQUEST_CODE_ITEM,
+                    ),
+                ),
             )
-            views.setOnClickPendingIntent(R.id.lr_widget_header_text_container, openApp)
-            views.setOnClickPendingIntent(R.id.lr_widget_empty, openApp)
-
-            val refreshIntent = Intent(context, LibraryRecommendationsWidget::class.java).apply {
-                action = ACTION_REFRESH
-            }
-            val refreshPending = PendingIntent.getBroadcast(
-                context,
-                REQUEST_CODE_REFRESH,
-                refreshIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-            )
-            views.setOnClickPendingIntent(R.id.lr_widget_refresh, refreshPending)
-
-            val templateIntent = Intent(context, MainActivity::class.java).apply {
-                action = Intent.ACTION_VIEW
-                addCategory(Intent.CATEGORY_DEFAULT)
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or
-                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
-                    Intent.FLAG_ACTIVITY_SINGLE_TOP
-            }
-            val templatePending = PendingIntent.getActivity(
-                context,
-                REQUEST_CODE_ITEM,
-                templateIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
-            )
-            views.setPendingIntentTemplate(R.id.lr_widget_grid, templatePending)
-
-            val serviceIntent = Intent(context, LibraryRecommendationsWidgetService::class.java).apply {
-                putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
-                data = Uri.parse(toUri(Intent.URI_INTENT_SCHEME))
-            }
-            views.setRemoteAdapter(R.id.lr_widget_grid, serviceIntent)
-            views.setEmptyView(R.id.lr_widget_grid, R.id.lr_widget_empty)
-
-            appWidgetManager.updateAppWidget(appWidgetId, views)
         }
 
         private fun readSourceLabel(context: Context, appWidgetId: Int): String = runCatching {

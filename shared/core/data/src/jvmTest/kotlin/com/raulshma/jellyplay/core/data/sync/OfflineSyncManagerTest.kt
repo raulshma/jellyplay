@@ -24,8 +24,10 @@ import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeoutOrNull
@@ -35,6 +37,9 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import com.raulshma.jellyplay.core.data.util.TimeSource
+import java.time.LocalDate
+import java.time.ZoneId
 
 /**
  * Pins the decision + persistence orchestration of [OfflineSyncManager] (the
@@ -67,7 +72,7 @@ class OfflineSyncManagerTest {
     private lateinit var playbackRepository: PlaybackRepository
     private lateinit var manager: OfflineSyncManager
 
-    private val comparator = OfflineSyncComparator()
+    private val comparator = OfflineSyncComparator(FakeTimeSource())
 
     @BeforeTest
     fun setup() {
@@ -97,6 +102,7 @@ class OfflineSyncManagerTest {
             offlineModeManager = offlineModeManager,
             playbackRepository = playbackRepository,
             appScope = CoroutineScope(UnconfinedTestDispatcher()),
+            timeSource = FakeTimeSource(),
         )
     }
 
@@ -422,13 +428,17 @@ class OfflineSyncManagerTest {
     }
 
     @Test
-    fun `resyncBatch drives every item through batchProgress to DONE`() = runTest {
+    fun `resyncBatch drives every item through batchProgress to DONE`() = runBlocking {
         val fresh = detail()
         coEvery { mediaRepository.getMediaDetail(any(), any()) } returns Result.success(fresh)
         coEvery { syncBaselineDao.getBaseline(any()) } returns null
         coEvery { downloadRepository.getDownloadByMediaItemId(any()) } returns null
         coEvery { writer.saveOfflineMediaDetail(any(), any(), any()) } returns Unit
-        val batchScope = CoroutineScope(UnconfinedTestDispatcher(testScheduler))
+        // Real dispatchers end to end: the manager's resyncItem hops through
+        // Dispatchers.IO, so a runTest virtual clock would fire the wait's
+        // timeout during the first real-thread pause. runBlocking keeps the
+        // withTimeoutOrNull below in real time.
+        val batchScope = CoroutineScope(Dispatchers.Unconfined)
         val batchManager = OfflineSyncManager(
             mediaRepository = mediaRepository,
             writer = writer,
@@ -439,6 +449,7 @@ class OfflineSyncManagerTest {
             offlineModeManager = offlineModeManager,
             playbackRepository = playbackRepository,
             appScope = batchScope,
+            timeSource = FakeTimeSource(),
         )
         everyIsOffline(false)
 
@@ -464,5 +475,17 @@ class OfflineSyncManagerTest {
 
     private companion object {
         const val ITEM_ID = "item-1"
+    }
+
+    /**
+     * Controllable [TimeSource] whose default NOW tracks the real wall clock:
+     * the fixtures stamp baselines with `System.currentTimeMillis()` deltas,
+     * so the TTL gate's fresh/stale branches must compare against a now in
+     * the same epoch-millis regime.
+     */
+    private class FakeTimeSource(var nowMs: Long = System.currentTimeMillis()) : TimeSource {
+        override fun nowEpochMillis(): Long = nowMs
+        override fun nowElapsedRealtimeMillis(): Long = nowMs
+        override fun today(zone: ZoneId): LocalDate = LocalDate.of(2026, 1, 1)
     }
 }

@@ -10,7 +10,7 @@ package com.raulshma.jellyplay.core.model
  * entries). Not thread-safe by itself — confine access to one dispatcher
  * or synchronize externally, as each call site documents for its own regime.
  *
- * Promoted to commonMain in wave 15B when `core:data` grew a wasmJs target
+ * Promoted to commonMain when `core:data` grew a wasmJs target
  * (its commonMain code was already calling [lruMapOf]). Platform regimes:
  *  - JVM (android + desktop): the exact historical body —
  *    `java.util.LinkedHashMap(16, 0.75f, accessOrder = true)` with

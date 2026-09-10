@@ -19,7 +19,7 @@ import com.raulshma.jellyplay.PlayerActivity
  *    `onNewIntent`, returning `null` when the variant's mandatory id is
  *    absent (the activity's `finish()` path depends on that null).
  *
- * Wave 19C (live PiP): the contract is sealed — the dedicated host now also
+ * Live PiP: the contract is sealed — the dedicated host now also
  * mounts Live TV (so system PiP serves live), and a live launch carries a
  * different payload than the video-shaped one:
  *
@@ -60,7 +60,7 @@ sealed class PlayerActivityArgs {
     ) : PlayerActivityArgs()
 
     /**
-     * Live-TV channel playback (wave 19C), mounted as
+     * Live-TV channel playback, mounted as
      * [com.raulshma.jellyplay.feature.player.live.LivePlayerScreen]. No
      * `startPositionTicks`: a live stream has no resume position (mirrors
      * the external-player handoff, which passes zero for live).

@@ -14,7 +14,7 @@ import java.util.concurrent.atomic.AtomicReference
 
 /**
  * The single owner of "the active identity changed" for the app, and the
- * jvmShared [SessionIdentityProvider] implementation (wave 15B: the seam's
+ * jvmShared [SessionIdentityProvider] implementation (the seam's
  * classifier types moved to commonMain so commonMain subscribers can read
  * them; this classifier stays JVM-bound — see the interface KDoc).
  *

@@ -3,7 +3,7 @@ package com.raulshma.jellyplay.feature.player.video.subtitle
 import java.io.File
 
 /**
- * Subtitle font seam (wave 8C): the member set the commonMain
+ * Subtitle font seam: the member set the commonMain
  * [VideoPlayerViewModel][com.raulshma.jellyplay.feature.player.video.VideoPlayerViewModel]
  * (and the app's startup prewarm) call. The androidMain class formerly named
  * `FontProvider` was renamed [AndroidFontProvider][com.raulshma.jellyplay.feature.player.video.subtitle.AndroidFontProvider]

@@ -52,27 +52,35 @@ class SettingsSearchCatalogTest {
     }
 
     @Test
-    fun `aggregation preserves the verbatim move - all 257 items in flat order`() {
+    fun `aggregation preserves the verbatim move - all 258 items in flat order`() {
         val items = SettingsSearchCatalog.items
         // The old core/ui registry held 259 items; the aggregation must have
-        // kept every one (the 260th is the wave-18C video-cache-size row).
+        // kept every one (the 260th is the video-cache-size row).
         // v0.10.6 then consolidated the 5 synthwave/soothing/monochrome mode
-        // + accent entries into theme_style + style_accent (257).
+        // + accent entries into theme_style + style_accent (257); the
+        // missing auto_delete_after_watch declaration followed its existing
+        // storage row (258).
         // Bump this count when you deliberately add items.
-        assertEquals(257, items.size)
+        assertEquals(258, items.size)
         // Curated flat order starts with the account/session pair that used to
         // open the old registry, and the aggregation is a pure concatenation
-        // of the per-screen lists (no dedup, no reordering).
+        // of the decorated per-screen groups (no dedup, no reordering).
         assertEquals("logout", items.first().id)
         assertEquals(
             AccountSearchItems.size + IntegrationsSearchItems.size +
                 ActivityInsightsSearchItems.size + SystemSearchItems.size +
-                AppearanceSettingsSearchItems.size + PlaybackSettingsSearchItems.size +
+                AppearanceThemeSearchItems.size + AppearanceNavigationSearchItems.size +
+                AppearanceLibrarySearchItems.size + AppearanceHomeLayoutSearchItems.size +
+                AppearancePerformanceSearchItems.size + AppearanceEyeCareSearchItems.size +
+                AppearanceNewsletterSearchItems.size +
+                PlaybackSettingsSearchItems.size + PlaybackAdvancedVideoSearchItems.size +
                 MpvEngineSearchItems.size + VlcEngineSearchItems.size +
                 ExoPlayerEngineSearchItems.size + SyncPlaySearchItems.size +
                 CastingSearchItems.size + LiveTvSearchItems.size +
-                AudioSettingsSearchItems.size + LanguageSettingsSearchItems.size +
-                NotificationSettingsSearchItems.size + StorageSettingsSearchItems.size +
+                AudioSettingsSearchItems.size + AudioCacheSearchItems.size +
+                LanguageSettingsSearchItems.size + NotificationSettingsSearchItems.size +
+                StorageCacheSearchItems.size + StorageNetworkSearchItems.size +
+                StorageDownloadsSearchItems.size +
                 SecuritySettingsSearchItems.size + BackupSettingsSearchItems.size +
                 AboutSearchItems.size + ExperimentalSettingsSearchItems.size,
             items.size,

@@ -8,13 +8,13 @@ import org.koin.dsl.module
 
 /**
  * Koin construction owner for the Downloads feature (docs/kmp-migration-plan.md
- * §Phase V3, fifth conveyor item after search, library, music and livetv). The
+ * , fifth conveyor item after search, library, music and livetv). The
  * HiltViewModel/@Inject annotations were stripped at the move — Koin is the
  * single constructor owner (one framework per type). Ctor deps split three
  * ways:
  *  - DownloadRepository is still Hilt-owned in the legacy data shim
  *    (WorkManager-coupled) and reaches Koin through the app composition root's
- *    Hilt interop module (dies at Phase X);
+ *    Hilt interop module (dies at );
  *  - OfflineRepository resolves from dataJvmModule and UserDataMutator from
  *    the Hilt interop bridge (the C4 shared-module graph);
  *  - OfflineSyncManager was flipped to a Koin single in dataJvmModule by this

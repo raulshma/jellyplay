@@ -28,13 +28,13 @@ import org.koin.dsl.module
 /**
  * Desktop platform pick of the settings feature's seams (the
  * androidDataModule/desktopDataModule split pattern): the AWT-dialog backup
- * picker + JDK-stream backup IO (wave 20C), the no-op app-locale setter, the
- * REAL storage actuals (wave 21B — see below), the build-literal AppMeta /
+ * picker + JDK-stream backup IO, the no-op app-locale setter, the
+ * REAL storage actuals (see below), the build-literal AppMeta /
  * null-log / classpath aboutlibraries actuals, and the desktop
  * notification-poke actuals. The desktop composition root loads this
  * alongside [settingsModule].
  *
- * Storage went real with wave 21B: the downloads and cache buckets walk the
+ * Storage went real with: the downloads and cache buckets walk the
  * roots the desktop data seams own — `<dataDir>/downloads`
  * (DesktopDownloadStorageLayout's root, nested music subtree included) and
  * `<configDir>/http-cache` (DesktopNetworkModule's OkHttp cache) — with the
@@ -46,7 +46,10 @@ import org.koin.dsl.module
  * [DesktopAutoDownloadScheduler] (desktopDataModule): a poke restarts the
  * idempotent 6 h loop with one immediate check, so a freshly toggled
  * auto-download preference is honoured right away. WatchNext / audio-cache /
- * notification-sync have no desktop surface and bind no-ops.
+ * notification-sync have no desktop backend and bind no-ops — the no-ops are
+ * the BEHAVIOR half only; the rows themselves are hidden through
+ * `SettingsCapabilities` (see its ownership rule), so no desktop user sees a
+ * control whose poke lands nowhere.
  *
  * @param dataDir the appdata root (`<appdata>/data`, DesktopPaths.dataDirNio)
  *   the downloads subtree hangs under.

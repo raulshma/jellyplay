@@ -25,11 +25,11 @@ import org.koin.dsl.module
  *  - [TranscodeReasonsRenderer] — delegates to the legacy core:ui
  *    TranscodeReasonsFormatter (Android-coupled, dies at its own conveyor
  *    move);
- *  - [com.raulshma.jellyplay.feature.player.live.PipController] — wave 19C:
+ *  - [com.raulshma.jellyplay.feature.player.live.PipController] —:
  *    [AndroidPipController] over the legacy core:data PipController
  *    singleton, the same instance the host PlayerActivity injects, so the
  *    live ViewModel's PiP writes and the Activity's collectors observe one
- *    state (the wave-8C player-video adapter's relationship).
+ *    state (the player-video adapter's relationship).
  *
  * Registered only app-side (JellyPlayApplication); desktop's registration of
  * `playerLiveModule` stays documented-latent — the Android-only screen never

@@ -1026,9 +1026,9 @@ val MIGRATION_50_51 = object : Migration(50, 51) {
 //    offline_media_with_playback view with a CASE-led ORDER BY — no planner
 //    path can use a BINARY-collation B-tree there, so the index was pure
 //    write amplification on the app's highest-churn table.
-//  - Add a covering composite on playback_outbox(itemId, deadLetter, createdAt)
-//    for PlaybackOutboxDao.getForItemByType, which runs ~every 10 s during
-//    playback and filters + sorts by createdAt using only the itemId index.
+//  - Add an ordered composite index on playback_outbox(itemId, deadLetter,
+//    createdAt) for PlaybackOutboxDao.getForItemByType, which runs ~every 10 s
+//    during playback and filters + sorts by createdAt using only the itemId index.
 val MIGRATION_51_52 = object : Migration(51, 52) {
     override fun migrate(db: SQLiteConnection) {
         db.execSQL("DROP INDEX IF EXISTS index_offline_media_name")
@@ -1036,8 +1036,30 @@ val MIGRATION_51_52 = object : Migration(51, 52) {
     }
 }
 
+// Ordered range index for OfflineMediaDao.getDownloadedEpisodes — the offline
+// home's Continue Watching / Next Up source. That reactive query filters
+// `mediaType = 'EPISODE'` over the offline_media_with_playback view and orders
+// by `seriesId, seasonNumber, episodeNumber` (LIMIT 2000); no existing index
+// served that WHERE + ORDER BY combination, so SQLite full-scanned offline_media
+// and sorted up to 2000 joined rows on EVERY re-emission — and any write to
+// offline_media or playback_state (metadata re-persist, 2 s progress ticks
+// during transfers) re-ran the flow. The new index lets the planner walk the
+// matching mediaType range already in output order (LEFT JOIN playback_state by
+// primary key per row, then a row lookup for the selected offline_media
+// columns — ordered, not covering) instead of sorting.
+// Schema-additive only; no table data changes.
+val MIGRATION_52_53 = object : Migration(52, 53) {
+    override fun migrate(db: SQLiteConnection) {
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS " +
+                "index_offline_media_mediaType_seriesId_seasonNumber_episodeNumber " +
+                "ON offline_media(mediaType, seriesId, seasonNumber, episodeNumber)"
+        )
+    }
+}
+
 /**
- * The complete, correctly-ordered v1→v52 migration chain, with the
+ * The complete, correctly-ordered v1→v53 migration chain, with the
  * token-encrypting [Migration24To25] (which needs a [TokenCipher]) inserted at
  * its true position between v23→v24 and v25→v26. Room matches migrations by
  * start/end version regardless of list order, but keeping the chain in strict
@@ -1097,4 +1119,5 @@ fun allMigrations(tokenCipher: TokenCipher): List<Migration> =
         MIGRATION_49_50,
         MIGRATION_50_51,
         MIGRATION_51_52,
+        MIGRATION_52_53,
     )

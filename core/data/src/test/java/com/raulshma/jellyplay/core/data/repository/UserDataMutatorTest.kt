@@ -129,9 +129,12 @@ class UserDataMutatorTest {
 
         assertEquals(Result.success(AppliedMutation(itemId = "a", played = true)), result)
         coVerify(exactly = 1) { mediaRepository.markPlayed("a") }
-        // The grid contract: no container flip, no provider session touch.
+        // The grid contract: no container flip — but the provider session
+        // (an open detail screen, e.g. under the player) is still aligned.
         assertFalse(container.current.single().isPlayed)
-        coVerify(exactly = 0) { mediaDetailProvider.applyOptimisticItemState(any(), any(), any()) }
+        coVerify(exactly = 1) {
+            mediaDetailProvider.applyOptimisticItemState("a", isFavorite = null, isPlayed = true)
+        }
         coVerify(exactly = 0) { mediaDetailProvider.applyOptimisticSeasonRewrite(any(), any(), any()) }
     }
 
@@ -214,7 +217,9 @@ class UserDataMutatorTest {
         val result = mutator.setFavorite(itemId = "track-1")
 
         assertEquals(false, result.getOrThrow().favorite)
-        coVerify(exactly = 0) { mediaDetailProvider.applyOptimisticItemState(any(), any(), any()) }
+        coVerify(exactly = 1) {
+            mediaDetailProvider.applyOptimisticItemState("track-1", isFavorite = false, isPlayed = null)
+        }
     }
 
     @Test

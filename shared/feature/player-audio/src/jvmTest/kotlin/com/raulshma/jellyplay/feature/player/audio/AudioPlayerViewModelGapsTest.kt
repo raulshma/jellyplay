@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.data.playback.AudioQueueManager
 import com.raulshma.jellyplay.core.data.playback.SleepTimerManager
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.datastore.audio.AudioSlice
 import com.raulshma.jellyplay.core.datastore.audio.AudioStore
 import com.raulshma.jellyplay.core.datastore.audioeffects.AudioEffectsSlice
@@ -72,6 +73,7 @@ class AudioPlayerViewModelGapsTest {
     private lateinit var audioStore: AudioStore
     private lateinit var audioEffectsStore: AudioEffectsStore
     private lateinit var mediaRepository: MediaRepository
+    private lateinit var playlistRepository: PlaylistRepository
     private lateinit var userDataMutator: com.raulshma.jellyplay.core.data.repository.UserDataMutator
     private lateinit var downloadRepository: DownloadRepository
     private lateinit var downloadIntake: DownloadIntake
@@ -119,6 +121,7 @@ class AudioPlayerViewModelGapsTest {
         audioStore = mockk(relaxed = true)
         audioEffectsStore = mockk(relaxed = true)
         mediaRepository = mockk(relaxed = true)
+        playlistRepository = mockk(relaxed = true)
         userDataMutator = mockk(relaxed = true)
         downloadRepository = mockk(relaxed = true)
         downloadIntake = mockk(relaxed = true)
@@ -128,6 +131,8 @@ class AudioPlayerViewModelGapsTest {
         every { projections.audioPlayerUiPreferences } returns MutableStateFlow(AudioPlayerUiPreferences())
         every { audioStore.audio } returns MutableStateFlow(AudioSlice())
         every { audioEffectsStore.audioEffects } returns MutableStateFlow(AudioEffectsSlice())
+        every { effectsManager.replayGainMode } returns MutableStateFlow(com.raulshma.jellyplay.core.model.AudioNormalizationMode.NONE)
+        every { effectsManager.replayGainPreAmpDb } returns MutableStateFlow(0.0f)
         every { queueManager.currentPlayingItemId } returns currentItemIdFlow
         every { queueManager.queue } returns queue
         every { queueManager.currentIndex } returns queueIndex
@@ -166,6 +171,7 @@ class AudioPlayerViewModelGapsTest {
             audioStore = audioStore,
             audioEffectsStore = audioEffectsStore,
             mediaRepository = mediaRepository,
+            playlistRepository = playlistRepository,
             userDataMutator = userDataMutator,
             downloadRepository = downloadRepository,
             downloadIntake = downloadIntake,
@@ -305,7 +311,7 @@ class AudioPlayerViewModelGapsTest {
         currentItemIdFlow.value = "track-1"
         val editable = Playlist(id = "p1", name = "Mine", canEdit = true)
         val locked = Playlist(id = "p2", name = "Theirs", canEdit = false)
-        coEvery { mediaRepository.getPlaylists(any()) } returns Result.success(listOf(editable, locked))
+        coEvery { playlistRepository.getPlaylists(any()) } returns Result.success(listOf(editable, locked))
 
         viewModel.openPlaylistPicker()
 
@@ -321,13 +327,13 @@ class AudioPlayerViewModelGapsTest {
         viewModel.openPlaylistPicker()
 
         assertFalse(viewModel.uiState.value.showPlaylistPicker)
-        coVerify(exactly = 0) { mediaRepository.getPlaylists(any()) }
+        coVerify(exactly = 0) { playlistRepository.getPlaylists(any()) }
     }
 
     @Test
     fun openPlaylistPicker_failure_stopsLoadingWithAnEmptyList() {
         currentItemIdFlow.value = "track-1"
-        coEvery { mediaRepository.getPlaylists(any()) } returns Result.failure(RuntimeException("offline"))
+        coEvery { playlistRepository.getPlaylists(any()) } returns Result.failure(RuntimeException("offline"))
 
         viewModel.openPlaylistPicker()
 
@@ -340,7 +346,7 @@ class AudioPlayerViewModelGapsTest {
     fun addToPlaylist_success_closesPickerAndPostsThePlaylistName() {
         currentItemIdFlow.value = "track-1"
         val playlist = Playlist(id = "p1", name = "Road Trip", canEdit = true)
-        coEvery { mediaRepository.addItemsToPlaylist("p1", listOf("track-1")) } returns Result.success(Unit)
+        coEvery { playlistRepository.addItemsToPlaylist("p1", listOf("track-1")) } returns Result.success(Unit)
 
         viewModel.addToPlaylist(playlist)
 
@@ -355,8 +361,10 @@ class AudioPlayerViewModelGapsTest {
     @Test
     fun addToPlaylist_failure_keepsPickerOpenAndSurfacesTheError() {
         currentItemIdFlow.value = "track-1"
+        coEvery { playlistRepository.getPlaylists(limit = 100) } returns Result.success(emptyList())
+        viewModel.openPlaylistPicker()
         val playlist = Playlist(id = "p1", name = "Road Trip", canEdit = true)
-        coEvery { mediaRepository.addItemsToPlaylist(any(), any()) } returns
+        coEvery { playlistRepository.addItemsToPlaylist(any(), any()) } returns
             Result.failure(RuntimeException("server rejected"))
 
         viewModel.addToPlaylist(playlist)
@@ -370,8 +378,8 @@ class AudioPlayerViewModelGapsTest {
     fun dismissPlaylistPicker_isGuardedWhileAnAddIsInFlight() {
         currentItemIdFlow.value = "track-1"
         val gate = CompletableDeferred<Unit>()
-        coEvery { mediaRepository.getPlaylists(any()) } returns Result.success(emptyList())
-        coEvery { mediaRepository.addItemsToPlaylist(any(), any()) } coAnswers {
+        coEvery { playlistRepository.getPlaylists(any()) } returns Result.success(emptyList())
+        coEvery { playlistRepository.addItemsToPlaylist(any(), any()) } coAnswers {
             gate.await()
             Result.success(Unit)
         }
@@ -395,7 +403,7 @@ class AudioPlayerViewModelGapsTest {
     @Test
     fun clearPlaylistMessage_clearsOnlyTheMessage() {
         currentItemIdFlow.value = "track-1"
-        coEvery { mediaRepository.addItemsToPlaylist(any(), any()) } returns Result.success(Unit)
+        coEvery { playlistRepository.addItemsToPlaylist(any(), any()) } returns Result.success(Unit)
         viewModel.addToPlaylist(Playlist(id = "p1", name = "Road Trip"))
         assertEquals("Road Trip", viewModel.uiState.value.playlistMessage)
 
@@ -408,8 +416,8 @@ class AudioPlayerViewModelGapsTest {
 
     @Test
     fun downloadCurrentTrack_completedDownload_redownloadsByDeletingFirst() {
-        currentItemIdFlow.value = "track-1"
         downloadFlows["track-1"] = MutableStateFlow(downloadItem("dl-1", DownloadStatus.COMPLETED))
+        currentItemIdFlow.value = "track-1"
 
         viewModel.downloadCurrentTrack()
 
@@ -454,8 +462,12 @@ class AudioPlayerViewModelGapsTest {
 
     @Test
     fun currentDownloadItem_mirror_followsThePlayingItem() {
-        currentItemIdFlow.value = "track-1"
+        // The per-item download flow must exist BEFORE the playing-item switch:
+        // the eager collector binds to getDownloadByMediaItemIdFlow("track-1")
+        // at the moment the itemId emission lands (getOrPut would otherwise
+        // create and bind a permanent null flow).
         downloadFlows["track-1"] = MutableStateFlow(downloadItem("dl-1", DownloadStatus.COMPLETED))
+        currentItemIdFlow.value = "track-1"
         assertEquals("dl-1", viewModel.currentDownloadItem.value?.id)
 
         // Moving to an item without a download clears the mirror (and the

@@ -93,6 +93,7 @@ include(":baselineprofile")
 // KMP shell (docs/kmp-migration-plan.md): the parallel tree that legacy modules
 // migrate into, phase by phase. Lives beside (not inside) the Android tree so
 // the existing app keeps building untouched until cutover.
+include(":shared:core:concurrency")
 include(":shared:core:model")
 include(":shared:core:designsystem")
 include(":shared:core:datastore")
@@ -140,6 +141,12 @@ include(":shared:feature:subtitle-tester")
 include(":shared:feature:player-live")
 include(":shared:feature:player-video")
 include(":shared:feature:details")
+
+// Shell-graph aggregator (CONTEXT.md "Shared appSections nav graph"): the one
+// module that depends on every feature whose *Section builder the two shells
+// used to restate — appSections + ShellHostHooks + the derived registration
+// ledger the desktop dead-end guard reads.
+include(":shared:feature:shell")
 
 include(":shared:feature:auth")
 include(":shared:feature:player-audio")

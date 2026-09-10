@@ -17,9 +17,6 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -28,78 +25,57 @@ class PluginApiClientImpl @Inject constructor(
     private val engine: JellyfinApiEngine,
 ) : PluginApiClient {
 
-    private fun requireServer() = engine.currentServer.value?.address
-        ?: throw IllegalStateException("Not connected")
-
-    private fun requireToken() = engine.currentUser.value?.accessToken
-        ?: throw IllegalStateException("Not authenticated")
-
-    private fun authRequest(url: String) = Request.Builder()
-        .url(url)
-        .header("X-Emby-Token", requireToken())
+    private val rawRequester = JellyfinRawRequester(engine)
 
     override suspend fun getInstalledPlugins(): Result<List<PluginInfo>> = engine.apiResultWithRetry {
-        val url = "${requireServer()}/Plugins"
-        val request = authRequest(url).get().build()
-        engine.okHttpClient.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) throw Exception("Failed to get plugins: ${response.code}")
-            val body = response.body ?: return@use emptyList<PluginInfo>()
-            // Stream-decode: the plugin list never materializes as a String
-            // alongside the decoded objects.
-            val json = JellyfinApiEngine.sharedJson.decodeFromStream<JsonArray>(body.byteStream())
-            json.mapNotNull { element ->
-                try { parsePluginInfo(element.jsonObject) } catch (_: Exception) { null }
+        rawRequester.getJson("/Plugins", "Failed to get plugins") { body ->
+            if (body == null) {
+                emptyList()
+            } else {
+                // Stream-decode: the plugin list never materializes as a String
+                // alongside the decoded objects.
+                JellyfinApiEngine.sharedJson.decodeFromStream<JsonArray>(body.byteStream())
+                    .mapNotNull { element ->
+                        try { parsePluginInfo(element.jsonObject) } catch (_: Exception) { null }
+                    }
             }
         }
     }
 
     override suspend fun enablePlugin(pluginId: String, version: String): Result<Unit> = engine.apiResultWithRetry {
-        val url = "${requireServer()}/Plugins/$pluginId/$version/Enable"
-        val request = authRequest(url).post("".toRequestBody("application/json".toMediaType())).build()
-        engine.okHttpClient.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) throw Exception("Failed to enable plugin: ${response.code}")
-        }
+        rawRequester.postStatusOnly("/Plugins/$pluginId/$version/Enable", "Failed to enable plugin")
     }
 
     override suspend fun disablePlugin(pluginId: String, version: String): Result<Unit> = engine.apiResultWithRetry {
-        val url = "${requireServer()}/Plugins/$pluginId/$version/Disable"
-        val request = authRequest(url).post("".toRequestBody("application/json".toMediaType())).build()
-        engine.okHttpClient.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) throw Exception("Failed to disable plugin: ${response.code}")
-        }
+        rawRequester.postStatusOnly("/Plugins/$pluginId/$version/Disable", "Failed to disable plugin")
     }
 
     override suspend fun uninstallPlugin(pluginId: String): Result<Unit> = engine.apiResultWithRetry {
-        val url = "${requireServer()}/Plugins/$pluginId"
-        val request = authRequest(url).delete().build()
-        engine.okHttpClient.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) throw Exception("Failed to uninstall plugin: ${response.code}")
-        }
+        rawRequester.deleteStatusOnly("/Plugins/$pluginId", "Failed to uninstall plugin")
     }
 
     override suspend fun getAvailablePackages(): Result<List<PluginPackage>> = engine.apiResultWithRetry {
-        val url = "${requireServer()}/Packages"
-        val request = authRequest(url).get().build()
-        engine.okHttpClient.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) throw Exception("Failed to get packages: ${response.code}")
-            val body = response.body ?: return@use emptyList<PluginPackage>()
-            // Stream-decode — the package catalog is the largest plugin payload.
-            val json = JellyfinApiEngine.sharedJson.decodeFromStream<JsonArray>(body.byteStream())
-            json.mapNotNull { element ->
-                try { parsePackageInfo(element.jsonObject) } catch (_: Exception) { null }
+        rawRequester.getJson("/Packages", "Failed to get packages") { body ->
+            if (body == null) {
+                emptyList()
+            } else {
+                // Stream-decode — the package catalog is the largest plugin payload.
+                JellyfinApiEngine.sharedJson.decodeFromStream<JsonArray>(body.byteStream())
+                    .mapNotNull { element ->
+                        try { parsePackageInfo(element.jsonObject) } catch (_: Exception) { null }
+                    }
             }
         }
     }
 
     override suspend fun getPackageInfo(name: String, assemblyGuid: String?): Result<PluginPackage> = engine.apiResultWithRetry {
-        val urlBuilder = StringBuilder("${requireServer()}/Packages/$name")
-        if (assemblyGuid != null) urlBuilder.append("?assemblyGuid=$assemblyGuid")
-        val request = authRequest(urlBuilder.toString()).get().build()
-        engine.okHttpClient.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) throw Exception("Failed to get package info: ${response.code}")
-            val body = response.body ?: throw Exception("Empty response from server")
-            val json = JellyfinApiEngine.sharedJson.decodeFromStream<JsonObject>(body.byteStream())
-            parsePackageInfo(json)
+        val query = if (assemblyGuid != null) "?assemblyGuid=$assemblyGuid" else ""
+        rawRequester.getJson("/Packages/$name$query", "Failed to get package info") { body ->
+            parsePackageInfo(
+                JellyfinApiEngine.sharedJson.decodeFromStream<JsonObject>(
+                    (body ?: throw Exception("Empty response from server")).byteStream(),
+                ),
+            )
         }
     }
 
@@ -109,32 +85,23 @@ class PluginApiClientImpl @Inject constructor(
         version: String?,
         repositoryUrl: String?,
     ): Result<Unit> = engine.apiResultWithRetry {
-        val urlBuilder = StringBuilder("${requireServer()}/Packages/Installed/$name?")
-        assemblyGuid?.let { urlBuilder.append("assemblyGuid=$it&") }
-        version?.let { urlBuilder.append("version=$it&") }
-        repositoryUrl?.let { urlBuilder.append("repositoryUrl=$it&") }
-        val url = urlBuilder.trimEnd('&', '?').toString()
-        val request = authRequest(url).post("".toRequestBody("application/json".toMediaType())).build()
-        engine.okHttpClient.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) throw Exception("Failed to install package: ${response.code}")
-        }
+        val pathBuilder = StringBuilder("/Packages/Installed/$name?")
+        assemblyGuid?.let { pathBuilder.append("assemblyGuid=$it&") }
+        version?.let { pathBuilder.append("version=$it&") }
+        repositoryUrl?.let { pathBuilder.append("repositoryUrl=$it&") }
+        rawRequester.postStatusOnly(
+            path = pathBuilder.trimEnd('&', '?').toString(),
+            failureMessage = "Failed to install package",
+        )
     }
 
     override suspend fun cancelPackageInstallation(packageId: String): Result<Unit> = engine.apiResultWithRetry {
-        val url = "${requireServer()}/Packages/Installing/$packageId"
-        val request = authRequest(url).delete().build()
-        engine.okHttpClient.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) throw Exception("Failed to cancel installation: ${response.code}")
-        }
+        rawRequester.deleteStatusOnly("/Packages/Installing/$packageId", "Failed to cancel installation")
     }
 
     override suspend fun getPackageInstallations(): Result<List<PluginInstallationInfo>> = engine.apiResultWithRetry {
-        val url = "${requireServer()}/Packages/Installing"
-        val request = authRequest(url).get().build()
-        engine.okHttpClient.newCall(request).execute().use { response ->
-            val body = response.body?.string() ?: "[]"
-            if (!response.isSuccessful) throw Exception("Failed to get installations: ${response.code}")
-            val json = JellyfinApiEngine.sharedJson.decodeFromString<JsonArray>(body)
+        rawRequester.getJson("/Packages/Installing", "Failed to get installations") { body ->
+            val json = JellyfinApiEngine.sharedJson.decodeFromString<JsonArray>(body?.string() ?: "[]")
             json.mapNotNull { element ->
                 try { parseInstallationInfo(element.jsonObject) } catch (_: Exception) { null }
             }
@@ -142,12 +109,8 @@ class PluginApiClientImpl @Inject constructor(
     }
 
     override suspend fun getRepositories(): Result<List<PluginRepository>> = engine.apiResultWithRetry {
-        val url = "${requireServer()}/Repositories"
-        val request = authRequest(url).get().build()
-        engine.okHttpClient.newCall(request).execute().use { response ->
-            val body = response.body?.string() ?: "[]"
-            if (!response.isSuccessful) throw Exception("Failed to get repositories: ${response.code}")
-            val json = JellyfinApiEngine.sharedJson.decodeFromString<JsonArray>(body)
+        rawRequester.getJson("/Repositories", "Failed to get repositories") { body ->
+            val json = JellyfinApiEngine.sharedJson.decodeFromString<JsonArray>(body?.string() ?: "[]")
             json.mapNotNull { element ->
                 try { parseRepository(element.jsonObject) } catch (_: Exception) { null }
             }
@@ -155,7 +118,6 @@ class PluginApiClientImpl @Inject constructor(
     }
 
     override suspend fun setRepositories(repositories: List<PluginRepository>): Result<Unit> = engine.apiResultWithRetry {
-        val url = "${requireServer()}/Repositories"
         val jsonArray = kotlinx.serialization.json.buildJsonArray {
             repositories.forEach { repo ->
                 add(kotlinx.serialization.json.buildJsonObject {
@@ -166,41 +128,22 @@ class PluginApiClientImpl @Inject constructor(
             }
         }
         val json = JellyfinApiEngine.sharedJson.encodeToString(kotlinx.serialization.json.JsonArray.serializer(), jsonArray)
-        val request = authRequest(url)
-            .post(json.toRequestBody("application/json".toMediaType()))
-            .build()
-        engine.okHttpClient.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) throw Exception("Failed to set repositories: ${response.code}")
-        }
+        rawRequester.postStatusOnly("/Repositories", "Failed to set repositories", json)
     }
 
     override suspend fun getPluginConfiguration(pluginId: String): Result<String> = engine.apiResultWithRetry {
-        val url = "${requireServer()}/Plugins/$pluginId/Configuration"
-        val request = authRequest(url).get().build()
-        engine.okHttpClient.newCall(request).execute().use { response ->
-            val body = response.body?.string() ?: "{}"
-            if (!response.isSuccessful) throw Exception("Failed to get plugin configuration: ${response.code}")
-            body
+        rawRequester.getJson("/Plugins/$pluginId/Configuration", "Failed to get plugin configuration") { body ->
+            body?.string() ?: "{}"
         }
     }
 
     override suspend fun updatePluginConfiguration(pluginId: String, jsonBody: String): Result<Unit> = engine.apiResultWithRetry {
-        val url = "${requireServer()}/Plugins/$pluginId/Configuration"
-        val request = authRequest(url)
-            .post(jsonBody.toRequestBody("application/json".toMediaType()))
-            .build()
-        engine.okHttpClient.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) throw Exception("Failed to update plugin configuration: ${response.code}")
-        }
+        rawRequester.postStatusOnly("/Plugins/$pluginId/Configuration", "Failed to update plugin configuration", jsonBody)
     }
 
     override suspend fun getConfigurationPages(): Result<List<PluginConfigPage>> = engine.apiResultWithRetry {
-        val url = "${requireServer()}/web/ConfigurationPages"
-        val request = authRequest(url).get().build()
-        engine.okHttpClient.newCall(request).execute().use { response ->
-            val body = response.body?.string() ?: "[]"
-            if (!response.isSuccessful) throw Exception("Failed to get configuration pages: ${response.code}")
-            val json = JellyfinApiEngine.sharedJson.decodeFromString<JsonArray>(body)
+        rawRequester.getJson("/web/ConfigurationPages", "Failed to get configuration pages") { body ->
+            val json = JellyfinApiEngine.sharedJson.decodeFromString<JsonArray>(body?.string() ?: "[]")
             json.mapNotNull { element ->
                 try { parseConfigPage(element.jsonObject) } catch (_: Exception) { null }
             }
@@ -208,12 +151,11 @@ class PluginApiClientImpl @Inject constructor(
     }
 
     override suspend fun getDashboardConfigurationPage(name: String): Result<String> = engine.apiResultWithRetry {
-        val url = "${requireServer()}/web/ConfigurationPage?name=${java.net.URLEncoder.encode(name, "UTF-8")}"
-        val request = authRequest(url).get().build()
-        engine.okHttpClient.newCall(request).execute().use { response ->
-            val body = response.body?.string() ?: ""
-            if (!response.isSuccessful) throw Exception("Failed to get config page: ${response.code}")
-            body
+        rawRequester.getJson(
+            path = "/web/ConfigurationPage?name=${java.net.URLEncoder.encode(name, "UTF-8")}",
+            failureMessage = "Failed to get config page",
+        ) { body ->
+            body?.string() ?: ""
         }
     }
 }

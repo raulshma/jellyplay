@@ -4,6 +4,7 @@ import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.model.DeviceInfo
 import com.raulshma.jellyplay.core.data.repository.AdminRepository
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import com.raulshma.jellyplay.feature.admin.AdminLoad
 
 data class DevicesState(
     val isLoading: Boolean = true,
@@ -30,14 +31,17 @@ class DevicesViewModel(
 
     fun loadDevices() {
         launch {
-            _state.value = _state.value.copy(isLoading = true, error = null)
-            val result = adminRepository.getDevices()
-            result.onSuccess { devices ->
-                _state.value = _state.value.copy(devices = devices, isLoading = false)
-            }.onFailure { e ->
-                Log.e("Devices", "Failed to fetch devices", e)
-                _state.value = _state.value.copy(error = e.message, isLoading = false)
-            }
+            AdminLoad.load(
+                start = { _state.value = _state.value.copy(isLoading = true, error = null) },
+                fetch = { adminRepository.getDevices() },
+                onSuccess = { devices ->
+                    _state.value = _state.value.copy(devices = devices, isLoading = false)
+                },
+                onFailure = { e ->
+                    Log.e("Devices", "Failed to fetch devices", e)
+                    _state.value = _state.value.copy(error = e.message, isLoading = false)
+                },
+            )
         }
     }
 

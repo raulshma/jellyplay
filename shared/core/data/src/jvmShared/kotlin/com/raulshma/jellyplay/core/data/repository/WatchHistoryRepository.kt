@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.repository
 
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PlaybackActivityPoint
@@ -136,11 +137,11 @@ class WatchHistoryRepositoryImpl constructor(
             }
             return filteredItems.map { item ->
                 val timeStr = item.lastPlayedDate?.let { dateStr ->
-                    runCatching {
+                    runCatchingRethrowingCancellation {
                         val parsed = java.time.ZonedDateTime.parse(dateStr)
                         parsed.format(TIME_OF_DAY_FORMATTER)
                     }.getOrElse {
-                        runCatching {
+                        runCatchingRethrowingCancellation {
                             val parsed = java.time.LocalDateTime.parse(dateStr)
                             parsed.format(TIME_OF_DAY_FORMATTER)
                         }.getOrDefault("")

@@ -5,6 +5,8 @@ import com.raulshma.jellyplay.core.model.ActivityLogEntry
 import com.raulshma.jellyplay.core.model.LogFile
 import com.raulshma.jellyplay.core.model.trimToSize
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
+import com.raulshma.jellyplay.feature.admin.AdminLoad
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
@@ -27,6 +29,8 @@ data class LogsState(
     val selectedLogFileLines: List<LogLine> = emptyList(),
     val isLogPollingActive: Boolean = true,
     val isLoadingLogContent: Boolean = false,
+    /** True while a paginated activity fetch (an older page) is in flight. */
+    val isLoadingMoreActivity: Boolean = false,
     val selectedTabIndex: Int = 0,
     val isLiveStreamActive: Boolean = false,
     val liveEntries: List<ActivityLogEntry> = emptyList(),
@@ -60,23 +64,35 @@ class LogsViewModel(
 
     fun loadInitialData() {
         launch {
-            _state.value = _state.value.copy(isLoading = true, error = null)
-            try {
-                val logFilesDeferred = async { adminRepository.getLogFiles() }
-                val activityDeferred = async { adminRepository.getActivityLogEntries(limit = 50) }
-                val logFilesResult = logFilesDeferred.await()
-                val activityResult = activityDeferred.await()
-                val entries = activityResult.getOrNull() ?: emptyList()
-                activityEntriesBuffer.clear()
-                activityEntriesBuffer.addAll(entries)
-                _state.value = _state.value.copy(
-                    logFiles = logFilesResult.getOrNull() ?: emptyList(),
-                    activityEntries = activityEntriesBuffer.toList(),
-                    isLoading = false,
-                )
-            } catch (e: Exception) {
-                _state.value = _state.value.copy(error = e.message, isLoading = false)
-            }
+            AdminLoad.load(
+                start = { _state.value = _state.value.copy(isLoading = true, error = null) },
+                // Declared variant (see AdminLoad): the legacy ladder fetched
+                // both halves in parallel and settled each with
+                // `getOrNull() ?: emptyList()` — a failed Result never surfaces
+                // an error here, only a THROWN exception does (the old catch),
+                // hence the wrapper around the awaited pair; cancellation
+                // propagates instead of settling as the error arm.
+                fetch = {
+                    runCatchingRethrowingCancellation {
+                        val logFilesDeferred = async { adminRepository.getLogFiles() }
+                        val activityDeferred = async { adminRepository.getActivityLogEntries(limit = 50) }
+                        logFilesDeferred.await() to activityDeferred.await()
+                    }
+                },
+                onSuccess = { (logFilesResult, activityResult) ->
+                    val entries = activityResult.getOrNull() ?: emptyList()
+                    activityEntriesBuffer.clear()
+                    activityEntriesBuffer.addAll(entries)
+                    _state.value = _state.value.copy(
+                        logFiles = logFilesResult.getOrNull() ?: emptyList(),
+                        activityEntries = activityEntriesBuffer.toList(),
+                        isLoading = false,
+                    )
+                },
+                onFailure = { e ->
+                    _state.value = _state.value.copy(error = e.message, isLoading = false)
+                },
+            )
         }
     }
 
@@ -266,7 +282,18 @@ class LogsViewModel(
         _state.value = _state.value.copy(isLiveStreamActive = false)
     }
 
+    /**
+     * Fetches the next activity page at `startIndex = currentSize`. Re-entry
+     * safe: a fast fling used to fire this re-entrantly with the same
+     * startIndex before the buffer grew, double-appending the same server
+     * page (the screen's `!isLoadingMore` guard was fed a hardcoded `false`).
+     * The in-flight flag is raised synchronously (before the coroutine) and
+     * mirrored into [LogsState.isLoadingMoreActivity] so both this guard and
+     * the screen's infinite-list guard see it.
+     */
     fun loadMoreActivity() {
+        if (_state.value.isLoadingMoreActivity) return
+        _state.value = _state.value.copy(isLoadingMoreActivity = true)
         launch {
             val currentSize = _state.value.activityEntries.size
             val result = adminRepository.getActivityLogEntries(startIndex = currentSize, limit = 50)
@@ -276,6 +303,7 @@ class LogsViewModel(
                     activityEntries = activityEntriesBuffer.toList(),
                 )
             }
+            _state.value = _state.value.copy(isLoadingMoreActivity = false)
         }
     }
 

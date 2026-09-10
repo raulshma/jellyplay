@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.model.seerr.SeerrAuthMethod
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import kotlinx.coroutines.CoroutineScope
@@ -50,9 +51,7 @@ class SeerrPreferencesStore constructor(
         .map { prefs ->
             SeerrPreferences(
                 serverUrl = prefs[Keys.SERVER_URL] ?: "",
-                authMethod = try {
-                    SeerrAuthMethod.valueOf(prefs[Keys.AUTH_METHOD] ?: SeerrAuthMethod.API_KEY.name)
-                } catch (_: Exception) { SeerrAuthMethod.API_KEY },
+                authMethod = prefs[Keys.AUTH_METHOD].toEnumOrNull() ?: SeerrAuthMethod.API_KEY,
                 username = prefs[Keys.USERNAME] ?: "",
                 email = prefs[Keys.EMAIL] ?: "",
                 enabled = prefs[Keys.ENABLED] ?: false,

@@ -6,47 +6,8 @@
 (function () {
   'use strict';
 
-  // ============ THEME SWITCHER ============
-  function initThemeSwitcher() {
-    const btn = document.getElementById('theme-switcher-btn');
-    const menu = document.getElementById('theme-menu');
-    const wrapper = document.querySelector('.theme-switcher-wrapper');
-    const options = document.querySelectorAll('.theme-option');
-    
-    if (!btn || !menu || !wrapper) return;
-    
-    const savedTheme = localStorage.getItem('jellyplay_theme') || 'dark';
-    applyTheme(savedTheme);
-    
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      wrapper.classList.toggle('active');
-    });
-    
-    document.addEventListener('click', (e) => {
-      if (!wrapper.contains(e.target)) {
-        wrapper.classList.remove('active');
-      }
-    });
-    
-    options.forEach(opt => {
-      opt.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const theme = opt.dataset.value;
-        applyTheme(theme);
-        wrapper.classList.remove('active');
-      });
-    });
-    
-    function applyTheme(theme) {
-      document.documentElement.setAttribute('data-theme', theme);
-      localStorage.setItem('jellyplay_theme', theme);
-      
-      options.forEach(opt => {
-        opt.classList.toggle('active', opt.dataset.value === theme);
-      });
-    }
-  }
+  // Theming lives in scripts/themes.js (app design-system port).
+  // This file handles page interactions only.
 
   // ============ SCROLL ANIMATIONS (IntersectionObserver) ============
   function initScrollAnimations() {
@@ -128,113 +89,276 @@
     });
   }
 
-  // ============ SCREENSHOT CAROUSEL ============
-  function initCarousel() {
-    const carousel = document.getElementById('screenshot-carousel');
-    const navContainer = document.getElementById('carousel-nav');
-    if (!carousel || !navContainer) return;
+  // ============ SCROLLSPY (active nav link) ============
+  function initScrollSpy() {
+    const navAnchors = document.querySelectorAll('.nav-links ul a[href^="#"]');
+    if (!navAnchors.length) return;
 
-    const cards = carousel.querySelectorAll('.screenshot-card');
-    const cardCount = cards.length;
-    if (!cardCount) return;
+    const sectionToLink = new Map();
+    navAnchors.forEach((anchor) => {
+      const section = document.querySelector(anchor.getAttribute('href'));
+      if (section) sectionToLink.set(section, anchor);
+    });
+    if (!sectionToLink.size) return;
 
-    let activeIndex = 0;
-    let autoplayTimer = null;
-    const intervalTime = 4000;
-
-    // Create dots
-    navContainer.innerHTML = '';
-    for (let i = 0; i < cardCount; i++) {
-      const dot = document.createElement('button');
-      dot.className = 'carousel-dot' + (i === 0 ? ' active' : '');
-      dot.setAttribute('aria-label', `Go to screenshot ${i + 1}`);
-      dot.addEventListener('click', () => {
-        activeIndex = i;
-        scrollCardIntoView(i);
-        resetAutoplay();
-      });
-      navContainer.appendChild(dot);
-    }
-
-    const dots = navContainer.querySelectorAll('.carousel-dot');
-
-    function scrollCardIntoView(index) {
-      const card = cards[index];
-      const carouselLeft = carousel.getBoundingClientRect().left;
-      const cardLeft = card.getBoundingClientRect().left;
-      const offset = cardLeft - carouselLeft + carousel.scrollLeft;
-      const centerOffset = offset - (carousel.clientWidth / 2) + (card.clientWidth / 2);
-      
-      carousel.scrollTo({
-        left: centerOffset,
-        behavior: 'smooth'
-      });
-    }
-
-    function startAutoplay() {
-      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-      if (!autoplayTimer) {
-        autoplayTimer = setInterval(() => {
-          activeIndex = (activeIndex + 1) % cardCount;
-          scrollCardIntoView(activeIndex);
-        }, intervalTime);
-      }
-    }
-
-    function stopAutoplay() {
-      if (autoplayTimer) {
-        clearInterval(autoplayTimer);
-        autoplayTimer = null;
-      }
-    }
-
-    function resetAutoplay() {
-      stopAutoplay();
-      startAutoplay();
-    }
-
-    // Update active dot on scroll
-    const carouselObserver = new IntersectionObserver(
+    const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
           if (entry.isIntersecting) {
-            const index = Array.from(cards).indexOf(entry.target);
-            activeIndex = index;
-            dots.forEach((d, i) => {
-              d.classList.toggle('active', i === index);
-            });
+            navAnchors.forEach((a) => a.classList.remove('active'));
+            const link = sectionToLink.get(entry.target);
+            if (link) link.classList.add('active');
           }
         });
       },
-      {
-        root: carousel,
-        threshold: 0.6,
-      }
+      { rootMargin: '-40% 0px -55% 0px' }
     );
 
-    cards.forEach((card) => carouselObserver.observe(card));
+    sectionToLink.forEach((_, section) => observer.observe(section));
+  }
 
-    // Pause autoplay on hover or touch
-    carousel.addEventListener('mouseenter', stopAutoplay);
-    carousel.addEventListener('mouseleave', startAutoplay);
-    carousel.addEventListener('touchstart', stopAutoplay, { passive: true });
-    carousel.addEventListener('touchend', startAutoplay, { passive: true });
+  // ============ BACK TO TOP ============
+  function initBackToTop() {
+    const btn = document.getElementById('back-to-top');
+    if (!btn) return;
 
-    // Keyboard support
-    carousel.setAttribute('tabindex', '0');
-    carousel.addEventListener('keydown', (e) => {
-      const scrollAmount = 320;
+    let ticking = false;
+    window.addEventListener('scroll', () => {
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          btn.classList.toggle('visible', window.scrollY > 600);
+          ticking = false;
+        });
+        ticking = true;
+      }
+    }, { passive: true });
+
+    btn.addEventListener('click', () => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  }
+
+  // ============ SCREENSHOT SHOWCASE (stage + filmstrip) ============
+  function initShowcase() {
+    const stage = document.getElementById('showcase-stage');
+    const frame = document.getElementById('showcase-frame');
+    const image = document.getElementById('showcase-image');
+    const imageNext = document.getElementById('showcase-image-next');
+    const titleEl = document.getElementById('showcase-title');
+    const descEl = document.getElementById('showcase-desc');
+    const counterEl = document.getElementById('showcase-counter');
+    const strip = document.getElementById('showcase-filmstrip');
+    const prevBtn = document.getElementById('showcase-prev');
+    const nextBtn = document.getElementById('showcase-next');
+    const autoplayBtn = document.getElementById('showcase-autoplay');
+    const autoplayIcon = document.getElementById('showcase-autoplay-icon');
+    if (!stage || !frame || !image || !imageNext || !strip) return;
+
+    const thumbs = Array.from(strip.querySelectorAll('.showcase-thumb'));
+    const total = thumbs.length;
+    if (!total) return;
+
+    // Read each thumb's data attributes once — render/showScreenshot/morphTo
+    // all share this Shot list instead of re-reading dataset per call site.
+    const shots = thumbs.map((thumb) => ({
+      full: thumb.dataset.full,
+      alt: thumb.dataset.alt || thumb.dataset.title || '',
+      title: thumb.dataset.title || '',
+      desc: thumb.dataset.desc || '',
+      landscape: thumb.dataset.landscape === 'true',
+    }));
+
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    let index = 0;
+    let playing = !reduceMotion;
+    let timer = null;
+    let fadeTimer = null;
+    let promoteTimer = null;
+    let transitionId = 0;
+    const intervalTime = 4000;
+
+    const twoDigits = (n) => String(n).padStart(2, '0');
+
+    // Shared preload-then-commit behind swapImage/morphTo: resolves on load,
+    // on error, or on a timeout fallback so a hung image never stalls.
+    function preloadImage(src, commit, timeoutMs) {
+      const pre = new Image();
+      pre.onload = commit;
+      pre.onerror = commit;
+      pre.src = src;
+      clearTimeout(fadeTimer);
+      fadeTimer = setTimeout(commit, timeoutMs);
+    }
+
+    function render(i) {
+      const shot = shots[i];
+      titleEl.textContent = shot.title;
+      descEl.textContent = shot.desc;
+      counterEl.textContent = `${twoDigits(i + 1)} / ${twoDigits(total)}`;
+      thumbs.forEach((t, j) => {
+        const active = j === i;
+        t.classList.toggle('active', active);
+        t.setAttribute('aria-current', active ? 'true' : 'false');
+      });
+      const activeThumb = thumbs[i];
+      if (activeThumb) {
+        ensureThumbVisible(activeThumb);
+      }
+    }
+
+    // Scroll the filmstrip itself only — never the page. scrollIntoView()
+    // would also scroll every scrollable ancestor, yanking the viewport
+    // (and the user's perceived focus) back to the gallery on each tick.
+    function ensureThumbVisible(thumb) {
+      const stripRect = strip.getBoundingClientRect();
+      const thumbRect = thumb.getBoundingClientRect();
+      if (thumbRect.left < stripRect.left) {
+        strip.scrollBy({ left: thumbRect.left - stripRect.left - 8, behavior: 'smooth' });
+      } else if (thumbRect.right > stripRect.right) {
+        strip.scrollBy({ left: thumbRect.right - stripRect.right + 8, behavior: 'smooth' });
+      }
+    }
+
+    function swapImage(src, alt) {
+      if (image.getAttribute('src') === src && imageNext.getAttribute('src') !== src) {
+        image.alt = alt;
+        return;
+      }
+      if (imageNext.getAttribute('src') === src) return;
+      // Preload, then dissolve the incoming shot in over the outgoing one.
+      // A generation counter supersedes stale loads when the user flips
+      // through shots faster than images arrive.
+      const id = ++transitionId;
+      const commit = () => {
+        if (id !== transitionId) return;
+        clearTimeout(fadeTimer);
+        imageNext.classList.remove('visible');
+        void imageNext.offsetWidth;
+        imageNext.src = src;
+        imageNext.alt = alt;
+        imageNext.classList.add('visible');
+        clearTimeout(promoteTimer);
+        promoteTimer = setTimeout(() => {
+          if (id !== transitionId) return;
+          image.src = src;
+          image.alt = alt;
+          imageNext.classList.remove('visible');
+          imageNext.removeAttribute('src');
+        }, 600);
+      };
+      preloadImage(src, commit, 1200);
+    }
+
+    function showScreenshot(i) {
+      index = (i + total) % total;
+      const shot = shots[index];
+      render(index);
+      // Same aspect: layered cross-dissolve. Aspect change: dip-to-black
+      // morph — crossfading across aspects would stretch/crop mid-flight.
+      if (frame.classList.contains('is-landscape') !== shot.landscape) {
+        morphTo(shot);
+      } else {
+        swapImage(shot.full, shot.alt);
+      }
+    }
+
+    // Fade the frame out, swap size + image while invisible, fade back in.
+    function morphTo(shot) {
+      const id = ++transitionId;
+      const src = shot.full;
+      const alt = shot.alt;
+      const landscape = shot.landscape;
+      clearTimeout(promoteTimer);
+      frame.classList.add('is-switching');
+      let settled = false;
+      const commit = () => {
+        if (settled || id !== transitionId) return;
+        settled = true;
+        clearTimeout(fadeTimer);
+        frame.classList.toggle('is-landscape', landscape);
+        image.src = src;
+        image.alt = alt;
+        imageNext.classList.remove('visible');
+        imageNext.removeAttribute('src');
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          if (id !== transitionId) return;
+          frame.classList.remove('is-switching');
+        }));
+      };
+      // Worst case: never trap the gallery invisible on a hung image.
+      preloadImage(src, commit, 600);
+    }
+
+    function startAutoplay() {
+      if (reduceMotion || timer) return;
+      timer = setInterval(() => showScreenshot(index + 1), intervalTime);
+    }
+
+    function stopAutoplay() {
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+      }
+    }
+
+    function setPlaying(next) {
+      playing = next;
+      updateTimer();
+      if (autoplayIcon) autoplayIcon.textContent = playing ? 'pause' : 'play_arrow';
+      if (autoplayBtn) {
+        autoplayBtn.setAttribute('aria-pressed', playing ? 'true' : 'false');
+        autoplayBtn.setAttribute('aria-label', playing ? 'Pause slideshow' : 'Play slideshow');
+      }
+    }
+
+    // The timer runs only while the gallery is on screen and the user is
+    // not interacting with it — background ticks must never steal scroll.
+    let isHovering = false;
+    let isVisible = true;
+
+    function updateTimer() {
+      stopAutoplay();
+      if (playing && isVisible && !isHovering) startAutoplay();
+    }
+
+    // Pause while the user is interacting; resume after.
+    stage.addEventListener('mouseenter', () => { isHovering = true; updateTimer(); });
+    stage.addEventListener('mouseleave', () => { isHovering = false; updateTimer(); });
+    stage.addEventListener('focusin', () => { isHovering = true; updateTimer(); });
+    stage.addEventListener('focusout', () => { isHovering = false; updateTimer(); });
+    stage.addEventListener('touchstart', () => { isHovering = true; updateTimer(); }, { passive: true });
+    stage.addEventListener('touchend', () => { isHovering = false; updateTimer(); }, { passive: true });
+
+    if ('IntersectionObserver' in window) {
+      new IntersectionObserver(
+        (entries) => {
+          isVisible = entries.some((e) => e.isIntersecting);
+          updateTimer();
+        },
+        { threshold: 0.15 }
+      ).observe(stage);
+    }
+
+    if (prevBtn) prevBtn.addEventListener('click', () => showScreenshot(index - 1));
+    if (nextBtn) nextBtn.addEventListener('click', () => showScreenshot(index + 1));
+    if (autoplayBtn) autoplayBtn.addEventListener('click', () => setPlaying(!playing));
+
+    thumbs.forEach((thumb, i) => {
+      thumb.addEventListener('click', () => showScreenshot(i));
+    });
+
+    stage.addEventListener('keydown', (e) => {
       if (e.key === 'ArrowRight') {
-        carousel.scrollBy({ left: scrollAmount, behavior: 'smooth' });
-        resetAutoplay();
+        e.preventDefault();
+        showScreenshot(index + 1);
       } else if (e.key === 'ArrowLeft') {
-        carousel.scrollBy({ left: -scrollAmount, behavior: 'smooth' });
-        resetAutoplay();
+        e.preventDefault();
+        showScreenshot(index - 1);
       }
     });
 
-    // Start autoplay
-    startAutoplay();
+    render(0);
+    setPlaying(playing);
   }
 
   // ============ FAQ ACCORDIONS ============
@@ -331,6 +455,8 @@
     const modalVersionEl = document.getElementById('modal-release-version');
     const phoneList = document.getElementById('phone-download-list');
     const tvList = document.getElementById('tv-download-list');
+    const desktopList = document.getElementById('desktop-download-list');
+    const heroDownloadLeft = document.getElementById('hero-download-btn-left');
     
     // Dropdown selectors
     const dropdownList = document.getElementById('dropdown-list');
@@ -419,11 +545,19 @@
     // Populate fallback downloads list initially so clicking triggers actual files instantly
     const fallbackData = getFallbackData();
     populateDownloads(fallbackData);
+    if (desktopList) {
+      desktopList.innerHTML = `<p style="color: var(--jp-white-alpha-40); text-align: center; font-size: 0.8125rem; padding: 12px 0;">Checking preview builds… <a href="https://github.com/raulshma/JellyPlay/releases" target="_blank" rel="noopener noreferrer" class="inline-link">Browse releases</a></p>`;
+    }
 
     // --- 3. Fetch Release Data asynchronously in background ---
+    // Stable lane (/releases/latest) carries the Android APKs; the desktop
+    // MSI/DEB/DMG installers ship on the KMP alpha pre-release channel, so
+    // scan the recent releases (including pre-releases) for desktop assets.
     const cacheKey = 'jellyplay_latest_release';
+    const desktopCacheKey = 'jellyplay_latest_desktop';
     const cacheDuration = 3600000; // 1 hour
     let releaseData = null;
+    let desktopData = null;
 
     try {
       const cached = sessionStorage.getItem(cacheKey);
@@ -444,6 +578,7 @@
           const data = await response.json();
           releaseData = {
             tag: data.tag_name,
+            url: data.html_url,
             assets: data.assets.map(a => ({
               name: a.name,
               url: a.browser_download_url,
@@ -467,10 +602,65 @@
       populateDownloads(releaseData);
     }
 
+    // Desktop preview installers (alpha pre-release channel) — best effort.
+    try {
+      const cachedDesktop = sessionStorage.getItem(desktopCacheKey);
+      if (cachedDesktop) {
+        const parsed = JSON.parse(cachedDesktop);
+        if (Date.now() - parsed.timestamp < cacheDuration) {
+          desktopData = parsed.data;
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to read desktop release cache', e);
+    }
+
+    if (!desktopData) {
+      try {
+        const response = await fetch('https://api.github.com/repos/raulshma/JellyPlay/releases?per_page=10');
+        if (response.ok) {
+          const releases = await response.json();
+          for (const rel of releases) {
+            const desktopAssets = (rel.assets || []).filter(a =>
+              /\.(msi|exe|deb|rpm|dmg|zip)$/i.test(a.name) && /desktop/i.test(a.name)
+            );
+            if (desktopAssets.length) {
+              desktopData = {
+                tag: rel.tag_name,
+                url: rel.html_url,
+                assets: desktopAssets.map(a => ({
+                  name: a.name,
+                  url: a.browser_download_url,
+                  size: a.size
+                }))
+              };
+              try {
+                sessionStorage.setItem(desktopCacheKey, JSON.stringify({
+                  data: desktopData,
+                  timestamp: Date.now()
+                }));
+              } catch (e) {}
+              break;
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Failed to fetch desktop release from GitHub API', e);
+      }
+    }
+
+    if (desktopData) {
+      populateDesktopDownloads(desktopData);
+    } else if (desktopList) {
+      desktopList.innerHTML = `<p style="color: var(--jp-white-alpha-40); text-align: center; font-size: 0.8125rem; padding: 12px 0;">No preview builds published yet — <a href="https://github.com/raulshma/JellyPlay/releases" target="_blank" rel="noopener noreferrer" class="inline-link">browse releases</a></p>`;
+    }
+
     function populateDownloads(data) {
       navVersionEl.textContent = data.tag;
       modalVersionEl.textContent = data.tag;
       navBadge.style.display = 'inline-flex';
+      if (data.url) navBadge.setAttribute('href', data.url);
+      syncSoftwareVersion(data.tag);
 
       phoneList.innerHTML = '';
       tvList.innerHTML = '';
@@ -479,6 +669,7 @@
       let phoneCount = 0;
       let tvCount = 0;
       let dropdownCount = 0;
+      let recommendedUrl = null;
 
       data.assets.forEach(asset => {
         if (asset.name.endsWith('.apk')) {
@@ -486,6 +677,9 @@
           if (asset.name.includes('-phone-')) {
             phoneList.insertAdjacentHTML('beforeend', modalHtml);
             phoneCount++;
+            if (!recommendedUrl && asset.name.includes('universal')) {
+              recommendedUrl = asset.url;
+            }
           } else if (asset.name.includes('-tv-')) {
             tvList.insertAdjacentHTML('beforeend', modalHtml);
             tvCount++;
@@ -499,6 +693,14 @@
         }
       });
 
+      if (!recommendedUrl) {
+        const firstApk = data.assets.find(a => a.name.endsWith('.apk'));
+        if (firstApk) recommendedUrl = firstApk.url;
+      }
+      if (recommendedUrl && heroDownloadLeft) {
+        heroDownloadLeft.setAttribute('href', recommendedUrl);
+      }
+
       if (phoneCount === 0) {
         phoneList.innerHTML = `<p style="color: var(--jp-white-alpha-40); text-align: center; font-size: 0.8125rem; padding: 12px 0;">No phone APKs found.</p>`;
       }
@@ -507,6 +709,35 @@
       }
       if (dropdownCount === 0 && dropdownList) {
         dropdownList.innerHTML = `<p style="color: var(--jp-white-alpha-40); text-align: center; font-size: 0.8125rem; padding: 12px 0;">No downloads found.</p>`;
+      }
+    }
+
+    function populateDesktopDownloads(data) {
+      if (!desktopList) return;
+      desktopList.innerHTML = '';
+
+      let count = 0;
+      data.assets.forEach(asset => {
+        desktopList.insertAdjacentHTML('beforeend', createDesktopItemHTML(asset, data));
+        count++;
+      });
+
+      if (count === 0) {
+        desktopList.innerHTML = `<p style="color: var(--jp-white-alpha-40); text-align: center; font-size: 0.8125rem; padding: 12px 0;">No desktop builds in this release.</p>`;
+      }
+    }
+
+    // Keep the SoftwareApplication structured data on the fetched version so
+    // search results never go stale between site edits.
+    function syncSoftwareVersion(tag) {
+      try {
+        const el = document.getElementById('ld-software');
+        if (!el) return;
+        const json = JSON.parse(el.textContent);
+        json.softwareVersion = String(tag).replace(/^v/, '');
+        el.textContent = JSON.stringify(json);
+      } catch (e) {
+        console.warn('Failed to sync structured-data version', e);
       }
     }
   }
@@ -584,8 +815,42 @@
     `;
   }
 
+  function createDesktopItemHTML(asset, release) {
+    let platformLabel = 'Desktop';
+    let platformDesc = asset.name;
+    const lower = asset.name.toLowerCase();
+    if (lower.includes('windows')) {
+      platformLabel = 'Windows';
+      platformDesc = lower.includes('.msi') ? 'Installer (MSI, x64)' : 'Windows build';
+    } else if (lower.includes('linux')) {
+      platformLabel = 'Linux';
+      platformDesc = lower.includes('.deb') ? 'Debian package' : lower.includes('.rpm') ? 'RPM package' : 'Linux build';
+    } else if (lower.includes('macos') || lower.endsWith('.dmg')) {
+      platformLabel = 'macOS';
+      platformDesc = 'Disk image (untested)';
+    }
+
+    const sizeStr = asset.size ? ` • ${formatBytes(asset.size)}` : '';
+    const versionNote = release && release.tag ? ` • ${release.tag}` : '';
+
+    return `
+      <div class="download-item">
+        <div class="download-item-info">
+          <div class="download-item-name">
+            ${platformLabel}
+            <span class="download-item-name-rec">Preview</span>
+          </div>
+          <div class="download-item-meta">${platformDesc}${sizeStr}${versionNote}</div>
+        </div>
+        <a href="${asset.url}" class="download-item-btn" aria-label="Download ${platformLabel} preview build" download>
+          <span class="material-symbols-outlined">download</span>
+        </a>
+      </div>
+    `;
+  }
+
   function getFallbackData() {
-    const fallbackVersion = 'v0.5.8';
+    const fallbackVersion = 'v0.10.7';
     const architectures = ['universal', 'arm64-v8a', 'x86_64'];
     const types = ['phone', 'tv'];
     const assets = [];
@@ -603,6 +868,7 @@
     
     return {
       tag: fallbackVersion,
+      url: `https://github.com/raulshma/JellyPlay/releases/tag/${fallbackVersion}`,
       assets: assets
     };
   }
@@ -906,13 +1172,60 @@
     }
   }
 
+  // ============ THEME SHOWCASE (live style preview) ============
+  function initThemeShowcase() {
+    const row = document.getElementById('theme-showcase-row');
+    const note = document.getElementById('theme-showcase-note');
+    if (!row || !window.JellyPlayThemes) return;
+
+    const chips = Array.from(row.querySelectorAll('[data-theme-variant]'));
+    if (!chips.length) return;
+
+    const labelFor = (id) => {
+      const chip = chips.find((c) => c.dataset.themeVariant === id);
+      return chip ? chip.textContent.trim() : id;
+    };
+
+    function syncActive() {
+      const current = window.JellyPlayThemes.getCurrentVariant
+        ? window.JellyPlayThemes.getCurrentVariant()
+        : document.documentElement.getAttribute('data-variant');
+      chips.forEach((c) => {
+        const active = c.dataset.themeVariant === current;
+        c.classList.toggle('active', active);
+        c.setAttribute('aria-pressed', active ? 'true' : 'false');
+      });
+      if (note && current) {
+        note.innerHTML = `You are previewing <strong></strong> — your choice is saved on this device only.`;
+        note.querySelector('strong').textContent = labelFor(current);
+      }
+    }
+
+    chips.forEach((chip) => {
+      chip.addEventListener('click', () => {
+        window.JellyPlayThemes.setVariant(chip.dataset.themeVariant);
+        syncActive();
+      });
+    });
+
+    // Stay in sync when the nav palette panel changes the style.
+    const observer = new MutationObserver(syncActive);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-variant'] });
+    syncActive();
+  }
+
+  // ============ FOOTER YEAR ============
+  function initFooterYear() {
+    const el = document.getElementById('footer-year');
+    if (el) el.textContent = String(new Date().getFullYear());
+  }
+
   // ============ INITIALIZE ============
   function init() {
-    initThemeSwitcher();
     initScrollAnimations();
     initMobileNav();
     initNavScrollEffect();
-    initCarousel();
+    initShowcase();
     initFAQs();
     initSmoothScroll();
     initHeroParallax();
@@ -924,6 +1237,10 @@
     initTVSimulator();
     initSyncPlaySimulator();
     initMinorWidgets();
+    initScrollSpy();
+    initBackToTop();
+    initThemeShowcase();
+    initFooterYear();
   }
 
   if (document.readyState === 'loading') {

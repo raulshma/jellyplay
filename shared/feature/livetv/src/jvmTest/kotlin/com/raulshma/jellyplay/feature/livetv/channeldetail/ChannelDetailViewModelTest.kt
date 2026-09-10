@@ -1,7 +1,8 @@
 package com.raulshma.jellyplay.feature.livetv.channeldetail
 
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
+import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
 import io.mockk.coEvery
@@ -16,6 +17,11 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.flow.first
+import java.time.Instant
+import java.time.LocalDate
+import java.time.OffsetDateTime
+import java.time.ZoneId
+import java.time.ZoneOffset
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -31,21 +37,32 @@ class ChannelDetailViewModelTest {
     // has no access to that module (search/music conveyor port pattern).
     private val mainDispatcher = StandardTestDispatcher()
 
-    private lateinit var mediaRepository: MediaRepository
+    private lateinit var mediaRepository: LiveTvRepository
     private lateinit var imageUrlProvider: ImageUrlProvider
     private lateinit var viewModel: ChannelDetailViewModel
+
+    /**
+     * The fake clock behind the VM's program-window math (request bounds,
+     * ended-filter, airing verdicts) — every fixture below is EXACT against
+     * it, no real-time tolerance. 2026-07-01T12:00:00Z.
+     */
+    private val fakeTimeSource = FakeTimeSource(1_782_907_200_000L)
+
+    /** The VM's view of the fake clock, as the UTC OffsetDateTime fixtures are built from. */
+    private val fakeNow: OffsetDateTime get() =
+        Instant.ofEpochMilli(fakeTimeSource.nowMs).atOffset(ZoneOffset.UTC)
 
     @BeforeTest
     fun setUp() {
         Dispatchers.setMain(mainDispatcher)
         mediaRepository = mockk(relaxed = true)
         imageUrlProvider = mockk(relaxed = true)
-        // getImageUrl is a non-suspend fun → stub with `every`, not `coEvery`.
-        every { imageUrlProvider.getImageUrl(any(), any()) } returns "https://img/channel"
-        every { imageUrlProvider.getImageUrl("prog-1", any()) } returns "https://img/prog"
+        // Non-suspend folds → stub with `every`, not `coEvery`.
+        every { imageUrlProvider.getImageUrlOrNull(any(), any()) } returns "https://img/channel"
+        every { imageUrlProvider.getImageUrlOrNull("prog-1", any()) } returns "https://img/prog"
         coEvery { mediaRepository.getLiveTvChannels(any(), any(), any(), any(), any()) } returns Result.success(emptyList())
         coEvery { mediaRepository.getLiveTvPrograms(any(), any(), any()) } returns Result.success(emptyList())
-        viewModel = ChannelDetailViewModel(mediaRepository, imageUrlProvider)
+        viewModel = ChannelDetailViewModel(mediaRepository, imageUrlProvider, fakeTimeSource)
     }
 
     @AfterTest
@@ -60,7 +77,7 @@ class ChannelDetailViewModelTest {
                 LiveTvChannel(id = "chan-1", name = "BBC One", number = "101", imageTag = "tag-1")
             )
         )
-        val now = java.time.OffsetDateTime.now()
+        val now = fakeNow
         val airing = program(
             id = "p-now", name = "Evening News",
             start = now.minusMinutes(10), end = now.plusMinutes(20),
@@ -88,7 +105,7 @@ class ChannelDetailViewModelTest {
 
     @Test
     fun ended_programs_are_dropped_from_the_timeline() = runTest(mainDispatcher) {
-        val now = java.time.OffsetDateTime.now()
+        val now = fakeNow
         val ended = program(id = "p-old", name = "Gone", start = now.minusHours(2), end = now.minusHours(1))
         val airing = program(id = "p-now", name = "Live", start = now.minusMinutes(5), end = now.plusMinutes(25))
         coEvery { mediaRepository.getLiveTvPrograms(any(), any(), any()) } returns Result.success(listOf(ended, airing))
@@ -107,6 +124,46 @@ class ChannelDetailViewModelTest {
             program(id = "prog-1", name = "X", imageTag = "ptag").copy(imageUrl = null)
         )
         assertEquals("https://img/prog", url)
+    }
+
+    // ── Offset-less timestamps (the C10 declared fix) ────────────────────────
+    // The timeline filter/airing check used to strict-parse (`Instant.parse`),
+    // which returns null for offset-less strings — an ended program with an
+    // offset-less endDate stayed in the list. The shared lenient ladder
+    // (LiveTvTimeFormat) now reads its UTC instant, so the filter, the airing
+    // check and the hero agree.
+
+    @Test
+    fun ended_program_with_offset_less_dates_is_dropped_from_the_timeline() = runTest(mainDispatcher) {
+        val now = Instant.ofEpochMilli(fakeTimeSource.nowMs)
+        val ended = LiveTvProgram(
+            id = "p-old", name = "Gone", channelId = "chan-1",
+            startDate = utcWallClock(now.minusSeconds(2 * 3600)),
+            endDate = utcWallClock(now.minusSeconds(3600)),
+        )
+        coEvery { mediaRepository.getLiveTvPrograms(any(), any(), any()) } returns Result.success(listOf(ended))
+
+        viewModel.loadChannel("chan-1", "Ch")
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.programs.isEmpty())
+    }
+
+    @Test
+    fun airing_program_with_offset_less_dates_resolves_as_current_program() = runTest(mainDispatcher) {
+        val now = Instant.ofEpochMilli(fakeTimeSource.nowMs)
+        val airing = LiveTvProgram(
+            id = "p-now", name = "Live", channelId = "chan-1",
+            startDate = utcWallClock(now.minusSeconds(300)),
+            endDate = utcWallClock(now.plusSeconds(1500)),
+        )
+        coEvery { mediaRepository.getLiveTvPrograms(any(), any(), any()) } returns Result.success(listOf(airing))
+
+        viewModel.loadChannel("chan-1", "Ch")
+        advanceUntilIdle()
+
+        assertEquals(1, viewModel.uiState.value.programs.size)
+        assertEquals("p-now", viewModel.uiState.value.currentProgram?.id)
     }
 
     @Test
@@ -160,7 +217,7 @@ class ChannelDetailViewModelTest {
         coEvery { mediaRepository.getLiveTvChannels(any(), any(), any(), any(), any()) } returns Result.success(
             listOf(LiveTvChannel(id = "other", name = "Other", imageTag = "tag"))
         )
-        val now = java.time.OffsetDateTime.now()
+        val now = fakeNow
         val airing = program(id = "p-now", name = "Live", start = now.minusMinutes(5), end = now.plusMinutes(25))
         coEvery { mediaRepository.getLiveTvPrograms("chan-1", any(), any()) } returns Result.success(listOf(airing))
 
@@ -290,7 +347,7 @@ class ChannelDetailViewModelTest {
     @Test
     fun successful_record_refresh_keeps_the_hero_on_the_same_program_id() = runTest(mainDispatcher) {
         // Initial load resolves the airing hero from the programs list…
-        val now = java.time.OffsetDateTime.now()
+        val now = fakeNow
         val airing = program(
             id = "p-now", name = "Live",
             start = now.minusMinutes(5), end = now.plusMinutes(25),
@@ -337,6 +394,10 @@ class ChannelDetailViewModelTest {
             listOf(LiveTvChannel(id = "chan-1", name = "No Logo", number = "7", imageTag = null)),
         )
         coEvery { mediaRepository.getLiveTvPrograms(any(), any(), any()) } returns Result.success(emptyList())
+        // The null-tag → "" fold is the interface default's policy (pinned in
+        // ImageUrlProviderImplTest); the mock intercepts the default, so
+        // mirror it for the provider seam this test drives.
+        every { imageUrlProvider.getImageUrlOrNull("chan-1", null) } returns ""
 
         viewModel.loadChannel("chan-1", "No Logo")
         advanceUntilIdle()
@@ -347,8 +408,8 @@ class ChannelDetailViewModelTest {
     private fun program(
         id: String,
         name: String,
-        start: java.time.OffsetDateTime = java.time.OffsetDateTime.now(),
-        end: java.time.OffsetDateTime = java.time.OffsetDateTime.now().plusMinutes(30),
+        start: OffsetDateTime = fakeNow,
+        end: OffsetDateTime = fakeNow.plusMinutes(30),
         imageTag: String? = "default-tag",
         timerId: String? = null,
         seriesTimerId: String? = null,
@@ -362,4 +423,21 @@ class ChannelDetailViewModelTest {
         timerId = timerId,
         seriesTimerId = seriesTimerId,
     )
+
+    /** Offset-less ISO string whose lenient (UTC) reading equals [instant]. */
+    private fun utcWallClock(instant: Instant): String =
+        java.time.LocalDateTime.ofInstant(instant, ZoneOffset.UTC).toString()
+
+    /**
+     * Controllable [TimeSource] on a fixed epoch (the HomeRefresher fake
+     * idiom) — the request window, ended-filter and airing verdicts are all
+     * EXACT against it. Fixed at 2026-07-01T12:00:00Z (mid-day UTC in every
+     * real zone, so the end-of-local-midnight request bound never lands on
+     * the fake "now").
+     */
+    private class FakeTimeSource(var nowMs: Long) : TimeSource {
+        override fun nowEpochMillis(): Long = nowMs
+        override fun nowElapsedRealtimeMillis(): Long = nowMs
+        override fun today(zone: ZoneId): LocalDate = LocalDate.of(2026, 1, 1)
+    }
 }

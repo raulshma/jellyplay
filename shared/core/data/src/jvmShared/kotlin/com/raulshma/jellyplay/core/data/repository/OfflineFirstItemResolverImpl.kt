@@ -5,7 +5,7 @@ import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.OfflineMode
 import com.raulshma.jellyplay.core.model.toMediaItem
 
-// Phase X MediaRepository cluster flip: moved verbatim from the legacy
+//  MediaRepository cluster flip: moved verbatim from the legacy
 // :core:data shim (same package/name); `@Singleton` / `@Inject` stripped
 // (one framework per type — Koin's dataJvmModule constructs this single; the
 // legacy DataModule bridges the remaining Hilt injectors via koin().get()).

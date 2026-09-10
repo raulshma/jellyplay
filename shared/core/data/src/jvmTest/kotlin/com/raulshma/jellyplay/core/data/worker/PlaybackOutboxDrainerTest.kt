@@ -1,0 +1,576 @@
+package com.raulshma.jellyplay.core.data.worker
+
+import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
+import com.raulshma.jellyplay.core.data.repository.OfflineRepository
+import com.raulshma.jellyplay.core.data.repository.PlayedStateSync
+import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEventType
+import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxRepository
+import com.raulshma.jellyplay.core.data.repository.MediaCacheInvalidator
+import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import io.mockk.coEvery
+import io.mockk.coVerify
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.verify
+import kotlinx.coroutines.test.runTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
+import kotlin.test.BeforeTest
+
+/**
+ * Tests [PlaybackOutboxDrainerImpl] — the offline outbox drain + reconciliation
+ * (ported case-for-case from the legacy `PlaybackSyncWorkerTest`, which moved
+ * here with the drain body; `attempt` is now a plain parameter, no
+ * Robolectric/WorkManager rig). Assertions cover drain order, delete-on-success,
+ * retry/failure policy, reconciliation branches, and the post-drain
+ * `enqueueNow` trigger; the WorkManager result mapping and the notification
+ * plumbing stay covered by the Android-side worker suites, and the
+ * Notifier protocol itself is pinned in [PlaybackOutboxDrainerResilienceTest].
+ *
+ * The entry-type → API-call mapping itself is exercised in
+ * `PlaybackRepositoryImplTest` (the repository owns it); these tests stub
+ * [PlaybackRepository.replayOutboxEntry] and assert the drain-loop behaviour.
+ */
+class PlaybackOutboxDrainerTest {
+
+    private val outbox: PlaybackOutboxRepository = mockk(relaxed = true)
+    private val playbackRepository: PlaybackRepository = mockk(relaxed = true)
+    private val offlineModeManager: OfflineModeManager = mockk()
+    private val playedStateSync: PlayedStateSync = mockk(relaxed = true)
+    private val offlineRepository: OfflineRepository = mockk(relaxed = true)
+    private val userDataSyncTrigger: PlaybackOutboxDrainer.UserDataSyncTrigger = mockk(relaxed = true)
+    private val mediaRepository: MediaRepository = mockk(relaxed = true)
+    private val cacheInvalidator: MediaCacheInvalidator = mockk(relaxed = true)
+
+    @BeforeTest
+    fun setup() {
+        // Defaults mirroring the legacy worker-suite setup; tests override per
+        // entry/item to model failure.
+        every { offlineModeManager.isOffline } returns false
+        coEvery { playbackRepository.replayOutboxEntry(any()) } returns true
+        coEvery { outbox.drain() } returns emptyList()
+        coEvery { offlineRepository.getDownloadedItemIds() } returns emptyList()
+        // Derived watched flips route through the repository (cache
+        // invalidation included); relaxed mocks cannot synthesize Result.
+        coEvery { mediaRepository.markPlayed(any()) } returns Result.success(Unit)
+        // Relaxed mocks cannot pick a sealed-interface answer; default to the
+        // benign outcome (tests override where the branch matters).
+        coEvery { playedStateSync.reconcileOfflineRow(any()) } returns PlayedStateSync.ReconcileOutcome.NoChange
+        // Delivery probe default: flips land.
+        coEvery { outbox.isPlayedStateIntentDelivered(any(), any()) } returns true
+    }
+
+    private fun drainer(): PlaybackOutboxDrainer =
+        PlaybackOutboxDrainerImpl(
+            outbox = outbox,
+            playbackRepository = playbackRepository,
+            offlineModeManager = offlineModeManager,
+            playedStateSync = playedStateSync,
+            offlineRepository = offlineRepository,
+            mediaRepository = mediaRepository,
+            cacheInvalidator = cacheInvalidator,
+            userDataSyncTrigger = userDataSyncTrigger,
+        )
+
+    private suspend fun drain(attempt: Int = 0): PlaybackOutboxDrainer.DrainResult = drainer().drainOnce(attempt)
+
+    // ── Empty / offline gating ────────────────────────────────────────
+
+    @Test
+    fun `empty outbox succeeds without replaying`() = runTest {
+        val result = drain()
+
+        assertFalse(result.retriesPending)
+        assertEquals(0, result.pendingCount)
+        coVerify(exactly = 0) { playbackRepository.replayOutboxEntry(any()) }
+        verify(exactly = 0) { userDataSyncTrigger.enqueueNow() }
+    }
+
+    @Test
+    fun `offline completes without draining so manual reconnect can trigger immediately`() = runTest {
+        every { offlineModeManager.isOffline } returns true
+        coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.PROGRESS))
+
+        val result = drain()
+
+        assertFalse(result.retriesPending)
+        coVerify(exactly = 0) { outbox.drain() }
+        coVerify(exactly = 0) { playbackRepository.replayOutboxEntry(any()) }
+    }
+
+    // ── Downloaded-item reconcile (Gap A: empty outbox still reconciles) ──
+
+    @Test
+    fun `downloaded items are reconciled even with an empty outbox`() = runTest {
+        coEvery { offlineRepository.getDownloadedItemIds() } returns listOf("d1", "d2")
+        coEvery { playedStateSync.reconcileOfflineRow(any()) } returns
+            PlayedStateSync.ReconcileOutcome.Changed(PlayedStateSync.ComputeResult.PLAYED)
+
+        val result = drain()
+
+        assertFalse(result.retriesPending)
+        assertTrue(result.reconcileChanged)
+        coVerify(exactly = 1) { playedStateSync.reconcileOfflineRow("d1") }
+        coVerify(exactly = 1) { playedStateSync.reconcileOfflineRow("d2") }
+        // reconcile changed (PLAYED) → refresh online caches.
+        verify(exactly = 1) { userDataSyncTrigger.enqueueNow() }
+    }
+
+    @Test
+    fun `downloaded items reconcile with all NOOP does not trigger userDataSync`() = runTest {
+        coEvery { offlineRepository.getDownloadedItemIds() } returns listOf("d1")
+        coEvery { playedStateSync.reconcileOfflineRow(any()) } returns PlayedStateSync.ReconcileOutcome.NoChange
+
+        val result = drain()
+
+        coVerify(exactly = 1) { playedStateSync.reconcileOfflineRow("d1") }
+        assertFalse(result.reconcileChanged)
+        verify(exactly = 0) { userDataSyncTrigger.enqueueNow() }
+    }
+
+    @Test
+    fun `an adopted reconcile change announces the item id on the user-data flow`() = runTest {
+        coEvery { offlineRepository.getDownloadedItemIds() } returns listOf("d1")
+        coEvery { playedStateSync.reconcileOfflineRow(any()) } returns
+            PlayedStateSync.ReconcileOutcome.Changed(PlayedStateSync.ComputeResult.POSITION_UPDATED)
+
+        drain()
+
+        // Adoption-only drain: no outbox entry landed (reconciledItems is
+        // empty), yet the adopted row's item must still be named so
+        // id-matching consumers (an open detail screen) heal — the previous
+        // announce passed the empty set and was a no-op.
+        verify(exactly = 1) { mediaRepository.notifyUserDataChanged(listOf("d1")) }
+    }
+
+    @Test
+    fun `the reconcile batch is capped at fifty items`() = runTest {
+        // A very large downloaded library must not monopolise the foreground
+        // drain with N serial detail fetches — the excess defers to the
+        // periodic backstop (take(MAX_RECONCILE_BATCH)).
+        coEvery { offlineRepository.getDownloadedItemIds() } returns (1..60).map { "d%02d".format(it) }
+
+        val result = drain()
+
+        assertFalse(result.retriesPending)
+        coVerify(exactly = 50) { playedStateSync.reconcileOfflineRow(any()) }
+        coVerify(exactly = 1) { playedStateSync.reconcileOfflineRow("d50") }
+        coVerify(exactly = 0) { playedStateSync.reconcileOfflineRow("d51") }
+        coVerify(exactly = 0) { playedStateSync.reconcileOfflineRow("d60") }
+    }
+
+    @Test
+    fun `an item both drained and downloaded reconciles exactly once`() = runTest {
+        coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.PROGRESS))
+        coEvery { offlineRepository.getDownloadedItemIds() } returns listOf("item-1", "d2")
+
+        drain()
+
+        coVerify(exactly = 1) { playedStateSync.reconcileOfflineRow("item-1") }
+        coVerify(exactly = 1) { playedStateSync.reconcileOfflineRow("d2") }
+    }
+
+    @Test
+    fun `a getDownloadedItemIds failure degrades to an outbox-only run`() = runTest {
+        // The best-effort lookup: a DB read failure must not abort the drain —
+        // the outbox entries still push and the run converges.
+        coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.PROGRESS))
+        coEvery { offlineRepository.getDownloadedItemIds() } throws RuntimeException("db")
+
+        val result = drain()
+
+        assertFalse(result.retriesPending)
+        coVerify(exactly = 1) { playbackRepository.replayOutboxEntry(any()) }
+        coVerify(exactly = 1) { playedStateSync.reconcileOfflineRow("item-1") }
+    }
+
+    @Test
+    fun `empty outbox and no downloads succeeds without reconcile`() = runTest {
+        val result = drain()
+
+        assertFalse(result.retriesPending)
+        coVerify(exactly = 0) { playedStateSync.reconcileOfflineRow(any()) }
+        verify(exactly = 0) { userDataSyncTrigger.enqueueNow() }
+    }
+
+    // ── Happy path: all entries succeed ───────────────────────────────
+
+    @Test
+    fun `all entries replay and are deleted on success`() = runTest {
+        val entries = listOf(
+            entry("e1", "item-1", PlaybackOutboxEventType.START),
+            entry("e2", "item-1", PlaybackOutboxEventType.PROGRESS),
+            entry("e3", "item-1", PlaybackOutboxEventType.STOP),
+        )
+        coEvery { outbox.drain() } returns entries
+
+        val result = drain()
+
+        assertFalse(result.retriesPending)
+        assertEquals(listOf("item-1"), result.reconciledItemIds)
+        coVerify(exactly = 3) { playbackRepository.replayOutboxEntry(any()) }
+        coVerify(exactly = 3) { outbox.delete(any()) }
+        verify(exactly = 1) { userDataSyncTrigger.enqueueNow() }
+    }
+
+    @Test
+    fun `successful drain triggers userDataSync enqueueNow exactly once`() = runTest {
+        coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.PROGRESS))
+
+        drain()
+
+        verify(exactly = 1) { userDataSyncTrigger.enqueueNow() }
+    }
+
+    @Test
+    fun `PLAYED entry is replayed and deleted on success`() = runTest {
+        coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.PLAYED))
+
+        val result = drain()
+
+        assertFalse(result.retriesPending)
+        coVerify(exactly = 1) { playbackRepository.replayOutboxEntry(any()) }
+        coVerify(exactly = 1) { outbox.delete("e1") }
+    }
+
+    @Test
+    fun `UNPLAYED entry is replayed and deleted on success`() = runTest {
+        coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.UNPLAYED))
+
+        val result = drain()
+
+        assertFalse(result.retriesPending)
+        coVerify(exactly = 1) { playbackRepository.replayOutboxEntry(any()) }
+        coVerify(exactly = 1) { outbox.delete("e1") }
+    }
+
+    @Test
+    fun `replay failure retains the entry for retry`() = runTest {
+        coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.PLAYED))
+        coEvery { playbackRepository.replayOutboxEntry(any()) } returns false
+
+        val result = drain()
+
+        assertTrue(result.retriesPending)
+        coVerify(exactly = 0) { outbox.delete(any()) }
+    }
+
+    // ── Failure / retry policy ────────────────────────────────────────
+
+    @Test
+    fun `early attempt on a failed entry reports retries-pending and retains the entry`() = runTest {
+        coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.PROGRESS))
+        coEvery { playbackRepository.replayOutboxEntry(any()) } returns false
+
+        val result = drain()
+
+        assertTrue(result.retriesPending)
+        coVerify(exactly = 0) { outbox.delete(any()) }
+    }
+
+    @Test
+    fun `exhausted retries dead-letter a failing telemetry entry and converge`() = runTest {
+        coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.PROGRESS))
+        coEvery { playbackRepository.replayOutboxEntry(any()) } returns false
+
+        // attempt >= MAX_RETRIES (3) triggers the dead-letter path.
+        val result = drain(attempt = 3)
+
+        // Dead-lettered: the entry is flagged (not hard-deleted) so the row is
+        // retained for audit but skipped by future drains — countFlow() still
+        // reaches 0 and the sync indicator clears. The drain converges.
+        assertFalse(result.retriesPending)
+        assertEquals(1, result.deadLetteredCount)
+        coVerify(exactly = 0) { outbox.delete("e1") }
+        coVerify(exactly = 1) { outbox.markDeadLetter("e1") }
+        // Nothing was reconciled — the report never landed on the server.
+        coVerify(exactly = 0) { playedStateSync.reconcileOfflineRow(any()) }
+    }
+
+    // ── User-intent retry budget (#153) ───────────────────────────────
+    // A dead-lettered PLAYED flip is a silently lost watched action — the
+    // exact #151-era bug. Intents keep retrying well past the telemetry
+    // budget; only an exhausted intent budget dead-letters them.
+
+    @Test
+    fun `failed PLAYED intent is not dead-lettered at the telemetry budget`() = runTest {
+        coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.PLAYED))
+        coEvery { playbackRepository.replayOutboxEntry(any()) } returns false
+
+        // Past MAX_RETRIES (3) — a telemetry entry would dead-letter here.
+        val result = drain(attempt = 3)
+
+        assertTrue(result.retriesPending)
+        coVerify(exactly = 0) { outbox.markDeadLetter("e1") }
+    }
+
+    @Test
+    fun `failed PLAYED intent dead-letters only past its own larger budget`() = runTest {
+        coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.PLAYED))
+        coEvery { playbackRepository.replayOutboxEntry(any()) } returns false
+
+        val result = drain(attempt = 10)
+
+        assertFalse(result.retriesPending)
+        coVerify(exactly = 1) { outbox.markDeadLetter("e1") }
+    }
+
+    @Test
+    fun `failed FAVORITE intent shares the larger user-intent budget`() = runTest {
+        // Favorites are user intents like PLAYED/UNPLAYED: dead-lettering at
+        // the telemetry budget would silently lose an offline favorite flip.
+        coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.FAVORITE))
+        coEvery { playbackRepository.replayOutboxEntry(any()) } returns false
+
+        val earlyResult = drain(attempt = 3)
+
+        assertTrue(earlyResult.retriesPending)
+        coVerify(exactly = 0) { outbox.markDeadLetter("e1") }
+
+        val exhaustedResult = drain(attempt = 10)
+
+        assertFalse(exhaustedResult.retriesPending)
+        coVerify(exactly = 1) { outbox.markDeadLetter("e1") }
+    }
+
+    @Test
+    fun `failed UNFAVORITE intent shares the larger user-intent budget`() = runTest {
+        coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.UNFAVORITE))
+        coEvery { playbackRepository.replayOutboxEntry(any()) } returns false
+
+        val result = drain(attempt = 3)
+
+        assertTrue(result.retriesPending)
+        coVerify(exactly = 0) { outbox.markDeadLetter("e1") }
+    }
+
+    // ── markPlayed derivation + telemetry suppression (#153) ──────────
+
+    @Test
+    fun `pending PLAYED intent suppresses telemetry replay for the same item`() = runTest {
+        coEvery { outbox.drain() } returns listOf(
+            entry("e1", "item-1", PlaybackOutboxEventType.PROGRESS),
+            entry("e2", "item-1", PlaybackOutboxEventType.STOP),
+            entry("e3", "item-1", PlaybackOutboxEventType.PLAYED),
+        )
+        // The drop gate reads the outbox (pending + dead-lettered), not just
+        // the drain snapshot — model the staged PLAYED row.
+        coEvery { outbox.hasUnsyncedPlayedIntent("item-1") } returns true
+
+        val result = drain()
+
+        assertFalse(result.retriesPending)
+        // Only the PLAYED flip reaches the API; the trailing telemetry would
+        // otherwise re-write a near-end position over the played state.
+        coVerify(exactly = 1) { playbackRepository.replayOutboxEntry(any()) }
+        coVerify(exactly = 1) { playbackRepository.replayOutboxEntry(match { it.eventType == PlaybackOutboxEventType.PLAYED }) }
+        coVerify(exactly = 3) { outbox.delete(any()) }
+    }
+
+    @Test
+    fun `a dead-lettered PLAYED intent still suppresses telemetry replay`() = runTest {
+        coEvery { outbox.drain() } returns listOf(
+            entry("e1", "item-1", PlaybackOutboxEventType.PROGRESS),
+            entry("e2", "item-1", PlaybackOutboxEventType.STOP),
+        )
+        // The PLAYED row exhausted its budget in an earlier drain — it is not
+        // in the snapshot, but it still authorizes dropping the telemetry.
+        coEvery { outbox.hasUnsyncedPlayedIntent("item-1") } returns true
+
+        val result = drain()
+
+        assertFalse(result.retriesPending)
+        coVerify(exactly = 0) { playbackRepository.replayOutboxEntry(any()) }
+        coVerify(exactly = 2) { outbox.delete(any()) }
+    }
+
+    @Test
+    fun `telemetry is still replayed for items whose PLAYED intent belongs to another item`() = runTest {
+        coEvery { outbox.drain() } returns listOf(
+            entry("e1", "item-1", PlaybackOutboxEventType.STOP),
+            entry("e2", "item-2", PlaybackOutboxEventType.PLAYED),
+        )
+
+        drain()
+
+        coVerify(exactly = 2) { playbackRepository.replayOutboxEntry(any()) }
+    }
+
+    @Test
+    fun `mirror row at or above the watched threshold derives a played flip`() = runTest {
+        coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.STOP))
+        // A PLAYED outbox row was lost (process death at the threshold); the
+        // local mirror is the only remaining evidence of the watched fact.
+        coEvery { offlineRepository.getOfflineItem("item-1") } returns offlineItem(playedPercentage = 97.0)
+
+        drain()
+
+        coVerify(exactly = 1) { mediaRepository.markPlayed("item-1") }
+    }
+
+    @Test
+    fun `mirror row marked played derives a played flip even below the threshold`() = runTest {
+        coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.PROGRESS))
+        coEvery { offlineRepository.getOfflineItem("item-1") } returns offlineItem(isPlayed = true, playedPercentage = 30.0)
+
+        drain()
+
+        coVerify(exactly = 1) { mediaRepository.markPlayed("item-1") }
+    }
+
+    @Test
+    fun `mirror row below the threshold derives nothing`() = runTest {
+        coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.STOP))
+        coEvery { offlineRepository.getOfflineItem("item-1") } returns offlineItem(playedPercentage = 50.0)
+
+        drain()
+
+        coVerify(exactly = 0) { mediaRepository.markPlayed(any()) }
+    }
+
+    @Test
+    fun `an undelivered derived flip retries the drain`() = runTest {
+        // markPlayed reports success optimistically (the flip applies locally
+        // + stages the row on failure) — the outbox probe is the real
+        // delivery signal. A flip that did not land must not converge the
+        // drain, or the re-staged PLAYED row waits for the 4h backstop.
+        // (The STOP telemetry itself replayed fine, so the item is still
+        // legitimately named in the post-drain user-data notify.)
+        coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.STOP))
+        coEvery { offlineRepository.getOfflineItem("item-1") } returns offlineItem(isPlayed = true)
+        coEvery { outbox.isPlayedStateIntentDelivered("item-1", played = true) } returns false
+
+        val result = drain()
+
+        assertTrue(result.retriesPending)
+        coVerify(exactly = 1) { mediaRepository.markPlayed("item-1") }
+        // The telemetry push (not the flip) is what names the item here.
+        verify(exactly = 1) { mediaRepository.notifyUserDataChanged(listOf("item-1")) }
+    }
+
+    @Test
+    fun `a changed drain invalidates repo caches and notifies user-data consumers`() = runTest {
+        coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.PROGRESS))
+
+        val result = drain()
+
+        assertFalse(result.retriesPending)
+        // Post-drain coherence (#153): server state moved, so the in-memory
+        // caches must drop synchronously and the synthetic user-data push must
+        // reach home/detail listeners without waiting for the WS echo.
+        coVerify(exactly = 1) { cacheInvalidator.invalidateCaches() }
+        verify(exactly = 1) { mediaRepository.notifyUserDataChanged(listOf("item-1")) }
+        verify(exactly = 1) { userDataSyncTrigger.enqueueNow() }
+    }
+
+    @Test
+    fun `a drain that pushed nothing leaves the caches untouched`() = runTest {
+        // Dead-lettered telemetry (never pushed), no downloads to reconcile:
+        // the server state did not move, so no invalidation or notify fires.
+        coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.PROGRESS))
+        coEvery { playbackRepository.replayOutboxEntry(any()) } returns false
+
+        val result = drain(attempt = 10)
+
+        coVerify(exactly = 0) { cacheInvalidator.invalidateCaches() }
+        verify(exactly = 0) { mediaRepository.notifyUserDataChanged(any()) }
+    }
+
+    @Test
+    fun `items with an explicit intent never get a derived flip`() = runTest {
+        coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.UNPLAYED))
+        coEvery { offlineRepository.getOfflineItem("item-1") } returns offlineItem(isPlayed = true, playedPercentage = 97.0)
+
+        drain()
+
+        // The UNPLAYED intent is the authority; deriving a watched flip here
+        // would immediately undo the user's unwatch.
+        coVerify(exactly = 0) { mediaRepository.markPlayed(any()) }
+    }
+
+    @Test
+    fun `exhausted retries still drain successes and dead-letter only failures`() = runTest {
+        coEvery { outbox.drain() } returns listOf(
+            entry("e1", "item-1", PlaybackOutboxEventType.PROGRESS),
+            entry("e2", "item-2", PlaybackOutboxEventType.PROGRESS),
+        )
+        coEvery { playbackRepository.replayOutboxEntry(match { it.itemId == "item-1" }) } returns true
+        coEvery { playbackRepository.replayOutboxEntry(match { it.itemId == "item-2" }) } returns false
+        // Success-side reconciliation early-returns (no offline row).
+
+        val result = drain(attempt = 3)
+
+        assertFalse(result.retriesPending)
+        coVerify(exactly = 1) { outbox.delete("e1") }
+        coVerify(exactly = 0) { outbox.delete("e2") }
+        coVerify(exactly = 1) { outbox.markDeadLetter("e2") }
+        // Only the pushed item is reconciled; the dead-lettered one is not.
+        coVerify(exactly = 1) { playedStateSync.reconcileOfflineRow("item-1") }
+        coVerify(exactly = 0) { playedStateSync.reconcileOfflineRow("item-2") }
+    }
+
+    @Test
+    fun `partial failure replays successful entries and retries failed ones`() = runTest {
+        coEvery { outbox.drain() } returns listOf(
+            entry("e1", "item-1", PlaybackOutboxEventType.PROGRESS),
+            entry("e2", "item-2", PlaybackOutboxEventType.PROGRESS),
+        )
+        coEvery { playbackRepository.replayOutboxEntry(match { it.itemId == "item-1" }) } returns true
+        coEvery { playbackRepository.replayOutboxEntry(match { it.itemId == "item-2" }) } returns false
+
+        val result = drain()
+
+        assertTrue(result.retriesPending)
+        // Only the successful entry is deleted; the failed one is retained.
+        coVerify(exactly = 1) { outbox.delete("e1") }
+        coVerify(exactly = 0) { outbox.delete("e2") }
+    }
+
+    // ── Reconcile branches ────────────────────────────────────────────
+    // Reconcile behaviour is verified in PlayedStateSyncImplTest — the
+    // drainer delegates the merge to PlayedStateSync, so these tests only
+    // assert that the drain *calls* reconcile for each drained item.
+
+    @Test
+    fun `reconcile failure during drain does not fail the drain`() = runTest {
+        coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.PROGRESS))
+        coEvery { playedStateSync.reconcileOfflineRow("item-1") } throws RuntimeException("reconcile failed")
+
+        val result = drain()
+
+        // Reconcile is best-effort (wrapped in runCatching); the push still succeeded.
+        assertFalse(result.retriesPending)
+    }
+
+    @Test
+    fun `an undelivered reconcile intent push retries the drain (#153)`() = runTest {
+        coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.PROGRESS))
+        // reconcileOfflineRow re-pushed a staged PLAYED intent; the server
+        // call failed and flip() re-enqueued the row (UndeliveredIntent).
+        coEvery { playedStateSync.reconcileOfflineRow("item-1") } returns
+            PlayedStateSync.ReconcileOutcome.UndeliveredIntent
+
+        val result = drain()
+
+        // Returning success here would strand the freshly re-enqueued intent
+        // row until the 4h periodic backstop — the drain must retry instead.
+        assertTrue(result.retriesPending)
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────
+
+    /** Minimal offline mirror row for the played-derivation checks (#153). */
+    private fun offlineItem(
+        isPlayed: Boolean = false,
+        playedPercentage: Double = 0.0,
+    ) = com.raulshma.jellyplay.core.model.OfflineMediaItem(
+        id = "item-1",
+        name = "Item 1",
+        mediaType = com.raulshma.jellyplay.core.model.MediaType.EPISODE,
+        isPlayed = isPlayed,
+        playedPercentage = playedPercentage,
+    )
+}

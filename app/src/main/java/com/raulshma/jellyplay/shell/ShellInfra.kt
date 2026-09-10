@@ -14,14 +14,22 @@ import kotlinx.coroutines.flow.StateFlow
  * MainContent. Pure parameter aggregation — each service stays owned by its
  * provider; the ViewModel-owned signals stay on [com.raulshma.jellyplay.MainViewModel].
  *
- * [audioPlaybackManagerLazy] is deliberately a lazy provider: callers resolve
- * it with `get()` only once the user is authenticated, so the playback engine
- * is never built for auth/onboarding-only sessions.
+ * Every field is a lazy provider, not just
+ * [audioPlaybackManagerLazy]. The former eager fields forced MainActivity's
+ * onCreate to construct UserMessageBus, NetworkMonitor (whose constructor
+ * registers a connectivity callback) and the remote-control objects on the
+ * critical path just to bundle them here; the consumers in JellyPlayApp
+ * resolve each provider at its first real use — the bus and the network
+ * status flow inside their composition branches, the remote-control pair
+ * inside their post-frame collection effects — so none of that construction
+ * gates onCreate (and the auth/onboarding branches skip NetworkMonitor and
+ * the remote-control objects entirely, the same deferral
+ * [audioPlaybackManagerLazy] always had for the playback engine).
  */
 class ShellInfra(
-    val userMessageBus: UserMessageBus,
-    val networkStatus: StateFlow<NetworkStatus>,
+    val userMessageBusLazy: Lazy<UserMessageBus>,
+    val networkStatusLazy: Lazy<StateFlow<NetworkStatus>>,
     val audioPlaybackManagerLazy: Lazy<AudioPlaybackManager>,
-    val remoteNavigationBridge: RemoteNavigationBridge,
-    val remoteControlReceiver: RemoteControlReceiver,
+    val remoteNavigationBridgeLazy: Lazy<RemoteNavigationBridge>,
+    val remoteControlReceiverLazy: Lazy<RemoteControlReceiver>,
 )

@@ -6,7 +6,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 
 /**
- * Web actuals of the detail platform seams (wave 16C) — bodies copied from
+ * Web actuals of the detail platform seams — bodies copied from
  * DetailPlatform.jvm.kt, which is the matching no-embed/no-share posture:
  *
  * Share: no web share sheet v1 — no-op (documented dead-click,
@@ -21,7 +21,7 @@ internal actual fun rememberShareMediaAction(itemId: String, chooserTitle: Strin
 
 /**
  * Web actual of the trailer-host seam: no in-app YouTube embed (the WebView
- * host is android-only, dies at Phase X) — fire the embed-failed path so call
+ * host is android-only, dies at ) — fire the embed-failed path so call
  * sites take their existing fallback (external browser link / autoplay
  * overlay hidden), exactly like the desktop actual and like an Android
  * WebView embed failure. On web that fallback is uriHandler.openUri(...) —

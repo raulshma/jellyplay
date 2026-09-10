@@ -9,7 +9,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * Wave 20C: the desktop heatmap share's file half — PNG bytes landing under
+ * The desktop heatmap share's file half — PNG bytes landing under
  * the given directory with the expected name shape. The GraphicsLayer
  * capture (a live skia scene) and the AWT Desktop.open handoff are
  * interactive/dependent on a display session and stay manually-verified;

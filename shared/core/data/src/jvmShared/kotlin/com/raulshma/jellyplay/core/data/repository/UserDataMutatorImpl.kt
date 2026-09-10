@@ -3,7 +3,7 @@ package com.raulshma.jellyplay.core.data.repository
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-// Phase X MediaRepository cluster flip: moved verbatim from the legacy
+//  MediaRepository cluster flip: moved verbatim from the legacy
 // :core:data shim (same package/name). Ctor-level transforms only, plus the
 // one mechanical body edit they force:
 //  - `@Singleton` / `@Inject` stripped (one framework per type — Koin's
@@ -44,7 +44,7 @@ class UserDataMutatorImpl(
     ): Result<AppliedMutation> = userDataMutationMutex.withLock {
         writePlayed(itemId, played)
             .map { AppliedMutation(itemId = itemId, played = played) }
-            .onSuccess { applied -> applyOptimistically(itemId, applied, mode, containers, seriesId) }
+            .onSuccess { applied -> applyPostSuccessRefresh(itemId, applied, mode, containers, seriesId) }
     }
 
     override suspend fun setFavorite(
@@ -55,7 +55,7 @@ class UserDataMutatorImpl(
     ): Result<AppliedMutation> = userDataMutationMutex.withLock {
         mediaRepository.value.toggleFavorite(itemId)
             .map { target -> AppliedMutation(itemId = itemId, favorite = target) }
-            .onSuccess { applied -> applyOptimistically(itemId, applied, mode, containers, seriesId) }
+            .onSuccess { applied -> applyPostSuccessRefresh(itemId, applied, mode, containers, seriesId) }
     }
 
     override suspend fun setSeasonPlayed(
@@ -89,21 +89,27 @@ class UserDataMutatorImpl(
         else mediaRepository.value.markSeasonUnplayed(seasonId, seriesId)
 
     /**
-     * Post-success optimistic pass, in the order callers used to hand-assemble:
-     * caller containers → provider session rewrite → residual series-catalogue
-     * drop. Skipped entirely in [UserDataMutator.FlipMode.Silent] and on write
-     * failure (never reached) — there is no flip without a successful write,
-     * so there is nothing to roll back.
+     * Post-success refresh pass, in the order callers used to hand-assemble:
+     * caller containers (optimistic mode only — the silent grid contract keeps
+     * them untouched so scroll positions survive) → provider session rewrite →
+     * residual series-catalogue drop. The provider pass runs in BOTH modes: a
+     * silent write (player watched-threshold, auto-advance, grid mark) must
+     * still update an open detail session (e.g. the screen under the player)
+     * instead of waiting for the server's WS echo — [applyOptimisticItemState]
+     * is a no-op without an active session, so nothing flips where nothing is
+     * watching. Skipped on write failure (never reached — there is no flip
+     * without a successful write, so there is nothing to roll back).
      */
-    private suspend fun applyOptimistically(
+    private suspend fun applyPostSuccessRefresh(
         itemId: String,
         applied: AppliedMutation,
         mode: UserDataMutator.FlipMode,
         containers: List<UserDataContainer>,
         seriesId: String?,
     ) {
-        if (mode == UserDataMutator.FlipMode.Silent) return
-        containers.forEach { it.rewrite(itemId, applied::patch) }
+        if (mode == UserDataMutator.FlipMode.Optimistic) {
+            containers.forEach { it.rewrite(itemId, applied::patch) }
+        }
         // Keep the provider's replayed snapshot aligned with the caller's
         // optimistic state so leaving and immediately re-entering detail does
         // not flash the pre-mutation state (no-op without an active session).

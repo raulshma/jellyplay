@@ -33,7 +33,7 @@ private const val WASM_APP_VERSION = "1.0"
 private const val WASM_DEVICE_NAME = "JellyPlay Web"
 
 /**
- * Koin construction owner for the wasmJs network stack (Phase W chunks 1-2;
+ * Koin construction owner for the wasmJs network stack (chunks 1-2;
  * chunk 4 adds the stateless Seerr / Radarr / Sonarr / TMDB clients) —
  * the counterpart of [networkJvmModule] for the web target. Consumed by the
  * web shell's startKoin (apps/web Main.kt registers it alongside
@@ -41,7 +41,7 @@ private const val WASM_DEVICE_NAME = "JellyPlay Web"
  * modules), where its auth/library/playback singles drive the connect/sign-in
  * flow and the shared feature screens' repositories.
  *
- * Device identity (wave 21C): the device id is PERSISTED across boots —
+ * Device identity: the device id is PERSISTED across boots —
  * direct localStorage under `jellyplay/device-id` (see
  * [persistedOrRandomDeviceId]): the first boot on an origin generates a UUID
  * v4 and stores it, every later boot re-uses the stored value, so the server
@@ -102,7 +102,7 @@ val networkWasmModule: Module = module {
     single<LibraryApiClient> { get<KtorWasmLibraryApiClient>() }
     single<PlaybackApiClient> { get<KtorWasmPlaybackApiClient>() }
     single<UserApiClient> { get<KtorWasmUserApiClient>() }
-    // Seerr / *arr / TMDB (Phase W chunk 4): stateless per-call
+    // Seerr / *arr / TMDB (chunk 4): stateless per-call
     // (baseUrl, credentials) clients over the shared app HttpClient — they
     // hold NO session state and take their own `ArrSeerrApiSupport` base.
     // DELTA vs the JVM graph: networkJvmModule binds each interface through a

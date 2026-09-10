@@ -9,9 +9,10 @@ import java.io.File
 /**
  * Ratchet against reintroducing the god-state wiring pattern.
  *
- * 1. The seven migrated controllers (`SleepTimerController`,
+ * 1. The nine migrated controllers (`SleepTimerController`,
  *    `TrackSelectionHelper`, `SubtitleManager`, `VideoEffectsController`,
- *    `AbRepeatController`, `SyncPlayBridge`, `PlaybackSession`) must not
+ *    `AbRepeatController`, `SyncPlayBridge`, `PlaybackSession`,
+ *    `EpisodeNavigator`, `SubtitlePreviewController`) must not
  *    reference [VideoPlayerUiState] at all — their interface is their state
  *    class plus commands, never the state bag or a state transformer.
  * 2. The count of god-state wirings (`getUiState =` / `updateUiState =` /
@@ -31,13 +32,15 @@ class ControllerOwnershipTest {
         "AbRepeatController.kt",
         "SyncPlayBridge.kt",
         "PlaybackSession.kt",
+        "EpisodeNavigator.kt",
+        "SubtitlePreviewController.kt",
     )
 
     /** The maximum allowed god-state wirings in src/main (see class KDoc). */
     private val maxGodStateWirings = 3
 
     private fun mainSources(): List<File> {
-        // KMP move (wave 7C): the module's main sources now live under
+        // KMP move: the module's main sources now live under
         // src/commonMain/kotlin + src/androidMain/kotlin (the monolith
         // ViewModel + session stack are androidMain), not src/main/java.
         var dir: File? = File(System.getProperty("user.dir")).absoluteFile

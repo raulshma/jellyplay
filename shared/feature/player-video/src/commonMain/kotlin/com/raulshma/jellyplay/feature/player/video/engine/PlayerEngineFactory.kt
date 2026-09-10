@@ -3,7 +3,7 @@ package com.raulshma.jellyplay.feature.player.video.engine
 import com.raulshma.jellyplay.core.model.PlayerType
 
 /**
- * Maps a [PlayerType] to a concrete [MediaEngine] (wave 8C seam): the member
+ * Maps a [PlayerType] to a concrete [MediaEngine] (seam): the member
  * the commonMain session cluster ([PlayerSessionManager][com.raulshma.jellyplay.feature.player.video.PlayerSessionManager])
  * calls. The androidMain class formerly named `PlayerEngineFactory` was
  * renamed [AndroidPlayerEngineFactory][com.raulshma.jellyplay.feature.player.video.engine.AndroidPlayerEngineFactory]

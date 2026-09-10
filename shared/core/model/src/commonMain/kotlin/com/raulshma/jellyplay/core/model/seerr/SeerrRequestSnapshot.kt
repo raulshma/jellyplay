@@ -15,4 +15,11 @@ data class SeerrRequestSnapshot(
     val isLoadingServices: Boolean = false,
     val tvSeasons: List<SeerrSeason> = emptyList(),
     val tvIsAnime: Boolean = false,
+    /**
+     * The item the request dialog is open for (null = closed). Set by the
+     * holder's `openRequestDialog` — together with the open cascade it fires —
+     * so screens gate the dialog render on this instead of hand-copying the
+     * open/dismiss choreography.
+     */
+    val dialogItem: SeerrSearchItem? = null,
 )

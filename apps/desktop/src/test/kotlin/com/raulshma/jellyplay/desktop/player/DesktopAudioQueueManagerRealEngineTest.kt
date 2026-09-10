@@ -256,7 +256,7 @@ class DesktopAudioQueueManagerRealEngineTest {
     }
 
     /**
-     * Wave 17B interplay variant (docs/spikes/x-desktop-video-surface-story.md
+     *  interplay variant (docs/spikes/x-desktop-video-surface-story.md
      * "AudioQueue interplay"): the SAME manager lifecycle over the
      * software-render engine variant instead of plain [MpvDesktopEngine] —
      * the manager's ctor takes an `engineFactory`, so this is cheap. Proves

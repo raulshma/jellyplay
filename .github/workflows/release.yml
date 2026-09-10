@@ -70,6 +70,13 @@ jobs:
       fail-fast: false
       matrix:
         flavor: [phone, tv]
+    env:
+      # The universal APK is opt-in, and BOTH gradle invocations below
+      # must pass the same property — the baseline-profile lane so its GMD
+      # APK set stays identical to pre-gating, the assemble lane so the
+      # published artifact set (the rename step's known_abis) stays
+      # byte-identical. Defined once here so the two steps cannot drift.
+      BUILD_UNIVERSAL: -PbuildUniversal=true
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v7
@@ -83,27 +90,13 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      - name: Decode Keystore
-        run: |
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > jellyplay-release.jks
-
-      - name: Grant Execute Permission for Gradlew
-        run: chmod +x ./gradlew
-
-      # GMD emulator needs writable /dev/kvm. ubuntu runners expose it, but not
-      # always world/group-accessible for the runner user — apply the same udev
-      # rule android-emulator-runner uses, then fail fast with a clear message
-      # if the runner genuinely lacks nested virtualization. Only the phone leg
-      # generates a baseline profile (on a managed emulator), so strictly only
-      # it needs KVM, but keep the guard unconditional to catch runner
-      # regressions on both legs.
-      - name: Enable KVM access
-        run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-          ls -l /dev/kvm || { echo "::error::/dev/kvm missing — runner has no nested virtualization, emulator cannot start"; exit 1; }
-          /usr/local/lib/android/sdk/emulator/emulator -accel-check || true
+      # Keystore + gradlew + KVM — the shared GMD-runner prereqs
+      # (.github/actions/setup-gmd-runner; the KVM guard stays unconditional
+      # to catch runner regressions on both legs, TV included).
+      - name: Setup GMD Runner
+        uses: ./.github/actions/setup-gmd-runner
+        with:
+          keystore-base64: ${{ secrets.KEYSTORE_BASE64 }}
 
       # Generates the ART baseline/startup profile on a headless Gradle Managed
       # Device and writes baseline-prof.txt + startup-prof.txt into the app's
@@ -111,20 +104,57 @@ jobs:
       # merges them into the release APK automatically during assemble.
       # Phone only — AGP cannot run TV images on Gradle Managed Devices, so the
       # tv flavor ships without generated profiles.
+      # -PbuildUniversal=true (job-level $BUILD_UNIVERSAL): this step
+      # assembles and installs the
+      # app's release APKs on the x86_64 ciPixel8 GMD — keep its APK set
+      # identical to what it built before the universal-APK gating (the
+      # universal APK is where the emulator's ABI coverage came from).
       - name: Generate Baseline Profile
         if: matrix.flavor == 'phone'
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: ./gradlew :app:generate${{ matrix.flavor == 'phone' && 'Phone' || 'Tv' }}ReleaseBaselineProfile -PversionName="${{ needs.determine-version.outputs.apk_version }}" -PversionCode="${{ github.run_number }}"
+        run: ./gradlew :app:generate${{ matrix.flavor == 'phone' && 'Phone' || 'Tv' }}ReleaseBaselineProfile -PversionName="${{ needs.determine-version.outputs.apk_version }}" -PversionCode="${{ github.run_number }}" $BUILD_UNIVERSAL
+
+      # saveInSrc writes the generated profiles into
+      # app/src/phoneRelease/generated/baselineProfiles (baseline-prof.txt /
+      # startup-prof.txt). The generate step can silently produce nothing
+      # (emulator flake, runner regressions) and the lane would still ship a
+      # profile-less release APK — fail it here instead, before the assemble
+      # step reuses an empty profile source set.
+      - name: Verify Baseline Profile Artifacts
+        if: matrix.flavor == 'phone'
+        run: |
+          profile_dir="app/src/phoneRelease/generated/baselineProfiles"
+          # Require BOTH artifacts, not any-of: a partial write (e.g. only
+          # startup-prof.txt survived an emulator flake) still assembles a
+          # release without the merged baseline profile, which is just as
+          # profile-less as an empty directory. -s, not -f: a zero-byte
+          # artifact is just as profile-less as a missing one.
+          missing=()
+          for f in "$profile_dir/baseline-prof.txt" "$profile_dir/startup-prof.txt"; do
+            [ -s "$f" ] || missing+=("$f")
+          done
+          if [ ${#missing[@]} -ne 0 ]; then
+            echo "::error::Missing baseline profile artifacts: ${missing[*]}"
+            ls -laR app/src/phoneRelease 2>/dev/null || true
+            exit 1
+          fi
+          echo "Baseline profile artifacts present:"
+          ls -la "$profile_dir"
 
       - name: Build Android App (Release - ${{ matrix.flavor }})
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: ./gradlew assemble${{ matrix.flavor == 'phone' && 'Phone' || 'Tv' }}Release -PversionName="${{ needs.determine-version.outputs.apk_version }}" -PversionCode="${{ github.run_number }}"
+        # -PbuildUniversal=true (job-level $BUILD_UNIVERSAL): the
+        # universal APK is opt-in since the
+        # splits gating; this lane is its only consumer (the rename step's
+        # known_abis list includes it), so pass the property and the published
+        # artifact set stays byte-identical.
+        run: ./gradlew assemble${{ matrix.flavor == 'phone' && 'Phone' || 'Tv' }}Release -PversionName="${{ needs.determine-version.outputs.apk_version }}" -PversionCode="${{ github.run_number }}" $BUILD_UNIVERSAL
 
       - name: Rename APK Outputs
         run: |

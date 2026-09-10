@@ -40,24 +40,18 @@ import com.raulshma.jellyplay.core.model.ActiveSession
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
-import com.raulshma.jellyplay.core.network.api.ApiException
 import com.raulshma.jellyplay.core.network.api.AuthApiClient
-import io.ktor.client.plugins.HttpRequestTimeoutException
 import kotlinx.browser.window
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.io.IOException
 
 /**
- * Connect/sign-in orchestration for the web shell (wave 12C slice 2). The web
+ * Connect/sign-in orchestration for the web shell (slice 2). The web
  * module has NO AuthRepository and no core:data on wasm (Room cut), so this
  * controller talks to [AuthApiClient] directly — the same client the desktop
  * pane drives through the repository, with the session publish/restore spine
@@ -106,12 +100,10 @@ internal class WebConnectController(
     // Post-success work that must OUTLIVE the pane which started it (see
     // SIDE-EFFECT OWNERSHIP above): the connected card can replace the
     // sign-in form the instant the atomic session publishes, disposing the
-    // pane's rememberCoroutineScope. Owned by this shell-level controller —
-    // it lives as long as the page does, like the singleton API clients, and
-    // is never cancelled explicitly. SupervisorJob keeps one failed job from
-    // tearing down siblings; Dispatchers.Default is fine for a DataStore
-    // write and one POST on wasm.
-    private val sideEffectScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    // pane's rememberCoroutineScope. Owned by this shell-level controller;
+    // the scope lifetime + degrade shape live in [WebSideEffectScope]
+    // (shared with WebSeerrController).
+    private val sideEffectScope = WebSideEffectScope()
 
     /**
      * Post-sign-in capability outcome for the connected card to render.
@@ -150,7 +142,7 @@ internal class WebConnectController(
      */
     fun declareCapabilitiesAfterSignIn() {
         _capabilityNote.value = null
-        sideEffectScope.launch {
+        sideEffectScope.launchDegrading {
             val failed = try {
                 auth.postCapabilities().isFailure
             } catch (e: CancellationException) {
@@ -199,7 +191,7 @@ internal class WebConnectController(
 
     /** Persists a just-probed URL on [sideEffectScope]; fire-and-forget. */
     fun rememberServerUrlLater(url: String) {
-        sideEffectScope.launch { rememberServerUrl(url) }
+        sideEffectScope.launchDegrading { rememberServerUrl(url) }
     }
 
     /**
@@ -218,7 +210,7 @@ internal class WebConnectController(
 }
 
 /**
- * Landing-pane connect/auth flow (wave 12C): replaces the Phase W placeholder
+ * Landing-pane connect/auth flow: replaces the placeholder
  * readout when signed out — server probe → inline name result → username /
  * password sign-in — and collapses to a minimal connected card (server, user,
  * online/offline chip, logout) once the auth client's atomic session publishes.
@@ -227,7 +219,7 @@ internal class WebConnectController(
  * there is no snackbar host, and window.alert is banned. This is connect/auth
  * browsing status ONLY — not a feature browser.
  *
- * RUNTIME HONESTY: verified in a real browser (2026-08-27, wave 13C) — the
+ * RUNTIME HONESTY: verified in a real browser (2026-08-27) — the
  * headless-Edge CDP lane (tools/e2e/web-verify.mjs) clicked through this
  * exact flow against a live Jellyfin 10.11.11 server: URL typed via CDP
  * (Input.insertText, with a per-char key-event fallback in the driver),
@@ -237,7 +229,7 @@ internal class WebConnectController(
  * deeper in WebDiagnosticsPane the same run.
  *
  * Cut from v1 (documented deltas vs the shared auth screens the desktop shell
- * hosts since wave 19A): QuickConnect,
+ * hosts since then): QuickConnect,
  * remembered-user prefill, password visibility toggle (no Tabler icon set on
  * the web module), and a server Version line — /System/Info/Public carries
  * Version in real responses but the shared wire DTO subset reads only
@@ -249,17 +241,17 @@ internal fun WebConnectFlow(
     networkStatus: NetworkStatus,
     modifier: Modifier = Modifier,
     onOpenConnectionDetails: (() -> Unit)? = null,
-    // Wave 13C: opens the gated E2E diagnostics pane (WebDiagnosticsPane)
+    // Opens the gated E2E diagnostics pane (WebDiagnosticsPane)
     // — deliberately optional so nothing renders until the nav root wires it.
     onOpenDiagnostics: (() -> Unit)? = null,
-    // Wave 15C: opens the FIRST shared feature screen (Route.Requests →
+    // Opens the first shared feature screen (Route.Requests →
     // RequestsScreen). Optional like the other hooks so WebConnectFlow stays
     // renderable without a nav root behind it.
     onOpenRequests: (() -> Unit)? = null,
-    // Wave 16A: opens the SECOND shared feature screen (Route.UpcomingCalendar
+    // Opens the second shared feature screen (Route.UpcomingCalendar
     // → UpcomingCalendarScreen). Same optionality contract as onOpenRequests.
     onOpenCalendar: (() -> Unit)? = null,
-    // Wave 16B: opens the Seerr credentials pane (WebSeerrPane) — the entry
+    // Opens the Seerr credentials pane (WebSeerrPane) — the entry
     // point that makes the requests feature usable on web (API-key creds).
     onOpenSeerr: (() -> Unit)? = null,
 ) {
@@ -397,7 +389,7 @@ private fun ConnectedCard(
                     Text("Connection details")
                 }
             }
-            // Wave 15C: the first SHARED feature screen. A primary Button
+            // The first SHARED feature screen. A primary Button
             // (real feature, unlike the diagnostics tooling below) placed
             // before it. The screen itself renders the honest "Seerr not
             // configured" error state until Seerr credentials exist on web —
@@ -407,7 +399,7 @@ private fun ConnectedCard(
                     Text("Requests")
                 }
             }
-            // Wave 16A: the second SHARED feature screen, same primary-Button
+            // The second SHARED feature screen, same primary-Button
             // treatment right next to Requests. The screen renders the honest
             // feature-disabled pane on web (flag off, no settings UI — see
             // WebAppRoot's Route.UpcomingCalendar entry note).
@@ -416,7 +408,7 @@ private fun ConnectedCard(
                     Text("Calendar")
                 }
             }
-            // Wave 16B: the Seerr credentials pane — the make-requests-work
+            // The Seerr credentials pane — the make-requests-work
             // entry (server URL + API key, persist + test + disconnect).
             // Primary Button like Requests (real feature), placed beside it.
             if (onOpenSeerr != null) {
@@ -424,7 +416,7 @@ private fun ConnectedCard(
                     Text("Seerr")
                 }
             }
-            // Wave 13C E2E hook: gated entry into WebDiagnosticsPane. An
+            //  E2E hook: gated entry into WebDiagnosticsPane. An
             // OutlinedButton so it reads as secondary tooling next to the
             // primary actions — the pane is a verification surface, not a
             // user-facing feature.
@@ -633,62 +625,6 @@ private fun SignInCard(
     }
 }
 
-/**
- * True when [failure] looks like a transport-layer refusal rather than a
- * server verdict. Two signals, either suffices:
- *  - TYPE: Ktor Js/fetch IO errors (which CORS blocks surface as) or the
- *    timeout plugin. The assumption that the Js engine wraps fetch failures
- *    in [IOException] is statically unverifiable from this repo's lanes.
- *  - MESSAGE: the raw browser rejection strings ("Failed to fetch" on
- *    Chromium, "NetworkError" on Firefox, "Load failed" on WebKit) matched
- *    case-insensitively down the cause chain, so the friendly line + CORS
- *    hint survive an engine whose wrapping differs; the coordinator's
- *    real-server browser pass will confirm the actual taxonomy.
- *
- * Used only to decide whether the CORS doc pointer shows alongside the error
- * line — never to replace the typed message itself.
- */
-private fun isLikelyCorsOrTransport(failure: Throwable): Boolean {
-    var cause: Throwable? = failure
-    while (cause != null) {
-        if (cause is HttpRequestTimeoutException || cause is IOException) return true
-        val message = cause.message?.lowercase() ?: ""
-        if (
-            "failed to fetch" in message ||
-            "networkerror" in message ||
-            "load failed" in message
-        ) {
-            return true
-        }
-        cause = cause.cause
-    }
-    return false
-}
-
-/**
- * Probe-stage error mapping: transport refusals get a diagnosable line (with
- * the CORS doc hint added separately when the browser still reports
- * connectivity); anything else falls back to whatever the failure carries.
- */
-private fun friendlyProbeFailure(failure: Throwable, browserOnline: Boolean): String {
-    if (isLikelyCorsOrTransport(failure)) {
-        return if (browserOnline) {
-            "Could not reach the server (request refused or timed out)."
-        } else {
-            "The browser reports no connectivity."
-        }
-    }
-    return failure.message ?: "Could not reach the server."
-}
-
-/**
- * Sign-in-stage error mapping, invalid-credentials vs unreachable kept
- * distinct: Jellyfin answers wrong credentials with HTTP 401, which the
- * client surfaces as an access-denied ApiException; transport failures ride
- * the client's classified retryable messages ("Connection timed out…", etc.).
- */
-private fun friendlySignInFailure(failure: Throwable): String = when {
-    failure is ApiException && failure.httpCode == 401 -> "Incorrect username or password."
-    failure.message != null -> failure.message!!
-    else -> "Sign-in failed."
-}
+// The probe/sign-in failure taxonomy (isLikelyCorsOrTransport +
+// friendlyProbeFailure/friendlySignInFailure) lives in WebConnectFailurePolicy.kt
+// — same package, internal visibility, pinned by WebConnectFailurePolicyTest.

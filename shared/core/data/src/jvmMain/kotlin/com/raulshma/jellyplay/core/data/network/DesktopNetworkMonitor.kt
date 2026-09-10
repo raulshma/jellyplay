@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.network
 
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import java.net.NetworkInterface
 import kotlinx.coroutines.CoroutineScope
@@ -18,7 +19,7 @@ import kotlinx.coroutines.isActive
 
 /**
  * Desktop implementation of the [NetworkMonitor] seam: JVM
- * [NetworkInterface]-based reachability (wave 17C — replaces the
+ * [NetworkInterface]-based reachability (replaces the
  * always-Online stub whose deferral note outlived its phase). The JVM has
  * no connectivity callback, so the upstream re-probes the interface table
  * on a timer; the wiring mirrors [AndroidNetworkMonitor]
@@ -63,7 +64,7 @@ class DesktopNetworkMonitor : NetworkMonitor {
     override val networkStatus: StateFlow<NetworkStatus> = flow {
         var last: NetworkStatus? = null
         while (currentCoroutineContext().isActive) {
-            last = runCatching { probeNetworkStatus() }
+            last = runCatchingRethrowingCancellation { probeNetworkStatus() }
                 .getOrDefault(last ?: NetworkStatus.Online)
             emit(last)
             delay(PROBE_INTERVAL_MS)

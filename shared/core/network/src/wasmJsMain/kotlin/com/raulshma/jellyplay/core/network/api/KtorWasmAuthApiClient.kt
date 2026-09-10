@@ -1,10 +1,12 @@
 package com.raulshma.jellyplay.core.network.api
 
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.model.ActiveSession
 import com.raulshma.jellyplay.core.model.QuickConnectInfo
 import com.raulshma.jellyplay.core.model.QuickConnectState
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
+import com.raulshma.jellyplay.core.model.normalizeServerAddress
 import com.raulshma.jellyplay.core.network.NetworkLog
 import com.raulshma.jellyplay.core.network.RetryPolicy
 import com.raulshma.jellyplay.core.network.auth.AtomicSessionState
@@ -30,7 +32,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /**
- * Phase W chunk 1: the wasmJs [AuthApiClient] — a hand-rolled Ktor
+ *  chunk 1: the wasmJs [AuthApiClient] — a hand-rolled Ktor
  * replacement for the jvmShared `AuthApiClientImpl` (Jellyfin SDK + OkHttp),
  * mirroring its session discipline and wire behavior.
  *
@@ -63,10 +65,10 @@ import kotlinx.coroutines.withContext
  *    base URL + token from the session state per call, so `setUser`'s
  *    build-client-before-publish ordering collapses to publish-inside-lock.
  *  - The device id is random PER BOOT (no persisted identity on wasm v1);
- *    the server will list each browser session as a new device until Phase W
+ *    the server will list each browser session as a new device until 
  *    persistence lands.
  *  - postCapabilities omits the DeviceProfile (no codec profile on wasm yet
- *    — HtmlVideoEngine lands in a later Phase W chunk).
+ *    — HtmlVideoEngine lands in a later chunk).
  *  - No Dispatchers.IO hop (no such dispatcher on wasm; the fetch engine is
  *    non-blocking).
  */
@@ -144,18 +146,12 @@ class KtorWasmAuthApiClient(
             .toServerInfo(address = address, fallbackServerId = randomUuidV4())
     }
 
-    /** Address normalization, verbatim from `AuthApiClientImpl`. */
-    private fun normalizeAddress(address: String): String = address.trim().trimEnd('/').let {
-        if (it.startsWith("http://") || it.startsWith("https://")) it
-        else "https://$it"
-    }
-
     override suspend fun connectToServer(address: String): Result<ServerInfo> {
-        val normalizedAddress = normalizeAddress(address)
+        val normalizedAddress = normalizeServerAddress(address)
         // Same RetryPolicy wrap (max 2 retries) the JVM discovery path uses —
         // one call with backoff instead of re-taps each firing fresh probes.
         return RetryPolicy.executeWithRetry(maxRetries = 2) {
-            runCatching {
+            runCatchingRethrowingCancellation {
                 try {
                     val info = probeServerInfo(normalizedAddress)
                     // Atomically adopt the probed server AND drop any signed-in
@@ -173,8 +169,8 @@ class KtorWasmAuthApiClient(
     }
 
     override suspend fun getServerInfo(address: String): Result<ServerInfo> {
-        val normalizedAddress = normalizeAddress(address)
-        return runCatching { probeServerInfo(normalizedAddress) }
+        val normalizedAddress = normalizeServerAddress(address)
+        return runCatchingRethrowingCancellation { probeServerInfo(normalizedAddress) }
     }
 
     override suspend fun selectReachableAddress(): String? {
@@ -186,10 +182,10 @@ class KtorWasmAuthApiClient(
         // The primary is normalized like the alternates — a stored address
         // with a trailing '/' or missing scheme must not fail fetch and
         // wrongly skip to the alternates.
-        val normalizedPrimary = normalizeAddress(server.address)
+        val normalizedPrimary = normalizeServerAddress(server.address)
         if (probeHttp(normalizedPrimary).reachable) return normalizedPrimary
         for (alternate in server.alternateAddresses) {
-            val normalized = normalizeAddress(alternate)
+            val normalized = normalizeServerAddress(alternate)
             if (probeHttp(normalized).reachable) return normalized
         }
         return normalizedPrimary

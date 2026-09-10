@@ -60,3 +60,23 @@ fun isWatchedPercentage(percentage: Double): Boolean = percentage >= OFFLINE_WAT
  */
 val OfflineMediaItem.isFinishedOffline: Boolean
     get() = isWatchedPercentage(playedPercentage)
+
+/**
+ * The offline-row "counts as watched" test — the derived flip of the row's
+ * raw flags: played outright, OR finished by [isFinishedOffline]'s
+ * threshold. Every offline surface partitioning watched vs unwatched
+ * (badges, unplayed counts, download filters) reads this instead of
+ * re-deriving `isPlayed || isFinishedOffline` and drifting from the rule.
+ */
+val OfflineMediaItem.isWatchedOffline: Boolean
+    get() = isPlayed || isFinishedOffline
+
+/**
+ * The offline row's copy of [MediaItem.hasPlaybackPosition] — true when the
+ * row carries a non-zero playback position, regardless of played state. Same
+ * null handling (`null`/zero/negative ticks → false) and same ticks unit as
+ * the [MediaItem] predicate, so resume/progress surfaces stay one concept
+ * across the online and offline models.
+ */
+val OfflineMediaItem.hasPlaybackPosition: Boolean
+    get() = playbackPositionTicks != null && playbackPositionTicks > 0

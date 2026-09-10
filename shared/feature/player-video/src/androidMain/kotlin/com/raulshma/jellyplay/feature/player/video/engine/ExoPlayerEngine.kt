@@ -57,7 +57,6 @@ import com.raulshma.jellyplay.core.data.playback.EqualizerHelper
 import com.raulshma.jellyplay.core.data.playback.HighPassFilterAudioProcessor
 import com.raulshma.jellyplay.core.data.playback.isSessionKeyedUrl
 import com.raulshma.jellyplay.core.data.playback.LoudnessEnhancerHelper
-import com.raulshma.jellyplay.core.data.playback.MediaStreamVolume
 import com.raulshma.jellyplay.core.data.playback.NightModeHelper
 import com.raulshma.jellyplay.core.data.playback.ReplayGainAudioProcessor
 import com.raulshma.jellyplay.core.data.playback.ReverbHelper
@@ -76,7 +75,7 @@ import com.raulshma.jellyplay.core.model.TrackType
 import com.raulshma.jellyplay.feature.player.video.subtitle.AssSupport
 import com.raulshma.jellyplay.feature.player.video.subtitle.AndroidFontProvider
 import com.raulshma.jellyplay.feature.player.video.subtitle.OffsettingSubtitleParserFactory
-import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleMimeMapper
+import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleFormatCatalog
 import io.github.peerless2012.ass.media.AssHandler
 import io.github.peerless2012.ass.media.kt.withAssMkvSupport
 import io.github.peerless2012.ass.media.parser.AssSubtitleParserFactory
@@ -596,7 +595,7 @@ class ExoPlayerEngine(
         // point for content protection — the engine never hard-codes Widevine
         // or any scheme, so it stays testable without a DRM framework. A `null`
         // manager (clear content) leaves Media3's default no-DRM path in place.
-        // The provider's return is type-erased (`Any?`, Phase V2 common-ization);
+        // The provider's return is type-erased (`Any?`, common-ization);
         // only a media3 DrmSessionManager attaches — anything else is ignored.
         currentConfig.drmSessionManagerProvider?.provide()?.let { raw ->
             (raw as? DrmSessionManager)?.let { drmManager ->
@@ -680,8 +679,10 @@ class ExoPlayerEngine(
         // over stale activeTrackIsAss=true from a prior ASS track.
         activeTrackIsAss = false
         // Mirror the per-item state resets of release()+rebuild for the fields
-        // the fresh path re-establishes.
-        resetItemScopedState()
+        // the fresh path re-establishes. The item-scoped granularity (no
+        // transport-leaf flip) — release() adds those via
+        // [resetPublishedEngineState].
+        resetItemScopedPublishedState()
 
         trackSelector?.let { applyRequestTrackSelection(it, request, exoCfg) }
 
@@ -693,22 +694,18 @@ class ExoPlayerEngine(
     }
 
     /**
-     * The per-item state both [release] and [reusePlayerForRequest] must
-     * clear: stale cues from the previous item would linger into the new
-     * one's loading window, and the previous episode's buffered position,
-     * decoder counters, and "Stats for Nerds" snapshot would surface briefly
-     * on the new item.
+     * The ExoPlayer residue cleared alongside the base resets (C5): stale
+     * cues from the previous item would linger into the new one's loading
+     * window, and the previous episode's buffered position, decoder counters,
+     * and "Stats for Nerds" snapshot would surface briefly on the new item.
+     * The flow resets themselves live in [BasePlayerEngine].
      */
-    private fun resetItemScopedState() {
-        _currentCues.value = emptyList()
-        _availableTracks.value = emptyList()
+    override fun onResetItemScopedState() {
         lastSelectedTextTrackId = null
         subtitleTrackAutoDisabled = false
         resetStatsGuard()
         videoDecoderCounters = null
         wasPlayingBeforeActivityPause = false
-        _bufferedPositionMs.value = 0L
-        _videoStats.value = EngineVideoStats()
     }
 
     /**
@@ -796,7 +793,7 @@ class ExoPlayerEngine(
         request: PlaybackRequest,
     ): List<MediaItem.SubtitleConfiguration> =
         request.externalSubtitles.mapNotNull { sub ->
-            val mimeType = sub.mimeType ?: SubtitleMimeMapper.mapCodecToMime(sub.codec ?: sub.label) ?: return@mapNotNull null
+            val mimeType = sub.mimeType ?: SubtitleFormatCatalog.mapCodecToMime(sub.codec ?: sub.label) ?: return@mapNotNull null
             MediaItem.SubtitleConfiguration.Builder(Uri.parse(sub.url))
                 .setId(sub.id)
                 .setMimeType(mimeType)
@@ -983,9 +980,7 @@ class ExoPlayerEngine(
         releaseAudioEffects()
         cachedVolume = 1f
         lastUnmuteVolume = 1f
-        _playbackState.value = EnginePlaybackState.IDLE
-        _isPlaying.value = false
-        resetItemScopedState()
+        resetPublishedEngineState()
 
         // Drop the libass overlay + handler so the next load() rebuilds them
         // fresh. The AssSubtitleView is a child of the (now-cleared) subtitle
@@ -1030,42 +1025,26 @@ class ExoPlayerEngine(
 
     override val volume: Float get() = cachedVolume
 
-    override fun setVolume(value: Float) = runOnPlayerThread {
-        val p = player ?: return@runOnPlayerThread
-        val clamped = clamp01(value)
-        rememberUnmuteVolumeIfAudible(clamped)
-        p.volume = clamped
-        MediaStreamVolume.setNormalized(context, clamped)
+    // ── Volume / mute seams (C4) ────────────────────────────────────────────
+    // The four command bodies are final templates in ReloadablePlayerEngine;
+    // ExoPlayer contributes only the native write/read, the Media3 mute
+    // vocabulary (zero the handle on mute, restore it to full on unmute — the
+    // system stream carries the remembered level), and the player-thread
+    // dispatch with its former `player ?: return` abort.
+
+    override fun dispatchVolumeCommand(command: () -> Unit) = runOnPlayerThread {
+        if (player != null) command()
     }
 
-    override fun increaseVolume(delta: Float) = runOnPlayerThread {
-        val p = player ?: return@runOnPlayerThread
-        val next = (p.volume + delta).coerceAtMost(1f)
-        rememberUnmuteVolumeIfAudible(next)
-        p.volume = next
-        MediaStreamVolume.setNormalized(context, next)
+    override fun readNativeVolume(): Float? = player?.volume
+
+    override fun applyNativeVolume(normalized: Float) {
+        player?.volume = normalized
     }
 
-    override fun decreaseVolume(delta: Float) = runOnPlayerThread {
-        val p = player ?: return@runOnPlayerThread
-        val next = (p.volume - delta).coerceAtLeast(0f)
-        rememberUnmuteVolumeIfAudible(next)
-        p.volume = next
-        MediaStreamVolume.setNormalized(context, next)
-    }
-
-    override fun setMuted(muted: Boolean) = runOnPlayerThread {
-        val p = player ?: return@runOnPlayerThread
-        if (muted) {
-            snapshotSystemVolumeForMute()
-            p.volume = 0f
-            MediaStreamVolume.setNormalized(context, 0f)
-        } else {
-            val target = unmuteTarget()
-            p.volume = 1f
-            MediaStreamVolume.setNormalized(context, target)
-        }
-    }
+    override fun nativeVolumeRestore(muted: Boolean): PlaybackVolumePolicy.NativeVolumeRestore =
+        if (muted) PlaybackVolumePolicy.NativeVolumeRestore.ZERO
+        else PlaybackVolumePolicy.NativeVolumeRestore.FULL
 
     override fun snapshotIsPlaying(): Boolean = player?.isPlaying ?: super.snapshotIsPlaying()
 
@@ -1446,37 +1425,28 @@ class ExoPlayerEngine(
     }
 
     override fun setAspectRatio(ratio: AspectRatio) {
-        // Map the engine-neutral enum to the media3 resize mode here, inside the
-        // only adapter that uses media3's AspectRatioFrameLayout, so no media3
-        // constant crosses the engine seam.
-        val resizeMode = when (ratio) {
-            AspectRatio.FIT, AspectRatio.AUTO -> AspectRatioFrameLayout.RESIZE_MODE_FIT
-            AspectRatio.FILL -> AspectRatioFrameLayout.RESIZE_MODE_FILL
-            AspectRatio.CROP -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
-            AspectRatio.RATIO_16_9, AspectRatio.RATIO_4_3, AspectRatio.RATIO_21_9 ->
-                AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH
+        val plan = AspectRatioMapping.exoPlan(ratio)
+        // Map the policy's neutral selector to the media3 constants here, inside
+        // the only adapter that uses media3's AspectRatioFrameLayout, so no
+        // media3 constant crosses the engine seam.
+        val resizeMode = when (plan.resizeMode) {
+            AspectRatioMapping.ResizeMode.FIT -> AspectRatioFrameLayout.RESIZE_MODE_FIT
+            AspectRatioMapping.ResizeMode.FILL -> AspectRatioFrameLayout.RESIZE_MODE_FILL
+            AspectRatioMapping.ResizeMode.ZOOM -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+            AspectRatioMapping.ResizeMode.FIXED_WIDTH -> AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH
         }
         playerView?.setResizeMode(resizeMode)
-        val aspectValue = ratio.ratio
-        if (aspectValue != null && aspectValue > 0f) {
-            (playerView as? AspectRatioFrameLayout)?.setAspectRatio(aspectValue)
-        } else {
-            (playerView as? AspectRatioFrameLayout)?.setAspectRatio(0f)
-        }
+        (playerView as? AspectRatioFrameLayout)?.setAspectRatio(plan.aspectValue)
     }
 
     override val currentPositionMs: Long get() = player?.currentPosition ?: 0L
     override val durationMs: Long
         get() {
             // Prefer the ExoPlayer-resolved duration when available; fall back
-            // to the server-reported runTimeTicks, which for HLS/transcoded
-            // streams is the only accurate total-runtime source (ExoPlayer's
-            // `duration` is `C.TIME_UNSET` until/ unless the manifest advertises
-            // a finite VOD duration — Jellyfin transcode manifests often do
-            // not, leaving the seek bar and end-detection without a duration).
-            // Mirrors [MpvPlayerEngine.durationMs].
+            // to the server-reported runTimeTicks (see resolveDurationMs).
+            // Mirrors [MpvPlayerEngine.durationMs] via the shared ladder.
             val engine = player?.duration ?: C.TIME_UNSET
-            return if (engine != C.TIME_UNSET && engine > 0L) engine else serverDurationMs
+            return resolveDurationMs(engine, serverDurationMs)
         }
     override val playbackSpeed: Float get() = player?.playbackParameters?.speed ?: 1f
     override val audioSessionId: Int get() = player?.audioSessionId ?: C.AUDIO_SESSION_ID_UNSET
@@ -1767,7 +1737,7 @@ class ExoPlayerEngine(
         val exo = player ?: return@runOnPlayerThread
         val item = currentMediaItem ?: return@runOnPlayerThread
         val mimeType = source.mimeType
-            ?: SubtitleMimeMapper.mapCodecToMime(source.codec ?: source.label)
+            ?: SubtitleFormatCatalog.mapCodecToMime(source.codec ?: source.label)
             ?: run {
                 // A silent drop here used to strand the subtitle-download flow:
                 // the row flipped to "Use" but no track ever surfaced, so the

@@ -3,7 +3,7 @@ package com.raulshma.jellyplay.desktop
 import androidx.compose.ui.awt.ComposeWindow
 
 /**
- * Wave 13A testability extraction: the tray menu's "Show JellyPlay" window
+ *  testability extraction: the tray menu's "Show JellyPlay" window
  * restore and "Quit" handlers previously lived as inline lambdas inside
  * Main.kt's tray block, which put them outside any programmatic test reach
  * (docs/perf/desktop-skia-baseline.md, limits §6). Behavior here is

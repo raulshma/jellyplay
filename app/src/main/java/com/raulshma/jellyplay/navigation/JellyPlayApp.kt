@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.navigation
 
-import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.ActivityResult
@@ -60,6 +59,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -109,6 +109,7 @@ import com.raulshma.jellyplay.core.model.ExperimentalFeature
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.navigation.components.ExpressiveFloatingNavigationBar
 import com.raulshma.jellyplay.navigation.components.MoreToggleIcon
+import com.raulshma.jellyplay.navigation.playbackhost.ExternalPlayerHost
 import com.raulshma.jellyplay.navigation.playbackhost.HostDecision
 import com.raulshma.jellyplay.navigation.playbackhost.PlaybackHostRouter
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
@@ -126,13 +127,14 @@ import com.raulshma.jellyplay.core.designsystem.theme.containerTint
 import com.raulshma.jellyplay.core.designsystem.theme.shadowElevation
 import com.raulshma.jellyplay.core.designsystem.theme.tonalElevation
 import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
+import com.raulshma.jellyplay.core.ui.components.BackExitConfirmation
 import com.raulshma.jellyplay.core.ui.components.MiniPlayer
 import com.raulshma.jellyplay.core.ui.components.clearFloatingNav
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.LocalPerformanceMode
 import com.raulshma.jellyplay.core.ui.components.LocalFloatingNavVisibility
+import com.raulshma.jellyplay.core.ui.components.ScrollDirectionVisibility
 import com.raulshma.jellyplay.core.ui.feedback.LocalUserMessageBus
-import com.raulshma.jellyplay.core.ui.feedback.UserMessage
 import com.raulshma.jellyplay.core.ui.feedback.resolve
 import com.raulshma.jellyplay.core.ui.animation.DefaultNavTransitionPolicy
 import com.raulshma.jellyplay.core.ui.animation.NavDirection
@@ -140,52 +142,29 @@ import com.raulshma.jellyplay.core.ui.animation.NavTransitionContext
 import com.raulshma.jellyplay.core.ui.animation.isReducedMotion
 import com.raulshma.jellyplay.core.ui.animation.toTransition
 import com.raulshma.jellyplay.core.ui.navigation.ALL_TOP_LEVEL_ROUTE_KEYS
-import com.raulshma.jellyplay.core.ui.navigation.MUSIC_TOP_LEVEL_ROUTES
+import com.raulshma.jellyplay.core.ui.navigation.navIcon
 import com.raulshma.jellyplay.core.ui.navigation.Navigator
 import com.raulshma.jellyplay.core.ui.navigation.Route
-import com.raulshma.jellyplay.core.ui.navigation.VIDEO_TOP_LEVEL_ROUTES
 import com.raulshma.jellyplay.core.ui.navigation.rememberNavigationState
 import com.raulshma.jellyplay.core.ui.navigation.SHORTCUTS_NAV_KEY
-import com.raulshma.jellyplay.core.ui.navigation.applyNavCustomization
-import com.raulshma.jellyplay.core.ui.navigation.navKey
 import com.raulshma.jellyplay.core.ui.navigation.toNavRouteClass
 import com.raulshma.jellyplay.core.ui.tv.TvScaffold
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.LocalTvTypography
 import com.raulshma.jellyplay.core.ui.tv.isTv
 import com.raulshma.jellyplay.feature.auth.navigation.authSection
-import com.raulshma.jellyplay.feature.admin.navigation.adminSection
-import com.raulshma.jellyplay.feature.details.navigation.detailsSection
-import com.raulshma.jellyplay.feature.downloads.navigation.downloadsSection
-import com.raulshma.jellyplay.feature.editor.navigation.editorSection
 import com.raulshma.jellyplay.feature.home.navigation.HomePlayOnRedirect
-import com.raulshma.jellyplay.feature.home.navigation.homeSection
-import com.raulshma.jellyplay.feature.insights.navigation.insightsSection
-import com.raulshma.jellyplay.feature.library.navigation.librarySection
-import com.raulshma.jellyplay.feature.livetv.navigation.liveTvSection
-import com.raulshma.jellyplay.feature.music.navigation.musicSection
-import com.raulshma.jellyplay.feature.music.musichome.MusicHomeScreen
-import com.raulshma.jellyplay.feature.player.audio.navigation.audioPlayerSection
 import com.raulshma.jellyplay.feature.player.live.navigation.livePlayerSection
-import com.raulshma.jellyplay.feature.search.navigation.searchSection
-import com.raulshma.jellyplay.feature.settings.navigation.settingsSection
-import com.raulshma.jellyplay.feature.syncplay.navigation.syncPlaySection
-import com.raulshma.jellyplay.feature.onboarding.navigation.onboardingSection
-import com.raulshma.jellyplay.feature.newsletter.navigation.newsletterSection
-import com.raulshma.jellyplay.feature.requests.navigation.requestsSection
-import com.raulshma.jellyplay.feature.arrqueue.navigation.arrQueueSection
-import com.raulshma.jellyplay.feature.calendar.navigation.calendarSection
-import com.raulshma.jellyplay.feature.shortcuts.navigation.shortcutsSection
+import com.raulshma.jellyplay.feature.shell.onboardingGateRoute
+import com.raulshma.jellyplay.feature.shell.navigation.ShellHostHooks
+import com.raulshma.jellyplay.feature.shell.navigation.shellEntryProvider
 import com.raulshma.jellyplay.feature.subtitle.tester.navigation.subtitleTesterSection
 import com.raulshma.jellyplay.update.AppUpdateSheet
 import com.raulshma.jellyplay.shell.ShellInfra
-import com.raulshma.jellyplay.shell.SyncPlayOpenRequest
 import com.raulshma.jellyplay.shell.UpdateCoordinator
 import kotlinx.coroutines.launch
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
-
-private const val ExitConfirmationTimeoutMs = 2000L
 
 @Composable
 fun JellyPlayApp(
@@ -214,12 +193,22 @@ fun JellyPlayApp(
     }
 
     CompositionLocalProvider(
-        LocalUserMessageBus provides infra.userMessageBus,
+        // Resolved here (first composition) instead of MainActivity's
+        // onCreate — the bus is needed by every branch below, so this is as
+        // late as its provider can fire without redesigning the local.
+        LocalUserMessageBus provides infra.userMessageBusLazy.value,
         com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus provides sharedUserMessageBus,
     ) {
         when {
             isRestoring -> {}
-            isAuthenticated && !preferences.onboardingCompleted && !isTv -> {
+            // First-run wizard gate — the shared pure decision both shells run
+            // (feature/shell OnboardingGateRoute); the TV build auto-completes
+            // in the LaunchedEffect below instead of gating.
+            onboardingGateRoute(
+                authenticated = isAuthenticated,
+                onboardingCompleted = preferences.onboardingCompleted,
+                isTv = isTv,
+            ) != null -> {
                 OnboardingContent(
                     onComplete = {},
                     viewModel = viewModel,
@@ -235,18 +224,21 @@ fun JellyPlayApp(
                     )
                 }
                 CompositionLocalProvider(
-                    com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus provides infra.networkStatus,
+                    // Resolved in the AUTHENTICATED branch only, so
+                    // NetworkMonitor (and its connectivity-callback
+                    // registration) is never built for auth/onboarding
+                    // sessions.
+                    com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus provides infra.networkStatusLazy.value,
                     com.raulshma.jellyplay.core.ui.components.LocalServerHealth provides session.serverHealth,
                     com.raulshma.jellyplay.core.ui.components.LocalSurpriseOnLaunch provides surpriseController,
                 ) {
                     MainContent(
-                        onLogout = { revoke ->
-                            if (revoke) {
-                                session.revokeServerSession()
-                            } else {
-                                session.logout()
-                            }
-                        },
+                        // ADR 0001: the revoke/plain fork dispatches through
+                        // the shared ShellSessionController, whose sign-out
+                        // action lands in SessionCoordinator (remote-control
+                        // stop + sign-out) — the same fork desktop runs
+                        // against AuthRepository.
+                        onLogout = { revoke -> viewModel.logout(revoke) },
                         viewModel = viewModel,
                         preferences = preferences,
                         infra = infra,
@@ -374,55 +366,59 @@ private fun MainContent(
     // Shared (commonMain) bus — same instance the root provider supplies to
     // the migrated ViewModels; collected alongside the legacy bus below.
     val sharedUserMessageBus = com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus.current
-    var pendingExternalLaunch by remember { mutableStateOf<com.raulshma.jellyplay.ExternalPlayerLaunch?>(null) }
+    // One home for the external-player launch protocol (ExternalPlayerHost,
+    // beside PlaybackHostRouter): resolve → report-start → stash → chooser →
+    // failure-clears-stash+error, plus the result arm's position parse +
+    // report-stop — the ordering between those steps is pinned there
+    // (ExternalPlayerHostTest). The host owns the pending-launch stash, so it
+    // is remembered (stateful, unlike the stateless NavRequestCollector
+    // constructed inline below); the ActivityResultLauncher arrives as a
+    // per-call seam because the shell constructs the host BEFORE the launcher
+    // (the launcher's result callback feeds host.onResult). The bus rides a
+    // rememberUpdatedState wrapper so the remembered host always posts to the
+    // composition's current bus.
+    val currentMessageBus by rememberUpdatedState(userMessageBus)
+    val externalPlayerHost = remember {
+        ExternalPlayerHost(
+            buildLaunch = viewModel::buildExternalPlayerLaunch,
+            reportStart = viewModel::reportExternalPlaybackStart,
+            reportStopped = viewModel::reportExternalPlaybackStopped,
+            notifyNoPlayerFound = {
+                currentMessageBus.error(
+                    com.raulshma.jellyplay.core.ui.feedback.uiTextOf(
+                        com.raulshma.jellyplay.core.ui.R.string.msg_no_video_player_found,
+                    ),
+                )
+            },
+        )
+    }
     val externalPlayerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult(),
     ) { result: ActivityResult ->
-        val launch = pendingExternalLaunch
-        pendingExternalLaunch = null
-        if (launch != null) {
-            val finalMs = result.data?.let { data ->
-                val pos = data.extras?.get("position") ?: data.extras?.get("positionMs")
-                val ms = when (pos) {
-                    is Number -> pos.toLong()
-                    else -> -1L
-                }
-                ms.takeIf { it >= 0 }
-            }
-            val finalTicks = finalMs?.let { it * 10_000 } ?: -1L
-            viewModel.reportExternalPlaybackStopped(launch, finalTicks)
-        }
+        externalPlayerHost.onResult(
+            position = result.data?.extras?.get("position"),
+            positionMs = result.data?.extras?.get("positionMs"),
+        )
     }
     val navigator = Navigator(navigationState, navigateFilter = { route ->
         // Thin executing adapter for PlaybackHostRouter — the single owner of
         // the "which host mounts playback" decision. ExternalPlayer → the
-        // app-level ActivityResultLauncher below (its returned position is
-        // credited via reportExternalPlaybackStopped, so Continue Watching
-        // advances for regular videos and Live TV channels); DedicatedActivity
-        // → PlayerActivity (system PiP floats over this browse UI; back-stack
+        // host above (its returned position is credited via
+        // reportExternalPlaybackStopped, so Continue Watching advances for
+        // regular videos and Live TV channels); DedicatedActivity →
+        // PlayerActivity (system PiP floats over this browse UI; back-stack
         // choreography: shared taskAffinity, singleTask). Both return false so
         // the route never enters an in-nav back stack. InNav/NotPlayback →
         // true, the Navigator pushes normally.
         when (val decision = PlaybackHostRouter.decide(route, preferences.preferredPlayer)) {
             is HostDecision.ExternalPlayer -> {
                 scope.launch {
-                    val launch = viewModel.buildExternalPlayerLaunch(
+                    externalPlayerHost.launch(
                         itemId = decision.itemId,
                         mediaSourceId = decision.mediaSourceId,
                         startPositionTicks = decision.startPositionTicks,
-                    ) ?: return@launch
-                    viewModel.reportExternalPlaybackStart(launch)
-                    pendingExternalLaunch = launch
-                    val chooser = Intent.createChooser(launch.intent, "Open with…")
-                    runCatching { externalPlayerLauncher.launch(chooser) }
-                        .onFailure {
-                            pendingExternalLaunch = null
-                            userMessageBus.error(
-                                com.raulshma.jellyplay.core.ui.feedback.uiTextOf(
-                                    com.raulshma.jellyplay.core.ui.R.string.msg_no_video_player_found,
-                                ),
-                            )
-                        }
+                        startChooser = { chooser -> externalPlayerLauncher.launch(chooser) },
+                    )
                 }
                 false
             }
@@ -476,15 +472,14 @@ private fun MainContent(
         isOffline,
     ) {
         derivedStateOf {
-            when (homeMode) {
-                HomeMode.VIDEO -> VIDEO_TOP_LEVEL_ROUTES
-                HomeMode.MUSIC -> MUSIC_TOP_LEVEL_ROUTES
-            }.let { routes ->
-                // Server-bound destination with no offline fallback. Library is
-                // NOT here: its grid auto-switches to the offline store (#147).
-                val offlineHidden = if (isOffline) setOf(Route.LiveTv.navKey) else emptySet()
-                applyNavCustomization(routes, preferences.hiddenNavItems + offlineHidden, preferences.navItemOrder)
-            }
+            // Pure fold (VisibleTopLevelRoutes.kt): homeMode route set + the
+            // offline hide-set (LiveTv) + nav customization composition.
+            visibleTopLevelRoutes(
+                homeMode = homeMode,
+                hiddenNavItems = preferences.hiddenNavItems,
+                navItemOrder = preferences.navItemOrder,
+                isOffline = isOffline,
+            )
         }
     }
 
@@ -505,77 +500,61 @@ private fun MainContent(
         }
     }
 
-    val pendingRoute by viewModel.pendingRoute.collectAsStateWithLifecycle()
-    LaunchedEffect(pendingRoute) {
-        pendingRoute?.let { route ->
-            if (ALL_TOP_LEVEL_ROUTE_KEYS.contains(route)) {
-                navigationState.topLevelRoute.value = route
-            } else {
-                navigator.navigate(route)
-            }
-            viewModel.consumePendingRoute()
-        }
-    }
-
-    // Consume remote "Play" / "Playstate" / "GeneralCommand" navigation requests
-    // emitted by the WebSocket receiver.
-    LaunchedEffect(infra.remoteNavigationBridge) {
-        infra.remoteNavigationBridge.targets.collect { target ->
-            when (target) {
-                is com.raulshma.jellyplay.core.data.remote.NavigationTarget.ClosePlayer -> {
-                    // Pop any active player entries from every back stack so the
-                    // player UI actually disappears (not just hidden behind a tab
-                    // switch). This matches Jellyfin web's "Stop" semantics.
-                    navigationState.backStacks.values.forEach { stack ->
-                        while (stack.isNotEmpty()) {
-                            val last = stack.last()
-                            if (last is Route.VideoPlayer ||
-                                last is Route.AudioPlayer ||
-                                last is Route.LiveTvChannelPlayer
-                            ) {
-                                stack.removeLastOrNull()
-                            } else {
-                                break
-                            }
-                        }
-                    }
-                }
-                else -> navigator.navigate(
-                    when (target) {
-                        is com.raulshma.jellyplay.core.data.remote.NavigationTarget.OpenVideoPlayer -> Route.VideoPlayer(
-                            itemId = target.itemId,
-                            mediaSourceId = target.mediaSourceId,
-                            startPositionTicks = target.startPositionTicks,
-                            audioStreamIndex = target.audioStreamIndex,
-                            subtitleStreamIndex = target.subtitleStreamIndex,
-                        )
-                        is com.raulshma.jellyplay.core.data.remote.NavigationTarget.OpenAudioPlayer -> Route.AudioPlayer(target.itemId)
-                        is com.raulshma.jellyplay.core.data.remote.NavigationTarget.OpenMediaDetail -> Route.MediaDetail(target.itemId)
-                        else -> Route.Home
-                    }
-                )
-            }
-        }
-    }
-
-    // SyncPlay auto-open collector — lives next to the
-    // SyncPlayOpenCoordinator seam that feeds it.
-    SyncPlayAutoOpen(
-        openRequests = viewModel.syncPlayOpenCoordinator.openRequests,
-        navigationState = navigationState,
-        navigator = navigator,
+    // One home for the shell's nav-request collectors (NavRequestCollector,
+    // beside RemoteNavigationRouting): every collect-then-dispatch loop that
+    // used to live inline in this body — the policy forks are pure and pinned
+    // there; the effects below are one-line launchers. The controller is
+    // stateless, so no remember: each effect captures the instance current
+    // when it (re)launches, exactly as the former inline collectors captured
+    // `navigator` (whose navigateFilter carries the playback-host decision).
+    val snackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
+    val navRequests = NavRequestCollector(
+        topLevelKeys = ALL_TOP_LEVEL_ROUTE_KEYS,
+        navigate = navigator::navigate,
+        selectTopLevelTab = { route -> navigationState.topLevelRoute.value = route },
+        backStacks = { navigationState.backStacks.values },
+        consumePendingRoute = viewModel::consumePendingRoute,
+        presentSnackbar = { message ->
+            snackbarHostState.showSnackbar(message = message, withDismissAction = true)
+        },
     )
 
-    val snackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
+    // Deep links / launcher shortcuts / shared-text targets
+    // (MainViewModel.pendingRoute). Value-keyed over the lifecycle-aware
+    // state, so dispatch + the consume-once ack land in the frame the state
+    // is seen — the tab-vs-nested fork lives in the collector's pure fold.
+    val pendingRoute by viewModel.pendingRoute.collectAsStateWithLifecycle()
+    LaunchedEffect(pendingRoute) {
+        navRequests.dispatchPendingRoute(pendingRoute)
+    }
+
+    // Remote "Play" / "Playstate" / "GeneralCommand" navigation requests
+    // emitted by the WebSocket receiver; the target→route mapping and the
+    // multi-back-stack player pop live in RemoteNavigationRouting.kt (pure,
+    // pinned by RemoteNavigationRoutingTest). The bridge resolves
+    // INSIDE the effect body — LaunchedEffect runs after the frame applies,
+    // so its Koin construction no longer runs during any composition pass.
+    LaunchedEffect(infra.remoteNavigationBridgeLazy) {
+        navRequests.collectRemoteNavigation(infra.remoteNavigationBridgeLazy.value.targets)
+    }
+
+    // SyncPlay auto-open: a joined group started playing (or switched items)
+    // while no player is on top of any back stack → open the video player.
+    // When a player IS already open, its SyncPlayBridge drives the item load
+    // in place — the player-open guard lives in the collector's pure fold.
+    LaunchedEffect(viewModel.syncPlayOpenCoordinator) {
+        navRequests.collectSyncPlayOpens(viewModel.syncPlayOpenCoordinator.openRequests)
+    }
+
+    // Remote-control "now playing" snackbar; the title fallback + template
+    // format live in the collector's pure fold. Resolved inside the
+    // effect body for the same post-frame reason as the bridge above.
     val nowPlayingTemplate = stringResource(R.string.snackbar_now_playing)
-    androidx.compose.runtime.LaunchedEffect(infra.remoteControlReceiver) {
-        infra.remoteControlReceiver.playEvents.collect { event ->
-            val title = event.title.ifBlank { event.itemId }
-            snackbarHostState.showSnackbar(
-                message = nowPlayingTemplate.format(title),
-                withDismissAction = true,
-            )
-        }
+    androidx.compose.runtime.LaunchedEffect(infra.remoteControlReceiverLazy) {
+        navRequests.collectNowPlayingSnackbars(
+            events = infra.remoteControlReceiverLazy.value.playEvents,
+            messageTemplate = nowPlayingTemplate,
+        )
     }
 
     val navBarColorState = remember { mutableStateOf<Color?>(null) }
@@ -608,68 +587,35 @@ private fun MainContent(
     val previewBlurModifier =
         if (previewBlur > 0.5f) Modifier.blur(previewBlur.dp) else Modifier
 
-    // Single root collector for app-wide one-shot messages.
-    // Phone renders a Snackbar (accessible, dismissible, localizable); TV keeps
-    // a system Toast since the TV layout has no root SnackbarHost. Either way,
-    // emission is now centralized through UserMessageBus instead of scattered
-    // Toast.makeText calls across modules.
-    androidx.compose.runtime.LaunchedEffect(userMessageBus, isTv) {
-        userMessageBus.messages.collect { message ->
-            val resolvedText = message.text.resolve(context)
-            if (isTv) {
-                android.widget.Toast.makeText(
-                    context,
-                    resolvedText,
-                    if (message is UserMessage.Error) android.widget.Toast.LENGTH_LONG
-                    else android.widget.Toast.LENGTH_SHORT,
-                ).show()
-            } else {
-                snackbarHostState.showSnackbar(
-                    message = resolvedText,
-                    withDismissAction = true,
-                    duration = if (message is UserMessage.Error) {
-                        androidx.compose.material3.SnackbarDuration.Long
-                    } else {
-                        androidx.compose.material3.SnackbarDuration.Short
-                    },
-                )
-            }
-        }
+    // Single root collector pair for app-wide one-shot messages, behind the
+    // shared UserMessageHost seam: the merge→resolve→present choreography
+    // (serial presentation, queue-not-drop, exactly-once, per-source order)
+    // lives in feature/shell; the shell-side adaptation (the TV-Toast vs
+    // phone-Snackbar present fork and the legacy bus's severity projection)
+    // is constructed by shellUserMessageHost/legacySeverityOf in
+    // NavRequestCollector.kt. The host is rebuilt on isTv and both
+    // collectors key on (bus, isTv), so a TV/phone flip restarts collection
+    // exactly as the former hand-copied collectors did.
+    val userMessageHost = remember(isTv) {
+        shellUserMessageHost(context = context, isTv = isTv, snackbarHostState = snackbarHostState)
     }
 
-    // Same severity→duration mapping as the legacy bus above, but for the
-    // shared (commonMain) bus the migrated ViewModels post through. Resource
-    // messages resolve via compose-resources' suspend getString (asString()
-    // is @Composable-only, unavailable inside a collect lambda).
+    // Legacy (:core:ui feedback) bus — its Android payload type stays outside
+    // the seam via hostAdapted: the severity projection (legacySeverityOf)
+    // and the legacy UiText.resolve(context) resolution are supplied here,
+    // not the shared compose-resources resolver.
+    androidx.compose.runtime.LaunchedEffect(userMessageBus, isTv) {
+        userMessageHost.hostAdapted(
+            sources = listOf(userMessageBus.messages),
+            severityOf = ::legacySeverityOf,
+            resolveText = { message -> message.text.resolve(context) },
+        )
+    }
+
+    // Shared (commonMain) bus the migrated ViewModels post through — its
+    // payloads are already seam UserMessages, so plain host().
     androidx.compose.runtime.LaunchedEffect(sharedUserMessageBus, isTv) {
-        sharedUserMessageBus.messages.collect { message ->
-            val resolvedText = when (val text = message.text) {
-                is com.raulshma.jellyplay.core.ui.message.UiText.Raw -> text.value
-                is com.raulshma.jellyplay.core.ui.message.UiText.Resource ->
-                    org.jetbrains.compose.resources.getString(text.res, *text.args.toTypedArray())
-            }
-            if (isTv) {
-                android.widget.Toast.makeText(
-                    context,
-                    resolvedText,
-                    if (message is com.raulshma.jellyplay.core.ui.message.UserMessage.Error) {
-                        android.widget.Toast.LENGTH_LONG
-                    } else {
-                        android.widget.Toast.LENGTH_SHORT
-                    },
-                ).show()
-            } else {
-                snackbarHostState.showSnackbar(
-                    message = resolvedText,
-                    withDismissAction = true,
-                    duration = if (message is com.raulshma.jellyplay.core.ui.message.UserMessage.Error) {
-                        androidx.compose.material3.SnackbarDuration.Long
-                    } else {
-                        androidx.compose.material3.SnackbarDuration.Short
-                    },
-                )
-            }
-        }
+        userMessageHost.host(sharedUserMessageBus.messages)
     }
 
     val adaptiveInfo = rememberAdaptiveInfo()
@@ -683,8 +629,21 @@ private fun MainContent(
     val bottomNavHeight = Dimensions.floatingNavHeight // Canonical floating nav-bar height
     val bottomNavHeightPx = with(LocalDensity.current) { bottomNavHeight.toPx() }
     val bottomNavOffsetHeightPx = remember { mutableFloatStateOf(0f) }
-    val isBottomNavVisibleState = remember { mutableStateOf(true) }
-    var isBottomNavVisible by isBottomNavVisibleState
+    // Hide-on-scroll policy for the floating nav bar: core/ui's shared
+    // ScrollDirectionVisibility — the same policy the home dock feeds from its
+    // LazyListState. The nav's mechanism adapter is the NestedScrollConnection
+    // in PhoneContent below. There is deliberately NO at-top rule
+    // (forceVisibleAtTop = false — the nav never force-shows on returning to a
+    // list's top) and NO per-update canHide gate (canHide = null — its only
+    // gate is the settings-off reset LaunchedEffect in PhoneContent), matching
+    // the former inline state machine exactly. The module owns the visible
+    // state: `visibleState` is what LocalFloatingNavVisibility provides, and
+    // the offset animation below reads `visible` exactly as it read the former
+    // bare MutableState.
+    val bottomNavScrollVisibility = remember {
+        ScrollDirectionVisibility(thresholdPx = 15f, forceVisibleAtTop = false)
+    }
+    var isBottomNavVisible by bottomNavScrollVisibility.visibleState
 
     val animatedBottomNavOffset by androidx.compose.animation.core.animateFloatAsState(
         targetValue = if (isBottomNavVisible) 0f else -bottomNavHeightPx * 2,
@@ -721,7 +680,7 @@ private fun MainContent(
         LocalTvTypography provides tvTypography,
         LocalPerformanceMode provides preferences.performanceMode,
         com.raulshma.jellyplay.core.ui.feedback.LocalHapticsEnabled provides preferences.hapticsEnabled,
-        LocalFloatingNavVisibility provides isBottomNavVisibleState,
+        LocalFloatingNavVisibility provides bottomNavScrollVisibility.visibleState,
         com.raulshma.jellyplay.core.ui.preview.LocalMediaPreviewController provides mediaPreviewController,
         com.raulshma.jellyplay.core.ui.preview.LocalMediaPeekEnabled provides
             preferences.isExperimentalEnabled(ExperimentalFeature.MEDIA_CARD_PEEK),
@@ -766,6 +725,20 @@ private fun MainContent(
                 )
             }
 
+            // Play On (cast-to-Jellyfin-session) controller — the ONE
+            // construction site for the whole Play On surface family, hoisted
+            // above the TV / phone / full-screen branches for the same reason
+            // as the saveable state holder: a runtime TV-mode flip (or
+            // entering/leaving a full-screen route) re-dispatches the branch,
+            // and the mini bar's companion screen must keep rendering the
+            // same controller instead of re-resolving per branch. Activity-
+            // scoped through the ViewModelStore (Koin def in AppKoinModule),
+            // so the instance also survives config changes. Threaded to every
+            // host below as an explicit parameter — no Play On surface
+            // resolves it itself.
+            val playOn: com.raulshma.jellyplay.PlayOnViewModel =
+                org.koin.compose.viewmodel.koinViewModel()
+
             Box(Modifier.fillMaxSize()) {
             // Wrap the live content (TV / Phone / FullScreen) in its own Box so
             // the peek overlay's backdrop blur applies to it only, leaving the
@@ -801,6 +774,7 @@ private fun MainContent(
                     entryDecorator = entryDecorator,
                     onNowPlayingClick = onNowPlayingClick,
                     onAmbientClick = onAmbientClick,
+                    playOn = playOn,
                     tvDrawerState = tvDrawerState,
                     tvDrawerListState = tvDrawerListState,
                     libraryFolders = libraryFolders,
@@ -815,24 +789,28 @@ private fun MainContent(
                     // Wire the system/gesture back button to in-app navigation so back
                     // from a deep screen returns to the tab root. At a tab root, mirror
                     // the TV path: prompt with a toast and only exit on a second press
-                    // within ExitConfirmationTimeoutMs. The full-screen player is
-                    // excluded — it owns its own BackHandler.
+                    // inside the shared BackExitConfirmation window. The full-screen
+                    // player is excluded — it owns its own BackHandler.
+                    val backExitConfirmation = remember { BackExitConfirmation() }
                     var lastBackPressTime by remember { mutableLongStateOf(0L) }
                     BackHandler(enabled = true) {
-                        if (!navigator.isAtTabRoot()) {
-                            navigator.goBack()
-                        } else {
-                            val now = System.currentTimeMillis()
-                            if (now - lastBackPressTime < ExitConfirmationTimeoutMs) {
-                                lastBackPressTime = 0L
-                                (context as? android.app.Activity)?.moveTaskToBack(true)
-                            } else {
-                                lastBackPressTime = now
+                        when (val decision = backExitConfirmation.onBack(
+                            nowMs = System.currentTimeMillis(),
+                            lastAtMs = lastBackPressTime,
+                            atExitPoint = navigator.isAtTabRoot(),
+                        )) {
+                            BackExitConfirmation.Decision.Pop -> navigator.goBack()
+                            is BackExitConfirmation.Decision.Prompt -> {
+                                lastBackPressTime = decision.nowMs
                                 android.widget.Toast.makeText(
                                     context,
                                     context.getString(R.string.press_back_again_to_exit),
                                     android.widget.Toast.LENGTH_SHORT,
                                 ).show()
+                            }
+                            BackExitConfirmation.Decision.Exit -> {
+                                lastBackPressTime = 0L
+                                (context as? android.app.Activity)?.moveTaskToBack(true)
                             }
                         }
                     }
@@ -848,9 +826,10 @@ private fun MainContent(
                         entryDecorator = entryDecorator,
                         onNowPlayingClick = onNowPlayingClick,
                         onAmbientClick = onAmbientClick,
+                        playOn = playOn,
                         isAudioPlayerScreen = isAudioPlayerScreen,
                         isExpanded = isExpanded,
-                        isBottomNavVisibleState = isBottomNavVisibleState,
+                        bottomNavScrollVisibility = bottomNavScrollVisibility,
                         hideBottomNavOnScroll = preferences.hideBottomNavOnScroll,
                         bottomNavOffsetHeightPx = bottomNavOffsetHeightPx,
                         showMiniPlayer = showMiniPlayer,
@@ -880,7 +859,9 @@ private fun MainContent(
                         saveableStateHolder = saveableStateHolder,
                         entryDecorator = entryDecorator,
                         onNowPlayingClick = onNowPlayingClick,
-                        onAmbientClick = onAmbientClick,                    )
+                        onAmbientClick = onAmbientClick,
+                        playOn = playOn,
+                    )
                 }
                 }
             } // end inner blur Box
@@ -905,38 +886,6 @@ private fun MainContent(
 }
 
 /**
- * SyncPlay auto-open: a joined group started playing (or switched items)
- * while no player is on top of any back stack → open the video player.
- * When a player IS already open, its SyncPlayBridge drives the item load
- * in place — pushing another VideoPlayer route here would stack duplicate
- * player screens. Collector for [SyncPlayOpenCoordinator.openRequests],
- * kept out of [MainContent]'s body so each collector sits next to its
- * coordinator's seam.
- */
-@Composable
-private fun SyncPlayAutoOpen(
-    openRequests: kotlinx.coroutines.flow.Flow<SyncPlayOpenRequest>,
-    navigationState: com.raulshma.jellyplay.core.ui.navigation.NavigationState,
-    navigator: Navigator,
-) {
-    LaunchedEffect(Unit) {
-        openRequests.collect { request ->
-            val playerOpen = navigationState.backStacks.values.any { stack ->
-                stack.lastOrNull() is Route.VideoPlayer
-            }
-            if (!playerOpen) {
-                navigator.navigate(
-                    Route.VideoPlayer(
-                        itemId = request.itemId,
-                        startPositionTicks = request.startPositionTicks,
-                    )
-                )
-            }
-        }
-    }
-}
-
-/**
  * TV form-factor layout:_TV Material3 theme + [TvNavigationDrawer] host wrapping a single
  * [MainNavDisplay]. Extracted from [MainContent] so the per-form-factor scaffolding stays
  * isolated and the orchestrator stays a clean when-branch picker.
@@ -954,6 +903,7 @@ private fun TvContent(
     entryDecorator: NavEntryDecorator<NavKey>,
     onNowPlayingClick: () -> Unit,
     onAmbientClick: () -> Unit,
+    playOn: com.raulshma.jellyplay.PlayOnViewModel,
     tvDrawerState: androidx.tv.material3.DrawerState,
     tvDrawerListState: androidx.compose.foundation.lazy.LazyListState,
     libraryFolders: List<com.raulshma.jellyplay.core.model.LibraryFolder>,
@@ -1008,7 +958,7 @@ private fun TvContent(
                         } else {
                             activeTopLevelRoutes.getValue(route)
                         },
-                        icon = routeToIcon(route),
+                        icon = route.navIcon,
                     )
                 }
             }
@@ -1037,6 +987,7 @@ private fun TvContent(
                         entryDecorator = entryDecorator,
                         onNowPlayingClick = onNowPlayingClick,
                         onAmbientClick = onAmbientClick,
+                        playOn = playOn,
                     )
                     // TV mini-player transport: the drawer's "Now Playing" row only opens the
                     // full player, so without this overlay backgrounded audio has no D-pad-
@@ -1044,33 +995,15 @@ private fun TvContent(
                     // (MiniPlayer applies tvFocusIndicator); this is the host
                     // wiring gap for TV navigation.
                     if (showMiniPlayer) {
-                        val isAudioPlaying by audioPlaybackManager.isPlaying.collectAsStateWithLifecycle()
-                        val audioArtist by audioPlaybackManager.artist.collectAsStateWithLifecycle()
-                        val audioArtworkUrl by audioPlaybackManager.albumArtUrl.collectAsStateWithLifecycle()
-                        Box(
+                        AppMiniPlayerHost(
+                            audioPlaybackManager = audioPlaybackManager,
+                            title = audioTitle,
+                            onNowPlayingClick = onNowPlayingClick,
+                            onDismissMiniPlayer = onDismissMiniPlayer,
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
                                 .padding(bottom = 8.dp),
-                        ) {
-                            MiniPlayer(
-                                isVisible = true,
-                                title = audioTitle,
-                                artist = audioArtist,
-                                artworkUri = audioArtworkUrl,
-                                isPlaying = isAudioPlaying,
-                                onClick = onNowPlayingClick,
-                                onClose = {
-                                    audioPlaybackManager.stopAndRelease()
-                                    onDismissMiniPlayer()
-                                },
-                                onPlayPause = {
-                                    audioPlaybackManager.togglePlayPause()
-                                },
-                                onSkipNext = {
-                                    audioPlaybackManager.skipToNext()
-                                },
-                            )
-                        }
+                        )
                     }                }
             }
         }
@@ -1095,9 +1028,10 @@ private fun PhoneContent(
     entryDecorator: NavEntryDecorator<NavKey>,
     onNowPlayingClick: () -> Unit,
     onAmbientClick: () -> Unit,
+    playOn: com.raulshma.jellyplay.PlayOnViewModel,
     isAudioPlayerScreen: Boolean,
     isExpanded: Boolean,
-    isBottomNavVisibleState: androidx.compose.runtime.MutableState<Boolean>,
+    bottomNavScrollVisibility: ScrollDirectionVisibility,
     hideBottomNavOnScroll: Boolean,
     bottomNavOffsetHeightPx: androidx.compose.runtime.MutableFloatState,
     showMiniPlayer: Boolean,
@@ -1114,15 +1048,17 @@ private fun PhoneContent(
 ) {
     val systemNavBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-    var isBottomNavVisible by isBottomNavVisibleState
 
     // Play On (cast-to-Jellyfin-session) lives at the app shell so the mini
-    // transport persists across tabs. Owned by an activity-scoped VM: both
-    // this site and PlayOnCompanionScreen's default resolve through the same
-    // LocalViewModelStoreOwner (MainActivity) with the same Koin store key,
-    // so they observe one instance.
-    val playOnViewModel: com.raulshma.jellyplay.PlayOnViewModel = org.koin.compose.viewmodel.koinViewModel()
-    val playOnState by playOnViewModel.uiState.collectAsStateWithLifecycle()
+    // transport persists across tabs. The controller is the parameter
+    // threaded from MainContent's single construction site — this wiring
+    // (mini bar + device sheet), MainNavDisplay's companion entry and the
+    // Home redirect all read that one instance; nothing resolves it here.
+    // uiState is the LOW-FREQUENCY slice only (connection, metadata,
+    // play/pause): the per-tick position/duration/volume streams pass to the
+    // mini bar as narrow flows and are collected at its leaf sliders, so the
+    // ~1 Hz cast position tick no longer recomposes this whole shell scope.
+    val playOnState by playOn.uiState.collectAsStateWithLifecycle()
     var showPlayOnSheet by remember { mutableStateOf(false) }
     val playOnContext = LocalContext.current
     val onPlayOnClick: () -> Unit = { showPlayOnSheet = true }
@@ -1132,7 +1068,7 @@ private fun PhoneContent(
     val currentRoute = navigationState.backStacks[navigationState.topLevelRoute.value]?.lastOrNull()
     val isPlayOnCompanionOpen = currentRoute is Route.PlayOnCompanion
     androidx.compose.runtime.LaunchedEffect(showPlayOnSheet) {
-        if (showPlayOnSheet) playOnViewModel.startDiscovery(playOnContext)
+        if (showPlayOnSheet) playOn.startDiscovery(playOnContext)
     }
 
     // Global "More" overflow — a DotsVertical toggle docked in the nav bar
@@ -1155,17 +1091,17 @@ private fun PhoneContent(
         // identity stays stable, but it is only attached to the tree when the
         // setting is on.
         androidx.compose.runtime.LaunchedEffect(hideBottomNavOnScroll) {
-            if (!hideBottomNavOnScroll) isBottomNavVisible = true
+            if (!hideBottomNavOnScroll) bottomNavScrollVisibility.resetToVisible()
         }
         val nestedScrollConnection = remember {
             object : NestedScrollConnection {
                 override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
                     val delta = available.y
-                    if (delta < -15f) {
-                        isBottomNavVisible = false
-                    } else if (delta > 15f) {
-                        isBottomNavVisible = true
-                    }
+                    // The policy (15px dead zone, hide on scroll-down / show
+                    // on scroll-up, no at-top rule, no per-update gate) lives
+                    // in the shared ScrollDirectionVisibility; this connection
+                    // is only the feed.
+                    bottomNavScrollVisibility.onScrollDelta(delta)
                     return Offset.Zero
                 }
             }
@@ -1238,42 +1174,28 @@ private fun PhoneContent(
                         entryDecorator = entryDecorator,
                         onNowPlayingClick = onNowPlayingClick,
                         onAmbientClick = onAmbientClick,
-                        playOnStrategy = playOnViewModel.strategy,
+                        playOn = playOn,
                         surpriseRequests = surpriseRequests,
                     )
                 }
                 if (showMiniPlayer) {
-                    val isAudioPlaying by audioPlaybackManager.isPlaying.collectAsStateWithLifecycle()
                     val audioTitle by audioPlaybackManager.title.collectAsStateWithLifecycle()
-                    val audioArtist by audioPlaybackManager.artist.collectAsStateWithLifecycle()
-                    val audioArtworkUrl by audioPlaybackManager.albumArtUrl.collectAsStateWithLifecycle()
                     if (isExpanded) {
-                        Box(
+                        AppMiniPlayerHost(
+                            audioPlaybackManager = audioPlaybackManager,
+                            title = audioTitle,
+                            onNowPlayingClick = onNowPlayingClick,
+                            onDismissMiniPlayer = onDismissMiniPlayer,
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
                                 .padding(bottom = systemNavBarBottom + 2.dp)
-                        ) {
-                            MiniPlayer(
-                                isVisible = true,
-                                title = audioTitle,
-                                artist = audioArtist,
-                                artworkUri = audioArtworkUrl,
-                                isPlaying = isAudioPlaying,
-                                onClick = onNowPlayingClick,
-                                onClose = {
-                                    audioPlaybackManager.stopAndRelease()
-                                    onDismissMiniPlayer()
-                                },
-                                onPlayPause = {
-                                    audioPlaybackManager.togglePlayPause()
-                                },
-                                onSkipNext = {
-                                    audioPlaybackManager.skipToNext()
-                                },
-                            )
-                        }
+                        )
                     } else {
-                        Box(
+                        AppMiniPlayerHost(
+                            audioPlaybackManager = audioPlaybackManager,
+                            title = audioTitle,
+                            onNowPlayingClick = onNowPlayingClick,
+                            onDismissMiniPlayer = onDismissMiniPlayer,
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
                                 .padding(bottom = systemNavBarBottom + 60.dp)
@@ -1282,30 +1204,14 @@ private fun PhoneContent(
                                     val yOffset = (-bottomNavOffsetHeightPx.floatValue).coerceAtMost(maxOffset)
                                     IntOffset(x = 0, y = yOffset.roundToInt())
                                 }
-                        ) {
-                            MiniPlayer(
-                                isVisible = true,
-                                title = audioTitle,
-                                artist = audioArtist,
-                                artworkUri = audioArtworkUrl,
-                                isPlaying = isAudioPlaying,
-                                onClick = onNowPlayingClick,
-                                onClose = {
-                                    audioPlaybackManager.stopAndRelease()
-                                    onDismissMiniPlayer()
-                                },
-                                onPlayPause = {
-                                    audioPlaybackManager.togglePlayPause()
-                                },
-                                onSkipNext = {
-                                    audioPlaybackManager.skipToNext()
-                                },
-                            )
-                        }
+                        )
                     }
                 }                // Play On persistent transport bar — visible while a Jellyfin
                 // remote session is active and the full-screen companion is not
-                // already open. Sits above the floating nav bar.
+                // already open. Sits above the floating nav bar. The per-tick
+                // transport streams pass through as narrow flows (collected at
+                // the bar's leaf sliders) so this scope only recomposes on the
+                // low-frequency slice — connection, metadata, play/pause.
                 if (playOnState.isConnected && !isPlayOnCompanionOpen) {
                     com.raulshma.jellyplay.components.PlayOnMiniBar(
                         isVisible = playOnState.isConnected,
@@ -1313,15 +1219,15 @@ private fun PhoneContent(
                         title = playOnState.title,
                         subtitle = playOnState.artist,
                         isPlaying = playOnState.isPlaying,
-                        positionMs = playOnState.positionMs,
-                        durationMs = playOnState.durationMs,
-                        volume = playOnState.volume,
+                        positionMsFlow = playOn.positionMsFlow,
+                        durationMsFlow = playOn.durationMsFlow,
+                        volumeFlow = playOn.volumeFlow,
                         onPlayPause = {
-                            if (playOnState.isPlaying) playOnViewModel.castPause() else playOnViewModel.castPlay()
+                            if (playOnState.isPlaying) playOn.castPause() else playOn.castPlay()
                         },
-                        onSeek = { playOnViewModel.castSeekTo(it) },
-                        onVolume = { playOnViewModel.setCastVolume(it) },
-                        onDisconnect = { playOnViewModel.disconnect(playOnContext) },
+                        onSeek = { playOn.castSeekTo(it) },
+                        onVolume = { playOn.setCastVolume(it) },
+                        onDisconnect = { playOn.disconnect(playOnContext) },
                         onExpand = { navigator.navigate(Route.PlayOnCompanion) },
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
@@ -1332,11 +1238,11 @@ private fun PhoneContent(
                     com.raulshma.jellyplay.components.PlayOnDeviceSheet(
                         devices = playOnState.devices,
                         onSelect = { device ->
-                            playOnViewModel.connectAndFling(playOnContext, device)
+                            playOn.connectAndFling(playOnContext, device)
                             showPlayOnSheet = false
                         },
                         onDismiss = {
-                            playOnViewModel.stopDiscovery()
+                            playOn.stopDiscovery()
                             showPlayOnSheet = false
                         },
                     )
@@ -1423,6 +1329,48 @@ private fun PhoneContent(
     }
 
 /**
+ * Single audio mini-player host for every form-factor shell (TV overlay,
+ * phone NavigationRail, phone compact floating-nav). Owns the playback-flow
+ * collects and the [MiniPlayer] transport wiring that all three shells used
+ * to paste verbatim; [title] stays a parameter because [TvContent] hoists its
+ * own title collect to feed the drawer's Now Playing row. Per-shell placement —
+ * alignment, bottom padding and the compact shell's scroll-coupled offset —
+ * arrives via [modifier]; the `showMiniPlayer` gate stays at the call sites.
+ */
+@Composable
+private fun AppMiniPlayerHost(
+    audioPlaybackManager: AudioPlaybackManager,
+    title: String,
+    onNowPlayingClick: () -> Unit,
+    onDismissMiniPlayer: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val isAudioPlaying by audioPlaybackManager.isPlaying.collectAsStateWithLifecycle()
+    val audioArtist by audioPlaybackManager.artist.collectAsStateWithLifecycle()
+    val audioArtworkUrl by audioPlaybackManager.albumArtUrl.collectAsStateWithLifecycle()
+    Box(modifier = modifier) {
+        MiniPlayer(
+            isVisible = true,
+            title = title,
+            artist = audioArtist,
+            artworkUri = audioArtworkUrl,
+            isPlaying = isAudioPlaying,
+            onClick = onNowPlayingClick,
+            onClose = {
+                audioPlaybackManager.stopAndRelease()
+                onDismissMiniPlayer()
+            },
+            onPlayPause = {
+                audioPlaybackManager.togglePlayPause()
+            },
+            onSkipNext = {
+                audioPlaybackManager.skipToNext()
+            },
+        )
+    }
+}
+
+/**
  * Full-screen layout (player / onboarding / ambient / photo viewer): bare [Box] with
  * [MainNavDisplay]. Deliberately
  * omits drawer / nav-bar / mini-player chrome.
@@ -1437,7 +1385,9 @@ private fun FullScreenContent(
     saveableStateHolder: androidx.compose.runtime.saveable.SaveableStateHolder,
     entryDecorator: NavEntryDecorator<NavKey>,
     onNowPlayingClick: () -> Unit,
-    onAmbientClick: () -> Unit,) {
+    onAmbientClick: () -> Unit,
+    playOn: com.raulshma.jellyplay.PlayOnViewModel,
+) {
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -1453,17 +1403,9 @@ private fun FullScreenContent(
             entryDecorator = entryDecorator,
             onNowPlayingClick = onNowPlayingClick,
             onAmbientClick = onAmbientClick,
-        )    }
-}
-
-private fun routeToIcon(route: Route): ImageVector = when (route) {
-    Route.Home -> Tabler.Outline.Home
-    Route.Library -> Tabler.Outline.Stack2
-    Route.Search -> Tabler.Outline.Search
-    Route.LiveTv -> Tabler.Outline.DeviceTv
-    Route.MusicBrowse -> Tabler.Outline.Disc
-    Route.Shortcuts -> Tabler.Outline.Apps
-    else -> Tabler.Outline.Home
+            playOn = playOn,
+        )
+    }
 }
 
 @Composable
@@ -1480,7 +1422,7 @@ internal fun NavIcon(
         label = "iconScale",
     )
     Icon(
-        imageVector = routeToIcon(route),
+        imageVector = route.navIcon,
         contentDescription = label,
         tint = tint,
         modifier = androidx.compose.ui.Modifier
@@ -1502,7 +1444,7 @@ private fun MainNavDisplay(
     modifier: Modifier = Modifier,
     onNowPlayingClick: () -> Unit = {},
     onAmbientClick: () -> Unit = {},
-    playOnStrategy: com.raulshma.jellyplay.core.data.cast.remote.JellyfinRemotePlayCastStrategy? = null,
+    playOn: com.raulshma.jellyplay.PlayOnViewModel,
     surpriseRequests: kotlinx.coroutines.flow.Flow<Unit> = kotlinx.coroutines.flow.emptyFlow(),
 ) {
     val currentBackStack = navigationState.backStacks[navigationState.topLevelRoute.value] ?: return
@@ -1581,87 +1523,59 @@ private fun MainNavDisplay(
 
     // Remember the entry provider graph so the ~25 section builders aren't
     // re-invoked (allocating fresh lambdas + entry objects) on every
-    // MainNavDisplay recomposition. Re-key on the values it captures.
-    val sharedEntryProvider = remember(
+    // MainNavDisplay recomposition. The 20 shared sections are the shell
+    // module's appSections (one canonical graph behind both shells); this
+    // shell adds only what cannot leave Android — the androidMain-only
+    // livePlayer/subtitleTester builders and the inline PlayOnCompanion
+    // entry — through shellEntryProvider's extraSections slot, which the
+    // shared registration ledger sees too.
+    val shellHost = remember(
         navigator,
         homeMode,
         onModeChange,
         onNowPlayingClick,
         onAmbientClick,
         onLogout,
-        playOnStrategy,
+        playOn,
     ) {
-        entryProvider {
-            homeSection(
-                navigator = navigator,
-                homeMode = homeMode,
-                onModeChange = onModeChange,
-                // The shared home module narrows the Play-On surface to its
-                // HomePlayOnRedirect seam (the concrete cast strategy is
-                // Android-bound); adapt the real strategy here — probe +
-                // fling, exactly the inline shape the legacy homeSection had.
-                playOnStrategy = playOnStrategy?.let { strategy ->
-                    HomePlayOnRedirect { itemId, startPositionMs ->
-                        strategy.isConnected.value.also { connected ->
-                            if (connected) {
-                                strategy.loadMedia(itemId = itemId, startPositionMs = startPositionMs)
-                            }
-                        }
-                    }
-                },
-                surpriseRequests = surpriseRequests,
-                musicContent = {
-                    MusicHomeScreen(
-                        onItemClick = { itemId -> navigator.navigate(Route.MediaDetail(itemId)) },
-                        onAlbumClick = { albumId -> navigator.navigate(Route.AlbumDetail(albumId)) },
-                        onArtistsClick = { navigator.navigate(Route.Artists) },
-                        onAlbumsClick = { navigator.navigate(Route.Albums) },
-                        onTracksClick = { navigator.navigate(Route.Tracks) },
-                        onGenresClick = { navigator.navigate(Route.Genres) },
-                        onPlaylistsClick = { navigator.navigate(Route.Playlists) },
-                        onNowPlayingClick = onNowPlayingClick,
-                        onAmbientClick = onAmbientClick,
-                    )
-                },
-            )
-            librarySection(navigator)
-            searchSection(navigator)
-            liveTvSection(navigator)
-            detailsSection(navigator)
-            editorSection(navigator)
+        ShellHostHooks(
+            homeMode = homeMode,
+            onHomeModeChange = onModeChange,
+            onNowPlayingClick = onNowPlayingClick,
+            onAmbientClick = onAmbientClick,
+            onLogout = onLogout,
+            onCheckForUpdates = { mainViewModel.updateCoordinator.manualCheckForUpdate() },
+            // Lazy .value reads — admin refreshes don't rebuild the graph.
+            isAdmin = { isAdminState.value },
+            isRefreshingAdmin = { isRefreshingAdminState.value },
+            onRefreshAdmin = { mainViewModel.refreshAdminStatus() },
+            // The shared home module narrows the Play-On surface to its
+            // HomePlayOnRedirect seam (the concrete strategy is Android-
+            // bound); the probe + fling choreography lives on the controller
+            // (flingIfConnected), so the strategy never leaves it. Declared
+            // delta: the redirect is active on EVERY host now —
+            // it used to be phone-layout-only (the TV and full-screen
+            // MainNavDisplay calls passed no strategy). Only observable when
+            // a remote session is already connected, which itself can only
+            // be initiated from the phone layout's Play On device sheet.
+            playOnRedirect = HomePlayOnRedirect(playOn::flingIfConnected),
+            surpriseRequests = surpriseRequests,
+        )
+    }
+    val shellSections = remember(navigator, shellHost) {
+        shellEntryProvider(navigator = navigator, host = shellHost) {
             livePlayerSection(navigator)
-            audioPlayerSection(navigator)
-            downloadsSection(navigator)
-            authSection(navigator) { navigator.goBack() }
-            settingsSection(
-                navigator = navigator,
-                onLogout = onLogout,
-                onSetupWizard = { navigator.navigate(Route.Onboarding) },
-                onCheckForUpdates = { mainViewModel.updateCoordinator.manualCheckForUpdate() },
-            )
-            adminSection(
-                navigator = navigator,
-                isAdmin = { isAdminState.value },
-                isRefreshingAdmin = { isRefreshingAdminState.value },
-                onRefreshAdmin = { mainViewModel.refreshAdminStatus() },
-            )
-            musicSection(navigator)
-            syncPlaySection(navigator)
-            onboardingSection { navigator.goBack() }
-            newsletterSection(navigator)
-            insightsSection(navigator)
-            requestsSection(navigator)
-            arrQueueSection(navigator)
-            calendarSection(navigator)
-            shortcutsSection(navigator)
             subtitleTesterSection(navigator)
             // Play On companion — full-screen remote-control surface reached by
-            // tapping the persistent PlayOnMiniBar. Reuses the activity-scoped
-            // PlayOnViewModel (same instance the mini bar holds), so state stays
-            // in sync without threading the VM through params.
+            // tapping the persistent PlayOnMiniBar. The controller arrives as
+            // an explicit parameter: the same single instance MainContent
+            // constructs and the mini bar renders. The former koinViewModel()
+            // self-resolution here was identity-by-convention — it held only
+            // while both sites sat under MainActivity's ViewModelStoreOwner.
             entry<Route.PlayOnCompanion> {
                 com.raulshma.jellyplay.components.PlayOnCompanionScreen(
                     onBack = { navigator.goBack() },
+                    playOn = playOn,
                 )
             }
         }
@@ -1686,7 +1600,7 @@ private fun MainNavDisplay(
             val initialRoute = initialState.entries.lastOrNull()?.contentKey as? Route
             resolveTransition(targetRoute, initialRoute, NavDirection.PREDICTIVE_POP)
         },
-        entryProvider = sharedEntryProvider,
+        entryProvider = shellSections.entryProvider,
         modifier = modifier,
     )
 }

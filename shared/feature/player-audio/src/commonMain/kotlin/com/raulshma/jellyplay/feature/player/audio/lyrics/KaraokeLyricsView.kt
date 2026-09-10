@@ -70,7 +70,11 @@ fun KaraokeLyricsView(
             contentPadding = PaddingValues(vertical = 80.dp, horizontal = 24.dp),
             userScrollEnabled = false,
         ) {
-            itemsIndexed(items = lyrics, key = { _, line -> "${line.timeMs}_${line.text.hashCode()}" }) { index, line ->
+            itemsIndexed(
+                items = lyrics,
+                key = { _, line -> "${line.timeMs}_${line.text.hashCode()}" },
+                contentType = { _, _ -> "lyricLine" },
+            ) { index, line ->
                 val isCurrent = index == currentIndex
                 val lineAlpha by animateFloatAsState(
                     targetValue = if (isCurrent) activeAlpha else upcomingAlpha,

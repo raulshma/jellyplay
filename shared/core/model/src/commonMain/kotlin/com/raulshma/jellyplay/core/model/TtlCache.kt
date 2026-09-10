@@ -8,7 +8,7 @@ package com.raulshma.jellyplay.core.model
  * sits below the layer that owned the cache; both depend on `core:model`, so
  * the canonical implementation lives here and the duplicates were removed.
  *
- * Thread-safety regime (wave 15B promotion to commonMain): on the JVM targets
+ * Thread-safety regime (promotion to commonMain): on the JVM targets
  * (android + desktop) the backing map is a `Collections.synchronizedMap`
  * wrapper — the exact historical shape — and [withMapMonitor] takes that
  * wrapper's monitor, so every compound section below is mutually exclusive
@@ -70,6 +70,21 @@ class TtlCache<V>(
 
     fun put(key: String, value: V) {
         map[key] = TtlEntry(value, clock())
+    }
+
+    /**
+     * Cache-aside fold for the get-miss-fetch-put sequence the API clients
+     * run inside their retry blocks: returns the cached value, or runs
+     * [producer] and caches (then returns) its result. [producer] runs only
+     * on a miss and only a successful result is cached — a throw propagates
+     * WITHOUT a put, exactly like the unfolded sequence. Inline so callers
+     * inside suspend blocks can fetch in [producer] without this class
+     * depending on coroutines; the same not-single-flight caveat as the class
+     * KDoc applies (concurrent callers may both run [producer]).
+     */
+    inline fun getOrPut(key: String, producer: () -> V): V {
+        get(key)?.let { return it }
+        return producer().also { put(key, it) }
     }
 
     /** Identity-aware [put]. */

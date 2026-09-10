@@ -25,6 +25,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.ExperimentalMaterial3Api
 import com.raulshma.jellyplay.core.ui.components.PullToRefreshBox
+import com.raulshma.jellyplay.core.ui.components.DeferredRefreshEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -99,8 +100,20 @@ fun AlbumDetailScreen(
         viewModel.loadAlbum(albumId)
     }
 
-    LaunchedEffect(viewModel.mixFirstTrackId) {
-        viewModel.mixFirstTrackId?.let {
+    DeferredRefreshEffect(viewModel.deferredRefresher)
+
+    // Stable URL-builder refs (MediaDetailScreen's rememberedGetImageUrl idiom) so
+    // AlbumDetailContent can skip recomposition while trackDownloads re-emits a
+    // fresh Map on every download-progress tick.
+    val rememberedGetImageUrl = remember(viewModel) { { id: String -> viewModel.getImageUrl(id) } }
+    val rememberedGetBackdropUrl = remember(viewModel) { { id: String -> viewModel.getBackdropUrl(id) } }
+
+    // One collected mix snapshot drives both the isStartingMix progress gate
+    // and the first-track navigation one-shot (InstantMixStateHolder fold).
+    val mixState by viewModel.mixState.collectAsStateWithLifecycle()
+
+    LaunchedEffect(mixState.firstTrackId) {
+        mixState.firstTrackId?.let {
             viewModel.consumeMixEvent()
             onTrackClick(it)
         }
@@ -138,8 +151,8 @@ fun AlbumDetailScreen(
                     detail = viewModel.detail!!,
                     tracks = viewModel.tracks,
                     trackDownloads = trackDownloads,
-                    getImageUrl = { viewModel.getImageUrl(it) },
-                    getBackdropUrl = { viewModel.getBackdropUrl(it) },
+                    getImageUrl = rememberedGetImageUrl,
+                    getBackdropUrl = rememberedGetBackdropUrl,
                     onTrackClick = onTrackClick,
                     onPlayAlbum = { tracks, startIndex ->
                         viewModel.playAlbum(tracks, startIndex)
@@ -149,7 +162,7 @@ fun AlbumDetailScreen(
                     },
                     onAddToQueue = { track -> viewModel.addToQueue(track) },
                     onInstantMix = { viewModel.startInstantMix(albumId) },
-                    isStartingMix = viewModel.isStartingMix,
+                    isStartingMix = mixState.isStarting,
                     onDownloadTrack = { track -> viewModel.downloadTrack(track) },
                     onDownloadAlbum = { viewModel.downloadAlbum() },
                     onDeleteAlbum = { viewModel.deleteAlbumDownloads() },
@@ -513,10 +526,13 @@ private fun TrackItem(
         }
 
         track.runTimeTicks?.let { ticks ->
-            val minutes = (ticks / 600_000_000)
-            val seconds = ((ticks / 10_000_000) % 60)
+            val durationText = remember(ticks) {
+                val minutes = (ticks / 600_000_000)
+                val seconds = ((ticks / 10_000_000) % 60)
+                String.format("%d:%02d", minutes, seconds)
+            }
             Text(
-                text = String.format("%d:%02d", minutes, seconds),
+                text = durationText,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

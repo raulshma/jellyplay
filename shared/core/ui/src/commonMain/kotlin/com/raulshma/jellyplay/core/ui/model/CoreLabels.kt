@@ -11,7 +11,7 @@ import org.jetbrains.compose.resources.stringResource
  * are module-internal (shared/feature:library pattern, same story as the
  * media-type names below: display strings resolve at the UI layer while the
  * `@StringRes Int` halves stay in the legacy :core:ui shim until every
- * consumer has migrated off resource ids, plan §Phase X).
+ * consumer has migrated off resource ids).
  */
 
 /** Localized "Cancel" (confirm-dialog dismiss label). */

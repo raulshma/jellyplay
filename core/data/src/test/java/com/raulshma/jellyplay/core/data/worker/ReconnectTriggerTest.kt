@@ -42,6 +42,9 @@ class ReconnectTriggerTest {
 
     private class FakeOfflineModeManager(initial: OfflineMode) : OfflineModeManager {
         override val offlineMode = MutableStateFlow(initial)
+        // The reconnect edge only watches the mode; the going-online flag is
+        // the manager-impls' choreography and stays parked here.
+        override val goingOnline = MutableStateFlow(false)
         override val isOffline: Boolean get() = offlineMode.value != OfflineMode.ONLINE
         override val networkStatus = MutableStateFlow(NetworkStatus.Online)
         override fun toggleManualOffline() {

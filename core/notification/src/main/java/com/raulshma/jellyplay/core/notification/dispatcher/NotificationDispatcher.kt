@@ -11,6 +11,7 @@ import androidx.core.app.NotificationManagerCompat
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.NotificationPreferences
+import com.raulshma.jellyplay.core.model.deeplink.DeepLinkGrammar
 import com.raulshma.jellyplay.core.notification.R
 import com.raulshma.jellyplay.core.notification.channel.NotificationChannelManager
 import com.raulshma.jellyplay.core.notification.receiver.NotificationActionReceiver
@@ -223,7 +224,7 @@ class NotificationDispatcher(
         val contentIntent = PendingIntent.getActivity(
             context,
             notificationId,
-            Intent(Intent.ACTION_VIEW, android.net.Uri.parse("jellyplay://media/${item.id}"))
+            Intent(Intent.ACTION_VIEW, android.net.Uri.parse(DeepLinkGrammar.mediaLink(item.id)))
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
                 .setPackage(context.packageName),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,

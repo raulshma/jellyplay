@@ -13,7 +13,7 @@ kotlin {
         namespace = "com.raulshma.jellyplay.shared.feature.details"
         compileSdk = 37
         minSdk = 28
-        // Compose-resources packaging (wave-21 device-pass finding): with the
+        // Compose-resources packaging (device-pass finding): with the
         // AGP-9 KMP library plugin, android resources are OFF by default, so
         // copyAndroidMainComposeResourcesToAndroidAssets never runs and the
         // app APK ships this module's Res accessors with NO backing .cvr
@@ -26,7 +26,7 @@ kotlin {
         }
     }
 
-    // Wave 16C: second shared/feature module with the web target — the
+    // Second shared/feature module with the web target — the
     // SeerrDetail slice renders in the ComposeViewport web shell (the
     // Requests→SeerrDetail navigation stub becomes real). The old blocker
     // (java.time/java.text in commonMain) is gone two ways: SeerrDetailScreen/
@@ -66,12 +66,16 @@ kotlin {
             implementation(project(":shared:core:model"))
             implementation(project(":shared:core:designsystem"))
             implementation(project(":shared:core:data"))
+            // runCatchingRethrowingCancellation in resolveTargetItemIds (the
+            // sanctioned wrapper — a bare runCatching there masked cancellation
+            // of the canonicalEpisodeIds fetch).
+            implementation(project(":shared:core:concurrency"))
             // Preference/state stores + projections (DetailStores bundle) and
             // the per-feature slices (Seerr, Downloads, Library, HomeDiscovery,
             // Experimental, PlayerEngine, AppRuntime).
             implementation(project(":shared:core:datastore"))
             implementation(project(":shared:core:ui"))
-            // SeerrDetailUtils' purified date formatting (wave 16C): the java.time
+            // SeerrDetailUtils' purified date formatting: the java.time
             // "yyyy-MM-dd" parse moved onto kotlinx-datetime's LocalDate.parse.
             implementation(libs.kotlinx.datetime)
             // JetBrains CMP distribution (see catalog note): Android targets
@@ -96,7 +100,7 @@ kotlin {
             // collectAsStateWithLifecycle in the screens.
             implementation(libs.lifecycle.runtime.compose)
             implementation(libs.coil.compose)
-            // Koin owns every details ViewModel (V3/Phase X feature conveyor:
+            // Koin owns every details ViewModel (V3/ feature conveyor:
             // one framework per type — the Hilt annotations were stripped at
             // the move).
             implementation(libs.koin.core)
@@ -115,7 +119,7 @@ kotlin {
             // The trailer-host actual delegates to legacy core:ui's WebView
             // InlineTrailerPlayer (library/livetv/admin/calendar messenger
             // precedent — documented shared→legacy androidMain edge; dies at
-            // Phase X). The AudioPlaybackManager/ThemeMusicPlayer adapters
+            // ). The AudioPlaybackManager/ThemeMusicPlayer adapters
             // stay APP-side (AppKoinModule interop adapters; formerly the
             // HiltInteropModule singles) — a shared-module androidMain
             // actual would have to construct second instances. The share +

@@ -8,6 +8,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import com.raulshma.jellyplay.core.model.deeplink.DeepLinkGrammar
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.withContext
@@ -27,7 +28,7 @@ internal actual fun rememberShareMediaAction(itemId: String, chooserTitle: Strin
         {
             val shareIntent = Intent(Intent.ACTION_SEND).apply {
                 type = "text/plain"
-                putExtra(Intent.EXTRA_TEXT, "jellyplay://media/$itemId")
+                putExtra(Intent.EXTRA_TEXT, DeepLinkGrammar.mediaLink(itemId))
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             context.startActivity(Intent.createChooser(shareIntent, chooserTitle))
@@ -55,7 +56,7 @@ class AndroidDetailStorageProbe(
 /** Android platform pick for the details module (registered app-side). */
 fun androidDetailsModule(context: Context): Module = module {
     single<DetailStorageProbe> { AndroidDetailStorageProbe(context) }
-    // Wave 16C: the jvm-only detail defs (dependency closure reaches the
+    // The jvm-only detail defs (dependency closure reaches the
     // jvmShared halves of core:data — AudioQueueFacade, DownloadIntake,
     // OfflineSyncManager, SyncPlayManager) moved here out of commonMain's
     // detailsModule, which is now the wasm-clean module the web shell

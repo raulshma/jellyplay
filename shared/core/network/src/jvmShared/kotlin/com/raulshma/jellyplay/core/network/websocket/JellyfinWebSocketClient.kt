@@ -26,7 +26,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.random.Random
 
-// C3 note: this client keeps its org.json-based message routing verbatim.
+// This client keeps its org.json-based message routing verbatim.
 // Every emitted [WebSocketEvent] carries the `Data` payload as an
 // org.json object/array because legacy :core:data consumers
 // (RemoteControlReceiver, SyncPlayManager) read those typed fields directly
@@ -52,6 +52,17 @@ class JellyfinWebSocketClient @Inject constructor(
     private val maxReconnectAttempts = 5
     private var backgroundRetryJob: Job? = null
     private var reconnectJob: Job? = null
+
+    /**
+     * Current delay of the slow-path background retry (see
+     * [scheduleReconnect]): starts at [BACKGROUND_RETRY_INITIAL_DELAY_MS] and
+     * doubles each failed retry cycle, capped at [BACKGROUND_RETRY_MAX_DELAY_MS].
+     * Reset to the initial delay whenever a connection succeeds (`onOpen`) or
+     * `connect()` is called explicitly — a user-driven reconnect re-earns the
+     * fast schedule. Atomic like [reconnectAttempts]: read/written from OkHttp
+     * callback threads and [scope]'s IO dispatchers.
+     */
+    private val backgroundRetryDelayMs = java.util.concurrent.atomic.AtomicLong(BACKGROUND_RETRY_INITIAL_DELAY_MS)
 
     private val _isConnected = MutableStateFlow(false)
     val isConnected: StateFlow<Boolean> = _isConnected.asStateFlow()
@@ -83,6 +94,8 @@ class JellyfinWebSocketClient @Inject constructor(
         deviceName = credentials.deviceName
         clientName = credentials.clientName
         reconnectAttempts.set(0)
+        // An explicit connect re-earns the fast background-retry schedule.
+        backgroundRetryDelayMs.set(BACKGROUND_RETRY_INITIAL_DELAY_MS)
         connectInternal()
     }
 
@@ -100,6 +113,9 @@ class JellyfinWebSocketClient @Inject constructor(
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 NetworkLog.d(TAG, "WebSocket connected")
                 reconnectAttempts.set(0)
+                // A successful connection ends the failure streak — the next
+                // slow-path retry (if any) starts back at the initial delay.
+                backgroundRetryDelayMs.set(BACKGROUND_RETRY_INITIAL_DELAY_MS)
                 _isConnected.value = true
                 startKeepAlive()
             }
@@ -173,9 +189,22 @@ class JellyfinWebSocketClient @Inject constructor(
         if (attempts > maxReconnectAttempts) {
             NetworkLog.w(TAG, "Max reconnect attempts ($maxReconnectAttempts) reached, scheduling slow background retry")
             backgroundRetryJob?.cancel()
+            // Exponential backoff on the slow path: 60s → 2m → 4m → … → 15min
+            // cap. Each failed retry cycle (the 5 fast attempts below, then
+            // this background cycle failing again) doubles the next wait, so
+            // a permanently dead server no longer wakes every 60s forever.
+            // Additive jitter matches the fast path below; the cap applies to
+            // the total, same as the 30s cap there.
+            val baseDelayMs = backgroundRetryDelayMs.get()
+            backgroundRetryDelayMs.set((baseDelayMs * 2).coerceAtMost(BACKGROUND_RETRY_MAX_DELAY_MS))
+            val retryDelayMs = (baseDelayMs + (0..1000L).random()).coerceAtMost(BACKGROUND_RETRY_MAX_DELAY_MS)
+            NetworkLog.d(TAG, "Background retry in ${retryDelayMs / 1000}s")
             backgroundRetryJob = scope.launch {
+                // Exits without connecting once serverUrl/token are nullified
+                // (disconnect()); the loop shape is kept so a nullify that
+                // races the delay never attempts a connect on stale creds.
                 while (serverUrl != null && token != null) {
-                    delay(60_000L)
+                    delay(retryDelayMs)
                     if (serverUrl != null && token != null) {
                         NetworkLog.d(TAG, "Background WebSocket retry")
                         reconnectAttempts.set(0)
@@ -313,5 +342,12 @@ class JellyfinWebSocketClient @Inject constructor(
         // Safe under the server's default 60s idle timeout. A server-sent
         // ForceKeepAlive can tighten this at runtime.
         private const val DEFAULT_KEEP_ALIVE_INTERVAL_MS = 30_000L
+
+        // Slow-path background retry cadence (see backgroundRetryDelayMs):
+        // initial 60s, doubling per failed cycle, capped at 15 min so a dead
+        // server degrades to at most one attempt storm per quarter hour
+        // instead of one per minute.
+        private const val BACKGROUND_RETRY_INITIAL_DELAY_MS = 60_000L
+        private const val BACKGROUND_RETRY_MAX_DELAY_MS = 900_000L
     }
 }

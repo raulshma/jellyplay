@@ -66,6 +66,7 @@ import com.raulshma.jellyplay.core.ui.tv.ifElse
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.ui.components.BackExitConfirmation
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 
 
@@ -77,7 +78,6 @@ private val CollapsedDrawerWidth = 72.dp
 private val ExpandedDrawerWidth = 240.dp
 private val DrawerIconSize = 24.dp
 private val DrawerItemSpacing = 4.dp
-private const val ExitConfirmationTimeoutMs = 2000L
 
 /**
  * Frame budget for the content-focus guard. The content requester often isn't attached to a
@@ -198,6 +198,7 @@ fun TvNavigationDrawer(
     val contentFocusRequester = remember { FocusRequester() }
 
     var contentHasFocus by remember { mutableStateOf(false) }
+    val backExitConfirmation = remember { BackExitConfirmation() }
     var lastBackPressTime by remember { mutableLongStateOf(0L) }
 
     // ── Item layout: [primaryItems...] [drawerFolders...] [Settings] ───────────
@@ -263,20 +264,23 @@ fun TvNavigationDrawer(
     }
 
     BackHandler(enabled = drawerState.currentValue == DrawerValue.Closed) {
-        if (isSubPage) {
-            onBack()
-        } else {
-            val now = System.currentTimeMillis()
-            if (now - lastBackPressTime < ExitConfirmationTimeoutMs) {
-                lastBackPressTime = 0L
-                (context as? android.app.Activity)?.moveTaskToBack(true)
-            } else {
-                lastBackPressTime = now
+        when (val decision = backExitConfirmation.onBack(
+            nowMs = System.currentTimeMillis(),
+            lastAtMs = lastBackPressTime,
+            atExitPoint = !isSubPage,
+        )) {
+            BackExitConfirmation.Decision.Pop -> onBack()
+            is BackExitConfirmation.Decision.Prompt -> {
+                lastBackPressTime = decision.nowMs
                 android.widget.Toast.makeText(
                     context,
                     context.getString(R.string.press_back_again_to_exit),
                     android.widget.Toast.LENGTH_SHORT,
                 ).show()
+            }
+            BackExitConfirmation.Decision.Exit -> {
+                lastBackPressTime = 0L
+                (context as? android.app.Activity)?.moveTaskToBack(true)
             }
         }
     }

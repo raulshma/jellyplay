@@ -39,7 +39,7 @@ import org.jetbrains.compose.resources.stringResource
  * one source of truth and translators get a single set of `core_segment_*` keys.
  *
  * The `@StringRes Int` halves stay in the legacy `:core:ui` shim until every
- * consumer has migrated off resource ids (plan §Phase X).
+ * consumer has migrated off resource ids.
  */
 
 // region MediaSegmentType

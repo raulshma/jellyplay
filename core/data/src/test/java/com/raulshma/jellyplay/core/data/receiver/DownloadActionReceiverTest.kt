@@ -52,6 +52,9 @@ class DownloadActionReceiverTest {
     @Before
     fun setUp() {
         context = ApplicationProvider.getApplicationContext()
+        // SDK 34 shadows drop posted notifications without this grant.
+        shadowOf(context.applicationContext as Application)
+            .grantPermissions(android.Manifest.permission.POST_NOTIFICATIONS)
         startKoin {
             modules(module { single<DownloadRepository> { downloadRepository } })
         }
@@ -84,6 +87,9 @@ class DownloadActionReceiverTest {
 
         coVerify(timeout = 5000, exactly = 1) { downloadRepository.pauseDownload("dl-1") }
         coVerify(timeout = 5000, exactly = 1) { downloadRepository.getDownloadName("dl-1") }
+        // The shade post races the name lookup on the receiver's worker thread.
+        val deadline = System.currentTimeMillis() + 5_000
+        while (postedNotificationCount() < 1 && System.currentTimeMillis() < deadline) Thread.sleep(20)
         assertTrue(postedNotificationCount() >= 1)
     }
 

@@ -14,7 +14,7 @@ kotlin {
         namespace = "com.raulshma.jellyplay.shared.feature.requests"
         compileSdk = 37
         minSdk = 28
-        // Compose-resources packaging (wave-21 device-pass finding): with the
+        // Compose-resources packaging (device-pass finding): with the
         // AGP-9 KMP library plugin, android resources are OFF by default, so
         // copyAndroidMainComposeResourcesToAndroidAssets never runs and the
         // app APK ships this module's Res accessors with NO backing .cvr
@@ -27,7 +27,7 @@ kotlin {
         }
     }
 
-    // Wave 15B: first shared/feature module with the web target — the
+    // First shared/feature module with the web target — the
     // requests slice renders in the ComposeViewport web shell. The old
     // blocker (java.time in commonMain) is gone: those reads moved behind
     // the RequestTime.kt expect/actual seam (jvmShared = the verbatim
@@ -85,7 +85,7 @@ kotlin {
             implementation(libs.navigation3.ui)
             implementation(libs.lifecycle.viewmodel)
             // LocalViewModelStoreOwner/LocalLifecycleOwner in
-            // ProvidePlatformLocalsFallback (wave 15B) — declared explicitly
+            // ProvidePlatformLocalsFallback — declared explicitly
             // rather than relying on the transitive koin-compose-viewmodel
             // edge; already a repo pin, no new version enters the graph.
             implementation(libs.lifecycle.viewmodel.compose)

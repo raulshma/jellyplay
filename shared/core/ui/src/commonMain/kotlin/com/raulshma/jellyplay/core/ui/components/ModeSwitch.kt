@@ -62,6 +62,8 @@ fun MorphingMusicVideoIcon(
     color: Color,
     modifier: Modifier = Modifier,
 ) {
+    val morphPath = remember { Path() }
+
     Canvas(modifier = modifier) {
         val W = size.width
         val H = size.height
@@ -139,7 +141,8 @@ fun MorphingMusicVideoIcon(
 
         // A 4-point polygon connecting the two stems in Music mode,
         // and collapsing into a triangle in Video mode.
-        val path = Path().apply {
+        morphPath.rewind()
+        val path = morphPath.apply {
             moveTo(
                 lerp(cx1, W * 0.68f, progress),
                 lerp(H * 0.22f, H * 0.60f, progress)

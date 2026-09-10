@@ -183,6 +183,13 @@ class HomeViewModelEventsTest {
     private val offlineModeFlow = MutableStateFlow(OfflineMode.ONLINE)
     private val networkStatusFlow = MutableStateFlow(NetworkStatus.Online)
 
+    /**
+     * Backs the mocked manager's goingOnline — the flag's single owner,
+     * mirrored into uiState by the VM's fold. Stays false throughout: these
+     * events never arm it (the toggle arms it inside the real manager).
+     */
+    private val goingOnlineFlow = MutableStateFlow(false)
+
     private lateinit var viewModel: HomeViewModel
 
     @BeforeTest
@@ -234,6 +241,7 @@ class HomeViewModelEventsTest {
         every { offlineModeManager.offlineMode } returns offlineModeFlow
         every { offlineModeManager.networkStatus } returns networkStatusFlow
         every { offlineModeManager.isOffline } returns false
+        every { offlineModeManager.goingOnline } returns goingOnlineFlow
         every { downloadRepository.getActiveDownloadCount() } returns flowOf(0)
         every { downloadRepository.observeCompletedDownloadedIds() } returns flowOf(emptySet())
         every { downloadRepository.observeDownloadedIdsIncludingSeries() } returns flowOf(emptySet())
@@ -261,10 +269,12 @@ class HomeViewModelEventsTest {
         offlineRepository = offlineRepository,
         offlineModeManager = offlineModeManager,
         newsletterTriggerManager = newsletterTriggerManager,
-        homeDiscoveryStore = homeDiscoveryStore,
-        appearanceStore = appearanceStore,
-        experimentalStore = experimentalStore,
-        playbackStore = playbackStore,
+        prefs = HomeStores(
+            homeDiscovery = homeDiscoveryStore,
+            appearance = appearanceStore,
+            experimental = experimentalStore,
+            playback = playbackStore,
+        ),
         preferencesEditor = preferencesEditor,
         seerrRequestDelegate = seerrRequestDelegate,
         seerrPreferencesStore = seerrPreferencesStore,

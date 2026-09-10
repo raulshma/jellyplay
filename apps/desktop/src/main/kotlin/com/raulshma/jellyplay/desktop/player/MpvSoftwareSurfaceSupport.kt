@@ -6,7 +6,7 @@ import com.sun.jna.ptr.PointerByReference
 
 /**
  * One-shot, lazy capability probe for the mpv software-render surface path
- * (wave 12B): "does libmpv load AND can an offscreen `sw` render context be
+ *: "does libmpv load AND can an offscreen `sw` render context be
  * created on this machine's dll?"
  *
  * Why a real smoke test instead of an os.name check: software rendering is

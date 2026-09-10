@@ -80,6 +80,49 @@ abstract class BasePlayerEngine : MediaEngine {
     final override fun setVideoStatsEnabled(enabled: Boolean) { _videoStatsEnabled.value = enabled }
 
     // -------------------------------------------------------------------------------------------
+    // Published-state resets (C5). Each adapter's release() used to re-derive
+    // its own reset list over these base-owned flows; the lists live here now
+    // so a field can never be silently dropped from one engine's teardown.
+    // -------------------------------------------------------------------------------------------
+
+    /**
+     * Resets the per-item published leaves (cues / tracks / buffered /
+     * stats) and fires [onResetItemScopedState]. The granularity ExoPlayer's
+     * reuse path needs — it deliberately does NOT touch the transport leaves
+     * (`_playbackState` / `_isPlaying`), which a mid-session item swap must
+     * not flip.
+     */
+    protected fun resetItemScopedPublishedState() {
+        _currentCues.value = emptyList()
+        _availableTracks.value = emptyList()
+        _bufferedPositionMs.value = 0L
+        _videoStats.value = EngineVideoStats()
+        onResetItemScopedState()
+    }
+
+    /**
+     * Full published-state reset for teardown: everything
+     * [resetItemScopedPublishedState] clears plus the transport leaves
+     * (`_playbackState` → IDLE, `_isPlaying` → false). `_pollingIntervalMs` /
+     * `_videoStatsEnabled` are session prefs and stay; the SharedFlows have
+     * no state to clear.
+     */
+    protected fun resetPublishedEngineState() {
+        _playbackState.value = EnginePlaybackState.IDLE
+        _isPlaying.value = false
+        resetItemScopedPublishedState()
+    }
+
+    /**
+     * Per-engine residue cleared alongside the base resets — genuinely
+     * adapter-owned fields (mpv's cached position/duration mirrors and
+     * `liveSubtitleCue`, ExoPlayer's decoder counters + stats guard, libVLC's
+     * cached duration). Called from both resets above, mirroring the former
+     * inline placement inside each adapter's reset list.
+     */
+    protected open fun onResetItemScopedState() {}
+
+    // -------------------------------------------------------------------------------------------
     // Main-thread scope + handler. Identical field declarations across engines.
     // -------------------------------------------------------------------------------------------
 

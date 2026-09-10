@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.data.repository.ServerDiscoveryRepository
 import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
 import com.raulshma.jellyplay.core.model.DiscoveredServer
 import com.raulshma.jellyplay.core.model.ServerInfo
+import com.raulshma.jellyplay.core.model.normalizeServerAddress
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.core.ui.viewmodel.StateFlowHandle
 import com.raulshma.jellyplay.feature.auth.generated.resources.Res
@@ -234,13 +235,11 @@ private fun getRootCause(throwable: Throwable): Throwable {
  * `getConnectionErrorMessage` classifies inline.
  */
 internal fun tlsTrustPromptFor(address: String, throwable: Throwable): String? {
-    val normalized = address.trim().trimEnd('/').let {
-        if (it.startsWith("http://") || it.startsWith("https://")) it else "https://$it"
-    }
+    val normalized = normalizeServerAddress(address)
     if (!normalized.startsWith("https://")) return null
     // SSLHandshakeException / SSLPeerUnverifiedException are both SSLException
     // subclasses. The network probe wraps TLS-trust failures in a plain
-    // RuntimeException marker (non-retryable, wave-21 review round) —
+    // RuntimeException marker (non-retryable, review round) —
     // getRootCause walks past the wrapper to the underlying SSLException.
     return if (getRootCause(throwable) is javax.net.ssl.SSLException) normalized else null
 }

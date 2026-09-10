@@ -161,14 +161,17 @@ class StorageSettingsViewModelTest {
         store = userPreferencesStore,
     )
 
-    private fun viewModel(): StorageSettingsViewModel = StorageSettingsViewModel(
-        projections = projections,
-        appearanceStore = appearanceStore,
-        editor = realEditor(),
-        autoDownloadSync = AutoDownloadSync { autoDownloadSyncs.add(Unit) },
-        storageAreas = storageAreas,
-        storageMountsProvider = storageMountsProvider,
-    )
+    private fun viewModel(): StorageSettingsViewModel {
+        val editor = realEditor()
+        return StorageSettingsViewModel(
+            projections = projections,
+            advancedSettings = AdvancedSettingsGate(appearanceStore, editor),
+            editor = editor,
+            autoDownloadSync = AutoDownloadSync { autoDownloadSyncs.add(Unit) },
+            storageAreas = storageAreas,
+            storageMountsProvider = storageMountsProvider,
+        )
+    }
 
     // ---------------------------------------------------------------- init / mounts
 
@@ -309,7 +312,7 @@ class StorageSettingsViewModelTest {
         val vm = viewModel()
         advanceUntilIdle()
 
-        vm.setDownloadStorageLocation("EXTERNAL")
+        vm.edit { it.downloads.setDownloadStorageLocation("EXTERNAL") }
         advanceUntilIdle()
 
         coVerify(exactly = 1) { downloadsStore.setDownloadStorageLocation("EXTERNAL") }
@@ -320,7 +323,7 @@ class StorageSettingsViewModelTest {
         val vm = viewModel()
         advanceUntilIdle()
 
-        vm.setMaxCacheSize(512)
+        vm.edit { it.networkOffline.setMaxCacheSize(512) }
         advanceUntilIdle()
 
         coVerify(exactly = 1) { networkOfflineStore.setMaxCacheSize(512) }

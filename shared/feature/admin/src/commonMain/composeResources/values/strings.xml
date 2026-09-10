@@ -22,6 +22,14 @@
     <string name="admin_scanning">Scanning…</string>
     <string name="admin_scan_now">Scan Now</string>
     <string name="admin_select_all">Select All</string>
+
+    <string name="admin_sort_default">Default</string>
+    <string name="admin_sort_name_asc">Name (A–Z)</string>
+    <string name="admin_sort_name_desc">Name (Z–A)</string>
+    <string name="admin_sort_largest">Largest</string>
+    <string name="admin_sort_smallest">Smallest</string>
+    <string name="admin_sort_type">Type</string>
+    <string name="admin_sort_date">Date</string>
     <string name="admin_media_types">Media types</string>
     <string name="admin_dry_run">Dry run (preview only)</string>
 
@@ -131,8 +139,8 @@
 
     <!-- Statistics -->
     <string name="admin_user_statistics_title">User Statistics</string>
-    <string name="admin_watched_more">You watched %1$s%% more this month</string>
-    <string name="admin_watched_less">You watched %1$s%% less this month</string>
+    <string name="admin_watched_more">You watched %1$s% more this month</string>
+    <string name="admin_watched_less">You watched %1$s% less this month</string>
     <string name="admin_duration_vs_last">%1$s vs %2$s last month</string>
     <string name="admin_content_breakdown">Content Breakdown</string>
     <string name="admin_by_genre">By Genre</string>
@@ -303,7 +311,7 @@
     <string name="admin_n_items">%1$d items</string>
     <string name="admin_n_lines">%1$d lines</string>
     <string name="admin_scanning_library">Scanning library</string>
-    <string name="admin_scan_progress_pct">Scanning %1$d%%</string>
+    <string name="admin_scan_progress_pct">Scanning %1$d%</string>
 
     <!-- Misc UI batch3 -->
     <string name="admin_quick_access">Quick Access</string>
@@ -394,4 +402,6 @@
     <string name="user_stats_export_shared">User statistics exported</string>
 
     <string name="admin_plugin_config_unavailable">Plugin configuration is not available on this platform.</string>
+
+    <string name="admin_no_delete_permission">Your account does not have permission to delete content. Contact your server administrator.</string>
 </resources>

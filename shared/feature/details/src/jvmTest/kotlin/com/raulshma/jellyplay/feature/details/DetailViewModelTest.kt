@@ -11,9 +11,11 @@ import com.raulshma.jellyplay.core.data.repository.DetailLoadError
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
+import com.raulshma.jellyplay.core.data.repository.SyncPlayRepository
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.data.sync.OfflineSyncManager
@@ -205,12 +207,12 @@ class DetailViewModelTest {
                 offlineSyncManager = mockk(relaxed = true),
                 downloadIntake = mockk(relaxed = true),
             ),
-            playlists = PlaylistActions.Factory(
-                mediaRepository = mediaRepository,
+            playlists = PlaylistTargets.Factory(
+                playlistRepository = mockk<PlaylistRepository>(relaxed = true),
                 appRuntimeStateStore = mockk<AppRuntimeStateStore>(relaxed = true),
             ),
             watchParty = WatchPartyActions.Factory(
-                mediaRepository = mediaRepository,
+                syncPlayRepository = mockk<SyncPlayRepository>(relaxed = true),
                 syncPlayManager = mockk<SyncPlayManager>(relaxed = true),
             ),
         )
@@ -450,6 +452,70 @@ class DetailViewModelTest {
 
         assertNotNull(viewModel.uiState.value.detail)
         assertNull(viewModel.uiState.value.smartPlayTarget)
+    }
+
+    // ---- Navigation reset (DetailUiState.clearedForReload) -----------------
+    // Pins the episodes-family bug fix: the former inline reset cleared
+    // seasons/episodes/fetchedSeasonIds but NOT sortedEpisodes, so the
+    // previous series' canonical episode list survived navigation (and fed
+    // smart-play resolution for the next item).
+
+    @Test
+    fun navigation_clearsSortedEpisodesFromPreviousItem() = runTest(mainDispatcher) {
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        val season = MediaItem(id = "season1", name = "Season 1", mediaType = MediaType.SEASON, indexNumber = 1)
+        val ep1 = episode("e1", 1, 1, isPlayed = false)
+        val ep2 = episode("e2", 1, 2, isPlayed = false)
+        stubSeries("s1", season, listOf(ep1, ep2))
+
+        viewModel.loadItem("s1")
+        advanceUntilIdle()
+        // Precondition: the series screen holds the sorted episode list.
+        assertEquals(listOf("e1", "e2"), viewModel.uiState.value.sortedEpisodes.map { it.id })
+
+        // Navigate to a new item whose provider flow never emits Loaded, so
+        // the post-reset state (not a subsequent reduction) is observed.
+        stubProvider("m2")
+        viewModel.loadItem("m2")
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertTrue(state.sortedEpisodes.isEmpty(), "previous item's sortedEpisodes must not survive navigation")
+        assertTrue(state.seasons.isEmpty())
+        assertTrue(state.episodes.isEmpty())
+        assertNull(state.detail)
+        assertTrue(state.loadState is DetailUiLoadState.Loading)
+    }
+
+    @Test
+    fun forceRefresh_clearsSortedEpisodesButKeepsDetailVisible() = runTest(mainDispatcher) {
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        val season = MediaItem(id = "season1", name = "Season 1", mediaType = MediaType.SEASON, indexNumber = 1)
+        val ep1 = episode("e1", 1, 1, isPlayed = false)
+        stubSeries("s1", season, listOf(ep1))
+
+        viewModel.loadItem("s1")
+        advanceUntilIdle()
+        assertEquals(listOf("e1"), viewModel.uiState.value.sortedEpisodes.map { it.id })
+
+        // Hold the provider's refresh open so the in-flight state is observable.
+        val gate = CompletableDeferred<Unit>()
+        coEvery { mediaDetailProvider.refresh("s1") } coAnswers { gate.await() }
+
+        viewModel.forceRefresh()
+        advanceUntilIdle()
+
+        // Declared survivors: the detail stays visible under Refreshing; the
+        // content slices (sortedEpisodes included) clear so fresh data
+        // replaces them wholesale.
+        val state = viewModel.uiState.value
+        assertNotNull(state.detail)
+        assertTrue(state.loadState is DetailUiLoadState.Refreshing)
+        assertTrue(state.sortedEpisodes.isEmpty())
+        assertTrue(state.episodes.isEmpty())
+
+        gate.complete(Unit)
+        advanceUntilIdle()
     }
 
     // ---- Pull-to-refresh ---------------------------------------------------

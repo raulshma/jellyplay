@@ -5,10 +5,13 @@ import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.UserDataChange
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.Dispatchers
@@ -30,23 +33,17 @@ class PersonDetailViewModelTest {
     // Legacy :core:testing MainDispatcherRule, inlined (conveyor port pattern).
     private val mainDispatcher = StandardTestDispatcher()
 
-    @BeforeTest
-    fun setUpMainDispatcher() {
-        Dispatchers.setMain(mainDispatcher)
-    }
-
-    @AfterTest
-    fun tearDownMainDispatcher() {
-        Dispatchers.resetMain()
-    }
-
     private lateinit var mediaRepository: MediaRepository
     private lateinit var userDataMutator: FakeUserDataMutator
     private lateinit var imageUrlProvider: ImageUrlProvider
     private lateinit var viewModel: PersonDetailViewModel
 
+    /** Driven by the deferred-refresh tests; collected by the VM for its lifetime. */
+    private val userDataEvents = MutableSharedFlow<UserDataChange>(extraBufferCapacity = 16)
+
     @BeforeTest
     fun setUp() {
+        Dispatchers.setMain(mainDispatcher)
         mediaRepository = mockk(relaxed = true)
         userDataMutator = FakeUserDataMutator()
         imageUrlProvider = mockk(relaxed = true)
@@ -56,6 +53,11 @@ class PersonDetailViewModelTest {
             imageUrlProvider,
             mockk<com.raulshma.jellyplay.core.data.download.MediaDownloadActions>(relaxed = true),
         )
+    }
+
+    @AfterTest
+    fun tearDown() {
+        Dispatchers.resetMain()
     }
 
     @Test
@@ -190,8 +192,158 @@ class PersonDetailViewModelTest {
     }
 
     @Test
+    fun `a thrown repo failure on the loud load surfaces Error instead of stranding Loading`() = runTest(mainDispatcher) {
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        coEvery { mediaRepository.getMediaDetail("p1") } throws IllegalStateException("engine blew up")
+        coEvery { mediaRepository.getItemsByPerson("p1") } returns Result.success(emptyList())
+
+        viewModel.loadPerson("p1")
+        advanceUntilIdle()
+
+        // The coordinator swallows the throw (re-arm + no uncaught handler);
+        // without the error hook this screen would sit on Loading forever.
+        val state = viewModel.uiState.value
+        assertTrue(state is PersonDetailUiState.Error)
+        assertEquals("engine blew up", (state as PersonDetailUiState.Error).message)
+    }
+
+    @Test
+    fun `loadPerson on an already-successful person is a no-op`() = runTest(mainDispatcher) {
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        coEvery { mediaRepository.getMediaDetail("p1") } returns Result.success(
+            MediaDetail(item = MediaItem(id = "p1", name = "Person One", mediaType = MediaType.UNKNOWN))
+        )
+        coEvery { mediaRepository.getItemsByPerson("p1") } returns Result.success(emptyList())
+
+        viewModel.loadPerson("p1")
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value is PersonDetailUiState.Success)
+
+        // Back-stack re-entry re-runs the screen's LaunchedEffect; a second
+        // loud load must not refetch (or flash Loading) on top of the deferred
+        // refresh's silent regeneration.
+        viewModel.loadPerson("p1")
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { mediaRepository.getMediaDetail("p1") }
+        coVerify(exactly = 1) { mediaRepository.getItemsByPerson("p1") }
+        assertTrue(viewModel.uiState.value is PersonDetailUiState.Success)
+    }
+
+    @Test
     fun `getImageUrl delegates to ImageUrlProvider`() {
         viewModel.getImageUrl("p1")
         io.mockk.verify(exactly = 1) { imageUrlProvider.getImageUrl("p1") }
+    }
+
+    // ── Deferred refresh (user-data changes while off-screen) ───────────────
+    //
+    // Builds a LOCAL ViewModel after stubbing `userDataChanges`: the suite's
+    // setUp-built VM starts its refresher collector before this test can stub
+    // the flow, and a relaxed-mock Flow's collect completes immediately —
+    // killing the collector before the first emit.
+
+    @Test
+    fun `userData change while inactive defers a silent reload to the next entry`() = runTest {
+        every { mediaRepository.userDataChanges } returns userDataEvents
+        coEvery { mediaRepository.getMediaDetail("p1") } returns Result.success(
+            MediaDetail(item = MediaItem(id = "p1", name = "Person One", mediaType = MediaType.UNKNOWN))
+        )
+        coEvery { mediaRepository.getItemsByPerson("p1") } returns Result.success(emptyList())
+        val viewModel = PersonDetailViewModel(
+            mediaRepository,
+            userDataMutator,
+            imageUrlProvider,
+            mockk<com.raulshma.jellyplay.core.data.download.MediaDownloadActions>(relaxed = true),
+        )
+
+        viewModel.loadPerson("p1")
+        advanceUntilIdle()
+        coVerify(exactly = 1) { mediaRepository.getItemsByPerson("p1") }
+
+        // A write confirmed while the screen is NOT on screen only marks stale.
+        viewModel.deferredRefresher.onScreenActiveChanged(false)
+        userDataEvents.emit(UserDataChange("user-1", listOf("m1")))
+        advanceUntilIdle()
+        coVerify(exactly = 1) { mediaRepository.getItemsByPerson("p1") }
+
+        // Re-entry fires the single deferred reload — silently: Success is
+        // never dropped back to Loading on the way.
+        viewModel.deferredRefresher.onScreenActiveChanged(true)
+        advanceUntilIdle()
+        coVerify(exactly = 2) { mediaRepository.getItemsByPerson("p1") }
+        assertTrue(viewModel.uiState.value is PersonDetailUiState.Success)
+    }
+
+    // The no-stack/skip-re-arm choreography this suite used to re-pin
+    // (in-flight loud loads holding a gated repo read) is module behaviour
+    // now — DeferredFetchCoordinatorTest owns that table. What stays here is
+    // the host surface: the guard's failure half, expressed through
+    // loadPerson's public state.
+
+    @Test
+    fun `loadPerson after an Error reloads instead of no-oping`() = runTest {
+        every { mediaRepository.userDataChanges } returns userDataEvents
+        coEvery { mediaRepository.getMediaDetail("p1") } returns Result.failure(RuntimeException("offline"))
+        coEvery { mediaRepository.getItemsByPerson("p1") } returns Result.success(emptyList())
+        val viewModel = PersonDetailViewModel(
+            mediaRepository,
+            userDataMutator,
+            imageUrlProvider,
+            mockk<com.raulshma.jellyplay.core.data.download.MediaDownloadActions>(relaxed = true),
+        )
+
+        viewModel.loadPerson("p1")
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value is PersonDetailUiState.Error)
+
+        // Back-stack re-entry re-runs the screen's LaunchedEffect: a failed
+        // loud load re-arms the guard, so re-entry reloads and heals.
+        coEvery { mediaRepository.getMediaDetail("p1") } returns Result.success(
+            MediaDetail(item = MediaItem(id = "p1", name = "Person One", mediaType = MediaType.UNKNOWN))
+        )
+        viewModel.loadPerson("p1")
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value is PersonDetailUiState.Success)
+        coVerify(exactly = 2) { mediaRepository.getMediaDetail("p1") }
+    }
+
+    @Test
+    fun `a silent reload failure keeps the last success and re-arms for the next re-entry`() = runTest {
+        every { mediaRepository.userDataChanges } returns userDataEvents
+        coEvery { mediaRepository.getMediaDetail("p1") } returns Result.success(
+            MediaDetail(item = MediaItem(id = "p1", name = "Person One", mediaType = MediaType.UNKNOWN))
+        ) andThen Result.failure(RuntimeException("offline blip"))
+        coEvery { mediaRepository.getItemsByPerson("p1") } returns Result.success(emptyList())
+        val viewModel = PersonDetailViewModel(
+            mediaRepository,
+            userDataMutator,
+            imageUrlProvider,
+            mockk<com.raulshma.jellyplay.core.data.download.MediaDownloadActions>(relaxed = true),
+        )
+
+        viewModel.loadPerson("p1")
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value is PersonDetailUiState.Success)
+
+        viewModel.deferredRefresher.onScreenActiveChanged(false)
+        userDataEvents.emit(UserDataChange("user-1", listOf("m1")))
+        advanceUntilIdle()
+        viewModel.deferredRefresher.onScreenActiveChanged(true)
+        advanceUntilIdle()
+
+        // The silent reload DID run (second fetch) and its detail read
+        // failed — serve-stale-while-revalidate keeps the last Success.
+        coVerify(exactly = 2) { mediaRepository.getItemsByPerson("p1") }
+        assertTrue(viewModel.uiState.value is PersonDetailUiState.Success)
+
+        // The failed silent fetch re-arms the deferred refresh: the next
+        // re-entry retries instead of trusting the consumed flag.
+        viewModel.deferredRefresher.onScreenActiveChanged(false)
+        viewModel.deferredRefresher.onScreenActiveChanged(true)
+        advanceUntilIdle()
+        coVerify(exactly = 3) { mediaRepository.getItemsByPerson("p1") }
+        assertTrue(viewModel.uiState.value is PersonDetailUiState.Success)
     }
 }

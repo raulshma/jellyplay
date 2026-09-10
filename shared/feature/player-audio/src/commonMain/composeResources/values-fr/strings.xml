@@ -84,8 +84,8 @@
     <string name="audio_effects_dialogue_boost">Amplification des voix</string>
     <string name="audio_effects_night_mode">Mode nuit</string>
     <string name="audio_effects_lr_balance">Équilibre G/D</string>
-    <string name="audio_effects_balance_left">Gauche %1$d%%</string>
-    <string name="audio_effects_balance_right">Droite %1$d%%</string>
+    <string name="audio_effects_balance_left">Gauche %1$d%</string>
+    <string name="audio_effects_balance_right">Droite %1$d%</string>
     <string name="audio_effects_balance_center">Centre</string>
     <string name="audio_effects_pitch">Hauteur tonale</string>
     <string name="audio_effects_pitch_original">Original</string>

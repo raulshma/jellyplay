@@ -226,6 +226,14 @@ class HomeViewModelTest {
     private val offlineModeFlow = MutableStateFlow(OfflineMode.ONLINE)
     private val networkStatusFlow = MutableStateFlow(NetworkStatus.Online)
 
+    /**
+     * Backs the mocked manager's goingOnline — the flag's single owner. The
+     * manager's arm/clear choreography is pinned on the real class by
+     * GoingOnlineFlagTest (core:data); here the flow is just the fold's
+     * input, driven by hand.
+     */
+    private val goingOnlineFlow = MutableStateFlow(false)
+
     private lateinit var viewModel: HomeViewModel
 
     @BeforeTest
@@ -277,6 +285,7 @@ class HomeViewModelTest {
         every { offlineModeManager.offlineMode } returns offlineModeFlow
         every { offlineModeManager.networkStatus } returns networkStatusFlow
         every { offlineModeManager.isOffline } returns false
+        every { offlineModeManager.goingOnline } returns goingOnlineFlow
         every { downloadRepository.getActiveDownloadCount() } returns flowOf(0)
         every { downloadRepository.observeCompletedDownloadedIds() } returns flowOf(emptySet())
         every { downloadRepository.observeDownloadedIdsIncludingSeries() } returns flowOf(emptySet())
@@ -304,10 +313,12 @@ class HomeViewModelTest {
         offlineRepository = offlineRepository,
         offlineModeManager = offlineModeManager,
         newsletterTriggerManager = newsletterTriggerManager,
-        homeDiscoveryStore = homeDiscoveryStore,
-        appearanceStore = appearanceStore,
-        experimentalStore = experimentalStore,
-        playbackStore = playbackStore,
+        prefs = HomeStores(
+            homeDiscovery = homeDiscoveryStore,
+            appearance = appearanceStore,
+            experimental = experimentalStore,
+            playback = playbackStore,
+        ),
         preferencesEditor = preferencesEditor,
         seerrRequestDelegate = seerrRequestDelegate,
         seerrPreferencesStore = seerrPreferencesStore,
@@ -444,10 +455,14 @@ class HomeViewModelTest {
     }
 
     @Test
-    fun offlineToOnline_clearsIsGoingOnline_afterFetch() = vmTest {
-        // The sign-in fetch resolves immediately; the handshake's fetch parks
-        // on the gate so the busy flag is observable mid-transition via the
-        // uiState fold (the refresher owns the flag, the VM only folds it).
+    fun offlineToOnline_runsDrainThenCappedFetch_andClearsLoader() = vmTest {
+        // The going-online busy flag is OfflineModeManager's now (armed on
+        // the toggle, cleared at the ONLINE emission — pinned by
+        // GoingOnlineFlagTest in core:data). What stays pinned here is the
+        // handshake the ONLINE emission triggers through the VM's event:
+        // the sign-in fetch resolves immediately; the handshake's fetch
+        // parks on the gate so the full-screen loader is observable
+        // mid-transition via the uiState fold.
         val fetchGate = CompletableDeferred<Unit>()
         var fetchCalls = 0
         coEvery {
@@ -470,36 +485,33 @@ class HomeViewModelTest {
         runCurrent()
 
         // Go online through the real entry: the event forwards the
-        // GoingOnline trigger to the refresher, which raises the busy flag
-        // and toggles the manager; the mocked manager flips the mode flow
-        // like the real one, and the refresher's own observer runs the
-        // drain + capped fetch handshake.
+        // GoingOnline trigger to the refresher, which toggles the manager;
+        // the mocked manager flips the mode flow like the real one, and the
+        // refresher's own observer runs the drain + capped fetch handshake.
         every { offlineModeManager.isOffline } returns false
         every { offlineModeManager.toggleManualOffline() } answers { offlineModeFlow.value = OfflineMode.ONLINE }
         viewModel.onEvent(HomeUiEvent.ToggleOfflineMode)
         runCurrent()
 
-        assertTrue(
-            viewModel.uiState.value.isGoingOnline,
-            "isGoingOnline must be observable (via the uiState fold) while the fetch runs",
-        )
+        // Mid-handshake: the ONLINE emission already cleared the manager's
+        // flag; the full-screen loader owns the wait while the fetch runs.
+        assertFalse(viewModel.uiState.value.isGoingOnline)
+        assertTrue(viewModel.uiState.value.isLoading)
         fetchGate.complete(Unit)
         runCurrent()
 
-        assertFalse(
-            viewModel.uiState.value.isGoingOnline,
-            "isGoingOnline must clear after the online fetch resolves",
-        )
         assertFalse(viewModel.uiState.value.isLoading)
     }
 
     @Test
-    fun offlineToOnline_clearsIsGoingOnline_whenFetchTimesOut() = vmTest {
+    fun offlineToOnline_clearsLoader_whenFetchTimesOut() = vmTest {
         // Regression: a hung getHomeSections call (half-open socket, unvalidated
         // captive portal that still reports INTERNET, etc.) previously parked
-        // fetchAndUpdateSections on refreshMutex forever, so isGoingOnline never
-        // cleared and the Go Online button + app bar spinners spun indefinitely.
-        // The withTimeoutOrNull cap must force-clear both flags on timeout.
+        // fetchAndUpdateSections on refreshMutex forever, leaving the loader
+        // (and, before the flag moved to the manager, the busy spinner) stuck
+        // on indefinitely. The withTimeoutOrNull cap must force-clear the
+        // loader on timeout. (The busy flag is immune by construction now:
+        // the manager clears it at the ONLINE emission, before the fetch.)
         // Hang on a never-completing Deferred (not real delay): real delay would
         // run on the repository's withContext(Dispatchers.Default) and block a
         // worker thread for the full timeout, leaking past test teardown.
@@ -517,22 +529,33 @@ class HomeViewModelTest {
         every { offlineModeManager.toggleManualOffline() } answers { offlineModeFlow.value = OfflineMode.ONLINE }
         viewModel.onEvent(HomeUiEvent.ToggleOfflineMode)
         runCurrent()
-        assertTrue(
-            viewModel.uiState.value.isGoingOnline,
-            "isGoingOnline must be observable (via the uiState fold) while the fetch hangs",
-        )
+        assertTrue(viewModel.uiState.value.isLoading, "the loader must be up while the fetch hangs")
         // Advance virtual time past the GOING_ONLINE_TIMEOUT_MS deadline.
         advanceTimeBy(31_000)
         runCurrent()
 
         assertFalse(
-            viewModel.uiState.value.isGoingOnline,
-            "isGoingOnline must clear even if the fetch hangs past the deadline",
-        )
-        assertFalse(
             viewModel.uiState.value.isLoading,
             "isLoading must clear even if the fetch hangs past the deadline",
         )
+    }
+
+    @Test
+    fun uiState_mirrorsTheManagersGoingOnlineFlag() = vmTest {
+        // The fold is a pure mirror of OfflineModeManager.goingOnline — the
+        // flag's single owner. Neither the VM nor the refresher may add
+        // choreography on top (the old second-owner bug class).
+        viewModel = buildViewModel()
+        runCurrent()
+        assertFalse(viewModel.uiState.value.isGoingOnline)
+
+        goingOnlineFlow.value = true
+        runCurrent()
+        assertTrue(viewModel.uiState.value.isGoingOnline)
+
+        goingOnlineFlow.value = false
+        runCurrent()
+        assertFalse(viewModel.uiState.value.isGoingOnline)
     }
 
     @Test

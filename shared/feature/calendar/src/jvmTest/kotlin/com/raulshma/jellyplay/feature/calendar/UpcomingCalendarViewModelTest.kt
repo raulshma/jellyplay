@@ -244,7 +244,7 @@ class UpcomingCalendarViewModelTest {
         advanceUntilIdle()
         val windowsBefore = arr.calendarWindows.size
 
-        // Same month → no-op. (Wave 16A: goToDate takes kotlinx.datetime
+        // Same month → no-op. (goToDate takes kotlinx.datetime
         // LocalDate now — the java.time `now()` converts at the call.)
         assertFalse(vm.goToDate(LocalDate.now().toKotlinLocalDate()))
         assertEquals(windowsBefore, arr.calendarWindows.size)
@@ -371,8 +371,7 @@ class UpcomingCalendarViewModelTest {
 private class FakeArrRepository : ArrRepository {
     // Recorded as java.time pairs (converted at record time) so every
     // assertion below keeps comparing the original java.time windows — the
-    // ArrRepository surface itself flipped to kotlinx.datetime.LocalDate in
-    // wave 15B.
+    // ArrRepository surface itself flipped to kotlinx.datetime.LocalDate.
     val calendarWindows = mutableListOf<Pair<LocalDate, LocalDate>>()
     val refreshCalls = mutableListOf<Pair<LocalDate, LocalDate>>()
     val calendarItems = MutableStateFlow(emptyList<ArrCalendarItem>())

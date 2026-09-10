@@ -81,7 +81,7 @@ object RetryPolicy {
 }
 
 /**
- * Phase W seam (docs/kmp-migration-plan.md §Phase W chunk 1): platform
+ *  seam (docs/kmp-migration-plan.md § chunk 1): platform
  * throwable classification for [RetryPolicy.isRetryable]. The retry/backoff
  * math above is pure and now common; which raw throwables count as transient
  * network errors is platform-specific:

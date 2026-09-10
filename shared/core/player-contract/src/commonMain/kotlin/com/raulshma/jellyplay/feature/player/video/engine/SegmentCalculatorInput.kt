@@ -26,4 +26,17 @@ data class SegmentCalculatorInput(
     val isInSyncPlaySession: Boolean = false,
     val hasNextEpisode: Boolean = false,
     val seriesId: String? = null,
-)
+) {
+    /**
+     * Chapter names pre-normalized (lowercase + trimmed), indexed like
+     * [chapters]. Memoized per input instance so the calculator's chapter
+     * fallback does not re-normalize the active chapter's name on every
+     * position-tick scan — inputs are rebuilt only when a segment-relevant
+     * field changes, so the one-time cost amortizes across ticks. Not a
+     * constructor parameter, so `equals`/`hashCode`/`copy` stay defined by
+     * the raw inputs alone.
+     */
+    internal val normalizedChapterNames: List<String> by lazy {
+        chapters.map { it.name.lowercase().trim() }
+    }
+}

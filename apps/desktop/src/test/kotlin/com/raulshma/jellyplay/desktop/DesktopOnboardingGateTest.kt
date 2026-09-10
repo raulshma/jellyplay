@@ -1,15 +1,22 @@
 package com.raulshma.jellyplay.desktop
 
 import com.raulshma.jellyplay.core.ui.navigation.Route
+import com.raulshma.jellyplay.feature.shell.onboardingGateRoute
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
 /**
- * Wave 21B first-run gate: pins the pure decision the desktop shell makes
+ *  first-run gate: pins the pure decision the desktop shell makes
  * once per authenticated session (DesktopNavScaffold) against the Android
  * JellyPlayApp branch it mirrors — gate fires only for a signed-in user that
  * never completed the wizard, never for a completer or a signed-out session.
+ *
+ * The decision itself moved to the shared
+ * [onboardingGateRoute] (:shared:feature:shell — the Android shell runs the
+ * same fn with the TV delta); these pins stay on the desktop wrapper, whose
+ * job is now exactly the `isTv = false` specialization (the desktop build is
+ * never the TV build).
  */
 class DesktopOnboardingGateTest {
 
@@ -38,5 +45,25 @@ class DesktopOnboardingGateTest {
             desktopOnboardingGateRoute(isAuthenticated = false, onboardingCompleted = false),
             "the signed-out host must not be asked for the wizard",
         )
+    }
+
+    @Test
+    fun `wrapper is exactly the isTv=false row of the shared gate matrix`() {
+        for (authenticated in listOf(false, true)) {
+            for (onboardingCompleted in listOf(false, true)) {
+                assertEquals(
+                    onboardingGateRoute(
+                        authenticated = authenticated,
+                        onboardingCompleted = onboardingCompleted,
+                        isTv = false,
+                    ),
+                    desktopOnboardingGateRoute(
+                        isAuthenticated = authenticated,
+                        onboardingCompleted = onboardingCompleted,
+                    ),
+                    "desktop wrapper must stay the isTv=false specialization",
+                )
+            }
+        }
     }
 }

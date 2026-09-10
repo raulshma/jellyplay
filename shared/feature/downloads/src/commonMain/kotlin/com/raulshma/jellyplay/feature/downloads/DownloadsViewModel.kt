@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.downloads
 
 import androidx.compose.runtime.Immutable
+import com.raulshma.jellyplay.core.data.repository.DownloadProgress
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.sync.OfflineSyncManager
@@ -9,6 +10,7 @@ import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.OfflineSyncUpdate
 import com.raulshma.jellyplay.core.model.ResyncBatchProgress
 import com.raulshma.jellyplay.core.model.ResyncOptions
+import com.raulshma.jellyplay.core.model.SelectionState
 import com.raulshma.jellyplay.core.model.formatBytes
 import com.raulshma.jellyplay.core.model.formatEta
 import com.raulshma.jellyplay.core.model.formatSpeed
@@ -24,20 +26,28 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.scan
 import kotlinx.coroutines.flow.stateIn
 
 @Immutable
 data class DownloadsUiState(
     val downloads: List<DownloadItem> = emptyList(),
-    val totalStorageBytes: Long = 0L,
     val isLoading: Boolean = true,
     val error: String? = null,
     /** Stable ids currently in selection mode. */
-    val selectedIds: Set<String> = emptySet(),
-    val selectionMode: Boolean = false,
-)
+    val selection: SelectionState<String> = SelectionState(),
+) {
+    /** Selection reads, delegated from the shared [SelectionState] algebra. */
+    val selectedIds: Set<String>
+        get() = selection.ids
+
+    val selectionMode: Boolean
+        get() = selection.active
+}
 
 /**
  * A downloaded item eligible for a force resync (completed, or stalled after
@@ -91,45 +101,133 @@ class DownloadsViewModel(
     private val _checking = MutableStateFlow(false)
     val checking: StateFlow<Boolean> = _checking.asStateFlow()
 
+    /**
+     * Structural (status-change-only) projection of the list, shared between
+     * the uiState collector and the [totalStorageBytes] combine so the
+     * repository flow has a single upstream subscription.
+     */
+    private val structuralItems = MutableStateFlow<List<DownloadItem>>(emptyList())
+
+    /**
+     * Live per-row byte/speed for in-flight downloads, keyed by download id —
+     * the moving half of the split uiState. The 2 s transfer tick
+     * used to re-emit the whole list (and re-execute the entire screen) per
+     * progress event; rows now read their moving values from here while the
+     * list itself only re-emits on structural change. The backing StateFlow
+     * is conflated by construction (stateIn), so a burst of ticks collapses
+     * to the latest map.
+     *
+     * Exit-transition retention: the live query drops a row the moment its
+     * status leaves the in-flight set, which can land a frame BEFORE the
+     * structural list re-emits with the row's new status — without retention
+     * the still-DOWNLOADING row would flash back to its stale structural
+     * bytes for that frame. The scan accumulator keeps the last live value
+     * for every row the structural list still shows as DOWNLOADING and
+     * forgets a row once its structural status moves on (or it leaves the
+     * list).
+     */
+    val progressById: StateFlow<Map<String, DownloadProgress>> =
+        downloadRepository.getActiveDownloadProgress()
+            .combine(structuralItems) { live, items -> live to items }
+            .scan(emptyMap<String, DownloadProgress>()) { retained, (live, structural) ->
+                val stillDownloading = structural
+                    .asSequence()
+                    .filter { it.status == DownloadStatus.DOWNLOADING }
+                    .mapTo(HashSet()) { it.id }
+                val merged = HashMap(retained)
+                merged.keys.retainAll(stillDownloading)
+                merged.putAll(live)
+                merged
+            }
+            .distinctUntilChanged()
+            .stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    /**
+     * Total bytes used, kept live across progress ticks. Lives OUTSIDE
+     * [uiState] on purpose: folding it in would re-emit uiState per tick and
+     * drag the whole screen body along with it. Computed as the structural
+     * sum with each in-flight row's bytes overridden by its live value —
+     * exactly the Σ downloadedBytes the pre-split uiState carried — and
+     * collected by the screen only inside the storage-header leaf.
+     */
+    val totalStorageBytes: StateFlow<Long> =
+        combine(structuralItems, progressById) { items, progress ->
+            items.sumOf { item -> progress[item.id]?.downloadedBytes ?: item.downloadedBytes }
+        }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), 0L)
+
     init {
         launch {
-            // Change-filtering already lives in the repository (id order +
-            // per-item bytes/status), so only list-affecting changes land here.
+            // Change-filtering lives in two layers. The repository's filter
+            // (id order + per-item bytes/status) still forwards byte movement
+            // because other consumers render live progress from the item list
+            // itself (album detail's per-track bars). This screen no longer
+            // does — bytes/speed arrive through [progressById] — so a second
+            // projection drops the per-tick fields and only list-structure
+            // changes (ids in order, per-item status) re-emit uiState.
             downloadRepository.getAllDownloads()
                 .catch { e ->
                     _uiState.update {
                         it.copy(error = e.localizedMessage ?: "Failed to load downloads", isLoading = false)
                     }
                 }
+                .distinctUntilChanged { old, new -> sameListStructure(old, new) }
                 .collectLatest { items ->
+                    structuralItems.value = items
                     _uiState.update {
                         it.copy(
                             downloads = items,
                             error = null,
                             isLoading = false,
-                            totalStorageBytes = items.sumOf { item -> item.downloadedBytes },
                         )
                     }
                 }
         }
     }
 
-    fun cancelDownload(item: DownloadItem) {
-        launch {
-            downloadRepository.cancelDownload(item.id)
-        }
+    /**
+     * True when two lists differ only in per-tick progress fields — i.e. the
+     * screen has nothing structural to re-render. Every real transition
+     * (queue admission, pause/resume, completion, failure, insert/delete)
+     * changes some row's status or the id sequence, so id order + status is
+     * the complete structural key.
+     */
+    private fun sameListStructure(old: List<DownloadItem>, new: List<DownloadItem>): Boolean {
+        if (old.size != new.size) return false
+        return old.zip(new).all { (o, n) -> o.id == n.id && o.status == n.status }
     }
 
-    fun pauseDownload(item: DownloadItem) {
+    /**
+     * The single dispatch for every [DownloadBulkAction]. Target selection is
+     * the pure [DownloadActions] fold (scope ∩ live list ∩ admission table);
+     * a no-target call is a guarded no-op, exactly like the per-action funs it
+     * replaced. DELETE additionally clears the selection (bulk scope only) and
+     * emits the one-shot Deleted message at every scope — the former
+     * deleteSelected/deleteDownload side effects.
+     */
+    fun applyBulkAction(action: DownloadBulkAction, scope: DownloadActionScope) {
+        val state = _uiState.value
+        val targets = DownloadActions.targets(action, state.downloads, state.selectedIds, scope)
+        if (targets.isEmpty()) return
         launch {
-            downloadRepository.pauseDownload(item.id)
-        }
-    }
-
-    fun resumeDownload(item: DownloadItem) {
-        launch {
-            downloadRepository.resumeDownload(item.id)
-            downloadRepository.enqueueDownload(item.id)
+            bulkMap(targets) { item ->
+                when (action) {
+                    DownloadBulkAction.PAUSE -> downloadRepository.pauseDownload(item.id)
+                    DownloadBulkAction.RESUME -> {
+                        downloadRepository.resumeDownload(item.id)
+                        downloadRepository.enqueueDownload(item.id)
+                    }
+                    DownloadBulkAction.CANCEL -> downloadRepository.cancelDownload(item.id)
+                    DownloadBulkAction.RETRY_FAILED -> {
+                        downloadRepository.retryDownload(item.id)
+                        downloadRepository.enqueueDownload(item.id)
+                    }
+                    DownloadBulkAction.DELETE -> downloadRepository.deleteDownload(item.id)
+                }
+            }
+            if (action == DownloadBulkAction.DELETE) {
+                if (scope == DownloadActionScope.Selected) clearSelection()
+                messageChannel.trySend(DownloadsUserMessage.Deleted)
+            }
         }
     }
 
@@ -137,13 +235,6 @@ class DownloadsViewModel(
         launch {
             downloadRepository.deleteDownload(item.id)
             messageChannel.trySend(DownloadsUserMessage.Deleted)
-        }
-    }
-
-    fun retryDownload(item: DownloadItem) {
-        launch {
-            downloadRepository.retryDownload(item.id)
-            downloadRepository.enqueueDownload(item.id)
         }
     }
 
@@ -164,107 +255,21 @@ class DownloadsViewModel(
     // ── Selection ────────────────────────────────────────────────────────
 
     fun toggleSelection(item: DownloadItem) {
-        _uiState.update {
-            val next = if (item.id in it.selectedIds) it.selectedIds - item.id else it.selectedIds + item.id
-            it.copy(selectedIds = next, selectionMode = next.isNotEmpty())
-        }
+        _uiState.update { it.copy(selection = it.selection.toggled(item.id)) }
     }
 
     fun clearSelection() {
-        _uiState.update { it.copy(selectedIds = emptySet(), selectionMode = false) }
+        _uiState.update { it.copy(selection = it.selection.cleared()) }
     }
 
     fun selectAll() {
-        _uiState.update {
-            it.copy(selectedIds = it.downloads.map { item -> item.id }.toSet(), selectionMode = true)
-        }
+        _uiState.update { it.copy(selection = it.selection.selectAll(it.downloads.map { item -> item.id })) }
     }
 
     // ── Bulk actions ─────────────────────────────────────────────────────
-
-    /** Bulk-delete every selected download. Frees disk for completed items. */
-    fun deleteSelected() {
-        val targets = _uiState.value.downloads.filter { it.id in _uiState.value.selectedIds }
-        if (targets.isEmpty()) return
-        launch {
-            bulkMap(targets) { downloadRepository.deleteDownload(it.id) }
-            clearSelection()
-            messageChannel.trySend(DownloadsUserMessage.Deleted)
-        }
-    }
-
-    /** Pause every selected download that is currently downloading. */
-    fun pauseSelected() {
-        val targets = _uiState.value.downloads
-            .filter { it.id in _uiState.value.selectedIds && it.status == DownloadStatus.DOWNLOADING }
-        if (targets.isEmpty()) return
-        launch {
-            bulkMap(targets) { downloadRepository.pauseDownload(it.id) }
-        }
-    }
-
-    /** Resume every selected download that is currently paused. */
-    fun resumeSelected() {
-        val targets = _uiState.value.downloads
-            .filter { it.id in _uiState.value.selectedIds && it.status == DownloadStatus.PAUSED }
-        if (targets.isEmpty()) return
-        launch {
-            bulkMap(targets) {
-                downloadRepository.resumeDownload(it.id)
-                downloadRepository.enqueueDownload(it.id)
-            }
-        }
-    }
-
-    /** Cancel every selected active/queued/paused download. */
-    fun cancelSelected() {
-        val targets = _uiState.value.downloads.filter { item ->
-            item.id in _uiState.value.selectedIds && item.status in setOf(
-                DownloadStatus.PENDING,
-                DownloadStatus.QUEUED,
-                DownloadStatus.DOWNLOADING,
-                DownloadStatus.PAUSED,
-            )
-        }
-        if (targets.isEmpty()) return
-        launch {
-            bulkMap(targets) { downloadRepository.cancelDownload(it.id) }
-        }
-    }
-
-    // ── Global actions ──────────────────────────────────────────────────
-
-    /**
-     * Pause every download that is currently downloading. Mirrors [pauseSelected]
-     * but over the full list, so the user can halt all active transfers without
-     * entering selection mode.
-     */
-    fun pauseAll() {
-        val targets = _uiState.value.downloads
-            .filter { it.status == DownloadStatus.DOWNLOADING }
-        if (targets.isEmpty()) return
-        launch {
-            bulkMap(targets) { downloadRepository.pauseDownload(it.id) }
-        }
-    }
-
-    /**
-     * Re-queue every download in a Failed state. Mirrors the per-item
-     * [retryDownload] flow (reset + enqueue) applied to all Failed items, so a
-     * transient batch failure (e.g. a dropped network) can be recovered in one
-     * action without entering selection mode.
-     */
-    fun retryAllFailed() {
-        val targets = _uiState.value.downloads
-            .filter { it.status == DownloadStatus.FAILED }
-        if (targets.isEmpty()) return
-        launch {
-            bulkMap(targets) {
-                downloadRepository.retryDownload(it.id)
-                downloadRepository.enqueueDownload(it.id)
-            }
-        }
-    }
+    // The former pauseSelected/resumeSelected/cancelSelected/deleteSelected
+    // and global pauseAll/retryAllFailed funs folded into [applyBulkAction]
+    // above; [DownloadActions] owns the shared admission table.
 
     /**
      * Runs [action] for every target concurrently instead of serially — each

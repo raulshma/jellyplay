@@ -4,7 +4,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
- * Wire DTOs for the Phase W wasm Radarr/Sonarr clients — field-for-field
+ * Wire DTOs for the wasm Radarr/Sonarr clients — field-for-field
  * transcriptions of the PRIVATE nested DTOs inside the jvmShared
  * `RadarrApiClientImpl` / `SonarrApiClientImpl`. Same names (those are
  * class-nested there, so no collision with these top-level declarations),

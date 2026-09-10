@@ -1,11 +1,13 @@
 package com.raulshma.jellyplay.core.data.network
 
+import com.raulshma.jellyplay.core.concurrency.TaskBundle
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
+import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.model.ServerHealth
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
@@ -22,8 +24,12 @@ import kotlinx.coroutines.launch
  * The monitor starts checking when a server is connected and stops when
  * disconnected. The check interval is [HEALTH_CHECK_INTERVAL_MS].
  */
+private const val MONITOR_LOOP = "ServerHealthMonitor.loop"
+
 class ServerHealthMonitor(
     private val apiClient: JellyfinApiClient,
+    /** Clock seam for the per-check latency measurement (start/delta pair). */
+    private val timeSource: TimeSource,
 ) {
     // The monitor loop runs on [Dispatchers.IO] in production. Unit tests swap
     // this for their virtual-time test dispatcher (see [useDispatcherForTest])
@@ -42,11 +48,11 @@ class ServerHealthMonitor(
      */
     fun useDispatcherForTest(dispatcher: CoroutineDispatcher) {
         // Tear down any loop started on the default IO scope before swapping.
-        monitorJob?.cancel()
-        monitorJob = null
+        monitorTasks.cancel(MONITOR_LOOP)
         scope.cancel()
         loopDispatcher = dispatcher
         scope = CoroutineScope(SupervisorJob() + dispatcher)
+        monitorTasks = TaskBundle(scope)
     }
 
     private val _serverHealth = MutableStateFlow<ServerHealth>(ServerHealth.Unknown)
@@ -54,7 +60,11 @@ class ServerHealthMonitor(
 
     @Volatile
     private var currentServerAddress: String? = null
-    private var monitorJob: Job? = null
+
+    // The single monitor-loop slot: cancel-and-replace on address switch.
+    // Recreated with the scope in [useDispatcherForTest]. Confined to the
+    // caller's thread, like the plain var it replaces.
+    private var monitorTasks = TaskBundle(scope)
 
     /**
      * Starts monitoring the server health. Safe to call multiple times;
@@ -66,24 +76,25 @@ class ServerHealthMonitor(
             stopMonitoring()
             return
         }
-        if (currentServerAddress == serverAddress && monitorJob?.isActive == true) return
+        if (currentServerAddress == serverAddress && monitorTasks[MONITOR_LOOP]?.isActive == true) return
 
         // Cancel any in-flight loop before starting a new one to avoid races
         // where two coroutines ping concurrently after an address switch.
-        monitorJob?.cancel()
         currentServerAddress = serverAddress
 
-        monitorJob = scope.launch {
+        monitorTasks.replace(MONITOR_LOOP) {
+            scope.launch {
             while (true) {
                 // Re-run address selection first: this both fails over to an
                 // alternate when the active endpoint died and switches back to
                 // the primary once it answers again (primary is always probed
                 // first). Health is then reported for the endpoint actually
                 // in use.
-                runCatching { apiClient.selectReachableAddress() }
+                runCatchingRethrowingCancellation { apiClient.selectReachableAddress() }
                 val activeAddress = apiClient.getServerUrl()?.takeIf { it.isNotBlank() } ?: serverAddress
-                runCatching { checkHealth(activeAddress) }
+                runCatchingRethrowingCancellation { checkHealth(activeAddress) }
                 delay(HEALTH_CHECK_INTERVAL_MS)
+            }
             }
         }
     }
@@ -92,8 +103,7 @@ class ServerHealthMonitor(
      * Stops the health monitoring loop and clears the published status.
      */
     fun stopMonitoring() {
-        monitorJob?.cancel()
-        monitorJob = null
+        monitorTasks.cancel(MONITOR_LOOP)
         currentServerAddress = null
         _serverHealth.value = ServerHealth.Unknown
     }
@@ -110,9 +120,9 @@ class ServerHealthMonitor(
 
         _serverHealth.value = ServerHealth.Checking
 
-        val startTime = System.currentTimeMillis()
+        val startTime = timeSource.nowEpochMillis()
         val result = apiClient.getServerInfo(serverAddress)
-        val latency = System.currentTimeMillis() - startTime
+        val latency = timeSource.nowEpochMillis() - startTime
 
         _serverHealth.value = if (result.isSuccess) {
             ServerHealth.Healthy(latencyMs = latency)

@@ -5,6 +5,20 @@ import com.raulshma.jellyplay.core.model.DownloadItem
 import kotlinx.coroutines.flow.Flow
 
 /**
+ * Live per-row transfer progress for an in-flight download — the feature-
+ * facing shape of the DAO's `DownloadProgressRow` projection (features never
+ * import DAO types; the impl maps at the repository boundary). Rows here are
+ * by definition in flight (PENDING/QUEUED/DOWNLOADING); their structural
+ * status is read from [getAllDownloads], which re-emits on every status
+ * transition.
+ */
+data class DownloadProgress(
+    val id: String,
+    val downloadedBytes: Long,
+    val speedBytesPerSec: Long,
+)
+
+/**
  * Download lifecycle, status queries, and series-batch orchestration.
  *
  * The offline-artifact-write surface (start, enqueue, saveOfflineMediaItem,
@@ -18,6 +32,23 @@ import kotlinx.coroutines.flow.Flow
 interface DownloadRepository : OfflineDownloadWriter {
 
     fun getAllDownloads(): Flow<List<DownloadItem>>
+
+    /**
+     * Live byte/speed progress for in-flight downloads, keyed by download id
+     * — the hot companion to [getAllDownloads]. The 2 s transfer
+     * ticker's DAO write invalidates the whole `downloads` table, and
+     * [getAllDownloads]' change filter (id order + per-item bytes/status)
+     * deliberately forwards byte movement for consumers that render live
+     * progress from the item list itself (album detail's per-track bars).
+     * The downloads screen instead treats bytes/speed as non-structural: it
+     * suppresses tick-only list re-emissions and reads the moving values
+     * from this narrow projection instead, so a tick re-renders
+     * only the actively-downloading rows. Rows drop out of the map as soon
+     * as their status leaves the in-flight set (PENDING/QUEUED/DOWNLOADING),
+     * which is exactly when the status change re-emits [getAllDownloads]
+     * carrying the row's final bytes.
+     */
+    fun getActiveDownloadProgress(): Flow<Map<String, DownloadProgress>>
 
     /**
      * One-shot read of every download row, uncapped — unlike [getAllDownloads],

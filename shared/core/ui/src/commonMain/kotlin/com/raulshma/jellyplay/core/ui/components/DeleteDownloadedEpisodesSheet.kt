@@ -2,8 +2,6 @@ package com.raulshma.jellyplay.core.ui.components
 import com.raulshma.jellyplay.core.ui.generated.resources.Res
 import com.raulshma.jellyplay.core.ui.generated.resources.detail_episode_count
 import com.raulshma.jellyplay.core.ui.generated.resources.detail_cancel
-import com.raulshma.jellyplay.core.ui.generated.resources.detail_cd_collapse
-import com.raulshma.jellyplay.core.ui.generated.resources.detail_cd_expand
 import com.raulshma.jellyplay.core.ui.generated.resources.detail_delete_count
 import com.raulshma.jellyplay.core.ui.generated.resources.detail_delete_count_with_freed
 import com.raulshma.jellyplay.core.ui.generated.resources.detail_delete_downloads_title
@@ -15,11 +13,7 @@ import com.raulshma.jellyplay.core.ui.generated.resources.detail_season_default
 import com.raulshma.jellyplay.core.ui.generated.resources.detail_select_all
 import com.raulshma.jellyplay.core.ui.generated.resources.detail_select_episodes_to_remove
 
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -29,23 +23,19 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TriStateCheckbox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -53,18 +43,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.graphicsLayer
 import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
-import com.composables.icons.tabler.outline.ChevronDown
 import com.composables.icons.tabler.outline.Trash
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
-import com.raulshma.jellyplay.core.designsystem.theme.defaultContentSizeSpec
-import com.raulshma.jellyplay.core.designsystem.theme.defaultSpatialSpring
-import com.raulshma.jellyplay.core.designsystem.theme.expressiveListShape
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.formatBytes
 
@@ -83,7 +67,10 @@ import com.raulshma.jellyplay.core.model.formatBytes
  * Callers wrap it in [TvSafeSheet].
  *
  * Data note: callers must pre-filter [episodes] to downloaded episodes only —
- * every episode passed in is treated as deletable. The freed-space figure is
+ * every episode passed in is treated as deletable. Both list params come from
+ * the ONE derivation [downloadedSeasonSlices] (drops empty seasons, keeps
+ * order); callers whose source map is already downloaded-only and keyed by
+ * known season ids pass it through as-is. The freed-space figure is
  * exact for any selection when [episodeSizeBytes] is supplied (per-episode
  * sizes); otherwise it falls back to the aggregate [totalSizeBytes], shown
  * only when the selection covers every episode. Both current callers (the
@@ -92,7 +79,8 @@ import com.raulshma.jellyplay.core.model.formatBytes
  * remains for any future caller that lacks it.
  *
  * @param seasons season rows (for names + ordering); each should exist as a key
- *   in [episodes]. Only seasons with at least one downloaded episode.
+ *   in [episodes]. Only seasons with at least one downloaded episode — see
+ *   [downloadedSeasonSlices].
  * @param episodes downloaded episodes keyed by season id.
  * @param totalSizeBytes aggregate on-disk size of the series' downloads; 0
  *   hides the aggregate freed-space figure (ignored when [episodeSizeBytes]
@@ -207,157 +195,67 @@ fun DeleteDownloadedEpisodesSheet(
         Spacer(Modifier.height(8.dp))
 
         // ── Seasons + episodes ──
+        // The season header and each expanded season's episode rows are
+        // individual keyed items (see [seasonEpisodeItems]) so an expanded
+        // 100+ episode season composes only its visible rows instead of one
+        // giant unvirtualized item.
         LazyColumn(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            items(seasons, key = { it.id }, contentType = { "season" }) { season ->
+            seasons.forEach { season ->
                 val isExpanded = season.id in expandedSeasonIds
                 val seasonEpisodes = episodes[season.id].orEmpty()
-                val selectedInSeason = selection.selectedForSeason(season.id)
-                val triState = selection.triStateForSeason(season.id)
 
-                val seasonBgColor by animateColorAsState(
-                    targetValue = if (isExpanded) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
-                    else MaterialTheme.colorScheme.surfaceContainer,
-                    animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
-                    label = "seasonBg",
-                )
+                seasonHeaderItem(season.id) {
+                    val triState = selection.triStateForSeason(season.id)
 
-                val chevronRotation by animateFloatAsState(
-                    targetValue = if (isExpanded) 180f else 0f,
-                    animationSpec = defaultSpatialSpring(),
-                    label = "chevron",
-                )
-
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .animateContentSize(animationSpec = defaultContentSizeSpec()),
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(ShapeCache.smooth16)
-                            .background(seasonBgColor)
-                            .clickable {
-                                expandedSeasonIds = if (isExpanded) {
-                                    expandedSeasonIds - season.id
-                                } else {
-                                    expandedSeasonIds + season.id
-                                }
-                            }
-                            .padding(horizontal = 8.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        TriStateCheckbox(
-                            state = triState,
-                            onClick = { selection.toggleSeason(season.id) },
-                        )
-                        Spacer(Modifier.width(4.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = season.name.takeIf { it.isNotBlank() }
-                                    ?: stringResource(Res.string.detail_season_default, season.seasonNumber ?: 1),
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                fontWeight = FontWeight.SemiBold,
+                    SeasonHeaderRow(
+                        title = season.name.takeIf { it.isNotBlank() }
+                            ?: stringResource(Res.string.detail_season_default, season.seasonNumber ?: 1),
+                        subtitle = if (seasonEpisodes.isNotEmpty()) {
+                            pluralStringResource(
+                                Res.plurals.detail_episode_count,
+                                seasonEpisodes.size,
+                                seasonEpisodes.size,
                             )
-                            if (seasonEpisodes.isNotEmpty()) {
-                                Text(
-                                    text = pluralStringResource(
-                                        Res.plurals.detail_episode_count,
-                                        seasonEpisodes.size,
-                                        seasonEpisodes.size,
-                                    ),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
+                        } else null,
+                        triState = triState,
+                        isExpanded = isExpanded,
+                        expandedContainerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f),
+                        onHeaderClick = {
+                            expandedSeasonIds = if (isExpanded) {
+                                expandedSeasonIds - season.id
+                            } else {
+                                expandedSeasonIds + season.id
                             }
-                        }
-                        Icon(
-                            imageVector = Tabler.Outline.ChevronDown,
-                            contentDescription = stringResource(if (isExpanded) Res.string.detail_cd_collapse else Res.string.detail_cd_expand),
-                            modifier = Modifier
-                                .size(20.dp)
-                                .graphicsLayer { rotationZ = chevronRotation },
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+                        },
+                        onCheckboxClick = { selection.toggleSeason(season.id) },
+                    )
+                }
 
-                    if (isExpanded) {
-                        Column(
-                            modifier = Modifier
-                                .padding(start = 12.dp, top = 4.dp, end = 4.dp, bottom = 4.dp),
-                        ) {
-                            seasonEpisodes.forEachIndexed { idx, episode ->
-                                val isEpisodeSelected = episode.id in selectedInSeason
-                                val shape = expressiveListShape(
-                                    index = idx,
-                                    count = seasonEpisodes.size,
-                                    outerRadius = 14.dp,
-                                    innerRadius = 8.dp,
-                                )
+                if (isExpanded) {
+                    val selectedInSeason = selection.selectedForSeason(season.id)
+                    seasonEpisodeItems(
+                        seasonId = season.id,
+                        episodes = seasonEpisodes,
+                        selected = { episodeId -> episodeId in selectedInSeason },
+                        tints = {
+                            SeasonEpisodeRowTints(
+                                selectedContainerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
+                                nameColor = MaterialTheme.colorScheme.onSurface,
+                                checkboxColors = CheckboxDefaults.colors(
+                                    checkedColor = MaterialTheme.colorScheme.error,
+                                    uncheckedColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                ),
+                            )
+                        },
+                        onToggle = { episodeId -> selection.toggleEpisode(season.id, episodeId) },
+                    )
 
-                                val episodeBgColor by animateColorAsState(
-                                    targetValue = if (isEpisodeSelected) {
-                                        MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)
-                                    } else {
-                                        androidx.compose.ui.graphics.Color.Transparent
-                                    },
-                                    animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
-                                    label = "epBg",
-                                )
-
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(shape)
-                                        .background(episodeBgColor)
-                                        .clickable {
-                                            selection.toggleEpisode(season.id, episode.id)
-                                        }
-                                        .padding(horizontal = 8.dp, vertical = 6.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    Checkbox(
-                                        checked = isEpisodeSelected,
-                                        onCheckedChange = null,
-                                        colors = CheckboxDefaults.colors(
-                                            checkedColor = MaterialTheme.colorScheme.error,
-                                            uncheckedColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        ),
-                                    )
-                                    Spacer(Modifier.width(8.dp))
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = buildString {
-                                                episode.episodeNumber?.let { append("E$it. ") }
-                                                append(episode.name)
-                                            },
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = MaterialTheme.colorScheme.onSurface,
-                                        )
-                                        episode.runTimeTicks?.let { ticks ->
-                                            val minutes = ticks / 600_000_000
-                                            Text(
-                                                text = "${minutes}m",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        HorizontalDivider(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
-                        )
-                    }
+                    seasonDividerItem(season.id)
                 }
             }
         }
@@ -414,4 +312,41 @@ fun DeleteDownloadedEpisodesSheet(
             }
         }
     }
+}
+
+/**
+ * The delete sheet's [DeleteDownloadedEpisodesSheet.seasons] /
+ * [DeleteDownloadedEpisodesSheet.episodes] parameter pair, derived once.
+ * The two hosts (the media-detail screen's offline snapshot and the home
+ * delete holder's offline store read) hand-derived this same two-step before
+ * the fold: drop the episode map's empty seasons, then keep only the season
+ * rows that still carry a key in it.
+ *
+ * The only-downloaded rule is the CALLER's half of the contract: every
+ * surviving episode is treated as deletable, so callers must pass a map
+ * already restricted to downloaded episodes (both do — a LOCAL-origin
+ * snapshot is downloaded by construction; the offline store read is
+ * pre-filtered). The fold does NOT additionally intersect the map with
+ * [seasons]: entries for season ids missing from the list survive in
+ * [episodesBySeason] (select-all's selectable set reads the map's keys), so
+ * a caller wanting them gone restricts its own map — the home holder builds
+ * its map keyed by known season ids before calling. Order is preserved from
+ * both inputs; the sheet renders seasons in list order.
+ */
+@Immutable
+data class DownloadedSeasonSlices(
+    val seasons: List<MediaItem>,
+    val episodesBySeason: Map<String, List<MediaItem>>,
+)
+
+/** Builds [DownloadedSeasonSlices]; see the value's KDoc for the rule. */
+fun downloadedSeasonSlices(
+    seasons: List<MediaItem>,
+    episodesBySeason: Map<String, List<MediaItem>>,
+): DownloadedSeasonSlices {
+    val downloaded = episodesBySeason.filterValues { it.isNotEmpty() }
+    return DownloadedSeasonSlices(
+        seasons = seasons.filter { it.id in downloaded },
+        episodesBySeason = downloaded,
+    )
 }

@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.worker
 
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
@@ -128,11 +129,11 @@ class DesktopDownloadManager(
             // Cold-start recovery mirror: rows a dead process left mid-flight
             // are reset to PENDING (bytes preserved so the transfer resumes
             // from its persisted offset). The observer below picks them up.
-            runCatching { recoverStaleRows() }
+            runCatchingRethrowingCancellation { recoverStaleRows() }
                 .onFailure { Log.w(TAG, "Failed to recover stale download rows", it) }
             // One resume pass at start (PAUSED/NETWORK + FAILED rows past the
             // eligibility rules; safe no-op when nothing qualifies).
-            runCatching { downloadRepository.value.resumeInterruptedDownloads() }
+            runCatchingRethrowingCancellation { downloadRepository.value.resumeInterruptedDownloads() }
                 .onFailure { Log.w(TAG, "Startup resume of interrupted downloads failed", it) }
             downloadDao.getPendingDownloads()
                 .map { rows -> rows.filter { it.status == DownloadStatus.PENDING.name } }
@@ -170,7 +171,7 @@ class DesktopDownloadManager(
         ) { networkStatus, offlineMode -> isReady(networkStatus, offlineMode) }
             .collect { ready ->
                 if (ready && !wasReady) {
-                    runCatching { downloadRepository.value.resumeInterruptedDownloads() }
+                    runCatchingRethrowingCancellation { downloadRepository.value.resumeInterruptedDownloads() }
                         .onFailure { Log.w(TAG, "Reconnect resume of interrupted downloads failed", it) }
                 }
                 wasReady = ready
@@ -197,8 +198,12 @@ class DesktopDownloadManager(
     private suspend fun recoverStaleRows() {
         val stale = downloadDao.getRecoveryRows(DownloadStatus.DOWNLOADING.name) +
             downloadDao.getRecoveryRows(DownloadStatus.QUEUED.name)
-        for (row in stale) {
-            downloadDao.updateProgress(row.id, row.downloadedBytes, DownloadStatus.PENDING.name)
+        // One UPDATE: the per-row loop rewrote each row's own downloadedBytes
+        // back unchanged, so only the status transition matters.
+        if (stale.isNotEmpty()) {
+            downloadDao.updateStatusForIds(
+                stale.map { it.id }, DownloadStatus.PENDING.name,
+            )
         }
     }
 

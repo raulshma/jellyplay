@@ -6,7 +6,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
 /**
- * Wave 21D coverage for the shared AWT dialog helper's pure half. The
+ *  coverage for the shared AWT dialog helper's pure half. The
  * dialog itself is a native modal window (HeadlessException in a test JVM),
  * so it is manually-verified-only; what is pinned here is the
  * answer-mapping contract every picker seam rides on: cancel (either half

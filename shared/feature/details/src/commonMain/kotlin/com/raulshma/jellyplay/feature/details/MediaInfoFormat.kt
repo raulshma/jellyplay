@@ -15,7 +15,7 @@ internal object MediaInfoFormat {
     /**
      * Formats a bitrate (bits/sec) into Mbps / Kbps / bps.
      *
-     * Wave 16C purification: `"%.1f".format` / `"%.0f".format` are JVM-API
+     *  purification: `"%.1f".format` / `"%.0f".format` are JVM-API
      * (default-locale formatting, no wasm variant). Replaced with integer
      * HALF_UP math (floor(x + 0.5) — java Formatter's ties-away-from-zero,
      * NOT kotlin.math.round's ties-to-even; `0.25f` → "0.3" here as in java,

@@ -1,42 +1,29 @@
 package com.raulshma.jellyplay.feature.music.artists
 
 import androidx.paging.PagingData
-import androidx.paging.cachedIn
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
-import com.raulshma.jellyplay.feature.music.albums.MusicSortOption
-import kotlinx.coroutines.ExperimentalCoroutinesApi
+import com.raulshma.jellyplay.feature.music.collection.MusicSortOption
+import com.raulshma.jellyplay.feature.music.collection.SortedPagedCollection
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.StateFlow
 
-@OptIn(ExperimentalCoroutinesApi::class)
 class ArtistsViewModel(
-    private val mediaRepository: MediaRepository,
+    mediaRepository: MediaRepository,
     private val imageUrlProvider: ImageUrlProvider,
 ) : JellyPlayViewModel() {
 
-    private val _selectedSort = composeState(MusicSortOption.NAME)
-    val selectedSort: MusicSortOption get() = _selectedSort.value
+    /** Sorted paged artists — sort state and pager live in the collection. */
+    private val collection = SortedPagedCollection(mediaRepository, scope, MediaType.ARTIST)
 
-    private val sortFlow = MutableStateFlow(_selectedSort.value)
+    val selectedSort: StateFlow<MusicSortOption> = collection.selectedSort
 
-    val artists: Flow<PagingData<MediaItem>> = sortFlow.flatMapLatest { sort ->
-        mediaRepository.getMediaItemsPaged(
-            filters = com.raulshma.jellyplay.core.model.LibraryFilters(
-                mediaTypes = listOf(MediaType.ARTIST),
-                sortBy = sort.option,
-            ),
-        )
-    }.cachedIn(scope)
+    val artists: Flow<PagingData<MediaItem>> = collection.items
 
-    fun setSort(sort: MusicSortOption) {
-        _selectedSort.value = sort
-        sortFlow.value = sort
-    }
+    fun setSort(sort: MusicSortOption) = collection.setSort(sort)
 
     fun getImageUrl(itemId: String): String =
         imageUrlProvider.getImageUrl(itemId, maxWidth = ImageUrlProvider.MUSIC_MAX_WIDTH)

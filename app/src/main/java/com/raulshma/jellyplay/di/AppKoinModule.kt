@@ -48,7 +48,7 @@ import org.koin.dsl.module
 import org.koin.mp.KoinPlatform
 
 /**
- * App-side Koin graph (wave 8B — Hilt removal): every former @Inject/@Singleton
+ * App-side Koin graph (Hilt removal): every former @Inject/@Singleton
  * ctor class and @Binds interface pair that used to live in :app's Hilt
  * component (plus the deleted WidgetModule's three @Binds) constructs here.
  * 1:1 with the old constructors — Context params are the application context,
@@ -57,14 +57,14 @@ import org.koin.mp.KoinPlatform
  *
  * Data-layer deps (AuthRepository, RealtimeConnection, the schedulers, …)
  * resolve from the core graphs: the legacy remainder lands in
- * androidCoreDataModule/androidNotificationModule (wave 8A) and the shared
+ * androidCoreDataModule/androidNotificationModule and the shared
  * stores from datastoreCommonModule/androidDatastoreModule — one framework
  * per type, this module owns only :app classes.
  */
 fun androidAppModule(context: Context): Module = module {
     single { DeepLinkHandler() }
 
-    // App-scoped PIN/biometric lock flag (wave 20E): the single source of
+    // App-scoped PIN/biometric lock flag: the single source of
     // truth for "unlocked" that MainActivity's compose gate renders AND
     // PlayerActivity's locked-redirect check reads — hoisted off
     // MainActivity's former compose-local state so the media-notification
@@ -110,14 +110,13 @@ fun androidAppModule(context: Context): Module = module {
     // driven off the @ApplicationScope coroutine scope).
     single {
         DownloadRecoveryInitializer(
-            context = context,
             downloadDao = get(),
             downloadEnqueuer = get(),
         )
     }
     single {
         CacheMaintenanceInitializer(
-            mediaRepository = get(),
+            lyricsRepository = get(),
             offlineRepository = get(),
             applicationScope = get(DatastoreQualifiers.applicationScope),
         )
@@ -135,7 +134,11 @@ fun androidAppModule(context: Context): Module = module {
         WidgetWorkSchedulerImpl(context = context)
     }
     single<ContinueWatchingBroadcaster> {
-        ContinueWatchingBroadcasterImpl(context = context)
+        ContinueWatchingBroadcasterImpl(
+            context = context,
+            widgetDataStore = get(),
+            playbackRepository = get(),
+        )
     }
     single<LibrarySyncHook> {
         LibrarySyncHookImpl(
@@ -190,7 +193,7 @@ val androidAppViewModelsModule: Module = module {
  * HiltAudioPlayerEngine/HiltAudioPlayerCast classes in the deleted
  * HiltInteropModule). Same adapter bodies, direct Koin resolution: the
  * AudioPlaybackManager/CastManager/UserMessageBus/ThemeMusicPlayer targets
- * are Koin-owned by the core graphs now (wave 8A), so no EntryPoint bridge
+ * are Koin-owned by the core graphs now, so no EntryPoint bridge
  * remains. Desktop halves are the no-op defs in each shared module's jvmMain.
  */
 fun androidAppInteropAdaptersModule(application: Application): Module = module {

@@ -850,7 +850,7 @@
     <string name="settings_reduce_motion">Bewegung reduzieren</string>
     <string name="settings_reduce_motion_subtitle">Starke Parallax- und Kartenanimationen deaktivieren</string>
     <string name="settings_comfort_eye_care">Komfort &amp; Augenschonung</string>
-    <string name="settings_blue_light_filter_summary">Blaulichtfilter · %1$d%%</string>
+    <string name="settings_blue_light_filter_summary">Blaulichtfilter · %1$d%</string>
     <string name="settings_blue_light_filter">Blaulichtfilter</string>
     <string name="settings_blue_light_filter_subtitle">Bildschirm bernsteinfarben tönen, um Augenanstrengung nachts zu verringern</string>
     <string name="settings_blue_light_filter_strength">Blaulichtfilter-Stärke</string>
@@ -910,7 +910,7 @@
     <string name="settings_tv_zoom_mode">TV-Zoom-Modus</string>
     <string name="settings_tv_zoom_mode_subtitle">Video zuschneiden/zoomen, um den Bildschirm zu füllen (0% = aus)</string>
     <string name="settings_tv_zoom_none">Kein Zoom (originales Seitenverhältnis)</string>
-    <string name="settings_tv_zoom_percent">Video um %1$d%% zuschneiden und zoomen, um Bildschirm zu füllen</string>
+    <string name="settings_tv_zoom_percent">Video um %1$d% zuschneiden und zoomen, um Bildschirm zu füllen</string>
     <string name="settings_episode_browser">Episoden-Browser</string>
     <string name="settings_episode_browser_on">Episodenliste während der Wiedergabe zeigen</string>
     <string name="settings_episode_browser_off">Episodenliste ausblenden</string>

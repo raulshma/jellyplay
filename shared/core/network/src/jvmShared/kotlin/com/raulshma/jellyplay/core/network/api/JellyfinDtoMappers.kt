@@ -12,6 +12,7 @@ import com.raulshma.jellyplay.core.model.DvrTimer
 import com.raulshma.jellyplay.core.model.DvrTimerStatus
 import com.raulshma.jellyplay.core.model.ImageBlurHashes
 import com.raulshma.jellyplay.core.model.GuideInfo
+import com.raulshma.jellyplay.core.model.ItemCounts
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.core.model.LiveTvRecording
@@ -30,6 +31,8 @@ import com.raulshma.jellyplay.core.model.TaskExecutionInfo
 import com.raulshma.jellyplay.core.model.TaskState
 import com.raulshma.jellyplay.core.model.TaskTriggerInfo
 import com.raulshma.jellyplay.core.model.TrickplayInfo
+import com.raulshma.jellyplay.core.network.library.filterByParentalRating
+import com.raulshma.jellyplay.core.network.library.parseItemSortList as parseItemSortTokens
 import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.BaseItemKind
 import org.jellyfin.sdk.model.api.ImageType
@@ -42,7 +45,7 @@ import org.jellyfin.sdk.model.DateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
-// C3 note: the two org.json WebSocket-payload parsers that used to live here
+// The two org.json WebSocket-payload parsers that used to live here
 // (toScheduledTaskInfo / toActivityLogEntry + their private helpers) stay in
 // the legacy Android shim (core/network/src/main/.../api/WsDtoMappers.kt):
 // their consumers — the realtime channels — inject the Hilt-qualified
@@ -90,6 +93,19 @@ internal fun BaseItemDto.toMediaItem() = MediaItem(
     lastPlayedDate = userData?.lastPlayedDate?.toString(),
     unplayedItemCount = userData?.unplayedItemCount,
 )
+
+/**
+ * The standard tail of every library listing call: map the DTOs to
+ * [MediaItem]s, then parental-rate them through the commonMain policy
+ * ([filterByParentalRating] over the caller-supplied max, e.g.
+ * `JellyfinApiEngine.currentMaxParentalRating`) — the JVM twin of the wasm
+ * client's `map { it.toMediaItem() }.filterByParentalRating(max)` tail. The
+ * map-then-filter order is equivalent to the former engine member
+ * (filter-then-map keyed on `officialRating`) because [toMediaItem] carries
+ * `officialRating` through unchanged.
+ */
+internal fun List<BaseItemDto>.toFilteredMediaItems(maxParentalRating: Int?): List<MediaItem> =
+    map { it.toMediaItem() }.filterByParentalRating(maxParentalRating)
 
 internal fun BaseItemKind.toMediaType(): MediaType = when (this) {
     BaseItemKind.MOVIE -> MediaType.MOVIE
@@ -341,6 +357,26 @@ internal fun org.jellyfin.sdk.model.api.TaskResult.toExecutionModel() = TaskExec
     errorMessage = errorMessage,
 )
 
+/**
+ * Maps the `/Items/Counts` DTO onto the domain [ItemCounts], deriving
+ * `totalCount` as the sum of the seven per-library axes. Shared by the admin
+ * dashboard (`AdminApiClientImpl.getItemCounts`) and the newsletter's library
+ * stats (`MediaInfoApiClientImpl.getNewsletterData`).
+ */
+internal fun org.jellyfin.sdk.model.api.ItemCounts.toItemCounts() = ItemCounts(
+    movieCount = movieCount.toLong(),
+    seriesCount = seriesCount.toLong(),
+    episodeCount = episodeCount.toLong(),
+    albumCount = albumCount.toLong(),
+    songCount = songCount.toLong(),
+    musicVideoCount = musicVideoCount.toLong(),
+    bookCount = bookCount.toLong(),
+    totalCount = movieCount.toLong() + seriesCount.toLong() +
+            episodeCount.toLong() + albumCount.toLong() +
+            songCount.toLong() + musicVideoCount.toLong() +
+            bookCount.toLong(),
+)
+
 internal fun org.jellyfin.sdk.model.api.DeviceInfoDto.toDeviceModel() = DeviceInfo(
     id = id?.toString() ?: "",
     name = name ?: "",
@@ -434,36 +470,16 @@ internal fun parseItemKind(type: String): BaseItemKind? = when (type) {
     else -> null
 }
 
-internal fun parseItemSortList(sortBy: String): List<org.jellyfin.sdk.model.api.ItemSortBy> {
-    if (sortBy.isBlank()) return emptyList()
-    return sortBy.split(",").mapNotNull { token -> parseItemSortToken(token.trim()) }
-}
-
 /**
- * Lookup for one sort token: the 9 exact-match hot tokens via `when`, then a
- * static lowercase map over all [org.jellyfin.sdk.model.api.ItemSortBy] entries
- * (serialName + enum name) — previously a linear O(entries) scan per non-exact
- * token on every browse/search page load.
+ * Parses a compound sort key ("ProductionYear,SortName") into SDK
+ * [ItemSortBy] entries, delegating token parsing to the commonMain wire
+ * ([parseItemSortTokens]) and resolving its serial names against the enum —
+ * the canonical token table lives there (the wasm client parses the same
+ * string), so the two can never drift.
  */
-private fun parseItemSortToken(trimmed: String): org.jellyfin.sdk.model.api.ItemSortBy? = when (trimmed) {
-    "SortName" -> org.jellyfin.sdk.model.api.ItemSortBy.SORT_NAME
-    "DatePlayed" -> org.jellyfin.sdk.model.api.ItemSortBy.DATE_PLAYED
-    "DateCreated" -> org.jellyfin.sdk.model.api.ItemSortBy.DATE_CREATED
-    "DateLastContentAdded" -> org.jellyfin.sdk.model.api.ItemSortBy.DATE_LAST_CONTENT_ADDED
-    "PlayCount" -> org.jellyfin.sdk.model.api.ItemSortBy.PLAY_COUNT
-    "Random" -> org.jellyfin.sdk.model.api.ItemSortBy.RANDOM
-    "PremiereDate" -> org.jellyfin.sdk.model.api.ItemSortBy.PREMIERE_DATE
-    "ProductionYear" -> org.jellyfin.sdk.model.api.ItemSortBy.PRODUCTION_YEAR
-    "CommunityRating" -> org.jellyfin.sdk.model.api.ItemSortBy.COMMUNITY_RATING
-    else -> ITEM_SORT_BY_TOKENS[trimmed.lowercase()]
-}
-
-private val ITEM_SORT_BY_TOKENS: Map<String, org.jellyfin.sdk.model.api.ItemSortBy> =
-    buildMap {
-        for (entry in org.jellyfin.sdk.model.api.ItemSortBy.entries) {
-            put(entry.serialName.lowercase(), entry)
-            put(entry.name.lowercase(), entry)
-        }
+internal fun parseItemSortList(sortBy: String): List<org.jellyfin.sdk.model.api.ItemSortBy> =
+    parseItemSortTokens(sortBy).mapNotNull { serial ->
+        org.jellyfin.sdk.model.api.ItemSortBy.entries.firstOrNull { it.serialName == serial }
     }
 
 internal fun parseItemSortBy(sortBy: String): org.jellyfin.sdk.model.api.ItemSortBy? =

@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.player.video
 
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.model.ChapterInfo
+import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.EffectStrength
@@ -31,6 +32,58 @@ data class CinemaIntroUiState(
     val currentIndex: Int,
     val totalCount: Int,
 )
+
+/**
+ * Segment-relevant slice of [VideoPlayerUiState]. Projecting only these fields
+ * (and `distinctUntilChanged`-ing them) means a 4 Hz position tick does not
+ * allocate a fresh `VideoPlayerUiState.copy(...)` or re-run
+ * [SegmentCalculator.computeActiveSegment] unless one of these fields actually
+ * changed. Shared by the ViewModel's overlay flow and the
+ * [PlaybackProgressReporter] tick path so the field mapping lives in exactly
+ * one place.
+ *
+ * Note: `isInIntro` / `isInCredits` / `shouldShowUpNext` are deliberately NOT
+ * captured here — they are computed properties on [VideoPlayerUiState] that
+ * depend on the live position/duration, so they are re-derived inside
+ * `computeOverlay` from the position-aware state. Only the *inputs* that do
+ * not change every tick are projected.
+ */
+internal data class SegmentProjection(
+    val segments: List<MediaSegment>,
+    val chapters: List<ChapterInfo>,
+    val segmentBehaviors: Map<MediaSegmentType, SegmentBehavior>,
+    val autoplayCancelled: Boolean,
+    val isInSyncPlaySession: Boolean,
+    val nextEpisode: MediaItem?,
+    val seriesId: String?,
+) {
+    constructor(state: VideoPlayerUiState) : this(
+        segments = state.segmentState.segments,
+        chapters = state.chapters,
+        segmentBehaviors = state.segmentState.segmentBehaviors,
+        autoplayCancelled = state.autoplay.autoplayCancelled,
+        isInSyncPlaySession = state.isInSyncPlaySession,
+        nextEpisode = state.episodes.nextEpisode,
+        seriesId = state.media.seriesId,
+    )
+
+    /**
+     * Builds the position-independent [SegmentCalculatorInput] for a given
+     * duration. Everything here is low-frequency (projection + duration), so
+     * the input is built only when one of those changes — not on every 4 Hz
+     * position tick.
+     */
+    fun toSegmentInput(durationMs: Long) = SegmentCalculatorInput(
+        segments = segments,
+        chapters = chapters,
+        segmentBehaviors = segmentBehaviors,
+        durationMs = durationMs,
+        autoplayCancelled = autoplayCancelled,
+        isInSyncPlaySession = isInSyncPlaySession,
+        hasNextEpisode = nextEpisode != null,
+        seriesId = seriesId,
+    )
+}
 
 /**
  * Narrow, low-frequency view of the segment / up-next overlays.
@@ -100,18 +153,16 @@ data class SegmentOverlayState(
  *
  * *Everything else still flat* is leaf state with no slice to join:
  * [chapters] (feeds both the media display and [toSegmentInput], so it cannot
- * live in the media slice alone), the subtitle-sync preview trio
- * [subtitlePreviewCues] / [subtitlePreviewSource] / [previewSheetVisible]
- * (sheet-scoped, gate-controlled state; the wider subtitle workflow lives in
- * `SubtitleManager`'s own state), [isScreenLocked] and [audioOnly] (transient
+ * live in the media slice alone), [isScreenLocked] and [audioOnly] (transient
  * lock / surface-gate flags) and [isConnectionMetered] (network environment
  * signal surfaced to explain quality caps).
  *
- * The sleep-timer, track-selection, subtitle-workflow, audio-effects and
- * SyncPlay group-display concerns are not here at all: they are owned by their
- * controllers (`SleepTimerController.state`, `TrackSelectionHelper.state`,
- * `SubtitleManager.state`, `VideoEffectsController.state`, `SyncPlayBridge.state`)
- * and exposed as `StateFlow`s on the ViewModel.
+ * The sleep-timer, track-selection, subtitle-workflow, subtitle-preview,
+ * audio-effects and SyncPlay group-display concerns are not here at all: they
+ * are owned by their controllers (`SleepTimerController.state`,
+ * `TrackSelectionHelper.state`, `SubtitleManager.state`,
+ * `SubtitlePreviewController.state`, `VideoEffectsController.state`,
+ * `SyncPlayBridge.state`) and exposed as `StateFlow`s on the ViewModel.
  *
  * ## Reading / writing
  *
@@ -169,27 +220,6 @@ data class VideoPlayerUiState(
     val segmentState: SegmentState = SegmentState(),
     val isInSyncPlaySession: Boolean = false,
     val engineCapabilities: EngineCapabilities = EngineCapabilities(),
-    /**
-     * Parsed cue list for the active subtitle track, for the G10 subtitle-sync
-     * preview. Sourced from either an external text track (full track, all
-     * engines, bidirectional) or, as a fallback for embedded subs, the engine's
-     * live `currentCues` accumulation (played range only). Null when neither
-     * source has cues (image subs, unsupported engines).
-     */
-    val subtitlePreviewCues: List<com.raulshma.jellyplay.feature.player.video.subtitle.TimedCue>? = null,
-    /**
-     * Which source populated [subtitlePreviewCues], so the preview UI can show
-     * the right hint (external = full track; embedded = played range only).
-     */
-    val subtitlePreviewSource: SubtitlePreviewSource = SubtitlePreviewSource.NONE,
-    /**
-     * Whether the AV-sync sheet (the only consumer of [subtitlePreviewCues]) is
-     * open. The ViewModel uses this to gate pushing embedded-subtitle cues into
-     * `subtitlePreviewCues` — there's no point copying the wide UI state on
-     * every onCues tick when the preview isn't visible. Toggled by the screen
-     * as the sheet opens/dismisses; `loadActiveSubtitleCues` re-syncs on open.
-     */
-    val previewSheetVisible: Boolean = false,
     val playerError: String? = null,
     /**
      * Structured retryability verdict paired with [playerError], propagated
@@ -288,16 +318,7 @@ data class VideoPlayerUiState(
     fun computeActiveSegment(positionMs: Long): MediaSegment? =
         SegmentCalculator.computeActiveSegment(toSegmentInput(), positionMs)
 
-    private fun toSegmentInput() = SegmentCalculatorInput(
-        segments = segmentState.segments,
-        chapters = chapters,
-        segmentBehaviors = segmentState.segmentBehaviors,
-        durationMs = duration,
-        autoplayCancelled = autoplay.autoplayCancelled,
-        isInSyncPlaySession = isInSyncPlaySession,
-        hasNextEpisode = episodes.nextEpisode != null,
-        seriesId = media.seriesId,
-    )
+    internal fun toSegmentInput() = SegmentProjection(this).toSegmentInput(duration)
 
     val activeSegment: MediaSegment?
         get() = computeActiveSegment()

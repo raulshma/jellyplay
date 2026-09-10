@@ -51,15 +51,15 @@ import kotlin.test.assertTrue
  * OnboardingViewModel coverage (requests/downloads conveyor test style — no
  * legacy suite existed): step-state coercion and skip semantics, the
  * completion write through the real PreferencesEditor (fire-and-forget edit
- * over the owning AppRuntimeStateStore), every named editor delegation the
- * wizard surfaces (appearance / home / navigation / playback / video / audio
- * / subtitle / security), and the Seerr credential fan-out (prefs store vs
- * secure-credentials store routing).
+ * over the owning AppRuntimeStateStore), every store write the wizard's
+ * `edit { }` command surfaces (appearance / home / navigation / playback /
+ * video / audio / subtitle / security), and the Seerr credential fan-out
+ * (prefs store vs secure-credentials store routing).
  *
  * The editor under test is REAL, built over a PreferencesEditScope of relaxed
- * store mocks on the test scheduler — that way `setThemeMode(DARK)` is
- * verified against appearance.setThemeMode(DARK) through the actual edit{}
- * launch, not against a mocked editor's shape.
+ * store mocks on the test scheduler — that way `edit { appearance
+ * .setThemeMode(DARK) }` is verified against appearance.setThemeMode(DARK)
+ * through the actual edit{} launch, not against a mocked editor's shape.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class OnboardingViewModelTest {
@@ -222,13 +222,13 @@ class OnboardingViewModelTest {
     fun `appearance delegations reach the appearance store`() = runTest(mainDispatcher) {
         val vm = newViewModel()
 
-        vm.setThemeMode(ThemeMode.DARK)
-        vm.setDynamicTheming(true)
-        vm.setOledMode(true)
-        vm.setContrastLevel(ContrastLevel.HIGH)
-        vm.setAccentColorSwatch("sunset")
-        vm.setColorStyle(ColorStyle.VIBRANT)
-        vm.setPerformanceMode(true)
+        vm.edit { it.appearance.setThemeMode(ThemeMode.DARK) }
+        vm.edit { it.appearance.setDynamicTheming(true) }
+        vm.edit { it.appearance.setOledMode(true) }
+        vm.edit { it.appearance.setContrastLevel(ContrastLevel.HIGH) }
+        vm.edit { it.appearance.setAccentColorSwatch("sunset") }
+        vm.edit { it.appearance.setColorStyle(ColorStyle.VIBRANT) }
+        vm.edit { it.appearance.setPerformanceMode(true) }
         advanceUntilIdle()
 
         coVerify(exactly = 1) { appearanceStore.setThemeMode(ThemeMode.DARK) }
@@ -245,10 +245,10 @@ class OnboardingViewModelTest {
         val vm = newViewModel()
         val sections = setOf(HomeSectionType.CONFIGURABLE.first())
 
-        vm.setHomeHeroEnabled(false)
-        vm.setHomeMode(HomeMode.MUSIC)
-        vm.setEnabledHomeSectionTypes(sections)
-        vm.setNavBarShowLabels(false)
+        vm.edit { it.homeDiscovery.setHomeHeroEnabled(false) }
+        vm.edit { it.homeDiscovery.setHomeMode(HomeMode.MUSIC) }
+        vm.edit { it.homeDiscovery.setEnabledHomeSectionTypes(sections) }
+        vm.edit { it.navigation.setNavBarShowLabels(false) }
         advanceUntilIdle()
 
         coVerify(exactly = 1) { homeDiscoveryStore.setHomeHeroEnabled(false) }
@@ -261,12 +261,12 @@ class OnboardingViewModelTest {
     fun `playback and video player delegations reach their owning stores`() = runTest(mainDispatcher) {
         val vm = newViewModel()
 
-        vm.setPreferredPlayer(PlayerType.MPV)
-        vm.setStreamingQuality(StreamingQuality.FHD_1080P)
-        vm.setVideoSeekDurationMs(30_000L)
-        vm.setVideoGesturesEnabled(false)
-        vm.setVideoDefaultOrientation(OrientationMode.SENSOR)
-        vm.setVideoAutoplayNext(false)
+        vm.edit { it.playback.setPreferredPlayer(PlayerType.MPV) }
+        vm.edit { it.playback.setStreamingQuality(StreamingQuality.FHD_1080P) }
+        vm.edit { it.videoPlayer.setVideoSeekDurationMs(30_000L) }
+        vm.edit { it.videoPlayer.setVideoGesturesEnabled(false) }
+        vm.edit { it.videoPlayer.setVideoDefaultOrientation(OrientationMode.SENSOR) }
+        vm.edit { it.videoPlayer.setVideoAutoplayNext(false) }
         advanceUntilIdle()
 
         coVerify(exactly = 1) { playbackStore.setPreferredPlayer(PlayerType.MPV) }
@@ -281,11 +281,11 @@ class OnboardingViewModelTest {
     fun `audio delegations reach the audio store`() = runTest(mainDispatcher) {
         val vm = newViewModel()
 
-        vm.setAudioDefaultSpeed(1.5f)
-        vm.setGaplessEnabled(false)
-        vm.setCrossfadeDurationMs(5_000L)
-        vm.setAudioNormalizationEnabled(true)
-        vm.setAudioAutoplayNext(false)
+        vm.edit { it.audio.setAudioDefaultSpeed(1.5f) }
+        vm.edit { it.audio.setAudioGaplessEnabled(false) }
+        vm.edit { it.audio.setAudioCrossfadeDurationMs(5_000L) }
+        vm.edit { it.audio.setAudioNormalizationEnabled(true) }
+        vm.edit { it.audio.setAudioAutoplayNext(false) }
         advanceUntilIdle()
 
         coVerify(exactly = 1) { audioStore.setAudioDefaultSpeed(1.5f) }
@@ -300,8 +300,8 @@ class OnboardingViewModelTest {
         val vm = newViewModel()
         val style = SubtitleStyle(fontSize = 32)
 
-        vm.setSubtitleStyle(style)
-        vm.setPreferredSubtitleLanguage("de")
+        vm.edit { it.subtitle.setSubtitleStyle(style) }
+        vm.edit { it.subtitle.setPreferredSubtitleLanguage("de") }
         advanceUntilIdle()
 
         coVerify(exactly = 1) { subtitleStore.setSubtitleStyle(style) }
@@ -313,10 +313,10 @@ class OnboardingViewModelTest {
         val vm = newViewModel()
         every { securityStore.hashPin("1234") } returns "hashed-1234"
 
-        vm.setPinLockEnabled(true)
-        vm.setPinHash("hashed-1234")
-        vm.setBiometricLockEnabled(true)
-        vm.setAutoLockTimerMs(60_000L)
+        vm.edit { it.security.setPinLockEnabled(true) }
+        vm.edit { it.security.setPinHash("hashed-1234") }
+        vm.edit { it.security.setBiometricLockEnabled(true) }
+        vm.edit { it.security.setAutoLockTimerMs(60_000L) }
         assertEquals("hashed-1234", vm.hashPin("1234"))
         advanceUntilIdle()
 

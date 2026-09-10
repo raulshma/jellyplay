@@ -1,7 +1,9 @@
 package com.raulshma.jellyplay.feature.settings
 
+import com.raulshma.jellyplay.core.model.currentPlatform
 import com.raulshma.jellyplay.core.ui.settingssearch.ResolvedSettingsItem
 import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchItem
+import com.raulshma.jellyplay.core.ui.settingssearch.filterFor
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -43,7 +45,7 @@ class SettingsSearchCatalogOffMainTest {
     }
 
     @Test
-    fun `resolved hands the full catalog to the resolver`() = runTest {
+    fun `resolved hands the platform-filtered catalog to the resolver`() = runTest {
         var resolvedIds: List<String>? = null
         val fake: suspend (List<SettingsSearchItem>) -> List<ResolvedSettingsItem> = { items ->
             resolvedIds = items.map { it.id }
@@ -52,7 +54,12 @@ class SettingsSearchCatalogOffMainTest {
 
         SettingsSearchCatalog.resolved(fake)
 
-        assertEquals(SettingsSearchCatalog.items.map { it.id }, resolvedIds)
+        // The funnel applies the platform filter (this JVM is the desktop
+        // actual): Android-only rows must already be gone before resolution.
+        assertEquals(
+            SettingsSearchCatalog.items.filterFor(currentPlatform).map { it.id },
+            resolvedIds,
+        )
     }
 
     @Test

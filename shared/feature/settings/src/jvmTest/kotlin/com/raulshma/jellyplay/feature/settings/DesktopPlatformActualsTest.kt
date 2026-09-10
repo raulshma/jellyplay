@@ -1,5 +1,9 @@
 package com.raulshma.jellyplay.feature.settings
 
+import com.raulshma.jellyplay.core.model.PlatformKind
+import com.raulshma.jellyplay.core.model.PlayerType
+import com.raulshma.jellyplay.core.model.currentPlatform
+import com.raulshma.jellyplay.core.model.platformEngineSupport
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -70,7 +74,10 @@ class DesktopPlatformActualsTest {
 
     @Test
     fun `desktop has no wallpaper-derived dynamic color`() {
-        assertFalse(supportsDynamicColor, "the dynamic-theming row stays hidden on desktop")
+        assertFalse(
+            settingsCapabilities.supportsDynamicColor,
+            "the dynamic-theming row stays hidden on desktop",
+        )
     }
 
     // ------------------------------------------------------ locale setter
@@ -109,5 +116,52 @@ class DesktopPlatformActualsTest {
         // either way the runCatching guard means the caller never sees a throw.
         intents.openUrl("::::not-a-uri")
         assertTrue(true, "reached without an exception")
+    }
+
+    // -------------------------------------------- platform / engine support
+
+    @Test
+    fun `desktop is the DESKTOP platform with mpv-only engines`() {
+        assertEquals(PlatformKind.DESKTOP, currentPlatform)
+        assertEquals(listOf(PlayerType.MPV), platformEngineSupport.engines)
+        assertEquals(PlayerType.MPV, platformEngineSupport.default)
+    }
+
+    // ------------------------------------------------------ capabilities
+
+    @Test
+    fun `desktop capabilities hide every row without a desktop backend`() {
+        val caps = settingsCapabilities
+
+        assertFalse(caps.supportsDynamicColor)
+        assertFalse(caps.supportsNotifications, "no desktop notification backend (NotificationSync no-ops)")
+        assertFalse(caps.supportsAppLocaleOverride, "DesktopAppLocaleSetter is a no-op")
+        assertFalse(caps.supportsAudioCache, "no desktop audio cache to clear")
+        assertFalse(caps.supportsScreenOrientation)
+        assertFalse(caps.supportsTouchGestures)
+        assertFalse(caps.supportsBiometric, "rememberBiometricGate returns null (DesktopBiometricGate)")
+        assertFalse(caps.supportsSystemNotificationSettings)
+        assertFalse(caps.supportsLogSharing)
+    }
+
+    @Test
+    fun `capability flags stay equal to their behavior seams`() {
+        // The visibility flag must never outlive the seam's null-ness / query —
+        // the pairs are pinned together here so one platform's truth has one
+        // review home.
+        val intents = DesktopPlatformIntents()
+        assertEquals(
+            intents.canOpenSystemNotificationSettings(),
+            settingsCapabilities.supportsSystemNotificationSettings,
+        )
+        val collector = DesktopLogCollector()
+        assertEquals(
+            collector.collectLogs("1.2.3", "Release", "https://jelly.example") != null,
+            settingsCapabilities.supportsLogSharing,
+        )
+        assertEquals(
+            desktopBiometricGate != null,
+            settingsCapabilities.supportsBiometric,
+        )
     }
 }

@@ -8,9 +8,9 @@ import kotlinx.coroutines.flow.StateFlow
 
 /**
  * Android adapter over the Hilt-era legacy `core:data` PipController
- * singleton (wave 19C seam): the same instance the app's PlayerActivity
+ * singleton (seam): the same instance the app's PlayerActivity
  * injects, so the live ViewModel's writes and the Activity's PiP collectors
- * observe one state — exactly the relationship the wave-8C `player-video`
+ * observe one state — exactly the relationship the `player-video`
  * adapter established for VOD. Maps the commonMain [PipTransport] wrapper
  * onto the legacy fun-interface and `(width, height)` aspect pairs onto
  * [Rational]; the legacy `android.graphics.Rect` surface has no live caller

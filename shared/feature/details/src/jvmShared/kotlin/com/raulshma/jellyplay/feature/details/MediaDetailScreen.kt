@@ -34,23 +34,21 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.formatBytes
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.MediaQuickActionScope
-import com.raulshma.jellyplay.core.model.quickActions
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.components.ConfirmState
 import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.components.DeleteDownloadedEpisodesSheet
 import com.raulshma.jellyplay.core.ui.components.LocalMediaQuickActionController
-import com.raulshma.jellyplay.core.ui.components.MediaQuickActionHost
-import com.raulshma.jellyplay.core.ui.components.QuickAction
-import com.raulshma.jellyplay.core.ui.components.RemoveDownloadConfirmHost
+import com.raulshma.jellyplay.core.ui.components.QuickActionAdapter
+import com.raulshma.jellyplay.core.ui.components.QuickActionIntakeHost
 import com.raulshma.jellyplay.core.ui.components.SeerrPrefetchCallback
 import com.raulshma.jellyplay.core.ui.components.SeerrRequestDialog
 import com.raulshma.jellyplay.core.ui.components.SeriesDownloadSheet
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
+import com.raulshma.jellyplay.core.ui.components.downloadedSeasonSlices
 import com.raulshma.jellyplay.core.ui.components.rememberConfirmState
-import com.raulshma.jellyplay.core.ui.components.rememberMediaQuickActionController
-import com.raulshma.jellyplay.core.ui.components.rememberRemoveDownloadState
+import com.raulshma.jellyplay.core.ui.components.rememberQuickActionIntake
 import com.raulshma.jellyplay.core.ui.components.rememberSeerrCardLoadingState
 import com.raulshma.jellyplay.core.ui.components.rememberVideoClickHandler
 import com.raulshma.jellyplay.core.ui.components.LocalSeerrCardLoadingState
@@ -189,48 +187,77 @@ fun MediaDetailScreen(
     val markSeasonConfirm = rememberConfirmState()
     var markSeasonToWatched by remember { mutableStateOf(true) }
 
-    // Row item awaiting a remove-download confirm from the quick-action menu.
-    // Hoisted so the dialog survives the card leaving composition while open.
-    val removeDownloadState = rememberRemoveDownloadState()
+    // The four mark-played callbacks (item/season × watched/unwatched) fold
+    // into one remembered dispatcher: [DetailPlayPolicies.dispatchMarkPlayedAction]
+    // owns the confirm-vs-direct table over (mediaType × season action) and this
+    // lambda only routes to the matching confirm channel + ViewModel call.
+    // mediaType is read fresh at invocation (not captured) so the gate always
+    // sees the loaded item's type.
+    val dispatchMarkPlayedAction = remember(viewModel, markSeriesConfirm, markSeasonConfirm) {
+        { isSeasonAction: Boolean, toWatched: Boolean, seasonId: String? ->
+            val confirm: () -> Unit = {
+                if (isSeasonAction) {
+                    markSeasonToWatched = toWatched
+                    markSeasonConfirm.request {
+                        if (toWatched) viewModel.markSeasonPlayed(requireNotNull(seasonId))
+                        else viewModel.markSeasonUnplayed(requireNotNull(seasonId))
+                    }
+                } else {
+                    markSeriesToWatched = toWatched
+                    markSeriesConfirm.request {
+                        if (toWatched) viewModel.markPlayed()
+                        else viewModel.markUnplayed()
+                    }
+                }
+            }
+            // Direct dispatch: reachable only for item-level marks on
+            // movies/episodes (the season row of the gate always confirms, so
+            // the season callbacks never take this branch).
+            val action: () -> Unit = {
+                if (toWatched) viewModel.markPlayed()
+                else viewModel.markUnplayed()
+            }
+            DetailPlayPolicies.dispatchMarkPlayedAction(
+                mediaType = uiState.detail?.item?.mediaType,
+                isSeasonAction = isSeasonAction,
+                confirm = confirm,
+                action = action,
+            )
+        }
+    }
 
     // Quick actions for row items (related/collection/episode cards) and the
-    // TV Menu key on the focused card. The controller is
-    // provided to every PosterCard/EpisodeCard below via CompositionLocal.
-    // Download / Remove download ride the same intake as the library grid
-    // (#147): a downloaded row card flips the slot to "Remove download".
-    val quickActionController = rememberMediaQuickActionController(
-        resolveActions = remember(viewModel) {
-            { item: MediaItem ->
-                item.quickActions(
-                    MediaQuickActionScope.DETAIL,
-                    includeDownload = true,
-                    isDownloaded = viewModel.quickActionDownloadedIds.value.contains(item.id),
-                )
-            }
+    // TV Menu key on the focused card, on the shared intake (core/ui — see
+    // QuickActionIntake). The controller is provided to every
+    // PosterCard/EpisodeCard below via CompositionLocal. Download / Remove
+    // download ride the same intake as the library grid (#147): a downloaded
+    // row card flips the slot to "Remove download". The downloaded set is
+    // read through the VM flow's .value at resolve time (not collected) —
+    // the sheet re-resolves on every open, so no snapshot churn here.
+    val quickActionIntake = rememberQuickActionIntake(
+        scope = MediaQuickActionScope.DETAIL,
+        includeDownload = true,
+        isDownloaded = remember(viewModel) {
+            { item: MediaItem -> viewModel.quickActionDownloadedIds.value.contains(item.id) }
         },
-        executeAction = remember(viewModel, onPlayClick, onItemClick) {
-            { item: MediaItem, action: QuickAction ->
-                when (action) {
-                    QuickAction.PLAY -> onPlayClick(
+        adapter = remember(viewModel, onPlayClick, onItemClick) {
+            QuickActionAdapter(
+                onPlay = { item ->
+                    onPlayClick(
                         item.id,
                         null,
                         item.playbackPositionTicks ?: 0L,
                         viewModel.selectedSubtitleIndex,
                         viewModel.selectedAudioIndex,
                     )
-                    QuickAction.MARK_WATCHED -> viewModel.markRowItemPlayed(item, played = true)
-                    QuickAction.MARK_UNWATCHED -> viewModel.markRowItemPlayed(item, played = false)
-                    QuickAction.DOWNLOAD -> viewModel.downloadRowItem(item, onOpenDetail = onItemClick)
-                    QuickAction.REMOVE_DOWNLOAD -> removeDownloadState.request(item)
-                    QuickAction.DETAILS -> onItemClick(item.id)
-                    else -> Unit
-                }
-            }
+                },
+                onOpenDetail = { item -> onItemClick(item.id) },
+                onMarkPlayed = viewModel::markRowItemPlayed,
+                onDownload = { item -> viewModel.downloadRowItem(item, onOpenDetail = onItemClick) },
+                onRemoveDownload = viewModel::removeRowItemDownload,
+            )
         },
     )
-    // TV-only: the card currently holding D-pad focus, so the Menu key can open
-    // its quick actions.
-    var tvFocusedItem by remember { mutableStateOf<MediaItem?>(null) }
 
     // Composition state hop for the queued-episodes plural snackbar (see the
     // SeriesDownload branch below): the plural resolves in composition
@@ -315,15 +342,11 @@ fun MediaDetailScreen(
             .onDpadKey(
                 onMenu = {
                     // TV remote Menu button: open the focused card's quick
-                    // actions. The focused card is tracked by the
-                    // rows via onFocusedMediaItem.
-                    val focused = tvFocusedItem
-                    if (focused != null) {
-                        quickActionController.show(focused)
-                        true
-                    } else {
-                        false
-                    }
+                    // actions. The focused card is tracked by the rows via
+                    // onFocusedMediaItem; an unfocused Menu propagates — the
+                    // only host with the non-consuming contract, hence the
+                    // returned flag instead of `true`.
+                    quickActionIntake.openFocusedItem()
                 },
             ),
     ) {
@@ -339,9 +362,8 @@ fun MediaDetailScreen(
             val activeDownload by downloadFlow.collectAsStateWithLifecycle(initialValue = null)
 
             // Seerr integration state (the holder's single snapshot, folded
-            // into uiState as-is)
+            // into uiState as-is — its dialogItem gates the request dialog)
             val seerrRequest = uiState.seerrRequest
-            var seerrRequestItem by remember { mutableStateOf<SeerrSearchItem?>(null) }
 
             // Seerr card loading state for prefetch animation
             val seerrLoadingState = rememberSeerrCardLoadingState()
@@ -362,7 +384,6 @@ fun MediaDetailScreen(
             ) {
                 val rememberedGetImageUrl = remember(viewModel) { { id: String -> viewModel.getImageUrl(id) } }
                 val rememberedGetBackdropUrl = remember(viewModel) { { id: String -> viewModel.getBackdropUrl(id) } }
-                val rememberedGetSeerrPosterUrl = remember(viewModel) { { path: String? -> viewModel.getSeerrPosterUrl(path) } }
                 val rememberedGetChapterImageUrl = remember(viewModel) {
                     { id: String, index: Int, tag: String? -> viewModel.getChapterImageUrl(id, index, tag) }
                 }
@@ -432,56 +453,65 @@ fun MediaDetailScreen(
                     onPlayYouTube = { key -> activeTrailerKey = key },
                 )
 
-                val callbacks = remember(
-                    rememberedGetImageUrl, rememberedGetBackdropUrl, rememberedGetSeerrPosterUrl,
+                // ── Per-concern callback bundles. Each bundle is remembered on
+                // exactly the inputs its lambdas capture, so a new capability
+                // edits its bundle here + its section file — not a growing flat
+                // constructor. Two bundles additionally key on plain local vals
+                // their lambdas capture (`detail`, `seriesIdForSeasons`): the
+                // former single remember was effectively refreshed every
+                // recomposition (its `onVideoClick` key is unstable), and these
+                // captures must not go stale now that the other bundles' keys
+                // are stable. Delegated reads (`uiState`, `var … by remember`)
+                // resolve at invocation time and need no keys. ──
+                val artworkCallbacks = remember(
+                    rememberedGetImageUrl,
+                    rememberedGetBackdropUrl,
                     rememberedGetChapterImageUrl,
-                    viewModel, onPlayClick, onAudioClick, itemId, onItemClick, onPersonClick,
-                    onNavigateToSeries, onNavigate, onEditClick, onManageSeries, onBack, onVideoClick,
                 ) {
-                    DetailContentCallbacks(
+                    ArtworkCallbacks(
                         getImageUrl = rememberedGetImageUrl,
                         getBackdropUrl = rememberedGetBackdropUrl,
-                        getSeerrPosterUrl = rememberedGetSeerrPosterUrl,
                         getChapterImageUrl = rememberedGetChapterImageUrl,
-                        onRetry = { viewModel.loadItem(itemId) },
-                        onRefresh = { viewModel.forceRefresh() },
+                    )
+                }
+
+                val playbackCallbacks = remember(viewModel, onPlayClick, onAudioClick, itemId) {
+                    PlaybackCallbacks(
                         onPlayClick = { playItemId: String, sourceId: String?, start: Long ->
-                            // For a LOCAL origin the server stream index is meaningless; pass
-                            // the chosen local-manifest subtitle index instead so the player's
-                            // offline-id wiring (TrackSelectionPolicy.resolveByOfflineSubtitleId)
-                            // resolves the right side-loaded subtitle. The remote audio index is
-                            // still threaded because the local audio inventory is not selectable
-                            // here.
-                            val isLocalOrigin = uiState.origin?.isLocal == true
-                            val subtitleIndex = if (isLocalOrigin) {
-                                viewModel.selectedLocalSubtitleIndex
-                            } else {
-                                viewModel.selectedSubtitleIndex
-                            }
+                            // Stream selection (local-origin subtitle index when offline)
+                            // is the shared [DetailPlayPolicies.resolveDetailPlayDispatch]
+                            // fold; this lambda only dispatches.
+                            val dispatch = DetailPlayPolicies.resolveDetailPlayDispatch(
+                                origin = uiState.origin,
+                                localSubtitleIndex = viewModel.selectedLocalSubtitleIndex,
+                                remoteSubtitleIndex = viewModel.selectedSubtitleIndex,
+                                audioStreamIndex = viewModel.selectedAudioIndex,
+                            )
                             onPlayClick(
                                 playItemId,
                                 sourceId,
                                 start,
-                                subtitleIndex,
-                                viewModel.selectedAudioIndex,
+                                dispatch.subtitleStreamIndex,
+                                dispatch.audioStreamIndex,
                             )
                         },
                         onPlayChapter = { start ->
                             // Resume the current item at a chapter position. Reuses the
                             // same play path + stream selection as the primary play button
-                            // (local-origin subtitle index when offline).
-                            val isLocalOrigin = uiState.origin?.isLocal == true
-                            val subtitleIndex = if (isLocalOrigin) {
-                                viewModel.selectedLocalSubtitleIndex
-                            } else {
-                                viewModel.selectedSubtitleIndex
-                            }
+                            // via the shared [DetailPlayPolicies.resolveDetailPlayDispatch]
+                            // fold; this lambda only dispatches.
+                            val dispatch = DetailPlayPolicies.resolveDetailPlayDispatch(
+                                origin = uiState.origin,
+                                localSubtitleIndex = viewModel.selectedLocalSubtitleIndex,
+                                remoteSubtitleIndex = viewModel.selectedSubtitleIndex,
+                                audioStreamIndex = viewModel.selectedAudioIndex,
+                            )
                             onPlayClick(
                                 itemId,
                                 null,
                                 start,
-                                subtitleIndex,
-                                viewModel.selectedAudioIndex,
+                                dispatch.subtitleStreamIndex,
+                                dispatch.audioStreamIndex,
                             )
                         },
                         onPlayExtra = { extra ->
@@ -492,6 +522,17 @@ fun MediaDetailScreen(
                             onPlayClick(extra.id, null, 0L, null, null)
                         },
                         onAudioClick = { onAudioClick(itemId) },
+                        onPlayAlbumTrack = { index: Int -> viewModel.playAlbum(index) },
+                        onSubtitleSelect = { idx: Int? -> viewModel.selectSubtitle(idx) },
+                        onAudioSelect = { idx: Int? -> viewModel.selectAudio(idx) },
+                        onSelectLocalSubtitle = { index -> viewModel.selectLocalSubtitle(index) },
+                        onStartInstantMix = { viewModel.startInstantMix() },
+                        onStartWatchParty = { viewModel.watchParty.startScreenItem() },
+                    )
+                }
+
+                val downloadCallbacks = remember(viewModel, itemId, detail) {
+                    DownloadCallbacks(
                         onDownloadClick = { viewModel.downloads.startDownload() },
                         onOpenDownloadPicker = { viewModel.downloads.openDownloadPicker() },
                         onDismissDownloadPicker = { viewModel.downloads.dismissDownloadPicker() },
@@ -502,73 +543,6 @@ fun MediaDetailScreen(
                             viewModel.downloads.loadDownloadedEpisodeIds()
                             viewModel.downloads.prepareDownloadSheetEpisodes()
                         },
-                        onToggleFavorite = { viewModel.toggleFavorite() },
-                        onMarkPlayed = {
-                            // A series mark recurses into every episode and clears every
-                            // resume position; confirm first. Single movies/episodes flip
-                            // immediately (trivially reversible via the same button).
-                            if (currentItem?.mediaType == MediaType.SERIES) {
-                                markSeriesToWatched = true
-                                markSeriesConfirm.request { viewModel.markPlayed() }
-                            } else {
-                                viewModel.markPlayed()
-                            }
-                        },
-                        onMarkUnplayed = {
-                            if (currentItem?.mediaType == MediaType.SERIES) {
-                                markSeriesToWatched = false
-                                markSeriesConfirm.request { viewModel.markUnplayed() }
-                            } else {
-                                viewModel.markUnplayed()
-                            }
-                        },
-                        onMarkSeasonPlayed = { seasonId ->
-                            markSeasonToWatched = true
-                            markSeasonConfirm.request { viewModel.markSeasonPlayed(seasonId) }
-                        },
-                        onMarkSeasonUnplayed = { seasonId ->
-                            markSeasonToWatched = false
-                            markSeasonConfirm.request { viewModel.markSeasonUnplayed(seasonId) }
-                        },
-                        onSubtitleSelect = { idx: Int? -> viewModel.selectSubtitle(idx) },
-                        onAudioSelect = { idx: Int? -> viewModel.selectAudio(idx) },
-                        onItemClick = onItemClick,
-                        onPersonClick = onPersonClick,
-                        onSeeAllCast = {
-                            onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.CastAndCrew(itemId))
-                        },
-                        onNavigateToSeries = onNavigateToSeries,
-                        onSeasonSelected = { seasonId: String ->
-                            viewModel.loadEpisodesForSeason(seriesIdForSeasons, seasonId)
-                        },
-                        onSeasonPinned = { seasonId: String ->
-                            viewModel.setLastViewedSeason(seriesIdForSeasons, seasonId)
-                        },
-                        onEpisodesDescendingChange = { descending: Boolean ->
-                            viewModel.setEpisodesDescending(descending)
-                        },
-                        onCompactEpisodeListChange = { enabled: Boolean ->
-                            viewModel.setCompactEpisodeList(enabled)
-                        },
-                        onBack = onBack,
-                        onSeerrRequest = { item: SeerrSearchItem -> seerrRequestItem = item },
-                        onNavigate = onNavigate,
-                        onEditClick = { onEditClick(itemId) },
-                        onPlayAlbumTrack = { index: Int -> viewModel.playAlbum(index) },
-                        onVideoClick = onVideoClick,
-                        onHideFromNextUp = { viewModel.hideFromNextUp() },
-                        onShowFromNextUp = { viewModel.showFromNextUp() },
-                        onHideFromContinueWatching = { viewModel.hideFromContinueWatching() },
-                        onShowFromContinueWatching = { viewModel.showFromContinueWatching() },
-                        onShowDetailUpNext = { viewModel.setShowDetailUpNext(true) },
-                        onHideDetailUpNext = { viewModel.setShowDetailUpNext(false) },
-                        onManageSeries = { onManageSeries(itemId) },
-                        onAddToPlaylist = { viewModel.playlists.openPlaylistPicker() },
-                        onAddToCollection = { viewModel.collections.openCollectionPicker() },
-                        onStartInstantMix = { viewModel.startInstantMix() },
-                        onStartWatchParty = { viewModel.watchParty.startScreenItem() },
-                        onMediaQuickActions = { item -> quickActionController.show(item) },
-                        onFocusedMediaItem = { item -> tvFocusedItem = item },
                         onDeleteDownload = {
                             val target = detail?.item
                             val isEpisode = target?.mediaType == MediaType.EPISODE
@@ -588,16 +562,113 @@ fun MediaDetailScreen(
                             )
                         },
                         onOpenResync = { showResyncSheet = true },
-                        onResync = { viewModel.resync.resync() },
-                        onRedownloadMedia = { viewModel.resync.redownloadMedia() },
-                        onClearResync = { viewModel.resync.clearResyncState() },
                         onOpenDownloadDetails = {
                             // Load the on-disk inventory (media + sidecars) before showing
                             // the sheet so sizes are fresh; it re-reads on every open.
                             viewModel.downloads.loadDownloadFileInventory()
                             showDownloadDetailsSheet = true
                         },
-                        onSelectLocalSubtitle = { index -> viewModel.selectLocalSubtitle(index) },
+                    )
+                }
+
+                val seasonsCallbacks = remember(viewModel, seriesIdForSeasons, dispatchMarkPlayedAction) {
+                    SeasonsCallbacks(
+                        onSeasonSelected = { seasonId: String ->
+                            viewModel.loadEpisodesForSeason(seriesIdForSeasons, seasonId)
+                        },
+                        onSeasonPinned = { seasonId: String ->
+                            viewModel.setLastViewedSeason(seriesIdForSeasons, seasonId)
+                        },
+                        onEpisodesDescendingChange = { descending: Boolean ->
+                            viewModel.setEpisodesDescending(descending)
+                        },
+                        onCompactEpisodeListChange = { enabled: Boolean ->
+                            viewModel.setCompactEpisodeList(enabled)
+                        },
+                        onMarkSeasonPlayed = { seasonId -> dispatchMarkPlayedAction(true, true, seasonId) },
+                        onMarkSeasonUnplayed = { seasonId -> dispatchMarkPlayedAction(true, false, seasonId) },
+                    )
+                }
+
+                val userDataCallbacks = remember(viewModel, dispatchMarkPlayedAction) {
+                    UserDataCallbacks(
+                        onToggleFavorite = { viewModel.toggleFavorite() },
+                        // dispatchMarkPlayedAction(isSeasonAction, toWatched, seasonId)
+                        onMarkPlayed = { dispatchMarkPlayedAction(false, true, null) },
+                        onMarkUnplayed = { dispatchMarkPlayedAction(false, false, null) },
+                        onHideFromNextUp = { viewModel.hideFromNextUp() },
+                        onShowFromNextUp = { viewModel.showFromNextUp() },
+                        onHideFromContinueWatching = { viewModel.hideFromContinueWatching() },
+                        onShowFromContinueWatching = { viewModel.showFromContinueWatching() },
+                        onShowDetailUpNext = { viewModel.setShowDetailUpNext(true) },
+                        onHideDetailUpNext = { viewModel.setShowDetailUpNext(false) },
+                    )
+                }
+
+                val seerrCallbacks = remember(viewModel, onVideoClick) {
+                    SeerrCallbacks(
+                        onSeerrRequest = { item: SeerrSearchItem ->
+                            viewModel.seerrRequests.openRequestDialog(item)
+                        },
+                        onVideoClick = onVideoClick,
+                    )
+                }
+
+                val addToCallbacks = remember(viewModel) {
+                    AddToCallbacks(
+                        onAddToPlaylist = { viewModel.playlists.openPicker() },
+                        onAddToCollection = { viewModel.collections.openPicker() },
+                    )
+                }
+
+                val navigationCallbacks = remember(
+                    onItemClick, onPersonClick, onNavigateToSeries, onNavigate, onEditClick,
+                    onManageSeries, onBack, itemId,
+                ) {
+                    NavigationCallbacks(
+                        onBack = onBack,
+                        onNavigate = onNavigate,
+                        onItemClick = onItemClick,
+                        onPersonClick = onPersonClick,
+                        onSeeAllCast = {
+                            onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.CastAndCrew(itemId))
+                        },
+                        onNavigateToSeries = onNavigateToSeries,
+                        onManageSeries = { onManageSeries(itemId) },
+                        onEditClick = { onEditClick(itemId) },
+                    )
+                }
+
+                val screenCallbacks = remember(viewModel, itemId, quickActionIntake) {
+                    ScreenCallbacks(
+                        onRetry = { viewModel.loadItem(itemId) },
+                        onRefresh = { viewModel.forceRefresh() },
+                        onMediaQuickActions = { item -> quickActionIntake.controller.show(item) },
+                        onFocusedMediaItem = { item -> quickActionIntake.tvFocusedItem = item },
+                    )
+                }
+
+                val callbacks = remember(
+                    artworkCallbacks,
+                    playbackCallbacks,
+                    downloadCallbacks,
+                    seasonsCallbacks,
+                    userDataCallbacks,
+                    seerrCallbacks,
+                    addToCallbacks,
+                    navigationCallbacks,
+                    screenCallbacks,
+                ) {
+                    DetailContentCallbacks(
+                        artwork = artworkCallbacks,
+                        playback = playbackCallbacks,
+                        download = downloadCallbacks,
+                        seasons = seasonsCallbacks,
+                        userData = userDataCallbacks,
+                        seerr = seerrCallbacks,
+                        addTo = addToCallbacks,
+                        navigation = navigationCallbacks,
+                        screen = screenCallbacks,
                     )
                 }
 
@@ -607,7 +678,7 @@ fun MediaDetailScreen(
                 }
 
                 CompositionLocalProvider(
-                    LocalMediaQuickActionController provides quickActionController,
+                    LocalMediaQuickActionController provides quickActionIntake.controller,
                 ) {
                     DetailContent(
                         state = state,
@@ -616,26 +687,17 @@ fun MediaDetailScreen(
                     )
                 }
 
-                // Seerr request dialog
-                seerrRequestItem?.let { item ->
-                    // Fetch service details and TV seasons on-demand when dialog opens
-                    LaunchedEffect(item.id) {
-                        viewModel.seerrRequests.loadServiceDetails(item.mediaType)
-                        if (item.mediaType.equals("tv", ignoreCase = true)) {
-                            viewModel.seerrRequests.loadTvSeasons(item.id)
-                        }
-                    }
-
+                // Seerr request dialog — the holder owns the open cascade and
+                // the dismiss ordering; the screen only gates the render on
+                // the snapshot's dialogItem.
+                seerrRequest.dialogItem?.let { item ->
                     SeerrRequestDialog(
                         item = item,
                         snapshot = seerrRequest,
                         onConfirm = { serverId, profileId, rootFolder, tags, seasons ->
                             viewModel.seerrRequests.requestMedia(item, seasons, serverId, profileId, rootFolder, tags)
                         },
-                        onDismiss = {
-                            seerrRequestItem = null
-                            viewModel.seerrRequests.clearRequestResult()
-                        },
+                        onDismiss = { viewModel.seerrRequests.dismissRequestDialog() },
                     )
                 }
             } // CompositionLocalProvider
@@ -645,61 +707,61 @@ fun MediaDetailScreen(
         // owning helper at the composition site that reads it — a closed sheet
         // composes nothing and the content core never sees a playlist tick. ──
         val playlistState by viewModel.playlists.state.collectAsStateWithLifecycle()
-        if (playlistState.showPlaylistPicker && detail != null) {
+        if (playlistState.showPicker && detail != null) {
             val playlistSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
             TvSafeSheet(
-                onDismissRequest = { viewModel.playlists.dismissPlaylistPicker() },
+                onDismissRequest = { viewModel.playlists.dismissPicker() },
                 sheetState = playlistSheetState,
             ) {
                 AddToPlaylistSheet(
-                    playlists = playlistState.playlists,
-                    isLoading = playlistState.isLoadingPlaylists,
-                    isAdding = playlistState.isAddingToPlaylist,
-                    onWatchLater = { viewModel.playlists.addToWatchLater() },
-                    onPick = { playlist -> viewModel.playlists.addToPlaylist(playlist) },
-                    onCreateNew = { viewModel.playlists.openCreatePlaylistDialog() },
-                    onDismiss = { viewModel.playlists.dismissPlaylistPicker() },
+                    playlists = playlistState.targets,
+                    isLoading = playlistState.isLoadingTargets,
+                    isAdding = playlistState.isAdding,
+                    onWatchLater = { viewModel.watchLater.addToWatchLater() },
+                    onPick = { playlist -> viewModel.playlists.addTo(playlist) },
+                    onCreateNew = { viewModel.playlists.openCreateDialog() },
+                    onDismiss = { viewModel.playlists.dismissPicker() },
                 )
             }
         }
 
-        if (playlistState.showCreatePlaylistDialog) {
+        if (playlistState.showCreateDialog) {
             CreatePlaylistDialog(
-                isLoading = playlistState.isAddingToPlaylist,
+                isLoading = playlistState.isAdding,
                 onConfirm = { name, overview ->
-                    viewModel.playlists.createAndAddPlaylist(name, overview)
+                    viewModel.playlists.createAndAdd(name, overview)
                 },
-                onDismiss = { viewModel.playlists.dismissCreatePlaylistDialog() },
+                onDismiss = { viewModel.playlists.dismissCreateDialog() },
             )
         }
 
-        // ── Add-to-Collection sheet + create dialog (mirror of the playlist
-        // block; same collection locality). ──
+        // ── Add-to-Collection sheet + create dialog (the same
+        // AddToTargetActions module with the collection adapter). ──
         val collectionState by viewModel.collections.state.collectAsStateWithLifecycle()
-        if (collectionState.showCollectionPicker && detail != null) {
+        if (collectionState.showPicker && detail != null) {
             val collectionSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
             TvSafeSheet(
-                onDismissRequest = { viewModel.collections.dismissCollectionPicker() },
+                onDismissRequest = { viewModel.collections.dismissPicker() },
                 sheetState = collectionSheetState,
             ) {
                 AddToCollectionSheet(
-                    collections = collectionState.collections,
-                    isLoading = collectionState.isLoadingCollections,
-                    isAdding = collectionState.isAddingToCollection,
-                    onPick = { collection -> viewModel.collections.addToCollection(collection) },
-                    onCreateNew = { viewModel.collections.openCreateCollectionDialog() },
-                    onDismiss = { viewModel.collections.dismissCollectionPicker() },
+                    collections = collectionState.targets,
+                    isLoading = collectionState.isLoadingTargets,
+                    isAdding = collectionState.isAdding,
+                    onPick = { collection -> viewModel.collections.addTo(collection) },
+                    onCreateNew = { viewModel.collections.openCreateDialog() },
+                    onDismiss = { viewModel.collections.dismissPicker() },
                 )
             }
         }
 
-        if (collectionState.showCreateCollectionDialog) {
+        if (collectionState.showCreateDialog) {
             CreateCollectionDialog(
-                isLoading = collectionState.isAddingToCollection,
+                isLoading = collectionState.isAdding,
                 onConfirm = { name ->
-                    viewModel.collections.createAndAddCollection(name)
+                    viewModel.collections.createAndAdd(name)
                 },
-                onDismiss = { viewModel.collections.dismissCreateCollectionDialog() },
+                onDismiss = { viewModel.collections.dismissCreateDialog() },
             )
         }
 
@@ -743,19 +805,16 @@ fun MediaDetailScreen(
         // selected season into a single deleteOfflineSeason transaction). ──
         if (showDeleteEpisodesSheet && detailItem?.mediaType == MediaType.SERIES) {
             // For a LOCAL origin every episode in the snapshot is downloaded;
-            // the sheet treats each listed episode as deletable. Only seasons
-            // that actually carry episodes are passed so the sheet renders no
-            // empty rows.
-            val downloadedEpisodesBySeason = remember(uiState.episodes) {
-                uiState.episodes.filterValues { it.isNotEmpty() }
-            }
-            val downloadableSeasons = remember(uiState.seasons, downloadedEpisodesBySeason) {
-                uiState.seasons.filter { it.id in downloadedEpisodesBySeason }
+            // the sheet treats each listed episode as deletable. The shared
+            // derivation drops seasons that carry no episodes so the sheet
+            // renders no empty rows.
+            val downloadedSlices = remember(uiState.seasons, uiState.episodes) {
+                downloadedSeasonSlices(seasons = uiState.seasons, episodesBySeason = uiState.episodes)
             }
             val totalSizeBytes = uiState.detailContext?.seriesAggregate?.totalSizeBytes ?: 0L
-            val downloadedEpisodeCount = remember(uiState.detailContext, downloadedEpisodesBySeason) {
+            val downloadedEpisodeCount = remember(uiState.detailContext, downloadedSlices) {
                 uiState.detailContext?.seriesAggregate?.downloadedEpisodeCount
-                    ?: downloadedEpisodesBySeason.values.sumOf { it.size }
+                    ?: downloadedSlices.episodesBySeason.values.sumOf { it.size }
             }
             val deleteSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
             TvSafeSheet(
@@ -763,8 +822,8 @@ fun MediaDetailScreen(
                 sheetState = deleteSheetState,
             ) {
                 DeleteDownloadedEpisodesSheet(
-                    seasons = downloadableSeasons,
-                    episodes = downloadedEpisodesBySeason,
+                    seasons = downloadedSlices.seasons,
+                    episodes = downloadedSlices.episodesBySeason,
                     totalSizeBytes = totalSizeBytes,
                     episodeSizeBytes = uiState.detailContext?.seriesAggregate?.episodeSizeBytes ?: emptyMap(),
                     onDelete = { episodeIds ->
@@ -859,8 +918,11 @@ fun MediaDetailScreen(
             }
         }
 
-        // Long-press / TV-Menu quick actions for row cards.
-        MediaQuickActionHost(quickActionController)
+        // Long-press / TV-Menu quick actions for row cards — the shared
+        // intake hosts the sheet AND the remove-download confirm (removal
+        // only ever deletes the local download; the server copy is
+        // untouched).
+        QuickActionIntakeHost(quickActionIntake)
 
         // ── Unified-provider delete confirmation. ──
         // Single item: deletes the current item's attached download. Episode: a
@@ -900,13 +962,6 @@ fun MediaDetailScreen(
                 onDismiss = { pendingDeleteEpisode = null },
             )
         }
-
-        // ── Quick-action remove-download confirm (row cards). Same contract
-        // as the library grid: only the LOCAL download is deleted. ──
-        RemoveDownloadConfirmHost(
-            state = removeDownloadState,
-            onConfirmRemove = { viewModel.removeRowItemDownload(it) },
-        )
 
         // ── Resync bottom sheet. Lists what changed and offers a
         // resync / re-download action with live status. ──

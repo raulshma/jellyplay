@@ -50,14 +50,14 @@ object PlaybackHostRouter {
 
         // Live TV quirk (deliberate, pinned by test): hands off to an external
         // app when EXTERNAL is preferred; every other engine choice mounts in
-        // the dedicated activity below (wave 19C — live PiP restored by
+        // the dedicated activity below (live PiP restored by
         // hosting live playback in PlayerActivity, whose full PiP apparatus
         // MainActivity can't offer since 55cd569f8 removed its
         // supportsPictureInPicture).
         route is Route.LiveTvChannelPlayer && preferredPlayer == PlayerType.EXTERNAL ->
             HostDecision.ExternalPlayer(route.channelId, null, 0L)
 
-        // PIN/biometric gate (wave 20E — CLOSED): PlayerActivity enforces
+        // PIN/biometric gate: PlayerActivity enforces
         // MainActivity's lock itself now — its onCreate/onNewIntent redirect
         // to MainActivity (whose gate renders the lock screen) while a lock
         // is configured and the app-scoped AppLockState says locked, so the
@@ -78,7 +78,7 @@ object PlaybackHostRouter {
                 ),
             )
 
-        // Wave 19C (live PiP): Live TV moved out of the nav shell — the
+        // Live PiP: Live TV moved out of the nav shell — the
         // dedicated PlayerActivity hosts LivePlayerScreen, whose PiP apparatus
         // (auto-enter on home, remote actions, aspect-shaped window) serves
         // live through the live VM's PipController seam. LivePlayerScreen

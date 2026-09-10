@@ -144,9 +144,17 @@ private fun streamingQualityLabelRes(quality: StreamingQuality): StringResource 
     StreamingQuality.UHD_4K -> Res.string.settings_quality_4k_ultra_hd
 }
 
-private val STORAGE_CACHE_GROUP_IDS = setOf("clear_cache", "clear_image_cache", "wifi_only_downloads", "download_connections", "max_concurrent_downloads", "auto_delete_cache", "max_cache_size")
-private val STORAGE_NETWORK_GROUP_IDS = setOf("offline_mode", "auto_offline", "adaptive_bitrate", "bandwidth_cap", "metered_network_behavior", "cellular_streaming_quality", "cellular_download_warning", "data_saver", "network_timeout", "verbose_logging", "user_data_sync")
-private val STORAGE_DOWNLOADS_GROUP_IDS = setOf("download_quality", "smart_downloads", "auto_download_new_episodes", "download_schedule", "download_schedule_start", "download_schedule_end", "download_schedule_wifi_only", "max_download_storage_limit", "download_storage_location", "auto_delete_after_watch")
+/**
+ * The declared storage screen groups in LazyColumn order — the derivation
+ * source the deep-link scroll resolver consumes (see HighlightScroll.kt), so
+ * the scroll target can never drift from the UI. All three groups always
+ * render, so no advanced offset applies.
+ */
+private val storageScreenGroups: List<Set<String>> = listOf(
+    SettingsScreenGroups.storageCache.itemIdSet,
+    SettingsScreenGroups.storageNetwork.itemIdSet,
+    SettingsScreenGroups.storageDownloads.itemIdSet,
+)
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
@@ -165,14 +173,7 @@ fun StorageSettingsScreen(
     LaunchedEffect(Unit) { viewModel.refreshCacheSize() }
 
     val scrollState = rememberLazyListState()
-    val scrollIndex = remember(highlightSettingId) {
-        when (highlightSettingId) {
-            in STORAGE_CACHE_GROUP_IDS -> 0
-            in STORAGE_NETWORK_GROUP_IDS -> 1
-            in STORAGE_DOWNLOADS_GROUP_IDS -> 2
-            else -> -1
-        }
-    }
+    val scrollIndex = resolveHighlightScrollIndex(highlightSettingId, storageScreenGroups)
 
     // Phase 1 (coarse): scroll the containing group into the LazyColumn's composition window so the
     // target item is actually composed — items in off-screen groups (later sections) are otherwise
@@ -293,7 +294,12 @@ fun StorageSettingsScreen(
                         }
                     }
 
-                    val storageTotal = if (showAdvanced) 8 else 3
+                    // Derived from the cache group declaration: the declared
+                    // rows behind the advanced toggle plus the cache-used info
+                    // row (a screen-local row with no search entry).
+                    val storageTotal = 1 + SettingsScreenGroups.storageCache.items.count {
+                        showAdvanced || !it.isAdvanced
+                    }
                     var storageIdx = 0
                     SettingInfoItem(
                         icon = Tabler.Outline.Database,
@@ -325,7 +331,7 @@ fun StorageSettingsScreen(
                             checked = preferences.wifiOnlyDownloads,
                             highlighted = highlightSettingId == "wifi_only_downloads",
                             index = storageIdx++, count = storageTotal,
-                            onCheckedChange = { viewModel.setWifiOnlyDownloads(it) },
+                            onCheckedChange = { viewModel.edit { scope -> scope.downloads.setWifiOnlyDownloads(it) } },
                         )
                         val connectionsTitle = stringResource(Res.string.settings_connections_per_download)
                         SettingListItem(
@@ -341,7 +347,7 @@ fun StorageSettingsScreen(
                                     items = listOf(1, 2, 4, 8, 12, 16),
                                     label = { it.toString() },
                                     isSelected = { it == preferences.downloadConnections },
-                                    onSelect = { viewModel.setDownloadConnections(it) },
+                                    onSelect = { viewModel.edit { scope -> scope.downloads.setDownloadConnections(it) } },
                                 )
                             },
                         )
@@ -359,7 +365,7 @@ fun StorageSettingsScreen(
                                     items = listOf(1, 2, 3, 4, 5, 6),
                                     label = { it.toString() },
                                     isSelected = { it == preferences.maxConcurrentDownloads },
-                                    onSelect = { viewModel.setMaxConcurrentDownloads(it) },
+                                    onSelect = { viewModel.edit { scope -> scope.downloads.setMaxConcurrentDownloads(it) } },
                                 )
                             },
                         )
@@ -370,7 +376,7 @@ fun StorageSettingsScreen(
                             checked = preferences.autoDeleteCache,
                             highlighted = highlightSettingId == "auto_delete_cache",
                             index = storageIdx++, count = storageTotal,
-                            onCheckedChange = { viewModel.setAutoDeleteCache(it) },
+                            onCheckedChange = { viewModel.edit { scope -> scope.networkOffline.setAutoDeleteCache(it) } },
                         )
                         val maxCacheSizeTitle = stringResource(Res.string.settings_max_cache_size)
                         val maxCacheUnlimited = stringResource(Res.string.settings_unlimited)
@@ -387,7 +393,7 @@ fun StorageSettingsScreen(
                                     items = listOf(0, 250, 500, 1000, 2000, 5000),
                                     label = { if (it == 0) maxCacheUnlimited else "$it MB" },
                                     isSelected = { it == preferences.maxCacheSizeMb },
-                                    onSelect = { viewModel.setMaxCacheSize(it) },
+                                    onSelect = { viewModel.edit { scope -> scope.networkOffline.setMaxCacheSize(it) } },
                                 )
                             },
                         )
@@ -404,9 +410,9 @@ fun StorageSettingsScreen(
                         stringResource(Res.string.settings_status_value, status)
                     },
                     modifier = Modifier.padding(vertical = 8.dp),
-                    initiallyExpanded = highlightSettingId in STORAGE_NETWORK_GROUP_IDS,
+                    initiallyExpanded = highlightSettingId in SettingsScreenGroups.storageNetwork.itemIdSet,
                 ) {
-                    val networkTotal = 11
+                    val networkTotal = SettingsScreenGroups.storageNetwork.items.size
                     var networkIdx = 0
 
                     SettingToggleItem(
@@ -416,7 +422,7 @@ fun StorageSettingsScreen(
                         checked = preferences.manualOfflineEnabled,
                         highlighted = highlightSettingId == "offline_mode",
                         index = networkIdx++, count = networkTotal,
-                        onCheckedChange = { viewModel.setManualOffline(it) },
+                        onCheckedChange = { viewModel.edit { scope -> scope.networkOffline.setManualOffline(it) } },
                     )
 
                     SettingToggleItem(
@@ -426,7 +432,7 @@ fun StorageSettingsScreen(
                         checked = preferences.autoOfflineEnabled,
                         highlighted = highlightSettingId == "auto_offline",
                         index = networkIdx++, count = networkTotal,
-                        onCheckedChange = { viewModel.setAutoOfflineEnabled(it) },
+                        onCheckedChange = { viewModel.edit { scope -> scope.networkOffline.setAutoOfflineEnabled(it) } },
                     )
 
                     SettingToggleItem(
@@ -436,7 +442,7 @@ fun StorageSettingsScreen(
                         checked = preferences.adaptiveBitrateEnabled,
                         highlighted = highlightSettingId == "adaptive_bitrate",
                         index = networkIdx++, count = networkTotal,
-                        onCheckedChange = { viewModel.setAdaptiveBitrateEnabled(it) },
+                        onCheckedChange = { viewModel.edit { scope -> scope.networkOffline.setAdaptiveBitrateEnabled(it) } },
                     )
 
                     val caps = listOf(0L, 1_000_000L, 2_000_000L, 5_000_000L, 10_000_000L, 20_000_000L)
@@ -457,7 +463,7 @@ fun StorageSettingsScreen(
                                 items = caps,
                                 label = { if (it == 0L) bandwidthUnlimited else "${it / 1_000_000L} Mbps" },
                                 isSelected = { it == preferences.manualBandwidthCap },
-                                onSelect = { viewModel.setManualBandwidthCap(it) },
+                                onSelect = { viewModel.edit { scope -> scope.networkOffline.setManualBandwidthCap(it) } },
                             )
                         },
                     )
@@ -476,7 +482,7 @@ fun StorageSettingsScreen(
                                 items = MeteredNetworkBehavior.entries,
                                 label = { it.displayName },
                                 isSelected = { it == preferences.meteredNetworkBehavior },
-                                onSelect = { viewModel.setMeteredNetworkBehavior(it) },
+                                onSelect = { viewModel.edit { scope -> scope.networkOffline.setMeteredNetworkBehavior(it) } },
                             )
                         },
                     )
@@ -496,7 +502,7 @@ fun StorageSettingsScreen(
                                 items = StreamingQuality.entries,
                                 label = { qualityLabels[it] ?: it.name },
                                 isSelected = { it == preferences.cellularStreamingQuality },
-                                onSelect = { viewModel.setCellularStreamingQuality(it) },
+                                onSelect = { viewModel.edit { scope -> scope.playback.setCellularStreamingQuality(it) } },
                             )
                         },
                     )
@@ -517,7 +523,7 @@ fun StorageSettingsScreen(
                                 items = listOf(0, 100, 250, 500, 1000, 2000),
                                 label = { if (it == 0) disabledLabel else "$it MB" },
                                 isSelected = { it == preferences.cellularDownloadSizeWarningMb },
-                                onSelect = { viewModel.setCellularDownloadSizeWarningMb(it) },
+                                onSelect = { viewModel.edit { scope -> scope.downloads.setCellularDownloadSizeWarningMb(it) } },
                             )
                         },
                     )
@@ -529,7 +535,7 @@ fun StorageSettingsScreen(
                         checked = preferences.dataSaverEnabled,
                         highlighted = highlightSettingId == "data_saver",
                         index = networkIdx++, count = networkTotal,
-                        onCheckedChange = { viewModel.setDataSaverEnabled(it) },
+                        onCheckedChange = { viewModel.edit { scope -> scope.networkOffline.setDataSaverEnabled(it) } },
                     )
                     val networkTimeoutsTitle = stringResource(Res.string.settings_network_timeouts)
                     SettingListItem(
@@ -545,7 +551,7 @@ fun StorageSettingsScreen(
                                 items = com.raulshma.jellyplay.core.model.NetworkTimeoutPreset.entries,
                                 label = { it.displayName },
                                 isSelected = { it == preferences.networkTimeoutPreset },
-                                onSelect = { viewModel.setNetworkTimeoutPreset(it) },
+                                onSelect = { viewModel.edit { scope -> scope.networkOffline.setNetworkTimeoutPreset(it) } },
                             )
                         },
                     )
@@ -556,7 +562,7 @@ fun StorageSettingsScreen(
                         checked = preferences.verboseNetworkLogging,
                         highlighted = highlightSettingId == "verbose_logging",
                         index = networkIdx++, count = networkTotal,
-                        onCheckedChange = { viewModel.setVerboseNetworkLogging(it) },
+                        onCheckedChange = { viewModel.edit { scope -> scope.networkOffline.setVerboseNetworkLogging(it) } },
                     )
                     SettingToggleItem(
                         icon = Tabler.Outline.Refresh,
@@ -565,7 +571,7 @@ fun StorageSettingsScreen(
                         checked = preferences.userDataSyncEnabled,
                         highlighted = highlightSettingId == "user_data_sync",
                         index = networkIdx++, count = networkTotal,
-                        onCheckedChange = { viewModel.setUserDataSyncEnabled(it) },
+                        onCheckedChange = { viewModel.edit { scope -> scope.playback.setUserDataSyncEnabled(it) } },
                     )
                 }
             }
@@ -578,7 +584,13 @@ fun StorageSettingsScreen(
                     modifier = Modifier.padding(vertical = 8.dp),
                     initiallyExpanded = true,
                 ) {
-                    val downloadTotal = 8
+                    // Derived from the downloads group declaration: the three
+                    // schedule-window rows only render when scheduling is on.
+                    val downloadTotal = SettingsScreenGroups.storageDownloads.items.count { item ->
+                        item.id == "download_schedule" ||
+                            !item.id.startsWith("download_schedule_") ||
+                            preferences.downloadScheduleEnabled
+                    }
                     var downloadIdx = 0
 
                     val downloadQualityTitle = stringResource(Res.string.settings_download_quality)
@@ -595,7 +607,7 @@ fun StorageSettingsScreen(
                                 items = com.raulshma.jellyplay.core.model.DownloadQuality.entries,
                                 label = { it.displayName },
                                 isSelected = { it == preferences.downloadQuality },
-                                onSelect = { viewModel.setDownloadQuality(it) },
+                                onSelect = { viewModel.edit { scope -> scope.downloads.setDownloadQuality(it) } },
                             )
                         }
                     )
@@ -607,7 +619,7 @@ fun StorageSettingsScreen(
                         checked = preferences.smartDownloadsEnabled,
                         highlighted = highlightSettingId == "smart_downloads",
                         index = downloadIdx++, count = downloadTotal,
-                        onCheckedChange = { viewModel.setSmartDownloadsEnabled(it) }
+                        onCheckedChange = { viewModel.edit { scope -> scope.downloads.setSmartDownloadsEnabled(it) } }
                     )
 
                     SettingToggleItem(
@@ -627,7 +639,7 @@ fun StorageSettingsScreen(
                         checked = preferences.downloadScheduleEnabled,
                         highlighted = highlightSettingId == "download_schedule",
                         index = downloadIdx++, count = downloadTotal,
-                        onCheckedChange = { viewModel.setDownloadScheduleEnabled(it) }
+                        onCheckedChange = { viewModel.edit { scope -> scope.downloads.setDownloadScheduleEnabled(it) } }
                     )
 
                     if (preferences.downloadScheduleEnabled) {
@@ -646,7 +658,7 @@ fun StorageSettingsScreen(
                                     items = (0..23).toList(),
                                     label = { "$it:00" },
                                     isSelected = { it == current.startHour },
-                                    onSelect = { viewModel.setDownloadScheduleWindow(current.copy(startHour = it)) },
+                                    onSelect = { viewModel.edit { scope -> scope.downloads.setDownloadScheduleWindow(current.copy(startHour = it)) } },
                                 )
                             }
                         )
@@ -666,7 +678,7 @@ fun StorageSettingsScreen(
                                     items = (0..23).toList(),
                                     label = { "$it:00" },
                                     isSelected = { it == current.endHour },
-                                    onSelect = { viewModel.setDownloadScheduleWindow(current.copy(endHour = it)) },
+                                    onSelect = { viewModel.edit { scope -> scope.downloads.setDownloadScheduleWindow(current.copy(endHour = it)) } },
                                 )
                             }
                         )
@@ -680,7 +692,7 @@ fun StorageSettingsScreen(
                             index = downloadIdx++, count = downloadTotal,
                             onCheckedChange = {
                                 val current = preferences.downloadScheduleWindow
-                                viewModel.setDownloadScheduleWindow(current.copy(wifiOnly = it))
+                                viewModel.edit { scope -> scope.downloads.setDownloadScheduleWindow(current.copy(wifiOnly = it)) }
                             }
                         )
                     }
@@ -700,7 +712,7 @@ fun StorageSettingsScreen(
                                 items = listOf(0, 5, 10, 20, 50),
                                 label = { if (it == 0) unlimitedLabel else "$it GB" },
                                 isSelected = { it == preferences.maxDownloadStorageGb },
-                                onSelect = { viewModel.setMaxDownloadStorageGb(it) },
+                                onSelect = { viewModel.edit { scope -> scope.downloads.setMaxDownloadStorageGb(it) } },
                             )
                         }
                     )
@@ -750,7 +762,7 @@ fun StorageSettingsScreen(
                                     }
                                 },
                                 isSelected = { it.prefValue == preferences.downloadStorageLocation },
-                                onSelect = { viewModel.setDownloadStorageLocation(it.prefValue) },
+                                onSelect = { viewModel.edit { scope -> scope.downloads.setDownloadStorageLocation(it.prefValue) } },
                             )
                         }
                     )
@@ -762,7 +774,7 @@ fun StorageSettingsScreen(
                         checked = preferences.autoDeleteAfterWatch,
                         highlighted = highlightSettingId == "auto_delete_after_watch",
                         index = downloadIdx, count = downloadTotal,
-                        onCheckedChange = { viewModel.setAutoDeleteAfterWatch(it) }
+                        onCheckedChange = { viewModel.edit { scope -> scope.downloads.setAutoDeleteAfterWatch(it) } }
                     )
                 }
             }

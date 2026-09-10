@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.model
 
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.Test
@@ -331,5 +332,47 @@ cache.get(identityB, "similar_item1_10"),
         cache.put(identityA, "key", "value")
         // Pre-login / post-logout identity can never read a real identity's entry.
         assertNull(cache.get(CacheIdentity.UNKNOWN, "key"))
+    }
+
+    // ── getOrPut ───────────────────────────────────────────────────────────
+    // The cache-aside fold the API clients run inside their retry blocks: a
+    // hit must NOT run the producer; a miss runs it once and caches; a
+    // throwing producer propagates WITHOUT caching (a retry re-fetches, it
+    // can never observe the failed attempt's residue).
+
+    @Test
+    fun getOrPut_hitReturnsCachedValueWithoutRunningProducer() {
+        val cache = newCache()
+        cache.put("key", "cached")
+        var produced = 0
+        assertEquals(
+            cache.getOrPut("key") { produced++; "fresh" },
+            "cached",
+        )
+        assertEquals(0, produced)
+    }
+
+    @Test
+    fun getOrPut_missRunsProducerOnceAndCachesTheResult() {
+        val cache = newCache()
+        var produced = 0
+        assertEquals(
+            cache.getOrPut("key") { produced++; "fresh" },
+            "fresh",
+        )
+        assertEquals("fresh", cache.get("key"))
+        assertEquals("fresh", cache.getOrPut("key") { produced++; "second" })
+        assertEquals(1, produced)
+    }
+
+    @Test
+    fun getOrPut_producerThrowPropagatesWithoutCaching() {
+        val cache = newCache()
+        val error = assertFailsWith<IllegalStateException> {
+            cache.getOrPut("key") { throw IllegalStateException("boom") }
+        }
+        assertEquals("boom", error.message)
+        assertNull(cache.get("key"), "the failed attempt must leave no residue")
+        assertEquals("retry", cache.getOrPut("key") { "retry" })
     }
 }

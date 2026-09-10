@@ -22,6 +22,14 @@
     <string name="admin_scanning">Analyse…</string>
     <string name="admin_scan_now">Analyser maintenant</string>
     <string name="admin_select_all">Tout sélectionner</string>
+
+    <string name="admin_sort_default">Par défaut</string>
+    <string name="admin_sort_name_asc">Nom (A–Z)</string>
+    <string name="admin_sort_name_desc">Nom (Z–A)</string>
+    <string name="admin_sort_largest">Le plus grand</string>
+    <string name="admin_sort_smallest">Le plus petit</string>
+    <string name="admin_sort_type">Type</string>
+    <string name="admin_sort_date">Date</string>
     <string name="admin_media_types">Types de média</string>
     <string name="admin_dry_run">Simulation (aperçu uniquement)</string>
 
@@ -131,8 +139,8 @@
 
     <!-- Statistics -->
     <string name="admin_user_statistics_title">Statistiques utilisateur</string>
-    <string name="admin_watched_more">Vous avez regardé %1$s%% de plus ce mois-ci</string>
-    <string name="admin_watched_less">Vous avez regardé %1$s%% de moins ce mois-ci</string>
+    <string name="admin_watched_more">Vous avez regardé %1$s% de plus ce mois-ci</string>
+    <string name="admin_watched_less">Vous avez regardé %1$s% de moins ce mois-ci</string>
     <string name="admin_duration_vs_last">%1$s contre %2$s le mois dernier</string>
     <string name="admin_content_breakdown">Répartition du contenu</string>
     <string name="admin_by_genre">Par genre</string>
@@ -303,7 +311,7 @@
     <string name="admin_n_items">%1$d éléments</string>
     <string name="admin_n_lines">%1$d lignes</string>
     <string name="admin_scanning_library">Analyse de la bibliothèque</string>
-    <string name="admin_scan_progress_pct">Analyse %1$d%%</string>
+    <string name="admin_scan_progress_pct">Analyse %1$d%</string>
 
     <!-- Misc UI batch3 -->
     <string name="admin_quick_access">Accès rapide</string>
@@ -394,4 +402,6 @@
     <string name="user_stats_export_shared">Statistiques exportées</string>
 
     <string name="admin_plugin_config_unavailable">La configuration du plugin n’est pas disponible sur cette plateforme.</string>
+
+    <string name="admin_no_delete_permission">Votre compte n\'est pas autorisé à supprimer du contenu. Contactez l\'administrateur de votre serveur.</string>
 </resources>

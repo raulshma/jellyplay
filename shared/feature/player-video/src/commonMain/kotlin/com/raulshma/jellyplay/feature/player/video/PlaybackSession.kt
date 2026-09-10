@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.player.video
 
 import androidx.lifecycle.SavedStateHandle
+import com.raulshma.jellyplay.core.concurrency.TaskBundle
 import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflinePlaybackFacade
@@ -47,8 +48,8 @@ private const val SAVED_KEY_POSITION_MS = "video_player.saved_position_ms"
 private const val SAVED_KEY_PLAY_SESSION_ID = "video_player.saved_play_session_id"
 private const val SAVED_KEY_POSITION_PERSISTED_AT = "video_player.saved_position_persisted_at"
 
-/** Minimum position delta (ms) between throttled process-death persists. */
-private const val POSITION_PERSIST_MIN_INTERVAL_MS = 5_000L
+/** Minimum wall-clock interval (ms) between throttled process-death persists. */
+private const val POSITION_PERSIST_MIN_WALL_CLOCK_INTERVAL_MS = 5_000L
 
 /**
  * Quiet-period for coalescing the *offline-mirror* DB write during rapid
@@ -104,7 +105,7 @@ internal fun resolveResumeTicks(
  *
  * Step B1a moved the session-scoped latches and bookkeeping fields. Step B1b
  * moved the initialize path: [initialize] owns the load sequence — latch
- * resets, the routing early-returns, single-flight [loadJob] tracking, and
+ * resets, the routing early-returns, single-flight the load task slot tracking, and
  * WHEN the [SessionLoadPipeline] starts. Step B2 moved the reload/retry
  * paths ([retryWithEngine], [retryPlayback], [reloadForMode],
  * [reloadForStreamChange]) plus the [EngineEventCoordinator] — its
@@ -133,7 +134,7 @@ internal fun resolveResumeTicks(
  * Construction contract:
  * - the ViewModel's [CoroutineScope] is INJECTED, never constructed here.
  *   Session-launched coroutines (e.g. the coalesced seek-mirror write tracked
- *   by [pendingSeekProgressJob]) keep launching on that scope — never on
+ *   by the seek-progress task slot) keep launching on that scope — never on
  *   [releaseScope] and never on a session-internal scope cancelled in
  *   release(), because the onDispose teardown path joins the pending seek
  *   job and depends on those launch semantics;
@@ -155,6 +156,10 @@ internal fun resolveResumeTicks(
  *   [setCinemaIntroState] and the playhead display write through
  *   [seedDisplayedPositionMs]).
  */
+private const val LOAD = "PlaybackSession.load"
+private const val SEEK_PROGRESS = "PlaybackSession.seekProgress"
+private const val ENGINE_DECISIONS = "PlaybackSession.engineDecisions"
+
 internal class PlaybackSession(
     val scope: CoroutineScope,
     val playerSessionManager: PlayerSessionManager,
@@ -261,8 +266,10 @@ internal class PlaybackSession(
     internal var engineEventCoordinator: EngineEventCoordinator = createEngineEventCoordinator()
         private set
 
-    /** Fan-out collector for the coordinator's decision stream. */
-    private var engineDecisionJob: Job? = null
+    // Task slots for the session's cancel-and-replace choreographies. The
+    // bundle owns only the slot bookkeeping; scope lifecycle (the injected VM
+    // scope + releaseScope) stays exactly where it was.
+    private val sessionTasks = TaskBundle(scope)
 
     init {
         startEngineDecisionFanOut()
@@ -274,11 +281,12 @@ internal class PlaybackSession(
      * which this class never touches.
      */
     private fun startEngineDecisionFanOut() {
-        engineDecisionJob?.cancel()
-        val coordinator = engineEventCoordinator
-        engineDecisionJob = scope.launch {
-            coordinator.decisions.collect { decision ->
-                executeEngineDecision(decision)
+        sessionTasks.replace(ENGINE_DECISIONS) {
+            val coordinator = engineEventCoordinator
+            scope.launch {
+                coordinator.decisions.collect { decision ->
+                    executeEngineDecision(decision)
+                }
             }
         }
     }
@@ -366,10 +374,19 @@ internal class PlaybackSession(
     internal var lastSeekTimestamp: Long = 0L
 
     /**
-     * Last position (ms) written to the process-death persistence; used to
-     * throttle writes.
+     * Last position (ms) written to the process-death persistence; feeds the
+     * stop-report fallback when the engine reports 0 after STATE_ENDED.
      */
     internal var lastPersistedPositionMs: Long = Long.MIN_VALUE
+
+    /**
+     * Wall clock of the last process-death persist; the throttle key for
+     * [persistPlaybackPosition]. A wall-clock gate (not a position delta)
+     * keeps the write cadence fixed at
+     * [POSITION_PERSIST_MIN_WALL_CLOCK_INTERVAL_MS] regardless of playback speed —
+     * a position delta made 2× speed halve the interval between writes.
+     */
+    internal var lastPersistedAtMs: Long = 0L
 
     /**
      * Locally-allocated UUID play-session id — the fallback used until (and
@@ -384,7 +401,6 @@ internal class PlaybackSession(
      * the ViewModel-supplied [scope] — the teardown path joins this job after
      * cancelling the viewModelScope.
      */
-    internal var pendingSeekProgressJob: Job? = null
 
     /**
      * In-flight media-load coroutine, so a new initialize call can cancel the
@@ -392,7 +408,6 @@ internal class PlaybackSession(
      * network/teardown side effects when a SyncPlay load event races a user
      * navigation.
      */
-    internal var loadJob: Job? = null
 
     /**
      * Scope for teardown work that must outlive the viewModelScope on clear()
@@ -430,7 +445,7 @@ internal class PlaybackSession(
      * 7. [SessionLifecycleHooks.wasInSyncPlay] (SyncPlay flag read) followed
      *    by the outgoing session's stop-report ([reportCurrentPlaybackStopped],
      *    session-side since B3, directly after the flag read);
-     * 8. cancel any in-flight [loadJob];
+     * 8. cancel any in-flight the load task slot;
      * 9. mini-player reclaim early-return: the GATE stays a VM hook
      *    ([SessionLifecycleHooks.tryReclaimMiniPlayer] — mini-player state
      *    knowledge), but the body ([loadReclaimedEngine]) is session-side
@@ -450,10 +465,10 @@ internal class PlaybackSession(
      *     old position by the process-death play-session restore
      *     ([restoreOrAllocatePlaySessionId]);
      * 12. persistence-latch resets ([lastPersistedPositionMs],
-     *     [pendingSeekProgressJob]);
+     *     [lastPersistedAtMs], the seek-progress task slot);
      * 13. [SessionLifecycleHooks.clearTrickplay];
      * 14. [SessionLifecycleHooks.reattachSyncPlay] (conditional on step 7);
-     * 15. start the [SessionLoadPipeline] and track it as [loadJob].
+     * 15. start the [SessionLoadPipeline] and track it as the load task slot.
      */
     fun initialize(request: LoadRequest): Job {
         released = false
@@ -494,11 +509,12 @@ internal class PlaybackSession(
         // (double stop-reports, crossed engine binds). Tracking and cancelling
         // the previous load makes "latest load wins" deterministic without
         // changing the synchronous semantics of this function.
-        loadJob?.cancel()
+        sessionTasks.cancel(LOAD)
 
         hooks.tryReclaimMiniPlayer(request.itemId)?.let { reclaimed ->
-            loadJob = loadReclaimedEngine(reclaimed, request.itemId)
-            return loadJob!!
+            return sessionTasks.replace(LOAD) {
+                loadReclaimedEngine(reclaimed, request.itemId)
+            }
         }
 
         hooks.releaseMiniPlayerState()
@@ -513,8 +529,8 @@ internal class PlaybackSession(
         // ticks (see onPlayheadSeeded) — seeding from the raw request ticks
         // missed the offline-mirror resume that resolution produces.
         lastPersistedPositionMs = Long.MIN_VALUE
-        pendingSeekProgressJob?.cancel()
-        pendingSeekProgressJob = null
+        lastPersistedAtMs = 0L
+        sessionTasks.cancel(SEEK_PROGRESS)
         hooks.clearTrickplay()
 
         if (wasInSyncPlay) {
@@ -526,9 +542,9 @@ internal class PlaybackSession(
         // hydration → media session + duration seed → trickplay → reports)
         // lives in [SessionLoadPipeline]; its stage order is pinned by
         // SessionLoadPipelineTest.
-        val job = sessionLoadPipeline.start(scope = scope, request = request)
-        loadJob = job
-        return job
+        return sessionTasks.replace(LOAD) {
+            sessionLoadPipeline.start(scope = scope, request = request)
+        }
     }
 
     /**
@@ -592,7 +608,7 @@ internal class PlaybackSession(
             currentPositionMs = pos,
             selection = selection,
         ) ?: return
-        afterEngineReloadRebuildSessionAndTracking()
+        rebindSessionTracking(playerSessionManager.sessionState.value.currentItemId ?: "")
 
         if (resolved.playMethod == PlayMethod.TRANSCODE) {
             _events.tryEmit(SessionEvent.InformUser("Switched to transcoded stream — re-buffering"))
@@ -612,24 +628,38 @@ internal class PlaybackSession(
     }
 
     /**
-     * After a same-item engine reload ([reloadForMode], [retryWithEngine])
-     * the previous engine — whose `positionFlow` the position-tracking job
-     * was collecting — has been released, so the job goes silent. The media
-     * session was also bound to the released engine's player. Rebuild both so
-     * the seek bar, buffer bar, stats overlay, segment auto-skip and the
-     * system media notification track the new engine. (Every other reload
-     * path — initialize / cinema / retry — already does this; consolidating it
-     * here keeps any future engine swap covered the same way.)
+     * Re-binds the system media session and the position/progress tracking to
+     * the engine that just (re)loaded — the ONE funnel for every path that
+     * swaps or adopts an engine without running the [SessionLoadPipeline]:
+     * the reload/retry family ([reloadForMode], [launchFallbackToTranscode],
+     * [retryWithEngine], [retryPlayback]) and the mini-player reclaim
+     * ([loadReclaimedEngine]).
+     *
+     * [itemId] is the item the media session is created for — the reload
+     * family passes the session state's current item, the reclaim path its
+     * bound id. Position tracking ALWAYS restarts (the seek/buffer bars, the
+     * stats overlay and the segment auto-skip read it, and the previous
+     * engine — whose `positionFlow` the tracking job collected — has been
+     * released, so the job would otherwise go silent). [trackProgress]
+     * additionally gates the SERVER-side progress reporting: cinema pre-roll
+     * intros are not part of the user's library history, so
+     * [loadCinemaIntro] passes `false` — the deliberate divergence from the
+     * other adopt sites.
      */
-    private fun afterEngineReloadRebuildSessionAndTracking() {
+    private fun rebindSessionTracking(
+        itemId: String,
+        trackProgress: Boolean = true,
+    ) {
         val sessionState = playerSessionManager.sessionState.value
         mediaSessionController.createForItem(
-            sessionState.currentItemId ?: "",
+            itemId,
             sessionState.title,
             sessionState.subtitle,
         )
         progressReporter.startPositionTracking()
-        progressReporter.startProgressReporting()
+        if (trackProgress) {
+            progressReporter.startProgressReporting()
+        }
     }
 
     private fun launchFallbackToTranscode(
@@ -649,7 +679,7 @@ internal class PlaybackSession(
                 fromPositionMs,
                 selection,
             )
-            afterEngineReloadRebuildSessionAndTracking()
+            rebindSessionTracking(playerSessionManager.sessionState.value.currentItemId ?: "")
         }
     }
 
@@ -671,7 +701,7 @@ internal class PlaybackSession(
         scope.launch {
             playbackStore.setPreferredPlayer(playerType)
             playerSessionManager.reloadWithEngine(playerType, currentPos, playbackSpeed, maxBitrate)
-            afterEngineReloadRebuildSessionAndTracking()
+            rebindSessionTracking(playerSessionManager.sessionState.value.currentItemId ?: "")
         }
     }
 
@@ -698,7 +728,7 @@ internal class PlaybackSession(
                 playbackSpeed,
                 maxBitrate,
             )
-            afterEngineReloadRebuildSessionAndTracking()
+            rebindSessionTracking(playerSessionManager.sessionState.value.currentItemId ?: "")
         }
     }
 
@@ -747,14 +777,7 @@ internal class PlaybackSession(
             val detail = detailResult.getOrNull()
             if (detail != null) {
                 playerSessionManager.bindReclaimedEngine(reclaimed, itemId, detail)
-                val sessionState = playerSessionManager.sessionState.value
-                mediaSessionController.createForItem(
-                    itemId,
-                    sessionState.title,
-                    sessionState.subtitle,
-                )
-                progressReporter.startPositionTracking()
-                progressReporter.startProgressReporting()
+                rebindSessionTracking(itemId)
                 hooks.hydrateReclaimedItem(itemId, detail)
             }
         }
@@ -816,15 +839,12 @@ internal class PlaybackSession(
                 )
             )
             // Pre-roll intros are not part of the user's library history — skip
-            // server-side playback reporting and segment/next-episode/trickplay
-            // bookkeeping for them.
+            // server-side playback reporting (trackProgress = false) and the
+            // segment/next-episode/trickplay bookkeeping for them; the media
+            // session + position tracking still rebind so the notification and
+            // the seek bar track the intro.
             playerSessionManager.loadMedia(intro.id, null, 0L)
-            mediaSessionController.createForItem(
-                intro.id,
-                playerSessionManager.sessionState.value.title,
-                playerSessionManager.sessionState.value.subtitle,
-            )
-            progressReporter.startPositionTracking()
+            rebindSessionTracking(intro.id, trackProgress = false)
         }
     }
 
@@ -937,10 +957,15 @@ internal class PlaybackSession(
      */
     fun seekPersisted(positionMs: Long) {
         lastSeekPositionMs = positionMs
-        lastSeekTimestamp = System.currentTimeMillis()
+        val now = System.currentTimeMillis()
+        lastSeekTimestamp = now
         val itemId = playerSessionManager.sessionState.value.currentItemId ?: return
         lastPersistedPositionMs = positionMs
-        positionStore.persist(itemId, positionMs, currentPlaySessionId, System.currentTimeMillis())
+        // The seek just persisted the store; restart the tick throttle's
+        // wall-clock window so post-seek ticks inside the window don't
+        // immediately re-persist.
+        lastPersistedAtMs = now
+        positionStore.persist(itemId, positionMs, currentPlaySessionId, now)
         // The DB mirror is coalesced: rapid scrubbing no longer queues one
         // recordProgress per seek. The store snapshot above is already
         // immediate, and the throttled tick mirror catches up regardless.
@@ -950,15 +975,22 @@ internal class PlaybackSession(
 
     /**
      * Persists the current playback position so it survives process death.
-     * Throttled to at most one write per [POSITION_PERSIST_MIN_INTERVAL_MS]
-     * unless [force] (e.g. an explicit seek). Also stashes the server session
-     * id so the post-restore stop-report pairs with the original start-report.
+     * Throttled to at most one write per [POSITION_PERSIST_MIN_WALL_CLOCK_INTERVAL_MS]
+     * of WALL CLOCK unless [force] (e.g. an explicit seek) — keying on
+     * wall clock rather than a position delta keeps the write cadence fixed
+     * regardless of playback speed (a delta gate wrote every 2.5 s at 2×);
+     * the accepted trade-off is that crash-resume granularity at >1× speed
+     * is ≤5 s wall-clock (coarser in content terms). Also stashes the server
+     * session id so the post-restore stop-report pairs with the original
+     * start-report.
      */
     fun persistPlaybackPosition(positionMs: Long, force: Boolean) {
-        if (!force && kotlin.math.abs(positionMs - lastPersistedPositionMs) < POSITION_PERSIST_MIN_INTERVAL_MS) return
+        val now = System.currentTimeMillis()
+        if (!force && now - lastPersistedAtMs < POSITION_PERSIST_MIN_WALL_CLOCK_INTERVAL_MS) return
         val itemId = playerSessionManager.sessionState.value.currentItemId ?: return
         lastPersistedPositionMs = positionMs
-        positionStore.persist(itemId, positionMs, currentPlaySessionId, System.currentTimeMillis())
+        lastPersistedAtMs = now
+        positionStore.persist(itemId, positionMs, currentPlaySessionId, now)
         // Mirror progress into the offline store so downloads render watched /
         // resume state while offline. No-op for non-downloaded items.
         val durationMs = playerSessionManager.engine?.durationMs ?: 0L
@@ -981,24 +1013,25 @@ internal class PlaybackSession(
      * The position-store snapshot is already written synchronously by
      * [seekPersisted], and the throttled position tick
      * (`persistPlaybackPosition(force=false)`) re-writes the mirror every
-     * [POSITION_PERSIST_MIN_INTERVAL_MS], so a dropped coalesced write is
+     * [POSITION_PERSIST_MIN_WALL_CLOCK_INTERVAL_MS], so a dropped coalesced write is
      * recovered within seconds.
      *
      * Keeps launching on the ViewModel-supplied [scope] (NOT [releaseScope]):
      * the teardown path joins this job after cancelling the viewModelScope.
      */
     private fun scheduleCoalescedSeekProgress(itemId: String, positionMs: Long, durationMs: Long) {
-        pendingSeekProgressJob?.cancel()
-        pendingSeekProgressJob = scope.launch {
-            delay(SEEK_PROGRESS_COALESCE_MS)
-            val positionTicks = positionMs * 10_000L // ms → ticks
-            val percentage = mirrorPlayedPercentage(positionMs, durationMs)
-            offlinePlaybackFacade.recordProgress(
-                itemId,
-                positionTicks,
-                percentage,
-                isPlayed = mirrorIsPlayed(percentage),
-            )
+        sessionTasks.replace(SEEK_PROGRESS) {
+            scope.launch {
+                delay(SEEK_PROGRESS_COALESCE_MS)
+                val positionTicks = positionMs * 10_000L // ms → ticks
+                val percentage = mirrorPlayedPercentage(positionMs, durationMs)
+                offlinePlaybackFacade.recordProgress(
+                    itemId,
+                    positionTicks,
+                    percentage,
+                    isPlayed = mirrorIsPlayed(percentage),
+                )
+            }
         }
     }
 
@@ -1096,8 +1129,7 @@ internal class PlaybackSession(
      * synchronous call chain.
      */
     private fun releaseInternalsSessionPart() {
-        loadJob?.cancel()
-        loadJob = null
+        sessionTasks.cancel(LOAD)
         progressReporter.cancelJobs()
         mediaSessionController.release()
         playerSessionManager.release()
@@ -1140,7 +1172,7 @@ internal class PlaybackSession(
         // offline store doesn't lag the final position on release. The write is
         // moved onto the release scope (IO + NonCancellable) so it survives the
         // viewModelScope being cancelled on clear().
-        val pendingSeek = pendingSeekProgressJob
+        val pendingSeek = sessionTasks[SEEK_PROGRESS]
         if (pendingSeek != null && itemId != null) {
             releaseScope.launch(NonCancellable) {
                 pendingSeek.join()

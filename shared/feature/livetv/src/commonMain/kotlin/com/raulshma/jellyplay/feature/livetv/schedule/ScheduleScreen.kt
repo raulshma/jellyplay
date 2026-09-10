@@ -109,7 +109,7 @@ fun ScheduleScreen(
                         item {
                             SectionHeader(stringResource(Res.string.livetv_section_active_recordings), contentPad)
                         }
-                        items(items = uiState.activeRecordings, key = { "active-${it.id}" }) { rec ->
+                        items(items = uiState.activeRecordings, key = { "active-${it.id}" }, contentType = { "recording" }) { rec ->
                             TimerRow(
                                 title = rec.name,
                                 subtitle = rec.channelName,
@@ -128,7 +128,7 @@ fun ScheduleScreen(
                             item(key = "header-${group.dateLabel}") {
                                 DateLabel(group.dateLabel, contentPad)
                             }
-                            items(items = group.timers, key = { "timer-${it.id}" }) { timer ->
+                            items(items = group.timers, key = { "timer-${it.id}" }, contentType = { "timer" }) { timer ->
                                 TimerRow(
                                     title = timer.programName,
                                     subtitle = timer.channelName,

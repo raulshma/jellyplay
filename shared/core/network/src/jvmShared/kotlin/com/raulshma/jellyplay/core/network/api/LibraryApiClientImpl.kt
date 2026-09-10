@@ -2,11 +2,9 @@ package com.raulshma.jellyplay.core.network.api
 
 import com.raulshma.jellyplay.core.model.ChapterInfo
 import com.raulshma.jellyplay.core.model.CollectionSummary
+import com.raulshma.jellyplay.core.model.CacheIdentity
 import com.raulshma.jellyplay.core.model.Genre
-import com.raulshma.jellyplay.core.model.HomeFreshness
-import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionQuery
-import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.HomeSectionsResult
 import com.raulshma.jellyplay.core.model.LibraryFilters
 import com.raulshma.jellyplay.core.model.LibraryFolder
@@ -14,29 +12,33 @@ import com.raulshma.jellyplay.core.model.LyricsResult
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
-import com.raulshma.jellyplay.core.model.CacheIdentity
-import com.raulshma.jellyplay.core.model.TtlCache
 import com.raulshma.jellyplay.core.model.lruMapOf
 import com.raulshma.jellyplay.core.model.isAudioType
-import com.raulshma.jellyplay.core.model.descriptor
-import com.raulshma.jellyplay.core.model.PinnedHomeSection
-import com.raulshma.jellyplay.core.model.PinnedSectionType
 import com.raulshma.jellyplay.core.model.PersonInfo
 import com.raulshma.jellyplay.core.model.Playlist
 import com.raulshma.jellyplay.core.model.PlaylistItem
-import com.raulshma.jellyplay.core.model.RecommendationResult
 import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.Studio
 import com.raulshma.jellyplay.core.network.LyricsApi
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.sync.Semaphore
+import com.raulshma.jellyplay.core.network.library.DETAIL_PROJECTION_FIELDS
+import com.raulshma.jellyplay.core.network.library.EmptyLibraryFallback
+import com.raulshma.jellyplay.core.network.library.FavoriteFlagCache
+import com.raulshma.jellyplay.core.network.library.HomeSectionSources
+import com.raulshma.jellyplay.core.network.library.HomeSectionsFetcher
+import com.raulshma.jellyplay.core.network.library.SEARCH_SUGGESTIONS_FIELDS
+import com.raulshma.jellyplay.core.network.library.SEARCH_SUGGESTIONS_ITEM_TYPES
+import com.raulshma.jellyplay.core.network.library.SEARCH_SUGGESTIONS_SORT_BY
+import com.raulshma.jellyplay.core.network.library.buildFavoritesQuerySpec
+import com.raulshma.jellyplay.core.network.library.buildItemsByGenreQuerySpec
+import com.raulshma.jellyplay.core.network.library.buildItemsByStudioQuerySpec
+import com.raulshma.jellyplay.core.network.library.buildMediaItemsQuerySpec
+import com.raulshma.jellyplay.core.network.library.buildSearchHintsQuerySpec
+import com.raulshma.jellyplay.core.network.library.emptyFallbackTotalCount
+import com.raulshma.jellyplay.core.network.library.resumableOnly
 import org.jellyfin.sdk.model.api.BaseItemKind
 import org.jellyfin.sdk.model.api.CreatePlaylistDto
 import org.jellyfin.sdk.model.api.ImageType
 import org.jellyfin.sdk.model.api.ItemFields
-import org.jellyfin.sdk.model.api.ItemFilter
 import org.jellyfin.sdk.model.api.ItemSortBy
 import org.jellyfin.sdk.model.api.MediaType as SdkMediaType
 import org.jellyfin.sdk.model.api.SortOrder
@@ -49,42 +51,40 @@ import javax.inject.Singleton
 import java.util.UUID
 
 /**
- * Fields the detail mapper ([getMediaDetail]) reads from the BaseItemDto.
- * Projected explicitly because [org.jellyfin.sdk.api.operations.UserLibraryApi.getItem]
- * accepts no `fields` parameter and several of these (notably TRICKPLAY, used
- * for scrub preview and download) come back null without an explicit request.
+ * Fields the detail mapper ([getMediaDetail]) reads from the BaseItemDto,
+ * resolved from the shared commonMain wire projection
+ * ([DETAIL_PROJECTION_FIELDS] — see it for why the projection is explicit).
  */
-private val DETAIL_ITEM_FIELDS = listOf(
-    ItemFields.PEOPLE,
-    ItemFields.CHAPTERS,
-    ItemFields.MEDIA_SOURCES,
-    ItemFields.TRICKPLAY,
-    ItemFields.EXTERNAL_URLS,
-    ItemFields.ORIGINAL_TITLE,
-    ItemFields.PRODUCTION_LOCATIONS,
-    ItemFields.STUDIOS,
-    ItemFields.GENRES,
-    ItemFields.OVERVIEW,
-    ItemFields.PROVIDER_IDS,
-    ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
-)
+private val DETAIL_ITEM_FIELDS = DETAIL_PROJECTION_FIELDS.map { name ->
+    requireNotNull(ItemFields.entries.firstOrNull { it.serialName == name }) {
+        "ItemFields has no serial name '$name' — SDK drift vs the shared projection"
+    }
+}
 
-/** LRU bound of the favorite-flag cache (the old `LruCache(200)` size). */
-private const val FAVORITE_CACHE_MAX_ENTRIES = 200
+/** The jellyfin-web useSearchSuggestions shape, resolved against the SDK enums. */
+private val SEARCH_SUGGESTIONS_SORT = SEARCH_SUGGESTIONS_SORT_BY.map { token ->
+    ItemSortBy.entries.firstOrNull { it.serialName == token }
+        ?: error("ItemSortBy has no serial name '$token' — SDK drift vs the search-suggestions projection")
+}
 
-/**
- * TTL of the favorite-flag cache — generous (the flags only seed a toggle's
- * "current" value until the first real read refreshes them), and the
- * identity-keyed composite key already guarantees a switched user never sees
- * the previous user's flags within any window.
- */
-private const val FAVORITE_CACHE_TTL_MS = 15 * 60_000L
+private val SEARCH_SUGGESTIONS_KINDS = SEARCH_SUGGESTIONS_ITEM_TYPES.map { token ->
+    BaseItemKind.entries.firstOrNull { it.serialName == token }
+        ?: error("BaseItemKind has no serial name '$token' — SDK drift vs the search-suggestions projection")
+}
+
+private val SEARCH_SUGGESTIONS_PROJECTION = SEARCH_SUGGESTIONS_FIELDS.map { token ->
+    ItemFields.entries.firstOrNull { it.serialName == token }
+        ?: error("ItemFields has no serial name '$token' — SDK drift vs the search-suggestions projection")
+}
+
+/** ImageType resolved by serial name once — [ImageType.fromNameOrNull] linear-scans per call and Coil binds run per item. Keys lowercased: [fromNameOrNull] matches serial names case-insensitively, so callers passing server-JSON casing ("primary") must resolve too. */
+private val IMAGE_TYPES_BY_SERIAL_NAME = ImageType.entries.associateBy { it.serialName.lowercase() }
 
 @Singleton
 class LibraryApiClientImpl @Inject constructor(
     private val engine: JellyfinApiEngine,
     private val lyricsApi: LyricsApi,
-) : LibraryApiClient {
+) : LibraryApiClient, HomeSectionSources {
 
     /**
      * Parent ids of libraries already known to return nothing from both the
@@ -94,345 +94,64 @@ class LibraryApiClientImpl @Inject constructor(
      */
     private val emptyFallbackLibraries = lruMapOf<String, Unit>(32)
 
-    private fun rememberEmptyFallback(parentId: String) {
-        // Main-dispatcher-safe: confined to the apiResultWithRetry IO block.
-        synchronized(emptyFallbackLibraries) { emptyFallbackLibraries[parentId] = Unit }
-    }
-
-    // ── Home hot-path sub-call caches ──────────────────────────────────────
-    // MediaRepositoryImpl.getHomeSections caches the whole HomeSectionsResult
-    // for 60s and the HomeViewModel's periodic refresh also runs every 60s, so
-    // without these each refresh re-fans-out one getLatestMedia per library
-    // folder + up to 5 getSimilarItems calls. Latest/recommendations change far
-    // less often than Continue Watching / Next Up, so a short TTL here skips
-    // those round-trips on back-to-back refreshes while CW/NextUp stay live.
-    // Mirrors the 2-minute TTL the repo uses for the same concepts — both
-    // values are [HomeFreshness.NETWORK_SUBCALL_TTL_MS], one policy constant.
-    private val homeLatestMediaCache = TtlCache<List<MediaItem>>(ttlMs = HomeFreshness.NETWORK_SUBCALL_TTL_MS)
-    private val homeSimilarCache = TtlCache<List<MediaItem>>(ttlMs = HomeFreshness.NETWORK_SUBCALL_TTL_MS)
-
-    override suspend fun getHomeSections(
-        query: HomeSectionQuery,
-        force: Boolean,
-    ): Result<HomeSectionsResult> = engine.apiResultWithRetry {
-        coroutineScope {
-            // Only enabledSections earns a local (read throughout the
-            // per-section logic below); everything else the query bundles is
-            // read at its single use site as query.<field>, so the value
-            // object stays intact instead of being re-flattened into
-            // positional locals at the seam.
-            val enabledSections = query.enabledSections
-            val sections = mutableListOf<HomeSection>()
-            val failedTypes = mutableSetOf<HomeSectionType>()
-            var firstError: Throwable? = null
-
-            val continueWatchingDeferred = async {
-                if (HomeSectionType.CONTINUE_WATCHING in enabledSections) getContinueWatching()
-                else Result.success(emptyList())
-            }
-            val nextUpDeferred = async {
-                if (HomeSectionType.NEXT_UP in enabledSections) getNextUp(
-                    enableRewatching = query.nextUpRewatching,
-                    maxDays = query.nextUpMaxDays,
-                )
-                else Result.success(emptyList())
-            }
-            val foldersDeferred = async {
-                if (HomeSectionType.LATEST_MEDIA in enabledSections || HomeSectionType.RECENTLY_ADDED in enabledSections) {
-                    getLibraryFolders()
-                } else {
-                    Result.success(emptyList())
-                }
-            }
-            // Kick off pinned-section fetches concurrently with the standard
-            // sections so they add no extra wall-clock latency to home loading.
-            val pinnedDeferred = async { fetchPinnedSections(query.pinnedSections) }
-
-            val continueWatchingResult = continueWatchingDeferred.await()
-            val nextUpResult = nextUpDeferred.await()
-            val foldersResult = foldersDeferred.await()
-
-            // Launch the recommendations chain now: it depends only on the
-            // Continue Watching / Next Up seeds above (already resolved), not
-            // on the per-folder latest-media fan-out below — overlapping the
-            // two chains turns home-load wall clock from
-            // latestChain + recommendationsChain into max(...) while keeping
-            // section emission order unchanged (awaited at its original spot).
-            val recommendationsDeferred: kotlinx.coroutines.Deferred<Result<RecommendationResult>>? =
-                if (HomeSectionType.RECOMMENDATIONS in enabledSections) {
-                    // Reuse the Continue Watching + Next Up lists already fetched
-                    // above as recommendation seeds instead of re-hitting the
-                    // /Items/Resume and /Shows/NextUp endpoints a second time.
-                    val recommendationSeeds =
-                        continueWatchingResult.getOrDefault(emptyList()) +
-                            nextUpResult.getOrDefault(emptyList())
-                    async { getRecommendations(limit = 20, seeds = recommendationSeeds, force = force) }
-                } else null
-
-            var continueWatchingIds = emptySet<String>()
-
-            if (HomeSectionType.CONTINUE_WATCHING in enabledSections) {
-                continueWatchingResult
-                    .onSuccess { list ->
-                        val filtered = list.filter { it.id !in query.hiddenCwItemIds }
-                        if (filtered.isNotEmpty()) {
-                            continueWatchingIds = filtered.map { it.id }.toSet()
-                            sections.add(HomeSectionType.CONTINUE_WATCHING.descriptor.section(filtered))
-                        }
-                    }
-                    .onFailure {
-                        if (firstError == null) firstError = it
-                        failedTypes.add(HomeSectionType.CONTINUE_WATCHING)
-                    }
-            }
-
-            if (HomeSectionType.NEXT_UP in enabledSections) {
-                nextUpResult
-                    .onSuccess { list ->
-                        // Drop items whose series is in the user's "remove from Next Up" blocklist.
-                        val filtered = list.filter { it.id !in continueWatchingIds }
-                            .filter { it.seriesId == null || it.seriesId !in query.nextUpExcludedSeriesIds }
-                        if (filtered.isNotEmpty()) {
-                            // Title comes from the descriptor ("Next Up") — the
-                            // pre-descriptor literal here had drifted to "NextUp".
-                            sections.add(HomeSectionType.NEXT_UP.descriptor.section(filtered))
-                        }
-                    }
-                    .onFailure {
-                        if (firstError == null) firstError = it
-                        failedTypes.add(HomeSectionType.NEXT_UP)
-                    }
-            }
-
-            val allLatestItems = mutableListOf<MediaItem>()
-
-            if (HomeSectionType.LATEST_MEDIA in enabledSections || HomeSectionType.RECENTLY_ADDED in enabledSections) {
-                foldersResult
-                    .onSuccess { folders ->
-                        val filteredFolders = folders
-                            .filter { it.collectionType != "music" }
-                        val semaphore = Semaphore(4)
-                        val latestDeferred = filteredFolders
-                            .map { folder ->
-                                async {
-                                    semaphore.acquire()
-                                    try { folder to getLatestMediaForHome(folder.id, limit = 16, force = force) }
-                                    finally { semaphore.release() }
-                                }
-                            }
-                        latestDeferred.forEach { deferred ->
-                            val (folder, result) = deferred.await()
-                            val disabledForFolder = query.libraryHomeSectionOverrides[folder.id].orEmpty()
-                            result.onSuccess { latest ->
-                                // Only feed the aggregated Recently Added row from
-                                // libraries the user hasn't disabled it for.
-                                if (HomeSectionType.RECENTLY_ADDED !in disabledForFolder) {
-                                    allLatestItems.addAll(latest)
-                                }
-                                val latestEnabledForFolder = HomeSectionType.LATEST_MEDIA in enabledSections &&
-                                    HomeSectionType.LATEST_MEDIA !in disabledForFolder
-                                if (latest.isNotEmpty() && latestEnabledForFolder) {
-                                    val descriptor = HomeSectionType.LATEST_MEDIA.descriptor
-                                    sections.add(HomeSection(
-                                        id = descriptor.idFor(folder.id),
-                                        title = descriptor.titleFor(folder.name),
-                                        type = HomeSectionType.LATEST_MEDIA,
-                                        items = latest,
-                                        libraryId = folder.id,
-                                        collectionType = folder.collectionType,
-                                    ))
-                                }
-                            }.onFailure {
-                                // A per-folder Latest Media 403 (e.g. a stale
-                                // cached folder list racing with a permission
-                                // change) should surface as a partial-load
-                                // banner, not vanish silently.
-                                if (firstError == null) firstError = it
-                                if (HomeSectionType.LATEST_MEDIA in enabledSections) {
-                                    failedTypes.add(HomeSectionType.LATEST_MEDIA)
-                                }
-                            }
-                        }
-                    }
-                    .onFailure {
-                        if (firstError == null) firstError = it
-                        // The shared folders fetch backs both Latest Media and
-                        // Recently Added rows; a failure starves both sections.
-                        if (HomeSectionType.LATEST_MEDIA in enabledSections) {
-                            failedTypes.add(HomeSectionType.LATEST_MEDIA)
-                        }
-                        if (HomeSectionType.RECENTLY_ADDED in enabledSections) {
-                            failedTypes.add(HomeSectionType.RECENTLY_ADDED)
-                        }
-                    }
-            }
-
-            if (HomeSectionType.RECENTLY_ADDED in enabledSections) {
-                val recentlyAddedItems = allLatestItems
-                    .distinctBy { it.id }
-                    .filter { it.id !in continueWatchingIds }
-                if (recentlyAddedItems.isNotEmpty()) {
-                    val recentlyAddedSection = HomeSectionType.RECENTLY_ADDED.descriptor.section(recentlyAddedItems)
-                    val latestMediaLastIndex = sections.indexOfLast { it.type == HomeSectionType.LATEST_MEDIA }
-                    val insertIndex = if (latestMediaLastIndex >= 0) latestMediaLastIndex + 1 else sections.size
-                    sections.add(insertIndex, recentlyAddedSection)
-                }
-            }
-
-            // The deferred is non-null exactly when RECOMMENDATIONS is enabled
-            // (same condition that launched it above) — null-safe chaining
-            // keeps that invariant local instead of resting on an `!!` tied
-            // to a distant guard.
-            recommendationsDeferred?.await()
-                ?.onSuccess { result ->
-                    if (result.items.isNotEmpty()) {
-                        sections.add(HomeSectionType.RECOMMENDATIONS.descriptor.section(result.items, seedItem = result.seedItem))
-                    } else {
-                        // Fallback "For You" source when there are no similarity
-                        // seeds yet (new user, no watch history): surface favorited
-                        // / liked items so the home page still has discovery content
-                        //. Mirrors the search "Suggestions" data source.
-                        getSearchSuggestions(limit = 20)
-                            .onSuccess { search ->
-                                if (search.items.isNotEmpty()) {
-                                    sections.add(HomeSectionType.RECOMMENDATIONS.descriptor.section(search.items))
-                                }
-                            }
-                    }
-                }
-                ?.onFailure {
-                    if (firstError == null) firstError = it
-                    failedTypes.add(HomeSectionType.RECOMMENDATIONS)
-                }
-
-            // Append user-pinned sections (collections / playlists / favorites /
-            // genres / studios). They are always fetched regardless of the
-            // enabledSections filter, and appended after the standard sections so
-            // the HomeViewModel's ordering logic places them at the end of the
-            // home screen in the user-chosen pin order.
-            pinnedDeferred.await().forEach { section -> sections.add(section) }
-
-            if (sections.isEmpty() && firstError != null) {
-                throw firstError!!
-            }
-            HomeSectionsResult(sections, failedTypes.toSet())
-        }
-    }
-
     /**
-     * Shared read/write shape of the home sub-call caches: consult [cache]
-     * first unless [force] (pull-to-refresh), and memoise every successful
-     * fetch — including a forced one, so the freshly pulled rows survive the
-     * next periodic refresh instead of the pre-pull rows reverting for up to
-     * the TTL. Keys are scoped to the current [CacheIdentity] so a
-     * user/server switch can never serve the previous identity's rows.
+     * The shared commonMain empty-library fallback ladder
+     * ([EmptyLibraryFallback]); this client supplies its synchronized LRU
+     * memo (runs inside the apiResultWithRetry IO block, so every access
+     * holds the map's monitor — the `containsKey` probe deliberately does not
+     * refresh access order, the historical shape) and the SDK
+     * getLatestMedia transport.
      */
-    private suspend fun cachedHomeSubCall(
-        cache: TtlCache<List<MediaItem>>,
-        keyPart: String,
-        limit: Int,
-        force: Boolean,
-        fetch: suspend () -> Result<List<MediaItem>>,
-    ): Result<List<MediaItem>> {
-        val identity = currentHomeCacheIdentity()
-        val cacheKey = "${keyPart}_$limit"
-        if (!force) {
-            cache.get(identity, cacheKey)?.let { return Result.success(it) }
-        }
-        return fetch().also { result ->
-            result.getOrNull()?.let { cache.put(identity, cacheKey, it) }
-        }
-    }
+    private val emptyLibraryFallback = EmptyLibraryFallback(
+        isKnownEmpty = { parentId ->
+            synchronized(emptyFallbackLibraries) { emptyFallbackLibraries.containsKey(parentId) }
+        },
+        rememberEmpty = { parentId ->
+            // Main-dispatcher-safe: confined to the apiResultWithRetry IO block.
+            synchronized(emptyFallbackLibraries) { emptyFallbackLibraries[parentId] = Unit }
+        },
+        fetchLatest = { parentId, limit ->
+            engine.requireApi().userLibraryApi.getLatestMedia(
+                parentId = parentId.toUUID(),
+                limit = limit,
+                fields = LIST_ITEM_FIELDS_WITH_GENRES,
+            ).content ?: emptyList()
+        },
+    )
 
     /**
-     * Home-path wrapper around [getLatestMedia] that consults [homeLatestMediaCache]
-     * first. The home screen refreshes every 60s (foreground) and re-issues one
-     * `/Items/Latest` call per library folder on each refresh; latest-in-library
-     * changes less often than that, so a short TTL skips the redundant fan-out.
-     * Only the home path uses this — browse/library screens still go straight to
-     * [getLatestMedia] for fresh data. [force] (pull-to-refresh) bypasses the
-     * cache read but still memoises a successful fetch, so the pulled rows
-     * are what the next periodic refresh serves.
+     * The home feed's fetch choreography (sub-call fan-out, semaphore bounds,
+     * TTL sub-caches, recommendations chain) lives in the commonMain
+     * [HomeSectionsFetcher]; this client merely supplies the transport via
+     * [HomeSectionSources] (satisfied for free — the same overrides serve
+     * [LibraryApiClient]) and its atomic-session identity.
      */
-    private suspend fun getLatestMediaForHome(parentId: String, limit: Int, force: Boolean = false): Result<List<MediaItem>> =
-        cachedHomeSubCall(homeLatestMediaCache, parentId, limit, force) { getLatestMedia(parentId, limit) }
+    private val homeSectionsFetcher = HomeSectionsFetcher(
+        sources = this,
+        cacheIdentity = { currentHomeCacheIdentity() },
+    )
 
     /**
-     * Home-path wrapper around [getSimilarItems] (via [getRecommendations]) that
-     * memoises each seed's similar-items list in [homeSimilarCache]. The
-     * recommendations fan-out (up to 5 concurrent `getSimilarItems` calls) is
-     * the single most expensive part of a home refresh; seeds rarely change
-     * within the TTL window, so back-to-back refreshes skip it entirely.
-     * [force] (pull-to-refresh) bypasses the cache read but still memoises a
-     * successful fetch, so the pulled rows are what the next periodic
-     * refresh serves.
-     */
-    private suspend fun getSimilarItemsForHome(seedId: String, limit: Int, force: Boolean = false): Result<List<MediaItem>> =
-        cachedHomeSubCall(homeSimilarCache, seedId, limit, force) { getSimilarItems(seedId, limit) }
-
-    /**
-     * The current `(serverId, userId)` as a [CacheIdentity], read from the
-     * engine's atomic [JellyfinApiEngine.session] flow. Reading
-     * `currentServer` and `currentUser` as two separate StateFlow snapshots
-     * could observe a synthetic `(newServer, oldUser)` mid-switch and key the
-     * caches under an identity that never existed; the session flow publishes
-     * both sides as one value. The home sub-call caches are identity-keyed so
-     * a user/server switch can't serve the previous identity's latest-media /
-     * recommendations — wrong identity misses by construction, so no parallel
-     * cross-boundary clearer is needed. Falls back to [CacheIdentity.UNKNOWN]
-     * before login / after logout; nothing cached under that key can leak.
+     * The current cache identity from ONE atomic session snapshot — never two
+     * separate StateFlow reads, which could observe a synthetic
+     * (newServer, oldUser) pair mid-switch. [CacheIdentity.UNKNOWN] before
+     * login never leaks into another user's entry: a wrong identity is a
+     * guaranteed miss.
      */
     private fun currentHomeCacheIdentity(): CacheIdentity {
         val session = engine.session.value
         return CacheIdentity.ofOrNull(session?.server?.id, session?.user?.id)
     }
-    private suspend fun fetchPinnedSections(
-        pinnedSections: List<PinnedHomeSection>,
-    ): List<HomeSection> {
-        if (pinnedSections.isEmpty()) return emptyList()
-        val semaphore = Semaphore(4)
-        return coroutineScope {
-            val deferred = pinnedSections.map { pinned ->
-                async {
-                    semaphore.acquire()
-                    try {
-                        val items = getPinnedSectionItems(pinned)
-                        if (items.isNotEmpty()) {
-                            HomeSection(
-                                id = HomeSectionType.PINNED.descriptor.idFor(pinned.id),
-                                title = pinned.title,
-                                type = HomeSectionType.PINNED,
-                                items = items,
-                            )
-                        } else null
-                    } catch (_: Exception) {
-                        // A single failing pin (e.g. deleted collection) must not
-                        // break the whole home screen; just drop that row.
-                        null
-                    } finally {
-                        semaphore.release()
-                    }
-                }
-            }
-            deferred.awaitAll().filterNotNull()
-        }
+
+    override suspend fun getHomeSections(
+        query: HomeSectionQuery,
+        force: Boolean,
+    ): Result<HomeSectionsResult> = engine.apiResultWithRetry {
+        homeSectionsFetcher.fetch(query, force)
     }
 
-    /** Resolves the items for a single pinned section using its source type. */
-    private suspend fun getPinnedSectionItems(pinned: PinnedHomeSection): List<MediaItem> = when (pinned.type) {
-        PinnedSectionType.COLLECTION -> getCollectionItems(pinned.sourceId, limit = 20)
-            .getOrNull()?.items.orEmpty()
-        // Playlists and collections are both parent-scoped item queries; reusing
-        // getCollectionItems avoids excluding episode items (getMediaItems drops
-        // seasons/episodes), which matters for video playlists.
-        PinnedSectionType.PLAYLIST -> getCollectionItems(pinned.sourceId, limit = 20)
-            .getOrNull()?.items.orEmpty()
-        PinnedSectionType.FAVORITES -> getFavorites(limit = 20)
-            .getOrNull()?.items.orEmpty()
-        PinnedSectionType.GENRE -> getItemsByGenre(pinned.sourceId, limit = 20)
-            .getOrNull()?.items.orEmpty()
-        PinnedSectionType.STUDIO -> getItemsByStudio(pinned.sourceId, limit = 20)
-            .getOrNull()?.items.orEmpty()
+    override fun invalidateHomeSubcallCaches() {
+        homeSectionsFetcher.invalidateCaches()
     }
 
     override suspend fun getLatestMedia(parentId: String, limit: Int): Result<List<MediaItem>> =
@@ -440,12 +159,9 @@ class LibraryApiClientImpl @Inject constructor(
             val response = engine.requireApi().userLibraryApi.getLatestMedia(
                 parentId = parentId.toUUID(),
                 limit = limit,
-                fields = listOf(
-                    ItemFields.OVERVIEW,
-                    ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
-                ),
+                fields = LIST_ITEM_FIELDS,
             ).content ?: emptyList()
-            engine.run { response.toFilteredMediaItems() }
+            response.toFilteredMediaItems(engine.currentMaxParentalRating)
         }
 
     override suspend fun getNextUp(
@@ -462,26 +178,22 @@ class LibraryApiClientImpl @Inject constructor(
             limit = limit,
             enableRewatching = enableRewatching,
             nextUpDateCutoff = cutoff,
-            fields = listOf(
-                ItemFields.OVERVIEW,
-                ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
-            ),
+            fields = LIST_ITEM_FIELDS,
         ).content
-        engine.run { (response?.items ?: emptyList()).toFilteredMediaItems() }
+        (response?.items ?: emptyList()).toFilteredMediaItems(engine.currentMaxParentalRating)
     }
 
     override suspend fun getContinueWatching(limit: Int): Result<List<MediaItem>> = engine.apiResultWithRetry {
         val response = engine.requireApi().itemsApi.getResumeItems(
             limit = limit,
-            fields = listOf(
-                ItemFields.OVERVIEW,
-                ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
-            ),
+            fields = LIST_ITEM_FIELDS,
         ).content
-        engine.run {
-            (response?.items ?: emptyList()).toFilteredMediaItems()
-                .distinctBy { it.id }
-        }
+        (response?.items ?: emptyList())
+            .toFilteredMediaItems(engine.currentMaxParentalRating)
+            .distinctBy { it.id }
+            // #157: drop played rows the resume endpoint still reports —
+            // see resumableOnly() for the full rationale.
+            .resumableOnly()
     }
 
     override suspend fun getLibraryFolders(): Result<List<LibraryFolder>> = engine.apiResultWithRetry {
@@ -513,87 +225,50 @@ class LibraryApiClientImpl @Inject constructor(
         searchTerm: String?,
         kindFilter: com.raulshma.jellyplay.core.model.ItemKindFilter,
     ): Result<SearchResult> = engine.apiResultWithRetry {
-        val sortByEnums = parseItemSortList(filters.sortBy.apiValue)
-        val sortOrderEnum = SortOrder.entries
-            .find { it.serialName.equals(filters.sortBy.sortOrder, ignoreCase = true) }
-            ?: SortOrder.ASCENDING
-        // Played-status maps onto Jellyfin's ItemFilter (IsPlayed/IsUnplayed).
-        // Previously these chips toggled + persisted but never reached the query,
-        // so the grid silently ignored them (analysis F1).
-        val itemFilters = buildList {
-            when (filters.playedStatus.takeIf { it != com.raulshma.jellyplay.core.model.PlayedStatus.ALL }) {
-                com.raulshma.jellyplay.core.model.PlayedStatus.PLAYED -> add(ItemFilter.IS_PLAYED)
-                com.raulshma.jellyplay.core.model.PlayedStatus.UNPLAYED -> add(ItemFilter.IS_UNPLAYED)
-                else -> {}
-            }
-            // IsResumable restricts to items with a playback position
-            // (UserData.PlaybackPositionTicks > 0). Composes with played-status
-            // and powers the "In Progress" library filter / sort.
-            if (filters.isResumable == true) add(ItemFilter.IS_RESUMABLE)
-        }
-        // includeItemTypes / excludeItemTypes: resolve the requested kinds once,
-        // then drop SEASON/EPISODE from the exclude list when they were
-        // explicitly included. Jellyfin would otherwise receive contradictory
-        // include+exclude for the same kind (e.g. section mode for a TV library
-        // includes EPISODE to match /Items/Latest) and return an empty result.
-        val mediaTypes = filters.mediaTypes.takeIf { it.isNotEmpty() }
-        val includeKinds = mediaTypes?.mapNotNull { it.toBaseItemKind() }.orEmpty()
-        val excludeKinds = buildList {
-            if (BaseItemKind.SEASON !in includeKinds) add(BaseItemKind.SEASON)
-            if (!kindFilter.includeEpisodes && BaseItemKind.EPISODE !in includeKinds) add(BaseItemKind.EPISODE)
-        }
-        val response = engine.requireApi().itemsApi.getItems(
-            parentId = parentId?.let { it.toUUID() },
-            includeItemTypes = includeKinds.takeIf { it.isNotEmpty() },
-            excludeItemTypes = excludeKinds,
-            genres = filters.genres.takeIf { it.isNotEmpty() },
-            years = filters.years.takeIf { it.isNotEmpty() },
-            studioIds = studioIds?.mapNotNull { it.toUUID() },
-            tags = filters.tags.takeIf { it.isNotEmpty() },
-            sortBy = sortByEnums.takeIf { it.isNotEmpty() },
-            sortOrder = listOf(sortOrderEnum),
+        // The filter/sort/kind/projection decisions live in the shared
+        // commonMain builder ([buildMediaItemsQuerySpec]); this adapter only
+        // resolves the spec's wire serial names against the SDK enums
+        // ([LibraryItemsQueryResolvers]).
+        val spec = buildMediaItemsQuerySpec(
+            parentId = parentId,
+            filters = filters,
+            studioIds = studioIds,
             startIndex = startIndex,
             limit = limit,
-            recursive = true,
-            searchTerm = searchTerm?.takeIf { it.isNotBlank() },
-            filters = itemFilters.takeIf { it.isNotEmpty() },
-            minCommunityRating = filters.minRating.takeIf { it > 0f }?.toDouble(),
-            fields = listOf(
-                ItemFields.OVERVIEW,
-                ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
-                ItemFields.GENRES,
-            ),
+            searchTerm = searchTerm,
+            kindFilter = kindFilter,
+        )
+        val response = engine.requireApi().itemsApi.getItems(
+            parentId = spec.parentId?.toUUID(),
+            includeItemTypes = spec.includeKinds.toBaseItemKinds(),
+            excludeItemTypes = spec.excludeKinds.toBaseItemKinds(),
+            genres = spec.genres,
+            years = spec.years,
+            studioIds = spec.studioIds?.map { it.toUUID() },
+            tags = spec.tags,
+            sortBy = spec.sortBy.toItemSortBys(),
+            sortOrder = spec.sortOrderDescending.toSortOrderList(),
+            startIndex = spec.startIndex,
+            limit = spec.limit,
+            recursive = spec.recursive,
+            searchTerm = spec.searchTerm,
+            filters = spec.itemFilters.toItemFilters(),
+            minCommunityRating = spec.minCommunityRating,
+            fields = spec.fields.toItemFieldsList(),
         ).content
-        val rawItems = if (response.items.isEmpty() && parentId != null && searchTerm.isNullOrBlank()) {
-            // Skip the doubled request for libraries already known to be
-            // genuinely empty (primary query empty AND fallback empty) — a
-            // visit to an empty library previously paid both requests every
-            // time. Bounded LRU: once the library gains content the primary
-            // query returns items and the fallback is never reached, so the
-            // memo cannot serve a stale non-empty state.
-            if (synchronized(emptyFallbackLibraries) { emptyFallbackLibraries.containsKey(parentId) }) {
-                emptyList()
-            } else {
-                val fallback = runCatching {
-                    engine.requireApi().userLibraryApi.getLatestMedia(
-                        parentId = parentId.toUUID(),
-                        limit = if (limit > 0) limit else 50,
-                        fields = listOf(
-                            ItemFields.OVERVIEW,
-                            ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
-                            ItemFields.GENRES,
-                        ),
-                    ).content
-                }.getOrNull() ?: emptyList()
-                if (fallback.isEmpty()) rememberEmptyFallback(parentId)
-                fallback
-            }
-        } else {
-            response.items
-        }
-        val totalCount = if (response.items.isEmpty() && rawItems.isNotEmpty()) rawItems.size else response.totalRecordCount
+        val rawItems = emptyLibraryFallback.resolve(
+            primaryItems = response.items,
+            parentId = parentId,
+            searchTerm = searchTerm,
+            limit = limit,
+        )
+        val totalCount = emptyFallbackTotalCount(
+            primaryCount = response.items.size,
+            resolvedCount = rawItems.size,
+            serverTotal = response.totalRecordCount,
+        )
         SearchResult(
-            items = engine.run { rawItems.toFilteredMediaItems() },
+            items = rawItems.toFilteredMediaItems(engine.currentMaxParentalRating),
             totalRecordCount = totalCount,
             startIndex = startIndex,
         )
@@ -689,20 +364,16 @@ class LibraryApiClientImpl @Inject constructor(
     }
 
     override suspend fun getIntros(itemId: String): Result<List<MediaItem>> = engine.apiResultWithRetry {
-        val userId = engine.currentUser.value?.id?.toUUID()
-            ?: throw IllegalStateException("Not authenticated")
+        val userId = engine.requireUserId().toUUID()
         val response = engine.requireApi().userLibraryApi.getIntros(
             itemId = itemId.toUUID(),
             userId = userId,
         ).content
-        engine.run {
-            (response?.items ?: emptyList()).toFilteredMediaItems()
-        }
+        (response?.items ?: emptyList()).toFilteredMediaItems(engine.currentMaxParentalRating)
     }
 
     override suspend fun getSpecialFeatures(itemId: String): Result<List<MediaItem>> = engine.apiResultWithRetry {
-        val userId = engine.currentUser.value?.id?.toUUID()
-            ?: throw IllegalStateException("Not authenticated")
+        val userId = engine.requireUserId().toUUID()
         // Unlike getIntros (a BaseItemDtoQueryResult with a paginated `.items`
         // wrapper), getSpecialFeatures returns a bare List<BaseItemDto> directly
         // — the /Items/{id}/SpecialFeatures endpoint emits a JSON array, so the
@@ -711,9 +382,7 @@ class LibraryApiClientImpl @Inject constructor(
             itemId = itemId.toUUID(),
             userId = userId,
         ).content
-        engine.run {
-            (response ?: emptyList()).toFilteredMediaItems()
-        }
+        (response ?: emptyList()).toFilteredMediaItems(engine.currentMaxParentalRating)
     }
 
     override suspend fun getSearchHints(
@@ -722,46 +391,34 @@ class LibraryApiClientImpl @Inject constructor(
         limit: Int,
         startIndex: Int,
     ): Result<SearchResult> = engine.apiResultWithRetry {
+        val spec = buildSearchHintsQuerySpec(query, mediaTypes, limit, startIndex)
         val response = engine.requireApi().itemsApi.getItems(
-            searchTerm = query,
-            includeItemTypes = mediaTypes?.mapNotNull { it.toBaseItemKind() },
-            limit = limit,
-            startIndex = startIndex,
-            recursive = true,
-            fields = listOf(
-                ItemFields.OVERVIEW,
-                ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
-            ),
+            searchTerm = spec.searchTerm,
+            includeItemTypes = spec.includeKinds.toBaseItemKinds(),
+            limit = spec.limit,
+            startIndex = spec.startIndex,
+            recursive = spec.recursive,
+            fields = spec.fields.toItemFieldsList(),
         ).content
         SearchResult(
-            items = engine.run { response.items.toFilteredMediaItems() },
+            items = response.items.toFilteredMediaItems(engine.currentMaxParentalRating),
             totalRecordCount = response.totalRecordCount,
             startIndex = startIndex,
         )
     }
 
     override suspend fun getSearchSuggestions(limit: Int): Result<SearchResult> = engine.apiResultWithRetry {
-        // Mirrors jellyfin-web's useSearchSuggestions: getItems sorted by
-        // [IsFavoriteOrLiked, Random] over Movies, Series and MusicArtists.
-        // Unlike the web client (which disables images for the cheap empty
-        // state) we keep images on so we can render poster cards that match the
-        // rest of the app's design language.
+        // The jellyfin-web useSearchSuggestions shape, held once in commonMain
+        // (SEARCH_SUGGESTIONS_* and resolved above against the SDK enums).
         val response = engine.requireApi().itemsApi.getItems(
-            sortBy = listOf(ItemSortBy.IS_FAVORITE_OR_LIKED, ItemSortBy.RANDOM),
-            includeItemTypes = listOf(
-                BaseItemKind.MOVIE,
-                BaseItemKind.SERIES,
-                BaseItemKind.MUSIC_ARTIST,
-            ),
+            sortBy = SEARCH_SUGGESTIONS_SORT,
+            includeItemTypes = SEARCH_SUGGESTIONS_KINDS,
             limit = limit,
             recursive = true,
-            fields = listOf(
-                ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
-                ItemFields.GENRES,
-            ),
+            fields = SEARCH_SUGGESTIONS_PROJECTION,
         ).content
         SearchResult(
-            items = engine.run { response.items.toFilteredMediaItems() },
+            items = response.items.toFilteredMediaItems(engine.currentMaxParentalRating),
             totalRecordCount = response.totalRecordCount,
             startIndex = 0,
         )
@@ -789,7 +446,7 @@ class LibraryApiClientImpl @Inject constructor(
 
     override suspend fun getGenres(parentId: String?, startIndex: Int, limit: Int): Result<List<Genre>> =
         engine.apiResultWithRetry {
-            val userId = engine.currentUser.value?.id?.toUUID()
+            val userId = engine.currentUserId()?.toUUID()
             val response = engine.requireApi().genresApi.getGenres(
                 parentId = parentId?.let { it.toUUID() },
                 userId = userId,
@@ -807,15 +464,16 @@ class LibraryApiClientImpl @Inject constructor(
         startIndex: Int,
         limit: Int,
     ): Result<SearchResult> = engine.apiResultWithRetry {
+        val spec = buildItemsByGenreQuerySpec(genreId, mediaTypes, startIndex, limit)
         val response = engine.requireApi().itemsApi.getItems(
-            genreIds = listOf(genreId.toUUID()),
-            includeItemTypes = mediaTypes?.mapNotNull { it.toBaseItemKind() },
-            startIndex = startIndex,
-            limit = limit,
-            recursive = true,
+            genreIds = spec.genreIds?.map { it.toUUID() },
+            includeItemTypes = spec.includeKinds.toBaseItemKinds(),
+            startIndex = spec.startIndex,
+            limit = spec.limit,
+            recursive = spec.recursive,
         ).content
         SearchResult(
-            items = engine.run { response.items.toFilteredMediaItems() },
+            items = response.items.toFilteredMediaItems(engine.currentMaxParentalRating),
             totalRecordCount = response.totalRecordCount,
             startIndex = startIndex,
         )
@@ -826,7 +484,7 @@ class LibraryApiClientImpl @Inject constructor(
         startIndex: Int,
         limit: Int,
     ): Result<List<Studio>> = engine.apiResultWithRetry {
-        val userId = engine.currentUser.value?.id?.toUUID()
+        val userId = engine.currentUserId()?.toUUID()
         val response = engine.requireApi().studiosApi.getStudios(
             parentId = parentId?.let { it.toUUID() },
             userId = userId,
@@ -844,19 +502,17 @@ class LibraryApiClientImpl @Inject constructor(
         startIndex: Int,
         limit: Int,
     ): Result<SearchResult> = engine.apiResultWithRetry {
+        val spec = buildItemsByStudioQuerySpec(studioId, mediaTypes, startIndex, limit)
         val response = engine.requireApi().itemsApi.getItems(
-            studioIds = listOf(studioId.toUUID()),
-            includeItemTypes = mediaTypes?.mapNotNull { it.toBaseItemKind() },
-            startIndex = startIndex,
-            limit = limit,
-            recursive = true,
-            fields = listOf(
-                ItemFields.OVERVIEW,
-                ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
-            ),
+            studioIds = spec.studioIds?.map { it.toUUID() },
+            includeItemTypes = spec.includeKinds.toBaseItemKinds(),
+            startIndex = spec.startIndex,
+            limit = spec.limit,
+            recursive = spec.recursive,
+            fields = spec.fields.toItemFieldsList(),
         ).content
         SearchResult(
-            items = engine.run { response.items.toFilteredMediaItems() },
+            items = response.items.toFilteredMediaItems(engine.currentMaxParentalRating),
             totalRecordCount = response.totalRecordCount,
             startIndex = startIndex,
         )
@@ -869,12 +525,9 @@ class LibraryApiClientImpl @Inject constructor(
             limit = limit,
             recursive = true,
             sortBy = listOf(ItemSortBy.SORT_NAME),
-            fields = listOf(
-                ItemFields.OVERVIEW,
-                ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
-            ),
+            fields = LIST_ITEM_FIELDS,
         ).content
-        engine.run { response.items.toFilteredMediaItems() }
+        response.items.toFilteredMediaItems(engine.currentMaxParentalRating)
     }
 
     override suspend fun getAlbumTracks(albumId: String): Result<List<MediaItem>> = engine.apiResultWithRetry {
@@ -884,96 +537,30 @@ class LibraryApiClientImpl @Inject constructor(
             recursive = true,
             sortBy = listOf(ItemSortBy.PARENT_INDEX_NUMBER, ItemSortBy.INDEX_NUMBER),
             sortOrder = listOf(SortOrder.ASCENDING),
-            fields = listOf(
-                ItemFields.OVERVIEW,
-                ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
-            ),
+            fields = LIST_ITEM_FIELDS,
         ).content
-        engine.run { response.items.toFilteredMediaItems() }
+        response.items.toFilteredMediaItems(engine.currentMaxParentalRating)
     }
 
     override suspend fun getSimilarItems(itemId: String, limit: Int): Result<List<MediaItem>> =
         engine.apiResultWithRetry {
-            engine.run {
-                engine.requireApi().libraryApi.getSimilarItems(
-                    itemId = itemId.toUUID(),
-                    limit = limit,
-                ).content.items.toFilteredMediaItems()
-            }
+            engine.requireApi().libraryApi.getSimilarItems(
+                itemId = itemId.toUUID(),
+                limit = limit,
+            ).content.items.toFilteredMediaItems(engine.currentMaxParentalRating)
         }
 
     override suspend fun getInstantMix(itemId: String, limit: Int): Result<List<MediaItem>> =
         engine.apiResultWithRetry {
-            val userId = engine.currentUser.value?.id?.toUUID()
+            val userId = engine.currentUserId()?.toUUID()
                 ?: return@apiResultWithRetry emptyList()
-            engine.run {
-                engine.requireApi().instantMixApi.getInstantMixFromItem(
-                    userId = userId,
-                    itemId = itemId.toUUID(),
-                    limit = limit,
-                    fields = listOf(
-                        ItemFields.OVERVIEW,
-                        ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
-                    ),
-                ).content.items.toFilteredMediaItems()
-            }
+            engine.requireApi().instantMixApi.getInstantMixFromItem(
+                userId = userId,
+                itemId = itemId.toUUID(),
+                limit = limit,
+                fields = LIST_ITEM_FIELDS,
+            ).content.items.toFilteredMediaItems(engine.currentMaxParentalRating)
         }
-
-    override suspend fun getRecommendations(
-        limit: Int,
-        seeds: List<MediaItem>,
-    ): Result<RecommendationResult> = getRecommendations(limit, seeds, force = false)
-
-    /**
-     * Force-aware core of [getRecommendations]: the home path passes through the
-     * [force] it received so a pull-to-refresh also bypasses the similar-items
-     * sub-cache; callers without a force argument keep the cached behavior.
-     */
-    private suspend fun getRecommendations(
-        limit: Int,
-        seeds: List<MediaItem>,
-        force: Boolean,
-    ): Result<RecommendationResult> = runCatching {
-        // Reuse caller-supplied seeds when available (e.g. the home screen has
-        // already fetched Continue Watching + Next Up) to avoid duplicate
-        // /Items/Resume and /Shows/NextUp round-trips within the same load.
-        val seedItems = if (seeds.isNotEmpty()) {
-            seeds.distinctBy { it.id }.take(5)
-        } else {
-            val continueWatching = getContinueWatching(limit = 5).getOrDefault(emptyList())
-            val nextUp = getNextUp(limit = 5).getOrDefault(emptyList())
-            (continueWatching + nextUp).distinctBy { it.id }.take(5)
-        }
-
-        if (seedItems.isEmpty()) return@runCatching RecommendationResult(emptyList(), null)
-
-        val seedIds = seedItems.map { it.id }.toSet()
-        val semaphore = Semaphore(3)
-        val allSimilar = coroutineScope {
-            seedItems.map { seed ->
-                async {
-                    semaphore.acquire()
-                    try {
-                        // Routed through homeSimilarCache: recommendations are the
-                        // most expensive part of a home refresh (up to 5 concurrent
-                        // /Items/Similar calls) and seeds rarely change within the
-                        // TTL window, so back-to-back refreshes (60s cadence) skip
-                        // the fan-out. Also benefits the detail screen's re-entry.
-                        val perSeedLimit = limit / seedItems.size + 2
-                        getSimilarItemsForHome(seed.id, perSeedLimit, force).getOrDefault(emptyList())
-                    }
-                    finally { semaphore.release() }
-                }
-            }.flatMap { it.await() }
-        }
-
-        val recommendations = allSimilar
-            .filter { it.id !in seedIds }
-            .distinctBy { it.id }
-            .take(limit)
-
-        RecommendationResult(recommendations, seedItems.firstOrNull())
-    }
 
     override suspend fun getItemsByPerson(personId: String, limit: Int): Result<List<MediaItem>> =
         engine.apiResultWithRetry {
@@ -981,12 +568,9 @@ class LibraryApiClientImpl @Inject constructor(
                 personIds = listOf(personId.toUUID()),
                 limit = limit,
                 recursive = true,
-                fields = listOf(
-                    ItemFields.OVERVIEW,
-                    ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
-                ),
+                fields = LIST_ITEM_FIELDS,
             ).content
-            engine.run { response.items.toFilteredMediaItems() }
+            response.items.toFilteredMediaItems(engine.currentMaxParentalRating)
         }
 
     override suspend fun getThemeSongs(itemId: String): Result<List<MediaItem>> =
@@ -994,34 +578,28 @@ class LibraryApiClientImpl @Inject constructor(
             val response = engine.requireApi().libraryApi.getThemeSongs(
                 itemId = itemId.toUUID(),
             ).content
-            engine.run { response.items.toFilteredMediaItems() }
+            response.items.toFilteredMediaItems(engine.currentMaxParentalRating)
         }
 
     override suspend fun getSeasons(seriesId: String): Result<List<MediaItem>> = engine.apiResultWithRetry {
-        engine.run {
-            engine.requireApi().tvShowsApi.getSeasons(
-                seriesId = seriesId.toUUID(),
-            ).content.items.toFilteredMediaItems()
-        }
+        engine.requireApi().tvShowsApi.getSeasons(
+            seriesId = seriesId.toUUID(),
+        ).content.items.toFilteredMediaItems(engine.currentMaxParentalRating)
     }
 
     override suspend fun getEpisodes(seriesId: String, seasonId: String): Result<List<MediaItem>> =
         engine.apiResultWithRetry {
-            engine.run {
-                engine.requireApi().tvShowsApi.getEpisodes(
-                    seriesId = seriesId.toUUID(),
-                    seasonId = seasonId.toUUID(),
-                ).content.items.toFilteredMediaItems()
-            }
+            engine.requireApi().tvShowsApi.getEpisodes(
+                seriesId = seriesId.toUUID(),
+                seasonId = seasonId.toUUID(),
+            ).content.items.toFilteredMediaItems(engine.currentMaxParentalRating)
         }
 
     override suspend fun getAllEpisodes(seriesId: String): Result<List<MediaItem>> =
         engine.apiResultWithRetry {
-            engine.run {
-                engine.requireApi().tvShowsApi.getEpisodes(
-                    seriesId = seriesId.toUUID(),
-                ).content.items.toFilteredMediaItems()
-            }
+            engine.requireApi().tvShowsApi.getEpisodes(
+                seriesId = seriesId.toUUID(),
+            ).content.items.toFilteredMediaItems(engine.currentMaxParentalRating)
         }
 
     override suspend fun getCollectionItems(
@@ -1034,13 +612,10 @@ class LibraryApiClientImpl @Inject constructor(
             startIndex = startIndex,
             limit = limit,
             recursive = true,
-            fields = listOf(
-                ItemFields.OVERVIEW,
-                ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
-            ),
+            fields = LIST_ITEM_FIELDS,
         ).content
         SearchResult(
-            items = engine.run { response.items.toFilteredMediaItems() },
+            items = response.items.toFilteredMediaItems(engine.currentMaxParentalRating),
             totalRecordCount = response.totalRecordCount,
             startIndex = startIndex,
         )
@@ -1108,19 +683,17 @@ class LibraryApiClientImpl @Inject constructor(
         limit: Int,
         startIndex: Int,
     ): Result<SearchResult> = engine.apiResultWithRetry {
+        val spec = buildFavoritesQuerySpec(mediaTypes, limit, startIndex)
         val response = engine.requireApi().itemsApi.getItems(
-            includeItemTypes = mediaTypes?.mapNotNull { it.toBaseItemKind() },
-            filters = listOf(ItemFilter.IS_FAVORITE),
-            limit = limit,
-            startIndex = startIndex,
-            recursive = true,
-            fields = listOf(
-                ItemFields.OVERVIEW,
-                ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
-            ),
+            includeItemTypes = spec.includeKinds.toBaseItemKinds(),
+            filters = spec.itemFilters.toItemFilters(),
+            limit = spec.limit,
+            startIndex = spec.startIndex,
+            recursive = spec.recursive,
+            fields = spec.fields.toItemFieldsList(),
         ).content
         SearchResult(
-            items = engine.run { response.items.toFilteredMediaItems() },
+            items = response.items.toFilteredMediaItems(engine.currentMaxParentalRating),
             totalRecordCount = response.totalRecordCount,
             startIndex = startIndex,
         )
@@ -1135,14 +708,9 @@ class LibraryApiClientImpl @Inject constructor(
             includeItemTypes = listOf(BaseItemKind.PLAYLIST),
             limit = limit,
             recursive = true,
-            fields = listOf(
-                ItemFields.OVERVIEW,
-                ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
-                ItemFields.CAN_DELETE,
-                ItemFields.DATE_CREATED,
-            ),
+            fields = LIST_ITEM_FIELDS + listOf(ItemFields.CAN_DELETE, ItemFields.DATE_CREATED),
         ).content
-        val currentUserId = engine.currentUser.value?.id
+        val currentUserId = engine.currentUserId()
         response.items.map { item ->
             Playlist(
                 id = item.id.toString(),
@@ -1173,10 +741,7 @@ class LibraryApiClientImpl @Inject constructor(
             startIndex = startIndex,
             limit = limit,
             recursive = true,
-            fields = listOf(
-                ItemFields.OVERVIEW,
-                ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
-            ),
+            fields = LIST_ITEM_FIELDS,
         ).content
         response.items.map { item ->
             PlaylistItem(
@@ -1197,7 +762,7 @@ class LibraryApiClientImpl @Inject constructor(
         itemIds: List<String>,
         mediaType: MediaType,
     ): Result<String> = engine.apiResultWithRetry {
-        val userId = engine.currentUser.value?.id?.toUUID()
+        val userId = engine.currentUserId()?.toUUID()
         // Jellyfin tags a playlist with a single media type so the server can
         // sort/limit it correctly. Music callers (the default) keep AUDIO;
         // video detail screens pass VIDEO. Without this, a playlist created
@@ -1241,7 +806,7 @@ class LibraryApiClientImpl @Inject constructor(
         playlistId: String,
         itemIds: List<String>,
     ): Result<Unit> = engine.apiResultWithRetry {
-        val userId = engine.currentUser.value?.id?.toUUID()
+        val userId = engine.currentUserId()?.toUUID()
         engine.requireApi().playlistsApi.addItemToPlaylist(
             playlistId = playlistId.toUUID(),
             ids = itemIds.map { it.toUUID() },
@@ -1275,8 +840,7 @@ class LibraryApiClientImpl @Inject constructor(
     }
 
     override suspend fun markPlayed(itemId: String): Result<Unit> = engine.apiResultWithRetry {
-        val userId = engine.currentUser.value?.id
-            ?: throw IllegalStateException("Not authenticated")
+        val userId = engine.requireUserId()
         engine.requireApi().playStateApi.markPlayedItem(
             userId = userId.toUUID(),
             itemId = itemId.toUUID(),
@@ -1284,8 +848,7 @@ class LibraryApiClientImpl @Inject constructor(
     }
 
     override suspend fun markUnplayed(itemId: String): Result<Unit> = engine.apiResultWithRetry {
-        val userId = engine.currentUser.value?.id
-            ?: throw IllegalStateException("Not authenticated")
+        val userId = engine.requireUserId()
         engine.requireApi().playStateApi.markUnplayedItem(
             userId = userId.toUUID(),
             itemId = itemId.toUUID(),
@@ -1293,37 +856,31 @@ class LibraryApiClientImpl @Inject constructor(
     }
 
     override suspend fun toggleFavorite(itemId: String, currentIsFavorite: Boolean?): Result<Boolean> = engine.apiResultWithRetry {
-        val userId = engine.currentUser.value?.id
-            ?: throw IllegalStateException("Not authenticated")
+        val userId = engine.requireUserId()
         val uuid = itemId.toUUID()
-        val identity = currentHomeCacheIdentity()
-        val cacheKey = uuid.toString()
-        val cached = favoriteCache.get(identity, cacheKey)
-        val isFavorite = currentIsFavorite ?: cached ?: run {
-            val fetched = engine.requireApi().userLibraryApi.getItem(itemId = uuid).content.userData?.isFavorite == true
-            favoriteCache.put(identity, cacheKey, fetched)
-            fetched
-        }
-        if (isFavorite) {
-            engine.requireApi().userLibraryApi.unmarkFavoriteItem(
-                userId = userId.toUUID(),
-                itemId = uuid,
-            )
-            favoriteCache.put(identity, cacheKey, false)
-            false
-        } else {
-            engine.requireApi().userLibraryApi.markFavoriteItem(
-                userId = userId.toUUID(),
-                itemId = uuid,
-            )
-            favoriteCache.put(identity, cacheKey, true)
-            true
-        }
+        favoriteFlags.toggle(
+            cacheKey = uuid.toString(),
+            currentIsFavorite = currentIsFavorite,
+            fetchCurrent = {
+                engine.requireApi().userLibraryApi.getItem(itemId = uuid).content.userData?.isFavorite == true
+            },
+            markOnServer = {
+                engine.requireApi().userLibraryApi.markFavoriteItem(
+                    userId = userId.toUUID(),
+                    itemId = uuid,
+                )
+            },
+            unmarkOnServer = {
+                engine.requireApi().userLibraryApi.unmarkFavoriteItem(
+                    userId = userId.toUUID(),
+                    itemId = uuid,
+                )
+            },
+        )
     }
 
     override suspend fun setFavorite(itemId: String, isFavorite: Boolean): Result<Unit> = engine.apiResultWithRetry {
-        val userId = engine.currentUser.value?.id
-            ?: throw IllegalStateException("Not authenticated")
+        val userId = engine.requireUserId()
         val uuid = itemId.toUUID()
         if (isFavorite) {
             engine.requireApi().userLibraryApi.markFavoriteItem(
@@ -1336,26 +893,20 @@ class LibraryApiClientImpl @Inject constructor(
                 itemId = uuid,
             )
         }
-        favoriteCache.put(currentHomeCacheIdentity(), uuid.toString(), isFavorite)
+        favoriteFlags.put(uuid.toString(), isFavorite)
         Unit
     }
 
     /**
-     * Last-known favorite flags, keyed by the current [CacheIdentity] (see
-     * [currentHomeCacheIdentity]) so a user/server switch misses by
-     * construction — the previous identity's entries can never resolve, and
-     * they expire on their own instead of being evicted by a cross-module
-     * clear on disconnect (the old `clearFavoriteCache` hand-off from
-     * `AuthApiClientImpl`).
+     * The shared commonMain favorite-flag cache-aside choreography
+     * ([FavoriteFlagCache]); this client supplies the atomic-session identity
+     * (see [currentHomeCacheIdentity]) and the SDK transport calls.
      */
-    private val favoriteCache = TtlCache<Boolean>(
-        maxSize = FAVORITE_CACHE_MAX_ENTRIES,
-        ttlMs = FAVORITE_CACHE_TTL_MS,
-    )
+    private val favoriteFlags = FavoriteFlagCache { currentHomeCacheIdentity() }
 
     override fun getImageUrl(itemId: String, imageType: String, maxWidth: Int?, imageIndex: Int?, tag: String?): String {
         val api = engine.api ?: return ""
-        val imageTypeEnum = org.jellyfin.sdk.model.api.ImageType.fromNameOrNull(imageType)
+        val imageTypeEnum = IMAGE_TYPES_BY_SERIAL_NAME[imageType.lowercase()]
             ?: return ""
         return api.imageApi.getItemImageUrl(
             itemId = runCatching { itemId.toUUID() }.getOrNull() ?: return "",

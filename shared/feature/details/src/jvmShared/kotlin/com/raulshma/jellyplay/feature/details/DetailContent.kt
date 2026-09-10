@@ -133,24 +133,24 @@ internal fun DetailContent(
         canStartWatchParty = state.capabilities.remoteWorkAllowed,
         isOffline = state.origin?.isLocal == true,
         onClose = { /* menus close themselves */ },
-        onEditClick = callbacks.onEditClick,
+        onEditClick = callbacks.navigation.onEditClick,
         onShare = shareMedia,
-        onDownload = callbacks.onOpenDownloadPicker,
-        onDownloadSeries = callbacks.onDownloadSeriesClick,
-        onDeleteDownload = callbacks.onDeleteDownload,
-        onDeleteDownloadedSeries = callbacks.onDeleteDownloadedEpisodes,
-        onHideFromNextUp = callbacks.onHideFromNextUp,
-        onShowFromNextUp = callbacks.onShowFromNextUp,
-        onHideFromContinueWatching = callbacks.onHideFromContinueWatching,
-        onShowFromContinueWatching = callbacks.onShowFromContinueWatching,
-        onHideDetailUpNext = callbacks.onHideDetailUpNext,
-        onShowDetailUpNext = callbacks.onShowDetailUpNext,
-        onManageSeries = callbacks.onManageSeries,
-        onTechnicalInfo = { callbacks.onNavigate(Route.MediaInfo(state.itemId)) },
-        onAddToPlaylist = callbacks.onAddToPlaylist,
-        onAddToCollection = callbacks.onAddToCollection,
-        onStartInstantMix = callbacks.onStartInstantMix,
-        onStartWatchParty = callbacks.onStartWatchParty,
+        onDownload = callbacks.download.onOpenDownloadPicker,
+        onDownloadSeries = callbacks.download.onDownloadSeriesClick,
+        onDeleteDownload = callbacks.download.onDeleteDownload,
+        onDeleteDownloadedSeries = callbacks.download.onDeleteDownloadedEpisodes,
+        onHideFromNextUp = callbacks.userData.onHideFromNextUp,
+        onShowFromNextUp = callbacks.userData.onShowFromNextUp,
+        onHideFromContinueWatching = callbacks.userData.onHideFromContinueWatching,
+        onShowFromContinueWatching = callbacks.userData.onShowFromContinueWatching,
+        onHideDetailUpNext = callbacks.userData.onHideDetailUpNext,
+        onShowDetailUpNext = callbacks.userData.onShowDetailUpNext,
+        onManageSeries = callbacks.navigation.onManageSeries,
+        onTechnicalInfo = { callbacks.navigation.onNavigate(Route.MediaInfo(state.itemId)) },
+        onAddToPlaylist = callbacks.addTo.onAddToPlaylist,
+        onAddToCollection = callbacks.addTo.onAddToCollection,
+        onStartInstantMix = callbacks.playback.onStartInstantMix,
+        onStartWatchParty = callbacks.playback.onStartWatchParty,
     )
 
     val themeVariant = com.raulshma.jellyplay.core.designsystem.theme.LocalThemeVariant.current
@@ -172,7 +172,7 @@ internal fun DetailContent(
             .then(backgroundModifier)
             .onDpadKeyEvent(
                 onBack = { e ->
-                    if (e.isKeyUp) { callbacks.onBack() }
+                    if (e.isKeyUp) { callbacks.navigation.onBack() }
                     true
                 },
             ),
@@ -197,7 +197,7 @@ internal fun DetailContent(
                 if (!contentVisible) {
                     com.raulshma.jellyplay.core.ui.components.ScreenErrorState(
                         message = loadState.message,
-                        onRetry = if (loadState.accessDenied) null else callbacks.onRetry,
+                        onRetry = if (loadState.accessDenied) null else callbacks.screen.onRetry,
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
@@ -210,7 +210,7 @@ internal fun DetailContent(
         DetailBackdrop(
             targetBackdropId = targetBackdropId,
             backdropBlurHash = item?.blurHashes?.backdrop,
-            getBackdropUrl = callbacks.getBackdropUrl,
+            getBackdropUrl = callbacks.artwork.getBackdropUrl,
             relatedVideos = state.relatedVideos,
             preferences = state.preferences,
             scrollState = scrollState,
@@ -224,7 +224,7 @@ internal fun DetailContent(
         if (!isTv) {
             PullToRefreshBox(
                 isRefreshing = state.loadState is DetailUiLoadState.Refreshing,
-                onRefresh = callbacks.onRefresh,
+                onRefresh = callbacks.screen.onRefresh,
                 modifier = Modifier.fillMaxSize(),
             ) {
                 DetailScrollContent(
@@ -260,7 +260,7 @@ internal fun DetailContent(
         DetailTopBar(
             itemName = item?.name ?: "",
             scrollState = scrollState,
-            onBack = callbacks.onBack,
+            onBack = callbacks.navigation.onBack,
             mediaOptions = mediaOptions,
             contentFocusRequester = contentFocusRequester,
             scrollBehavior = scrollBehavior,
@@ -284,10 +284,10 @@ internal fun DetailContent(
             subtitleStreams = subtitleStreams,
             pendingQuality = state.downloadPicker.quality,
             pendingSubtitleSelection = state.downloadPicker.subtitleSelection,
-            onPendingQualityChange = callbacks.onPendingQualityChange,
-            onPendingSubtitleSelectionChange = callbacks.onPendingSubtitleSelectionChange,
-            onConfirm = { callbacks.onDownloadClick() },
-            onDismiss = callbacks.onDismissDownloadPicker,
+            onPendingQualityChange = callbacks.download.onPendingQualityChange,
+            onPendingSubtitleSelectionChange = callbacks.download.onPendingSubtitleSelectionChange,
+            onConfirm = { callbacks.download.onDownloadClick() },
+            onDismiss = callbacks.download.onDismissDownloadPicker,
         )
     }
 }

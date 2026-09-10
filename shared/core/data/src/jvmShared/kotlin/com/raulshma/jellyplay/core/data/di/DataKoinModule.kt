@@ -37,15 +37,19 @@ import com.raulshma.jellyplay.core.data.repository.DownloadRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.DownloadStorageLayoutContract
 import com.raulshma.jellyplay.core.data.repository.ItemPlaybackPreferenceRepository
 import com.raulshma.jellyplay.core.data.repository.ItemPlaybackPreferenceRepositoryImpl
+import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
 import com.raulshma.jellyplay.core.data.repository.LyricsRepository
+import com.raulshma.jellyplay.core.data.repository.LyricsRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryAccess
+import com.raulshma.jellyplay.core.data.repository.MediaCacheInvalidator
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryCacheInvalidation
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.MetadataEditorRepository
 import com.raulshma.jellyplay.core.data.repository.MetadataEditorRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.MoodPlaylistRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.NewsletterRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineDownloadWriter
 import com.raulshma.jellyplay.core.data.repository.OfflineFirstItemResolver
 import com.raulshma.jellyplay.core.data.repository.OfflineFirstItemResolverImpl
@@ -59,6 +63,7 @@ import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.PlayedStateSync
 import com.raulshma.jellyplay.core.data.repository.PlayedStateSyncImpl
+import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.data.repository.RealtimeConnection
 import com.raulshma.jellyplay.core.data.repository.SearchHistoryRepository
 import com.raulshma.jellyplay.core.data.repository.SearchHistoryRepositoryImpl
@@ -72,6 +77,7 @@ import com.raulshma.jellyplay.core.data.repository.SmartPlaylistRepository
 import com.raulshma.jellyplay.core.data.repository.StoragePolicy
 import com.raulshma.jellyplay.core.data.repository.SubtitleProviderRepository
 import com.raulshma.jellyplay.core.data.repository.SubtitleProviderRepositoryImpl
+import com.raulshma.jellyplay.core.data.repository.SyncPlayRepository
 import com.raulshma.jellyplay.core.data.repository.UnifiedMediaDetailProviderImpl
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.repository.UserDataMutatorImpl
@@ -115,7 +121,7 @@ import org.koin.dsl.module
 
 /**
  * Koin construction owner for the platform-independent data layer
- * (docs/kmp-migration-plan.md §Phase C4 part 2). Batch 1 moved the portable
+ * (docs/kmp-migration-plan.md part 2). Batch 1 moved the portable
  * leaf types; batch 2 moved the Koin-constructible repository layer; batch 3
  * the session / playback / sync / syncplay / worker cluster. Each definition
  * is explicit (no reflection) and matches the constructor verbatim.
@@ -124,16 +130,16 @@ import org.koin.dsl.module
  * per type. During the Hilt era these singles were reached from Hilt through
  * the legacy DataModule's `koin().get()` bridges; the impl classes'
  * `@Inject`/`@Singleton` annotations were stripped at the move, and the whole
- * bridge layer left with the wave-8 Hilt extinction — Koin only.
+ * bridge layer left with the Hilt extinction — Koin only.
  *
- * Phase X MediaRepository cluster flip: the last Hilt-owned data-layer
+ *  MediaRepository cluster flip: the last Hilt-owned data-layer
  * cluster moved here — `MediaRepositoryImpl` (+ its PlayedStateSync /
  * MediaRepositoryCacheInvalidation / LyricsRepository views),
  * `PlayedStateSyncImpl`, `UserDataMutatorImpl`, `MediaSearchEngineImpl`,
  * `UnifiedMediaDetailProviderImpl`, `OfflineFirstItemResolverImpl` and
  * `OfflinePlaybackFacade` (see the definitions below). The legacy DataModule
  * constructs nothing from the cluster anymore (the whole legacy DataModule
- * left with the wave-8 Hilt extinction); Koin builds the cluster natively. `PlaybackSourceResolver` left
+ * left with the Hilt extinction); Koin builds the cluster natively. `PlaybackSourceResolver` left
  * that latent-on-desktop state with the playback-flips wave: its impl moved
  * here Uri-free (`File.toURI()` instead of `android.net.Uri.fromFile`), so
  * UnifiedMediaDetailProviderImpl's ctor dep resolves from this module on
@@ -156,13 +162,13 @@ import org.koin.dsl.module
  * `DefaultAudioQueueFacade` is the one playback-graph type NOT defined here:
  * its AudioQueueManager ctor dep is the media3 AudioPlaybackManager, so its
  * Koin single lives in the legacy core:data androidCoreDataModule (owned
- * there since wave 8A; desktopPlayerModule binds the desktop twin).
+ * there since then; desktopPlayerModule binds the desktop twin).
  * `AudioLyricsManager` left that Android-only set when its sole dep (the
  * LyricsRepository view of MediaRepository) became the single below;
  * `OfflineSyncManager` flipped into this module with the V3 downloads
  * conveyor.
  *
- * The admin flip (Wave wB) moved the last two Hilt-owned repositories here:
+ * The admin flip moved the last two Hilt-owned repositories here:
  * `AdminRepositoryImpl` (verbatim — no platform surface) and
  * `AdminStatisticsRepositoryImpl`, whose Android surfaces became seams: the
  * former `context.getString(R.string.data_*)` labels now flow through
@@ -199,7 +205,7 @@ val dataJvmModule: Module = module {
     single { PhotoFolderPrefetcher(get()) }
 
     // JellyfinApiClient resolves from :shared:core:network's networkJvmModule.
-    single { ServerHealthMonitor(get()) }
+    single { ServerHealthMonitor(get(), get()) }
 
     single { RemoteNavigationBridge() }
 
@@ -224,6 +230,7 @@ val dataJvmModule: Module = module {
             tokenCipher = get(),
             json = get(),
             externalScope = get(DatastoreQualifiers.applicationScope),
+            timeSource = get(),
         )
     }
     single<AuthRepository> { get<AuthRepositoryImpl>() }
@@ -234,10 +241,10 @@ val dataJvmModule: Module = module {
     single { ServerDiscoveryRepositoryImpl(get()) }
     single<ServerDiscoveryRepository> { get<ServerDiscoveryRepositoryImpl>() }
 
-    single { SearchHistoryRepositoryImpl(get()) }
+    single { SearchHistoryRepositoryImpl(get(), get()) }
     single<SearchHistoryRepository> { get<SearchHistoryRepositoryImpl>() }
 
-    single { ItemPlaybackPreferenceRepositoryImpl(get(), get()) }
+    single { ItemPlaybackPreferenceRepositoryImpl(get(), get(), get()) }
     single<ItemPlaybackPreferenceRepository> { get<ItemPlaybackPreferenceRepositoryImpl>() }
 
     single { MetadataEditorRepositoryImpl(get()) }
@@ -249,15 +256,15 @@ val dataJvmModule: Module = module {
     single { WatchHistoryRepositoryImpl(get()) }
     single<WatchHistoryRepository> { get<WatchHistoryRepositoryImpl>() }
 
-    single { OfflineRepositoryImpl(get(), get(), get(), get(), get()) }
+    single { OfflineRepositoryImpl(get(), get(), get(), get(), get(), timeSource = get()) }
     single<OfflineRepository> { get<OfflineRepositoryImpl>() }
 
-    single { PlaybackOutboxRepositoryImpl(get()) }
+    single { PlaybackOutboxRepositoryImpl(get(), get()) }
     single<PlaybackOutboxRepository> { get<PlaybackOutboxRepositoryImpl>() }
 
     single { SmartPlaylistRepository(get(), get()) }
 
-    single { MoodPlaylistRepository(get(), get()) }
+    single { MoodPlaylistRepository(get(), get(), get()) }
 
     // The byte-cap rule previously built by DataModule.provideStoragePolicy —
     // same stores, same DAO-backed suspend aggregate.
@@ -282,7 +289,7 @@ val dataJvmModule: Module = module {
 
     single { HomeSession(get(), get(DatastoreQualifiers.applicationScope)) }
 
-    // Wave 15B: the identity seam the promoted commonMain graph consumes
+    // The identity seam the promoted commonMain graph consumes
     // (SeerrRepositoryImpl's cache keys + SessionCacheRegistry's transition
     // subscription). Binds the SAME HomeSession singleton — android/desktop
     // behavior unchanged; wasmJs binds the AtomicSessionState-backed provider
@@ -316,7 +323,7 @@ val dataJvmModule: Module = module {
     // shim — SystemClock.elapsedRealtime became the TimeSource seam above
     // (the Android actual IS SystemClock.elapsedRealtime, so the countdown is
     // unchanged). The audio/live player VMs resolve this single through Koin
-    // directly since their wave-7 migrations; legacy core:data's
+    // directly since their migrations; legacy core:data's
     // AudioPlaybackManager resolves this single from androidCoreDataModule.
     // No other consumer needs the AudioSleepTimerManager interface, so only
     // the Koin alias exists here.
@@ -347,7 +354,7 @@ val dataJvmModule: Module = module {
         )
     }
 
-    single { OfflineSyncComparator() }
+    single { OfflineSyncComparator(get()) }
 
     // V3 downloads conveyor: OfflineSyncManager flipped from the interim
     // direct-construction DataModule provider to a Koin single (C4 flip
@@ -359,7 +366,7 @@ val dataJvmModule: Module = module {
     // details' ResyncActions shares the same instance through Koin).
     // `writer` reuses the DownloadRepository single: the interface extends
     // OfflineDownloadWriter, so no separate definition is needed. The former
-    // Hilt→Koin→Hilt edge (interop MediaRepository) died with the Phase X
+    // Hilt→Koin→Hilt edge (interop MediaRepository) died with the 
     // MediaRepository cluster flip below — the mediaRepository dep is now
     // this module's own MediaRepositoryImpl single on both platforms, so the
     // graph is pure Koin from OfflineSyncManager down.
@@ -374,10 +381,11 @@ val dataJvmModule: Module = module {
             offlineModeManager = get(),
             playbackRepository = get(),
             appScope = get(DatastoreQualifiers.applicationScope),
+            timeSource = get(),
         )
     }
 
-    // ── Phase X MediaRepository cluster flip ───────────────────────────────
+    // ──  MediaRepository cluster flip ───────────────────────────────
     // The last Hilt-owned data-layer cluster (C4 part 2's "deliberately
     // Hilt-retained" list, unblocked by the downloads seams). The impls moved
     // here verbatim (see each file's move note); definitions mirror the
@@ -399,6 +407,7 @@ val dataJvmModule: Module = module {
             mediaRepository = lazy { get<MediaRepository>() },
             downloadsStore = lazy { get<DownloadsStore>() },
             downloadRepository = lazy { get<DownloadRepository>() },
+            timeSource = get(),
         )
     }
     single<PlayedStateSync> { get<PlayedStateSyncImpl>() }
@@ -406,10 +415,7 @@ val dataJvmModule: Module = module {
     single {
         MediaRepositoryImpl(
             apiClient = get(),
-            lrcLibApi = get(),
-            lyricsCacheDao = get(),
             homeSectionCacheDao = get(),
-            networkMonitor = get(),
             playedStateSync = get(),
             episodeCatalogue = get(),
             userDataRealtimeChannel = get(),
@@ -422,10 +428,31 @@ val dataJvmModule: Module = module {
     // Plan 08's module-internal cache-maintenance view (the former DataModule
     // bindMediaRepositoryCacheInvalidation @Binds): same single, narrow seam.
     single<MediaRepositoryCacheInvalidation> { get<MediaRepositoryImpl>() }
-    // The narrow ISP view the legacy DataModule provided by delegation
-    // (MediaRepository extends LyricsRepository) — same single, no second
-    // set of caches.
-    single<LyricsRepository> { get<MediaRepository>() }
+    // Worker port of the wholesale cache drop (same single, narrow seam — the
+    // MediaRepositoryCacheInvalidation pattern): keeps the background sync
+    // workers in legacy :core:data off the concrete MediaRepositoryImpl type.
+    single<MediaCacheInvalidator> { get<MediaRepositoryImpl>() }
+    // Family-repository views (same single, narrow seam — same pattern as the
+    // MediaRepositoryCacheInvalidation binding above): MediaRepositoryImpl
+    // implements each family directly, and single-family consumers now inject
+    // the family type instead of the 86-member MediaRepository union.
+    single<LiveTvRepository> { get<MediaRepositoryImpl>() }
+    single<SyncPlayRepository> { get<MediaRepositoryImpl>() }
+    single<NewsletterRepository> { get<MediaRepositoryImpl>() }
+    single<PlaylistRepository> { get<MediaRepositoryImpl>() }
+    // Lyrics engine: its own impl (the LRC/LRCLIB fetch-parse-cache chain)
+    // since the extraction from MediaRepositoryImpl — no longer a view of the
+    // media single.
+    single {
+        LyricsRepositoryImpl(
+            apiClient = get(),
+            lrcLibApi = get(),
+            lyricsCacheDao = get(),
+            networkMonitor = get(),
+            timeSource = get(),
+        )
+    }
+    single<LyricsRepository> { get<LyricsRepositoryImpl>() }
 
     single {
         UserDataMutatorImpl(
@@ -456,7 +483,7 @@ val dataJvmModule: Module = module {
     // :core:data shim (Uri.fromFile → File.toURI, see the impl's URI-shape
     // note) — UnifiedMediaDetailProviderImpl's ctor dep below now resolves
     // from this module on BOTH platforms, and the app's HiltInterop reverse
-    // single for the interface was deleted with the wave-8 Hilt extinction.
+    // single for the interface was deleted with the Hilt extinction.
     // Every consumer of the interface (app MainViewModel,
     // feature:player:video PlayerSessionManager, the core:data audio trio)
     // resolves this single from Koin directly.
@@ -546,7 +573,7 @@ val dataJvmModule: Module = module {
     // notification summary + Coil preloading → platform no-op-able fun
     // interfaces, and MediaRepository behind the deferred MediaRepositoryAccess
     // (both platform defs forward to this module's own MediaRepositoryImpl
-    // single since the Phase X cluster flip — Android in androidDataModule,
+    // single since the cluster flip — Android in androidDataModule,
     // desktop in desktopDataModule). `downloadDelegate` keeps the
     // construction cycle broken via a memoizing kotlin Lazy (the Lazy-deferred
     // pattern). Consumers (PlayedStateSyncImpl,
@@ -572,6 +599,7 @@ val dataJvmModule: Module = module {
             syncComparator = get(),
             progressNotifier = get<DownloadProgressNotifier>(),
             imagePreloader = get<OfflineImagePreloader>(),
+            timeSource = get(),
         )
     }
     single<DownloadRepository> { get<DownloadRepositoryImpl>() }
@@ -621,6 +649,12 @@ val dataJvmModule: Module = module {
             sessionIdentity = get(),
             sessionCacheRegistry = get(),
             cacheScope = get(DatastoreQualifiers.applicationScope),
+            // The poll loop's offline gate — the same platform
+            // OfflineModeManager binding every other jvmShared consumer
+            // (PlaybackRepositoryImpl, OfflineSyncManager, …) resolves;
+            // the wasm slice stays on the ctor default (null) since no
+            // wasm OfflineModeManager exists.
+            offlineModeManager = get(),
         )
     }
     single<SeerrRepository> { get<SeerrRepositoryImpl>() }
@@ -634,6 +668,8 @@ val dataJvmModule: Module = module {
             offlineModeManager = get(),
             homeSession = get(),
             sessionCacheRegistry = get(),
+            mediaCacheInvalidation = get(),
+            mediaRepository = lazy { get<MediaRepository>() },
         )
     }
     single<PlaybackRepository> { get<PlaybackRepositoryImpl>() }
@@ -658,7 +694,7 @@ val dataJvmModule: Module = module {
     }
     single<ArrRepository> { get<ArrRepositoryImpl>() }
 
-    // ── Phase X admin flip (Wave wB) ──────────────────────────────────────
+    // ──  admin flip ──────────────────────────────────────
     // AdminRepositoryImpl + AdminStatisticsRepositoryImpl moved from the
     // legacy :core:data shim (Hilt @Binds -> koin().get() bridges there, the
     // app's Hilt interop singles deleted). Every ctor dep resolves natively
@@ -687,6 +723,7 @@ val dataJvmModule: Module = module {
             json = get(),
             scope = get(DatastoreQualifiers.applicationScope),
             labels = get<AdminStatisticsLabelProvider>(),
+            timeSource = get(),
         )
     }
     single<AdminStatisticsRepository> { get<AdminStatisticsRepositoryImpl>() }

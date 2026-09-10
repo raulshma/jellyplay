@@ -5,7 +5,7 @@ import kotlinx.coroutines.flow.StateFlow
 /**
  * Module-local seam over the Hilt-owned legacy
  * [com.raulshma.jellyplay.core.data.cast.CastManager] (Google/DLNA/Jellyfin
- * cast strategies, `:core:data` until Phase X). The audio player's whole cast
+ * cast strategies, `:core:data` until ). The audio player's whole cast
  * surface funnels through here: the top-bar device picker (discovery,
  * connect/disconnect, connection state) plus the ViewModel's remote-transport
  * passthroughs.

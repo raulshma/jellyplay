@@ -9,7 +9,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Wave 15B pin: the jvmShared actuals of [requestAgeMinutes] /
+ *  pin: the jvmShared actuals of [requestAgeMinutes] /
  * [formatRequestedDate] are the verbatim pre-15B java.time bodies moved out
  * of RequestListItem.kt / RequestDetailBottomSheet.kt — this suite freezes
  * that JVM behavior so a later edit of the actual cannot silently drift from

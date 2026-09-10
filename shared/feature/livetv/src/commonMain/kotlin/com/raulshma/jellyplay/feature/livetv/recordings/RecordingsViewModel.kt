@@ -1,10 +1,11 @@
 package com.raulshma.jellyplay.feature.livetv.recordings
 
 import androidx.compose.runtime.Immutable
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.LiveTvRecording
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import com.raulshma.jellyplay.feature.livetv.LiveTvLoad
 
 @Immutable
 data class RecordingsUiState(
@@ -18,12 +19,11 @@ data class RecordingsUiState(
 
 /**
  * Recordings tab — mirrors jellyfin-web `livetvrecordings.js`: fetches the
- * latest recordings list, gated by the same 5-minute full-render throttle the
- * web app applies. (Recording folders are intentionally omitted — Jellyfin's
- * web client no longer exposes them.)
+ * latest recordings list. (Recording folders are intentionally omitted —
+ * Jellyfin's web client no longer exposes them.)
  */
 class RecordingsViewModel(
-    private val mediaRepository: MediaRepository,
+    private val mediaRepository: LiveTvRepository,
     private val imageUrlProvider: ImageUrlProvider,
 ) : JellyPlayViewModel() {
 
@@ -34,20 +34,24 @@ class RecordingsViewModel(
 
     fun load() {
         launch {
-            _uiState.update { it.copy(isLoading = true, error = null) }
-            val recordingsResult = mediaRepository.getRecordings(limit = LATEST_LIMIT)
-            recordingsResult.onFailure { _uiState.update { s -> s.copy(error = it.message) } }
-            _uiState.update { s ->
-                s.copy(
-                    recordings = recordingsResult.getOrDefault(emptyList()),
-                    isLoading = false,
-                )
-            }
+            LiveTvLoad.load(
+                start = { _uiState.update { it.copy(isLoading = true, error = null) } },
+                fetch = { mediaRepository.getRecordings(limit = LATEST_LIMIT) },
+                onSuccess = { recordings ->
+                    _uiState.update { s -> s.copy(recordings = recordings, isLoading = false) }
+                },
+                onFailure = { e ->
+                    // The legacy ladder settled unconditionally with
+                    // getOrDefault(emptyList()) — a failure still clears the
+                    // previous list, it does not preserve it.
+                    _uiState.update { s -> s.copy(recordings = emptyList(), error = e.message, isLoading = false) }
+                },
+            )
         }
     }
 
     fun getImageUrl(itemId: String, imageTag: String?): String =
-        if (imageTag != null) imageUrlProvider.getImageUrl(itemId) else ""
+        imageUrlProvider.getImageUrlOrNull(itemId, imageTag)
 
     // ── Delete / cancel affordance ──────────────────────────────────────────
 

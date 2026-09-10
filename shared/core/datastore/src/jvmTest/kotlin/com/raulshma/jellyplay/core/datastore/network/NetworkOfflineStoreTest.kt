@@ -63,7 +63,7 @@ class NetworkOfflineStoreTest {
         assertEquals(MeteredNetworkBehavior.BLOCK, store.networkOffline.first().meteredNetworkBehavior)
     }
 
-    // ------------------------------- wave 21A: self-signed trust entries
+    // -------------------------------: self-signed trust entries
 
     @Test
     fun `selfSignedTrustHosts default empty, grants and revokes round-trip`() = runTest {

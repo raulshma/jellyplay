@@ -12,6 +12,7 @@ import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.search.MediaSearchEngine
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestStateHolder
+import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestSnapshot
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.Genre
@@ -24,6 +25,7 @@ import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.SortOption
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.seerr.buildPosterUrl
+import com.raulshma.jellyplay.core.ui.viewmodel.DeferredUserDataRefresher
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
@@ -87,8 +89,8 @@ class SearchViewModel(
     private val _searchHistory = stateFlow<List<SearchHistoryItem>>(emptyList())
     val searchHistory: StateFlow<List<SearchHistoryItem>> = _searchHistory.flow
 
-    private val seerrPrefs: Flow<com.raulshma.jellyplay.core.model.seerr.SeerrPreferences> =
-        seerrRepository.getPreferences()
+    private val seerrPrefs: StateFlow<SeerrPreferences> =
+        seerrRepository.getPreferences().stateIn(scope, SharingStarted.Lazily, SeerrPreferences())
 
     val isSeerrConnected: StateFlow<Boolean> = seerrPrefs.map {
         it.serverUrl.isNotBlank()
@@ -126,11 +128,20 @@ class SearchViewModel(
     // stale rows (plus a wasted duplicate DB scan per keystroke burst).
     private var offlineSearchJob: Job? = null
 
+    /**
+     * Deferred-refresh generation counter for [pagedResults] — bumped by
+     * [deferredRefresher] on screen re-entry after a user-data change,
+     * restarting the paged query with a fresh generation (the same
+     * silent-refresh contract as the library grid).
+     */
+    private val _refreshTrigger = stateFlow(0)
+
     val pagedResults: Flow<PagingData<MediaItem>> = combine(
         debouncedQuery,
         _filters.flow,
-    ) { q, f -> q to f }
-        .flatMapLatest { (currentQuery, filters) ->
+        _refreshTrigger.flow,
+    ) { q, f, refresh -> Triple(q, f, refresh) }
+        .flatMapLatest { (currentQuery, filters, _) ->
             if (currentQuery.isBlank()) {
                 flowOf(PagingData.empty())
             } else {
@@ -141,6 +152,17 @@ class SearchViewModel(
             }
         }
         .cachedIn(scope)
+
+    /**
+     * User-data changes while another screen is up only mark the results
+     * stale; the single regeneration fires when the search screen is next
+     * entered (see [DeferredUserDataRefresher]) — never mid-scroll.
+     */
+    val deferredRefresher = DeferredUserDataRefresher(
+        userDataChanges = mediaRepository.userDataChanges,
+        scope = scope,
+        trigger = _refreshTrigger,
+    )
 
     init {
         loadGenres()
@@ -279,21 +301,17 @@ class SearchViewModel(
     }
 
     fun toggleMediaType(mediaType: MediaType) {
-        _filters.update { current ->
-            val types = current.mediaTypes
-            current.copy(
-                mediaTypes = if (mediaType in types) types - mediaType else types + mediaType,
-            )
-        }
+        _filters.update { it.withMediaTypeToggled(mediaType) }
         persistFilters(_filters.value)
     }
 
     /**
-     * Single-select sort setter (mirrors [LibraryViewModel.updateFilters]' sort
-     * handling). Persists the new sort option so it survives navigation/restart.
+     * Single-select sort setter — writes through the [LibraryFilters] algebra
+     * (the same [LibraryFilters.withSortBy] policy the library's Sort sheet
+     * uses). Persists the new sort option so it survives navigation/restart.
      */
     fun setSortBy(sortBy: SortOption) {
-        _filters.update { it.copy(sortBy = sortBy) }
+        _filters.update { it.withSortBy(sortBy) }
         persistFilters(_filters.value)
     }
 
@@ -302,7 +320,7 @@ class SearchViewModel(
      * Persists the new status so it survives navigation/restart.
      */
     fun setPlayedStatus(status: PlayedStatus) {
-        _filters.update { it.copy(playedStatus = status) }
+        _filters.update { it.withPlayedStatus(status) }
         persistFilters(_filters.value)
     }
 
@@ -311,7 +329,7 @@ class SearchViewModel(
     }
 
     fun clearFilters() {
-        _filters.set(LibraryFilters())
+        _filters.update { it.cleared() }
         launch { runCatching { searchFiltersStore.clearSearchFilters() } }
     }
 
@@ -428,12 +446,16 @@ class SearchViewModel(
         tags: List<Int>? = null,
     ) = seerrRequestState.requestMedia(item, seasons, serverId, profileId, rootFolder, tags)
 
-    fun clearRequestResult() = seerrRequestState.clearRequestResult()
+    /**
+     * Opens the Seerr request dialog for [item]: the item plus the open
+     * cascade (service details, TV seasons for tv) are owned by the holder —
+     * the screen's dialog renders from the snapshot's `dialogItem`.
+     */
+    fun openSeerrRequestDialog(item: SeerrSearchItem) = seerrRequestState.openRequestDialog(item)
+
+    /** Closes the dialog and clears the last request result (holder-owned ordering). */
+    fun dismissSeerrRequestDialog() = seerrRequestState.dismissRequestDialog()
 
     fun prefetchSeerrDetails(tmdbId: Int, mediaType: String, onDone: () -> Unit) =
         seerrRequestState.prefetchDetails(tmdbId, mediaType, onDone)
-
-    fun loadSeerrServiceDetails(mediaType: String) = seerrRequestState.loadServiceDetails(mediaType)
-
-    fun loadTvSeasons(tmdbId: Int) = seerrRequestState.loadTvSeasons(tmdbId)
 }

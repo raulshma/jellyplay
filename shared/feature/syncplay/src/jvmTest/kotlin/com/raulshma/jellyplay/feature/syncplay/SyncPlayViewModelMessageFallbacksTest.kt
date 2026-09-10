@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.feature.syncplay
 
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.SyncPlayRepository
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayEvent
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
 import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastSlice
@@ -53,7 +53,7 @@ class SyncPlayViewModelMessageFallbacksTest {
     // has no access to that module (SyncPlayViewModelTest pattern).
     private val mainDispatcher = StandardTestDispatcher()
 
-    private lateinit var mediaRepository: MediaRepository
+    private lateinit var mediaRepository: SyncPlayRepository
     private lateinit var syncPlayManager: SyncPlayManager
     private lateinit var syncPlayCastStore: SyncPlayCastStore
     private lateinit var eventsFlow: MutableSharedFlow<SyncPlayEvent>
@@ -80,7 +80,7 @@ class SyncPlayViewModelMessageFallbacksTest {
     }
 
     private fun newViewModel() = SyncPlayViewModel(
-        mediaRepository = mediaRepository,
+        syncPlayRepository = mediaRepository,
         syncPlayManager = syncPlayManager,
         syncPlayCastStore = syncPlayCastStore,
     )

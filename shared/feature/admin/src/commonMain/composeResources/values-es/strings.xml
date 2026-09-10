@@ -22,6 +22,14 @@
     <string name="admin_scanning">Escaneando…</string>
     <string name="admin_scan_now">Escanear ahora</string>
     <string name="admin_select_all">Seleccionar todo</string>
+
+    <string name="admin_sort_default">Predeterminado</string>
+    <string name="admin_sort_name_asc">Nombre (A–Z)</string>
+    <string name="admin_sort_name_desc">Nombre (Z–A)</string>
+    <string name="admin_sort_largest">El más grande</string>
+    <string name="admin_sort_smallest">El más pequeño</string>
+    <string name="admin_sort_type">Tipo</string>
+    <string name="admin_sort_date">Fecha</string>
     <string name="admin_media_types">Tipos de medio</string>
     <string name="admin_dry_run">Simulación (solo vista previa)</string>
 
@@ -131,8 +139,8 @@
 
     <!-- Statistics -->
     <string name="admin_user_statistics_title">Estadísticas de usuario</string>
-    <string name="admin_watched_more">Vio %1$s%% más este mes</string>
-    <string name="admin_watched_less">Vio %1$s%% menos este mes</string>
+    <string name="admin_watched_more">Vio %1$s% más este mes</string>
+    <string name="admin_watched_less">Vio %1$s% menos este mes</string>
     <string name="admin_duration_vs_last">%1$s frente a %2$s el mes pasado</string>
     <string name="admin_content_breakdown">Desglose de contenido</string>
     <string name="admin_by_genre">Por género</string>
@@ -303,7 +311,7 @@
     <string name="admin_n_items">%1$d elementos</string>
     <string name="admin_n_lines">%1$d líneas</string>
     <string name="admin_scanning_library">Escaneando biblioteca</string>
-    <string name="admin_scan_progress_pct">Escaneando %1$d%%</string>
+    <string name="admin_scan_progress_pct">Escaneando %1$d%</string>
 
     <!-- Misc UI batch3 -->
     <string name="admin_quick_access">Acceso rápido</string>
@@ -394,4 +402,6 @@
     <string name="user_stats_export_shared">Estadísticas exportadas</string>
 
     <string name="admin_plugin_config_unavailable">La configuración del complemento no está disponible en esta plataforma.</string>
+
+    <string name="admin_no_delete_permission">Tu cuenta no tiene permiso para eliminar contenido. Contacta con el administrador del servidor.</string>
 </resources>

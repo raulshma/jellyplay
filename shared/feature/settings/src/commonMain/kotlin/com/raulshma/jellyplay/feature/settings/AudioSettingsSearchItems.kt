@@ -79,9 +79,10 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_volume_nor
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_volume_normalization_title
 
 /**
- * Settings-search items for the "Audio Player Settings" group of the old core/ui
- * SettingsSearchRegistry, moved verbatim (ids, keywords, routes, icons, isAdvanced
- * flags) next to AudioSettingsScreen. Aggregated in [SettingsSearchCatalog].
+ * Settings-search items for the "Audio Player" group of AudioSettingsScreen
+ * (playback defaults, night mode, equalizer and audio effects). The list is
+ * the group declaration: SettingsScreenGroups.audio decorates it. Aggregated
+ * in [SettingsSearchCatalog].
  */
 internal val AudioSettingsSearchItems = listOf(
     SettingsSearchItem(
@@ -92,7 +93,7 @@ internal val AudioSettingsSearchItems = listOf(
         keywords = listOf("audio speed", "pitch", "podcast speed", "music rate"),
         route = Route.AudioSettings(),
         icon = Tabler.Outline.Gauge
-    ),
+    ),
     SettingsSearchItem(
         id = "audio_visualizer",
         titleRes = Res.string.ss_audio_visualizer_title,
@@ -101,7 +102,7 @@ internal val AudioSettingsSearchItems = listOf(
         keywords = listOf("visualizer", "fft", "spectrum", "music wave", "effects"),
         route = Route.AudioSettings(),
         icon = Tabler.Outline.Eye
-    ),
+    ),
     SettingsSearchItem(
         id = "sleep_timer",
         titleRes = Res.string.ss_sleep_timer_title,
@@ -110,7 +111,7 @@ internal val AudioSettingsSearchItems = listOf(
         keywords = listOf("sleep", "timer", "pause", "bedtime"),
         route = Route.AudioSettings(),
         icon = Tabler.Outline.Clock
-    ),
+    ),
     SettingsSearchItem(
         id = "audio_description",
         titleRes = Res.string.ss_audio_description_title,
@@ -119,7 +120,7 @@ internal val AudioSettingsSearchItems = listOf(
         keywords = listOf("audio description", "narrated", "accessibility", "visually impaired"),
         route = Route.AudioSettings(),
         icon = Tabler.Outline.Speakerphone
-    ),
+    ),
     SettingsSearchItem(
         id = "gapless_playback",
         titleRes = Res.string.ss_gapless_playback_title,
@@ -129,7 +130,7 @@ internal val AudioSettingsSearchItems = listOf(
         route = Route.AudioSettings(),
         icon = Tabler.Outline.PlaylistAdd,
         isAdvanced = true
-    ),
+    ),
     SettingsSearchItem(
         id = "crossfade",
         titleRes = Res.string.ss_crossfade_title,
@@ -139,7 +140,7 @@ internal val AudioSettingsSearchItems = listOf(
         route = Route.AudioSettings(),
         icon = Tabler.Outline.Music,
         isAdvanced = true
-    ),
+    ),
     SettingsSearchItem(
         id = "volume_normalization",
         titleRes = Res.string.ss_volume_normalization_title,
@@ -149,7 +150,7 @@ internal val AudioSettingsSearchItems = listOf(
         route = Route.AudioSettings(),
         icon = Tabler.Outline.Adjustments,
         isAdvanced = true
-    ),
+    ),
     SettingsSearchItem(
         id = "equalizer",
         titleRes = Res.string.ss_equalizer_title,
@@ -159,7 +160,7 @@ internal val AudioSettingsSearchItems = listOf(
         route = Route.AudioSettings(),
         icon = Tabler.Outline.Adjustments,
         isAdvanced = true
-    ),
+    ),
     SettingsSearchItem(
         id = "bass_boost",
         titleRes = Res.string.ss_bass_boost_title,
@@ -169,7 +170,7 @@ internal val AudioSettingsSearchItems = listOf(
         route = Route.AudioSettings(),
         icon = Tabler.Outline.WaveSine,
         isAdvanced = true
-    ),
+    ),
     SettingsSearchItem(
         id = "virtualizer",
         titleRes = Res.string.ss_virtualizer_title,
@@ -179,7 +180,7 @@ internal val AudioSettingsSearchItems = listOf(
         route = Route.AudioSettings(),
         icon = Tabler.Outline.Speakerphone,
         isAdvanced = true
-    ),
+    ),
     SettingsSearchItem(
         id = "volume_boost",
         titleRes = Res.string.ss_volume_boost_title,
@@ -189,7 +190,7 @@ internal val AudioSettingsSearchItems = listOf(
         route = Route.AudioSettings(),
         icon = Tabler.Outline.Speakerphone,
         isAdvanced = true
-    ),
+    ),
     SettingsSearchItem(
         id = "reverb",
         titleRes = Res.string.ss_reverb_title,
@@ -199,7 +200,7 @@ internal val AudioSettingsSearchItems = listOf(
         route = Route.AudioSettings(),
         icon = Tabler.Outline.WaveSine,
         isAdvanced = true
-    ),
+    ),
     SettingsSearchItem(
         id = "channel_mixing",
         titleRes = Res.string.ss_channel_mixing_title,
@@ -209,7 +210,7 @@ internal val AudioSettingsSearchItems = listOf(
         route = Route.AudioSettings(),
         icon = Tabler.Outline.Speakerphone,
         isAdvanced = true
-    ),
+    ),
     SettingsSearchItem(
         id = "lr_balance",
         titleRes = Res.string.ss_lr_balance_title,
@@ -219,7 +220,7 @@ internal val AudioSettingsSearchItems = listOf(
         route = Route.AudioSettings(),
         icon = Tabler.Outline.Adjustments,
         isAdvanced = true
-    ),
+    ),
     SettingsSearchItem(
         id = "audio_autoplay_next",
         titleRes = Res.string.ss_audio_autoplay_next_title,
@@ -228,7 +229,7 @@ internal val AudioSettingsSearchItems = listOf(
         keywords = listOf("audio", "autoplay", "next", "track", "music", "continuous"),
         route = Route.AudioSettings(),
         icon = Tabler.Outline.PlaylistAdd
-    ),
+    ),
     SettingsSearchItem(
         id = "night_mode_volume",
         titleRes = Res.string.ss_night_mode_volume_title,
@@ -238,7 +239,7 @@ internal val AudioSettingsSearchItems = listOf(
         route = Route.AudioSettings(),
         icon = Tabler.Outline.Music,
         isAdvanced = true
-    ),
+    ),
     SettingsSearchItem(
         id = "night_mode_gain",
         titleRes = Res.string.ss_night_mode_gain_title,
@@ -248,7 +249,7 @@ internal val AudioSettingsSearchItems = listOf(
         route = Route.AudioSettings(),
         icon = Tabler.Outline.Adjustments,
         isAdvanced = true
-    ),
+    ),
     SettingsSearchItem(
         id = "audio_skip_prev_threshold",
         titleRes = Res.string.ss_audio_skip_prev_threshold_title,
@@ -258,7 +259,7 @@ internal val AudioSettingsSearchItems = listOf(
         route = Route.AudioSettings(),
         icon = Tabler.Outline.PlayerSkipForward,
         isAdvanced = true
-    ),
+    ),
     SettingsSearchItem(
         id = "audio_preload_buffer",
         titleRes = Res.string.ss_audio_preload_buffer_title,
@@ -268,64 +269,7 @@ internal val AudioSettingsSearchItems = listOf(
         route = Route.AudioSettings(),
         icon = Tabler.Outline.Refresh,
         isAdvanced = true
-    ),
-    SettingsSearchItem(
-        id = "audio_caching_enabled",
-        titleRes = Res.string.ss_audio_caching_enabled_title,
-        subtitleRes = Res.string.ss_audio_caching_enabled_subtitle,
-        categoryRes = CoreUiRes.string.ss_cat_audio_player,
-        keywords = listOf("audio", "cache", "caching", "prefetch", "buffer", "plexamp", "music"),
-        route = Route.AudioSettings(),
-        icon = Tabler.Outline.Database
-    ),
-    SettingsSearchItem(
-        id = "audio_cache_size",
-        titleRes = Res.string.ss_audio_cache_size_title,
-        subtitleRes = Res.string.ss_audio_cache_size_subtitle,
-        categoryRes = CoreUiRes.string.ss_cat_audio_player,
-        keywords = listOf("audio", "cache", "size", "disk", "storage"),
-        route = Route.AudioSettings(),
-        icon = Tabler.Outline.DeviceFloppy
-    ),
-    SettingsSearchItem(
-        id = "audio_prefetch_lookahead",
-        titleRes = Res.string.ss_audio_prefetch_lookahead_title,
-        subtitleRes = Res.string.ss_audio_prefetch_lookahead_subtitle,
-        categoryRes = CoreUiRes.string.ss_cat_audio_player,
-        keywords = listOf("audio", "prefetch", "lookahead", "buffering", "music", "queue"),
-        route = Route.AudioSettings(),
-        icon = Tabler.Outline.Music,
-        isAdvanced = true
-    ),
-    SettingsSearchItem(
-        id = "audio_prefetch_backfill",
-        titleRes = Res.string.ss_audio_prefetch_backfill_title,
-        subtitleRes = Res.string.ss_audio_prefetch_backfill_subtitle,
-        categoryRes = CoreUiRes.string.ss_cat_audio_player,
-        keywords = listOf("audio", "prefetch", "backfill", "buffering", "music", "previous"),
-        route = Route.AudioSettings(),
-        icon = Tabler.Outline.Music,
-        isAdvanced = true
-    ),
-    SettingsSearchItem(
-        id = "audio_cache_clear",
-        titleRes = Res.string.ss_audio_cache_clear_title,
-        subtitleRes = Res.string.ss_audio_cache_clear_subtitle,
-        categoryRes = CoreUiRes.string.ss_cat_audio_player,
-        keywords = listOf("audio", "cache", "clear", "music", "storage", "wipe"),
-        route = Route.AudioSettings(),
-        icon = Tabler.Outline.Trash,
-        isAdvanced = true
-    ),
-    SettingsSearchItem(
-        id = "audio_cache_network_policy",
-        titleRes = Res.string.ss_audio_cache_network_policy_title,
-        subtitleRes = Res.string.ss_audio_cache_network_policy_subtitle,
-        categoryRes = CoreUiRes.string.ss_cat_audio_player,
-        keywords = listOf("audio", "cache", "network", "wifi", "cellular", "metered"),
-        route = Route.AudioSettings(),
-        icon = Tabler.Outline.Wifi
-    ),
+    ),
     SettingsSearchItem(
         id = "replaygain_preamp",
         titleRes = Res.string.ss_replaygain_preamp_title,
@@ -335,7 +279,7 @@ internal val AudioSettingsSearchItems = listOf(
         route = Route.AudioSettings(),
         icon = Tabler.Outline.Adjustments,
         isAdvanced = true
-    ),
+    ),
     SettingsSearchItem(
         id = "equalizer_preset",
         titleRes = Res.string.ss_equalizer_preset_title,
@@ -345,7 +289,7 @@ internal val AudioSettingsSearchItems = listOf(
         route = Route.AudioSettings(),
         icon = Tabler.Outline.Adjustments,
         isAdvanced = true
-    ),
+    ),
     SettingsSearchItem(
         id = "night_mode",
         titleRes = Res.string.ss_night_mode_title,
@@ -355,7 +299,7 @@ internal val AudioSettingsSearchItems = listOf(
         route = Route.AudioSettings(),
         icon = Tabler.Outline.Gauge,
         isAdvanced = true
-    ),
+    ),
     SettingsSearchItem(
         id = "night_mode_strength",
         titleRes = Res.string.ss_night_mode_strength_title,
@@ -365,7 +309,7 @@ internal val AudioSettingsSearchItems = listOf(
         route = Route.AudioSettings(),
         icon = Tabler.Outline.Moon,
         isAdvanced = true
-    ),
+    ),
     SettingsSearchItem(
         id = "bass_boost_strength",
         titleRes = Res.string.ss_bass_boost_strength_title,
@@ -375,7 +319,7 @@ internal val AudioSettingsSearchItems = listOf(
         route = Route.AudioSettings(),
         icon = Tabler.Outline.WaveSine,
         isAdvanced = true
-    ),
+    ),
     SettingsSearchItem(
         id = "virtualizer_strength",
         titleRes = Res.string.ss_virtualizer_strength_title,
@@ -385,7 +329,7 @@ internal val AudioSettingsSearchItems = listOf(
         route = Route.AudioSettings(),
         icon = Tabler.Outline.Speakerphone,
         isAdvanced = true
-    ),
+    ),
     SettingsSearchItem(
         id = "volume_boost_gain",
         titleRes = Res.string.ss_volume_boost_gain_title,
@@ -395,7 +339,7 @@ internal val AudioSettingsSearchItems = listOf(
         route = Route.AudioSettings(),
         icon = Tabler.Outline.Speakerphone,
         isAdvanced = true
-    ),
+    ),
     SettingsSearchItem(
         id = "auto_eq_by_genre",
         titleRes = Res.string.ss_auto_eq_by_genre_title,
@@ -405,7 +349,7 @@ internal val AudioSettingsSearchItems = listOf(
         route = Route.AudioSettings(),
         icon = Tabler.Outline.Wand,
         isAdvanced = true
-    ),
+    ),
     SettingsSearchItem(
         id = "channel_mix_mode",
         titleRes = Res.string.ss_channel_mix_mode_title,
@@ -415,7 +359,7 @@ internal val AudioSettingsSearchItems = listOf(
         route = Route.AudioSettings(),
         icon = Tabler.Outline.Speakerphone,
         isAdvanced = true
-    ),
+    ),
     SettingsSearchItem(
         id = "pitch_shift",
         titleRes = Res.string.ss_pitch_shift_title,
@@ -426,4 +370,78 @@ internal val AudioSettingsSearchItems = listOf(
         icon = Tabler.Outline.WaveSine,
         isAdvanced = true
     ),
+
+)
+
+/**
+ * Settings-search items for the nested "Audio Caching" group of
+ * AudioSettingsScreen. Split out of [AudioSettingsSearchItems] along the
+ * screen-group line: these rows render in their own group, gated by
+ * `settingsCapabilities.supportsAudioCache` — the same flag their platform
+ * tags derive from. Aggregated in [SettingsSearchCatalog].
+ */
+internal val AudioCacheSearchItems = listOf(
+    SettingsSearchItem(
+        id = "audio_caching_enabled",
+        titleRes = Res.string.ss_audio_caching_enabled_title,
+        subtitleRes = Res.string.ss_audio_caching_enabled_subtitle,
+        categoryRes = CoreUiRes.string.ss_cat_audio_player,
+        keywords = listOf("audio", "cache", "caching", "prefetch", "buffer", "plexamp", "music"),
+        route = Route.AudioSettings(),
+        icon = Tabler.Outline.Database,
+        platforms = platformsForCapability(settingsCapabilities.supportsAudioCache),
+    ),
+    SettingsSearchItem(
+        id = "audio_cache_size",
+        titleRes = Res.string.ss_audio_cache_size_title,
+        subtitleRes = Res.string.ss_audio_cache_size_subtitle,
+        categoryRes = CoreUiRes.string.ss_cat_audio_player,
+        keywords = listOf("audio", "cache", "size", "disk", "storage"),
+        route = Route.AudioSettings(),
+        icon = Tabler.Outline.DeviceFloppy,
+        platforms = platformsForCapability(settingsCapabilities.supportsAudioCache),
+    ),
+    SettingsSearchItem(
+        id = "audio_prefetch_lookahead",
+        titleRes = Res.string.ss_audio_prefetch_lookahead_title,
+        subtitleRes = Res.string.ss_audio_prefetch_lookahead_subtitle,
+        categoryRes = CoreUiRes.string.ss_cat_audio_player,
+        keywords = listOf("audio", "prefetch", "lookahead", "buffering", "music", "queue"),
+        route = Route.AudioSettings(),
+        icon = Tabler.Outline.Music,
+        isAdvanced = true,
+        platforms = platformsForCapability(settingsCapabilities.supportsAudioCache),
+    ),
+    SettingsSearchItem(
+        id = "audio_prefetch_backfill",
+        titleRes = Res.string.ss_audio_prefetch_backfill_title,
+        subtitleRes = Res.string.ss_audio_prefetch_backfill_subtitle,
+        categoryRes = CoreUiRes.string.ss_cat_audio_player,
+        keywords = listOf("audio", "prefetch", "backfill", "buffering", "music", "previous"),
+        route = Route.AudioSettings(),
+        icon = Tabler.Outline.Music,
+        isAdvanced = true,
+        platforms = platformsForCapability(settingsCapabilities.supportsAudioCache),
+    ),
+    SettingsSearchItem(
+        id = "audio_cache_clear",
+        titleRes = Res.string.ss_audio_cache_clear_title,
+        subtitleRes = Res.string.ss_audio_cache_clear_subtitle,
+        categoryRes = CoreUiRes.string.ss_cat_audio_player,
+        keywords = listOf("audio", "cache", "clear", "music", "storage", "wipe"),
+        route = Route.AudioSettings(),
+        icon = Tabler.Outline.Trash,
+        isAdvanced = true,
+        platforms = platformsForCapability(settingsCapabilities.supportsAudioCache),
+    ),
+    SettingsSearchItem(
+        id = "audio_cache_network_policy",
+        titleRes = Res.string.ss_audio_cache_network_policy_title,
+        subtitleRes = Res.string.ss_audio_cache_network_policy_subtitle,
+        categoryRes = CoreUiRes.string.ss_cat_audio_player,
+        keywords = listOf("audio", "cache", "network", "wifi", "cellular", "metered"),
+        route = Route.AudioSettings(),
+        icon = Tabler.Outline.Wifi,
+        platforms = platformsForCapability(settingsCapabilities.supportsAudioCache),
+    )
 )

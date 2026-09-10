@@ -12,7 +12,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.runTest
 
 /**
- * Wave 8C: SubtitleManager is commonMain and jvmTest-reachable for the first
+ *: SubtitleManager is commonMain and jvmTest-reachable for the first
  * time. These tests pin the local-subtitle side-load mapping — the codec
  * inference from the picked file name and the label derivation — which the
  * androidMain Uri overload extension forwards into unchanged.

@@ -13,7 +13,6 @@ import `is`.xyz.mpv.MPV
 import `is`.xyz.mpv.MPVNode
 import com.raulshma.jellyplay.core.data.playback.DialogueBoostHelper
 import com.raulshma.jellyplay.core.data.playback.EqualizerHelper
-import com.raulshma.jellyplay.core.data.playback.MediaStreamVolume
 import com.raulshma.jellyplay.core.data.playback.NightModeHelper
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.ChannelMixMode
@@ -64,17 +63,6 @@ class MpvPlayerEngine(
         private const val MPV_END_FILE_REASON_QUIT = 2
         private const val MPV_END_FILE_REASON_ERROR = 3
         private const val MPV_END_FILE_REASON_REDIRECT = 4
-        // mpv_error codes carried by the END_FILE node's `error` field — see
-        // mpv client.h. A network/source load failure surfaces as
-        // MPV_ERROR_LOADING_FAILED; decoder/output/format init failures are
-        // fatal on the same engine. Used by [mapMpvError].
-        private const val MPV_ERROR_LOADING_FAILED = -13
-        private const val MPV_ERROR_AO_INIT_FAILED = -14
-        private const val MPV_ERROR_VO_INIT_FAILED = -15
-        private const val MPV_ERROR_NOTHING_TO_PLAY = -16
-        private const val MPV_ERROR_UNKNOWN_FORMAT = -17
-        private const val MPV_ERROR_UNSUPPORTED = -18
-        private const val MPV_ERROR_NOT_IMPLEMENTED = -19
         // Prefix/text filter for which verbose (below WARN) mpv messages are
         // surfaced in debug builds. Covers the subtitle/font/render pipeline
         // (sub/ass/libass/vtt/srt) plus the demux/vo/decode paths that feed it,
@@ -88,7 +76,7 @@ class MpvPlayerEngine(
 
     private val isLowRamDevice by lazy { EngineDeviceProfile.isLowRamDevice(context) }
 
-    // KMP seam (wave 7C): the legacy module's BuildConfig.DEBUG gate, replaced
+    // KMP seam: the legacy module's BuildConfig.DEBUG gate, replaced
     // by the runtime FLAG_DEBUGGABLE read (DataBuildFlags.android precedent —
     // the KMP library plugin generates no BuildConfig). Same value for every
     // standard build type; the three call sites are debug-logging gates.
@@ -688,17 +676,10 @@ class MpvPlayerEngine(
                 try { it.destroy() } catch (e: Exception) { Log.w(TAG, "destroy", e) }
             }
         }
-        _playbackState.value = EnginePlaybackState.IDLE
-        _isPlaying.value = false
-        _availableTracks.value = emptyList()
-        _bufferedPositionMs.value = 0L
-        _videoStats.value = EngineVideoStats()
-        _currentCues.value = emptyList()
-        _liveSubtitleCue.value = null
-        cachedPositionMs = 0L
-        cachedDurationMs = 0L
-        cachedBufferedPositionMs = 0L
-        cachedSubStartSec = -1.0
+        // Published-flow resets live in BasePlayerEngine (C5); mpv's residue
+        // (live-subtitle mirror + cached position/duration/buffer reads) goes
+        // through the hook that reset fires.
+        resetPublishedEngineState()
         serverDurationMs = 0L
         // Recreate the scope so a re-used engine stays usable without waiting
         // for the next load(). A cancelled scope silently swallows new
@@ -712,6 +693,19 @@ class MpvPlayerEngine(
         if (releaseThread.isAlive) {
             runCatching { releaseThread.quitSafely() }
         }
+    }
+
+    /**
+     * The mpv residue cleared alongside the base published-state reset (C5):
+     * the live-subtitle-text mirror (the one engine that publishes it) and
+     * the cached native position/duration/buffer reads the ticker seeds from.
+     */
+    override fun onResetItemScopedState() {
+        _liveSubtitleCue.value = null
+        cachedPositionMs = 0L
+        cachedDurationMs = 0L
+        cachedBufferedPositionMs = 0L
+        cachedSubStartSec = -1.0
     }
 
     override fun play() {
@@ -973,49 +967,36 @@ class MpvPlayerEngine(
             ((mpvView?.mpv?.getPropertyDouble("volume") ?: 100.0) / 100.0).toFloat().coerceIn(0f, 1f)
         } catch (_: Exception) { 1f }
 
-    override fun setVolume(value: Float) {
-        try {
-            val clamped = clamp01(value)
-            rememberUnmuteVolumeIfAudible(clamped)
-            mpvView?.mpv?.setPropertyDouble("volume", (clamped * 100.0).coerceIn(0.0, 200.0))
-            MediaStreamVolume.setNormalized(context, clamped)
-        } catch (_: Exception) {}
+    // ── Volume / mute seams (C4) ────────────────────────────────────────────
+    // The four command bodies are final templates in ReloadablePlayerEngine;
+    // mpv contributes the percent-scaled property write/read, its real mute
+    // flag, and the LEAVE_UNCHANGED vocabulary (the flag silences; the native
+    // volume stays untouched on both transitions — the system-stream sync is
+    // the mute's other surface and runs even without a handle, matching the
+    // former body). Dispatch keeps the former swallow-all containment.
+
+    override fun dispatchVolumeCommand(command: () -> Unit) {
+        try { command() } catch (_: Exception) {}
     }
 
-    override fun increaseVolume(delta: Float) {
-        try {
-            val m = mpvView?.mpv ?: return
-            val current = m.getPropertyDouble("volume") ?: 100.0
-            val next = (current + delta * 100.0).coerceIn(0.0, 200.0)
-            m.setPropertyDouble("volume", next)
-            val next01 = (next / 100.0).toFloat().coerceIn(0f, 1f)
-            rememberUnmuteVolumeIfAudible(next01)
-            MediaStreamVolume.setNormalized(context, next01)
-        } catch (_: Exception) {}
+    override fun readNativeVolume(): Float? = try {
+        val m = mpvView?.mpv ?: return null
+        // A missing property read defaults to full loudness — only a missing
+        // handle or a thrown read aborts the delta templates.
+        ((m.getPropertyDouble("volume") ?: 100.0) / 100.0).toFloat()
+    } catch (_: Exception) { null }
+
+    override fun applyNativeVolume(normalized: Float) {
+        // Throws through to dispatchVolumeCommand's catch on a failed write —
+        // the former bodies skipped the system-stream sync in that case too.
+        mpvView?.mpv?.setPropertyDouble("volume", normalized * 100.0)
     }
 
-    override fun decreaseVolume(delta: Float) {
-        try {
-            val m = mpvView?.mpv ?: return
-            val current = m.getPropertyDouble("volume") ?: 100.0
-            val next = (current - delta * 100.0).coerceAtLeast(0.0)
-            m.setPropertyDouble("volume", next)
-            val next01 = (next / 100.0).toFloat().coerceIn(0f, 1f)
-            rememberUnmuteVolumeIfAudible(next01)
-            MediaStreamVolume.setNormalized(context, next01)
-        } catch (_: Exception) {}
-    }
+    override fun nativeVolumeRestore(muted: Boolean): PlaybackVolumePolicy.NativeVolumeRestore =
+        PlaybackVolumePolicy.NativeVolumeRestore.LEAVE_UNCHANGED
 
-    override fun setMuted(muted: Boolean) {
+    override fun applyNativeMuteFlag(muted: Boolean) {
         try { mpvView?.mpv?.setPropertyBoolean("mute", muted) } catch (_: Exception) {}
-        try {
-            if (muted) {
-                snapshotSystemVolumeForMute()
-                MediaStreamVolume.setNormalized(context, 0f)
-            } else {
-                MediaStreamVolume.setNormalized(context, unmuteTarget())
-            }
-        } catch (_: Exception) {}
     }
 
     override fun createSurfaceView(context: Context): View {
@@ -1090,24 +1071,13 @@ class MpvPlayerEngine(
     }
 
     override fun setAspectRatio(ratio: AspectRatio) {
-        val numeric = ratio.ratio
-        val aspectValue = when {
-            numeric != null && numeric > 0f -> {
-                val w = (numeric * 100).toInt()
-                val h = 100
-                val gcd = gcd(w, h)
-                "${w / gcd}:${h / gcd}"
-            }
-            else -> "-1"
-        }
+        val plan = AspectRatioMapping.mpvPlan(ratio)
         val m = mpvView?.mpv ?: return
-        try { m.setPropertyString("video-aspect-override", aspectValue) } catch (_: Exception) {}
-
-        val isZoom = ratio == AspectRatio.CROP
+        try { m.setPropertyString("video-aspect-override", plan.aspectOverride) } catch (_: Exception) {}
         try {
-            m.setPropertyDouble("panscan", if (isZoom) 1.0 else 0.0)
-            m.setPropertyString("sub-use-margins", if (isZoom) "yes" else "no")
-            m.setPropertyString("sub-ass-force-margins", if (isZoom) "yes" else "no")
+            m.setPropertyDouble("panscan", plan.panscan)
+            m.setPropertyString("sub-use-margins", plan.subUseMargins)
+            m.setPropertyString("sub-ass-force-margins", plan.subAssForceMargins)
         } catch (_: Exception) {}
     }
 
@@ -1152,12 +1122,8 @@ class MpvPlayerEngine(
     override val durationMs: Long
         get() {
             // Prefer the mpv demuxer's duration when available; fall back to
-            // the server-reported runTimeTicks, which for HLS/transcoded
-            // streams is the only accurate total-runtime source (mpv's
-            // `duration` property is frequently 0 or only partially resolved
-            // for a transcoded manifest).
-            val engine = cachedDurationMs
-            return if (engine > 0L) engine else serverDurationMs
+            // the server-reported runTimeTicks (see resolveDurationMs).
+            return resolveDurationMs(cachedDurationMs, serverDurationMs)
         }
 
     override val playbackSpeed: Float
@@ -1393,9 +1359,10 @@ class MpvPlayerEngine(
     /**
      * Map an mpv END_FILE `error` string onto the [EngineError] taxonomy so the
      * UI can offer the right affordance. The node carries an `mpv_error` int,
-     * but the binding exposes it as a string; [mapMpvError] tolerates both the
-     * numeric form ("-13") and a descriptive string (e.g. "loading_failed",
-     * "ao_init_failed", or a raw network message).
+     * but the binding exposes it as a string — the whole mapping (numeric
+     * parse, descriptive-keyword fallback, unknown placeholder) lives in the
+     * shared [MpvErrorTaxonomy] so the desktop engine's int-code edge cannot
+     * drift from this one; this engine keeps only the string hand-off.
      *
      * Mirrors ExoPlayer's [PlaybackException.toEngineError]: a load/source
      * failure maps to a retryable [EngineError.Network] (transient mpv network
@@ -1403,47 +1370,8 @@ class MpvPlayerEngine(
      * failures map to [EngineError.Decoder] (not retryable on the same engine).
      * Unknown errors stay non-retryable [EngineError.Unknown].
      */
-    private fun mapMpvError(errorCode: String?): EngineError {
-        if (errorCode.isNullOrBlank()) return EngineError.Unknown("Playback error (mpv): unknown")
-        val raw = "Playback error (mpv): $errorCode"
-        val numeric = errorCode.toIntOrNull()
-        val textual = errorCode.lowercase()
-        // Numeric mpv_error path — the documented END_FILE contract.
-        if (numeric != null) {
-            return when (numeric) {
-                // Load / source failures — transient, retryable.
-                MPV_ERROR_LOADING_FAILED -> EngineError.Network(null)
-                // Decoder / output / format init — fatal on same engine.
-                MPV_ERROR_AO_INIT_FAILED,
-                MPV_ERROR_VO_INIT_FAILED,
-                MPV_ERROR_NOTHING_TO_PLAY,
-                MPV_ERROR_UNKNOWN_FORMAT,
-                MPV_ERROR_UNSUPPORTED,
-                MPV_ERROR_NOT_IMPLEMENTED,
-                -> EngineError.Decoder(codec = null, cause = null)
-                else -> EngineError.Unknown(raw)
-            }
-        }
-        // Descriptive-string fallback: some bindings surface the error name or
-        // a network message rather than the numeric code. Match keywords so we
-        // still recover the retry affordance for transient drops.
-        return when {
-            "loading_failed" in textual ||
-                "network" in textual ||
-                "connection" in textual ||
-                "timeout" in textual ||
-                "protocol" in textual ||
-                "http" in textual ||
-                "stream" in textual -> EngineError.Network(null)
-            "ao_init" in textual ||
-                "vo_init" in textual ||
-                "format" in textual ||
-                "unsupported" in textual ||
-                "decoder" in textual ||
-                "codec" in textual -> EngineError.Decoder(codec = null, cause = null)
-            else -> EngineError.Unknown(raw)
-        }
-    }
+    private fun mapMpvError(errorCode: String?): EngineError =
+        MpvErrorTaxonomy.fromCodeString(errorCode)
 
     private fun configureMpvForRequest(view: PlayerMPVView, request: PlaybackRequest) {
         if (request.startPositionMs > 0) {
@@ -1853,17 +1781,6 @@ class MpvPlayerEngine(
             .replace(REDACT_API_KEY, "\$1***")
             .replace(REDACT_API_KEY_ENCODED, "\$1***")
             .replace(REDACT_EMBY_TOKEN, "\$1***")
-
-    private fun gcd(a: Int, b: Int): Int {
-        var x = a
-        var y = b
-        while (y != 0) {
-            val temp = y
-            y = x % y
-            x = temp
-        }
-        return x
-    }
 
     private fun MPV.safeSetOption(name: String, value: String) {
         try {

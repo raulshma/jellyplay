@@ -21,10 +21,10 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 /**
- * Exercises the widget cache sink: Library/Seerr widget item list round-trips
- * (including version + updated-at stamps), the continue-watching payload, and
- * the corrupt-JSON degrade — a malformed blob must fall back to the empty
- * placeholder, never throw into the AppWidget render path.
+ * Exercises the widget cache sink: Library/Seerr widget item list round-trips,
+ * the continue-watching payload, and the corrupt-JSON degrade — a malformed
+ * blob must fall back to the empty placeholder, never throw into the
+ * AppWidget render path.
  */
 class WidgetDataStoreTest {
 
@@ -47,7 +47,7 @@ class WidgetDataStoreTest {
     }
 
     @Test
-    fun `library widget items round-trip with version and updatedAt`() = runTest {
+    fun `library widget items round-trip`() = runTest {
         val items = listOf(
             LibraryWidgetItem(
                 itemId = "item-1",
@@ -67,15 +67,13 @@ class WidgetDataStoreTest {
             ),
         )
 
-        store.setLibraryWidgetItems(items, version = 7, updatedAtMs = 1_720_000_000_000)
+        store.setLibraryWidgetItems(items)
 
         assertEquals(items, store.libraryWidgetItems.first())
-        assertEquals(7L, store.libraryWidgetVersion.first())
-        assertEquals(1_720_000_000_000L, store.libraryWidgetUpdatedAtMs.first())
     }
 
     @Test
-    fun `seerr widget items round-trip with version and updatedAt`() = runTest {
+    fun `seerr widget items round-trip`() = runTest {
         val items = listOf(
             SeerrWidgetItem(
                 tmdbId = 42,
@@ -90,22 +88,19 @@ class WidgetDataStoreTest {
             SeerrWidgetItem(tmdbId = 99, mediaType = "tv", title = "Show"),
         )
 
-        store.setSeerrWidgetItems(items, version = 3, updatedAtMs = 555L)
+        store.setSeerrWidgetItems(items)
 
         assertEquals(items, store.seerrWidgetItems.first())
-        assertEquals(3L, store.seerrWidgetVersion.first())
-        assertEquals(555L, store.seerrWidgetUpdatedAtMs.first())
     }
 
     @Test
     fun `library widget items overwrite the previous payload`() = runTest {
-        store.setLibraryWidgetItems(listOf(LibraryWidgetItem("a", "Old", MediaType.MOVIE)), 1, 1L)
+        store.setLibraryWidgetItems(listOf(LibraryWidgetItem("a", "Old", MediaType.MOVIE)))
         val next = listOf(LibraryWidgetItem("b", "New", MediaType.SERIES))
 
-        store.setLibraryWidgetItems(next, 2, 2L)
+        store.setLibraryWidgetItems(next)
 
         assertEquals(next, store.libraryWidgetItems.first())
-        assertEquals(2L, store.libraryWidgetVersion.first())
     }
 
     @Test
@@ -123,7 +118,7 @@ class WidgetDataStoreTest {
     fun `corrupt library blob degrades to empty list`() = runTest {
         // Seed a valid payload first so the corrupt write is a real transition,
         // then scribble garbage over the items key directly.
-        store.setLibraryWidgetItems(listOf(LibraryWidgetItem("a", "Old", MediaType.MOVIE)), 1, 1L)
+        store.setLibraryWidgetItems(listOf(LibraryWidgetItem("a", "Old", MediaType.MOVIE)))
         dataStore.edit { it[stringPreferencesKey("library_widget_items")] = "}{not json" }
 
         assertEquals(emptyList(), store.libraryWidgetItems.first())
@@ -131,7 +126,7 @@ class WidgetDataStoreTest {
 
     @Test
     fun `corrupt seerr blob degrades to empty list`() = runTest {
-        store.setSeerrWidgetItems(listOf(SeerrWidgetItem(1, "movie", "Old")), 1, 1L)
+        store.setSeerrWidgetItems(listOf(SeerrWidgetItem(1, "movie", "Old")))
         dataStore.edit { it[stringPreferencesKey("seerr_widget_items")] = "[{\"tmdbId\": }" }
 
         assertEquals(emptyList(), store.seerrWidgetItems.first())
@@ -143,15 +138,6 @@ class WidgetDataStoreTest {
         dataStore.edit { it[stringPreferencesKey("continue_watching")] = "not-json-at-all" }
 
         assertEquals(emptyList(), store.continueWatching.first())
-    }
-
-    @Test
-    fun `widget last refresh timestamp round-trips`() = runTest {
-        assertEquals(0L, store.widgetLastRefreshMs.first())
-
-        store.setWidgetLastRefreshMs(1_234_567_890L)
-
-        assertEquals(1_234_567_890L, store.widgetLastRefreshMs.first())
     }
 
     // ── widget config (legacy global + per-widget) ───────────────────

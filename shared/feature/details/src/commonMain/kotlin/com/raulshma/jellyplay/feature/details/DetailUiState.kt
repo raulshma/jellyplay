@@ -26,7 +26,8 @@ import com.raulshma.jellyplay.core.model.seerr.TmdbReview
  * detail/seasons/episodes tree plus remote-discovery ephemera written solely
  * by the ViewModel body. Per-sheet action state does NOT live here: downloads,
  * playlists, collections, and resync are owned by their action helpers
- * ([DownloadLifecycleActions], [PlaylistActions], [CollectionActions],
+ * ([DownloadLifecycleActions], [AddToTargetActions] with
+ * the playlist and collection adapters, [WatchLaterActions],
  * [ResyncActions]), which publish their own `StateFlow`s and are collected
  * directly by the sheet that needs them (see the `viewModel.downloads` /
  * `viewModel.playlists` / `viewModel.collections` / `viewModel.resync`
@@ -66,9 +67,6 @@ data class DetailUiState(
     // The currently-selected local subtitle stream index (null = none/disabled).
     // Independent from [selectedSubtitleIndex], which is the REMOTE stream index.
     val selectedLocalSubtitleIndex: Int? = null,
-    // Monotonic per-item content generation of the last fully-applied snapshot.
-    // Used by the screen only for diagnostics; the VM gates side effects off it.
-    val contentGeneration: Long = 0L,
     // Series content
     val seasons: List<MediaItem> = emptyList(),
     val episodes: Map<String, List<MediaItem>> = emptyMap(),
@@ -115,15 +113,48 @@ data class DetailUiState(
     // single snapshot, folded in as-is so a new holder field never re-adds a
     // mirror here.
     val seerrRequest: SeerrRequestSnapshot = SeerrRequestSnapshot(),
-    // "Manage Series" (DIRECT_ARR_INTEGRATION). Shown for a series with a tvdb
-    // id when the experimental flag is on; server resolution is deferred to the
-    // ManageSeriesScreen itself (cheap gate here — no network on the detail screen).
-    val canManageSeries: Boolean = false,
-    // Resolved once per series load (in loadItem) so the canManageSeries combine
-    // stays a pure derivation over snapshot state instead of issuing network I/O
-    // on every identity tick.
+    // Resolved once per series load (in loadItem) so the DetailViewModel's
+    // canManageSeries combine stays a pure derivation over snapshot state
+    // instead of issuing network I/O on every identity tick.
     val sonarrServersResolved: Boolean = false,
 ) {
+    /**
+     * The navigation/refresh reset, declared once (the
+     * `VideoPlayerUiState.keepAcrossItems()` precedent): the surviving leaves
+     * are exactly the constructor arguments here — everything else resets to
+     * its default.
+     *
+     *  - [keepDetail] `true` models pull-to-refresh: the current [detail]
+     *    stays visible under [DetailUiLoadState.Refreshing] while the
+     *    provider re-resolves (every subsidiary slice is still cleared so
+     *    fresh data replaces it wholesale). `false` models navigation to a
+     *    new item: content drops and the [DetailUiLoadState.Loading] veil
+     *    paints.
+     *  - [isSeerrConnected] / [isSeerrRecommendationsEnabled] /
+     *    [seerrRequest] are connection/session-level Seerr leaves, not
+     *    per-item content — they survive the reset (and are in any case
+     *    re-folded onto the published uiState by the ViewModel's outer
+     *    combine; the core flow this reset runs on never writes them).
+     *
+     * Every content family resets wholesale — [sortedEpisodes] included: it
+     * is the episodes family's canonical-order sibling, and the former
+     * inline reset cleared seasons/episodes/fetchedSeasonIds but not the
+     * sorted mirror, so the previous series' episode list survived
+     * navigation and could feed smart-play resolution for the next item.
+     * Segment availability ([hasIntroSegment] / [hasCreditSegment]) is only
+     * re-populated on the REMOTE success path of the ViewModel's remote side
+     * effects; it resets here so a navigation to a LOCAL item (or a failed
+     * REMOTE fetch) can't leave the prior item's "skip available" chip
+     * stale.
+     */
+    fun clearedForReload(keepDetail: Boolean): DetailUiState = DetailUiState(
+        detail = if (keepDetail) detail else null,
+        loadState = if (keepDetail) DetailUiLoadState.Refreshing else DetailUiLoadState.Loading,
+        isSeerrConnected = isSeerrConnected,
+        isSeerrRecommendationsEnabled = isSeerrRecommendationsEnabled,
+        seerrRequest = seerrRequest,
+    )
+
     @Immutable
     data class SmartPlayTarget(
         val episode: MediaItem,

@@ -4,7 +4,7 @@ package com.raulshma.jellyplay.core.data.repository
  * Locale seam for the user-visible labels [AdminStatisticsRepositoryImpl]
  * bakes into persisted scan rows (stale/watched-media cleanup) and the
  * per-user content breakdown. The repo left `context.getString(R.string.…)`
- * behind when it moved to jvmShared (Phase X admin flip), and shared
+ * behind when it moved to jvmShared (admin flip), and shared
  * :core:data has no resource infrastructure — the downloads conveyor's
  * precedent is platform-edge formatting, so every former getString call site
  * maps to exactly one method here (same name, same format args).

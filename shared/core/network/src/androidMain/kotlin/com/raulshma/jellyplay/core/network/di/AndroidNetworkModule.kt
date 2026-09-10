@@ -1,13 +1,14 @@
 package com.raulshma.jellyplay.core.network.di
 
 import android.content.Context
+import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.network.DiscoveryMulticastGuard
 import com.raulshma.jellyplay.core.network.api.AndroidDeviceCodecCapabilities
 import com.raulshma.jellyplay.core.network.api.DeviceCodecCapabilities
 import com.raulshma.jellyplay.core.network.config.OkHttpConfigProvider
 import java.io.File
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.CoroutineScope
 import okhttp3.OkHttpClient
 import org.jellyfin.sdk.Jellyfin
 import org.jellyfin.sdk.android.androidDevice
@@ -19,7 +20,7 @@ import org.koin.core.module.Module
 import org.koin.dsl.module
 
 /**
- * Android platform pick of the Koin-owned network stack (Phase C4).
+ * Android platform pick of the Koin-owned network stack.
  * Constructions replicate the legacy Hilt `NetworkModule` providers
  * byte-for-byte — cache under `context.cacheDir`, the full interceptor stack
  * via [baseOkHttpClient], the Jellyfin SDK options (androidDevice, device-id
@@ -52,20 +53,14 @@ fun androidNetworkModule(context: Context): Module = module {
         // id in MainViewModel), and the server all agree on one identity.
         // Without this the SDK defaults to Settings.Secure.ANDROID_ID, which
         // never equals ensureDeviceId() and made the app's own session show up
-        // in the Play On / Cast device list.
-        //
-        // ServerIdentityStore.identity is a StateFlow shared with
-        // SharingStarted.Eagerly, so after the very first process launch its
-        // current value is the persisted UUID held in memory. Reading .value
-        // is non-blocking and avoids a DataStore disk read on the DI critical
-        // path (every screen transitively pulls this definition on first
-        // resolution). Only on the rare first-launch case where the Eagerly flow
-        // hasn't populated yet do we fall back to the blocking
-        // ensureDeviceId() — which generates + persists the id. The resolved
-        // id is identical either way; the fast path simply skips the disk IO.
+        // in the Play On / Cast device list. Resolution ladder (memory value
+        // → bounded blocking → random-UUID last resort) lives in
+        // [resolveDeviceId], shared with the desktop pick.
         val androidDefault = androidDevice(context)
-        val deviceId = serverIdentityStore.identity.value.deviceId
-            ?: runBlocking { serverIdentityStore.ensureDeviceId() }
+        val deviceId = resolveDeviceId(
+            serverIdentityStore,
+            get<CoroutineScope>(DatastoreQualifiers.applicationScope),
+        )
         createJellyfin {
             this.context = context
             clientInfo = ClientInfo(

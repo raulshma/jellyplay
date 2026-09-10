@@ -44,7 +44,7 @@ import com.composables.icons.tabler.outline.PlayerTrackNext
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.isAudioType
-import com.raulshma.jellyplay.core.ui.components.progressFraction
+import com.raulshma.jellyplay.core.model.progressFraction
 import com.raulshma.jellyplay.core.ui.feedback.rememberConfirmHaptic
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.navigation.Route
@@ -107,9 +107,9 @@ internal fun DetailActionButtons(
     // dispatch play on the series root item. The button already dims when this is false.
     val canPlayPrimary = isAudio || !isSeries || target != null
     val progress = if (target != null) {
-        val t = target.startPositionTicks
-        val rt = target.episode.runTimeTicks
-        if (t > 0 && rt != null && rt > 0) (t.toFloat() / rt).coerceIn(0f, 1f) else 0f
+        // Smart-play resume math: the position is the resolver's
+        // startPositionTicks, not the episode's saved playbackPositionTicks.
+        target.episode.progressFraction(positionTicks = target.startPositionTicks) ?: 0f
     } else if (hasProgress) {
         itemProgressFraction
     } else 0f
@@ -151,18 +151,18 @@ internal fun DetailActionButtons(
         {
             if (!canPlayPrimary) return@remember
             if (isAlbum && state.albumTracks.isNotEmpty()) {
-                callbacks.onPlayAlbumTrack(0)
+                callbacks.playback.onPlayAlbumTrack(0)
                 state.albumTracks.firstOrNull()?.let { track ->
-                    callbacks.onNavigate(Route.AudioPlayer(track.id))
+                    callbacks.navigation.onNavigate(Route.AudioPlayer(track.id))
                 }
             } else if (isAudio) {
-                callbacks.onAudioClick()
+                callbacks.playback.onAudioClick()
             } else if (target != null) {
-                callbacks.onPlayClick(target.episode.id, null, target.startPositionTicks)
+                callbacks.playback.onPlayClick(target.episode.id, null, target.startPositionTicks)
             } else {
                 val sourceId = detail.mediaSources.firstOrNull()?.id
                 val startPos = item.playbackPositionTicks ?: 0L
-                callbacks.onPlayClick(item.id, sourceId, startPos)
+                callbacks.playback.onPlayClick(item.id, sourceId, startPos)
             }
         }
     }
@@ -198,7 +198,7 @@ internal fun DetailActionButtons(
                         scale = markScale,
                         interactionSource = markInteractionSource,
                         focusState = markTvFocusState,
-                        onClick = { if (item.isPlayed) callbacks.onMarkUnplayed() else callbacks.onMarkPlayed() },
+                        onClick = { if (item.isPlayed) callbacks.userData.onMarkUnplayed() else callbacks.userData.onMarkPlayed() },
                     )
                 }
                 FadingItem(modifier = Modifier.weight(1f)) {
@@ -208,7 +208,7 @@ internal fun DetailActionButtons(
                         scale = favoriteScale,
                         interactionSource = favoriteInteractionSource,
                         focusState = favoriteTvFocusState,
-                        onClick = callbacks.onToggleFavorite,
+                        onClick = callbacks.userData.onToggleFavorite,
                     )
                 }
             }
@@ -244,7 +244,7 @@ internal fun DetailActionButtons(
                     scale = markScale,
                     interactionSource = markInteractionSource,
                     focusState = markHFocusState,
-                    onClick = { if (item.isPlayed) callbacks.onMarkUnplayed() else callbacks.onMarkPlayed() },
+                    onClick = { if (item.isPlayed) callbacks.userData.onMarkUnplayed() else callbacks.userData.onMarkPlayed() },
                 )
             }
 
@@ -255,7 +255,7 @@ internal fun DetailActionButtons(
                     scale = favoriteScale,
                     interactionSource = favoriteInteractionSource,
                     focusState = favoriteHFocusState,
-                    onClick = callbacks.onToggleFavorite,
+                    onClick = callbacks.userData.onToggleFavorite,
                 )
             }
         }

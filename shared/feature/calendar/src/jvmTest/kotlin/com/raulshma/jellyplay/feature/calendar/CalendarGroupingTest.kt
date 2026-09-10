@@ -20,7 +20,7 @@ import kotlin.test.assertTrue
  * filtering, the ISO-prefix release-date parse, the relative-label boundary
  * window, and the month-membership check.
  *
- * Wave 16A: the helpers run kotlinx.datetime.LocalDate/YearMonth now (wasmJs
+ *: the helpers run kotlinx.datetime.LocalDate/YearMonth now (wasmJs
  * purification); `plus`/`minus` take a DateTimeUnit since kotlinx 0.8 dropped
  * the plusDays/minusDays sugar. The header-label test pins the JVM default
  * locale for the CalendarDateLabels jvmShared actual (Locale.getDefault()

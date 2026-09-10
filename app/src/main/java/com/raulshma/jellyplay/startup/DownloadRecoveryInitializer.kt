@@ -1,33 +1,64 @@
 package com.raulshma.jellyplay.startup
 
-import android.content.Context
 import android.util.Log
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
 import com.raulshma.jellyplay.core.data.repository.DownloadEnqueuer
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import java.io.File
+import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.supervisorScope
 
 /**
  * Cold-start download recovery. Extracted out of `JellyPlayApplication` so the
  * Application class *composes* startup steps rather than *containing* them.
  *
  * Re-enqueues `PENDING` downloads and resets `DOWNLOADING` rows back to
- * `PENDING` on every cold start, then deletes orphaned partial bytes for
- * `FAILED` rows. Both enqueues use `ExistingWorkPolicy.KEEP` so an in-flight
- * worker is never cancelled by a process restart.
+ * `PENDING` on every cold start, and deletes orphaned partial bytes for
+ * `FAILED` rows (that cleanup pass overlaps only the reconciliation pass and
+ * is joined before the recovery pass snapshots rows — see [recover]). Both
+ * enqueues use `ExistingWorkPolicy.KEEP` so an
+ * in-flight worker is never cancelled by a process restart.
  */
 class DownloadRecoveryInitializer (
-    private val context: Context,
     private val downloadDao: DownloadDao,
     private val downloadEnqueuer: DownloadEnqueuer,
 ) {
     suspend fun recover() {
-        // Must run first: reconciliation resets truncated/missing completed
-        // downloads to PENDING so recoverPendingDownloads() re-enqueues them
-        // (KEEP policy) on the same pass, self-healing the offline library.
-        reconcileCompletedDownloads()
-        recoverPendingDownloads()
-        cleanupStuckDownloads()
+        // The three passes used to run strictly
+        // sequentially at every cold start. The reconcile→recover order stays
+        // exactly as written below (load-bearing); the cleanup pass is independent —
+        // its FAILED-row file deletes touch a disjoint row set, and its bulk
+        // resetStuckDownloading() writes the same DOWNLOADING/QUEUED→PENDING
+        // transition (bytes untouched) recoverPendingDownloads() applies
+        // per-row, so any interleaving converges on identical row states —
+        // so it overlaps reconcile (the slow file-I/O pass) instead of
+        // serializing behind it. It is joined before recover() snapshots
+        // rows: a resetStuckDownloading() flip landing between recover's
+        // PENDING and DOWNLOADING queries would leave that row PENDING with
+        // no worker until the next cold start. The supervisorScope still
+        // joins it: recover() returns only once all three passes are done.
+        supervisorScope {
+            // Each pass swallows its own Exceptions, but an escaping Error
+            // from this launched child must not cancel the concurrently-running
+            // reconcile — the sequential predecessor never let cleanup's fate
+            // gate the other passes. A CoroutineExceptionHandler is only
+            // consulted for failures the parent Job doesn't absorb, so the
+            // containment needs supervisorScope: a child Error there neither
+            // cancels the sibling passes nor escapes recover(), and the
+            // handler logs it.
+            val cleanup = launch(CoroutineExceptionHandler { _, e ->
+                Log.w(TAG, "Cleanup pass failed", e)
+            }) {
+                cleanupStuckDownloads()
+            }
+            // Must run first: reconciliation resets truncated/missing completed
+            // downloads to PENDING so recoverPendingDownloads() re-enqueues them
+            // (KEEP policy) on the same pass, self-healing the offline library.
+            reconcileCompletedDownloads()
+            cleanup.join()
+            recoverPendingDownloads()
+        }
     }
 
     /**

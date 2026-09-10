@@ -1,12 +1,13 @@
 package com.raulshma.jellyplay.core.network.di
 
+import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.network.DiscoveryMulticastGuard
 import com.raulshma.jellyplay.core.network.NoopDiscoveryMulticastGuard
 import com.raulshma.jellyplay.core.network.api.DesktopDeviceCodecCapabilities
 import com.raulshma.jellyplay.core.network.api.DeviceCodecCapabilities
 import com.raulshma.jellyplay.core.network.config.OkHttpConfigProvider
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.CoroutineScope
 import okhttp3.OkHttpClient
 import okio.Path
 import org.jellyfin.sdk.Jellyfin
@@ -18,7 +19,7 @@ import org.koin.core.module.Module
 import org.koin.dsl.module
 
 /**
- * Desktop platform pick of the Koin-owned network stack (Phase C4). The base
+ * Desktop platform pick of the Koin-owned network stack. The base
  * client, its interceptor stack, and the derived streaming/download clients
  * are identical to Android (via [baseOkHttpClient]) except the cache lives
  * under `configDir/http-cache`. The Jellyfin SDK options mirror the Android
@@ -50,8 +51,13 @@ fun desktopNetworkModule(configDir: Path): Module = module {
         val serverIdentityStore = get<ServerIdentityStore>()
         // Same DataStore-backed device id as Android: one stable identity per
         // install, shared by the REST/session API and the WebSocket channel.
-        val deviceId = serverIdentityStore.identity.value.deviceId
-            ?: runBlocking { serverIdentityStore.ensureDeviceId() }
+        // Resolution ladder (memory value → bounded blocking → random-UUID
+        // last resort) lives in [resolveDeviceId], shared with the Android
+        // pick; the desktop Main.kt runs the same identity prewarm.
+        val deviceId = resolveDeviceId(
+            serverIdentityStore,
+            get<CoroutineScope>(DatastoreQualifiers.applicationScope),
+        )
         createJellyfin {
             clientInfo = ClientInfo(
                 name = "JellyPlay",

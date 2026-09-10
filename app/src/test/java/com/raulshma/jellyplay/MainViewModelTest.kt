@@ -75,8 +75,10 @@ import org.robolectric.annotation.Config
  *  - admin-status refresh de-duplicates: one in-flight refresh serializes
  *    concurrent entries and a successful refresh bounds re-fetches to once
  *    per the 30 s window.
- *  - the offline toggle raises the going-online busy flag only when leaving
- *    an offline mode and clears it when the mode settles back to ONLINE.
+ *  - the offline toggle delegates straight to the manager, and the
+ *    going-online busy flag is a pure pass-through of the manager's own
+ *    [OfflineModeManager.goingOnline] (the flag's single owner — this VM no
+ *    longer keeps a hand-synced mirror).
  *  - the external-player launch builder maps the resolved source (local
  *    download or stream) onto an ACTION_VIEW intent with the `video` mime
  *    type advertising `return_result`, carrying the start position in ms
@@ -116,6 +118,13 @@ class MainViewModelTest {
     private val downloadCount = MutableStateFlow(0)
     private val offlineMode = MutableStateFlow(OfflineMode.ONLINE)
 
+    /**
+     * Backs the mocked manager's goingOnline — the flag's single owner. Its
+     * arm/clear choreography is pinned on the real manager (core:data's
+     * GoingOnlineFlagTest); here it is just the pass-through's input.
+     */
+    private val goingOnline = MutableStateFlow(false)
+
     @Before
     fun setUp() {
         Dispatchers.setMain(dispatcher)
@@ -126,6 +135,7 @@ class MainViewModelTest {
         every { remoteControlReceiver.displayMessages } returns displayMessages
         every { downloadRepository.getActiveDownloadCount() } returns downloadCount
         every { offlineModeManager.offlineMode } returns offlineMode
+        every { offlineModeManager.goingOnline } returns goingOnline
         coEvery { playbackRepository.reportPlaybackStart(any()) } returns Result.success(Unit)
         coEvery { playbackRepository.reportPlaybackStopped(any(), any(), any()) } returns Result.success(Unit)
         coEvery { authRepository.refreshCurrentUser() } returns Result.success(userInfo(isAdmin = false))
@@ -421,18 +431,35 @@ class MainViewModelTest {
     }
 
     @Test
-    fun `toggleOfflineMode while offline raises the flag and settling online clears it`() = runTest(dispatcher) {
+    fun `isGoingOnline is a pass-through of the manager's flag`() = runTest(dispatcher) {
+        val vm = createVm()
+        advanceUntilIdle()
+
+        goingOnline.value = true
+        advanceUntilIdle()
+        assertTrue(vm.isGoingOnline.value)
+
+        goingOnline.value = false
+        advanceUntilIdle()
+        assertFalse(vm.isGoingOnline.value)
+    }
+
+    @Test
+    fun `toggleOfflineMode no longer raises the flag itself - the manager's toggle arms it`() = runTest(dispatcher) {
         val vm = createVm()
         advanceUntilIdle()
         offlineMode.value = OfflineMode.OFFLINE_MANUAL
 
         vm.toggleOfflineMode()
         advanceUntilIdle()
-        assertTrue(vm.isGoingOnline.value)
 
-        offlineMode.value = OfflineMode.ONLINE
-        advanceUntilIdle()
+        // The old mirror raised the flag here on its own mode guess — and a
+        // mode guess can be wrong (an OFFLINE_AUTO toggle goes FURTHER
+        // offline, no ONLINE emission ever clears it). The single-owner fix:
+        // only the manager's own toggle arms the flag, off the preference
+        // snapshot; until it does, the pass-through stays down.
         assertFalse(vm.isGoingOnline.value)
+        coVerify(exactly = 1) { offlineModeManager.toggleManualOffline() }
     }
 
     // ── preference plumbing ────────────────────────────────────────────────

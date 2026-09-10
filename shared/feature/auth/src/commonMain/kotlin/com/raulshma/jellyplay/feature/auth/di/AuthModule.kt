@@ -8,7 +8,7 @@ import org.koin.dsl.module
 
 /**
  * Koin construction owner for the auth feature (docs/kmp-migration-plan.md
- * §Phase X cutover; feature-conveyor transform). The HiltViewModel/@Inject
+ * § cutover; feature-conveyor transform). The HiltViewModel/@Inject
  * annotations were stripped at the move — Koin is the single constructor
  * owner (one framework per type). Every ctor dep is Koin-native on BOTH
  * platforms, so unlike most conveyor features this module has zero Hilt

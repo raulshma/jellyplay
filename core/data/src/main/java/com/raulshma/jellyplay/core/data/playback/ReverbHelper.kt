@@ -10,7 +10,9 @@ import com.raulshma.jellyplay.core.model.ReverbPreset
  * NONE (nothing to apply), and changing the preset mid-session re-opens the
  * underlying effect so the new preset takes.
  */
-class ReverbHelper : AudioFxHelper<PresetReverb>(TAG) {
+open class ReverbHelper(
+    private val effectFactory: (Int) -> PresetReverb = ::defaultPresetReverb,
+) : AudioFxHelper<PresetReverb>(TAG) {
 
     var preset: ReverbPreset = ReverbPreset.NONE
         private set
@@ -40,10 +42,11 @@ class ReverbHelper : AudioFxHelper<PresetReverb>(TAG) {
         // setPreset still releases the native PresetReverb handle — otherwise
         // the object never reaches `fx` and detach()/releaseFx() can't free it.
         val target = this.preset
-        return createSafely(audioSessionId, { PresetReverb(0, it) }) { it.setPreset(target.androidPreset) }
+        return createSafely(audioSessionId, effectFactory) { it.setPreset(target.androidPreset) }
     }
 
     companion object {
+        fun defaultPresetReverb(audioSessionId: Int): PresetReverb = PresetReverb(0, audioSessionId)
         private const val TAG = "ReverbHelper"
     }
 }

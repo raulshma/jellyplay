@@ -49,7 +49,7 @@ class ServerFailoverInterceptor(
             }
             try {
                 val response = chain.proceed(candidateRequest)
-                router.markActive(router.addressString(candidate))
+                router.markActive(candidate)
                 return response
             } catch (e: IOException) {
                 if (chain.call().isCanceled()) throw e

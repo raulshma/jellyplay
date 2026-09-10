@@ -48,8 +48,12 @@ data class HomeUiState(
     val sections: List<HomeSection> = emptyList(),
     val isLoading: Boolean = true,
     val isRefreshing: Boolean = false,
-    /** True while a manual offline→online transition is in progress, so the
-     * Go-online affordances can show an inline spinner instead of being silent. */
+    /**
+     * True while a user-initiated offline→online transition is in progress,
+     * so the Go-online affordances can show an inline spinner instead of
+     * being silent. Mirrored from its single owner,
+     * [com.raulshma.jellyplay.core.data.offline.OfflineModeManager.goingOnline].
+     */
     val isGoingOnline: Boolean = false,
     val error: String? = null,
     /** Non-blocking notice shown when some (not all) home sections failed to load. */

@@ -9,7 +9,7 @@ import org.koin.dsl.module
 
 /**
  * Koin construction owner for the subtitle tester (docs/kmp-migration-plan.md
- * §Phase V3, subtitle-tester conveyor — final feature). The whole feature is
+ * , subtitle-tester conveyor — final feature). The whole feature is
  * Android-only: the ViewModel, screen, preview engine host and raw-asset
  * factory live in this module's androidMain (admin androidAdminModule
  * pattern), so — unlike every earlier conveyor feature — there is NO
@@ -21,7 +21,7 @@ import org.koin.dsl.module
  * Ctor deps:
  *  - PlayerEngineFactory + FontProvider are Koin-owned in
  *    shared/feature/player-video's androidPlayerVideoModule (moved there with
- *    the wave-7C migration; Koin single laziness keeps media3 + font caches
+ *    the migration; Koin single laziness keeps media3 + font caches
  *    out of startup);
  *  - SubtitleLanguageStore is Koin-native (datastoreCommonModule);
  *  - PlaybackRequestFactory is built here with the application context handed

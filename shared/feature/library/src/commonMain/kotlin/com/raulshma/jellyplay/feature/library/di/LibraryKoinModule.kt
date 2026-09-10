@@ -12,12 +12,12 @@ import org.koin.dsl.module
 
 /**
  * Koin construction owner for the library feature (docs/kmp-migration-plan.md
- * §Phase V3, second conveyor item after search). The HiltViewModel/@Inject
+ * , second conveyor item after search). The HiltViewModel/@Inject
  * annotations were stripped at the move — Koin is the single constructor owner
  * (one framework per type). Ctor deps split three ways:
  *  - MediaRepository / UserDataMutator / PhotoFolderPrefetcher are still
  *    Hilt-owned in the legacy data shim and reach Koin through the app
- *    composition root's Hilt interop module (dies at Phase X);
+ *    composition root's Hilt interop module (dies at );
  *  - ImageUrlProvider (shared data) and LibraryStore (shared datastore)
  *    resolve from the C4 shared-module graph;
  *  - PhotoExport comes from the per-platform export module

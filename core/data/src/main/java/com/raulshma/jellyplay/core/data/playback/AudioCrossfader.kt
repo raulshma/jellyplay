@@ -42,6 +42,7 @@ class AudioCrossfader(
     private val onCrossfadeError: (PlaybackException) -> Unit,
     private val onCrossfadeFailed: (nextIndex: Int) -> Unit,
     private val dataSourceFactoryProvider: () -> androidx.media3.datasource.DataSource.Factory,
+    private val crossfadePlayerFactory: (() -> ExoPlayer)? = null,
 ) {
     private var crossfadePlayer: ExoPlayer? = null
     private var crossfadeJob: Job? = null
@@ -82,7 +83,11 @@ class AudioCrossfader(
         crossfadePlayer?.volume = pct
     }
 
-    private fun createCrossfadePlayer(): ExoPlayer {
+    private fun createCrossfadePlayer(): ExoPlayer =
+        crossfadePlayerFactory?.invoke() ?: defaultCrossfadePlayer()
+
+    /** The production crossfade player: the same renderer stack as the primary player. */
+    private fun defaultCrossfadePlayer(): ExoPlayer {
         val audioAttributes = AudioAttributes.Builder()
             .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
             .setUsage(C.USAGE_MEDIA)

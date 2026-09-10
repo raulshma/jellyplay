@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.data.repository
 
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
+import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsSlice
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.model.MediaDetail
@@ -58,6 +59,11 @@ class PlayedStateSyncImplTest {
             lazyMedia,
             lazyStore,
             lazyDownloads,
+            object : TimeSource {
+                override fun nowEpochMillis(): Long = System.currentTimeMillis()
+                override fun nowElapsedRealtimeMillis(): Long = System.currentTimeMillis()
+                override fun today(zone: java.time.ZoneId): java.time.LocalDate = java.time.LocalDate.now(zone)
+            },
         )
     }
 
@@ -174,6 +180,66 @@ class PlayedStateSyncImplTest {
                 isPlayed = true,
             )
         }
+    }
+
+    @Test
+    fun `reconcile heals a played server row that still carries a resume position (#157)`() = runTest {
+        // /Items/Resume filters on position > 0 only — Played=true + a stale
+        // position keeps the item resumable server-side forever. Reconcile
+        // must re-assert markPlayedItem (whose resetPosition zeroes it).
+        every { offlineModeManager.isOffline } returns false
+        coEvery { offlineRepository.getOfflineItem("item-1") } returns offlineItem(isPlayed = true)
+        coEvery { mediaRepository.getMediaDetail("item-1", any()) } returns Result.success(
+            mediaDetail(mediaItem(isPlayed = true, positionTicks = 5_000_000L))
+        )
+        coEvery { apiClient.markPlayed("item-1") } returns Result.success(Unit)
+        // The repair pushes through the intent row + delivery probe.
+        coEvery { playbackOutboxRepository.isPlayedStateIntentDelivered("item-1", played = true) } returns true
+
+        val result = sync.reconcileOfflineRow("item-1")
+
+        assertEquals(PlayedStateSync.ReconcileOutcome.Changed(PlayedStateSync.ComputeResult.PLAYED), result)
+        coVerify(exactly = 1) { apiClient.markPlayed("item-1") }
+        coVerify(exactly = 1) {
+            offlineRepository.updatePlaybackProgress(
+                itemId = "item-1",
+                positionTicks = 0L,
+                percentage = 100.0,
+                isPlayed = true,
+            )
+        }
+    }
+
+    @Test
+    fun `reconcile heal failure stages the intent and reports undelivered (#157)`() = runTest {
+        every { offlineModeManager.isOffline } returns false
+        coEvery { offlineRepository.getOfflineItem("item-1") } returns offlineItem(isPlayed = true)
+        coEvery { mediaRepository.getMediaDetail("item-1", any()) } returns Result.success(
+            mediaDetail(mediaItem(isPlayed = true, positionTicks = 5_000_000L))
+        )
+        coEvery { apiClient.markPlayed("item-1") } returns Result.failure(RuntimeException("5xx"))
+
+        val result = sync.reconcileOfflineRow("item-1")
+
+        // The failed heal re-stages a PLAYED row (the drain retries it) and
+        // reports UndeliveredIntent so the caller knows the server row is
+        // still poisoned — the local reset is deferred until the flip lands.
+        assertEquals(PlayedStateSync.ReconcileOutcome.UndeliveredIntent, result)
+        coVerify(exactly = 1) { playbackOutboxRepository.enqueuePlayedState("item-1", isPlayed = true) }
+        coVerify(exactly = 0) { offlineRepository.updatePlaybackProgress(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `reconcile does not re-assert played when the server row has no resume position`() = runTest {
+        coEvery { offlineRepository.getOfflineItem("item-1") } returns offlineItem(isPlayed = false)
+        coEvery { mediaRepository.getMediaDetail("item-1", any()) } returns Result.success(
+            mediaDetail(mediaItem(isPlayed = true, positionTicks = 0L))
+        )
+
+        val result = sync.reconcileOfflineRow("item-1")
+
+        assertEquals(PlayedStateSync.ReconcileOutcome.Changed(PlayedStateSync.ComputeResult.PLAYED), result)
+        coVerify(exactly = 0) { apiClient.markPlayed("item-1") }
     }
 
     @Test

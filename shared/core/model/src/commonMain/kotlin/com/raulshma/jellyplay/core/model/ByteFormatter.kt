@@ -1,27 +1,44 @@
 package com.raulshma.jellyplay.core.model
 
-/** Common replacement for `"%.1f".format(v)` — always one decimal, '.' separator. */
-private fun formatOneDecimal(value: Double): String {
-    val tenths = kotlin.math.round(value * 10.0).toLong()
-    val whole = tenths / 10
-    val frac = tenths % 10
-    return "$whole.$frac"
+/** The storage display band a byte count scales into (÷1024 house convention). */
+enum class StorageBytesUnit(val suffix: String) {
+    B("B"),
+    KB("KB"),
+    MB("MB"),
+    GB("GB"),
 }
 
-fun Long.formatBytes(): String = when {
-    this < 1024 -> "$this B"
-    this < 1024 * 1024 -> "${formatOneDecimal(this / 1024.0)} KB"
-    this < 1024 * 1024 * 1024 -> "${formatOneDecimal(this / (1024.0 * 1024))} MB"
-    else -> "${formatOneDecimal(this / (1024.0 * 1024 * 1024))} GB"
+/** A storage size already scaled into its [StorageBytesUnit] band. */
+data class StorageBytesValue(val value: Double, val unit: StorageBytesUnit)
+
+/**
+ * The ONE storage-byte band ladder (the ÷1024 house convention): below 1024
+ * stays in bytes, each larger band divides by another 1024. [formatBytes] and
+ * localized wrappers that need the number+unit parts separately both read
+ * this, so the divisor policy lives exactly here. Declared delta:
+ * the four drifted storage formatters (admin Logs, PhotoViewer,
+ * DetailDownloadDialog, ArrQueue) now route through this table — PhotoViewer
+ * and DetailDownloadDialog switch from ÷1000 to ÷1024 conventions (small
+ * visible number change, unifying drift), and the sub-band formatting quirks
+ * (integer KB, `%.0f KB`, missing GB band, the ÷1000 pair's sub-KB funnel
+ * where 500 B rendered "0.5 KB") collapse onto the one table.
+ */
+fun Long.toStorageBytesValue(): StorageBytesValue = when {
+    this < 1024 -> StorageBytesValue(toDouble(), StorageBytesUnit.B)
+    this < 1024 * 1024 -> StorageBytesValue(this / 1024.0, StorageBytesUnit.KB)
+    this < 1024 * 1024 * 1024 -> StorageBytesValue(this / (1024.0 * 1024), StorageBytesUnit.MB)
+    else -> StorageBytesValue(this / (1024.0 * 1024 * 1024), StorageBytesUnit.GB)
 }
 
-fun Long.formatSpeed(): String = when {
-    this <= 0 -> ""
-    this < 1024 -> "$this B/s"
-    this < 1024 * 1024 -> "${formatOneDecimal(this / 1024.0)} KB/s"
-    this < 1024 * 1024 * 1024 -> "${formatOneDecimal(this / (1024.0 * 1024))} MB/s"
-    else -> "${formatOneDecimal(this / (1024.0 * 1024 * 1024))} GB/s"
+/** The band's rendered "number unit" pair; [suffix] carries the "/s" speed tail. */
+private fun StorageBytesValue.render(suffix: String = ""): String {
+    val number = if (unit == StorageBytesUnit.B) value.toLong().toString() else formatFixed(value, 1)
+    return "$number ${unit.suffix}$suffix"
 }
+
+fun Long.formatBytes(): String = toStorageBytesValue().render()
+
+fun Long.formatSpeed(): String = if (this <= 0) "" else toStorageBytesValue().render("/s")
 
 fun formatEta(downloadedBytes: Long, totalBytes: Long, speedBytesPerSec: Long): String {
     if (totalBytes <= 0 || speedBytesPerSec <= 0) return ""

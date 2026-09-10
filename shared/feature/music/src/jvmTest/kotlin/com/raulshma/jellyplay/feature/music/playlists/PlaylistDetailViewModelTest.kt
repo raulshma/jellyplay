@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.music.playlists
 import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
 import com.raulshma.jellyplay.core.data.playback.AudioQueueOutcome
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
@@ -40,6 +41,7 @@ class PlaylistDetailViewModelTest {
     private val mainDispatcher = StandardTestDispatcher()
 
     private val mediaRepository: MediaRepository = mockk()
+    private val playlistRepository: PlaylistRepository = mockk()
     private val audioQueueFacade: AudioQueueFacade = mockk()
 
     private lateinit var viewModel: PlaylistDetailViewModel
@@ -57,6 +59,7 @@ class PlaylistDetailViewModelTest {
         coEvery { audioQueueFacade.enqueuePlaylistItem(any()) } just Runs
         viewModel = PlaylistDetailViewModel(
             mediaRepository = mediaRepository,
+            playlistRepository = playlistRepository,
             audioQueueFacade = audioQueueFacade,
         )
     }
@@ -68,7 +71,7 @@ class PlaylistDetailViewModelTest {
 
     /** Loads the playlist items so `items` state is populated. */
     private fun loadPlaylist() {
-        coEvery { mediaRepository.getPlaylistItems("pl1", any(), any()) } returns Result.success(items)
+        coEvery { playlistRepository.getPlaylistItems("pl1", any(), any()) } returns Result.success(items)
         viewModel.load("pl1", "My Playlist")
     }
 
@@ -116,7 +119,7 @@ class PlaylistDetailViewModelTest {
 
     @Test
     fun load_failure_setsErrorAndClearsLoading() = runTest(mainDispatcher) {
-        coEvery { mediaRepository.getPlaylistItems("pl1", any(), any()) } returns
+        coEvery { playlistRepository.getPlaylistItems("pl1", any(), any()) } returns
             Result.failure(RuntimeException("gone"))
         coEvery { mediaRepository.getMediaDetail("pl1", any()) } returns
             Result.success(MediaDetail(item = MediaItem(id = "pl1", name = "X", mediaType = MediaType.MUSIC)))
@@ -130,7 +133,7 @@ class PlaylistDetailViewModelTest {
 
     @Test
     fun load_withoutAName_resolvesItFromTheDetailEndpoint() = runTest(mainDispatcher) {
-        coEvery { mediaRepository.getPlaylistItems("pl1", any(), any()) } returns Result.success(items)
+        coEvery { playlistRepository.getPlaylistItems("pl1", any(), any()) } returns Result.success(items)
         coEvery { mediaRepository.getMediaDetail("pl1", any()) } returns
             Result.success(MediaDetail(item = MediaItem(id = "pl1", name = "Deep Link", mediaType = MediaType.MUSIC)))
 
@@ -145,7 +148,7 @@ class PlaylistDetailViewModelTest {
     fun refreshPlaylist_forcesTheUncachedDetailRead() = runTest(mainDispatcher) {
         loadPlaylist()
         advanceUntilIdle()
-        coEvery { mediaRepository.getPlaylistItems("pl1", any(), any()) } returns Result.success(items)
+        coEvery { playlistRepository.getPlaylistItems("pl1", any(), any()) } returns Result.success(items)
         coEvery { mediaRepository.getMediaDetail("pl1", any()) } returns
             Result.success(MediaDetail(item = MediaItem(id = "pl1", name = "My Playlist", mediaType = MediaType.MUSIC)))
 
@@ -153,7 +156,7 @@ class PlaylistDetailViewModelTest {
         advanceUntilIdle()
 
         // playlistName is known, so refresh goes through the named (fast) path…
-        coVerify(exactly = 2) { mediaRepository.getPlaylistItems("pl1", any(), any()) }
+        coVerify(exactly = 2) { playlistRepository.getPlaylistItems("pl1", any(), any()) }
         // …but the detail read (and its force flag) is unused there.
         coVerify(exactly = 0) { mediaRepository.getMediaDetail(any(), any()) }
     }
@@ -168,12 +171,12 @@ class PlaylistDetailViewModelTest {
         viewModel.removeFromPlaylist(PlaylistItem(id = "p1", playlistItemId = "e1", name = "Song"))
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { mediaRepository.removeItemsFromPlaylist(any(), any()) }
+        coVerify(exactly = 0) { playlistRepository.removeItemsFromPlaylist(any(), any()) }
     }
 
     @Test
     fun removeFromPlaylist_dropsTheRowImmediatelyAndEmitsAnUndoAction() = runTest(mainDispatcher) {
-        coEvery { mediaRepository.removeItemsFromPlaylist("pl1", listOf("e2")) } returns Result.success(Unit)
+        coEvery { playlistRepository.removeItemsFromPlaylist("pl1", listOf("e2")) } returns Result.success(Unit)
         loadPlaylist()
         advanceUntilIdle()
 
@@ -182,7 +185,7 @@ class PlaylistDetailViewModelTest {
 
         // Optimistic: the row is gone from the list before the server call.
         assertEquals(listOf(items[0], items[2]), viewModel.items)
-        coVerify(exactly = 1) { mediaRepository.removeItemsFromPlaylist("pl1", listOf("e2")) }
+        coVerify(exactly = 1) { playlistRepository.removeItemsFromPlaylist("pl1", listOf("e2")) }
         assertFalse(viewModel.isMutating)
 
         val undo = viewModel.undoActions.first()
@@ -191,7 +194,7 @@ class PlaylistDetailViewModelTest {
 
     @Test
     fun removeFromPlaylist_failureSurfacesAnErrorAndKeepsTheRowDropped() = runTest(mainDispatcher) {
-        coEvery { mediaRepository.removeItemsFromPlaylist("pl1", listOf("e2")) } returns
+        coEvery { playlistRepository.removeItemsFromPlaylist("pl1", listOf("e2")) } returns
             Result.failure(RuntimeException())
         loadPlaylist()
         advanceUntilIdle()
@@ -207,8 +210,8 @@ class PlaylistDetailViewModelTest {
 
     @Test
     fun undo_reAddsTheItemByMediaIdAndReloadsForAFreshEntryId() = runTest(mainDispatcher) {
-        coEvery { mediaRepository.removeItemsFromPlaylist("pl1", listOf("e2")) } returns Result.success(Unit)
-        coEvery { mediaRepository.addItemsToPlaylist("pl1", listOf("p2")) } returns Result.success(Unit)
+        coEvery { playlistRepository.removeItemsFromPlaylist("pl1", listOf("e2")) } returns Result.success(Unit)
+        coEvery { playlistRepository.addItemsToPlaylist("pl1", listOf("p2")) } returns Result.success(Unit)
         loadPlaylist()
         advanceUntilIdle()
         viewModel.removeFromPlaylist(items[1])
@@ -220,8 +223,8 @@ class PlaylistDetailViewModelTest {
 
         // Re-add goes by the underlying media id — the entry id is gone
         // server-side — and the reload re-syncs the fresh entry id.
-        coVerify(exactly = 1) { mediaRepository.addItemsToPlaylist("pl1", listOf("p2")) }
-        coVerify(exactly = 2) { mediaRepository.getPlaylistItems("pl1", any(), any()) }
+        coVerify(exactly = 1) { playlistRepository.addItemsToPlaylist("pl1", listOf("p2")) }
+        coVerify(exactly = 2) { playlistRepository.getPlaylistItems("pl1", any(), any()) }
         assertEquals(items, viewModel.items)
         assertFalse(viewModel.isMutating)
     }
@@ -238,12 +241,12 @@ class PlaylistDetailViewModelTest {
         viewModel.moveItem(items[0], 0) // already at position 0
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { mediaRepository.movePlaylistItem(any(), any(), any()) }
+        coVerify(exactly = 0) { playlistRepository.movePlaylistItem(any(), any(), any()) }
     }
 
     @Test
     fun moveItem_reordersOptimisticallyAndPersistsTheNewIndex() = runTest(mainDispatcher) {
-        coEvery { mediaRepository.movePlaylistItem("pl1", "e3", 0) } returns Result.success(Unit)
+        coEvery { playlistRepository.movePlaylistItem("pl1", "e3", 0) } returns Result.success(Unit)
         loadPlaylist()
         advanceUntilIdle()
 
@@ -251,20 +254,20 @@ class PlaylistDetailViewModelTest {
         advanceUntilIdle()
 
         assertEquals(listOf("p3", "p1", "p2"), viewModel.items.map { it.id })
-        coVerify(exactly = 1) { mediaRepository.movePlaylistItem("pl1", "e3", 0) }
+        coVerify(exactly = 1) { playlistRepository.movePlaylistItem("pl1", "e3", 0) }
         assertFalse(viewModel.isMutating)
     }
 
     @Test
     fun moveItem_failure_setsErrorAndRollsBackToTheServerOrder() = runTest(mainDispatcher) {
-        coEvery { mediaRepository.movePlaylistItem("pl1", "e3", 0) } returns
+        coEvery { playlistRepository.movePlaylistItem("pl1", "e3", 0) } returns
             Result.failure(RuntimeException("reorder denied"))
         loadPlaylist()
         advanceUntilIdle()
         // The rollback reloads; the server's authoritative order differs from
         // the optimistic local swap.
         val serverOrder = listOf(items[1], items[0], items[2])
-        coEvery { mediaRepository.getPlaylistItems("pl1", any(), any()) } returns
+        coEvery { playlistRepository.getPlaylistItems("pl1", any(), any()) } returns
             Result.success(serverOrder)
 
         viewModel.moveItem(items[2], 0)
@@ -283,7 +286,7 @@ class PlaylistDetailViewModelTest {
 
     @Test
     fun clearError_resetsTheErrorState() = runTest(mainDispatcher) {
-        coEvery { mediaRepository.getPlaylistItems("pl1", any(), any()) } returns
+        coEvery { playlistRepository.getPlaylistItems("pl1", any(), any()) } returns
             Result.failure(RuntimeException("gone"))
         // The nameless load path also resolves the playlist name; stub it so
         // the load coroutine completes cleanly instead of dying on an

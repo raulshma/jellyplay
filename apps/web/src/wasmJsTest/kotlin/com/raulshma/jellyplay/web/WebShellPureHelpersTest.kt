@@ -23,11 +23,11 @@ import org.koin.dsl.koinApplication
  *    binary links the real wasmJsMain module (Koin DSL, the narrow repository
  *    type graph) and runs it on wasm.
  *
- * Deliberately ABSENT: WebConnectFlow's transport-failure classifier
- * (`isLikelyCorsOrTransport` et al.) — it is the ideal pure-logic subject but
- * is `private` in WebConnectFlow.kt, and main-source changes are out of scope
- * for a canary wave. When it becomes testable (internal + parameterized
- * browser-online flag), move the coverage there.
+ * Formerly absent, now covered elsewhere: WebConnectFlow's transport-failure
+ * classifier (`isLikelyCorsOrTransport` et al.) was `private` in
+ * WebConnectFlow.kt when this canary landed — it has since been extracted to
+ * the internal WebConnectFailurePolicy.kt and is pinned by
+ * [WebConnectFailurePolicyTest].
  */
 class WebShellPureHelpersTest {
 

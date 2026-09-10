@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.core.data.repository
 import androidx.room.Room
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import com.raulshma.jellyplay.core.database.JellyPlayDatabase
+import com.raulshma.jellyplay.core.database.entity.ItemPlaybackPreferenceEntity
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.PlaybackPrefScope
 import com.raulshma.jellyplay.core.model.RememberedTrack
@@ -14,6 +15,9 @@ import kotlin.test.assertEquals
 import kotlin.test.Test
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import com.raulshma.jellyplay.core.data.util.TimeSource
+import java.time.LocalDate
+import java.time.ZoneId
 
 /**
  * Exercises [ItemPlaybackPreferenceRepositoryImpl] against a real in-memory
@@ -38,6 +42,7 @@ class ItemPlaybackPreferenceRepositoryImplTest {
         repository = ItemPlaybackPreferenceRepositoryImpl(
             dao = database.itemPlaybackPreferenceDao(),
             database = database,
+            timeSource = FakeTimeSource(),
         )
     }
 
@@ -250,5 +255,63 @@ class ItemPlaybackPreferenceRepositoryImplTest {
 
         assertNull(repository.get(PlaybackPrefScope.ITEM, "item-1"))
         assertEquals("ger", repository.get(PlaybackPrefScope.SERIES, "item-1")!!.audioLanguage)
+    }
+
+    // ── Corrupt stored values degrade to the documented default ─────────
+
+    @Test
+    fun `get with a corrupt stored dialogueBoostStrength returns null instead of throwing`() = runTest {
+        // A row persisted with an unknown strength name (hand-edit / restore
+        // from an incompatible build) must degrade to "no boost preference" —
+        // the parse seam never throws on a corrupt value.
+        database.itemPlaybackPreferenceDao().upsert(
+            ItemPlaybackPreferenceEntity(
+                scope = PlaybackPrefScope.ITEM.name,
+                key = "item-1",
+                audioLanguage = "ger",
+                subtitleLanguage = null,
+                dialogueBoostStrength = "BLAST",
+                updatedAt = 1L,
+            )
+        )
+
+        val pref = repository.get(PlaybackPrefScope.ITEM, "item-1")!!
+
+        assertNull(pref.dialogueBoostStrength)
+        assertEquals("ger", pref.audioLanguage)
+    }
+
+    @Test
+    fun `save merging onto a corrupt stored strength rewrites it as null without throwing`() = runTest {
+        // "Leave untouched" (null arg) re-parses the corrupt stored value on
+        // the merge path — the merge must yield null, keep the surviving
+        // fields, and overwrite the corrupt column on write-back.
+        database.itemPlaybackPreferenceDao().upsert(
+            ItemPlaybackPreferenceEntity(
+                scope = PlaybackPrefScope.ITEM.name,
+                key = "item-1",
+                audioLanguage = "ger",
+                subtitleLanguage = null,
+                dialogueBoostStrength = "BLAST",
+                updatedAt = 1L,
+            )
+        )
+
+        repository.save(PlaybackPrefScope.ITEM, "item-1", audioLanguage = null, subtitleLanguage = null, subtitleForced = null, subtitleHearingImpaired = null, dialogueBoostStrength = null)
+
+        val pref = repository.get(PlaybackPrefScope.ITEM, "item-1")!!
+        assertEquals("ger", pref.audioLanguage)
+        assertNull(pref.dialogueBoostStrength)
+    }
+
+    /**
+     * Controllable [TimeSource] — same shape as the fake in
+     * LyricsRepositoryImplTest (core:data deliberately hosts no shared test
+     * fakes; see TimeSource's KDoc).
+     */
+    private class FakeTimeSource(var nowMs: Long = 1_000L) : TimeSource {
+        override fun nowEpochMillis(): Long = nowMs
+        override fun nowElapsedRealtimeMillis(): Long = nowMs
+        override fun today(zone: ZoneId): LocalDate = LocalDate.of(2026, 1, 1)
     }
 }

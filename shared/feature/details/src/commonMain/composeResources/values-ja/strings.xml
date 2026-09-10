@@ -69,7 +69,7 @@
     <string name="detail_option_edit">編集</string>
     <string name="detail_option_share">共有</string>
     <string name="detail_option_downloading">ダウンロード中…</string>
-    <string name="detail_option_downloading_percent">ダウンロード中 (%1$d%%)</string>
+    <string name="detail_option_downloading_percent">ダウンロード中 (%1$d%)</string>
     <string name="detail_option_download">ダウンロード</string>
     <string name="detail_option_downloading_series">シリーズをダウンロード中…</string>
     <string name="detail_option_download_series">シリーズをダウンロード</string>
@@ -159,9 +159,9 @@
     <string name="detail_not_enough_storage">十分なストレージ容量がありません。</string>
 
     <!-- ── File-size formatting ─────────────────────────────────────────── -->
-    <string name="detail_size_gb">%1$.1f GB</string>
-    <string name="detail_size_mb">%1$.1f MB</string>
-    <string name="detail_size_kb">%1$.1f KB</string>
+    <string name="detail_size_gb">%1$s GB</string>
+    <string name="detail_size_mb">%1$s MB</string>
+    <string name="detail_size_kb">%1$s KB</string>
     <string name="detail_size_b">%1$d B</string>
     <string name="detail_size_unknown">不明</string>
 

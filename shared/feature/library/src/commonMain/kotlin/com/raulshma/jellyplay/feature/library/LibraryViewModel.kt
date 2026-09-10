@@ -31,6 +31,7 @@ import com.raulshma.jellyplay.core.ui.message.UserMessageBus
 import com.raulshma.jellyplay.feature.library.generated.resources.Res
 import com.raulshma.jellyplay.feature.library.generated.resources.data_download_start_failed
 import com.raulshma.jellyplay.feature.library.generated.resources.data_download_started
+import com.raulshma.jellyplay.core.ui.viewmodel.DeferredUserDataRefresher
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -193,7 +194,21 @@ class LibraryViewModel(
         mediaDownloadActions.removeDownload(item)
     }
 
-    private val _refreshTrigger = kotlinx.coroutines.flow.MutableStateFlow(0)
+    private val _refreshTrigger = stateFlow(0)
+
+    /**
+     * User-data changes while another screen is up only mark the grid stale;
+     * the single regeneration fires when the library screen is next entered
+     * (see [DeferredUserDataRefresher]) — never mid-scroll. Only the item
+     * pager regenerates: watched/favorite flips never change folders, genres
+     * or tags, so the cache-bypassing refetches [refresh] does (the manual
+     * pull-to-refresh path) are skipped here.
+     */
+    val deferredRefresher = DeferredUserDataRefresher(
+        userDataChanges = mediaRepository.userDataChanges,
+        scope = scope,
+        trigger = _refreshTrigger,
+    )
 
     /**
      * True while the app is offline (manual toggle or auto network loss): the
@@ -211,7 +226,7 @@ class LibraryViewModel(
     @OptIn(ExperimentalCoroutinesApi::class)
     val pagedItems: Flow<PagingData<MediaItem>> = combine(
         _browserState.flow,
-        _refreshTrigger,
+        _refreshTrigger.flow,
         offlineModeManager.offlineMode,
     ) { browser, refreshTrigger, mode ->
         PagedQueryKey(browser.folder, browser.filters, mode != OfflineMode.ONLINE, refreshTrigger)
@@ -473,11 +488,13 @@ class LibraryViewModel(
         // don't overwrite the folder's saved default sort order (which is what
         // a regular filter change via updateFilters persists). On the next visit
         // the user's chosen sort (e.g. Recently Added) is restored as expected.
-        _browserState.set(_browserState.value.copy(filters = _browserState.value.filters.copy(sortBy = SortOption.RANDOM)))
+        _browserState.set(_browserState.value.copy(filters = _browserState.value.filters.withSortBy(SortOption.RANDOM)))
     }
 
     fun clearFilters() {
-        _browserState.set(LibraryBrowserReducer.updateFilters(_browserState.value, LibraryFilters()))
+        _browserState.set(
+            LibraryBrowserReducer.updateFilters(_browserState.value, _browserState.value.filters.cleared())
+        )
     }
 
     /**
@@ -552,7 +569,7 @@ class LibraryViewModel(
             // Increment the trigger to force flatMapLatest to create a new Pager,
             // which avoids the duplicate-key crash that occurs when pagedItems.refresh()
             // is called concurrently on a cachedIn flow.
-            _refreshTrigger.value++
+            _refreshTrigger.update { it + 1 }
         }
     }
 

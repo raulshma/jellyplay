@@ -11,6 +11,7 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -47,7 +48,7 @@ class RemotePlaybackReporterTest {
 
     @Before
     fun setUp() {
-        every { authRepository.isAuthenticated } returns flowOf(true)
+        every { authRepository.isAuthenticated } returns MutableStateFlow(true)
         every { audioPlaybackManager.remoteSessionActive } answers { remoteSessionFlag }
         every { audioPlaybackManager.remoteSessionActive = any<Boolean>() } answers { remoteSessionFlag = firstArg<Boolean>() }
         every { audioPlaybackManager.hasActiveSession } returns false
@@ -107,7 +108,7 @@ class RemotePlaybackReporterTest {
     @Test
     fun `startSession while unauthenticated is a no-op`() = runBlocking {
         val reporter = reporter()
-        every { authRepository.isAuthenticated } returns flowOf(false)
+        every { authRepository.isAuthenticated } returns MutableStateFlow(false)
 
         reporter.startSession(itemIds = listOf("item1"), startPositionTicks = 0L)
 
@@ -175,6 +176,60 @@ class RemotePlaybackReporterTest {
         assertEquals(55_000_000L, progress.positionTicks)
         assertFalse(progress.isPaused)
         assertEquals(PlayMethod.DIRECT_PLAY, progress.playMethod)
+
+        reporter.stopSession()
+    }
+
+    @Test
+    fun `the progress loop falls back to the audio manager when no engine is bound`() = runBlocking {
+        // Pure remote-audio session (no cast/engine surface): the loop reads
+        // the audio manager's position ×10 000 into ticks.
+        val reporter = reporter()
+        every { audioPlaybackManager.hasActiveSession } returns true
+        every { audioPlaybackManager.currentPosition } returns kotlinx.coroutines.flow.MutableStateFlow(2_500L)
+        every { audioPlaybackManager.isPlaying } returns kotlinx.coroutines.flow.MutableStateFlow(true)
+
+        reporter.startSession(itemIds = listOf("item1"), startPositionTicks = 0L)
+
+        awaitNotEmpty(5_000)
+        val progress = progressReports.first()
+
+        assertEquals("item1", progress.itemId)
+        assertEquals(25_000_000L, progress.positionTicks)
+        assertFalse(progress.isPaused)
+
+        reporter.stopSession()
+    }
+
+    @Test
+    fun `the progress loop reports paused while the bound engine is not playing`() = runBlocking {
+        val reporter = reporter()
+        val engine = mockk<RemotePlayableEngine>(relaxed = true)
+        every { engine.currentPositionMs } returns 1_000L
+        every { engine.isPlaying } returns kotlinx.coroutines.flow.MutableStateFlow(false)
+        every { activePlayerController.engine } returns engine
+
+        reporter.startSession(itemIds = listOf("item1"), startPositionTicks = 0L)
+
+        awaitNotEmpty(5_000)
+        assertTrue(progressReports.first().isPaused)
+
+        reporter.stopSession()
+    }
+
+    @Test
+    fun `the progress loop stays silent while no session and no engine report a position`() = runBlocking {
+        // Neither an engine nor an active audio session: currentPosition-
+        // TicksAndPaused is null and no progress report goes out.
+        val reporter = reporter()
+        every { audioPlaybackManager.hasActiveSession } returns false
+
+        reporter.startSession(itemIds = listOf("item1"), startPositionTicks = 0L)
+
+        Thread.sleep(500)
+        assertTrue(progressReports.isEmpty())
+        // The START still went out — only the progress loop is gated.
+        coVerify(exactly = 1) { playbackRepository.reportPlaybackStart(any()) }
 
         reporter.stopSession()
     }

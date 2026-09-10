@@ -4,7 +4,7 @@ import com.raulshma.jellyplay.feature.player.video.engine.SubtitleSource
 import com.raulshma.jellyplay.feature.player.video.engine.TimedCue
 
 /**
- * Subtitle-sync preview seam (wave 8C): the member set the commonMain
+ * Subtitle-sync preview seam: the member set the commonMain
  * [VideoPlayerViewModel][com.raulshma.jellyplay.feature.player.video.VideoPlayerViewModel]
  * calls. The androidMain class formerly named `SubtitlePreviewRepository` was
  * renamed [AndroidSubtitlePreviewRepository][com.raulshma.jellyplay.feature.player.video.subtitle.AndroidSubtitlePreviewRepository]

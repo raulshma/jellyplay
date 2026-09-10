@@ -46,7 +46,7 @@
     <string name="search_filter_tags">태그</string>
     <string name="search_filter_minimum_rating">최소 평점</string>
     <string name="search_filter_any">전체</string>
-    <string name="search_filter_rating_plus">%1$.1f+</string>
+    <string name="search_filter_rating_plus">%1$s+</string>
     <string name="search_apply_filters">필터 적용</string>
 
     <!-- Sort (parity with Library's sort options) -->

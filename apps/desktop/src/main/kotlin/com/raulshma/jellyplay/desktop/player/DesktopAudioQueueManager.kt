@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.desktop.player
 import com.raulshma.jellyplay.core.data.playback.AudioLyricsManager
 import com.raulshma.jellyplay.core.data.playback.AudioQueueItem
 import com.raulshma.jellyplay.core.data.playback.AudioQueueManager
+import com.raulshma.jellyplay.core.data.playback.NowPlayingTracker
 import com.raulshma.jellyplay.core.data.playback.QueuePersistenceHelper
 import com.raulshma.jellyplay.core.data.playback.QueueSnapshot
 import com.raulshma.jellyplay.core.data.playback.QueueUndoEvent
@@ -34,7 +35,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 /**
- * Desktop audio playback core (wave 9B): real queue + transport over a
+ * Desktop audio playback core: real queue + transport over a
  * dedicated audio-only [MpvDesktopEngine] (`vo=null` — audio tracks never open
  * a video output).
  *
@@ -47,6 +48,16 @@ import kotlinx.coroutines.launch
  * single-object pattern Android uses (its manager implements
  * AudioQueueManager + AudioEffectsManager and the engine seam delegates to
  * it).
+ *
+ * The six now-playing metadata flows (item id, title, artist, artist id,
+ * album, album art url) are written ONLY through the shared
+ * [NowPlayingTracker] — constructed here and re-exposed by reference (same
+ * [StateFlow] instances, the exact Android `AudioPlaybackManager` pattern),
+ * so every consumer of the manager's properties is unchanged. The three
+ * former hand-publish sites map onto the tracker's publish shapes:
+ * [NowPlayingTracker.publishDetail] (play's resolve path),
+ * [NowPlayingTracker.publishQueueItem] ([transitionTo]), and
+ * [NowPlayingTracker.clear] ([stopAndRelease]).
  *
  * ## Semantics table (Android → here)
  *
@@ -75,7 +86,7 @@ import kotlinx.coroutines.launch
  *    `setGaplessEnabled` keep the observable state flows but there is no
  *    crossfader; track changes are load-file boundaries, so a small gap can
  *    be heard. Crossfade parity needs a second engine instance (later item).
- *    Gapless (mpv playlist-driven auto-advance) was SPIKED for wave 14C and
+ *    Gapless (mpv playlist-driven auto-advance) was SPIKED for and
  *    declined on evidence: feeding the next item via `loadfile … append-play`
  *    under the production engine options (`keep-open=yes`,
  *    `gapless-audio=weak`) makes mpv advance itself — END_FILE(EOF) for the
@@ -85,7 +96,7 @@ import kotlinx.coroutines.launch
  *    start the next item), and (b) makes current-item identity depend on
  *    mpv's shadow playlist, which every queue mutation below (remove/move/
  *    shuffle/undo/skip) would have to mirror. That re-couples the whole
- *    case-by-case parity surface to playlist plumbing wave 9B deliberately
+ *    case-by-case parity surface to playlist plumbing deliberately
  *    replaced ("the queue list IS the truth"); revisit only behind a
  *    dedicated engine contract for playlist identity.
  *  - **Queue pre-warm is next-item-only** — Android builds MediaItems for
@@ -123,7 +134,7 @@ import kotlinx.coroutines.launch
  *  - **Main-thread guard** — Android asserts `Looper.myLooper() == main` on
  *    every mutation; the desktop twin asserts the AWT EDT (the app's
  *     Dispatchers.Main). Injectable so tests can disable it.
- *  - **Audio effects are REAL via the engine's mpv `af` chain (wave 14C)** —
+ *  - **Audio effects are REAL via the engine's mpv `af` chain** —
  *    the shared AudioEffectsManager desktop impl ([DesktopAudioEffectsManager])
  *    keeps the full state machine and computes the final per-track ReplayGain
  *    here; every mutation is folded into `EngineConfig.audioEffects` and
@@ -134,6 +145,13 @@ import kotlinx.coroutines.launch
  *  - **No media session / now-playing notification / bandwidth sampling** —
  *    Android-only surfaces; the desktop position ticker keeps the A-B loop +
  *    lyrics index duties only.
+ *  - **[stopAndRelease] no longer resets `artistId`** — declared delta of the
+ *    [NowPlayingTracker] adoption: the tracker's `clear()` returns the five
+ *    display fields to their defaults but deliberately keeps the artist id
+ *    (Android's stop behaved identically pre-extraction; the desktop's former
+ *    hand-rolled reset cleared all six). Harmless surface — the flow is only
+ *    read while a now-playing row renders — and it keeps ONE clear shape
+ *    shared by both managers.
  */
 class DesktopAudioQueueManager(
     private val trackResolver: AudioTrackResolver,
@@ -188,14 +206,20 @@ class DesktopAudioQueueManager(
 
     // ── AudioQueueManager state (defaults identical to Android) ────────────
 
+    /**
+     * Sole writer of the now-playing metadata below; the manager re-exposes
+     * its flows by reference so consumers are unchanged. See
+     * [NowPlayingTracker] for the per-publish field coverage contract.
+     */
+    private val nowPlayingTracker = NowPlayingTracker()
+
     private val _queue = MutableStateFlow<List<AudioQueueItem>>(emptyList())
     override val queue: StateFlow<List<AudioQueueItem>> = _queue.asStateFlow()
 
     private val _currentIndex = MutableStateFlow(-1)
     override val currentIndex: StateFlow<Int> = _currentIndex.asStateFlow()
 
-    private val _currentPlayingItemId = MutableStateFlow<String?>(null)
-    override val currentPlayingItemId: StateFlow<String?> = _currentPlayingItemId.asStateFlow()
+    override val currentPlayingItemId: StateFlow<String?> get() = nowPlayingTracker.currentPlayingItemId
 
     private val _shuffleMode = MutableStateFlow(false)
     override val shuffleMode: StateFlow<Boolean> = _shuffleMode.asStateFlow()
@@ -204,21 +228,19 @@ class DesktopAudioQueueManager(
     override val repeatMode: StateFlow<Int> = _repeatMode.asStateFlow()
 
     // ── AudioPlayerEngine state (defaults identical to Android) ────────────
+    // The now-playing metadata six re-expose [nowPlayingTracker]'s flows BY
+    // REFERENCE (same StateFlow instances — the Android manager's pattern);
+    // the manager never writes them directly.
 
-    private val _title = MutableStateFlow("")
-    override val title: StateFlow<String> = _title.asStateFlow()
+    override val title: StateFlow<String> get() = nowPlayingTracker.title
 
-    private val _artist = MutableStateFlow("")
-    override val artist: StateFlow<String> = _artist.asStateFlow()
+    override val artist: StateFlow<String> get() = nowPlayingTracker.artist
 
-    private val _artistId = MutableStateFlow<String?>(null)
-    override val artistId: StateFlow<String?> = _artistId.asStateFlow()
+    override val artistId: StateFlow<String?> get() = nowPlayingTracker.artistId
 
-    private val _album = MutableStateFlow("")
-    override val album: StateFlow<String> = _album.asStateFlow()
+    override val album: StateFlow<String> get() = nowPlayingTracker.album
 
-    private val _albumArtUrl = MutableStateFlow("")
-    override val albumArtUrl: StateFlow<String> = _albumArtUrl.asStateFlow()
+    override val albumArtUrl: StateFlow<String> get() = nowPlayingTracker.albumArtUrl
 
     private val _isPlaying = MutableStateFlow(false)
     override val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
@@ -396,11 +418,10 @@ class DesktopAudioQueueManager(
             else _duration.value * 10_000
 
         currentItemId = item.id
-        _currentPlayingItemId.value = item.id
-        _title.value = item.name
-        _artist.value = item.artist
-        _album.value = item.album ?: ""
-        _albumArtUrl.value = item.imageUrl ?: ""
+        // Queue-item publish shape: five fields from the queue item, artistId
+        // deliberately untouched (AudioQueueItem carries none — the tracker's
+        // recorded divergence; the pre-adoption site behaved identically).
+        nowPlayingTracker.publishQueueItem(item)
 
         scope.launch {
             reportStopped(prevItemId, prevSessionId, prevPosTicks)
@@ -526,12 +547,16 @@ class DesktopAudioQueueManager(
             val track = trackResolver.resolve(itemId, 0L)
             if (track != null) {
                 _playbackError.value = null
-                _currentPlayingItemId.value = itemId
-                _title.value = track.title
-                _artist.value = track.artist
-                _artistId.value = track.artistId
-                _album.value = track.album ?: ""
-                _albumArtUrl.value = playbackRepository.getImageUrl(itemId, maxWidth = 600)
+                // Detail publish shape: the ONE site that knows the artist id
+                // and the server image url (Android play()'s detail path).
+                nowPlayingTracker.publishDetail(
+                    itemId = itemId,
+                    title = track.title,
+                    artist = track.artist,
+                    artistId = track.artistId,
+                    album = track.album ?: "",
+                    albumArtUrl = playbackRepository.getImageUrl(itemId, maxWidth = 600),
+                )
 
                 val resumeTicks = track.resumePositionTicks ?: 0L
                 val startPositionMs = if (resumeTicks > 0) resumeTicks / 10_000 else 0L
@@ -542,10 +567,10 @@ class DesktopAudioQueueManager(
                 if (!isInQueue) {
                     val queueItem = AudioQueueItem(
                         id = itemId,
-                        name = _title.value,
-                        artist = _artist.value,
-                        album = _album.value,
-                        imageUrl = _albumArtUrl.value,
+                        name = title.value,
+                        artist = artist.value,
+                        album = album.value,
+                        imageUrl = albumArtUrl.value,
                         mediaSourceId = track.mediaSourceId,
                         durationMs = track.durationMs,
                         normalizationGain = track.normalizationGain,
@@ -753,7 +778,7 @@ class DesktopAudioQueueManager(
             // Android rebuilds the player playlist at the current position;
             // the desktop keeps the same item playing — state-only.
         } else {
-            val currentId = _currentPlayingItemId.value
+            val currentId = currentPlayingItemId.value
             val original = unshuffledQueue
             if (original.isNotEmpty()) {
                 _queue.value = original
@@ -1061,13 +1086,11 @@ class DesktopAudioQueueManager(
         engine = null
 
         currentItemId = null
-        _currentPlayingItemId.value = null
+        // Clear publish shape: five display fields to defaults; artistId
+        // deliberately survives (the tracker's recorded divergence — see the
+        // declared-divergences note in the class KDoc).
+        nowPlayingTracker.clear()
         _isPlaying.value = false
-        _title.value = ""
-        _artist.value = ""
-        _artistId.value = null
-        _album.value = ""
-        _albumArtUrl.value = ""
         _currentPosition.value = 0L
         _duration.value = 0L
         lyricsManager.reset()

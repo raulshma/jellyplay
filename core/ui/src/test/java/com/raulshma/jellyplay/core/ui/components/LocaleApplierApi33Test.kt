@@ -33,7 +33,7 @@ class LocaleApplierApi33Test {
             LocaleApplier.recreateSignal.first()
             signalArrived = true
         }
-        LocaleApplier.recreateSignal.subscriptionCount.first { it > 0 }
+        LocaleApplier._recreateSignal.subscriptionCount.first { it > 0 }
 
         LocaleApplier.apply(context, "fr-FR")
 

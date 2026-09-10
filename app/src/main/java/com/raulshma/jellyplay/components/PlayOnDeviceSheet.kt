@@ -25,7 +25,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.R
 import com.raulshma.jellyplay.core.data.cast.CastDevice
-import com.raulshma.jellyplay.core.data.cast.CastManager
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
@@ -34,8 +33,11 @@ import com.composables.icons.tabler.outline.*
 
 /**
  * Pure-state device picker for the global "Play On" entry. Lists Jellyfin
- * remote sessions (other controllable JellyPlay / Jellyfin clients) discovered
- * by [CastManager]. Driven entirely by callbacks; owns no state itself.
+ * remote sessions (other controllable JellyPlay / Jellyfin clients) fed in
+ * from the shell's Play On controller ([com.raulshma.jellyplay.PlayOnViewModel]
+ * over JellyfinRemotePlayCastStrategy — deliberately NOT the shared
+ * CastManager the video player owns). Driven entirely by callbacks; owns no
+ * state itself.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

@@ -48,8 +48,8 @@ class AuthApiClientImplTest {
         val okHttpClient = OkHttpClient()
         addressRouter = ServerAddressRouter()
         engine = JellyfinApiEngine(
-            jellyfinLazy = dagger.Lazy { jellyfin },
-            okHttpClientLazy = dagger.Lazy { okHttpClient },
+            jellyfinLazy = LazyProvider { jellyfin },
+            okHttpClientLazy = LazyProvider { okHttpClient },
             deviceProfileProvider = DeviceProfileProvider(DesktopDeviceCodecCapabilities()),
             addressRouter = addressRouter,
         )
@@ -159,8 +159,8 @@ class AuthApiClientImplTest {
         coEvery { unauthenticatedApi.userApi.authenticateUserByName(any()) } throws
             java.io.IOException("auth round-trip failed")
         val localEngine = JellyfinApiEngine(
-            jellyfinLazy = dagger.Lazy { jellyfin },
-            okHttpClientLazy = dagger.Lazy { OkHttpClient() },
+            jellyfinLazy = LazyProvider { jellyfin },
+            okHttpClientLazy = LazyProvider { OkHttpClient() },
             deviceProfileProvider = DeviceProfileProvider(DesktopDeviceCodecCapabilities()),
             addressRouter = ServerAddressRouter(),
         )
@@ -210,8 +210,8 @@ class AuthApiClientImplTest {
             serverName = "New Server",
         )
         val probeEngine = JellyfinApiEngine(
-            jellyfinLazy = dagger.Lazy { mockk<Jellyfin>(relaxed = true) },
-            okHttpClientLazy = dagger.Lazy { OkHttpClient() },
+            jellyfinLazy = LazyProvider { mockk<Jellyfin>(relaxed = true) },
+            okHttpClientLazy = LazyProvider { OkHttpClient() },
             deviceProfileProvider = DeviceProfileProvider(DesktopDeviceCodecCapabilities()),
             addressRouter = probeRouter,
         )
@@ -237,7 +237,7 @@ class AuthApiClientImplTest {
 
     @Test
     fun `connectToServer tls-trust probe failure fails after exactly one attempt`() = runTest {
-        // Wave-21 review round: no retry can fix an untrusted certificate —
+        // No retry can fix an untrusted certificate —
         // retrying just delayed the Add Server trust dialog by 3 probe
         // rounds. The probe wraps TLS-trust failures into a non-retryable
         // signal; RetryPolicy must stop after attempt 1 while the original
@@ -250,8 +250,8 @@ class AuthApiClientImplTest {
         )
         val client = AuthApiClientImpl(
             engine = JellyfinApiEngine(
-                jellyfinLazy = dagger.Lazy { mockk<Jellyfin>(relaxed = true) },
-                okHttpClientLazy = dagger.Lazy { OkHttpClient() },
+                jellyfinLazy = LazyProvider { mockk<Jellyfin>(relaxed = true) },
+                okHttpClientLazy = LazyProvider { OkHttpClient() },
                 deviceProfileProvider = DeviceProfileProvider(DesktopDeviceCodecCapabilities()),
                 addressRouter = probeRouter,
             ),
@@ -281,8 +281,8 @@ class AuthApiClientImplTest {
         )
         val client = AuthApiClientImpl(
             engine = JellyfinApiEngine(
-                jellyfinLazy = dagger.Lazy { mockk<Jellyfin>(relaxed = true) },
-                okHttpClientLazy = dagger.Lazy { OkHttpClient() },
+                jellyfinLazy = LazyProvider { mockk<Jellyfin>(relaxed = true) },
+                okHttpClientLazy = LazyProvider { OkHttpClient() },
                 deviceProfileProvider = DeviceProfileProvider(DesktopDeviceCodecCapabilities()),
                 addressRouter = probeRouter,
             ),

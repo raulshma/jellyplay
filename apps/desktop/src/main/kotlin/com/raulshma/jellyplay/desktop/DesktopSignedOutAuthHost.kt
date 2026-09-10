@@ -21,7 +21,7 @@ import com.raulshma.jellyplay.feature.auth.navigation.authSection
 import org.koin.compose.koinInject
 
 /**
- * The signed-out half of DesktopAppRoot's session gate (wave 19A): a compact
+ * The signed-out half of DesktopAppRoot's session gate: a compact
  * NavDisplay over the SHARED auth section, replacing the retired
  * DesktopSignInPane (which offered only server-URL + username + password and
  * cut everything else). One top-level route, [Route.ServerList] — the exact
@@ -67,7 +67,7 @@ import org.koin.compose.koinInject
  * OkHttpConfig trust plumbing plus a client-rebuild semantics design, so a
  * private-server user still needs a CA-signed (or system-trusted) endpoint.
  *
- * The wave-13B session harness is unaffected: it performs the login through
+ * The session harness is unaffected: it performs the login through
  * AuthRepository itself and waits for the signed-in scaffold to appear.
  */
 @Composable

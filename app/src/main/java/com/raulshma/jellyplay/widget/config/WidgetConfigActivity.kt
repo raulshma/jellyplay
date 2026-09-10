@@ -59,13 +59,18 @@ import org.koin.mp.KoinPlatform
  * `APPWIDGET_CONFIGURE` action and an `EXTRA_APPWIDGET_ID` extra; every kind
  * handled that identically (extract id → bail if invalid → init VM → set OK
  * result → mount the themed [ConfigScreen]), so the base owns it once.
- * Subclasses implement [saveAndFinish] for their kind-specific refresh side
- * effects (push RemoteViews, notify grid, kick a scheduler, etc.).
+ *
+ * The base also owns the save tail every kind hand-copied:
+ * `AppWidgetManager.getInstance` → [updateWidget] push → grid notify
+ * ([gridViewId], when the kind renders a collection view) → [refreshNow]
+ * (the scheduler kick, when the kind has one) → `finish()` — the declared
+ * differences ride the hooks: 3 of 4 kinds notify a grid, 2 of 4 kick a
+ * refresh.
  */
 abstract class BaseWidgetConfigActivity : ComponentActivity() {
 
     // Per-activity instance via the AndroidX ViewModelStore + Koin factory
-    // (wave 8B — Hilt removal): each config session owns its VM because
+    // (Hilt removal): each config session owns its VM because
     // initWidgetId wires the per-widget store lookup.
     protected val viewModel: WidgetConfigViewModel by viewModels { KoinViewModelFactory }
     protected var widgetId: Int = AppWidgetManager.INVALID_APPWIDGET_ID
@@ -77,8 +82,39 @@ abstract class BaseWidgetConfigActivity : ComponentActivity() {
     /** Which options section [ConfigScreen] renders. */
     protected abstract val kind: WidgetKind
 
-    /** Called when the user taps Save — push RemoteViews, notify grids, refresh. */
-    protected abstract suspend fun saveAndFinish()
+    /**
+     * The kind's RemoteViews push for [widgetId] over the shared manager —
+     * the `updateAppWidget`/`updateWidget` call each provider exposes.
+     */
+    protected abstract fun updateWidget(manager: AppWidgetManager)
+
+    /**
+     * The collection view to invalidate after the push (the remote adapter
+     * re-read), or null when the push alone is the whole update (Now Playing
+     * renders its RemoteViews directly — no grid).
+     */
+    protected open val gridViewId: Int? = null
+
+    /**
+     * The kind's post-save refresh — the one-shot scheduler kick. Default
+     * none: Continue Watching's shelf is fed by the playback shelf sync, and
+     * Now Playing renders directly, so neither triggers one.
+     */
+    protected open suspend fun refreshNow() {}
+
+    /**
+     * The save tail (see the class KDoc): resolve the manager once, push the
+     * kind's RemoteViews, notify the grid when there is one, kick the
+     * refresh when there is one, then finish. Call order matches the four
+     * former hand copies exactly.
+     */
+    protected suspend fun saveAndFinish() {
+        val manager = AppWidgetManager.getInstance(this)
+        updateWidget(manager)
+        gridViewId?.let { manager.notifyAppWidgetViewDataChanged(widgetId, it) }
+        refreshNow()
+        finish()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -118,12 +154,13 @@ class LibraryWidgetConfigActivity : BaseWidgetConfigActivity() {
     override val titleRes: Int = R.string.widget_library_recommendations_title
     override val kind: WidgetKind = WidgetKind.LIBRARY
 
-    override suspend fun saveAndFinish() {
-        val manager = AppWidgetManager.getInstance(this)
+    override fun updateWidget(manager: AppWidgetManager) =
         LibraryRecommendationsWidget.updateAppWidget(this, manager, widgetId)
-        manager.notifyAppWidgetViewDataChanged(widgetId, R.id.lr_widget_grid)
+
+    override val gridViewId: Int? = R.id.lr_widget_grid
+
+    override suspend fun refreshNow() {
         widgetWorkScheduler.refreshLibraryNow()
-        finish()
     }
 }
 
@@ -137,12 +174,13 @@ class SeerrWidgetConfigActivity : BaseWidgetConfigActivity() {
     override val titleRes: Int = R.string.widget_seerr_recommendations_title
     override val kind: WidgetKind = WidgetKind.SEERR
 
-    override suspend fun saveAndFinish() {
-        val manager = AppWidgetManager.getInstance(this)
+    override fun updateWidget(manager: AppWidgetManager) =
         SeerrRecommendationsWidget.updateAppWidget(this, manager, widgetId)
-        manager.notifyAppWidgetViewDataChanged(widgetId, R.id.sr_widget_grid)
+
+    override val gridViewId: Int? = R.id.sr_widget_grid
+
+    override suspend fun refreshNow() {
         widgetWorkScheduler.refreshSeerrNow()
-        finish()
     }
 }
 
@@ -156,12 +194,10 @@ class ContinueWatchingWidgetConfigActivity : BaseWidgetConfigActivity() {
     override val titleRes: Int = R.string.widget_continue_watching_label
     override val kind: WidgetKind = WidgetKind.CONTINUE_WATCHING
 
-    override suspend fun saveAndFinish() {
-        val manager = AppWidgetManager.getInstance(this)
+    override fun updateWidget(manager: AppWidgetManager) =
         ContinueWatchingWidget.updateWidget(this, manager, widgetId)
-        manager.notifyAppWidgetViewDataChanged(widgetId, R.id.cw_widget_list)
-        finish()
-    }
+
+    override val gridViewId: Int? = R.id.cw_widget_list
 }
 
 /**
@@ -174,11 +210,8 @@ class NowPlayingWidgetConfigActivity : BaseWidgetConfigActivity() {
     override val titleRes: Int = R.string.widget_now_playing_label
     override val kind: WidgetKind = WidgetKind.NOW_PLAYING
 
-    override suspend fun saveAndFinish() {
-        val manager = AppWidgetManager.getInstance(this)
+    override fun updateWidget(manager: AppWidgetManager) =
         NowPlayingWidget.updateAppWidget(this, manager, widgetId)
-        finish()
-    }
 }
 
 @Composable

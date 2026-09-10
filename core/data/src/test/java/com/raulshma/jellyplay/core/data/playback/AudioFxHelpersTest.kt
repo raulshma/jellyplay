@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.playback
 
+import android.media.audiofx.AudioEffect
 import android.media.audiofx.BassBoost
 import android.media.audiofx.LoudnessEnhancer
 import android.media.audiofx.PresetReverb
@@ -8,16 +9,14 @@ import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.ReverbPreset
 import io.mockk.every
 import io.mockk.just
-import io.mockk.mockkConstructor
 import io.mockk.runs
-import io.mockk.unmockkAll
+import io.mockk.mockk
 import io.mockk.verify
 import io.mockk.verifyOrder
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
-import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -41,8 +40,12 @@ import org.robolectric.annotation.Config
  *   [LoudnessEnhancerHelper] re-pushes its gain when enabled; [ReverbHelper]
  *   skips attach at preset NONE and re-opens the effect on preset change.
  *
- * The `android.media.audiofx` objects are intercepted via `mockkConstructor`
- * (their real constructors run against Robolectric's `ShadowAudioEffect`).
+ * The `android.media.audiofx` effect objects are supplied through each
+ * helper's `effectFactory` constructor seam returning a plain mock:
+ * `mockkConstructor` on Robolectric-shadowed framework classes intercepts
+ * unreliably — shadowed native methods such as `release()` bypass the mock and
+ * Robolectric's shadow answers instead, and `setEnabled`'s `int` return type
+ * clashes with a `just runs` stub (Unit cannot unbox to the status int).
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -54,66 +57,83 @@ class AudioFxHelpersTest {
     private val gainApplied = mutableListOf<Int>()
     private val reverbEnabledCalls = mutableListOf<Boolean>()
 
-    @Before
-    fun setUp() {
-        mockkConstructor(BassBoost::class)
-        every { anyConstructed<BassBoost>().setStrength(any()) } answers { bassApplied += firstArg<Short>() }
-        every { anyConstructed<BassBoost>().enabled } returns false
-        every { anyConstructed<BassBoost>().enabled = any() } just runs
-        every { anyConstructed<BassBoost>().release() } just runs
+    private fun bassFx(): BassBoost {
+        val fx = mockk<BassBoost>(relaxed = true)
+        every { fx.enabled } returns false
+        every { fx.setEnabled(any()) } answers { AudioEffect.SUCCESS.toInt() }
+        every { fx.setStrength(any()) } answers { bassApplied += firstArg<Short>(); AudioEffect.SUCCESS.toInt() }
+        every { fx.release() } just runs
+        return fx
+    }
 
-        mockkConstructor(Virtualizer::class)
-        every { anyConstructed<Virtualizer>().setStrength(any()) } answers { virtualizerApplied += firstArg<Short>() }
-        every { anyConstructed<Virtualizer>().enabled } returns false
-        every { anyConstructed<Virtualizer>().enabled = any() } just runs
-        every { anyConstructed<Virtualizer>().release() } just runs
+    private fun virtualizerFx(): Virtualizer {
+        val fx = mockk<Virtualizer>(relaxed = true)
+        every { fx.enabled } returns false
+        every { fx.setEnabled(any()) } answers { AudioEffect.SUCCESS.toInt() }
+        every { fx.setStrength(any()) } answers { virtualizerApplied += firstArg<Short>(); AudioEffect.SUCCESS.toInt() }
+        every { fx.release() } just runs
+        return fx
+    }
 
-        mockkConstructor(PresetReverb::class)
-        every { anyConstructed<PresetReverb>().setPreset(any()) } answers { reverbApplied += firstArg<Short>() }
-        every { anyConstructed<PresetReverb>().enabled } returns false
-        every { anyConstructed<PresetReverb>().enabled = any<Boolean>() } answers { reverbEnabledCalls += firstArg<Boolean>() }
-        every { anyConstructed<PresetReverb>().release() } just runs
+    private fun reverbFx(): PresetReverb {
+        val fx = mockk<PresetReverb>(relaxed = true)
+        every { fx.enabled } returns false
+        every { fx.setEnabled(any()) } answers {
+            reverbEnabledCalls += firstArg<Boolean>()
+            AudioEffect.SUCCESS.toInt()
+        }
+        every { fx.setPreset(any()) } answers { reverbApplied += firstArg<Short>(); AudioEffect.SUCCESS.toInt() }
+        every { fx.release() } just runs
+        return fx
+    }
 
-        mockkConstructor(LoudnessEnhancer::class)
-        every { anyConstructed<LoudnessEnhancer>().setTargetGain(any()) } answers { gainApplied += firstArg<Int>() }
-        every { anyConstructed<LoudnessEnhancer>().enabled } returns false
-        every { anyConstructed<LoudnessEnhancer>().enabled = any() } just runs
-        every { anyConstructed<LoudnessEnhancer>().release() } just runs
+    private fun loudnessFx(): LoudnessEnhancer {
+        val fx = mockk<LoudnessEnhancer>(relaxed = true)
+        every { fx.enabled } returns false
+        every { fx.setEnabled(any()) } answers { AudioEffect.SUCCESS.toInt() }
+        every { fx.setTargetGain(any()) } answers { gainApplied += firstArg<Int>(); AudioEffect.SUCCESS.toInt() }
+        every { fx.release() } just runs
+        return fx
     }
 
     @After
     fun tearDown() {
-        unmockkAll()
+        bassApplied.clear()
+        virtualizerApplied.clear()
+        reverbApplied.clear()
+        gainApplied.clear()
+        reverbEnabledCalls.clear()
     }
 
     // ── AudioFxHelper skeleton (via BassBoostHelper) ─────────────────────
 
     @Test
     fun `attach with UNSET session never opens an effect`() {
-        val helper = BassBoostHelper()
+        val helper = BassBoostHelper(effectFactory = { bassFx() })
 
         helper.attach(androidx.media3.common.C.AUDIO_SESSION_ID_UNSET)
         helper.setEnabled(true) // flag only, no effect to apply to
 
-        verify(exactly = 0) { anyConstructed<BassBoost>().setStrength(any()) }
-        verify(exactly = 0) { anyConstructed<BassBoost>().release() }
+        assertEquals(0, bassApplied.size)
+        assertTrue(helper.isEnabled)
     }
 
     @Test
     fun `attach applies the current strength then the enabled flag`() {
-        val helper = BassBoostHelper() // default strength MODERATE, enabled false
+        val fx = bassFx()
+        val helper = BassBoostHelper(effectFactory = { fx }) // default strength MODERATE, enabled false
 
         helper.attach(audioSessionId = 42)
 
         verifyOrder {
-            anyConstructed<BassBoost>().setStrength(700)
-            anyConstructed<BassBoost>().enabled = false
+            fx.setStrength(700)
+            fx.setEnabled(false)
         }
     }
 
     @Test
     fun `attaching the same session twice is idempotent`() {
-        val helper = BassBoostHelper()
+        val helper = BassBoostHelper(effectFactory = { bassFx() })
 
         helper.attach(audioSessionId = 42)
         helper.attach(audioSessionId = 42)
@@ -123,69 +143,76 @@ class AudioFxHelpersTest {
 
     @Test
     fun `attaching a different session releases the prior effect first`() {
-        val helper = BassBoostHelper()
+        val fx = bassFx()
+        val helper = BassBoostHelper(effectFactory = { fx })
 
         helper.attach(audioSessionId = 42)
         bassApplied.clear()
         helper.attach(audioSessionId = 43)
 
-        verify(exactly = 1) { anyConstructed<BassBoost>().release() }
+        verify(exactly = 1) { fx.release() }
         assertEquals(1, bassApplied.size) // exactly one live effect was re-created
     }
 
     @Test
     fun `detach releases the effect so later enables apply nothing`() {
-        val helper = BassBoostHelper()
+        val fx = bassFx()
+        val helper = BassBoostHelper(effectFactory = { fx })
         helper.attach(audioSessionId = 42)
 
         helper.detach()
         helper.setEnabled(true)
 
-        verify(exactly = 1) { anyConstructed<BassBoost>().release() }
-        verify(exactly = 1) { anyConstructed<BassBoost>().enabled = any() } // only from the original attach
-        assertFalse(helper.isEnabled)
+        verify(exactly = 1) { fx.release() }
+        verify(exactly = 1) { fx.setEnabled(any()) } // only from the original attach
+        // `isEnabled` is the remembered flag (it must survive detach so the
+        // next attach comes up enabled); setEnabled(true) above set it again.
+        assertTrue(helper.isEnabled)
     }
 
     @Test
     fun `setEnabled flips the flag and applies it to the attached effect`() {
-        val helper = BassBoostHelper()
+        val fx = bassFx()
+        val helper = BassBoostHelper(effectFactory = { fx })
         helper.attach(audioSessionId = 42)
 
         helper.setEnabled(true)
         helper.setEnabled(false)
 
         verifyOrder {
-            anyConstructed<BassBoost>().enabled = true
-            anyConstructed<BassBoost>().enabled = false
+            fx.setEnabled(true)
+            fx.setEnabled(false)
         }
     }
 
     @Test
     fun `attach after setEnabled(true) creates the effect already enabled`() {
-        val helper = BassBoostHelper()
+        val fx = bassFx()
+        val helper = BassBoostHelper(effectFactory = { fx })
         helper.setEnabled(true)
 
         helper.attach(audioSessionId = 42)
 
         verifyOrder {
-            anyConstructed<BassBoost>().setStrength(700)
-            anyConstructed<BassBoost>().enabled = true
+            fx.setStrength(700)
+            fx.setEnabled(true)
         }
         assertTrue(helper.isEnabled)
     }
 
     @Test
     fun `a throw while configuring the effect is contained and releases the native handle`() {
-        every { anyConstructed<BassBoost>().setStrength(any()) } throws RuntimeException("boom")
+        val fx = bassFx()
+        every { fx.setStrength(any()) } throws RuntimeException("boom")
 
-        val helper = BassBoostHelper()
+        val helper = BassBoostHelper(effectFactory = { fx })
         helper.attach(audioSessionId = 42) // must not throw
 
         // createSafely released the half-configured handle.
-        verify(exactly = 1) { anyConstructed<BassBoost>().release() }
+        verify(exactly = 1) { fx.release() }
 
         // The helper stays usable for the next attach.
-        every { anyConstructed<BassBoost>().setStrength(any()) } answers { bassApplied += firstArg<Short>() }
+        every { fx.setStrength(any()) } answers { bassApplied += firstArg<Short>(); AudioEffect.SUCCESS.toInt() }
         helper.attach(audioSessionId = 43)
         assertEquals(1, bassApplied.size)
     }
@@ -200,17 +227,18 @@ class AudioFxHelpersTest {
             EffectStrength.MODERATE to 700,
             EffectStrength.HIGH to 1000,
         ).forEach { (strength, expectedMb) ->
-            val helper = BassBoostHelper()
+            val helper = BassBoostHelper(effectFactory = { bassFx() })
             helper.setStrength(strength)
             helper.attach(audioSessionId = 42)
 
             assertEquals(expectedMb.toShort(), bassApplied.last())
+            bassApplied.clear()
         }
     }
 
     @Test
     fun `BassBoost strength change while enabled retargets the live effect`() {
-        val helper = BassBoostHelper()
+        val helper = BassBoostHelper(effectFactory = { bassFx() })
         helper.attach(audioSessionId = 42)
         helper.setEnabled(true)
 
@@ -224,7 +252,7 @@ class AudioFxHelpersTest {
 
     @Test
     fun `Virtualizer strength is coerced into 0-1000`() {
-        val helper = VirtualizerHelper()
+        val helper = VirtualizerHelper(effectFactory = { virtualizerFx() })
 
         helper.setStrength(1500)
         assertEquals(1000, helper.strength)
@@ -242,7 +270,8 @@ class AudioFxHelpersTest {
 
     @Test
     fun `LoudnessEnhancer attach pushes the stored gain and enabling re-pushes it`() {
-        val helper = LoudnessEnhancerHelper()
+        val fx = loudnessFx()
+        val helper = LoudnessEnhancerHelper(effectFactory = { fx })
         helper.setGain(3000)
         gainApplied.clear()
 
@@ -250,15 +279,15 @@ class AudioFxHelpersTest {
         helper.setEnabled(true)
 
         verifyOrder {
-            anyConstructed<LoudnessEnhancer>().setTargetGain(3000) // create() applies initial state
-            anyConstructed<LoudnessEnhancer>().setTargetGain(3000) // applyEnabled re-push on enable
-            anyConstructed<LoudnessEnhancer>().enabled = true
+            fx.setTargetGain(3000) // create() applies initial state
+            fx.setTargetGain(3000) // applyEnabled re-push on enable
+            fx.setEnabled(true)
         }
     }
 
     @Test
     fun `LoudnessEnhancer gain change while enabled forwards to the effect`() {
-        val helper = LoudnessEnhancerHelper()
+        val helper = LoudnessEnhancerHelper(effectFactory = { loudnessFx() })
         helper.attach(audioSessionId = 42)
         helper.setEnabled(true)
         gainApplied.clear()
@@ -273,16 +302,17 @@ class AudioFxHelpersTest {
 
     @Test
     fun `Reverb attach with preset NONE skips opening the effect`() {
-        val helper = ReverbHelper() // default preset NONE
+        val helper = ReverbHelper(effectFactory = { reverbFx() }) // default preset NONE
 
         helper.attach(audioSessionId = 42)
 
-        verify(exactly = 0) { anyConstructed<PresetReverb>().setPreset(any()) }
+        assertEquals(0, reverbApplied.size)
     }
 
     @Test
     fun `Reverb preset change while attached re-opens the effect with the new preset`() {
-        val helper = ReverbHelper()
+        val fx = reverbFx()
+        val helper = ReverbHelper(effectFactory = { fx })
         helper.setPreset(ReverbPreset.SMALL_ROOM)
         helper.attach(audioSessionId = 7)
         assertEquals(1.toShort(), reverbApplied.last())
@@ -293,15 +323,15 @@ class AudioFxHelpersTest {
         // and the helper comes back up enabled.
         assertEquals(ReverbPreset.MEDIUM_HALL, helper.preset)
         verifyOrder {
-            anyConstructed<PresetReverb>().setPreset(1)
-            anyConstructed<PresetReverb>().setPreset(4)
-            anyConstructed<PresetReverb>().enabled = true
+            fx.setPreset(1)
+            fx.setPreset(4)
+            fx.setEnabled(true)
         }
     }
 
     @Test
     fun `Reverb setPreset NONE while attached disables the effect`() {
-        val helper = ReverbHelper()
+        val helper = ReverbHelper(effectFactory = { reverbFx() })
         helper.setPreset(ReverbPreset.PLATE)
         helper.attach(audioSessionId = 7)
 

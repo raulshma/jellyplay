@@ -6,13 +6,7 @@ import com.raulshma.jellyplay.core.ui.components.SettingsItemList
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableStateMapOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onSizeChanged
@@ -125,64 +119,23 @@ fun NavigationCustomizationGroup(
                 if (preferences.hideBottomNavOnScroll) Res.string.settings_nav_hide_on_scroll_on else Res.string.settings_nav_hide_on_scroll_off,
             ),
             checked = preferences.hideBottomNavOnScroll,
-            onCheckedChange = { viewModel.setHideBottomNavOnScroll(it) },
+            onCheckedChange = { viewModel.edit { scope -> scope.navigation.setHideBottomNavOnScroll(it) } },
         )
 
         // ── Reorderable item list ──
-        // Order is driven by a local mutable list seeded from the stored order,
-        // reconciled whenever the stored order changes and no drag is in flight
-        // (mirrors the Home Screen Layout reorder pattern).
-        val navItemOrder = remember(preferences.navItemOrder, navItems) {
-            resolveOrder(preferences.navItemOrder, navItems).toMutableStateList()
-        }
-        val itemHeights = remember { mutableStateMapOf<String, Int>() }
-        var draggingKey by remember { mutableStateOf<String?>(null) }
-        var dragOffsetY by remember { mutableFloatStateOf(0f) }
-
-        fun persistOrder() {
-            val currentOrder = navItemOrder.toList()
-            if (currentOrder != preferences.navItemOrder) {
-                viewModel.setNavItemOrder(currentOrder)
-            }
-        }
-
-        fun moveItem(key: String, deltaY: Float) {
-            if (draggingKey != key) return
-            dragOffsetY += deltaY
-            while (true) {
-                val currentIndex = navItemOrder.indexOf(key)
-                if (currentIndex == -1) return
-                val draggedHeight = itemHeights[key] ?: return
-
-                if (dragOffsetY > 0f && currentIndex < navItemOrder.lastIndex) {
-                    val nextKey = navItemOrder[currentIndex + 1]
-                    val nextHeight = itemHeights[nextKey] ?: draggedHeight
-                    val threshold = (draggedHeight + nextHeight) / 2f
-                    if (dragOffsetY > threshold) {
-                        navItemOrder.removeAt(currentIndex)
-                        navItemOrder.add(currentIndex + 1, key)
-                        dragOffsetY -= nextHeight.toFloat()
-                        continue
-                    }
-                }
-                if (dragOffsetY < 0f && currentIndex > 0) {
-                    val prevKey = navItemOrder[currentIndex - 1]
-                    val prevHeight = itemHeights[prevKey] ?: draggedHeight
-                    val threshold = (draggedHeight + prevHeight) / 2f
-                    if (-dragOffsetY > threshold) {
-                        navItemOrder.removeAt(currentIndex)
-                        navItemOrder.add(currentIndex - 1, key)
-                        dragOffsetY += prevHeight.toFloat()
-                        continue
-                    }
-                }
-                break
-            }
-        }
+        // The shared reorderable-list holder owns the mirror/resync/persist
+        // choreography around ReorderState (same shape as the Appearance
+        // reorder lists); this site is just content: known nav items for the
+        // resolveOrder seed and the persist write.
+        val navOrder = rememberReorderableOrderedList(
+            storedOrder = preferences.navItemOrder,
+            knownOrder = navItems.map { it.key },
+            onPersist = { order -> viewModel.edit { it.navigation.setNavItemOrder(order) } },
+        )
 
         Spacer(Modifier.height(8.dp))
 
-        navItemOrder.forEachIndexed { index, key ->
+        navOrder.items.forEachIndexed { index, key ->
             val descriptor = navItems.first { it.key == key }
             val enabled = key !in preferences.hiddenNavItems
             SettingReorderableToggleItem(
@@ -191,16 +144,16 @@ fun NavigationCustomizationGroup(
                 subtitle = stringResource(descriptor.subtitleRes),
                 checked = enabled,
                 index = index,
-                count = navItemOrder.size,
-                modifier = Modifier.onSizeChanged { itemHeights[key] = it.height },
+                count = navOrder.items.size,
+                modifier = Modifier.onSizeChanged { navOrder.recordHeight(key, it.height) },
                 onCheckedChange = { checked ->
                     val current = preferences.hiddenNavItems.toMutableSet()
                     if (checked) current.remove(key) else current.add(key)
-                    viewModel.setHiddenNavItems(current)
+                    viewModel.edit { it.navigation.setHiddenNavItems(current) }
                 },
-                onDrag = { delta -> moveItem(key, delta) },
-                onDragStart = { draggingKey = key; dragOffsetY = 0f },
-                onDragEnd = { draggingKey = null; persistOrder() },
+                onDrag = { delta -> navOrder.onDrag(key, delta) },
+                onDragStart = { navOrder.onDragStart(key) },
+                onDragEnd = navOrder::onDragEnd,
             )
         }
         }
@@ -208,13 +161,12 @@ fun NavigationCustomizationGroup(
 }
 
 /**
- * Resolves the stored nav-item order against the available [navItems]: known items
- * in their stored position, then any known items missing from the stored order
- * in their default order. Unknown stored keys are dropped.
+ * Resolves a stored order against the [knownOrder]: known items in their
+ * stored position, then any known items missing from the stored order in
+ * their default [knownOrder] position. Unknown stored entries are dropped.
  */
-private fun resolveOrder(storedOrder: List<String>, navItems: List<NavItemDescriptor>): List<String> {
-    val known = navItems.map { it.key }
-    val ordered = storedOrder.filter { it in known }
-    val missing = known.filter { it !in ordered }
+internal fun <T> resolveOrder(storedOrder: List<T>, knownOrder: List<T>): List<T> {
+    val ordered = storedOrder.filter { it in knownOrder }
+    val missing = knownOrder.filter { it !in ordered }
     return ordered + missing
 }

@@ -35,6 +35,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlin.test.AfterTest
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -220,7 +221,7 @@ class SyncStatusStateHolderTest {
             outboxCountFlow.onSubscription { drainCollections++ }
         val holder = buildHolder()
 
-        holder.awaitOutboxDrained()
+        assertTrue(holder.awaitOutboxDrained())
 
         // Zero pending: the short-circuit returns without collecting the live count.
         assertEquals(0, drainCollections)
@@ -234,7 +235,7 @@ class SyncStatusStateHolderTest {
         val holder = buildHolder()
 
         val start = testScheduler.currentTime
-        holder.awaitOutboxDrained()
+        assertTrue(holder.awaitOutboxDrained())
 
         // Drained without waiting out the 8s cap.
         assertEquals(0L, testScheduler.currentTime - start)
@@ -249,7 +250,9 @@ class SyncStatusStateHolderTest {
         val holder = buildHolder()
 
         val start = testScheduler.currentTime
-        holder.awaitOutboxDrained()
+        // Timeout reports NOT drained — the caller's signal that its fetch
+        // raced a still-pending sync.
+        assertFalse(holder.awaitOutboxDrained())
 
         // Returned exactly at the cap, not immediately and not never.
         assertEquals(8_000L, testScheduler.currentTime - start)

@@ -7,7 +7,7 @@ import com.raulshma.jellyplay.core.model.RefreshRateMode
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 
 /**
- * Host-window seam for the commonMain [VideoPlayerScreen] (wave 9A): every
+ * Host-window seam for the commonMain [VideoPlayerScreen]: every
  * system-surface operation the screen performs on its host window — system-bar
  * visibility, keep-screen-on, window brightness, orientation lock, display
  * frame-rate matching — plus the device input facts the keyboard handling
@@ -154,7 +154,7 @@ internal expect fun rememberIs24HourFormat(): Boolean
  * at-HEAD focus-request condition, [VideoPlayerScreen]'s focus-request
  * effect). Static platform fact — no remember needed.
  *
- * Desktop (wave 14A) is TRUE. The desktop shell takes no Compose focus of its
+ * Desktop is TRUE. The desktop shell takes no Compose focus of its
  * own while the player is up: Route.VideoPlayer is isFullScreen so the nav
  * rail is removed from composition, the sign-in pane was replaced when the
  * session started, and PlayerControls' own focus grab is TV-only — but the
@@ -166,7 +166,7 @@ internal expect fun rememberIs24HourFormat(): Boolean
  * the TOPMOST key-input node only ([androidx.compose.ui.focus.FocusOwnerImpl]
  * `dispatchKeyEvent` null-focus fallback) — on desktop that topmost node is
  * DesktopNavScaffold's `onPreviewKeyEvent` Row, so ESC still popped the route
- * while SPACE/arrows never reached the player's `onKeyEvent` (the wave 13B
+ * while SPACE/arrows never reached the player's `onKeyEvent` (the
  * session-harness focus finding this seam's desktop grab fixes).
  *
  * Android is FALSE: the phone keyboard layer keeps the exact at-HEAD timing
@@ -181,17 +181,17 @@ internal expect fun grabsKeyboardFocusWithControlsVisible(): Boolean
  * closing and the layer re-composing), grabs focus onto [focusRequester] with
  * the codebase's retry idiom ([RequestOrRestoreFocus]: the requester's node
  * may not be laid out on the first frame, so retry across a frame, up to 3
- * attempts). Additionally (wave 14D): whenever [targetHoldsFocus] flips false
+ * attempts). Additionally: whenever [targetHoldsFocus] flips false
  * while [layerComposed] is true — focus was taken AWAY from the grab target
  * after a successful grab — the grab is re-asserted with the same retry
  * idiom. The real desktop window needs this: the live session pass proved the
  * initial grab succeeds (attempt=1 ok=true, +68 ms) yet Compose focus is
- * dropped again ~1–2 s later when the wave-14B mpv SwingPanel/HWND surface
+ * dropped again ~1–2 s later when the mpv SwingPanel/HWND surface
  * mounts (the AWT focus owner shuffles off the SkiaLayer and the player Box
  * reports hasFocus=false), and nothing ever re-grabbed — the auto-hide edge
  * re-request is a single un-retried attempt and the controls auto-hide had
  * already suppressed itself, so SPACE at the ~11 s injection found no Compose
- * focused node and died at the scaffold's null-focus fallback (wave 14A's
+ * focused node and died at the scaffold's null-focus fallback (the
  * live-pass OVERLAY_SPACE failure; its desktop UI test passed because the
  * miniature topology has no surface mount to steal focus).
  *
@@ -246,7 +246,7 @@ internal fun PlayerKeyboardFocusGrabEffect(
 }
 
 /**
- * Harness-gated focus diagnostic (wave 14D): emits one stdout line when the
+ * Harness-gated focus diagnostic: emits one stdout line when the
  * desktop session harness is armed (`jellyplay.harness.enabled=true`, the same
  * zero-cost gate [DesktopSessionHarness] uses), so a live
  * `tools/e2e/desktop-session-pass.sh` run can correlate the Compose-side focus
@@ -259,7 +259,7 @@ internal fun PlayerKeyboardFocusGrabEffect(
 internal expect fun harnessFocusDiag(message: String)
 
 /**
- * Wave 14E deterministic desktop key delivery: publish the composing player
+ *  deterministic desktop key delivery: publish the composing player
  * screen's media-key handler to the desktop shell ([DesktopPlayerKeyBridge],
  * jvmMain) so `DesktopNavScaffold.onPreviewKeyEvent` can forward raw key
  * events into [VideoPlayerScreen]'s own handler even while the player Box

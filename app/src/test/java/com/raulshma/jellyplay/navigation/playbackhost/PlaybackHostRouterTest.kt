@@ -12,7 +12,7 @@ import org.junit.Test
  * Characterization test of [PlaybackHostRouter.decide] — pins every
  * (route x preferredPlayer) cell of the CURRENT host table so any future
  * answer change is a deliberate, visible edit rather than silent drift
- * (wave 19C flipped Live TV from InNav to DedicatedActivity exactly that way).
+ * (flipped Live TV from InNav to DedicatedActivity exactly that way).
  *
  * Pure JVM: the router is a pure function of (NavKey, PlayerType) with no
  * Android types. Its single consumer is the navigateFilter adapter in
@@ -115,7 +115,7 @@ class PlaybackHostRouterTest {
 
     @Test
     fun `live tv with any non-EXTERNAL engine answers DedicatedActivity carrying the channel args`() {
-        // Wave 19C: the dedicated PlayerActivity hosts live for every embedded
+        // The dedicated PlayerActivity hosts live for every embedded
         // engine so system PiP serves live TV (the former in-nav answer died
         // with MainActivity's supportsPictureInPicture). The channel fields
         // map onto PlayerActivityArgs.Live verbatim; no resume position for a
@@ -200,7 +200,7 @@ class PlaybackHostRouterTest {
         // The external-player result flow (reportExternalPlaybackStopped)
         // credits watched progress; it must only ever run for these routes.
         // For live, every non-EXTERNAL engine now answers DedicatedActivity
-        // (wave 19C live PiP) — the ExternalPlayer handoff survives only for
+        // (live PiP) — the ExternalPlayer handoff survives only for
         // PlayerType.EXTERNAL.
         allPlayerTypes.forEach { pref ->
             val videoDecision = PlaybackHostRouter.decide(videoAllArgs, pref)

@@ -13,13 +13,34 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /**
  * State surfaced to the "Play On" sheet + persistent mini bar at the app shell.
+ *
+ * Declared delta: the `canFling` field is deleted. It was a
+ * `WhileSubscribed` stateIn over the audio manager's current item id whose
+ * value the fold read via `.value` — and because nothing ever collected that
+ * flow, it sat at its initial `false` forever while the fold kept re-stamping
+ * the dead value into every emission. Deleted rather than wired live: no
+ * surface ever rendered it (the fold was its only reader), and both real
+ * fling decisions ([connectAndFling], [flingIfConnected]) read the item id /
+ * the connection directly, so a live projection would still have no consumer.
+ *
+ * Declared delta: the `positionMs` / `durationMs` / `volume`
+ * fields are deleted. During a cast session the strategy updates `positionMs`
+ * ~1 Hz off WebSocket session pushes, and folding it here re-emitted uiState
+ * on every tick — recomposing the whole app-shell scope (PhoneContent:
+ * MainNavDisplay + nav bar + mini player) for the entire session. The per-tick
+ * fields now live as narrow [PlayOnViewModel.positionMsFlow] /
+ * [PlayOnViewModel.durationMsFlow] / [PlayOnViewModel.volumeFlow] StateFlows
+ * that only the leaf sliders rendering them collect — the same
+ * leaf-collection rule the video player pins for its 4 Hz position stream
+ * (VideoPlayerScreen's ChapterPickerBinder / TvControllableSeekBar). Nothing
+ * left in this fold changes per tick: connection, metadata and play/pause
+ * events only.
  */
 @Immutable
 data class PlayOnUiState(
@@ -29,20 +50,24 @@ data class PlayOnUiState(
     val isConnected: Boolean = false,
     /** Display name of the session we are currently controlling, if any. */
     val targetDeviceName: String? = null,
-    /** True when there is a local item id we can fling. */
-    val canFling: Boolean = false,
     // Transport — fed by the connected Jellyfin session's play state.
     val title: String = "",
     val artist: String = "",
     val artworkUri: String? = null,
-    val positionMs: Long = 0L,
-    val durationMs: Long = 0L,
     val isPlaying: Boolean = false,
-    val volume: Float = 1f,
 )
 
 /**
- * Backs the global "Play On" entry point (Home FAB).
+ * The "Play On" controller — the one home for the whole Play On surface
+ * family (the persistent mini bar, the device sheet and the full-screen
+ * companion): device discovery, connect + fling, the 5 s status poll and the
+ * [uiState] metadata-precedence fold all live here. It is constructed ONCE
+ * at the shell (`MainContent` in JellyPlayApp, above the TV / phone /
+ * full-screen fork) and threaded to every surface as an explicit parameter;
+ * no surface resolves it itself. The companion screen used to self-resolve
+ * through `koinViewModel()` — an identity that held only because both call
+ * sites happened to sit under MainActivity's ViewModelStoreOwner, and would
+ * have silently forked state the moment the screen moved to another host.
  *
  * Talks to [JellyfinRemotePlayCastStrategy] **directly** rather than through
  * the shared [com.raulshma.jellyplay.core.data.cast.CastManager]. This is
@@ -53,7 +78,11 @@ data class PlayOnUiState(
  * stops/the active strategy flips. The strategy's own flows
  * ([JellyfinRemotePlayCastStrategy.isConnected], [positionMs], …) are stable,
  * independent references, so Play On stays fully isolated from the player's
- * cast state.
+ * cast state. The strategy is PRIVATE to this controller: the transport
+ * commands below are the narrow surface the screens drive, and the Home nav
+ * graph's probe + fling rides [flingIfConnected] (adapted into its
+ * [com.raulshma.jellyplay.feature.home.navigation.HomePlayOnRedirect] seam
+ * at `MainNavDisplay`) — nothing outside reaches the strategy anymore.
  *
  * The PlayTo call is `JellyfinRemotePlayCastStrategy.loadMedia` →
  * `AdminApiClient.play(sessionId, "PlayNow", [itemId], …)`.
@@ -63,21 +92,30 @@ class PlayOnViewModel(
     private val audioPlaybackManager: AudioPlaybackManager,
 ) : JellyPlayViewModel() {
 
-    /** Shared singleton; exposed so the Home nav graph can short-circuit plays. */
-    val strategy: JellyfinRemotePlayCastStrategy get() = jellyfinStrategy
-
     private val _targetDeviceName = MutableStateFlow<String?>(null)
     val targetDeviceName: StateFlow<String?> = _targetDeviceName.asStateFlow()
-
-    private val canFling: StateFlow<Boolean> = audioPlaybackManager.currentPlayingItemId
-        .map { it != null }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
     val devices: StateFlow<List<CastDevice>> = jellyfinStrategy.discoveredDevices
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val isConnected: StateFlow<Boolean> = jellyfinStrategy.isConnected
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    // Per-tick transport streams, deliberately OUTSIDE [uiState]: during a
+    // connected session the strategy updates `positionMs` ~1 Hz off WebSocket
+    // session pushes, and the former uiState fold included position/duration/
+    // volume — so every tick re-emitted uiState and recomposed the entire app
+    // shell that collects it. Exposed as narrow StateFlows so only the leaf
+    // sliders that render them (the mini bar's + companion's seek/volume
+    // rows) subscribe and recompose. Initials mirror the strategy's own
+    // StateFlow seeds (0L / 0L / 1f), which are also what the former uiState
+    // defaults carried.
+    val positionMsFlow: StateFlow<Long> = jellyfinStrategy.positionMs
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0L)
+    val durationMsFlow: StateFlow<Long> = jellyfinStrategy.durationMs
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0L)
+    val volumeFlow: StateFlow<Float> = jellyfinStrategy.volume
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 1f)
 
     val uiState: StateFlow<PlayOnUiState> = combine(
         // devices + connected + target
@@ -86,20 +124,16 @@ class PlayOnViewModel(
             isConnected,
             targetDeviceName,
         ) { devs, connected, target -> DeviceState(devs, connected, target) },
-        // transport + remote now-playing — straight off the strategy's own flows.
-        // kotlinx.coroutines `combine` caps at 5 flows, so nest the metadata triple.
+        // transport + remote now-playing — straight off the strategy's own
+        // flows, minus the per-tick position/duration/volume (narrow flows
+        // above): only play/pause flips and metadata changes re-emit.
         combine(
             jellyfinStrategy.isPlaying,
-            jellyfinStrategy.positionMs,
-            jellyfinStrategy.durationMs,
-            jellyfinStrategy.volume,
-            combine(
-                jellyfinStrategy.nowPlayingTitle,
-                jellyfinStrategy.nowPlayingSubtitle,
-                jellyfinStrategy.nowPlayingArtworkUrl,
-            ) { t, s, art -> Triple(t, s, art) },
-        ) { playing, pos, dur, vol, (title, subtitle, art) ->
-            TransportState(playing, pos, dur, vol, title, subtitle, art)
+            jellyfinStrategy.nowPlayingTitle,
+            jellyfinStrategy.nowPlayingSubtitle,
+            jellyfinStrategy.nowPlayingArtworkUrl,
+        ) { playing, title, subtitle, art ->
+            TransportState(playing, title, subtitle, art)
         },
         // local now-playing metadata for the flingable item (fallback display)
         combine(
@@ -120,14 +154,10 @@ class PlayOnViewModel(
             isDiscovering = device.devices.isNotEmpty(),
             isConnected = device.connected,
             targetDeviceName = device.target,
-            canFling = canFling.value,
             title = displayTitle,
             artist = displaySubtitle,
             artworkUri = displayArt,
-            positionMs = transport.positionMs,
-            durationMs = transport.durationMs,
             isPlaying = transport.playing,
-            volume = transport.volume,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), PlayOnUiState())
 
@@ -162,18 +192,44 @@ class PlayOnViewModel(
         }
     }
 
+    /**
+     * The Home nav graph's probe + fling — the body behind its
+     * [com.raulshma.jellyplay.feature.home.navigation.HomePlayOnRedirect]
+     * seam: when a remote session is connected, fling [itemId] to it and
+     * return `true` (the caller skips local playback routing); otherwise
+     * return `false` having issued nothing. `loadMedia` itself no-ops when
+     * the session died between the probe and the call, so collapsing
+     * probe + call into one member changes nothing observable.
+     */
+    fun flingIfConnected(itemId: String, startPositionMs: Long): Boolean =
+        jellyfinStrategy.isConnected.value.also { connected ->
+            if (connected) {
+                jellyfinStrategy.loadMedia(itemId = itemId, startPositionMs = startPositionMs)
+            }
+        }
+
+    // ---- transport ----
+    // The narrow command surface every Play On surface drives (mini bar,
+    // companion). Each is a declared one-line pass-through onto the strategy —
+    // the strategy remains the transport home (it owns the session-id guards
+    // and the admin-API play/pause/seek commands); what is gone is the
+    // facade-era wide escape hatch: the strategy itself is no longer exposed,
+    // so this list is the ONLY way in.
+
     fun castPlay() = jellyfinStrategy.play()
     fun castPause() = jellyfinStrategy.pause()
     fun castSeekTo(positionMs: Long) = jellyfinStrategy.seekTo(positionMs)
     fun setCastVolume(volume: Float) = jellyfinStrategy.setRendererVolume(volume)
     fun castNextTrack() = jellyfinStrategy.nextTrack()
     fun castPreviousTrack() = jellyfinStrategy.previousTrack()
+
     fun castStop(context: Context) {
         jellyfinStrategy.stop(context)
         _targetDeviceName.value = null
         statusPollingJob?.cancel()
         statusPollingJob = null
     }
+
     fun disconnect(context: Context) {
         jellyfinStrategy.disconnect(context)
         _targetDeviceName.value = null
@@ -208,11 +264,10 @@ class PlayOnViewModel(
         val connected: Boolean,
         val target: String?,
     )
+    // Position/duration/volume ride their own narrow flows — see the
+    // positionMsFlow block above for why they left this fold.
     private data class TransportState(
         val playing: Boolean,
-        val positionMs: Long,
-        val durationMs: Long,
-        val volume: Float,
         val title: String,
         val subtitle: String,
         val artworkUrl: String,

@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.update
 
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.model.AppUpdateInfo
 import com.raulshma.jellyplay.core.model.compareVersions
 import com.raulshma.jellyplay.core.network.github.GitHubReleasesApi
@@ -140,14 +141,14 @@ class AppUpdateRepositoryImpl(
                     // already in place and still installable; the worst case is
                     // the next launch's sweep can't identify it (treats it as an
                     // orphan) — preferable to deleting a usable APK.
-                    runCatching { writeSidecar(info, updatesDir) }
+                    runCatchingRethrowingCancellation { writeSidecar(info, updatesDir) }
                     Result.success(finalFile)
                 } catch (e: Throwable) {
                     response.close()
                     // Only the in-flight .part is discarded; the prior APK +
                     // sidecar (if any) survive so the user can still install what
                     // they had before the failed re-download.
-                    runCatching { partFile.delete() }
+                    runCatchingRethrowingCancellation { partFile.delete() }
                     throw e
                 }
             }

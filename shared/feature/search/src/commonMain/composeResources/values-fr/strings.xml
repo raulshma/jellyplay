@@ -47,7 +47,7 @@
     <string name="search_filter_tags">Étiquettes</string>
     <string name="search_filter_minimum_rating">Note minimale</string>
     <string name="search_filter_any">Tous</string>
-    <string name="search_filter_rating_plus">%1$.1f+</string>
+    <string name="search_filter_rating_plus">%1$s+</string>
     <string name="search_apply_filters">Appliquer les filtres</string>
 
     <!-- Sort (parity with Library's sort options) -->

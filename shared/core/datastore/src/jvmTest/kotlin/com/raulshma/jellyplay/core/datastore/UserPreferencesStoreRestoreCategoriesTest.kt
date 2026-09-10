@@ -14,6 +14,7 @@ import com.raulshma.jellyplay.core.datastore.appearance.AppearanceSlice
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.ThemeMode
+import com.raulshma.jellyplay.core.model.platformEngineSupport
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -242,7 +243,7 @@ class UserPreferencesStoreRestoreCategoriesTest {
 
         val after = playbackAfter()
         assertEquals(true, after.pgsSubtitleDirectPlay, "pgsSubtitleDirectPlay is SUBTITLES_LANGUAGE-owned")
-        assertEquals(PlayerType.EXO_PLAYER, after.preferredPlayer, "preferredPlayer is PLAYBACK-owned; must not bleed")
+        assertEquals(platformEngineSupport.default, after.preferredPlayer, "preferredPlayer is PLAYBACK-owned; must not bleed")
     }
 
     @Test
@@ -356,7 +357,9 @@ class UserPreferencesStoreRestoreCategoriesTest {
         store.restoreV2Categories(incoming, categories = emptySet(), includeExtras = false)
         drain()
 
-        assertEquals(PlayerType.EXO_PLAYER, playbackAfter().preferredPlayer)
+        // No playback category → the stored/blank value survives the read
+        // clamp untouched.
+        assertEquals(platformEngineSupport.default, playbackAfter().preferredPlayer)
         assertEquals(ThemeMode.SYSTEM, appearanceAfter().themeMode)
         assertNull(extrasAfter().watchLaterPlaylistId, "extras must not land when the selection is empty")
         assertEquals(false, extrasAfter().onboardingCompleted)

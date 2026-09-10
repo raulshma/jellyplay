@@ -44,6 +44,19 @@ fun formatDurationMs(ms: Long): String {
     }
 }
 
+/**
+ * The no-hours clock variant of [formatDurationMs]: durations past an hour
+ * roll into plain minutes (`61:01`, the Now Playing widget's convention)
+ * instead of switching to `h:mm:ss`. Same zero/negative handling — `0:00`.
+ */
+fun formatDurationMsNoHours(ms: Long): String {
+    if (ms <= 0) return "0:00"
+    val totalSeconds = ms / 1000
+    val minutes = totalSeconds / 60
+    val seconds = totalSeconds % 60
+    return "$minutes:${seconds.toString().padStart(2, '0')}"
+}
+
 fun formatDurationFromMinutes(totalMinutes: Long): String {
     val hours = totalMinutes / 60
     val minutes = totalMinutes % 60

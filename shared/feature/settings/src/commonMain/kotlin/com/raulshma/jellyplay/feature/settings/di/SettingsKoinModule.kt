@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.settings.di
 
 import com.raulshma.jellyplay.feature.settings.AboutViewModel
+import com.raulshma.jellyplay.feature.settings.AdvancedSettingsGate
 import com.raulshma.jellyplay.feature.settings.AppearanceSettingsViewModel
 import com.raulshma.jellyplay.feature.settings.ArrSettingsViewModel
 import com.raulshma.jellyplay.feature.settings.AudioSettingsViewModel
@@ -29,8 +30,8 @@ import org.koin.core.module.Module
 import org.koin.dsl.module
 
 /**
- * Koin construction owner for the settings feature (docs/kmp-migration-plan.md
- * §Phase V3, settings conveyor Waves 1a+1b). The HiltViewModel/@Inject/@ApplicationContext
+ * Koin construction owner for the settings feature (docs/kmp-migration-plan.md).
+ * The HiltViewModel/@Inject/@ApplicationContext
  * annotations were stripped at the move — Koin is the single constructor owner
  * (one framework per type). Ctor deps split three ways:
  *  - datastore projections/stores (PreferenceProjections, UserPreferencesStore,
@@ -65,8 +66,13 @@ val settingsModule: Module = module {
     // (this module's own SettingsScreen uses direct object access; shared
     // consumers like feature/home resolve it from their own Koin module
     // graphs — the interim app-side SettingsSearchInteropModule Hilt bridge
-    // died with wave 6B's HomeViewModel flip).
+    // died with the HomeViewModel flip).
     single<SettingsSearchProvider> { SettingsSearchCatalog }
+
+    // One shared instance of the stateless advanced-settings gate (read flow
+    // + write command over the shared AppearanceStore) instead of a per-VM
+    // rebuild in every settings ViewModel.
+    single { AdvancedSettingsGate(get(), get()) }
 
     // Eager at startKoin so the settings string table is warm on a background
     // dispatcher LONG before the settings screen's first composition can block
@@ -93,7 +99,7 @@ val settingsModule: Module = module {
         AppearanceSettingsViewModel(
             store = get(),
             projections = get(),
-            appearanceStore = get(),
+            advancedSettings = get(),
             editor = get(),
         )
     }
@@ -102,7 +108,7 @@ val settingsModule: Module = module {
             appLocaleSetter = get(),
             store = get(),
             projections = get(),
-            appearanceStore = get(),
+            advancedSettings = get(),
             editor = get(),
         )
     }
@@ -110,7 +116,7 @@ val settingsModule: Module = module {
         PlaybackSettingsViewModel(
             store = get(),
             projections = get(),
-            appearanceStore = get(),
+            advancedSettings = get(),
             editor = get(),
             watchNextRefresher = get(),
         )
@@ -119,7 +125,7 @@ val settingsModule: Module = module {
         AudioSettingsViewModel(
             store = get(),
             projections = get(),
-            appearanceStore = get(),
+            advancedSettings = get(),
             editor = get(),
             audioCacheClearer = get(),
         )
@@ -128,7 +134,7 @@ val settingsModule: Module = module {
         ExperimentalSettingsViewModel(
             store = get(),
             projections = get(),
-            appearanceStore = get(),
+            advancedSettings = get(),
             editor = get(),
         )
     }
@@ -183,11 +189,11 @@ val settingsModule: Module = module {
             pinRateLimiter = get(),
         )
     }
-    // ── Wave 1b: storage / privacy / server / security / integrations / about ──
+    // ──: storage / privacy / server / security / integrations / about ──
     viewModel {
         StorageSettingsViewModel(
             projections = get(),
-            appearanceStore = get(),
+            advancedSettings = get(),
             editor = get(),
             autoDownloadSync = get(),
             storageAreas = get(),
@@ -220,7 +226,7 @@ val settingsModule: Module = module {
         SecuritySettingsViewModel(
             store = get(),
             projections = get(),
-            appearanceStore = get(),
+            advancedSettings = get(),
             editor = get(),
             authRepository = get(),
         )
@@ -259,19 +265,20 @@ val settingsModule: Module = module {
             jsonSource = get(),
         )
     }
-    // ── Wave 1b final slice: home-layout cluster + notifications ──
+    // ──  final slice: home-layout cluster + notifications ──
     viewModel {
         LibraryLayoutViewModel(
             homeDiscoveryStore = get(),
             editor = get(),
             mediaRepository = get(),
+            playlistRepository = get(),
         )
     }
     viewModel {
         NotificationSettingsViewModel(
             store = get(),
             projections = get(),
-            appearanceStore = get(),
+            advancedSettings = get(),
             editor = get(),
             mediaRepository = get(),
             notificationSync = get(),

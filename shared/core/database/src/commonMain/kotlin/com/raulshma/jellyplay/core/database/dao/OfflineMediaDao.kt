@@ -242,15 +242,30 @@ interface OfflineMediaDao {
     suspend fun getLocalImagePaths(itemId: String): OfflineImagePaths?
 
     /**
-     * Returns `(id, peopleJson)` for every offline row. Used by cast-image
-     * cleanup after a delete to decide whether a person is still referenced by
-     * any remaining offline item before deleting their shared image file — a
-     * person can appear across multiple movies/episodes, and the
-     * `personId`-keyed image is shared by all of them. Call this *after* the
-     * deleted rows are removed so only surviving references are counted.
+     * Whether any offline row's `peopleJson` references the person whose
+     * [personReferenceLikePattern] built [pattern]. Per-candidate existence
+     * check for cast-image cleanup after a delete (see
+     * [com.raulshma.jellyplay.core.data.repository.OfflineDeletionCore]): the
+     * former approach loaded and JSON-decoded EVERY row's multi-KB cast blob
+     * (`getAllPeopleJson`, O(rows × blob size) on first pass per blob) just to
+     * decide which shared person-image files survive; this answers the same
+     * question with one EXISTS per candidate id (≤ dozens — the deleted rows'
+     * cast), which stops at the first surviving reference and never ships the
+     * blobs across the DB boundary. No query runs at all when the delete
+     * produced no candidates.
+     *
+     * The blob is scanned as text, not decoded: `peopleJson` holds a
+     * kotlinx-serialized `List<OfflinePersonInfo>`, so a row references a
+     * person iff the JSON fragment `"id":"<personId>"` appears in its blob —
+     * [personReferenceLikePattern] builds exactly that fragment and the
+     * collision-safety argument lives there.
      */
-    @Query("SELECT id, peopleJson FROM offline_media")
-    suspend fun getAllPeopleJson(): List<OfflinePeopleRow>
+    @Query(
+        """
+        SELECT EXISTS(SELECT 1 FROM offline_media WHERE peopleJson LIKE :pattern ESCAPE '\' LIMIT 1)
+        """
+    )
+    suspend fun isPersonReferenced(pattern: String): Boolean
 
     /**
      * Offline "More like this": top-level titles (MOVIE/SERIES) whose CSV `genres`
@@ -302,8 +317,36 @@ data class UnplayedCountRow(
     val unplayedCount: Int,
 )
 
-/** `(id, peopleJson)` projection for cast-image reference counting on delete. */
-data class OfflinePeopleRow(
-    val id: String,
-    val peopleJson: String?,
-)
+/**
+ * Builds the [OfflineMediaDao.isPersonReferenced] LIKE pattern matching exactly
+ * the rows whose `peopleJson` references [personId].
+ *
+ * `peopleJson` stores a kotlinx-serialized `List<OfflinePersonInfo>`, so the
+ * pattern anchors on the real JSON key — `"id":"<personId>"` — rather than a
+ * bare quoted id, and is collision-safe on both ends:
+ *
+ *  - **False positives** — a *different* person id that merely contains
+ *    [personId] as a substring cannot match: inside a longer id the characters
+ *    adjacent to the substring are id characters (Jellyfin person ids are
+ *    GUIDs, `[0-9a-fA-F-]`), never the closing `"` the pattern demands; and a
+ *    `"` can never appear inside another JSON string value (kotlinx escapes it
+ *    as `\"`), so `"id":"…"` can only line up with a genuine key/value token
+ *    boundary — never with the `name`/`role`/… fields.
+ *  - **False negatives** — the id is JSON-escaped (`\` → `\\`, `"` → `\"`)
+ *    before matching so an id carrying those characters matches its encoded
+ *    form in the blob.
+ *
+ * LIKE wildcards (`%`, `_`) and the escape character itself are then escaped
+ * for the query's `ESCAPE '\'` clause — the same convention as
+ * `OfflineMediaDao.search` — so an id containing them matches literally.
+ */
+fun personReferenceLikePattern(personId: String): String {
+    val jsonEscaped = personId
+        .replace("\\", "\\\\")
+        .replace("\"", "\\\"")
+    val likeEscaped = jsonEscaped
+        .replace("\\", "\\\\")
+        .replace("%", "\\%")
+        .replace("_", "\\_")
+    return "%\"id\":\"$likeEscaped\"%"
+}

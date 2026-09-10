@@ -21,7 +21,7 @@ import kotlin.test.assertTrue
  * surfacing, preset-registry integrity, applyAndExit/reset persistence
  * writes, mode-copy updates, null-font-install no-op) has no portable
  * equivalent and is covered only by compileAndroidMain — documented in
- * docs/kmp-migration-plan.md §Phase V3.
+ * docs/kmp-migration-plan.md §.
  */
 class SubtitleTesterStateReducerTest {
 

@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.repository
 
+import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.model.DownloadStatus
 
 /**
@@ -50,6 +51,14 @@ object DownloadStates {
     fun isExhausted(retryCount: Int): Boolean = retryCount >= DOWNLOAD_MAX_AUTO_RETRY
 
     /**
+     * True when a row's accumulated bytes survive an auto-resume: `PAUSED`
+     * rows keep their contiguous prefix, anything else restarts from 0.
+     * [resumeByteOffset] is the same rule expressed as an offset; the
+     * batched reconnect path branches on this predicate to pick its UPDATE.
+     */
+    fun keepsResumeBytes(status: String): Boolean = status == DownloadStatus.PAUSED.name
+
+    /**
      * Byte offset a worker should resume from, given the row's last status and
      * accumulated bytes.
      *
@@ -67,9 +76,8 @@ object DownloadStates {
      * that resumes a FAILED body from its mid-point) has one place to fix.
      */
     fun resumeByteOffset(status: String, downloadedBytes: Long): Long =
-        if (status == DownloadStatus.PAUSED.name) downloadedBytes else 0L
+        if (keepsResumeBytes(status)) downloadedBytes else 0L
 
     /** Parses a stored status column back to the typed enum, or null if unknown. */
-    fun parse(status: String): DownloadStatus? =
-        runCatching { DownloadStatus.valueOf(status) }.getOrNull()
+    fun parse(status: String): DownloadStatus? = status.toEnumOrNull()
 }

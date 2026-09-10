@@ -14,10 +14,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
@@ -224,10 +221,36 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_unli
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_x_days
 
 private val THEME_HIGHLIGHT_IDS = setOf("theme_mode", "theme_scheduler")
-private val APPEARANCE_LIBRARY_GROUP_IDS = setOf("show_unwatched_badge", "show_watched_checkmark", "hide_watched_items", "hide_episode_thumbnails", "skip_specials", "show_share_media", "show_external_ratings")
-private val PERFORMANCE_GROUP_IDS = setOf("performance_mode", "reduce_motion")
-private val BLUE_LIGHT_GROUP_IDS = setOf("blue_light_filter", "blue_light_strength")
-private val NEWSLETTER_GROUP_IDS = setOf("newsletter_enabled", "newsletter_delivery_day", "newsletter_sections")
+
+/**
+ * The declared appearance screen groups in LazyColumn order — the derivation
+ * source the deep-link scroll resolver consumes (see HighlightScroll.kt), so
+ * the scroll target can never drift from the UI. Indices 0-3 always render;
+ * 4-6 (performance, eye care, newsletter) only compose when advanced settings
+ * are shown.
+ */
+private val appearanceScreenGroups: List<Set<String>> = listOf(
+    SettingsScreenGroups.appearanceTheme.itemIdSet,
+    SettingsScreenGroups.appearanceNavigation.itemIdSet,
+    SettingsScreenGroups.appearanceLibrary.itemIdSet,
+    SettingsScreenGroups.appearanceHomeLayout.itemIdSet,
+    SettingsScreenGroups.appearancePerformance.itemIdSet,
+    SettingsScreenGroups.appearanceEyeCare.itemIdSet,
+    SettingsScreenGroups.appearanceNewsletter.itemIdSet,
+)
+
+/**
+ * [resolveHighlightScrollIndex]'s [rememberHighlightScrollIndex adjustForAdvanced]
+ * for this screen's LazyColumn: with advanced hidden the three trailing
+ * expert groups don't compose, so their ids cannot scroll (`-1`). Pure (and
+ * internal) so the contract test can pin the derivation against it.
+ */
+internal fun appearanceAdjustForAdvanced(showAdvanced: Boolean): (Int) -> Int =
+    if (showAdvanced) {
+        { it }
+    } else {
+        { raw -> if (raw >= 4) -1 else raw }
+    }
 
 /**
  * The persisted accent id for a themed variant, or null when the variant has
@@ -265,36 +288,13 @@ fun AppearanceSettingsScreen(
         tag = "appearance_init",
     )
 
-    val homeLayoutGroup = remember { listOf("pinned_home_sections", "home_layout_presets", "configure_libraries", "home_section_layout") }
+    val homeLayoutGroupIds = SettingsScreenGroups.appearanceHomeLayout.itemIdSet
     val scrollState = rememberLazyListState()
-    val scrollIndex = remember(highlightSettingId, showAdvanced) {
-        val themeGroup = listOf(
-            "theme_mode", "theme_scheduler", "theme_style", "style_accent",
-            "dynamic_theming", "oled_mode", "contrast", "library_view_mode", "home_mode", "hero_section", "home_backdrop",
-            "clock_home", "settings_in_home_search", "continue_watching_click", "unhide_cw", "merge_continue_next_up", "next_up_max_days",
-            "next_up_rewatching", "theme_music", "nav_labels", "date_format", "font_scale", "color_blind_mode",
-            "hand_mode", "scheduled_start", "scheduled_end",
-        )
-        val libraryGroup = listOf(
-            "show_unwatched_badge", "show_watched_checkmark", "hide_watched_items", "hide_episode_thumbnails",
-            "skip_specials", "haptics_enabled", "show_share_media", "hide_search_history", "show_external_ratings",
-        )
-        val performanceGroup = listOf("performance_mode", "reduce_motion")
-        val eyeCareGroup = listOf("blue_light_filter", "blue_light_strength")
-        val newsletterGroup = listOf("newsletter_enabled", "newsletter_delivery_day")
-        // Index 0 = Theme, 1 = Navigation customization, 2 = Library & Cards, 3 = Home Screen Layout.
-        // Performance/Eye Care/Newsletter only exist when advanced is on
-        // and occupy indices 4/5/6 respectively.
-        when (highlightSettingId) {
-            in themeGroup -> 0
-            in libraryGroup -> 2
-            in homeLayoutGroup -> 3
-            in performanceGroup -> if (showAdvanced) 4 else -1
-            in eyeCareGroup -> if (showAdvanced) 5 else -1
-            in newsletterGroup -> if (showAdvanced) 6 else -1
-            else -> -1
-        }
-    }
+    val scrollIndex = rememberHighlightScrollIndex(
+        highlightSettingId,
+        appearanceScreenGroups,
+        appearanceAdjustForAdvanced(showAdvanced),
+    )
 
     // Phase 1 (coarse): scroll the containing group into the LazyColumn's composition window so the
     // target item is actually composed — items in off-screen groups (later sections) are otherwise
@@ -382,7 +382,7 @@ fun AppearanceSettingsScreen(
                     modifier = Modifier.padding(vertical = 8.dp),
                     initiallyExpanded = true,
                 ) {
-                    val isAndroid12 = supportsDynamicColor
+                    val isAndroid12 = settingsCapabilities.supportsDynamicColor
                     val isDarkActive = when (preferences.themeMode) {
                         ThemeMode.DARK -> true
                         ThemeMode.LIGHT -> false
@@ -491,7 +491,7 @@ fun AppearanceSettingsScreen(
                                                 items = ThemeMode.entries,
                                                 label = { themeLabels[it] ?: it.name },
                                                 isSelected = { it == preferences.themeMode },
-                                                onSelect = { viewModel.setThemeMode(it) },
+                                                onSelect = { viewModel.edit { scope -> scope.appearance.setThemeMode(it) } },
                                             )
                                         }
                                     },
@@ -512,7 +512,7 @@ fun AppearanceSettingsScreen(
                                             items = ThemeVariant.entries,
                                             label = { it.displayName },
                                             isSelected = { it == ThemeVariant.fromId(preferences.themeVariant) },
-                                            onSelect = { viewModel.setThemeVariant(it.name.lowercase()) },
+                                            onSelect = { viewModel.edit { scope -> scope.appearance.setThemeVariant(it.name.lowercase()) } },
                                         )
                                     },
                                 )
@@ -525,7 +525,7 @@ fun AppearanceSettingsScreen(
                                     isDark = effectiveDarkForSwatches,
                                     selectedAccent = accentIdFor(styleVariant, preferences) ?: "",
                                     onAccentSelected = { accent ->
-                                        viewModel.setVariantAccent(preferences.themeVariant, accent)
+                                        viewModel.edit { it.appearance.setVariantAccent(preferences.themeVariant, accent) }
                                     },
                                 )
                             }
@@ -533,14 +533,14 @@ fun AppearanceSettingsScreen(
                                 ConsumeSettingsItemIndex()
                                 com.raulshma.jellyplay.core.ui.components.AccentColorPicker(
                                     selectedSwatch = preferences.accentColorSwatch,
-                                    onSwatchSelected = { viewModel.setAccentColorSwatch(it) },
+                                    onSwatchSelected = { viewModel.edit { scope -> scope.appearance.setAccentColorSwatch(it) } },
                                 )
                             }
                             "color_style" -> {
                                 ConsumeSettingsItemIndex()
                                 com.raulshma.jellyplay.core.ui.components.ColorStylePicker(
                                     selectedStyle = preferences.colorStyle,
-                                    onStyleSelected = { viewModel.setColorStyle(it) },
+                                    onStyleSelected = { viewModel.edit { scope -> scope.appearance.setColorStyle(it) } },
                                 )
                             }
                             "dynamic_theming" -> {
@@ -550,7 +550,7 @@ fun AppearanceSettingsScreen(
                                     subtitle = stringResource(Res.string.settings_dynamic_theming_subtitle),
                                     checked = preferences.dynamicTheming,
                                     highlighted = highlightSettingId == "dynamic_theming",
-                                    onCheckedChange = { viewModel.setDynamicTheming(it) },
+                                    onCheckedChange = { viewModel.edit { scope -> scope.appearance.setDynamicTheming(it) } },
                                 )
                             }
                             "oled_mode" -> {
@@ -560,7 +560,7 @@ fun AppearanceSettingsScreen(
                                     subtitle = stringResource(Res.string.settings_oled_mode_subtitle),
                                     checked = preferences.oledMode,
                                     highlighted = highlightSettingId == "oled_mode",
-                                    onCheckedChange = { viewModel.setOledMode(it) },
+                                    onCheckedChange = { viewModel.edit { scope -> scope.appearance.setOledMode(it) } },
                                 )
                             }
                             "contrast" -> {
@@ -580,7 +580,7 @@ fun AppearanceSettingsScreen(
                                             ContrastLevel.MEDIUM -> ContrastLevel.HIGH
                                             ContrastLevel.HIGH -> ContrastLevel.DEFAULT
                                         }
-                                        viewModel.setContrastLevel(next)
+                                        viewModel.edit { it.appearance.setContrastLevel(next) }
                                     },
                                 )
                             }
@@ -597,7 +597,7 @@ fun AppearanceSettingsScreen(
                                     trailingText = preferences.libraryViewMode.name,
                                     highlighted = highlightSettingId == "library_view_mode",
                                     onClick = {
-                                        viewModel.setLibraryViewMode(preferences.libraryViewMode.next)
+                                        viewModel.edit { it.library.setLibraryViewMode(preferences.libraryViewMode.next) }
                                     },
                                 )
                             }
@@ -610,7 +610,7 @@ fun AppearanceSettingsScreen(
                                     highlighted = highlightSettingId == "home_mode",
                                     onClick = {
                                         val next = if (preferences.homeMode == HomeMode.VIDEO) HomeMode.MUSIC else HomeMode.VIDEO
-                                        viewModel.setHomeMode(next)
+                                        viewModel.edit { it.homeDiscovery.setHomeMode(next) }
                                     },
                                 )
                             }
@@ -621,7 +621,7 @@ fun AppearanceSettingsScreen(
                                     subtitle = if (preferences.homeHeroEnabled) stringResource(Res.string.settings_show_hero_on) else stringResource(Res.string.settings_show_hero_off),
                                     checked = preferences.homeHeroEnabled,
                                     highlighted = highlightSettingId == "hero_section",
-                                    onCheckedChange = { viewModel.setHomeHeroEnabled(it) },
+                                    onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setHomeHeroEnabled(it) } },
                                 )
                             }
                             "home_backdrop" -> {
@@ -631,7 +631,7 @@ fun AppearanceSettingsScreen(
                                     subtitle = if (preferences.homeBackdropEnabled) stringResource(Res.string.settings_home_backdrop_on) else stringResource(Res.string.settings_home_backdrop_off),
                                     checked = preferences.homeBackdropEnabled,
                                     highlighted = highlightSettingId == "home_backdrop",
-                                    onCheckedChange = { viewModel.setHomeBackdropEnabled(it) },
+                                    onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setHomeBackdropEnabled(it) } },
                                 )
                             }
                             "clock_home" -> {
@@ -641,7 +641,7 @@ fun AppearanceSettingsScreen(
                                     subtitle = if (preferences.showClockOnHome) stringResource(Res.string.settings_show_clock_on) else stringResource(Res.string.settings_show_clock_off),
                                     checked = preferences.showClockOnHome,
                                     highlighted = highlightSettingId == "clock_home",
-                                    onCheckedChange = { viewModel.setShowClockOnHome(it) },
+                                    onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setShowClockOnHome(it) } },
                                 )
                             }
                             "hide_top_header" -> {
@@ -651,7 +651,7 @@ fun AppearanceSettingsScreen(
                                     subtitle = if (preferences.hideTopHeaderOnScroll) stringResource(Res.string.settings_hide_top_header_on_scroll_on) else stringResource(Res.string.settings_hide_top_header_on_scroll_off),
                                     checked = preferences.hideTopHeaderOnScroll,
                                     highlighted = highlightSettingId == "hide_top_header",
-                                    onCheckedChange = { viewModel.setHideTopHeaderOnScroll(it) },
+                                    onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setHideTopHeaderOnScroll(it) } },
                                 )
                             }
                             "settings_in_home_search" -> {
@@ -661,7 +661,7 @@ fun AppearanceSettingsScreen(
                                     subtitle = if (preferences.showSettingsInHomeSearch) stringResource(Res.string.settings_show_settings_in_home_search_on) else stringResource(Res.string.settings_show_settings_in_home_search_off),
                                     checked = preferences.showSettingsInHomeSearch,
                                     highlighted = highlightSettingId == "settings_in_home_search",
-                                    onCheckedChange = { viewModel.setShowSettingsInHomeSearch(it) },
+                                    onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setShowSettingsInHomeSearch(it) } },
                                 )
                             }
                             "continue_watching_click" -> {
@@ -678,7 +678,7 @@ fun AppearanceSettingsScreen(
                                             items = com.raulshma.jellyplay.core.model.ContinueWatchingClickBehavior.entries,
                                             label = { it.displayName },
                                             isSelected = { it == preferences.continueWatchingClickBehavior },
-                                            onSelect = { viewModel.setContinueWatchingClickBehavior(it) },
+                                            onSelect = { viewModel.edit { scope -> scope.homeDiscovery.setContinueWatchingClickBehavior(it) } },
                                         )
                                     },
                                 )
@@ -689,7 +689,7 @@ fun AppearanceSettingsScreen(
                                     title = stringResource(Res.string.settings_unhide_continue_watching),
                                     subtitle = stringResource(Res.string.settings_unhide_continue_watching_subtitle, preferences.hiddenCwItemIds.size),
                                     highlighted = highlightSettingId == "unhide_cw",
-                                    onClick = { viewModel.unhideAllCwItems() },
+                                    onClick = { viewModel.edit { it.homeDiscovery.unhideAllCwItems() } },
                                 )
                             }
                             "merge_continue_next_up" -> {
@@ -699,7 +699,7 @@ fun AppearanceSettingsScreen(
                                     subtitle = if (preferences.mergeContinueWatchingAndNextUp) stringResource(Res.string.settings_merge_continue_next_up_on) else stringResource(Res.string.settings_merge_continue_next_up_off),
                                     checked = preferences.mergeContinueWatchingAndNextUp,
                                     highlighted = highlightSettingId == "merge_continue_next_up",
-                                    onCheckedChange = { viewModel.setMergeContinueWatchingAndNextUp(it) },
+                                    onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setMergeContinueWatchingAndNextUp(it) } },
                                 )
                             }
                             "next_up_max_days" -> {
@@ -726,7 +726,7 @@ fun AppearanceSettingsScreen(
                                             items = listOf(0, 7, 14, 30, 60, 90),
                                             label = { dayLabels[it] ?: xDaysFormat.format(it) },
                                             isSelected = { it == preferences.nextUpMaxDays },
-                                            onSelect = { viewModel.setNextUpMaxDays(it) },
+                                            onSelect = { viewModel.edit { scope -> scope.homeDiscovery.setNextUpMaxDays(it) } },
                                         )
                                     },
                                 )
@@ -738,7 +738,7 @@ fun AppearanceSettingsScreen(
                                     subtitle = if (preferences.nextUpRewatching) stringResource(Res.string.settings_rewatching_next_up_on) else stringResource(Res.string.settings_rewatching_next_up_off),
                                     checked = preferences.nextUpRewatching,
                                     highlighted = highlightSettingId == "next_up_rewatching",
-                                    onCheckedChange = { viewModel.setNextUpRewatching(it) },
+                                    onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setNextUpRewatching(it) } },
                                 )
                             }
                             "theme_music" -> {
@@ -748,7 +748,7 @@ fun AppearanceSettingsScreen(
                                     subtitle = if (preferences.backdropThemeMusicEnabled) stringResource(Res.string.settings_backdrop_theme_music_on) else stringResource(Res.string.settings_backdrop_theme_music_off),
                                     checked = preferences.backdropThemeMusicEnabled,
                                     highlighted = highlightSettingId == "theme_music",
-                                    onCheckedChange = { viewModel.setBackdropThemeMusicEnabled(it) },
+                                    onCheckedChange = { viewModel.edit { scope -> scope.appearance.setBackdropThemeMusicEnabled(it) } },
                                 )
                             }
                             "nav_labels" -> {
@@ -758,7 +758,7 @@ fun AppearanceSettingsScreen(
                                     subtitle = if (preferences.navBarShowLabels) stringResource(Res.string.settings_nav_labels_on) else stringResource(Res.string.settings_nav_labels_off),
                                     checked = preferences.navBarShowLabels,
                                     highlighted = highlightSettingId == "nav_labels",
-                                    onCheckedChange = { viewModel.setNavBarShowLabels(it) },
+                                    onCheckedChange = { viewModel.edit { scope -> scope.navigation.setNavBarShowLabels(it) } },
                                 )
                             }
                             "date_format" -> {
@@ -775,7 +775,7 @@ fun AppearanceSettingsScreen(
                                             items = DateFormatPreference.entries,
                                             label = { it.displayName },
                                             isSelected = { it == preferences.dateFormatPreference },
-                                            onSelect = { viewModel.setDateFormatPreference(it) },
+                                            onSelect = { viewModel.edit { scope -> scope.appearance.setDateFormatPreference(it) } },
                                         )
                                     },
                                 )
@@ -794,7 +794,7 @@ fun AppearanceSettingsScreen(
                                             items = AppFontScale.entries,
                                             label = { it.displayName },
                                             isSelected = { it == preferences.appFontScale },
-                                            onSelect = { viewModel.setAppFontScale(it) },
+                                            onSelect = { viewModel.edit { scope -> scope.appearance.setAppFontScale(it) } },
                                         )
                                     },
                                 )
@@ -813,7 +813,7 @@ fun AppearanceSettingsScreen(
                                             items = (0..23).toList(),
                                             label = { "$it:00" },
                                             isSelected = { it == preferences.scheduledThemeStartHour },
-                                            onSelect = { viewModel.setScheduledThemeStartHour(it) },
+                                            onSelect = { viewModel.edit { scope -> scope.appearance.setScheduledThemeStartHour(it) } },
                                         )
                                     },
                                 )
@@ -832,7 +832,7 @@ fun AppearanceSettingsScreen(
                                             items = (0..23).toList(),
                                             label = { "$it:00" },
                                             isSelected = { it == preferences.scheduledThemeEndHour },
-                                            onSelect = { viewModel.setScheduledThemeEndHour(it) },
+                                            onSelect = { viewModel.edit { scope -> scope.appearance.setScheduledThemeEndHour(it) } },
                                         )
                                     },
                                 )
@@ -851,7 +851,7 @@ fun AppearanceSettingsScreen(
                                             items = com.raulshma.jellyplay.core.model.ColorBlindMode.entries,
                                             label = { it.displayName },
                                             isSelected = { it == preferences.colorBlindMode },
-                                            onSelect = { viewModel.setColorBlindMode(it) },
+                                            onSelect = { viewModel.edit { scope -> scope.appearance.setColorBlindMode(it) } },
                                         )
                                     },
                                 )
@@ -870,7 +870,7 @@ fun AppearanceSettingsScreen(
                                             items = com.raulshma.jellyplay.core.model.HandMode.entries,
                                             label = { it.displayName },
                                             isSelected = { it == preferences.handMode },
-                                            onSelect = { viewModel.setHandMode(it) },
+                                            onSelect = { viewModel.edit { scope -> scope.appearance.setHandMode(it) } },
                                         )
                                     },
                                 )
@@ -907,9 +907,11 @@ fun AppearanceSettingsScreen(
                         listOfNotNull(unwatched, checkmarks, hideWatched, hideThumbnails, skipSpecials, shareOpt, ratingsOpt).joinToString(", ").ifEmpty { stringResource(Res.string.settings_summary_all_hidden) }
                     },
                     modifier = Modifier.padding(vertical = 8.dp),
-                    initiallyExpanded = highlightSettingId in APPEARANCE_LIBRARY_GROUP_IDS,
+                    initiallyExpanded = highlightSettingId in SettingsScreenGroups.appearanceLibrary.itemIdSet,
                 ) {
-                    val cardTotal = 8
+                    // The declared library rows plus the confirm-library-reset
+                    // action row (a screen-local row with no search entry).
+                    val cardTotal = SettingsScreenGroups.appearanceLibrary.items.size + 1
                     var cardIdx = 0
 
                     SettingToggleItem(
@@ -919,7 +921,7 @@ fun AppearanceSettingsScreen(
                         checked = preferences.showUnwatchedBadge,
                         highlighted = highlightSettingId == "show_unwatched_badge",
                         index = cardIdx++, count = cardTotal,
-                        onCheckedChange = { viewModel.setShowUnwatchedBadge(it) },
+                        onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setShowUnwatchedBadge(it) } },
                     )
 
                     SettingToggleItem(
@@ -929,7 +931,7 @@ fun AppearanceSettingsScreen(
                         checked = preferences.showWatchedCheckmark,
                         highlighted = highlightSettingId == "show_watched_checkmark",
                         index = cardIdx++, count = cardTotal,
-                        onCheckedChange = { viewModel.setShowWatchedCheckmark(it) },
+                        onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setShowWatchedCheckmark(it) } },
                     )
 
                     SettingToggleItem(
@@ -939,7 +941,7 @@ fun AppearanceSettingsScreen(
                         checked = preferences.hideWatchedItems,
                         highlighted = highlightSettingId == "hide_watched_items",
                         index = cardIdx++, count = cardTotal,
-                        onCheckedChange = { viewModel.setHideWatchedItems(it) },
+                        onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setHideWatchedItems(it) } },
                     )
 
                     SettingToggleItem(
@@ -949,7 +951,7 @@ fun AppearanceSettingsScreen(
                         checked = preferences.hideEpisodeThumbnails,
                         highlighted = highlightSettingId == "hide_episode_thumbnails",
                         index = cardIdx++, count = cardTotal,
-                        onCheckedChange = { viewModel.setHideEpisodeThumbnails(it) },
+                        onCheckedChange = { viewModel.edit { scope -> scope.library.setHideEpisodeThumbnails(it) } },
                     )
 
                     SettingToggleItem(
@@ -959,7 +961,7 @@ fun AppearanceSettingsScreen(
                         checked = preferences.compactEpisodeList,
                         highlighted = highlightSettingId == "compact_episode_list",
                         index = cardIdx++, count = cardTotal,
-                        onCheckedChange = { viewModel.setCompactEpisodeList(it) },
+                        onCheckedChange = { viewModel.edit { scope -> scope.library.setCompactEpisodeList(it) } },
                     )
 
                     SettingToggleItem(
@@ -969,7 +971,7 @@ fun AppearanceSettingsScreen(
                         checked = preferences.confirmLibraryReset,
                         highlighted = highlightSettingId == "confirm_library_reset",
                         index = cardIdx++, count = cardTotal,
-                        onCheckedChange = { viewModel.setConfirmLibraryReset(it) },
+                        onCheckedChange = { viewModel.edit { scope -> scope.library.setConfirmLibraryReset(it) } },
                     )
 
                     SettingToggleItem(
@@ -979,7 +981,7 @@ fun AppearanceSettingsScreen(
                         checked = preferences.skipSpecials,
                         highlighted = highlightSettingId == "skip_specials",
                         index = cardIdx++, count = cardTotal,
-                        onCheckedChange = { viewModel.setSkipSpecials(it) },
+                        onCheckedChange = { viewModel.edit { scope -> scope.library.setSkipSpecials(it) } },
                     )
 
                     SettingToggleItem(
@@ -989,7 +991,7 @@ fun AppearanceSettingsScreen(
                         checked = preferences.hapticsEnabled,
                         highlighted = highlightSettingId == "haptics_enabled",
                         index = cardIdx++, count = cardTotal,
-                        onCheckedChange = { viewModel.setHapticsEnabled(it) },
+                        onCheckedChange = { viewModel.edit { scope -> scope.appearance.setHapticsEnabled(it) } },
                     )
 
                     SettingToggleItem(
@@ -999,7 +1001,7 @@ fun AppearanceSettingsScreen(
                         checked = preferences.showShareMediaOption,
                         highlighted = highlightSettingId == "show_share_media",
                         index = cardIdx++, count = cardTotal,
-                        onCheckedChange = { viewModel.setShowShareMediaOption(it) },
+                        onCheckedChange = { viewModel.edit { scope -> scope.experimental.setShowShareMediaOption(it) } },
                     )
 
                     SettingToggleItem(
@@ -1009,7 +1011,7 @@ fun AppearanceSettingsScreen(
                         checked = preferences.hideSearchHistory,
                         highlighted = highlightSettingId == "hide_search_history",
                         index = cardIdx++, count = cardTotal,
-                        onCheckedChange = { viewModel.setHideSearchHistory(it) },
+                        onCheckedChange = { viewModel.edit { scope -> scope.experimental.setHideSearchHistory(it) } },
                     )
 
                     SettingToggleItem(
@@ -1019,7 +1021,7 @@ fun AppearanceSettingsScreen(
                         checked = preferences.showExternalRatings,
                         highlighted = highlightSettingId == "show_external_ratings",
                         index = cardIdx++, count = cardTotal,
-                        onCheckedChange = { viewModel.setShowExternalRatings(it) },
+                        onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setShowExternalRatings(it) } },
                     )
                 }
             }
@@ -1033,7 +1035,7 @@ fun AppearanceSettingsScreen(
                         stringResource(Res.string.settings_home_sections_visible, enabled.size, HomeSectionType.CONFIGURABLE.size)
                     },
                     modifier = Modifier.padding(vertical = 8.dp),
-                    initiallyExpanded = highlightSettingId in homeLayoutGroup,
+                    initiallyExpanded = highlightSettingId in homeLayoutGroupIds,
                 ) {
                     SettingListItem(
                         icon = Tabler.Outline.Pinned,
@@ -1065,63 +1067,12 @@ fun AppearanceSettingsScreen(
                         onClick = { navActions.onNavigate(Route.LibraryHomeSections(if (highlightSettingId == "configure_libraries") "configure_libraries" else null)) },
                     )
 
-                    val homeSectionOrder = remember { mutableStateListOf<HomeSectionType>().apply { addAll(preferences.homeSectionOrder) } }
-                    val itemHeights = remember { mutableStateMapOf<HomeSectionType, Int>() }
-                    var draggingSection by remember { mutableStateOf<HomeSectionType?>(null) }
-                    var dragOffsetY by remember { mutableFloatStateOf(0f) }
+                    val homeSections = rememberReorderableOrderedList(
+                        storedOrder = preferences.homeSectionOrder,
+                        onPersist = { order -> viewModel.edit { it.homeDiscovery.setHomeSectionOrder(order) } },
+                    )
 
-                    LaunchedEffect(preferences.homeSectionOrder) {
-                        if (draggingSection == null) {
-                            homeSectionOrder.clear()
-                            homeSectionOrder.addAll(preferences.homeSectionOrder)
-                        }
-                    }
-
-                    fun persistHomeSectionOrder() {
-                        val currentOrder = homeSectionOrder.toList()
-                        if (currentOrder != preferences.homeSectionOrder) {
-                            viewModel.setHomeSectionOrder(currentOrder)
-                        }
-                    }
-
-                    fun moveSection(type: HomeSectionType, deltaY: Float) {
-                        if (draggingSection != type) return
-                        dragOffsetY += deltaY
-
-                        while (true) {
-                            val currentIndex = homeSectionOrder.indexOf(type)
-                            if (currentIndex == -1) return
-
-                            val draggedHeight = itemHeights[type] ?: return
-
-                            if (dragOffsetY > 0f && currentIndex < homeSectionOrder.lastIndex) {
-                                val nextType = homeSectionOrder[currentIndex + 1]
-                                val nextHeight = itemHeights[nextType] ?: draggedHeight
-                                val threshold = (draggedHeight + nextHeight) / 2f
-                                if (dragOffsetY > threshold) {
-                                    homeSectionOrder.removeAt(currentIndex)
-                                    homeSectionOrder.add(currentIndex + 1, type)
-                                    dragOffsetY -= nextHeight.toFloat()
-                                    continue
-                                }
-                            }
-
-                            if (dragOffsetY < 0f && currentIndex > 0) {
-                                val prevType = homeSectionOrder[currentIndex - 1]
-                                val prevHeight = itemHeights[prevType] ?: draggedHeight
-                                val threshold = (draggedHeight + prevHeight) / 2f
-                                if (-dragOffsetY > threshold) {
-                                    homeSectionOrder.removeAt(currentIndex)
-                                    homeSectionOrder.add(currentIndex - 1, type)
-                                    dragOffsetY += prevHeight.toFloat()
-                                    continue
-                                }
-                            }
-                            break
-                        }
-                    }
-
-                    homeSectionOrder.forEachIndexed { index, sectionType ->
+                    homeSections.items.forEachIndexed { index, sectionType ->
                         val enabled = sectionType in preferences.enabledHomeSectionTypes
                         SettingReorderableToggleItem(
                             icon = homeSectionIcon(sectionType),
@@ -1129,14 +1080,14 @@ fun AppearanceSettingsScreen(
                             subtitle = sectionType.description,
                             checked = enabled,
                             index = index,
-                            count = homeSectionOrder.size,
-                            modifier = Modifier.onSizeChanged { itemHeights[sectionType] = it.height },
+                            count = homeSections.items.size,
+                            modifier = Modifier.onSizeChanged { homeSections.recordHeight(sectionType, it.height) },
                             onCheckedChange = { checked ->
-                                viewModel.setSectionVisible(sectionType, checked)
+                                viewModel.edit { it.homeDiscovery.setSectionVisible(sectionType, checked) }
                             },
-                            onDrag = { delta -> moveSection(sectionType, delta) },
-                            onDragStart = { draggingSection = sectionType; dragOffsetY = 0f },
-                            onDragEnd = { draggingSection = null; persistHomeSectionOrder() },
+                            onDrag = { delta -> homeSections.onDrag(sectionType, delta) },
+                            onDragStart = { homeSections.onDragStart(sectionType) },
+                            onDragEnd = homeSections::onDragEnd,
                         )
                     }
                 }
@@ -1155,9 +1106,9 @@ fun AppearanceSettingsScreen(
                         parts.joinToString(", ").ifEmpty { stringResource(Res.string.settings_standard_experience) }
                     },
                     modifier = Modifier.padding(vertical = 8.dp),
-                    initiallyExpanded = highlightSettingId in PERFORMANCE_GROUP_IDS,
+                    initiallyExpanded = highlightSettingId in SettingsScreenGroups.appearancePerformance.itemIdSet,
                 ) {
-                    val perfTotal = 2
+                    val perfTotal = SettingsScreenGroups.appearancePerformance.items.size
                     SettingToggleItem(
                         icon = Tabler.Outline.Gauge,
                         title = stringResource(Res.string.settings_performance_mode),
@@ -1165,7 +1116,7 @@ fun AppearanceSettingsScreen(
                         checked = preferences.performanceMode,
                         highlighted = highlightSettingId == "performance_mode",
                         index = 0, count = perfTotal,
-                        onCheckedChange = { viewModel.setPerformanceMode(it) },
+                        onCheckedChange = { viewModel.edit { scope -> scope.appearance.setPerformanceMode(it) } },
                     )
                     SettingToggleItem(
                         icon = Tabler.Outline.Activity,
@@ -1174,7 +1125,7 @@ fun AppearanceSettingsScreen(
                         checked = preferences.reduceMotionEnabled,
                         highlighted = highlightSettingId == "reduce_motion",
                         index = 1, count = perfTotal,
-                        onCheckedChange = { viewModel.setReduceMotionEnabled(it) },
+                        onCheckedChange = { viewModel.edit { scope -> scope.appearance.setReduceMotionEnabled(it) } },
                     )
                 }
             }
@@ -1191,9 +1142,9 @@ fun AppearanceSettingsScreen(
                         }
                     },
                     modifier = Modifier.padding(vertical = 8.dp),
-                    initiallyExpanded = highlightSettingId in BLUE_LIGHT_GROUP_IDS,
+                    initiallyExpanded = highlightSettingId in SettingsScreenGroups.appearanceEyeCare.itemIdSet,
                 ) {
-                    val eyeCareTotal = 2
+                    val eyeCareTotal = SettingsScreenGroups.appearanceEyeCare.items.size
                     SettingToggleItem(
                         icon = Tabler.Outline.Moon,
                         title = stringResource(Res.string.settings_blue_light_filter),
@@ -1201,7 +1152,7 @@ fun AppearanceSettingsScreen(
                         checked = preferences.blueLightFilterEnabled,
                         highlighted = highlightSettingId == "blue_light_filter",
                         index = 0, count = eyeCareTotal,
-                        onCheckedChange = { viewModel.setBlueLightFilterEnabled(it) },
+                        onCheckedChange = { viewModel.edit { scope -> scope.appearance.setBlueLightFilterEnabled(it) } },
                     )
                     SettingListItem(
                         icon = Tabler.Outline.Adjustments,
@@ -1228,65 +1179,20 @@ fun AppearanceSettingsScreen(
                         }
                     },
                     modifier = Modifier.padding(vertical = 8.dp),
-                    initiallyExpanded = highlightSettingId in NEWSLETTER_GROUP_IDS,
+                    initiallyExpanded = highlightSettingId in SettingsScreenGroups.appearanceNewsletter.itemIdSet,
                 ) {
-                    val newsletterSections = remember { mutableStateListOf<NewsletterSectionType>().apply { addAll(preferences.newsletterSectionOrder) } }
-                    val itemHeights = remember { mutableStateMapOf<NewsletterSectionType, Int>() }
-                    var draggingSection by remember { mutableStateOf<NewsletterSectionType?>(null) }
-                    var dragOffsetY by remember { mutableFloatStateOf(0f) }
+                    val newsletterSections = rememberReorderableOrderedList(
+                        storedOrder = preferences.newsletterSectionOrder,
+                        onPersist = { order -> viewModel.edit { it.notification.setNewsletterSectionOrder(order) } },
+                    )
 
-                    LaunchedEffect(preferences.newsletterSectionOrder) {
-                        if (draggingSection == null) {
-                            newsletterSections.clear()
-                            newsletterSections.addAll(preferences.newsletterSectionOrder)
-                        }
-                    }
-
-                    fun persistNewsletterSectionOrder() {
-                        val currentOrder = newsletterSections.toList()
-                        if (currentOrder != preferences.newsletterSectionOrder) {
-                            viewModel.setNewsletterSectionOrder(currentOrder)
-                        }
-                    }
-
-                    fun moveSection(type: NewsletterSectionType, deltaY: Float) {
-                        if (draggingSection != type) return
-                        dragOffsetY += deltaY
-
-                        while (true) {
-                            val currentIndex = newsletterSections.indexOf(type)
-                            if (currentIndex == -1) return
-
-                            val draggedHeight = itemHeights[type] ?: return
-
-                            if (dragOffsetY > 0f && currentIndex < newsletterSections.lastIndex) {
-                                val nextType = newsletterSections[currentIndex + 1]
-                                val nextHeight = itemHeights[nextType] ?: draggedHeight
-                                val threshold = (draggedHeight + nextHeight) / 2f
-                                if (dragOffsetY > threshold) {
-                                    newsletterSections.removeAt(currentIndex)
-                                    newsletterSections.add(currentIndex + 1, type)
-                                    dragOffsetY -= nextHeight.toFloat()
-                                    continue
-                                }
-                            }
-
-                            if (dragOffsetY < 0f && currentIndex > 0) {
-                                val prevType = newsletterSections[currentIndex - 1]
-                                val prevHeight = itemHeights[prevType] ?: draggedHeight
-                                val threshold = (draggedHeight + prevHeight) / 2f
-                                if (-dragOffsetY > threshold) {
-                                    newsletterSections.removeAt(currentIndex)
-                                    newsletterSections.add(currentIndex - 1, type)
-                                    dragOffsetY += prevHeight.toFloat()
-                                    continue
-                                }
-                            }
-                            break
-                        }
-                    }
-
-                    SettingsItemList(total = newsletterSections.size + 2) {
+                    // The two static declared rows (enable + delivery day) plus
+                    // the runtime-reorderable section rows (the declared
+                    // newsletter_sections id renders as those rows).
+                    SettingsItemList(
+                        total = newsletterSections.items.size +
+                            SettingsScreenGroups.appearanceNewsletter.items.count { it.id != "newsletter_sections" },
+                    ) {
 
                     SettingToggleItem(
                         icon = Tabler.Outline.Mail,
@@ -1294,7 +1200,7 @@ fun AppearanceSettingsScreen(
                         subtitle = stringResource(Res.string.settings_enable_newsletter_subtitle),
                         checked = preferences.newsletterEnabled,
                                     highlighted = highlightSettingId == "newsletter_enabled",
-                                    onCheckedChange = { viewModel.setNewsletterEnabled(it) }
+                                    onCheckedChange = { viewModel.edit { scope -> scope.notification.setNewsletterEnabled(it) } }
                     )
 
                     val daysOfWeek = listOf(
@@ -1317,53 +1223,30 @@ fun AppearanceSettingsScreen(
                         onClick = {
                             val currentIdx = daysOfWeek.indexOfFirst { it.first == preferences.newsletterDayOfWeek }
                             val nextIdx = (currentIdx + 1) % daysOfWeek.size
-                            viewModel.setNewsletterDayOfWeek(daysOfWeek[nextIdx].first)
+                            viewModel.edit { it.notification.setNewsletterDayOfWeek(daysOfWeek[nextIdx].first) }
                         }
                     )
 
                     if (preferences.newsletterEnabled) {
-                        newsletterSections.forEachIndexed { index, sectionType ->
+                        newsletterSections.items.forEachIndexed { index, sectionType ->
                             val enabled = sectionType in preferences.enabledNewsletterSections
-                            val displayName = when (sectionType) {
-                                NewsletterSectionType.RECENTLY_ADDED -> stringResource(Res.string.settings_newsletter_recently_added)
-                                NewsletterSectionType.ACTIVITY_DIGEST -> stringResource(Res.string.settings_newsletter_activity_log)
-                                NewsletterSectionType.LIBRARY_STATS -> stringResource(Res.string.settings_newsletter_library_stats)
-                                NewsletterSectionType.CONTINUE_WATCHING -> stringResource(Res.string.settings_newsletter_continue_watching)
-                                NewsletterSectionType.NEXT_UP -> stringResource(Res.string.settings_newsletter_next_up)
-                                NewsletterSectionType.CURATED_PICKS -> stringResource(Res.string.settings_newsletter_curated_picks)
-                            }
-                            val sectionDesc = when (sectionType) {
-                                NewsletterSectionType.RECENTLY_ADDED -> stringResource(Res.string.settings_newsletter_recently_added_desc)
-                                NewsletterSectionType.ACTIVITY_DIGEST -> stringResource(Res.string.settings_newsletter_activity_log_desc)
-                                NewsletterSectionType.LIBRARY_STATS -> stringResource(Res.string.settings_newsletter_library_stats_desc)
-                                NewsletterSectionType.CONTINUE_WATCHING -> stringResource(Res.string.settings_newsletter_continue_watching_desc)
-                                NewsletterSectionType.NEXT_UP -> stringResource(Res.string.settings_newsletter_next_up_desc)
-                                NewsletterSectionType.CURATED_PICKS -> stringResource(Res.string.settings_newsletter_curated_picks_desc)
-                            }
 
                             SettingReorderableToggleItem(
-                                icon = when (sectionType) {
-                                    NewsletterSectionType.CONTINUE_WATCHING -> Tabler.Outline.PlayerPlay
-                                    NewsletterSectionType.NEXT_UP -> Tabler.Outline.PlayerSkipForward
-                                    NewsletterSectionType.RECENTLY_ADDED -> Tabler.Outline.Clock
-                                    NewsletterSectionType.LIBRARY_STATS -> Tabler.Outline.LayersLinked
-                                    NewsletterSectionType.CURATED_PICKS -> Tabler.Outline.Wand
-                                    NewsletterSectionType.ACTIVITY_DIGEST -> Tabler.Outline.Folder
-                                },
-                                title = displayName,
-                                subtitle = sectionDesc,
+                                icon = newsletterSectionIcon(sectionType),
+                                title = stringResource(sectionType.labelRes),
+                                subtitle = stringResource(sectionType.descriptionRes),
                                 checked = enabled,
                                 index = index + 2,
-                                count = newsletterSections.size + 2,
-                                modifier = Modifier.onSizeChanged { itemHeights[sectionType] = it.height },
+                                count = newsletterSections.items.size + 2,
+                                modifier = Modifier.onSizeChanged { newsletterSections.recordHeight(sectionType, it.height) },
                                 onCheckedChange = { checked ->
                                     val current = preferences.enabledNewsletterSections.toMutableSet()
                                     if (checked) current.add(sectionType) else current.remove(sectionType)
-                                    viewModel.setEnabledNewsletterSections(current)
+                                    viewModel.edit { it.notification.setEnabledNewsletterSections(current) }
                                 },
-                                onDrag = { delta -> moveSection(sectionType, delta) },
-                                onDragStart = { draggingSection = sectionType; dragOffsetY = 0f },
-                                onDragEnd = { draggingSection = null; persistNewsletterSectionOrder() },
+                                onDrag = { delta -> newsletterSections.onDrag(sectionType, delta) },
+                                onDragStart = { newsletterSections.onDragStart(sectionType) },
+                                onDragEnd = newsletterSections::onDragEnd,
                             )
                         }
                     }
@@ -1395,7 +1278,7 @@ fun AppearanceSettingsScreen(
             rangeEndLabel = "100%",
             onDismiss = { showBlueLightStrengthSheet = false },
             onConfirm = {
-                viewModel.setBlueLightFilterStrength(it)
+                viewModel.edit { scope -> scope.appearance.setBlueLightFilterStrength(it) }
                 showBlueLightStrengthSheet = false
             },
         )

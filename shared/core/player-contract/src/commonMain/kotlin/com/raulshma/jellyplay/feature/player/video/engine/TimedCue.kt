@@ -13,7 +13,7 @@ package com.raulshma.jellyplay.feature.player.video.engine
  * the reactive surface consumed by the player feature) can expose it. The
  * original `com.raulshma.jellyplay.feature.player.video.subtitle.TimedCue`
  * symbol is retained as a `typealias` for source compatibility. The media3
- * `@UnstableApi` opt-in annotation was dropped in the Phase V2 common-ization —
+ * `@UnstableApi` opt-in annotation was dropped in the common-ization —
  * the data class itself is pure.
  */
 data class TimedCue(

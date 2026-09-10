@@ -24,7 +24,7 @@ package com.raulshma.jellyplay.feature.player.video.engine
  * ExoPlayerEngine.load installs it on its
  * `androidx.media3.exoplayer.source.DefaultMediaSourceFactory`.
  *
- * Phase V2 note: this used to be an Android-only fun-interface returning a
+ *  note: this used to be an Android-only fun-interface returning a
  * media3 `DrmSessionManager?`; the return type was erased to `Any?` when the
  * contract moved to commonMain so non-Android targets can compile it.
  */

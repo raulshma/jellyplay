@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.settings
 
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
+import com.raulshma.jellyplay.core.datastore.PreferencesEditScope
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.SecurityPreferences
@@ -10,7 +11,7 @@ import kotlinx.coroutines.flow.StateFlow
 class SecuritySettingsViewModel(
     private val store: UserPreferencesStore,
     private val projections: com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections,
-    private val appearanceStore: com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore,
+    private val advancedSettings: AdvancedSettingsGate,
     private val editor: PreferencesEditor,
     private val authRepository: AuthRepository,
 ) : JellyPlayViewModel() {
@@ -18,26 +19,22 @@ class SecuritySettingsViewModel(
     /** Security preference slice — recomposes this screen only on security-key writes. */
     val securityPreferences: StateFlow<SecurityPreferences> = projections.securityPreferences
 
-    val showAdvancedSettings: StateFlow<Boolean> = appearanceStore.showAdvancedSettings
+    val showAdvancedSettings: StateFlow<Boolean> = advancedSettings.showAdvancedSettings
 
-    fun setShowAdvancedSettings(enabled: Boolean) =
-        editor.edit { appearance.setShowAdvancedSettings(enabled) }
+    fun setShowAdvancedSettings(enabled: Boolean) = advancedSettings.setShowAdvancedSettings(enabled)
 
-    fun setPinLockEnabled(enabled: Boolean) = editor.setPinLockEnabled(enabled)
+    /**
+     * Single write command for this screen: `edit { it.security.setPin("1234") }`.
+     * Fire-and-forget on the same application scope [PreferencesEditor.edit] uses.
+     */
+    fun edit(transform: suspend (PreferencesEditScope) -> Unit) = editor.edit { transform(this) }
 
-    fun setPin(pin: String) = editor.setPin(pin)
-
-    fun clearPin() = editor.clearPin()
-
+    /**
+     * Verifies the entered PIN against the stored hash off the main thread —
+     * a read-back, so it stays a command of its own rather than riding the
+     * write-only [edit] path.
+     */
     suspend fun verifyPin(pin: String): Boolean = editor.verifyPin(pin)
-
-    fun setBiometricLockEnabled(enabled: Boolean) = editor.setBiometricLockEnabled(enabled)
-
-    fun setUsePinForPlayerLock(enabled: Boolean) = editor.setUsePinForPlayerLock(enabled)
-
-    fun setAutoLockTimerMs(ms: Long) = editor.setAutoLockTimerMs(ms)
-
-    fun setRemoteControlEnabled(enabled: Boolean) = editor.setRemoteControlEnabled(enabled)
 
     fun authorizeQuickConnect(code: String, onResult: (success: Boolean, error: String?) -> Unit) {
         launch {

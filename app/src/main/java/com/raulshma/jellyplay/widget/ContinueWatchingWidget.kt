@@ -2,8 +2,6 @@ package com.raulshma.jellyplay.widget
 
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
-import android.appwidget.AppWidgetProvider
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -11,46 +9,19 @@ import android.os.Bundle
 import android.widget.RemoteViews
 import com.raulshma.jellyplay.MainActivity
 import com.raulshma.jellyplay.R
-import com.raulshma.jellyplay.deeplink.DeepLinkHandler
-import org.koin.mp.KoinPlatform
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.launch
+import com.raulshma.jellyplay.core.model.deeplink.DeepLinkGrammar
+import com.raulshma.jellyplay.widget.skeleton.WidgetProviderSkeleton
+import com.raulshma.jellyplay.widget.skeleton.continueWatchingChromeVisibility
+import com.raulshma.jellyplay.widget.skeleton.notifyProviderDataChanged
+import com.raulshma.jellyplay.widget.skeleton.toViewVisibility
 
-/**
- * Koin accessor (wave 8B — Hilt removal): resolved straight from the
- * application container, same try/catch shape the EntryPoint call used.
- */
-private fun koinWidgetDataStore(): com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore =
-    KoinPlatform.getKoin()!!.get()
-
-class ContinueWatchingWidget : AppWidgetProvider() {
-
-    /**
-     * Runs [onDeleted] config cleanup off the main thread — mirrors the
-     * sibling `SeerrRecommendationsWidget.refreshScope` goAsync() pattern.
-     */
-    private val cleanupScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+class ContinueWatchingWidget : WidgetProviderSkeleton() {
 
     override fun onDeleted(context: Context?, appWidgetIds: IntArray?) {
         super.onDeleted(context, appWidgetIds)
-        if (context == null || appWidgetIds == null) return
-        val store = try {
-            koinWidgetDataStore()
-        } catch (_: Exception) {
-            return
-        }
-        val pending = goAsync()
-        cleanupScope.launch {
-            try {
-                for (id in appWidgetIds) {
-                    store.removeWidgetConfigForId(id)
-                }
-            } finally {
-                pending.finish()
-            }
-        }
+        // Config cleanup runs off the main thread inside the provider
+        // skeleton's shared goAsync() scope.
+        launchWidgetConfigCleanup(context, appWidgetIds)
     }
 
     override fun onUpdate(
@@ -77,10 +48,7 @@ class ContinueWatchingWidget : AppWidgetProvider() {
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
         if (intent.action == ACTION_REFRESH) {
-            val appWidgetManager = AppWidgetManager.getInstance(context)
-            val componentName = ComponentName(context, ContinueWatchingWidget::class.java)
-            val appWidgetIds = appWidgetManager.getAppWidgetIds(componentName)
-            appWidgetManager.notifyAppWidgetViewDataChanged(appWidgetIds, R.id.cw_widget_list)
+            notifyProviderDataChanged(context, ContinueWatchingWidget::class.java, R.id.cw_widget_list)
         }
     }
 
@@ -89,15 +57,7 @@ class ContinueWatchingWidget : AppWidgetProvider() {
             "com.raulshma.jellyplay.widget.ACTION_REFRESH_CONTINUE_WATCHING"
 
         fun triggerUpdate(context: Context) {
-            val appWidgetManager = AppWidgetManager.getInstance(context)
-            val componentName = ComponentName(context, ContinueWatchingWidget::class.java)
-            val appWidgetIds = appWidgetManager.getAppWidgetIds(componentName)
-            if (appWidgetIds.isNotEmpty()) {
-                appWidgetManager.notifyAppWidgetViewDataChanged(
-                    appWidgetIds,
-                    R.id.cw_widget_list,
-                )
-            }
+            notifyProviderDataChanged(context, ContinueWatchingWidget::class.java, R.id.cw_widget_list)
         }
 
         fun updateWidget(
@@ -108,28 +68,19 @@ class ContinueWatchingWidget : AppWidgetProvider() {
             val views = RemoteViews(context.packageName, R.layout.continue_watching_widget)
 
             // Apply responsive rules
-            val dims = widgetDimensionsFromOptions(context, appWidgetManager.getAppWidgetOptions(appWidgetId), 220)
+            val dims = widgetDimensionsFromOptions(
+                context,
+                appWidgetManager.getAppWidgetOptions(appWidgetId),
+                WidgetLayoutThresholds.CONTINUE_WATCHING_DEFAULT_HEIGHT_DP,
+            )
             if (dims != null) {
-                val width = dims.width
-                val height = dims.height
-
-                if (height < 150) {
-                    views.setViewVisibility(R.id.cw_widget_header, android.view.View.GONE)
-                } else {
-                    views.setViewVisibility(R.id.cw_widget_header, android.view.View.VISIBLE)
-                }
-
-                if (width < 220) {
-                    views.setViewVisibility(R.id.cw_widget_see_all, android.view.View.GONE)
-                } else {
-                    views.setViewVisibility(R.id.cw_widget_see_all, android.view.View.VISIBLE)
-                }
+                val chrome = continueWatchingChromeVisibility(dims.width, dims.height)
+                views.setViewVisibility(R.id.cw_widget_header, chrome.showHeader.toViewVisibility())
+                views.setViewVisibility(R.id.cw_widget_see_all, chrome.showSeeAll.toViewVisibility())
             }
 
             // Header click opens the continue-watching newsletter list.
-            val headerUri = Uri.parse(
-                "${DeepLinkHandler.SCHEME_CUSTOM}://newsletter/CONTINUE_WATCHING",
-            )
+            val headerUri = Uri.parse(DeepLinkGrammar.continueWatchingLink())
             val headerIntent = Intent(context, MainActivity::class.java).apply {
                 action = Intent.ACTION_VIEW
                 data = headerUri

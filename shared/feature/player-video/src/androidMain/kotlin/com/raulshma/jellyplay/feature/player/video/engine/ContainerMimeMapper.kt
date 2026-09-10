@@ -14,7 +14,7 @@ import androidx.media3.common.MimeTypes
  * [androidx.media3.common.MediaItem.Builder.setMimeType] forces the right
  * extractor and unblocks playback.
  *
- * Mirrors the [com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleMimeMapper]
+ * Mirrors the [com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleFormatCatalog]
  * pattern: lowercase-normalizes input, returns `null` for unknown containers
  * so the caller can fall back to extension-based inference.
  */

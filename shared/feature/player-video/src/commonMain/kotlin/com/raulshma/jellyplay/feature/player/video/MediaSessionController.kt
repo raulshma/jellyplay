@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.feature.player.video
 
 /**
- * System media-session seam for the video player (wave 8C): the member set
+ * System media-session seam for the video player: the member set
  * the commonMain [VideoPlayerViewModel] and [PlaybackSession] call. The
  * androidMain class was renamed [AndroidMediaSessionController][com.raulshma.jellyplay.feature.player.video.AndroidMediaSessionController]
  * (module androidMain) and implements this interface; it keeps the media3

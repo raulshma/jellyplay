@@ -1,18 +1,15 @@
 package com.raulshma.jellyplay.core.data.repository
 
-import androidx.paging.Pager
-import androidx.paging.PagingConfig
 import androidx.paging.PagingData
 import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.database.dao.HomeSectionCacheDao
-import com.raulshma.jellyplay.core.database.dao.LyricsCacheDao
 import com.raulshma.jellyplay.core.database.entity.HomeSectionCacheEntity
-import com.raulshma.jellyplay.core.database.entity.LyricsCacheEntity
-import com.raulshma.jellyplay.core.data.paging.FavoritesPagingSource
-import com.raulshma.jellyplay.core.data.paging.MediaPagingSource
-import com.raulshma.jellyplay.core.data.paging.SearchPagingSource
+import com.raulshma.jellyplay.core.data.paging.JellyfinPagingSource
+import com.raulshma.jellyplay.core.data.paging.pagedMediaPager
+import com.raulshma.jellyplay.core.data.paging.searchPagingSource
 import com.raulshma.jellyplay.core.data.session.HomeSession
 import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
+import com.raulshma.jellyplay.core.data.session.SessionIdentity
 import com.raulshma.jellyplay.core.model.CollectionSummary
 import com.raulshma.jellyplay.core.model.DvrSeriesTimer
 import com.raulshma.jellyplay.core.model.DvrTimer
@@ -30,18 +27,12 @@ import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.core.model.LiveTvRecording
 import com.raulshma.jellyplay.core.model.GuideInfo
 import com.raulshma.jellyplay.core.model.ProgramFilters
-import com.raulshma.jellyplay.core.model.LrcLibTrack
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
-import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.data.util.TimeSource
-import com.raulshma.jellyplay.core.model.LyricsLine
-import com.raulshma.jellyplay.core.model.LyricsResult
-import com.raulshma.jellyplay.core.model.LyricsSource
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.Playlist
 import com.raulshma.jellyplay.core.model.PlaylistItem
 import com.raulshma.jellyplay.core.model.MediaItem
-import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.Studio
@@ -52,22 +43,29 @@ import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
 import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
 import com.raulshma.jellyplay.core.model.NewsletterData
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
-import com.raulshma.jellyplay.core.network.LrcLibApi
 import com.raulshma.jellyplay.core.network.realtime.UserDataRealtimeChannel
-import kotlinx.coroutines.Deferred
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
+import com.raulshma.jellyplay.core.data.cache.getOrFetch
+import com.raulshma.jellyplay.core.data.cache.getOrFetchGuarded
+import com.raulshma.jellyplay.core.data.concurrency.SingleFlightFetcher
+import com.raulshma.jellyplay.core.data.concurrency.StaleReadGroup
+import com.raulshma.jellyplay.core.data.concurrency.StaleReadGroups
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.merge
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicLong
 
-// Phase X MediaRepository cluster flip: moved verbatim from the legacy
+// Shared by [MediaRepositoryImpl] (the collection-items cache) and the
+// file-private [DetailCacheGroup] below, so the detail-cluster TTL is one
+// value, not two hand-synced constants.
+/** 2 minutes — short enough that server changes are reflected quickly. */
+private const val DETAIL_CACHE_TTL_MS = 2 * 60 * 1000L
+private const val DETAIL_CACHE_MAX_ENTRIES = 30
+
+//  MediaRepository cluster flip: moved verbatim from the legacy
 // :core:data shim (same package/name). Ctor-level transforms only — method
 // bodies are byte-identical:
 //  - `@Singleton` / `@Inject` stripped (one framework per type — Koin's
@@ -79,10 +77,7 @@ import java.util.concurrent.atomic.AtomicLong
 //    `internal` no longer crosses the module boundary after this move.
 class MediaRepositoryImpl(
     private val apiClient: JellyfinApiClient,
-    private val lrcLibApi: LrcLibApi,
-    private val lyricsCacheDao: LyricsCacheDao,
     private val homeSectionCacheDao: HomeSectionCacheDao,
-    private val networkMonitor: NetworkMonitor,
     private val playedStateSync: PlayedStateSync,
     /**
      * The deep "Episode Catalogue": the single owner of the series
@@ -128,12 +123,21 @@ class MediaRepositoryImpl(
      * bespoke collector or long-lived scope of its own.
      */
     private val sessionCacheRegistry: SessionCacheRegistry,
-) : MediaRepository, MediaRepositoryCacheInvalidation {
+) : MediaRepository,
+    LiveTvRepository,
+    SyncPlayRepository,
+    NewsletterRepository,
+    PlaylistRepository,
+    MediaRepositoryCacheInvalidation,
+    MediaCacheInvalidator {
 
-    private val detailCache = TtlCache<MediaDetail>(
-        maxSize = DETAIL_CACHE_MAX_ENTRIES,
-        ttlMs = DETAIL_CACHE_TTL_MS,
-    )
+    // The detail screen's item-scoped cache cluster — detail snapshot,
+    // similar items (per limit), album tracks, theme songs — plus the one
+    // epoch that guards their writes against invalidation. One semantic
+    // unit, one owner: [DetailCacheGroup] (file-private below) owns the key
+    // grammar and the eviction choreography that used to be hand-synced at
+    // two sites per key family inside this class.
+    private val detailCaches = DetailCacheGroup(apiClient, homeSession)
 
     private val libraryFoldersCache = TtlCache<List<LibraryFolder>>(ttlMs = FOLDERS_CACHE_TTL_MS)
     private val genresCache = TtlCache<List<Genre>>(maxSize = 64, ttlMs = FOLDERS_CACHE_TTL_MS)
@@ -142,11 +146,10 @@ class MediaRepositoryImpl(
 
     // Series-scoped seasons/episodes caches used to live here; they've moved
     // into [episodeCatalogue], the single owner of the series snapshot. The
-    // remaining series-adjacent caches (similar, album tracks, collection
-    // items) stay — they're not part of the catalogue's "seasons → episodes →
-    // sorted" shape.
-    private val similarCache = TtlCache<List<MediaItem>>(ttlMs = DETAIL_CACHE_TTL_MS)
-    private val albumTracksCache = TtlCache<List<MediaItem>>(ttlMs = DETAIL_CACHE_TTL_MS)
+    // similar/tracks/themes item-scoped caches moved into [detailCaches]
+    // (they co-evict with the detail cache through one epoch); the
+    // collection-items cache stays — a plain page-shaped cache with no
+    // detail-epoch coupling.
     private val collectionItemsCache = TtlCache<SearchResult>(ttlMs = DETAIL_CACHE_TTL_MS)
 
     // Child-photo URLs for a photo folder (player backdrop fan-out); declared
@@ -157,23 +160,10 @@ class MediaRepositoryImpl(
         ttlMs = 5 * 60 * 1000L,
     )
 
-    // Plan 08: private — the detail cache is repo-internal machinery; reads
-    // that need freshness use getMediaDetail(force = true) and mutations/
-    // invalidations run through the composite + per-type dispatch below.
-    private fun invalidateDetailCache(itemId: String? = null) {
-        detailCacheEpoch.incrementAndGet()
-        if (itemId != null) {
-            val identity = homeSession.cacheIdentitySnapshot()
-            detailCache.remove(identity, itemId)
-            // similarCache keys are `similar_${itemId}_$limit` (the limit is
-            // part of the key so a different limit never serves a truncated
-            // list), so evict by prefix to drop every limit variant.
-            similarCache.removeByKeyPrefix(identity, "similar_$itemId")
-        } else {
-            detailCache.clear()
-            similarCache.clear()
-        }
-    }
+    // Plan 08: private — the detail-cache group is repo-internal machinery;
+    // reads that need freshness use getMediaDetail(force = true) and mutations/
+    // invalidations run through the composite + per-type dispatch below, all
+    // delegating to [detailCaches].
 
     // Plan 08: funnels to the catalogue so the composite user-data eviction
     // (and the internal per-type dispatch) can drop a series' seasons/episodes
@@ -186,9 +176,14 @@ class MediaRepositoryImpl(
     // Plan 08: private funnel — collection edits self-invalidate, so no
     // external caller needs this knob anymore.
     private fun invalidateCollectionItemsCache(collectionId: String) {
-        // Keys are `collection_${id}_${startIndex}_${limit}`, so evict by prefix.
-        collectionItemsCache.removeByKeyPrefix(homeSession.cacheIdentitySnapshot(), "collection_$collectionId")
+        // Prefix of [collectionItemsKey] for every page — one evict drops all
+        // of a collection's cached pages. Trailing underscore so one id is
+        // never a prefix of another's keys (collection_12 vs collection_123).
+        collectionItemsCache.removeByKeyPrefix(homeSession.cacheIdentitySnapshot(), "collection_${collectionId}_")
     }
+
+    private fun collectionItemsKey(collectionId: String, startIndex: Int, limit: Int) =
+        "collection_${collectionId}_$startIndex" + "_$limit"
 
     /**
      * Single owner of the "what did this detail's type affect" mapping (plan
@@ -201,13 +196,21 @@ class MediaRepositoryImpl(
         when (detail.item.mediaType) {
             MediaType.SERIES -> {
                 episodeCatalogue.invalidateSeries(detail.item.id)
-                invalidateDetailCache(detail.item.id)
+                detailCaches.invalidateItem(detail.item.id)
             }
             MediaType.EPISODE -> detail.item.seriesId?.let { invalidateSeriesCache(it) }
             MediaType.ALBUM -> invalidateUserDataCaches(detail.item.id)
             MediaType.COLLECTION -> invalidateCollectionItemsCache(detail.item.id)
             else -> Unit // plain item: caller-scoped invalidation already ran
         }
+    }
+
+    override fun invalidateForUserDataChange(itemId: String, seriesIdHint: String?) {
+        // The two gap groups this user-data change cannot evict by key (see
+        // [albumTracksStale] / [collectionItemsStale]): arm them alongside
+        // the eviction below so the next read of either group heals itself.
+        staleReadGroups.announceUserDataWrite()
+        invalidateUserDataCaches(itemId, seriesIdHint)
     }
 
     // In-memory home-sections cache. Previously a hand-rolled triple of
@@ -225,24 +228,39 @@ class MediaRepositoryImpl(
         clock = { timeSource.nowElapsedRealtimeMillis() },
     )
 
-    /**
-     * Drops the in-memory home-sections cache for the current identity. Used by
-     * [toggleFavorite] / [markPlayed] / [markUnplayed] so a user-data change is
-     * reflected on the next home load (the previous hand-rolled slot zeroed the
-     * timestamp to force a TTL miss; this is the identity-aware equivalent).
-     */
-    private fun invalidateHomeSectionsCache() {
-        homeSectionsCache.clear()
-    }
+    // Lazy staleness for the announced-user-data read groups (#157): the
+    // eager eviction this replaces cleared caches at every user-data
+    // mutation, forcing the NEXT read into a full blocking refetch even when
+    // no consumer was alive to ask for fresh data. Each group inverts the
+    // timing without losing the guarantee — an announce arms it, and the
+    // next non-forced read of the group consumes it as a one-shot force
+    // (the [StaleReadGroup.staleAwareRead] choreography). Same freshness as
+    // the eager clear, zero refetches while nobody reads the group. Server
+    // WS pushes do NOT arm them — same scope as the eager eviction they
+    // replace — HomeRefresher serves those live.
+    //
+    // One owner for the whole ladder: [StaleReadGroups] is the registration
+    // point (a 4th group is one `register` call, not an edit at every arm
+    // site) and its two announce channels spell this repo's two group sets —
+    // every user-data write/invalidation arms the gap-group riders below,
+    // and only a CONFIRMED own-write announce arms home sections too (the
+    // scroll-sensitive path must not pay a forced refetch for a write that
+    // failed or never confirmed).
+    private val staleReadGroups = StaleReadGroups()
+    private val homeSectionsStale = staleReadGroups.register()
+    // The two "gap" groups the composite user-data eviction cannot reach by
+    // key: a TRACK flip evicts `tracks_<trackId>` but never the album's
+    // `tracks_<albumId>` entry, and a collection MEMBER flip evicts
+    // `detail_<itemId>` but never the collection's page keys — the flipped
+    // item's own ids are all the eviction has, and the owning album's /
+    // collection's identity is not cached anywhere in the reverse direction.
+    // Registered as riders (`ridesUserDataWrite`) so every user-data write/
+    // invalidation arms them alongside the eviction it already runs — the
+    // next non-forced read of either group heals itself instead of waiting
+    // for the manual force lever the detail hosts used to hand-thread.
+    private val albumTracksStale = staleReadGroups.register(ridesUserDataWrite = true)
+    private val collectionItemsStale = staleReadGroups.register(ridesUserDataWrite = true)
 
-    // Throttle for lyrics-cache eviction. cacheLyrics() is called on every
-    // successful lyrics fetch, and each call used to fire a full
-    // DELETE FROM lyrics_cache WHERE fetchedAt < :ts scan over the whole table
-    // — so opening lyrics for a new track walked & re-locked the entire table.
-    // Eviction is best-effort (wrapped in try/catch) and exact cadence isn't
-    // observable, so we cap it at once per hour.
-    @Volatile
-    private var lastLyricsEvictionMs = 0L
 
     init {
         // Identity transitions are handled by [SessionCacheRegistry] (the
@@ -268,7 +286,10 @@ class MediaRepositoryImpl(
             genresCache,
             studiosCache,
             latestMediaCache,
-            albumTracksCache,
+            // The group's registry contribution (today: the album-tracks
+            // cache — the only member whose plain wholesale clear IS the
+            // whole identity reaction; see DetailCacheGroup.registryCaches).
+            *detailCaches.registryCaches.toTypedArray(),
             collectionItemsCache,
             homeSectionsCache,
             photoFolderChildUrlCache,
@@ -276,13 +297,18 @@ class MediaRepositoryImpl(
         // The action carries only the reactions a plain registry drop
         // cannot express: the detail cache's epoch bump (an in-flight
         // previous-identity fetch must not write back into the cleared
-        // cache) together with its similarCache companion, and the
+        // cache) together with its similar/theme-songs companions, and the
         // previous identity's persisted SWR rows. The episode catalogue's
         // snapshot drop + epoch bump lives in its own registration —
         // routing through invalidateCaches() here would clear every cache
         // twice and double-bump the catalogue's epoch on each transition.
         sessionCacheRegistry.registerAction("media-identity-clear") { transition ->
-            invalidateDetailCache()
+            detailCaches.invalidateAll()
+            // The #157 staleness markers are identity-scoped state in spirit
+            // (they are armed by the PREVIOUS user's confirmed writes);
+            // without this reset they survive the switch and force the next
+            // user's first read of each group into one redundant refetch.
+            staleReadGroups.resetAll()
             // Clear the PREVIOUS identity's persisted home-section SWR
             // rows — scoped, not wholesale, so a multi-account server
             // keeps the other users' snapshots for their next cold
@@ -303,7 +329,7 @@ class MediaRepositoryImpl(
      // table, to be served to a different user on the next cold open.
      */
     private suspend fun clearHomeSectionsForIdentity(serverId: String, userId: String) {
-        runCatching { homeSectionCacheDao.clearForIdentity(serverId, userId) }
+        runCatchingRethrowingCancellation { homeSectionCacheDao.clearForIdentity(serverId, userId) }
             .onFailure { e ->
                 Log.w(
                     "MediaRepo",
@@ -317,25 +343,31 @@ class MediaRepositoryImpl(
         query: HomeSectionQuery,
         force: Boolean,
     ): Result<HomeSectionsResult> {
-        val identity = homeSession.cacheIdentity()
         val cacheKey = query.cacheKey()
-        // Freshness lever: drop this query's cached snapshot first — the
-        // invalidate-then-read sequence the home screen's manual refresh used
-        // to run as a global cache drop (plan 08).
-        if (force) homeSectionsCache.remove(identity, cacheKey)
-        homeSectionsCache.get(identity, cacheKey)?.let { return Result.success(it) }
-        // The query value object crosses the repo → network seam intact; force
-        // propagates so the network layer's sub-call caches are bypassed too.
-        return apiClient.getHomeSections(query, force).also { result ->
-            result.getOrNull()?.let { homeResult ->
-                homeSectionsCache.put(identity, cacheKey, homeResult)
-                // Persist the snapshot for stale-while-revalidate on cold open.
-                // The in-memory cache above is lost on process death; this row lets
-                // getCachedHomeSections() render instantly next launch while a
-                // network refresh runs. Identity-keyed (serverId, userId) so a
-                // user switch never serves another user's payload — cleared by
-                // clearHomeSectionsForIdentity() from the registry's identity action above.
-                persistHomeSectionsSnapshot(cacheKey, homeResult)
+        // Consume the #157 lazy staleness marker as a one-shot force (see
+        // [homeSectionsStale]): an announced user-data write makes this read
+        // bypass the cached payload — a fresh Continue Watching within the
+        // TTL window, not after it. The consume/re-arm choreography (an
+        // announce racing the fetch re-arms for the NEXT read; a failed or
+        // cancelled consuming read re-arms) lives in
+        // [StaleReadGroup.staleAwareRead].
+        return homeSectionsStale.staleAwareRead(force) { effectiveForce ->
+            homeSectionsCache.getOrFetch(
+                { homeSession.cacheIdentity() },
+                cacheKey,
+                force = effectiveForce,
+                // SWR persist: the fetch-path-only write hook — persists the
+                // snapshot for stale-while-revalidate on cold open (the in-memory
+                // cache is lost on process death) after the in-memory put, and
+                // never on a cache hit, so a hit cannot slide the persisted row's
+                // fetchedAt forward and defeat the 24h SWR staleness ceiling below.
+                onFetched = { persistHomeSectionsSnapshot(cacheKey, it) },
+            ) {
+                // The query value object crosses the repo → network seam intact;
+                // effectiveForce (not force) so a consumed staleness marker
+                // bypasses the network layer's sub-call caches too, not just
+                // the in-memory one.
+                apiClient.getHomeSections(query, effectiveForce)
             }
         }
     }
@@ -374,13 +406,83 @@ class MediaRepositoryImpl(
         return withContext(Dispatchers.Default) { entity.payload }
     }
 
+    /**
+     * In-memory record of the last home snapshot this process persisted (or
+     * verified byte-identical) for one (server, user, cacheKey): the DB row's
+     * `fetchedAt` it was computed against, plus the cheap fingerprint of the
+     * payload ([HomeSnapshotFingerprint]). Lets the dedup window in
+     * [persistHomeSectionsSnapshot] skip the full JSON re-encode on
+     * usually-identical foreground refreshes. Null until the first persist
+     * of the process — a miss simply takes the exact encode+compare path.
+     */
+    private class HomeSnapshotDedupState(
+        val serverId: String,
+        val userId: String,
+        val cacheKey: String,
+        val rowFetchedAt: Long,
+        val fingerprint: Int,
+    )
+
+    // @Volatile: persistHomeSectionsSnapshot runs on the caller's dispatcher
+    // (the home refresh path), which is not pinned to one thread.
+    @Volatile
+    private var lastHomeSnapshotDedup: HomeSnapshotDedupState? = null
+
     private suspend fun persistHomeSectionsSnapshot(cacheKey: String, result: HomeSectionsResult) {
         val identity = homeSession.currentIdentity() ?: return
-        runCatching {
+        // Fire-and-forget persist on the home refresh path: a cancelled
+        // collector must still cancel, not park cancellation in a discarded
+        // Result — the block suspends on Room reads/writes and the encode.
+        runCatchingRethrowingCancellation {
+            // Foreground refreshes arrive ~once/minute with usually-identical
+            // content; when the prior row is younger than the refresh cadence
+            // and the payload is byte-identical, the rewrite would advance
+            // nothing (fetchedAt refreshes at the next real change) — skip it.
+            // Rows older than the window still rewrite, preserving the 24h
+            // fetchedAt SWR staleness ceiling for every other path.
+            val now = timeSource.nowEpochMillis()
+            val existing = homeSectionCacheDao.get(identity.serverId, identity.userId, cacheKey)
+            // Computed once here: the cheap-path check and both
+            // rememberHomeSnapshotDedup exits below all need the same value.
+            val fingerprint = HomeSnapshotFingerprint.of(result)
+            // Cheap-path dedup: inside the window, a fingerprint
+            // match against the last payload this process persisted/verified
+            // for this exact (server, user, cacheKey, row) skips the full
+            // encode — that encode used to run on every ~1/min refresh and
+            // allocate a several-hundred-KB string even when byte-identical.
+            // INVARIANT: fingerprint equal ⇒ the encode would have been
+            // byte-identical is NOT guaranteed (only section identity, item
+            // ids and their user-data fields are fingerprinted — see
+            // [HomeSnapshotFingerprint]), so a metadata-only change inside
+            // the window persists one refresh cycle later.
+            // Fingerprint unequal, window expired, or no prior state ⇒ the
+            // exact pre-existing encode+compare+write path below runs.
+            if (existing != null && now - existing.fetchedAt < HOME_PERSIST_DEDUP_WINDOW_MS) {
+                val last = lastHomeSnapshotDedup
+                if (last != null &&
+                    last.serverId == identity.serverId &&
+                    last.userId == identity.userId &&
+                    last.cacheKey == cacheKey &&
+                    last.rowFetchedAt == existing.fetchedAt &&
+                    last.fingerprint == fingerprint
+                ) {
+                    return
+                }
+            }
             // Encode off the caller's (Main) dispatcher — this runs on every
             // successful home refresh (min. once/minute in foreground).
             val payloadJson = withContext(Dispatchers.Default) {
                 com.raulshma.jellyplay.core.database.Converters.encodeHomeSectionsResult(result)
+            }
+            if (existing != null &&
+                now - existing.fetchedAt < HOME_PERSIST_DEDUP_WINDOW_MS &&
+                existing.payloadJson == payloadJson
+            ) {
+                // Byte-identical inside the window: remember the fingerprint
+                // (against this row's fetchedAt) so the next in-window
+                // refresh can take the cheap path above.
+                rememberHomeSnapshotDedup(identity, cacheKey, existing.fetchedAt, fingerprint)
+                return
             }
             homeSectionCacheDao.upsert(
                 HomeSectionCacheEntity(
@@ -396,32 +498,46 @@ class MediaRepositoryImpl(
                     // share one test fake.
                     // fetchedAt is load-bearing: getCachedHomeSections reads it
                     // against HomeFreshness's 24h SWR staleness ceiling.
-                    fetchedAt = timeSource.nowEpochMillis(),
+                    fetchedAt = now,
                 ),
             )
+            rememberHomeSnapshotDedup(identity, cacheKey, now, fingerprint)
         }
     }
 
-    override suspend fun getLibraryFolders(force: Boolean): Result<List<LibraryFolder>> {
-        val identity = homeSession.cacheIdentity()
-        if (force) libraryFoldersCache.remove(identity, "folders")
-        libraryFoldersCache.get(identity, "folders")?.let { return Result.success(it) }
-        return apiClient.getLibraryFolders().also { result ->
-            result.getOrNull()?.let { libraryFoldersCache.put(identity, "folders", it) }
-        }
+    /**
+     * Records [lastHomeSnapshotDedup] for the row fetchedAt the fingerprint
+     * was computed against — both persist paths (skipped rewrite and fresh
+     * upsert) funnel through here. Takes the fingerprint the caller already
+     * computed rather than recomputing it.
+     */
+    private fun rememberHomeSnapshotDedup(
+        identity: SessionIdentity,
+        cacheKey: String,
+        rowFetchedAt: Long,
+        fingerprint: Int,
+    ) {
+        lastHomeSnapshotDedup = HomeSnapshotDedupState(
+            serverId = identity.serverId,
+            userId = identity.userId,
+            cacheKey = cacheKey,
+            rowFetchedAt = rowFetchedAt,
+            fingerprint = fingerprint,
+        )
     }
+
+    override suspend fun getLibraryFolders(force: Boolean): Result<List<LibraryFolder>> =
+        libraryFoldersCache.getOrFetch({ homeSession.cacheIdentity() }, "folders", force = force) {
+            apiClient.getLibraryFolders()
+        }
 
     override suspend fun getLatestMedia(
         parentId: String,
         limit: Int,
-    ): Result<List<MediaItem>> {
-        val identity = homeSession.cacheIdentity()
-        val cacheKey = "latest_${parentId}_$limit"
-        latestMediaCache.get(identity, cacheKey)?.let { return Result.success(it) }
-        return apiClient.getLatestMedia(parentId = parentId, limit = limit).also { result ->
-            result.getOrNull()?.let { latestMediaCache.put(identity, cacheKey, it) }
+    ): Result<List<MediaItem>> =
+        latestMediaCache.getOrFetch({ homeSession.cacheIdentity() }, "latest_${parentId}_$limit") {
+            apiClient.getLatestMedia(parentId = parentId, limit = limit)
         }
-    }
 
     override suspend fun getMediaItems(
         parentId: String?,
@@ -439,99 +555,10 @@ class MediaRepositoryImpl(
         kindFilter = kindFilter,
     )
 
-    // Single-flight dedup for getMediaDetail: the detail screen is reachable
-    // from many entry points (home row tap, deep link, "play next"
-    // notification, cast handshake, download resume). Two near-simultaneous
-    // entries previously fired two full getItem round-trips (and, for series,
-    // two full episode storms) because TtlCache's get-check-put is not atomic.
-    // The Mutex guards the in-flight map; the Deferred is awaited by all
-    // concurrent callers for the same key so the fetch runs exactly once.
-    // The async is launched on the caller's coroutine scope (via coroutineScope)
-    // so the fetch inherits the caller's dispatcher — important for tests
-    // (runTest's test dispatcher) and for cancellation semantics.
-    private val detailInFlightMutex = Mutex()
-    private val detailInFlight = mutableMapOf<String, Deferred<Result<MediaDetail>>>()
-    // Bumped on every detail-cache invalidation. An in-flight fetch captures
-    // the epoch at start and skips re-caching if it changed by completion —
-    // otherwise a slow fetch could re-insert a pre-mutation snapshot after a
-    // concurrent markPlayed/favorite/played invalidation, pinning stale
-    // user-data for the full TTL. AtomicLong so concurrent invalidations never
-    // lose an increment (a lost update would weaken the stale-snapshot guard).
-    private val detailCacheEpoch = AtomicLong(0L)
-
-    override suspend fun getMediaDetail(itemId: String, force: Boolean): Result<MediaDetail> {
-        // Freshness lever: drop the cached entry first — verbatim the
-        // invalidate-then-read sequence callers used to run by hand. The
-        // detailCacheEpoch bump below also guards a racing fetch from
-        // re-inserting the stale snapshot.
-        if (force) invalidateDetailCache(itemId)
-        val identity = homeSession.cacheIdentity()
-        // Fast path: serve from cache without entering coroutineScope, avoiding
-        // the scope-creation overhead on the (common) cached read. The authoritative
-        // single-flight coordination still happens below under the mutex.
-        detailCache.get(identity, itemId)?.let { return Result.success(it) }
-        return coroutineScope {
-            // Single-flight: if another caller already started this fetch, await
-            // its result instead of issuing a duplicate request. The cache read is
-            // captured inside the lock so a concurrent fetch that completes while
-            // we waited is observed exactly once.
-            val cachedOrDeferred: Any = detailInFlightMutex.withLock {
-                detailCache.get(identity, itemId)?.let { return@withLock it }
-                val epochAtStart = detailCacheEpoch.get()
-                detailInFlight.getOrPut(itemId) {
-                    // async on the current coroutineScope so the fetch runs on
-                    // the caller's dispatcher (not a fixed background scope).
-                    async {
-                        try {
-                            apiClient.getMediaDetail(itemId).also { result ->
-                                // Only cache the result if no invalidation landed
-                                // while the fetch was in flight; otherwise the
-                                // freshly fetched snapshot could be stale relative
-                                // to a concurrent user-data mutation.
-                                if (detailCacheEpoch.get() == epochAtStart) {
-                                    result.getOrNull()?.let { detail -> detailCache.put(identity, itemId, detail) }
-                                }
-                            }
-                        } finally {
-                            // Clear the in-flight marker. Guarded so a concurrent
-                            // awaiter that already grabbed the Deferred still sees
-                            // the completed value, but a later caller re-fetches.
-                            detailInFlightMutex.withLock { detailInFlight.remove(itemId) }
-                        }
-                    }
-                }
-            }
-            @Suppress("UNCHECKED_CAST")
-            when (cachedOrDeferred) {
-                is MediaDetail -> Result.success(cachedOrDeferred)
-                else -> {
-                    val deferred = cachedOrDeferred as Deferred<Result<MediaDetail>>
-                    try {
-                        deferred.await()
-                    } catch (ce: kotlinx.coroutines.CancellationException) {
-                        // The shared in-flight Deferred is a child of its
-                        // originator's coroutineScope: if that caller was
-                        // cancelled (e.g. navigated away mid-fetch), the
-                        // Deferred is cancelled and every concurrent awaiter
-                        // would fail too. Re-fetch directly on this caller's
-                        // scope so a single originator's cancellation can't
-                        // take down unrelated awaiters. Re-throw only if THIS
-                        // caller was itself cancelled (its Job is marked so);
-                        // otherwise the interruption came from the originator
-                        // and a fresh fetch on this still-alive caller is safe.
-                        val job = coroutineContext[kotlinx.coroutines.Job]
-                        if (job?.isCancelled == true) throw ce
-                        val epochAtRetry = detailCacheEpoch.get()
-                        apiClient.getMediaDetail(itemId).also { result ->
-                            if (detailCacheEpoch.get() == epochAtRetry) {
-                                result.getOrNull()?.let { detail -> detailCache.put(identity, itemId, detail) }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
+    override suspend fun getMediaDetail(itemId: String, force: Boolean): Result<MediaDetail> =
+        // Single-flight dedup, the force freshness lever, the epoch guard and
+        // the cancellation ladder all live in [DetailCacheGroup.detail].
+        detailCaches.detail(itemId, force)
 
     override suspend fun getIntros(itemId: String): Result<List<MediaItem>> =
         apiClient.getIntros(itemId)
@@ -581,59 +608,38 @@ class MediaRepositoryImpl(
         filters: LibraryFilters,
         studioIds: List<String>?,
         kindFilter: com.raulshma.jellyplay.core.model.ItemKindFilter,
-    ): Flow<PagingData<MediaItem>> = Pager(
-        config = PagingConfig(
-            pageSize = PAGE_SIZE,
-            enablePlaceholders = false,
-            prefetchDistance = PREFETCH_DISTANCE,
-        ),
-        pagingSourceFactory = {
-            MediaPagingSource(
-                mediaRepository = this,
+    ): Flow<PagingData<MediaItem>> = pagedMediaPager {
+        JellyfinPagingSource { startIndex, limit ->
+            getMediaItems(
                 parentId = parentId,
                 filters = filters,
                 studioIds = studioIds,
+                startIndex = startIndex,
+                limit = limit,
                 kindFilter = kindFilter,
             )
-        },
-    ).flow
+        }
+    }
 
     override fun searchPaged(
         query: String,
         filters: LibraryFilters,
-    ): Flow<PagingData<MediaItem>> = Pager(
-        config = PagingConfig(
-            pageSize = PAGE_SIZE,
-            enablePlaceholders = false,
-            prefetchDistance = PREFETCH_DISTANCE,
-        ),
-        pagingSourceFactory = {
-            SearchPagingSource(
-                mediaRepository = this,
-                query = query,
-                filters = filters,
-            )
-        },
-    ).flow
-
-    override suspend fun getGenres(parentId: String?, force: Boolean): Result<List<Genre>> {
-        val identity = homeSession.cacheIdentity()
-        val cacheKey = "genres_${parentId ?: "root"}"
-        if (force) genresCache.remove(identity, cacheKey)
-        genresCache.get(identity, cacheKey)?.let { return Result.success(it) }
-        return apiClient.getGenres(parentId).also { result ->
-            result.getOrNull()?.let { genresCache.put(identity, cacheKey, it) }
-        }
+    ): Flow<PagingData<MediaItem>> = pagedMediaPager {
+        // The blank-query guard (no repository round-trip) lives in the factory.
+        searchPagingSource(query = query, filters = filters)
     }
 
-    override suspend fun getStudios(parentId: String?): Result<List<Studio>> {
-        val identity = homeSession.cacheIdentity()
-        val cacheKey = "studios_${parentId ?: "root"}"
-        studiosCache.get(identity, cacheKey)?.let { return Result.success(it) }
-        return apiClient.getStudios(parentId).also { result ->
-            result.getOrNull()?.let { studiosCache.put(identity, cacheKey, it) }
+    override suspend fun getGenres(parentId: String?, force: Boolean): Result<List<Genre>> =
+        genresCache.getOrFetch({ homeSession.cacheIdentity() }, "genres_${parentId ?: "root"}", force = force) {
+            apiClient.getGenres(parentId)
         }
-    }
+
+    // No force lever: unlike getGenres, getStudios never grew the freshness
+    // parameter, and the plain shape keeps exactly that behaviour.
+    override suspend fun getStudios(parentId: String?): Result<List<Studio>> =
+        studiosCache.getOrFetch({ homeSession.cacheIdentity() }, "studios_${parentId ?: "root"}") {
+            apiClient.getStudios(parentId)
+        }
 
     override suspend fun getItemsByStudio(
         studioId: String,
@@ -645,20 +651,17 @@ class MediaRepositoryImpl(
     override suspend fun getArtistAlbums(artistId: String, limit: Int): Result<List<MediaItem>> =
         apiClient.getArtistAlbums(artistId, limit)
 
-    override suspend fun getAlbumTracks(albumId: String): Result<List<MediaItem>> {
-        val identity = homeSession.cacheIdentity()
-        val cacheKey = "tracks_$albumId"
-        albumTracksCache.get(identity, cacheKey)?.let { return Result.success(it) }
-        val epochAtStart = detailCacheEpoch.get()
-        return apiClient.getAlbumTracks(albumId).also { result ->
-            // Skip the cache write if a user-data invalidation landed while the
-            // fetch was in flight — otherwise this (now stale) snapshot would be
-            // pinned for the full TTL. See [detailCacheEpoch] for the rationale.
-            if (detailCacheEpoch.get() == epochAtStart) {
-                result.getOrNull()?.let { albumTracksCache.put(identity, cacheKey, it) }
-            }
+    override suspend fun getAlbumTracks(albumId: String, force: Boolean): Result<List<MediaItem>> =
+        // Announced-staleness read (see [albumTracksStale]): a track flip
+        // arms the marker because the composite user-data eviction only
+        // drops the flipped item's OWN `tracks_<trackId>` key, never the
+        // album's `tracks_<albumId>` entry — the next non-forced read
+        // consumes the marker as the force that drops it, so the album's
+        // track rows heal without a caller-side force. Epoch-guarded write —
+        // see DetailCacheGroup's key grammar/KDoc.
+        albumTracksStale.staleAwareRead(force) { effectiveForce ->
+            detailCaches.albumTracks(albumId, effectiveForce)
         }
-    }
 
     override suspend fun getMusicVideos(parentId: String, limit: Int): Result<List<MediaItem>> =
         apiClient.getMediaItems(
@@ -667,22 +670,11 @@ class MediaRepositoryImpl(
             limit = limit,
         ).map { it.items }
 
-    override suspend fun getSimilarItems(itemId: String, limit: Int): Result<List<MediaItem>> {
-        val identity = homeSession.cacheIdentity()
-        // Key includes the limit so a call with a different limit doesn't serve
-        // a stale truncated list.
-        val cacheKey = "similar_${itemId}_$limit"
-        similarCache.get(identity, cacheKey)?.let { return Result.success(it) }
-        val epochAtStart = detailCacheEpoch.get()
-        return apiClient.getSimilarItems(itemId, limit).also { result ->
-            // Skip the cache write if a user-data invalidation landed while the
-            // fetch was in flight; otherwise a pre-mutation similar-items list
-            // (e.g. before a favorite toggle) would be pinned for the full TTL.
-            if (detailCacheEpoch.get() == epochAtStart) {
-                result.getOrNull()?.let { similarCache.put(identity, cacheKey, it) }
-            }
-        }
-    }
+    override suspend fun getSimilarItems(itemId: String, limit: Int): Result<List<MediaItem>> =
+        // Key includes the limit (DetailCacheGroup's key grammar) so a call
+        // with a different limit doesn't serve a stale truncated list;
+        // epoch-guarded write — see DetailCacheGroup's KDoc.
+        detailCaches.similarItems(itemId, limit)
 
     override suspend fun getInstantMix(itemId: String, limit: Int): Result<List<MediaItem>> =
         apiClient.getInstantMix(itemId, limit)
@@ -691,7 +683,10 @@ class MediaRepositoryImpl(
         apiClient.getItemsByPerson(personId, limit)
 
     override suspend fun getThemeSongs(itemId: String): Result<List<MediaItem>> =
-        apiClient.getThemeSongs(itemId)
+        // Cached exactly like getSimilarItems: identity-keyed,
+        // item-scoped key, 2-minute TTL, epoch-guarded write — evicted with
+        // the detail's other per-item caches in DetailCacheGroup.invalidateItem.
+        detailCaches.themeSongs(itemId)
 
     override suspend fun getSeasons(seriesId: String): Result<List<MediaItem>> =
         // Thin passthrough: the catalogue owns the seasons/episodes snapshot
@@ -716,14 +711,24 @@ class MediaRepositoryImpl(
         collectionId: String,
         startIndex: Int,
         limit: Int,
-    ): Result<SearchResult> {
-        val identity = homeSession.cacheIdentity()
-        val cacheKey = "collection_${collectionId}_$startIndex" + "_$limit"
-        collectionItemsCache.get(identity, cacheKey)?.let { return Result.success(it) }
-        return apiClient.getCollectionItems(collectionId, startIndex, limit).also { result ->
-            result.getOrNull()?.let { collectionItemsCache.put(identity, cacheKey, it) }
+        force: Boolean,
+    ): Result<SearchResult> =
+        // Announced-staleness read (see [collectionItemsStale]): a member
+        // item's flip arms the marker because the composite user-data
+        // eviction drops `detail_<itemId>` but never the collection's page
+        // key — the next non-forced read consumes the marker as the force
+        // that drops the collection's whole page family (the prefix evict
+        // drops every page, so a future paginated caller healing page 2 also
+        // heals the earlier pages).
+        collectionItemsStale.staleAwareRead(force) { effectiveForce ->
+            if (effectiveForce) invalidateCollectionItemsCache(collectionId)
+            collectionItemsCache.getOrFetch(
+                { homeSession.cacheIdentity() },
+                collectionItemsKey(collectionId, startIndex, limit),
+            ) {
+                apiClient.getCollectionItems(collectionId, startIndex, limit)
+            }
         }
-    }
 
     override suspend fun getCollections(limit: Int): Result<List<CollectionSummary>> =
         // Not cached: the picker refetches on every open so a freshly-created
@@ -754,172 +759,15 @@ class MediaRepositoryImpl(
 
     override fun getFavoritesPaged(
         mediaTypes: List<MediaType>?,
-    ): Flow<PagingData<MediaItem>> = Pager(
-        config = PagingConfig(
-            pageSize = PAGE_SIZE,
-            enablePlaceholders = false,
-            prefetchDistance = PREFETCH_DISTANCE,
-        ),
-        pagingSourceFactory = {
-            FavoritesPagingSource(
-                mediaRepository = this,
+    ): Flow<PagingData<MediaItem>> = pagedMediaPager {
+        JellyfinPagingSource { startIndex, limit ->
+            getFavorites(
                 mediaTypes = mediaTypes,
+                limit = limit,
+                startIndex = startIndex,
             )
-        },
-    ).flow
-
-    override suspend fun getLyrics(itemId: String): Result<LyricsResult> = apiClient.getLyrics(itemId)
-
-    override suspend fun getLyricsWithFallback(
-        itemId: String,
-        artistName: String?,
-        trackName: String?,
-        duration: Double?,
-    ): Result<LyricsResult> = runCatching {
-        val cached = lyricsCacheDao.getByItemId(itemId)
-        if (cached != null) {
-            val cachedSynced = cached.syncedLyrics
-            val cachedPlain = cached.plainLyrics
-            if (!cachedSynced.isNullOrBlank()) {
-                // Regex-heavy parse over the full synced blob — keep it off the
-                // Main dispatcher this suspend path is usually called on.
-                val lines = withContext(Dispatchers.Default) { parseLrc(cachedSynced) }
-                if (lines.isNotEmpty()) {
-                    return@runCatching LyricsResult(
-                        lines = lines,
-                        source = LyricsSource.entries.find { it.name == cached.provider } ?: LyricsSource.UNKNOWN,
-                    )
-                }
-            }
-            if (!cachedPlain.isNullOrBlank() && cachedSynced.isNullOrBlank()) {
-                return@runCatching LyricsResult(
-                    lines = cachedPlain.lineSequence().filter { it.isNotBlank() }
-                        .map { LyricsLine(timeMs = 0L, text = it.trim()) }.toList(),
-                    source = LyricsSource.entries.find { it.name == cached.provider } ?: LyricsSource.UNKNOWN,
-                )
-            }
-            if (cachedSynced == null && cachedPlain == null && cached.artistName != null) {
-                return@runCatching LyricsResult(lines = emptyList(), source = LyricsSource.UNKNOWN)
-            }
         }
-
-        val jellyfinResult = apiClient.getLyrics(itemId)
-        if (jellyfinResult.isSuccess) {
-            val result = jellyfinResult.getOrThrow()
-            if (result.lines.isNotEmpty()) {
-                cacheLyrics(itemId, result.source, artistName, trackName, duration, result.lines)
-                return@runCatching result
-            }
-        }
-
-        if (artistName.isNullOrBlank() || trackName.isNullOrBlank()) {
-            return@runCatching LyricsResult(lines = emptyList(), source = LyricsSource.UNKNOWN)
-        }
-
-        val isLocal = networkMonitor.networkStatus.value == NetworkStatus.Local
-        if (!isLocal) {
-            val lrcLibResult = lrcLibApi.getBestMatch(artistName, trackName, duration)
-            if (lrcLibResult.isSuccess) {
-                val track = lrcLibResult.getOrThrow()
-                val trackSynced = track.syncedLyrics
-                val trackPlain = track.plainLyrics
-                if (track.instrumental) {
-                    lyricsCacheDao.upsert(
-                        LyricsCacheEntity(
-                            itemId = itemId,
-                            provider = LyricsSource.LRCLIB.name,
-                            artistName = artistName,
-                            trackName = trackName,
-                            duration = duration,
-                            lrcLibId = track.id,
-                            fetchedAt = System.currentTimeMillis(),
-                        )
-                    )
-                    return@runCatching LyricsResult(lines = emptyList(), source = LyricsSource.LRCLIB)
-                }
-                if (!trackSynced.isNullOrBlank()) {
-                    // Regex-heavy parse over the full synced blob — keep it off the
-                    // Main dispatcher this suspend path is usually called on.
-                    val lines = withContext(Dispatchers.Default) { parseLrc(trackSynced) }
-                    if (lines.isNotEmpty()) {
-                        lyricsCacheDao.upsert(
-                            LyricsCacheEntity(
-                                itemId = itemId,
-                                provider = LyricsSource.LRCLIB.name,
-                                artistName = artistName,
-                                trackName = trackName,
-                                syncedLyrics = trackSynced,
-                                plainLyrics = trackPlain,
-                                duration = duration,
-                                lrcLibId = track.id,
-                                fetchedAt = System.currentTimeMillis(),
-                            )
-                        )
-                        return@runCatching LyricsResult(lines = lines, source = LyricsSource.LRCLIB)
-                    }
-                }
-                if (!trackPlain.isNullOrBlank()) {
-                    val lines = trackPlain.lineSequence().filter { it.isNotBlank() }
-                        .map { LyricsLine(timeMs = 0L, text = it.trim()) }.toList()
-                    lyricsCacheDao.upsert(
-                        LyricsCacheEntity(
-                            itemId = itemId,
-                            provider = LyricsSource.LRCLIB.name,
-                            artistName = artistName,
-                            trackName = trackName,
-                            plainLyrics = trackPlain,
-                            duration = duration,
-                            lrcLibId = track.id,
-                            fetchedAt = System.currentTimeMillis(),
-                        )
-                    )
-                    return@runCatching LyricsResult(lines = lines, source = LyricsSource.LRCLIB)
-                }
-            }
-        }
-
-        lyricsCacheDao.upsert(
-            LyricsCacheEntity(
-                itemId = itemId,
-                provider = LyricsSource.UNKNOWN.name,
-                artistName = artistName,
-                trackName = trackName,
-                duration = duration,
-                fetchedAt = System.currentTimeMillis(),
-            )
-        )
-        LyricsResult(lines = emptyList(), source = LyricsSource.UNKNOWN)
     }
-
-    override suspend fun searchLyrics(query: String): Result<List<LrcLibTrack>> =
-        lrcLibApi.search(query)
-
-    override suspend fun getLyricsById(lrcLibId: Long, itemId: String): Result<LyricsResult> =
-        lrcLibApi.getById(lrcLibId).mapCatching { track ->
-            val trackSynced = track.syncedLyrics
-            val trackPlain = track.plainLyrics
-            val lines = if (!trackSynced.isNullOrBlank()) {
-                // Regex-heavy parse over the full synced blob — keep it off the
-                // Main dispatcher this suspend path is usually called on.
-                withContext(Dispatchers.Default) { parseLrc(trackSynced) }
-            } else if (!trackPlain.isNullOrBlank()) {
-                trackPlain.lineSequence().filter { it.isNotBlank() }
-                    .map { LyricsLine(timeMs = 0L, text = it.trim()) }.toList()
-            } else {
-                emptyList()
-            }
-            lyricsCacheDao.upsert(
-                LyricsCacheEntity(
-                    itemId = itemId,
-                    provider = LyricsSource.LRCLIB.name,
-                    syncedLyrics = track.syncedLyrics,
-                    plainLyrics = track.plainLyrics,
-                    lrcLibId = track.id,
-                    fetchedAt = System.currentTimeMillis(),
-                )
-            )
-            LyricsResult(lines = lines, source = LyricsSource.LRCLIB)
-        }
 
     override suspend fun getPlaylists(limit: Int): Result<List<Playlist>> = apiClient.getPlaylists(limit)
 
@@ -934,10 +782,10 @@ class MediaRepositoryImpl(
     ): Result<String> =
         // Plan 08: playlist edits self-invalidate. getPlaylistItems is an
         // uncached passthrough, so the one cached projection of a playlist is
-        // its detail entry — one invalidateDetailCache(playlistId) per edit
+        // its detail entry — one detailCaches.invalidateItem(playlistId) per edit
         // (PlaylistDetailViewModel used to drop it by hand on refresh).
         apiClient.createPlaylist(name, overview, itemIds, mediaType)
-            .onSuccess { invalidateDetailCache(it) }
+            .onSuccess { detailCaches.invalidateItem(it) }
 
     override suspend fun updatePlaylist(
         playlistId: String,
@@ -946,23 +794,23 @@ class MediaRepositoryImpl(
         isPublic: Boolean?,
     ): Result<Unit> =
         apiClient.updatePlaylist(playlistId, name, overview, isPublic)
-            .onSuccess { invalidateDetailCache(playlistId) }
+            .onSuccess { detailCaches.invalidateItem(playlistId) }
 
     override suspend fun deletePlaylist(playlistId: String): Result<Unit> =
         apiClient.deletePlaylist(playlistId)
-            .onSuccess { invalidateDetailCache(playlistId) }
+            .onSuccess { detailCaches.invalidateItem(playlistId) }
 
     override suspend fun addItemsToPlaylist(playlistId: String, itemIds: List<String>): Result<Unit> =
         apiClient.addItemsToPlaylist(playlistId, itemIds)
-            .onSuccess { invalidateDetailCache(playlistId) }
+            .onSuccess { detailCaches.invalidateItem(playlistId) }
 
     override suspend fun removeItemsFromPlaylist(playlistId: String, entryIds: List<String>): Result<Unit> =
         apiClient.removeItemsFromPlaylist(playlistId, entryIds)
-            .onSuccess { invalidateDetailCache(playlistId) }
+            .onSuccess { detailCaches.invalidateItem(playlistId) }
 
     override suspend fun movePlaylistItem(playlistId: String, entryId: String, newIndex: Int): Result<Unit> =
         apiClient.movePlaylistItem(playlistId, entryId, newIndex)
-            .onSuccess { invalidateDetailCache(playlistId) }
+            .onSuccess { detailCaches.invalidateItem(playlistId) }
 
     override suspend fun getSyncPlayGroups(): Result<List<SyncPlayGroup>> =
         apiClient.getSyncPlayGroups()
@@ -1046,6 +894,14 @@ class MediaRepositoryImpl(
         // No identity → nothing is keyed to a user yet; emitting would only
         // risk refreshing another account's screens on a stale collector.
         val userId = homeSession.currentIdentitySnapshot()?.userId ?: return
+        // The confirmed write also arms the lazy staleness markers (#157 —
+        // the [staleReadGroups] registrations): the next read of each
+        // announced-stale group refetches even if no consumer was collecting
+        // when this landed (VM off the back stack / recreated cold within
+        // the TTL). The announce names only item ids, so the gap groups
+        // (album tracks, collection pages) arm coarsely — one marker per
+        // group, never per item.
+        staleReadGroups.announceConfirmedWrite()
         syntheticUserDataChanges.tryEmit(UserDataChange(userId, itemIds.distinct()))
     }
 
@@ -1078,15 +934,17 @@ class MediaRepositoryImpl(
     override suspend fun markSeasonPlayed(seasonId: String, seriesId: String): Result<Unit> {
         // Season ids are never detail-cached, so the series-resolution inside
         // withUserDataMutationCacheInvalidation cannot discover the parent —
-        // the caller-supplied seriesIdHint is load-bearing here.
+        // the caller-supplied seriesIdHint is load-bearing here. The flip also
+        // announces the seriesId: detail screens are keyed by the series, so a
+        // seasonId-only announcement would never match an open series screen.
         return withUserDataMutationCacheInvalidation(seriesId, seriesIdHint = seriesId) {
-            playedStateSync.flip(seasonId, played = true)
+            playedStateSync.flip(seasonId, played = true, seriesId = seriesId)
         }
     }
 
     override suspend fun markSeasonUnplayed(seasonId: String, seriesId: String): Result<Unit> {
         return withUserDataMutationCacheInvalidation(seriesId, seriesIdHint = seriesId) {
-            playedStateSync.flip(seasonId, played = false)
+            playedStateSync.flip(seasonId, played = false, seriesId = seriesId)
         }
     }
 
@@ -1097,6 +955,23 @@ class MediaRepositoryImpl(
      * supplies it directly when the mutated id is not detail-cached at all
      * (e.g. season marks — seasons are never cached, so the caller names the
      * series).
+     *
+     * The home sections cache is deliberately NOT eagerly evicted here
+     * (scroll- and flicker-sensitive: a cleared cache forces the next home
+     * read into a full blocking refetch). Home freshness after a write is
+     * event-driven instead: the online write paths emit a synthetic
+     * [notifyUserDataChanged] whose consumers (HomeRefresher's throttled
+     * silent forced refresh, open screens) heal live, and the announcement
+     * also arms the lazy staleness marker ([homeSectionsStale], #157) so the
+     * next home READ refetches even when no consumer was collecting. The
+     * gap groups that cannot be evicted by key (album tracks, collection
+     * pages — see [albumTracksStale] / [collectionItemsStale]) arm their
+     * markers here, alongside the first eviction — arming is a user-data
+     * statement, so it stays with this wrapper (and
+     * [invalidateForUserDataChange]), not inside the eviction itself (which
+     * [invalidateFor]'s ALBUM branch also reaches from forced detail reads).
+     * The 60s TTL remains the staleness ceiling for the no-event path, and
+     * [invalidateCaches] still clears the cache wholesale.
      */
     private suspend fun <T> withUserDataMutationCacheInvalidation(
         itemId: String,
@@ -1104,14 +979,17 @@ class MediaRepositoryImpl(
         mutation: suspend () -> Result<T>,
     ): Result<T> {
         val seriesId = seriesIdHint ?: cachedSeriesId(itemId)
-        invalidateHomeSectionsCache()
+        // Arm the gap-group markers BEFORE the mutation, matching the
+        // pre-eviction this wrapper already runs: the marker records "a
+        // user-data write is in flight", which is true even if the write
+        // then fails (the pre-eviction already dropped the item's own keys).
+        staleReadGroups.announceUserDataWrite()
         invalidateUserDataCaches(itemId, seriesId)
         return try {
             mutation()
         } finally {
             // The second eviction closes the race where a fetch started after
             // the pre-write eviction observed the old server state.
-            invalidateHomeSectionsCache()
             invalidateUserDataCaches(itemId, seriesId)
         }
     }
@@ -1127,19 +1005,36 @@ class MediaRepositoryImpl(
      * call site never re-derives "is this item part of a series?" locally.
      */
     private fun invalidateUserDataCaches(itemId: String, seriesIdHint: String? = null) {
-        val identity = homeSession.cacheIdentitySnapshot()
-        // Read the cached detail first to discover whether this item belongs
-        // to a series (either is the series or is an episode of one) so we can
-        // drop the series-scoped seasons/episodes caches too.
-        val cached = detailCache.get(identity, itemId)
-        albumTracksCache.remove(identity, "tracks_$itemId")
-        invalidateDetailCache(itemId)
+        // The group's composite per-item eviction returns the cached detail
+        // read BEFORE the drop, so the series-resolution below can still
+        // discover whether this item belongs to a series (either is the
+        // series or is an episode of one, discovered from the cached detail
+        // or the caller-supplied [seriesIdHint] when the item itself is not
+        // detail-cached, e.g. seasons).
+        val cached = detailCaches.invalidateUserData(itemId)
         // Home "Latest in X" rows carry per-item UserData (played/favorite) but
         // are keyed by parent folder, not by itemId, so they can't be evicted
         // selectively — drop the whole (small, LRU-bounded) cache the way the
         // home-sections cache is dropped, so home/library rows reflect the write
         // instead of serving stale badges until the TTL expires.
         latestMediaCache.clear()
+        // The network layer's own home hot-path caches (per-folder latest +
+        // per-seed similar) carry the same per-item UserData — drop them too,
+        // or a home fetch within the sub-call TTL serves the pre-write rows.
+        apiClient.invalidateHomeSubcallCaches()
+        // The gap groups the per-item eviction above cannot reach (see
+        // [albumTracksStale] / [collectionItemsStale]): a track's or a
+        // collection member's flip carries per-item UserData into the rows
+        // its album/collection serves, but the eviction only knows the
+        // flipped item's own keys. Arming lives with the USER-DATA callers
+        // (the mutation wrapper and [invalidateForUserDataChange]), not here:
+        // this eviction also serves [invalidateFor]'s ALBUM branch — a forced
+        // detail read, no user-data write behind it — and a pull-to-refresh
+        // must not arm markers (one redundant forced read of whichever
+        // album/collection is read next, healing nothing). Coarse by design
+        // (one marker per group, like the home marker): a flip on an
+        // unrelated item costs at most one forced read of whichever
+        // album/collection is read next.
         val seriesId = seriesIdHint
             ?: cached?.item?.seriesId
             ?: cached?.takeIf { it.item.mediaType == MediaType.SERIES }?.item?.id
@@ -1147,7 +1042,7 @@ class MediaRepositoryImpl(
     }
 
     private fun cachedSeriesId(itemId: String): String? {
-        val cached = detailCache.get(homeSession.cacheIdentitySnapshot(), itemId) ?: return null
+        val cached = detailCaches.cachedDetail(itemId) ?: return null
         return cached.item.seriesId
             ?: cached.takeIf { it.item.mediaType == MediaType.SERIES }?.item?.id
     }
@@ -1201,69 +1096,20 @@ class MediaRepositoryImpl(
 
     override suspend fun cancelSeriesTimer(seriesTimerId: String): Result<Unit> = apiClient.cancelSeriesTimer(seriesTimerId)
 
-    private suspend fun cacheLyrics(
-        itemId: String,
-        source: LyricsSource,
-        artistName: String?,
-        trackName: String?,
-        duration: Double?,
-        lines: List<LyricsLine>,
-    ) {
-        val syncedLrc = buildString {
-            val formatter = java.util.Formatter(this)
-            lines.forEachIndexed { index, line ->
-                if (index > 0) append('\n')
-                val min = line.timeMs / 60_000
-                val sec = (line.timeMs % 60_000) / 1000.0
-                formatter.format("[%02d:%06.3f] %s", min, sec, line.text)
-            }
-        }
-        lyricsCacheDao.upsert(
-            LyricsCacheEntity(
-                itemId = itemId,
-                provider = source.name,
-                artistName = artistName,
-                trackName = trackName,
-                syncedLyrics = syncedLrc,
-                duration = duration,
-                fetchedAt = System.currentTimeMillis(),
-            )
-        )
-        // Throttle eviction to at most once per hour. deleteOlderThan is a full
-        // table scan; firing it on every lyrics fetch (which happens whenever a
-        // user opens lyrics for a new track) was walking & re-locking the whole
-        // lyrics_cache table unnecessarily. Eviction semantics (rows older than
-        // 30 days eventually removed) preserved.
-        val now = System.currentTimeMillis()
-        if (now - lastLyricsEvictionMs > 60L * 60 * 1000) {
-            lastLyricsEvictionMs = now
-            try {
-                lyricsCacheDao.deleteOlderThan(now - 30L * 24 * 60 * 60 * 1000)
-            } catch (e: Exception) {
-                Log.d("MediaRepo", "Failed to evict old lyrics cache", e)
-            }
-        }
-    }
-
-    override suspend fun cleanupLyricsCache() {
-        try {
-            lyricsCacheDao.deleteOlderThan(System.currentTimeMillis() - 30L * 24 * 60 * 60 * 1000)
-        } catch (e: Exception) {
-            Log.d("MediaRepo", "Failed to cleanup lyrics cache", e)
-        }
-    }
-
     /**
      * Wholesale in-memory cache drop (plan 08: demoted off the public
-     * [MediaRepository] interface, kept on the impl). The only production
-     * caller is the background user-data sync worker (legacy module — public,
-     * not internal, since the move made the two separate Gradle modules) —
-     * the `SessionCacheRegistry` identity path reacts via its own cache
-     * registration + action instead (see the init block). Reads that need
-     * freshness use the per-query force parameters instead.
+     * [MediaRepository] interface, kept on the impl — the
+     * [MediaCacheInvalidator] port is its cross-module seam for the legacy
+     * sync workers). The only production caller is the background user-data
+     * sync worker — the `SessionCacheRegistry` identity path reacts via its
+     * own cache registration + action instead (see the init block). Reads
+     * that need freshness use the per-query force parameters instead.
      */
-    suspend fun invalidateCaches() {
-        invalidateDetailCache()
+    override suspend fun invalidateCaches() {
+        // The group's wholesale drop: epoch bump + detail/similar/themes
+        // (the identity-path reaction) + album tracks (which the identity
+        // path clears via the registry's cache list instead).
+        detailCaches.clearAll()
         homeSectionsCache.clear()
         // Also clear the secondary caches — they hold user-scoped data (library folders,
         // latest media, genres, studios, photo folder child URLs). They are now
@@ -1278,12 +1124,13 @@ class MediaRepositoryImpl(
         // whole catalogue (every series snapshot + the long epoch) so a
         // wholesale invalidation behaves the same as before.
         episodeCatalogue.invalidateAll()
-        albumTracksCache.clear()
         collectionItemsCache.clear()
         photoFolderChildUrlCache.clear()
         // The network-layer home hot-path caches (per-folder latest + per-seed
-        // similar) are likewise identity-keyed now, so they no longer need a
-        // cross-boundary clear from here.
+        // similar) are likewise identity-keyed; they are dropped here because
+        // their entries carry per-item UserData that a wholesale drop must not
+        // resurrect for the sub-call TTL.
+        apiClient.invalidateHomeSubcallCaches()
         // NOTE: the persistent home-section SWR snapshot is intentionally NOT
         // cleared here. invalidateCaches() doesn't know which (server, user)
         // it's running for — it's called both from the registry's identity action (which
@@ -1304,11 +1151,6 @@ class MediaRepositoryImpl(
         apiClient.sendTestNewsletter()
 
     companion object {
-        private const val PAGE_SIZE = 50
-        private const val PREFETCH_DISTANCE = 20
-        private const val DETAIL_CACHE_MAX_ENTRIES = 30
-        /** 2 minutes — short enough that server changes are reflected quickly. */
-        private const val DETAIL_CACHE_TTL_MS = 2 * 60 * 1000L
         /**
          * Buffer for [syntheticUserDataChanges]: large enough that a drain of
          * dozens of flips never suspends or drops wholesale, small enough to
@@ -1317,75 +1159,253 @@ class MediaRepositoryImpl(
         private const val SYNTHETIC_CHANGES_BUFFER = 64
         /** 10 minutes — library folders change rarely during a session. */
         private const val FOLDERS_CACHE_TTL_MS = 10 * 60 * 1000L
+
+        /** Window within which a byte-identical home SWR persist is skipped (foreground refresh cadence). */
+        private const val HOME_PERSIST_DEDUP_WINDOW_MS = 60 * 1000L
         /** 2 minutes — "latest" content should feel fresh on re-entry. */
         private const val LATEST_CACHE_TTL_MS = 2 * 60 * 1000L
-        private val TIME_REGEX = Regex("""\[(\d{1,2}):(\d{2}\.\d{2,3})]""")
+    }
 
-        private fun parseLrc(lrcContent: String): List<LyricsLine> {
-            val lines = mutableListOf<LyricsLine>()
-            lrcContent.lineSequence().forEach { rawLine ->
-                val line = rawLine.trim()
-                if (line.isEmpty()) return@forEach
-                val times = TIME_REGEX.findAll(line).map { match ->
-                    val minutes = match.groupValues[1].toLong()
-                    val seconds = match.groupValues[2].toDouble()
-                    minutes * 60_000 + (seconds * 1000).toLong()
-                }.toList()
-                if (times.isEmpty()) return@forEach
-                val textStart = line.lastIndexOf(']') + 1
-                val text = line.substring(textStart).trim()
-                val words = parseInlineWordTimings(text)
-                if (text.isEmpty()) {
-                    times.forEach { timeMs -> lines.add(LyricsLine(timeMs = timeMs, text = "")) }
-                } else {
-                    times.forEach { timeMs ->
-                        // `words.map { it.copy(timeMs = it.timeMs) }` was an
-                        // identity copy of every word-timed line — the parsed
-                        // immutable list is already the final shape.
-                        lines.add(
-                            LyricsLine(
-                                timeMs = timeMs,
-                                text = text,
-                                words = words,
-                            )
-                        )
-                    }
-                }
-            }
-            // LRC files are usually authored already in time order — skip the
-            // sorted copy when the parse produced an ordered list.
-            return if ((1 until lines.size).all { lines[it - 1].timeMs <= lines[it].timeMs }) {
-                lines
-            } else {
-                lines.sortedBy { it.timeMs }
-            }
-        }
+    override suspend fun getPhotoFolderChildImageUrls(folderId: String, limit: Int): List<String> =
+        // The one non-Result fetch, riding the Result-shaped seam — the cache
+        // module deliberately has no fourth (non-Result) shape. The wrap is
+        // pure shape: if the call throws, the lambda unwinds before any Result
+        // exists (nothing is cached, the exception propagates), so the
+        // trailing getOrThrow can only ever unwrap a stored success.
+        photoFolderChildUrlCache.getOrFetch({ homeSession.cacheIdentity() }, folderId) {
+            Result.success(apiClient.getChildItemImageUrls(folderId, limit))
+        }.getOrThrow()
+}
 
-        /**
-         * Parses Enhanced LRC inline word timings:
-         * "[00:12.34]Hello [00:12.89]world [00:13.45]test"
-         */
-        private fun parseInlineWordTimings(text: String): List<com.raulshma.jellyplay.core.model.LyricsWord> {
-            if (text.isBlank()) return emptyList()
-            val matches = TIME_REGEX.findAll(text).toList()
-            if (matches.isEmpty()) return emptyList()
-            return matches.mapIndexed { index, match ->
-                val minutes = match.groupValues[1].toLong()
-                val seconds = match.groupValues[2].toDouble()
-                val timeMs = minutes * 60_000 + (seconds * 1000).toLong()
-                val wordStart = match.range.last + 1
-                val wordEnd = matches.getOrNull(index + 1)?.range?.first ?: text.length
-                val rawWord = text.substring(wordStart, wordEnd).trim()
-                com.raulshma.jellyplay.core.model.LyricsWord(timeMs = timeMs, text = rawWord)
-            }.filter { it.text.isNotEmpty() }
+/**
+ * The detail screen's item-scoped cache group — the single owner of the four
+ * caches that co-evict with one detail item (the detail snapshot, similar
+ * items, album tracks, theme songs) plus the ONE epoch that guards every
+ * write against that invalidation stream. File-private beside
+ * [MediaRepositoryImpl] (the `EpisodeCatalogueImpl` shape in miniature: a
+ * cache cluster + its invalidation choreography, constructor-injected with
+ * its two collaborators); the repo's public members are one-line delegates.
+ *
+ * ## Key grammar — the drift this group exists to kill
+ *
+ * Every item-scoped key is constructed here and nowhere else. The historical
+ * bug class: `getSimilarItems` stored under `similar_${id}_$limit` while the
+ * invalidation removed `similar_$id` (no suffix) — a no-op that pinned every
+ * limit variant for the full TTL. The grammar makes the get-key /
+ * evict-prefix co-eviction structural:
+ *  - similar items are LIMIT-SHAPED — the get key is derived from the
+ *    eviction prefix plus `_$limit` ([similarGetKey] literally calls
+ *    [similarEvictAllLimitsPrefix]), so a different limit never serves
+ *    another limit's truncated list AND one prefix eviction drops every
+ *    limit variant at once;
+ *  - theme songs and album tracks are UNshaped (`themes_$id`,
+ *    `tracks_$id`) — the prefix evict is exact-match equivalent.
+ *
+ * ## Epoch semantics (verbatim the pre-group `detailCacheEpoch`)
+ *
+ * One epoch guards every write in the group. `invalidateItem` /
+ * `invalidateAll` bump it; a fetch that completes after a bump is returned
+ * to its caller but never written back (the `getOrFetchGuarded` write guard
+ * and [SingleFlightFetcher]'s guard share [epoch]) — a slow fetch that raced
+ * a user-data invalidation must not pin the pre-mutation snapshot for the
+ * full TTL. Exactly one bump per invalidation call, no more.
+ *
+ * ## Identity
+ *
+ * Every get/put/remove goes through the [TtlCache] identity overloads
+ * (fetch paths read [HomeSession.cacheIdentity], the suspend source-flow
+ * read; best-effort evictions read [HomeSession.cacheIdentitySnapshot]) so a
+ * wrong identity is a guaranteed miss by construction.
+ */
+private class DetailCacheGroup(
+    private val apiClient: JellyfinApiClient,
+    private val homeSession: HomeSession,
+) {
+
+    private val detailCache = TtlCache<MediaDetail>(
+        maxSize = DETAIL_CACHE_MAX_ENTRIES,
+        ttlMs = DETAIL_CACHE_TTL_MS,
+    )
+
+    private val similarCache = TtlCache<List<MediaItem>>(ttlMs = DETAIL_CACHE_TTL_MS)
+    private val albumTracksCache = TtlCache<List<MediaItem>>(ttlMs = DETAIL_CACHE_TTL_MS)
+
+    // Theme songs for a detail item: ThemeMusicPlayer releases its player on
+    // screen exit, so every detail re-entry re-fetched the (almost always
+    // empty) list — one HTTP round-trip per navigation for nothing. Cached
+    // with the same 2-minute TTL and epoch-guarded write as its siblings; a
+    // stale list ≤2 min after a server change is harmless for ambient audio.
+    private val themeSongsCache = TtlCache<List<MediaItem>>(ttlMs = DETAIL_CACHE_TTL_MS)
+
+    // Single-flight dedup for `detail`: the detail screen is reachable from
+    // many entry points (home row tap, deep link, "play next" notification,
+    // cast handshake, download resume) and TtlCache's get-check-put is not
+    // atomic — two near-simultaneous entries share one flight instead of
+    // firing two round-trips. The fetch semantics (caller-scope async,
+    // lock-scope re-check, epoch guard, cancellation ladder) live in
+    // [SingleFlightFetcher]; the epoch it shares with the guarded writes
+    // above/below is [epoch].
+    private val epoch = AtomicLong(0L)
+    private val detailFetcher = SingleFlightFetcher(detailCache, epoch)
+
+    // ── Key grammar (the one home of every item-scoped key) ────────────────
+
+    /**
+     * The limit-agnostic similar-items eviction prefix — a prefix of
+     * [similarGetKey] for EVERY limit, so one prefix eviction drops all of
+     * the item's limit variants.
+     */
+    private fun similarEvictAllLimitsPrefix(itemId: String) = "similar_$itemId"
+
+    /** The per-limit similar-items get key, DERIVED from the eviction prefix. */
+    private fun similarGetKey(itemId: String, limit: Int) =
+        "${similarEvictAllLimitsPrefix(itemId)}_$limit"
+
+    /** Theme-songs key — unshaped; the prefix evict is exact-match equivalent. */
+    private fun themesKey(itemId: String) = "themes_$itemId"
+
+    /** Album-tracks key — unshaped; removed by exact key. */
+    private fun tracksKey(albumId: String) = "tracks_$albumId"
+
+    // ── Accessors ──────────────────────────────────────────────────────────
+
+    /**
+     * The detail snapshot: single-flight cache-through read with the force
+     * freshness lever (drop the cached entry first — the invalidate-then-read
+     * sequence callers used to run by hand; the epoch bump inside
+     * [invalidateItem] also guards a racing fetch from re-inserting the
+     * stale snapshot).
+     */
+    suspend fun detail(itemId: String, force: Boolean): Result<MediaDetail> {
+        if (force) invalidateItem(itemId)
+        return detailFetcher.getOrFetch({ homeSession.cacheIdentity() }, itemId) {
+            apiClient.getMediaDetail(itemId)
         }
     }
 
-    override suspend fun getPhotoFolderChildImageUrls(folderId: String, limit: Int): List<String> {
-        val identity = homeSession.cacheIdentity()
-        photoFolderChildUrlCache.get(identity, folderId)?.let { return it }
-        val urls = apiClient.getChildItemImageUrls(folderId, limit)
-        photoFolderChildUrlCache.put(identity, folderId, urls)
-        return urls
+    /** Similar items — limit-shaped key, epoch-guarded write. */
+    suspend fun similarItems(itemId: String, limit: Int): Result<List<MediaItem>> =
+        similarCache.getOrFetchGuarded(
+            { homeSession.cacheIdentity() },
+            similarGetKey(itemId, limit),
+            currentEpoch = epoch::get,
+        ) {
+            apiClient.getSimilarItems(itemId, limit)
+        }
+
+    /**
+     * Album tracks — epoch-guarded write. [force] mirrors [detail]'s
+     * freshness lever: drop the cached list (plus the epoch bump that
+     * stall-guards in-flight writers) before the cache-through read. Needed
+     * because [invalidateUserData] can only evict `tracks_<itemId>` — a
+     * flip on a TRACK never touches the album's `tracks_<albumId>` entry,
+     * so a deferred silent refresh that must show the post-flip rows cannot
+     * get them without the explicit force.
+     */
+    suspend fun albumTracks(albumId: String, force: Boolean): Result<List<MediaItem>> {
+        if (force) invalidateAlbumTracks(albumId)
+        return albumTracksCache.getOrFetchGuarded(
+            { homeSession.cacheIdentity() },
+            tracksKey(albumId),
+            currentEpoch = epoch::get,
+        ) {
+            apiClient.getAlbumTracks(albumId)
+        }
     }
+
+    /** Theme songs — epoch-guarded write. */
+    suspend fun themeSongs(itemId: String): Result<List<MediaItem>> =
+        themeSongsCache.getOrFetchGuarded(
+            { homeSession.cacheIdentity() },
+            themesKey(itemId),
+            currentEpoch = epoch::get,
+        ) {
+            apiClient.getThemeSongs(itemId)
+        }
+
+    /** Best-effort pre-eviction read of the cached detail (snapshot identity). */
+    fun cachedDetail(itemId: String): MediaDetail? =
+        detailCache.get(homeSession.cacheIdentitySnapshot(), itemId)
+
+    // ── Invalidation ───────────────────────────────────────────────────────
+
+    /**
+     * Drops EVERY cached shape of one item: the detail snapshot, every limit
+     * variant of its similar items (prefix evict), and its theme songs —
+     * plus the epoch bump that stall-guards in-flight writers.
+     */
+    fun invalidateItem(itemId: String) {
+        epoch.incrementAndGet()
+        val identity = homeSession.cacheIdentitySnapshot()
+        detailCache.remove(identity, itemId)
+        similarCache.removeByKeyPrefix(identity, similarEvictAllLimitsPrefix(itemId))
+        themeSongsCache.removeByKeyPrefix(identity, themesKey(itemId))
+    }
+
+    /**
+     * Drops the album's cached track list plus the epoch bump that
+     * stall-guards in-flight writers — [albumTracks]'s force lever, the
+     * same shape [invalidateItem] gives [detail]. ([invalidateUserData]
+     * keeps its direct, bump-less remove: it follows up with
+     * [invalidateItem], which bumps.)
+     */
+    fun invalidateAlbumTracks(albumId: String) {
+        epoch.incrementAndGet()
+        albumTracksCache.remove(homeSession.cacheIdentitySnapshot(), tracksKey(albumId))
+    }
+
+    /**
+     * Wholesale drop of the detail/similar/themes trio + the epoch bump.
+     * This (not [clearAll]) is the identity-transition reaction: album
+     * tracks rides the registry's cache list there instead — see
+     * [registryCaches].
+     */
+    fun invalidateAll() {
+        epoch.incrementAndGet()
+        detailCache.clear()
+        similarCache.clear()
+        themeSongsCache.clear()
+    }
+
+    /**
+     * The composite "user data for [itemId] changed" eviction. Returns the
+     * cached detail read BEFORE the drop (the caller's series-discovery
+     * input — it must be captured before [invalidateItem] removes it),
+     * removes the item's album tracks (a direct remove, not part of
+     * [invalidateItem]), then runs the full per-item invalidation.
+     */
+    fun invalidateUserData(itemId: String): MediaDetail? {
+        val identity = homeSession.cacheIdentitySnapshot()
+        val cached = detailCache.get(identity, itemId)
+        albumTracksCache.remove(identity, tracksKey(itemId))
+        invalidateItem(itemId)
+        return cached
+    }
+
+    /**
+     * Wholesale drop for [MediaRepositoryImpl.invalidateCaches] (the
+     * background sync-worker path): [invalidateAll] plus the album-tracks
+     * cache, which the identity path clears via the registry's cache list
+     * instead — the two wholesale callers each clear every member exactly
+     * once. Declared resequencing, unobservable: the former body cleared
+     * albumTracks AFTER the episode catalogue's invalidateAll(); the member
+     * caches are independent (no cross-cache read exists) and each is
+     * cleared exactly once, so ordering within the drop cannot matter —
+     * a racing getAlbumTracks put-after-clear was equally possible before.
+     */
+    fun clearAll() {
+        invalidateAll()
+        albumTracksCache.clear()
+    }
+
+    /**
+     * The group's contribution to the repo's `SessionCacheRegistry`
+     * registration: the member caches a plain registry wholesale clear fully
+     * invalidates. Only album tracks qualifies — the detail/similar/themes
+     * trio's reaction needs the epoch bump (an in-flight previous-identity
+     * fetch must not write back into the cleared cache), which a plain clear
+     * cannot express; that trio rides the repo's `media-identity-clear`
+     * ACTION ([invalidateAll]) instead.
+     */
+    val registryCaches: List<TtlCache<*>> get() = listOf(albumTracksCache)
 }

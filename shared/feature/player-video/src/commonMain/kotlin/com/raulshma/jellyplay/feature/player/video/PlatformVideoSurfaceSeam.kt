@@ -5,7 +5,7 @@ import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 
 /**
- * Engine video-surface seam for the commonMain [VideoPlayerScreen] (wave 9A).
+ * Engine video-surface seam for the commonMain [VideoPlayerScreen].
  *
  * Android actual: the screen's original `AndroidView` hosts, verbatim — the
  * engine's `AndroidSurfaceProvider.createSurfaceView` view (empty fallback
@@ -21,7 +21,7 @@ import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
  * — the same degrade the Android fallback view expresses.
  *
  * @param engine the live session engine, or null while the session is still
- *   creating one. The null case is the wave-14B pre-engine surface mount: mpv
+ *   creating one. The null case is the pre-engine surface mount: mpv
  *   captures the embed target HWND at engine-construction time, so the desktop
  *   SwingPanel must be realized BEFORE the engine factory's bounded wait for
  *   the handle — with the old screen-side `engine != null` guard the two
@@ -76,7 +76,7 @@ internal expect fun ZoomedSubtitleOverlayHost(
  * (mpv's `screenshot-to-file` — the embedded child window has no read-back),
  * so its actual downcasts [engine] to its own capture interface and ignores
  * [surfaceView] entirely, which also covers the software-render surface that
- * publishes no platform surface object (wave 17B).
+ * publishes no platform surface object.
  *
  * @param surfaceView the platform surface the engine renders into (Android
  *   PixelCopy path; unused on desktop).

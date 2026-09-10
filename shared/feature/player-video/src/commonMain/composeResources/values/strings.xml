@@ -59,7 +59,7 @@
     <string name="player_video_ass_force_hint">Override embedded styling with your colors, font &amp; borders</string>
     <string name="player_video_font_color">Font Color</string>
     <string name="player_video_background_color">Background Color</string>
-    <string name="player_video_background_opacity">Background Opacity: %1$d%%</string>
+    <string name="player_video_background_opacity">Background Opacity: %1$d%</string>
     <string name="player_video_edge_type">Edge Type</string>
     <string name="player_video_edge_none">None</string>
     <string name="player_video_edge_outline">Outline</string>
@@ -74,7 +74,7 @@
     <string name="player_video_border_width">Border Width: %1$s</string>
     <string name="player_video_shadow_offset">Shadow Offset: %1$s</string>
     <string name="player_video_subtitle_offset">Subtitle Offset: %1$s</string>
-    <string name="player_video_vertical_position">Vertical Position: %1$d%%</string>
+    <string name="player_video_vertical_position">Vertical Position: %1$d%</string>
 
     <!-- Sleep timer sheet -->
     <string name="player_video_sleep_timer">Sleep Timer</string>

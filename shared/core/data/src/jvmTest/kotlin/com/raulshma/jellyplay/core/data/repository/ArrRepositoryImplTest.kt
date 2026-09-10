@@ -235,30 +235,6 @@ class ArrRepositoryImplTest {
     }
 
     @Test
-    fun `buildBaseUrl prefers externalUrl`() {
-        val url = ArrRepositoryImpl.buildBaseUrl(
-            externalUrl = "https://radarr.example.com",
-            useSsl = false, hostname = "x", port = 1, baseUrl = null,
-        )
-        assertEquals("https://radarr.example.com", url)
-    }
-
-    @Test
-    fun `buildBaseUrl builds from hostname port and scheme`() {
-        val url = ArrRepositoryImpl.buildBaseUrl(
-            externalUrl = null, useSsl = true, hostname = "radarr.local", port = 7878, baseUrl = "/radarr",
-        )
-        assertEquals("https://radarr.local:7878/radarr", url)
-    }
-
-    @Test
-    fun `buildBaseUrl returns null when hostname blank`() {
-        assertNull(
-            ArrRepositoryImpl.buildBaseUrl(null, false, "", 1, null),
-        )
-    }
-
-    @Test
     fun `canonicalBaseUrl lowercases and strips trailing slash`() {
         assertEquals("https://radarr.local", ArrRepositoryImpl.canonicalBaseUrl("https://radarr.local/"))
         assertEquals("https://radarr.local", ArrRepositoryImpl.canonicalBaseUrl("HTTPS://Radarr.Local"))

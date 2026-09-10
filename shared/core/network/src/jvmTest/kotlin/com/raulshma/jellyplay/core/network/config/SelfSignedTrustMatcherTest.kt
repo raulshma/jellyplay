@@ -15,7 +15,7 @@ import kotlin.test.assertTrue
  * [SelfSignedTrustHandshakeTest].
  *
  * The matcher lives in commonMain (`SelfSignedTrustMatcher`) since the
- * wave-21 review round; the jvmShared `SelfSignedTrustHosts` facade it left
+ *  review round; the jvmShared `SelfSignedTrustHosts` facade it left
  * behind is pinned below (one delegation test) so a drift between the two
  * can't compile-and-pass silently.
  */
@@ -46,7 +46,7 @@ class SelfSignedTrustMatcherTest {
 
     @Test
     fun `portless grant covers a ported address - the display-drift regression`() {
-        // Wave-21 review finding: the settings toggle used exact string
+        // The settings toggle used exact string
         // membership, so a portless grant showed OFF for a ported primary even
         // though every handshake honored it.
         val entries = setOf("https://media.example.com")

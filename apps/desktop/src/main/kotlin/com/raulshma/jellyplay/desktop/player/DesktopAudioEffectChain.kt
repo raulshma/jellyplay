@@ -14,7 +14,7 @@ import kotlin.math.pow
 
 /**
  * The desktop mpv `af` (audio filter chain) builder for the audio player's
- * effect stack (wave 14C) — the mpv-side twin of the Android
+ * effect stack — the mpv-side twin of the Android
  * `AudioEffectChain`/`AudioEffectsProcessor` DSP half. Pure functions, no
  * mpv handle: [MpvDesktopEngine] applies the produced strings as runtime
  * properties (`af`, `audio-channels`, `pitch`), which mpv re-inits live.

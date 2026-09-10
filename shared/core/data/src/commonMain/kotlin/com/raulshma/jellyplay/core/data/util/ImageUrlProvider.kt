@@ -6,6 +6,17 @@ interface ImageUrlProvider {
     // null to a fixed default silently capped full-res photos at 400px.
     fun getImageUrl(itemId: String, maxWidth: Int? = DEFAULT_MAX_WIDTH): String
 
+    /**
+     * The tag-guard fold every Live TV card uses: a null image tag means the
+     * item HAS no image → empty string (never a URL for an image that does
+     * not exist); any tag → [getImageUrl] at its default width. The tag value
+     * itself is dropped on the floor — the Jellyfin URL is keyed by item id
+     * alone; the tag only gates existence. This used to be hand-copied into
+     * every Live TV ViewModel.
+     */
+    fun getImageUrlOrNull(itemId: String, imageTag: String?): String =
+        if (imageTag != null) getImageUrl(itemId) else ""
+
     /** Chapter thumbnail for the detail-screen chapter row (imageType = Chapter). */
     fun getChapterImageUrl(itemId: String, imageIndex: Int, tag: String? = null): String
 

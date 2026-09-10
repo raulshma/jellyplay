@@ -78,7 +78,7 @@ internal fun DetailBodyLandscape(
                     // Prefer the on-disk poster (DetailAssets.posterPath) for a
                     // LOCAL origin before the server getImageUrl fallback.
                     val posterImageUrl = state.assets.posterPath
-                        ?: callbacks.getImageUrl(state.itemId)
+                        ?: callbacks.artwork.getImageUrl(state.itemId)
                     DetailPoster(
                         itemId = state.itemId,
                         primaryBlurHash = item?.blurHashes?.primary,
@@ -122,7 +122,7 @@ internal fun DetailBodyLandscape(
             if (err != null) {
                 ErrorScreen(
                     message = err.message,
-                    onRetry = if (err.accessDenied) null else callbacks.onRetry,
+                    onRetry = if (err.accessDenied) null else callbacks.screen.onRetry,
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -187,7 +187,7 @@ internal fun DetailBodyPortrait(
                             // Prefer the on-disk poster (DetailAssets.posterPath)
                             // for a LOCAL origin before the server fallback.
                             url = state.assets.posterPath
-                                ?: callbacks.getImageUrl(state.itemId),
+                                ?: callbacks.artwork.getImageUrl(state.itemId),
                             contentDescription = null,
                             blurHash = item?.blurHashes?.primary,
                             // Portrait poster (~120 dp × 3× ≈ 432 px) — decode a
@@ -224,7 +224,7 @@ internal fun DetailBodyPortrait(
             if (err != null) {
                 ErrorScreen(
                     message = err.message,
-                    onRetry = if (err.accessDenied) null else callbacks.onRetry,
+                    onRetry = if (err.accessDenied) null else callbacks.screen.onRetry,
                 )
             }
         }

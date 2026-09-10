@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.StateFlow
 
 /**
  * Android adapter over the Hilt-owned legacy `core:data`
- * ActivePlayerController singleton (wave 8C seam): the registry remote-control
+ * ActivePlayerController singleton (seam): the registry remote-control
  * paths read to drive playback without a ViewModel reference.
  */
 internal class AndroidActivePlayerController(
@@ -24,8 +24,8 @@ internal class AndroidActivePlayerController(
 }
 
 /**
- * Android adapter over the Hilt-owned legacy "Play On" strategy (wave 8C
- * seam): the commonMain interface keeps the isConnected gate + loadMedia
+ * Android adapter over the Hilt-owned legacy "Play On" strategy (the
+ * remote-play seam): the commonMain interface keeps the isConnected gate + loadMedia
  * handoff the ViewModel's remote-play routing early-return needs.
  */
 internal class AndroidJellyfinRemotePlayCastStrategy(
@@ -50,7 +50,7 @@ internal class AndroidJellyfinRemotePlayCastStrategy(
 }
 
 /**
- * Android actual of the [VideoMediaSessionFactory] seam (wave 8C): constructs
+ * Android actual of the [VideoMediaSessionFactory] seam: constructs
  * the androidMain [AndroidMediaSessionController] with the app [Context] and
  * the Hilt-owned legacy [PlaybackSessionManager] the ViewModel used to take
  * as a constructor dependency — the legacy type now lives entirely on the
@@ -75,7 +75,7 @@ internal class AndroidMediaSessionFactory(
 
 /**
  * Android adapter bridging the module-local [PlayerVideoMessageBus] seam onto
- * the Hilt-owned legacy `core:ui` UserMessageBus (wave 8C seam; MusicMessageBus
+ * the Hilt-owned legacy `core:ui` UserMessageBus (seam; MusicMessageBus
  * precedent): strings post as UiText.Raw, the [PlayerVideoMessage.SmartDownloadDeleted]
  * seal resolves the legacy string entry the ViewModel used to build inline —
  * the resource stays in the legacy table (no string files touched).

@@ -3,11 +3,16 @@ package com.raulshma.jellyplay.core.model
 /**
  * Fixed-precision decimal formatting that mirrors `String.format("%.Nf")` for
  * non-negative inputs (the only kind passed by current call sites: percentages,
- * framerates, bitrates, zoom factors, playback positions).
+ * framerates, bitrates, zoom factors, playback positions, storage sizes,
+ * ratings, and any float that feeds a compose string resource).
  *
  * Avoids the `Formatter` + `StringBuilder` + locale lookup cost of
  * `String.format`, which matters on hot paths like the player stats overlay
- * (~4 Hz, many rows) and per-seek MPV command strings.
+ * (~4 Hz, many rows) and per-seek MPV command strings. It is also the only
+ * way to put a float into a compose string resource: `stringResource` only
+ * substitutes positional `%n$s`/`%n$d` placeholders, so a `%f` resource leaks
+ * the raw specifier into the UI (issue #158) — pre-format here, pass the
+ * string.
  *
  * Rounding is HALF_UP (round-half-towards-positive-infinity), matching
  * `String.format`'s default `RoundingMode.HALF_UP` for non-negative values.

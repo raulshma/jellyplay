@@ -8,7 +8,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Pins the Phase W library wire DTOs' PascalCase contract and the
+ * Pins the library wire DTOs' PascalCase contract and the
  * DTO→core.model mapping semantics (mirrors the jvmShared JellyfinDtoMappers
  * these tests substitute for), decoded through the same lenient Json the
  * wasm client uses. Field-for-field spot checks per the chunk-2 task list:

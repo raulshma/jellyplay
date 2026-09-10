@@ -1,0 +1,80 @@
+# Baseline-profile generation lane: the consumer plugin's
+# saveInSrc fallback tree (app/src/phoneRelease/generated/baselineProfiles) has
+# never been populated — every non-CI release build (local assembles,
+# sideloads, macrobenchmarks against local APKs) therefore ships with ZERO
+# baseline/startup rules, typically 20-30% worse cold-start TTID. The release
+# lane regenerates profiles on every tagged release (its APKs are always
+# covered), but its runner is ephemeral, so the committed fallback stays empty.
+#
+# This lane regenerates on a proper KVM runner and COMMITS the two artifacts to
+# the dispatching branch, closing the gap. Manual dispatch only — never
+# scheduled — so a human decides when to refresh the committed profiles.
+#
+# Local generation note: Gradle Managed Device boot of the ciPixel8 AOSP image
+# fails on many Windows dev boxes (GMD "No matching Apks found" after an
+# emulator timeout — no nested-virtualization support); this lane is the
+# reliable path, not local runs.
+name: Generate Baseline Profiles
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  generate-and-commit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      # Keystore + gradlew + KVM — the shared GMD-runner prereqs
+      # (.github/actions/setup-gmd-runner).
+      - name: Setup GMD Runner
+        uses: ./.github/actions/setup-gmd-runner
+        with:
+          keystore-base64: ${{ secrets.KEYSTORE_BASE64 }}
+
+      - name: Generate Baseline Profile
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: ./gradlew :app:generatePhoneReleaseBaselineProfile --stacktrace
+
+      # Same both-artifacts-must-exist gate the release lane applies — a
+      # partial/empty write must fail here, not land as a "refreshed" commit.
+      - name: Verify Baseline Profile Artifacts
+        run: |
+          profile_dir="app/src/phoneRelease/generated/baselineProfiles"
+          missing=()
+          for f in "$profile_dir/baseline-prof.txt" "$profile_dir/startup-prof.txt"; do
+            [ -s "$f" ] || missing+=("$f")
+          done
+          if [ ${#missing[@]} -ne 0 ]; then
+            echo "::error::Missing baseline profile artifacts: ${missing[*]}"
+            exit 1
+          fi
+
+      - name: Commit Generated Profiles
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add app/src/phoneRelease/generated/baselineProfiles/
+          if git diff --cached --quiet; then
+            echo "Generated profiles are identical to the committed ones — nothing to commit."
+          else
+            git commit -m "chore(baselineprofile): refresh committed phone release profiles [skip ci]"
+            git push
+          fi

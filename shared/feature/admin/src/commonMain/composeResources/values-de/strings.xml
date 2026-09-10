@@ -22,6 +22,14 @@
     <string name="admin_scanning">Wird gescannt…</string>
     <string name="admin_scan_now">Jetzt scannen</string>
     <string name="admin_select_all">Alle auswählen</string>
+
+    <string name="admin_sort_default">Standard</string>
+    <string name="admin_sort_name_asc">Name (A–Z)</string>
+    <string name="admin_sort_name_desc">Name (Z–A)</string>
+    <string name="admin_sort_largest">Größte</string>
+    <string name="admin_sort_smallest">Kleinste</string>
+    <string name="admin_sort_type">Typ</string>
+    <string name="admin_sort_date">Datum</string>
     <string name="admin_media_types">Medientypen</string>
     <string name="admin_dry_run">Testlauf (nur Vorschau)</string>
 
@@ -131,8 +139,8 @@
 
     <!-- Statistics -->
     <string name="admin_user_statistics_title">Benutzerstatistiken</string>
-    <string name="admin_watched_more">Sie haben diesen Monat %1$s%% mehr angesehen</string>
-    <string name="admin_watched_less">Sie haben diesen Monat %1$s%% weniger angesehen</string>
+    <string name="admin_watched_more">Sie haben diesen Monat %1$s% mehr angesehen</string>
+    <string name="admin_watched_less">Sie haben diesen Monat %1$s% weniger angesehen</string>
     <string name="admin_duration_vs_last">%1$s gegenüber %2$s im letzten Monat</string>
     <string name="admin_content_breakdown">Inhaltsaufschlüsselung</string>
     <string name="admin_by_genre">Nach Genre</string>
@@ -303,7 +311,7 @@
     <string name="admin_n_items">%1$d Elemente</string>
     <string name="admin_n_lines">%1$d Zeilen</string>
     <string name="admin_scanning_library">Bibliothek wird gescannt</string>
-    <string name="admin_scan_progress_pct">Scannen %1$d%%</string>
+    <string name="admin_scan_progress_pct">Scannen %1$d%</string>
 
     <!-- Misc UI batch3 -->
     <string name="admin_quick_access">Schnellzugriff</string>
@@ -394,4 +402,6 @@
     <string name="user_stats_export_shared">Benutzerstatistiken exportiert</string>
 
     <string name="admin_plugin_config_unavailable">Die Plugin-Konfiguration ist auf dieser Plattform nicht verfügbar.</string>
+
+    <string name="admin_no_delete_permission">Ihr Konto hat keine Berechtigung, Inhalte zu löschen. Wenden Sie sich an Ihren Serveradministrator.</string>
 </resources>

@@ -71,7 +71,7 @@ import okhttp3.OkHttpClient
 /**
  * JVM-side facade over the pure host matcher: every call delegates verbatim to
  * the commonMain [SelfSignedTrustMatcher] (the single home of the decision —
- * extraction wave 21 so commonMain callers like the Server Management trust
+ * extraction so commonMain callers like the Server Management trust
  * toggle answer the exact question the handshake path asks; no behavior
  * change). Parsing/matching is exhaustively unit-tested against the matcher in
  * `SelfSignedTrustMatcherTest` (jvmTest).

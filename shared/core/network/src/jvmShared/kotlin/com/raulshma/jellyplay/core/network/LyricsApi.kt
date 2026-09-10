@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.network
 
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.model.LyricsLine
 import com.raulshma.jellyplay.core.model.LyricsResult
 import com.raulshma.jellyplay.core.model.LyricsSource
@@ -17,7 +18,7 @@ class LyricsApi @Inject constructor(
 ) {
 
     suspend fun fetchLyrics(itemId: String): LyricsResult {
-        val response = runCatching { engine.requireApi().lyricsApi.getLyrics(itemId.toUUID()).content }
+        val response = runCatchingRethrowingCancellation { engine.requireApi().lyricsApi.getLyrics(itemId.toUUID()).content }
         return response.fold(
             onSuccess = { dto -> dto.toLyricsResult() },
             onFailure = { LyricsResult(lines = emptyList(), source = LyricsSource.UNKNOWN) },

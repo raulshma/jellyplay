@@ -59,7 +59,9 @@ interface DownloadDao {
      * Count of downloads actively in flight — `PENDING`/`QUEUED`/`DOWNLOADING`
      * only (excludes `PAUSED`, which the summary counts as resolved). Used by the
      * download notification group summary so it collapses to one shade item and
-     * dismisses itself when the last transfer finishes.
+     * dismisses itself when the last transfer finishes. Every other status set in
+     * this DAO is deliberately different (e.g. [getActiveDownloadCount] also
+     * counts `PAUSED`).
      */
     @Query("SELECT COUNT(*) FROM downloads WHERE status IN ('PENDING', 'QUEUED', 'DOWNLOADING')")
     suspend fun getInFlightDownloadCount(): Int
@@ -135,6 +137,21 @@ interface DownloadDao {
      */
     @Query("SELECT id, downloadedBytes FROM downloads WHERE status = :status LIMIT 500")
     suspend fun getRecoveryRows(status: String): List<RecoveryRow>
+
+    /**
+     * Narrow live-progress projection of the in-flight rows (`PENDING`/
+     * `QUEUED`/`DOWNLOADING` — the [getInFlightDownloadCount] status set; the
+     * 2 s ticker writes land on `DOWNLOADING` rows, the other two statuses
+     * only sit in the window around transitions). Room
+     * invalidation is table-level, so every [updateProgressWithSpeed] tick
+     * re-ran the downloads screen's full 23-column [getAllDownloads] window
+     * and re-executed the whole screen per event; the screen now takes its
+     * moving bytes/speed from this 3-column projection keyed by id instead.
+     * Same narrow-projection rationale as [getRecoveryRows] / [getStatus].
+     * Served by the `status` index.
+     */
+    @Query("SELECT id, downloadedBytes, speedBytesPerSec FROM downloads WHERE status IN ('PENDING', 'QUEUED', 'DOWNLOADING')")
+    fun getActiveDownloadProgress(): Flow<List<DownloadProgressRow>>
 
     /**
      * Lightweight rows for downloads whose [status] is in [statuses], used by the
@@ -226,6 +243,32 @@ interface DownloadDao {
      */
     @Query("UPDATE downloads SET downloadedBytes = :bytes, status = :status, pausedReason = :reason WHERE id = :id")
     suspend fun updateProgressWithPausedReason(id: String, bytes: Long, status: String, reason: String?)
+
+    /**
+     * Batch auto-resume for interrupted `PAUSED` rows whose byte offset survives
+     * ([com.raulshma.jellyplay.core.data.repository.DownloadStates.resumeByteOffset]
+     * keeps a paused row's contiguous prefix, so the bytes column is untouched —
+     * the reconnect path's former per-row [updateProgressWithPausedReason] loop
+     * wrote each row's own bytes back, i.e. changed nothing but status/reason).
+     */
+    @Query("UPDATE downloads SET status = :status, pausedReason = :reason WHERE id IN (:ids)")
+    suspend fun updateStatusWithPausedReasonForIds(ids: List<String>, status: String, reason: String?)
+
+    /**
+     * Batch auto-resume for interrupted `FAILED` rows, which always resume from
+     * 0 (a partial multi-connection body cannot be appended to) — the batched
+     * form of `updateProgressWithPausedReason(id, 0, status, reason)`.
+     */
+    @Query("UPDATE downloads SET downloadedBytes = 0, status = :status, pausedReason = :reason WHERE id IN (:ids)")
+    suspend fun markResumedFromZeroForIds(ids: List<String>, status: String, reason: String?)
+
+    /**
+     * Batch stale-row recovery: re-kicks stuck `DOWNLOADING`/`QUEUED` rows back
+     * to `PENDING` without touching their byte offsets (the per-row
+     * [updateProgress] loop wrote each row's own bytes back unchanged).
+     */
+    @Query("UPDATE downloads SET status = :status WHERE id IN (:ids)")
+    suspend fun updateStatusForIds(ids: List<String>, status: String)
 
     /**
      * Manual resume/retry in one statement: status back to `PENDING`, pause
@@ -370,4 +413,15 @@ data class SeriesSizeAggregate(
     val seriesId: String,
     val totalSizeBytes: Long,
     val downloadedBytes: Long,
+)
+
+/**
+ * Narrow per-row live-progress projection for the downloads screen's hot
+ * path — see [DownloadDao.getActiveDownloadProgress]. Carries only the
+ * columns that move on a 2 s progress tick.
+ */
+data class DownloadProgressRow(
+    val id: String,
+    val downloadedBytes: Long,
+    val speedBytesPerSec: Long,
 )

@@ -1,10 +1,12 @@
 package com.raulshma.jellyplay.core.network.api
 
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.model.ActiveSession
 import com.raulshma.jellyplay.core.model.QuickConnectInfo
 import com.raulshma.jellyplay.core.model.QuickConnectState
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
+import com.raulshma.jellyplay.core.model.normalizeServerAddress
 import com.raulshma.jellyplay.core.network.NetworkLog
 import com.raulshma.jellyplay.core.network.RetryPolicy
 import com.raulshma.jellyplay.core.network.config.isTlsTrustFailure
@@ -64,10 +66,7 @@ class AuthApiClientImpl @Inject constructor(
     }
 
     override suspend fun connectToServer(address: String): Result<ServerInfo> {
-        val normalizedAddress = address.trim().trimEnd('/').let {
-            if (it.startsWith("http://") || it.startsWith("https://")) it
-            else "https://$it"
-        }
+        val normalizedAddress = normalizeServerAddress(address)
         // Wrap the discovery call in RetryPolicy (max 2 retries) — every other
         // read path uses apiResultWithRetry, but discovery previously used bare
         // runCatching. A single transient socket timeout during server
@@ -75,7 +74,7 @@ class AuthApiClientImpl @Inject constructor(
         // surfaced as a hard failure and prompted re-taps that each fired N
         // independent discovery HTTP calls instead of one call with backoff.
         //
-        // TLS-trust failures are exempt FROM THIS PROBE ONLY (wave-21 review
+        // TLS-trust failures are exempt FROM THIS PROBE ONLY (review
         // round): no retry can fix an untrusted certificate, so retrying just
         // burned 3 probe rounds before the Add Server trust dialog could
         // appear. RetryPolicy's classifier treats any IOException as
@@ -88,7 +87,7 @@ class AuthApiClientImpl @Inject constructor(
         // global classifier semantics are untouched — non-TLS network failures
         // below retry exactly as before.
         return RetryPolicy.executeWithRetry(maxRetries = 2) {
-            runCatching {
+            runCatchingRethrowingCancellation {
                 withContext(Dispatchers.IO) {
                     try {
                         val info = probeServerInfo(normalizedAddress)
@@ -112,11 +111,8 @@ class AuthApiClientImpl @Inject constructor(
     }
 
     override suspend fun getServerInfo(address: String): Result<ServerInfo> {
-        val normalizedAddress = address.trim().trimEnd('/').let {
-            if (it.startsWith("http://") || it.startsWith("https://")) it
-            else "https://$it"
-        }
-        return runCatching {
+        val normalizedAddress = normalizeServerAddress(address)
+        return runCatchingRethrowingCancellation {
             withContext(Dispatchers.IO) { probeServerInfo(normalizedAddress) }
         }
     }

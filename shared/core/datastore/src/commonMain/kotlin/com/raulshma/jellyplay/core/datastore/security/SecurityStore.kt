@@ -71,7 +71,7 @@ class SecurityStore constructor(
 
     /**
      * The FIRST **persisted** slice — suspends until DataStore's initial read
-     * lands (wave 20E). [security]` .value` can still be the `SecuritySlice()`
+     * lands. [security]` .value` can still be the `SecuritySlice()`
      * seed on a cold process: the Eagerly-collected upstream has been started
      * but the file read is asynchronous, and a caller reading `.value`
      * immediately after the store is first resolved would see the defaults —

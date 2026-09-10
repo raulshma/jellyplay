@@ -19,13 +19,13 @@ data class DesktopPaths(
 
     /**
      * The config root as java.nio (desktopSettingsPlatformModule walks the
-     * http-cache subtree under it, wave 21B) — same conversion as
+     * http-cache subtree under it) — same conversion as
      * [dataDirNio].
      */
     val configDirNio: NioPath get() = NioPathOf(configDir.toString())
 
     /**
-     * Crash-log directory (wave 10A release engineering): `<data>/logs`.
+     * Crash-log directory (release engineering): `<data>/logs`.
      * Created lazily by [DesktopCrashHandler] on first write — no eager
      * directory for users who never crash.
      */
@@ -33,7 +33,7 @@ data class DesktopPaths(
 
     companion object {
         fun resolve(): DesktopPaths {
-            // Wave 12A measurement hook: the perf harness overrides the whole
+            //  measurement hook: the perf harness overrides the whole
             // tree so baseline runs never touch real appdata. Only set by
             // tools/perf/desktop-baseline.sh (see DesktopStartupPerf KDoc).
             System.getProperty(DesktopStartupPerf.PROP_DATA_DIR)

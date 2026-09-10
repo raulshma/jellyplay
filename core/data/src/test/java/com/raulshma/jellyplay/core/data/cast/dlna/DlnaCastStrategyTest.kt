@@ -104,7 +104,10 @@ class DlnaCastStrategyTest {
         assertFalse(s.isConnecting.value)
         coVerify(timeout = 3_000) {
             appRuntimeStateStore.addRecentDlnaDevice(
-                DlnaDeviceRef(id = "uuid:renderer-1", name = "Living Room TV", locationUrl = any()),
+                withArg { ref ->
+                    assertEquals("uuid:renderer-1", ref.id)
+                    assertEquals("Living Room TV", ref.name)
+                },
             )
         }
     }

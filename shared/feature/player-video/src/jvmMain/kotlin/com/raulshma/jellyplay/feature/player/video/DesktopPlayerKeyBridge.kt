@@ -3,8 +3,8 @@ package com.raulshma.jellyplay.feature.player.video
 import androidx.compose.ui.input.key.KeyEvent
 
 /**
- * Desktop deterministic media-key bridge (wave 14E): the missing half of the
- * wave-14A/14D focus story. The 14D re-assert makes the player Box WIN focus
+ * Desktop deterministic media-key bridge: the missing half of the
+ * focus story. The re-assert makes the player Box WIN focus
  * back after every loss, but the live merged-tree pass proved the AWT/Compose
  * focus flaps in continuous focus-less gaps even while the fix worked
  * per-loss — and a key injected (or typed by a user) inside a gap died at the
@@ -19,7 +19,7 @@ import androidx.compose.ui.input.key.KeyEvent
  * and the desktop shell's `DesktopNavScaffold.onPreviewKeyEvent` — which
  * receives EVERY key with or without any Compose focus owner (the null-focus
  * fallback dispatch reaches the topmost key-input chain; ESC has worked there
- * since wave 13B) — calls [deliver] when Route.VideoPlayer is the current
+ * since then) — calls [deliver] when Route.VideoPlayer is the current
  * route. The screen's own handler stays the SINGLE interpreter of media-key
  * semantics: the shell forwards raw events and nothing else.
  *
@@ -30,7 +30,7 @@ import androidx.compose.ui.input.key.KeyEvent
  * and the shell consumes the key — again exactly once. Either way one key
  * press produces one interpretation.
  *
- * [deliveryCount] is the wave-14E harness's "did the key reach AND get
+ * [deliveryCount] is the harness's "did the key reach AND get
  * interpreted by the player's handler" probe: only sink-ACCEPTED deliveries
  * count — a declined offer (focused subtree, sheet open, non-vocabulary key)
  * is NOT a delivery. [DesktopSessionHarness] snapshots it around each SPACE

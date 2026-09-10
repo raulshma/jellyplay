@@ -13,7 +13,7 @@ import org.koin.core.context.startKoin
 import org.koin.core.context.stopKoin
 
 /**
- * Wave 21B relay: the desktop MusicMessageBus actual buffers error messages
+ *  relay: the desktop MusicMessageBus actual buffers error messages
  * for the shell's snackbar host instead of dropping them. Pins the delivery
  * contract (a subscribed host receives what error() emitted), the drop-oldest
  * overflow shape (a slow host keeps the NEWEST messages of a burst), and the

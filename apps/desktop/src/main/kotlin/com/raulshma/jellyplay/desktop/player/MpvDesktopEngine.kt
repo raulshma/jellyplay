@@ -9,13 +9,6 @@ import com.raulshma.jellyplay.core.model.TrackType
 import com.raulshma.jellyplay.desktop.player.mpv.MpvLib
 import com.raulshma.jellyplay.desktop.player.mpv.MpvLib.END_FILE_REASON_EOF
 import com.raulshma.jellyplay.desktop.player.mpv.MpvLib.END_FILE_REASON_ERROR
-import com.raulshma.jellyplay.desktop.player.mpv.MpvLib.ERROR_AO_INIT_FAILED
-import com.raulshma.jellyplay.desktop.player.mpv.MpvLib.ERROR_LOADING_FAILED
-import com.raulshma.jellyplay.desktop.player.mpv.MpvLib.ERROR_NOTHING_TO_PLAY
-import com.raulshma.jellyplay.desktop.player.mpv.MpvLib.ERROR_NOT_IMPLEMENTED
-import com.raulshma.jellyplay.desktop.player.mpv.MpvLib.ERROR_UNKNOWN_FORMAT
-import com.raulshma.jellyplay.desktop.player.mpv.MpvLib.ERROR_UNSUPPORTED
-import com.raulshma.jellyplay.desktop.player.mpv.MpvLib.ERROR_VO_INIT_FAILED
 import com.raulshma.jellyplay.desktop.player.mpv.MpvLib.EVENT_END_FILE
 import com.raulshma.jellyplay.desktop.player.mpv.MpvLib.EVENT_FILE_LOADED
 import com.raulshma.jellyplay.desktop.player.mpv.MpvLib.EVENT_IDLE
@@ -40,6 +33,7 @@ import com.raulshma.jellyplay.feature.player.video.engine.EnginePositionTicker
 import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import com.raulshma.jellyplay.feature.player.video.engine.MediaTrack
+import com.raulshma.jellyplay.feature.player.video.engine.MpvErrorTaxonomy
 import com.raulshma.jellyplay.feature.player.video.engine.PlaybackRequest
 import com.raulshma.jellyplay.feature.player.video.engine.SubtitleEvent
 import com.raulshma.jellyplay.feature.player.video.engine.SubtitleSource
@@ -47,6 +41,7 @@ import com.raulshma.jellyplay.feature.player.video.engine.TimedCue
 import com.raulshma.jellyplay.feature.player.video.engine.TrackLabelFormatter
 import com.raulshma.jellyplay.feature.player.video.engine.TrackLabelInfo
 import com.raulshma.jellyplay.feature.player.video.engine.ZoomSafeSubtitleStrategy
+import com.raulshma.jellyplay.feature.player.video.engine.mergeAccumulatedCues
 import com.sun.jna.Memory
 import com.sun.jna.Pointer
 import java.awt.image.BufferedImage
@@ -74,7 +69,7 @@ import kotlinx.coroutines.launch
 
 /**
  * Desktop playback backend: libmpv over JNA, implementing the common
- * [MediaEngine] contract (plan §Phase V2). Property/event surface mirrors the
+ * [MediaEngine] contract (. Property/event surface mirrors the
  * Android `MpvPlayerEngine` where semantics are shared — same observed
  * properties, same END_FILE/eof-reached state mapping, same error taxonomy —
  * so the shared player feature behaves identically on both platforms when it
@@ -85,14 +80,14 @@ import kotlinx.coroutines.launch
  * on Windows) from the Compose/Swing layer. Headless setups (tests) pass
  * [extraOptions] with `vo=null`/`ao=null`.
  *
- * The former V2 cuts are closed (wave 17B, the "when the player feature
+ * The former V2 cuts are closed (the "when the player feature
  * migrates" trigger fired waves ago): `EngineConfig.videoEffects` is applied
  * as a live mpv `vf` chain + `video-rotate` property ([DesktopVideoEffectChain]
  * builds the strings — see its shared→mpv parity table), screenshot capture
  * goes through mpv's `screenshot-to-file` ([captureVideoFrame], the desktop
  * seam's COMPOSE engine hook), and [currentCues] accumulates the live-cue
  * history from the observed `sub-text` (with a live `sub-start` read) like
- * the Android MPV engine's `accumulateMpvSubText`. Wave 14C closed the
+ * the Android MPV engine's `accumulateMpvSubText`.  closed the
  * audio-effects cut before that: `EngineConfig.audioEffects` is applied as a
  * live mpv `af` chain + `audio-channels`/`pitch` properties
  * ([DesktopAudioEffectChain] builds the strings — see its Android→mpv parity
@@ -101,7 +96,7 @@ import kotlinx.coroutines.launch
  * (`replayGainEffectiveDb`), mirroring where Android's `AudioPlaybackManager`
  * applies the gain.
  *
- * Open (wave 12B) so [MpvSoftwareRenderEngine] can subclass it for the
+ * Open so [MpvSoftwareRenderEngine] can subclass it for the
  * render-API software-render path with three small hooks ([liveMpvHandle],
  * [onBeforeContextDestroy], [hwdecFor]) instead of duplicating the ~800-line
  * contract implementation.
@@ -124,7 +119,7 @@ open class MpvDesktopEngine(
     override val capabilities: EngineCapabilities = EngineCapabilities(
         supportsPip = false,          // no PiP on desktop; windowing covers it
         supportsMiniMode = false,
-        // Wave 17B: `sub-text`/`sub-start` now accumulate into currentCues
+        // `sub-text`/`sub-start` now accumulate into currentCues
         // exactly like the Android MPV engine (EngineCapabilityMatrix.MPV).
         supportsCues = true,
         supportsAudioDelay = true,
@@ -234,6 +229,19 @@ open class MpvDesktopEngine(
     @Volatile private var running = ctx != null
     private val released = AtomicBoolean(false)
 
+    /**
+     * Optional release notification: invoked EXACTLY
+     * ONCE from [release] — right after the released CAS wins, before any
+     * teardown — so instrumentation attached to the constructed engine (the
+     * session harness's EngineActivityRecorder, wired by the factory) can stop
+     * observing instead of sampling a released handle forever. Null for every
+     * engine nobody wired (the audio queue manager's engine, tests). Assigned
+     * by the factory AFTER construction (it observes the constructed engine);
+     * @Volatile because release() can be invoked from any thread. Pure
+     * notification — callbacks must not touch the engine back.
+     */
+    @Volatile var onReleased: (() -> Unit)? = null
+
     private val eventThread = thread(
         name = "mpv-desktop-event-loop",
         isDaemon = true,
@@ -335,7 +343,7 @@ open class MpvDesktopEngine(
     @Volatile private var lastAppliedPitch: Double? = 1.0
     @Volatile private var lastAppliedAfChain: String? = null
 
-    // Video twin of the same discipline (wave 17B): `vf` writes re-init the
+    // Video twin of the same discipline: `vf` writes re-init the
     // video pipeline, so only actual CHANGES are pushed, and an all-defaults
     // config performs zero writes. `video-rotate` starts at mpv's own 0.
     @Volatile private var lastAppliedVfChain: String? = null
@@ -349,7 +357,7 @@ open class MpvDesktopEngine(
     private fun aliveCtx(): Pointer? = if (released.get()) null else ctx
 
     /**
-     * Engine-variant hook (wave 12B): the live mpv handle for subclasses that
+     * Engine-variant hook: the live mpv handle for subclasses that
      * attach auxiliary contexts tied to it — [MpvSoftwareRenderEngine]'s
      * render-API context is created on this handle at construction. Returns
      * null post-[release] like [aliveCtx].
@@ -357,7 +365,7 @@ open class MpvDesktopEngine(
     protected fun liveMpvHandle(): Pointer? = aliveCtx()
 
     /**
-     * Engine-variant hook (wave 12B): emits into the engine's [errorFlow]
+     * Engine-variant hook: emits into the engine's [errorFlow]
      * during construction (e.g. sw render-context creation failure) —
      * subclasses cannot touch the private backing flow directly.
      */
@@ -455,7 +463,7 @@ open class MpvDesktopEngine(
             "demuxer-cache-time" -> data?.let { _bufferedPositionMs.value = it.getLong(0) * 1000 }
             // Contract: null when no line is active — mpv emits "" on clear.
             // Non-blank lines also fold into the currentCues history (G10,
-            // same pairing as Android's accumulateMpvSubText). Wave 17B fix:
+            // same pairing as Android's accumulateMpvSubText).  fix:
             // FORMAT_STRING event data is a char** (client.h hands the value
             // behind one pointer) — reading the bytes AT data yielded pointer
             // garbage; dereference first.
@@ -554,6 +562,12 @@ open class MpvDesktopEngine(
 
     override fun release() {
         if (!released.compareAndSet(false, true)) return
+        // First thing after the CAS: stop external observers (the recorder's
+        // sampler — see onReleased) BEFORE teardown, so their last reads saw
+        // a live engine and no sample lands against a destroyed handle.
+        // Guarded: the CAS has already won, so a throwing callback here would
+        // abort teardown with released==true and leak the mpv handle forever.
+        runCatching { onReleased?.invoke() }
         running = false
         val context = ctx ?: return
         repeat(RELEASE_JOIN_ATTEMPTS) {
@@ -586,7 +600,7 @@ open class MpvDesktopEngine(
     }
 
     /**
-     * Engine-variant hook (wave 12B): invoked exactly once during [release],
+     * Engine-variant hook: invoked exactly once during [release],
      * after the event thread has drained/joined (or the leak path bailed) but
      * BEFORE [MpvLib.mpv_terminate_destroy] — the last point where auxiliary
      * native contexts tied to [ctx] can be torn down against a live core, as
@@ -827,7 +841,7 @@ open class MpvDesktopEngine(
     }
 
     /**
-     * Wave 14C: push the audio-effects config onto mpv — the `af` chain
+     *: push the audio-effects config onto mpv — the `af` chain
      * ([DesktopAudioEffectChain.buildAfChain]), the channel-mix
      * `audio-channels` property, and the `pitch` property. All three are
      * runtime-settable; mpv rebuilds the audio chain on write — which is why
@@ -859,7 +873,7 @@ open class MpvDesktopEngine(
     }
 
     /**
-     * Wave 17B: push the video-effects config onto mpv — the `vf` chain
+     *: push the video-effects config onto mpv — the `vf` chain
      * ([DesktopVideoEffectChain.buildVfChain]) and the rotation via the
      * separate `video-rotate` property (rotation is an output transform, not
      * a filter). Both are runtime-settable; mpv rebuilds the video pipeline
@@ -896,10 +910,10 @@ open class MpvDesktopEngine(
      * the subtitle-sync preview can render prev/active/next for embedded subs
      * without re-fetching bytes. mpv fires `sub-text` only on a line *change*
      * and skips blank clears here; the end time starts open-ended and is
-     * closed when the next line begins. Covers the played range only —
-     * identical semantics to Android's `accumulateMpvSubText`/
-     * `mergeAccumulatedCues` pair (the merge rules are mirrored privately
-     * here because player-video keeps its accumulator module-internal).
+     * closed when the next line begins. Covers the played range only — the
+     * merge itself is player-video's shared [mergeAccumulatedCues] (now
+     * public for this adapter), identical to Android's
+     * `accumulateMpvSubText` call shape.
      *
      * Micro-divergence from Android: the START time is read live from the
      * `sub-start` property instead of Android's event-cached value — this
@@ -916,38 +930,13 @@ open class MpvDesktopEngine(
             ?.takeIf { it >= 0 }
             ?: (currentPositionMs / 1000.0)
         val incoming = TimedCue((startSec * 1_000_000L).toLong(), Long.MAX_VALUE, text)
-        val existing = _currentCues.value
-        if (existing.isEmpty()) {
-            _currentCues.value = listOf(incoming)
-            return
-        }
-        // Close the open-ended span of any cue still "active" at the point
-        // the new line begins.
-        var changed = false
-        val closed = existing.map { cue ->
-            if (cue.endTimeUs == Long.MAX_VALUE && cue.startTimeUs < incoming.startTimeUs) {
-                changed = true
-                cue.copy(endTimeUs = incoming.startTimeUs)
-            } else {
-                cue
-            }
-        }
-        // mpv re-emits the active line on some track/list transitions — an
-        // identical repeat changes nothing (only the closure above applies).
-        val lastText = closed.lastOrNull()?.text
-        if (lastText != null && incoming.text.toString() == lastText.toString()) {
-            if (changed) _currentCues.value = closed
-            return
-        }
-        _currentCues.value = (closed + incoming)
-            .sortedBy { it.startTimeUs }
-            .takeLast(MAX_ACCUMULATED_CUES)
+        _currentCues.value = mergeAccumulatedCues(_currentCues.value, listOf(incoming))
     }
 
-    // ── Screenshot capture (wave 17B) ────────────────────────────────────────
+    // ── Screenshot capture ────────────────────────────────────────
 
     /**
-     * Wave 17B: captures the currently-displayed video frame (subtitles
+     *: captures the currently-displayed video frame (subtitles
      * composited, like Android's PixelCopy path) via mpv's
      * `screenshot-to-file` into a temp PNG, decodes it into the platform
      * bitmap the desktop capture seam consumes, and deletes the temp file.
@@ -1060,21 +1049,17 @@ open class MpvDesktopEngine(
         return rc >= 0 && mem.getInt(0) != 0
     }
 
-    // ── Error taxonomy (identical mapping to Android MpvPlayerEngine) ──────
+    // ── Error taxonomy (shared MpvErrorTaxonomy — identical mapping to the
+    // ── Android MpvPlayerEngine; the JNA int-code hand-off stays here) ─────
 
-    private fun mapMpvError(errorCode: Int): EngineError = when (errorCode) {
-        ERROR_LOADING_FAILED -> EngineError.Network(null)
-        ERROR_AO_INIT_FAILED,
-        ERROR_VO_INIT_FAILED,
-        ERROR_NOTHING_TO_PLAY,
-        ERROR_UNKNOWN_FORMAT,
-        ERROR_UNSUPPORTED,
-        ERROR_NOT_IMPLEMENTED,
-        -> EngineError.Decoder(codec = null, cause = null)
-        else -> EngineError.Unknown(
-            "Playback error (mpv): ${MpvLib.mpv.mpv_error_string(errorCode)}",
-        )
-    }
+    /**
+     * The int-code edge only: classification comes from the shared
+     * [MpvErrorTaxonomy.fromCode]; the desktop's one kept divergence is the
+     * Unknown arm's diagnostic text — libmpv's `mpv_error_string(code)`
+     * instead of Android's raw code string (see the taxonomy KDoc).
+     */
+    private fun mapMpvError(errorCode: Int): EngineError =
+        MpvErrorTaxonomy.fromCode(errorCode, unknownDetail = MpvLib.mpv.mpv_error_string(errorCode))
 
     private companion object {
         private const val DEFAULT_POLLING_INTERVAL_MS = 1000L
@@ -1083,9 +1068,6 @@ open class MpvDesktopEngine(
         private const val RELEASE_JOIN_ATTEMPTS = 3
         /** mpv's untouched default for `audio-channels`. */
         private const val AUTO_CHANNELS = "auto"
-
-        /** Cue-history cap (player-video's CueAccumulator.MAX_ACCUMULATED_CUES). */
-        private const val MAX_ACCUMULATED_CUES = 500
 
         /** Temp-file prefix for screenshot-to-file captures. */
         private const val TEMP_SHOT_PREFIX = "jellyplay-frame-"

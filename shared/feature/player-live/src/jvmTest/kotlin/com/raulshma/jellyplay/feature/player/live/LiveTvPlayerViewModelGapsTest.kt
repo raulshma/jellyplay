@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.feature.player.live
 
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
@@ -84,7 +84,7 @@ class LiveTvPlayerViewModelGapsTest {
      */
     private val scheduler = TestCoroutineScheduler()
 
-    private lateinit var liveTvRepo: MediaRepository
+    private lateinit var liveTvRepo: LiveTvRepository
     private lateinit var playbackRepo: PlaybackRepository
     private lateinit var appRuntimeStateStore: AppRuntimeStateStore
     private lateinit var playbackStore: PlaybackStore
@@ -165,7 +165,7 @@ class LiveTvPlayerViewModelGapsTest {
         pip: PipController? = null,
         renderer: TranscodeReasonsRenderer = TranscodeReasonsRenderer { emptyList() },
     ): LiveTvPlayerViewModel = LiveTvPlayerViewModel(
-        mediaRepository = liveTvRepo,
+        liveTvRepository = liveTvRepo,
         playbackRepository = playbackRepo,
         appRuntimeStateStore = appRuntimeStateStore,
         playbackStore = playbackStore,
@@ -546,9 +546,10 @@ class LiveTvPlayerViewModelGapsTest {
         scheduler.advanceTimeBy(2_500L)
         scheduler.runCurrent()
         assertEquals(listOf("ContainerNotSupported"), vm.state.value.transcodeReasons)
-        assertEquals(listOf("ContainerNotSupported"), rendered)
 
         // Now the engine errors: raw detail + rendered reasons join as one block.
+        // The renderer runs at detail-build time (on the engine error), not at
+        // reason-landing time, so `rendered` only fills in below.
         engineErrorDetailFlow.value = "playback failed"
         engineErrorMessageFlow.value = "boom"
         engineStateFlow.value = LiveEngineState.ERROR
@@ -556,6 +557,7 @@ class LiveTvPlayerViewModelGapsTest {
 
         assertEquals("playback failed\n\nreason: ContainerNotSupported", vm.state.value.errorDetail)
         assertEquals(LivePlayerMessage.Raw("boom"), vm.state.value.errorMessage)
+        assertEquals(listOf("ContainerNotSupported"), rendered)
     }
 
     @Test

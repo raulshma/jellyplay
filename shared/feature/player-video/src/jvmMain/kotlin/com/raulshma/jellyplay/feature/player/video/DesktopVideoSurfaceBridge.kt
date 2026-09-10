@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.feature.player.video
 
 /**
- * Desktop HWND bridge (wave 9A): the SwingPanel video surface (jvmMain actual
+ * Desktop HWND bridge: the SwingPanel video surface (jvmMain actual
  * of [EngineVideoSurface]) publishes the active child-window handle provider
  * here, and the desktop `PlayerEngineFactory` implementation (apps/desktop) reads
  * it when the session creates its `MpvDesktopEngine` — mpv's `wid` option is
@@ -25,7 +25,7 @@ object DesktopVideoSurfaceBridge {
 
     /**
      * Whether this JVM can drive the mpv render-API SOFTWARE surface
-     * (wave 12B): libmpv loads AND an offscreen "sw" render context smoke-pass.
+     *: libmpv loads AND an offscreen "sw" render context smoke-pass.
      * The app layer registers the prober (apps/desktop's
      * MpvSoftwareSurfaceSupport — this module cannot see MpvLib); reads before
      * registration (and probe failures) degrade to false, restoring the
@@ -43,7 +43,7 @@ object DesktopVideoSurfaceBridge {
     /**
      * Install/remove the software-surface prober. Idempotent overwrites are
      * fine; call once during desktop app bootstrap (`DesktopAppRoot`
-     * composition, wave 12B).
+     * composition).
      */
     fun registerSoftwareSurfaceProbe(probe: (() -> Boolean)?) {
         softwareSurfaceProbe = probe

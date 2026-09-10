@@ -2,7 +2,6 @@ package com.raulshma.jellyplay.core.data.cast
 
 import android.os.StrictMode
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -34,8 +33,17 @@ class CastDiskReadsTest {
         )
         try {
             withCastDiskReadsPermitted {
-                // Disk-read detection is suspended: the active policy is LAX.
-                assertSame(StrictMode.ThreadPolicy.LAX, StrictMode.getThreadPolicy())
+                // allowThreadDiskReads strips the disk-read detection bit and
+                // keeps the rest of the policy — the active policy inside the
+                // block is exactly "previous minus detectDiskReads".
+                assertEquals(
+                    StrictMode.ThreadPolicy.Builder()
+                        .permitDiskReads()
+                        .penaltyDeath()
+                        .build()
+                        .toString(),
+                    StrictMode.getThreadPolicy().toString(),
+                )
             }
         } finally {
             StrictMode.setThreadPolicy(original)
@@ -71,7 +79,7 @@ class CastDiskReadsTest {
                 withCastDiskReadsPermitted<Unit> { throw IllegalStateException("boom") }
                 throw AssertionError("expected the exception to propagate")
             } catch (expected: IllegalStateException) {
-                assertSame("boom", expected.message)
+                assertEquals("boom", expected.message)
             }
 
             assertEquals(

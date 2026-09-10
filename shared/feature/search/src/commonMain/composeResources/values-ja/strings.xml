@@ -46,7 +46,7 @@
     <string name="search_filter_tags">タグ</string>
     <string name="search_filter_minimum_rating">最低評価</string>
     <string name="search_filter_any">指定なし</string>
-    <string name="search_filter_rating_plus">%1$.1f以上</string>
+    <string name="search_filter_rating_plus">%1$s以上</string>
     <string name="search_apply_filters">フィルターを適用</string>
 
     <!-- Sort (parity with Library's sort options) -->

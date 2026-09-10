@@ -1,6 +1,8 @@
 package com.raulshma.jellyplay.feature.insights.heatmap
 
 import androidx.compose.runtime.Immutable
+import com.raulshma.jellyplay.core.concurrency.DEFAULT_FANOUT_PARALLELISM
+import com.raulshma.jellyplay.core.concurrency.mapConcurrent
 import com.raulshma.jellyplay.core.data.repository.DailyWatchActivity
 import com.raulshma.jellyplay.core.data.repository.HeatmapFilter
 import com.raulshma.jellyplay.core.data.repository.StreakInfo
@@ -11,6 +13,7 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PlaybackReportingDetail
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.sync.Semaphore
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -58,6 +61,10 @@ class WatchProgressHeatmapViewModel(
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
 ) : JellyPlayViewModel() {
+
+    private companion object {
+        val SELECTED_DAY_LABEL_FORMAT = DateTimeFormatter.ofPattern("EEEE, MMMM d, yyyy")
+    }
 
     private val _uiState = stateFlow(WatchProgressHeatmapUiState())
     val uiState: StateFlow<WatchProgressHeatmapUiState> = _uiState.flow
@@ -150,9 +157,7 @@ class WatchProgressHeatmapViewModel(
                 it.copy(
                     selectedDay = SelectedDayInfo(
                         date = date,
-                        dateLabel = date.format(
-                            DateTimeFormatter.ofPattern("EEEE, MMMM d, yyyy")
-                        ),
+                        dateLabel = date.format(SELECTED_DAY_LABEL_FORMAT),
                         sessions = sessions,
                         resolvedItems = cachedResolvedItems.toMap(),
                     ),
@@ -161,16 +166,31 @@ class WatchProgressHeatmapViewModel(
         }
     }
 
+    private val resolveSemaphore = Semaphore(DEFAULT_FANOUT_PARALLELISM)
+
+    /**
+     * Resolves day-detail items at bounded parallelism
+     * ([DEFAULT_FANOUT_PARALLELISM]) — a
+     * binge day used to pay 20-50 sequential detail round-trips before the
+     * day sheet populated. Same shape as MusicHomeViewModel's
+     * fetchAlbumTracksParallel: a failed detail (getOrNull() == null) drops
+     * just that item, exactly the old `continue`, and survivors are folded
+     * into [cachedResolvedItems] in input order after the fan-out — the
+     * plain map stays single-writer on this coroutine, first-wins cache
+     * semantics unchanged.
+     */
     private suspend fun resolveItems(itemIds: List<String>) {
         val unresolved = itemIds.filter { it !in cachedResolvedItems }
-        for (itemId in unresolved) {
-            val detail = mediaRepository.getMediaDetail(itemId).getOrNull() ?: continue
-            cachedResolvedItems[itemId] = ResolvedMediaItem(
-                name = detail.item.name,
-                mediaType = detail.item.mediaType,
-                imageUrl = playbackRepository.getImageUrl(itemId, "Primary", 200),
-            )
-        }
+        val resolved = resolveSemaphore.mapConcurrent(unresolved) { itemId ->
+            mediaRepository.getMediaDetail(itemId).getOrNull()?.let { detail ->
+                itemId to ResolvedMediaItem(
+                    name = detail.item.name,
+                    mediaType = detail.item.mediaType,
+                    imageUrl = playbackRepository.getImageUrl(itemId, "Primary", 200),
+                )
+            }
+        }.filterNotNull()
+        resolved.forEach { (itemId, item) -> cachedResolvedItems[itemId] = item }
     }
 
     private fun calculateStreaks(activities: List<DailyWatchActivity>): StreakInfo {

@@ -63,11 +63,11 @@
     <string name="library_photo_start_slideshow">Avvia presentazione</string>
     <string name="library_photo_stop_slideshow">Ferma presentazione</string>
     <!-- %1$d = brightness as integer percent -->
-    <string name="library_photo_brightness">Luminosità %1$d%%</string>
+    <string name="library_photo_brightness">Luminosità %1$d%</string>
     <!-- %1$d = contrast as integer percent -->
-    <string name="library_photo_contrast">Contrasto %1$d%%</string>
+    <string name="library_photo_contrast">Contrasto %1$d%</string>
     <!-- %1$d = saturation as integer percent -->
-    <string name="library_photo_saturation">Saturazione %1$d%%</string>
+    <string name="library_photo_saturation">Saturazione %1$d%</string>
     <string name="library_photo_failed_to_load">Impossibile caricare la foto</string>
     <!-- ── Photo viewer icon content descriptions (TalkBack) ───────────── -->
     <string name="library_cd_close">Chiudi</string>

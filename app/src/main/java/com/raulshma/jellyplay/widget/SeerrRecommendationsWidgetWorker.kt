@@ -2,7 +2,6 @@ package com.raulshma.jellyplay.widget
 
 import android.content.Context
 import android.util.Log
-import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
@@ -12,15 +11,20 @@ import com.raulshma.jellyplay.core.model.SeerrWidgetSource
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.seerr.buildBackdropUrl
 import com.raulshma.jellyplay.core.model.seerr.buildPosterUrl
+import com.raulshma.jellyplay.widget.skeleton.RecommendationWorkerSkeleton
 import kotlinx.coroutines.flow.first
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 /**
- * Plain CoroutineWorker constructed by [AppWidgetWorkerFactory] (wave 8B —
- * Hilt removal: the former Hilt worker assisted-injection ctor became this
- * explicit constructor; deps resolve from the Koin container).
+ * Plain CoroutineWorker constructed by [AppWidgetWorkerFactory]
+ * (Hilt removal: the former Hilt worker assisted-injection ctor became this
+ * explicit constructor; deps resolve from the Koin container). A thin adapter
+ * over [RecommendationWorkerSkeleton], which owns the guard → fetch →
+ * empty-keep → persist → retry-fold chassis; this class supplies the Seerr
+ * seams (server-configured guard, source-routed discover fetches, the
+ * TMDB-url mapper, the persist call) and the permanent-only logging arm.
  */
 class SeerrRecommendationsWidgetWorker(
     appContext: Context,
@@ -28,37 +32,41 @@ class SeerrRecommendationsWidgetWorker(
     private val widgetDataStore: WidgetDataStore,
     private val seerrPreferencesStore: SeerrPreferencesStore,
     private val seerrRepository: SeerrRepository,
-) : CoroutineWorker(appContext, params) {
+) : RecommendationWorkerSkeleton<SeerrSearchItem, SeerrWidgetItem>(
+    appContext = appContext,
+    params = params,
+    maxItems = MAX_ITEMS,
+) {
 
-    override suspend fun doWork(): Result = runCatching {
+    // Resolved once by the guard (the preferences snapshot it already read)
+    // and consumed by fetchItems — the single historical preferences read.
+    private var discoverRegion: String = "US"
+
+    override suspend fun skipFetch(): Boolean {
         val seerrPrefs = seerrPreferencesStore.preferences.first()
-        if (seerrPrefs.serverUrl.isBlank()) {
-            // No Seerr server configured: leave existing cached items intact
-            // so the widget keeps showing the last good snapshot.
-            return@runCatching
-        }
+        discoverRegion = seerrPrefs.discoverRegion.ifBlank { "US" }
+        // No Seerr server configured: leave existing cached items intact
+        // so the widget keeps showing the last good snapshot.
+        return seerrPrefs.serverUrl.isBlank()
+    }
 
+    override suspend fun fetchItems(): List<SeerrSearchItem> {
         val config = widgetDataStore.widgetConfig.first()
-        val region = seerrPrefs.discoverRegion.ifBlank { "US" }
-        val response = fetch(config.seerrSource, region).getOrNull()
-        val items = response?.results.orEmpty().take(MAX_ITEMS)
-        if (items.isEmpty()) {
-            // Keep existing data instead of clearing the widget.
-            return@runCatching
+        val response = fetch(config.seerrSource, discoverRegion).getOrNull()
+        return response?.results.orEmpty()
+    }
+
+    override fun mapItem(raw: SeerrSearchItem): SeerrWidgetItem = raw.toWidgetItem()
+
+    override suspend fun persist(items: List<SeerrWidgetItem>) {
+        WidgetPersistHelper.persistSeerrItems(applicationContext, widgetDataStore, items)
+    }
+
+    override fun logFailure(error: Throwable) {
+        if (isPermanentWidgetFailure(error)) {
+            Log.w(TAG, "Permanent failure, not retrying", error)
         }
-        val mapped = items.map { it.toWidgetItem() }
-        WidgetPersistHelper.persistSeerrItems(applicationContext, widgetDataStore, mapped, versionBumpOnly = false)
-    }.fold(
-        onSuccess = { Result.success() },
-        onFailure = { e ->
-            if (isPermanentWidgetFailure(e)) {
-                Log.w(TAG, "Permanent failure, not retrying", e)
-                Result.failure()
-            } else {
-                Result.retry()
-            }
-        },
-    )
+    }
 
     private suspend fun fetch(source: SeerrWidgetSource, region: String) = when (source) {
         SeerrWidgetSource.TRENDING -> seerrRepository.getTrending(page = 1)

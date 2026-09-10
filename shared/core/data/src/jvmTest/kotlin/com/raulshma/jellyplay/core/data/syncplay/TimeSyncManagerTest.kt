@@ -90,7 +90,7 @@ class TimeSyncManagerTest {
 
     @Test
     fun sync_multipleCalls_keepsBestDelayMeasurement() = runBlocking {
-        // Wave 20D deflake. The historical flake (fails under full-suite
+        // The historical flake (fails under full-suite
         // parallel load, passes standalone) had two wall-clock dependencies:
         // 1. The offsets were asserted against FIXED bounds (-1000..21000).
         //    offset = serverTime(mock-captured) - System.currentTimeMillis()
@@ -106,7 +106,7 @@ class TimeSyncManagerTest {
         // deterministic min-delay winner — the property under test — and (b)
         // assert against brackets derived from the same wall clock sync()
         // reads, so the bounds hold under any load instead of a fixed
-        // tolerance. Residual wall-clock seam (reviewer, accepted): a
+        // tolerance. Residual wall-clock seam: a
         // >500ms stall STRICTLY inside the first mocked dispatch (GC pause)
         // could still flip the winner; margins below that are safe.
         val beforeFirst = System.currentTimeMillis()

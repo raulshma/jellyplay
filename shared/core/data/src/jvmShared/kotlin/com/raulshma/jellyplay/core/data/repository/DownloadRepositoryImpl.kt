@@ -1,14 +1,18 @@
 package com.raulshma.jellyplay.core.data.repository
 
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueSnapshot
 import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.data.sync.OfflineSyncComparator
 import com.raulshma.jellyplay.core.data.util.DownloadDelegate
+import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.data.worker.awaitResponse
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
+import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.database.JellyPlayDatabase
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
+import com.raulshma.jellyplay.core.database.dao.DownloadProgressRow
 import com.raulshma.jellyplay.core.database.dao.OfflineMediaDao
 import com.raulshma.jellyplay.core.database.dao.PlaybackStateDao
 import com.raulshma.jellyplay.core.database.dao.SyncBaselineDao
@@ -120,11 +124,25 @@ class DownloadRepositoryImpl(
     private val syncComparator: OfflineSyncComparator,
     private val progressNotifier: DownloadProgressNotifier,
     private val imagePreloader: OfflineImagePreloader,
+    /** Clock seam for the baseline-seeding `lastSyncedAt` stamp. */
+    private val timeSource: TimeSource,
 ) : DownloadRepository {
 
     // Caps the number of episodes processed concurrently when queueing a series
     // download. Avoids launching 20+ parallel OkHttp calls + Coil decodes at once.
     private val downloadPermits = Semaphore(permits = 4)
+
+    // The shared deletion choreography (see the class KDoc for the six-step
+    // ordering spec) — the same collaborator OfflineRepositoryImpl's three
+    // delete scopes run. This repo owns no artwork memo, so it passes no
+    // evictArtworkMemo hook.
+    private val deletionCore = OfflineDeletionCore(
+        database = database,
+        downloadDao = downloadDao,
+        offlineMediaDao = offlineMediaDao,
+        playbackStateDao = playbackStateDao,
+        syncBaselineDao = syncBaselineDao,
+    )
 
     // Room re-runs download queries on every 2 s progress tick, and a full
     // structural `distinctUntilChanged` over up to 500 x ~25-field items is
@@ -143,6 +161,14 @@ class DownloadRepositoryImpl(
         downloadDao.getAllDownloads().map { entities ->
             entities.map { it.toDownloadItem() }
         }.distinctUntilChanged { old, new -> old.rendersSameAs(new) }
+
+    override fun getActiveDownloadProgress(): Flow<Map<String, DownloadProgress>> =
+        downloadDao.getActiveDownloadProgress()
+            .map { rows -> rows.associate { row -> row.id to row.toDownloadProgress() } }
+            // The map is structurally compared, so invalidations that didn't
+            // move an active row's bytes/speed (e.g. a COMPLETED flip on some
+            // other row) collapse to nothing downstream.
+            .distinctUntilChanged()
 
     override suspend fun getAllDownloadsSnapshot(): List<DownloadItem> =
         downloadDao.getAllDownloadsSnapshot().map { it.toDownloadItem() }
@@ -208,16 +234,16 @@ class DownloadRepositoryImpl(
         seasonNumber: Int?,
         container: String?,
         precomputedCurrentBytes: Long?,
-    ): Result<DownloadItem> = runCatching {
+    ): Result<DownloadItem> = runCatchingRethrowingCancellation {
         val existing = downloadDao.getDownloadByMediaItemId(mediaItemId)
         if (existing != null) {
             val isCompleted = existing.status == DownloadStatus.COMPLETED.name
             val fileExists = existing.downloadPath.isNotBlank() && java.io.File(existing.downloadPath).exists()
             if (isCompleted && fileExists) {
-                return@runCatching existing.toDownloadItem()
+                return@runCatchingRethrowingCancellation existing.toDownloadItem()
             }
             if (existing.status != DownloadStatus.FAILED.name && existing.status != DownloadStatus.CANCELLED.name && !isCompleted) {
-                return@runCatching existing.toDownloadItem()
+                return@runCatchingRethrowingCancellation existing.toDownloadItem()
             }
             if (existing.downloadPath.isNotBlank()) {
                 withContext(Dispatchers.IO) {
@@ -272,8 +298,8 @@ class DownloadRepositoryImpl(
     entity.toDownloadItem()
 }
 
-    override suspend fun cancelDownload(id: String): Result<Unit> = runCatching {
-        val entity = downloadDao.getDownloadById(id) ?: return@runCatching
+    override suspend fun cancelDownload(id: String): Result<Unit> = runCatchingRethrowingCancellation {
+        val entity = downloadDao.getDownloadById(id) ?: return@runCatchingRethrowingCancellation
         // Cancel any in-flight background work first so the executing transfer
         // stops promptly and stops polling DB status. Without this, the
         // transfer keeps running until its next 2-second poll tick discovers
@@ -283,8 +309,8 @@ class DownloadRepositoryImpl(
         refreshDownloadSummary()
     }
 
-    override suspend fun pauseDownload(id: String): Result<Unit> = runCatching {
-        val entity = downloadDao.getDownloadById(id) ?: return@runCatching
+    override suspend fun pauseDownload(id: String): Result<Unit> = runCatchingRethrowingCancellation {
+        val entity = downloadDao.getDownloadById(id) ?: return@runCatchingRethrowingCancellation
         if (DownloadStates.isActive(entity.status)) {
             // Cancel the in-flight transfer first so the executing engine stops
             // promptly. Without this it keeps polling DB status until its next
@@ -300,8 +326,8 @@ class DownloadRepositoryImpl(
         refreshDownloadSummary()
     }
 
-    override suspend fun resumeDownload(id: String): Result<Unit> = runCatching {
-        val entity = downloadDao.getDownloadById(id) ?: return@runCatching
+    override suspend fun resumeDownload(id: String): Result<Unit> = runCatchingRethrowingCancellation {
+        val entity = downloadDao.getDownloadById(id) ?: return@runCatchingRethrowingCancellation
         if (DownloadStates.isPausedOrFailed(entity.status)) {
             // Manual resume/retry clears both the pause reason and the
             // auto-retry budget — the user has taken ownership of this row.
@@ -310,8 +336,8 @@ class DownloadRepositoryImpl(
         refreshDownloadSummary()
     }
 
-    override suspend fun deleteDownload(id: String): Result<Unit> = runCatching {
-        val entity = downloadDao.getDownloadById(id) ?: return@runCatching
+    override suspend fun deleteDownload(id: String): Result<Unit> = runCatchingRethrowingCancellation {
+        val entity = downloadDao.getDownloadById(id) ?: return@runCatchingRethrowingCancellation
         downloadEnqueuer.cancelWork(id)
         cleanupDownloadFiles(entity)
         refreshDownloadSummary()
@@ -325,12 +351,12 @@ class DownloadRepositoryImpl(
      * itself lives behind the [DownloadProgressNotifier] seam.
      */
     private suspend fun refreshDownloadSummary() {
-        runCatching {
+        runCatchingRethrowingCancellation {
             progressNotifier.refreshSummary(downloadDao.getInFlightDownloadCount())
         }
     }
 
-    override suspend fun retryDownload(id: String): Result<Unit> = runCatching {
+    override suspend fun retryDownload(id: String): Result<Unit> = runCatchingRethrowingCancellation {
         // A manual retry starts fresh — reset the bytes, clear the auto-retry
         // budget and reason, all in one UPDATE.
         downloadDao.markPendingForManualResume(id, 0L)
@@ -346,32 +372,59 @@ class DownloadRepositoryImpl(
             Log.w(TAG, "Failed to enumerate interrupted downloads for resume", e)
             return
         }
+        // Eligible rows resume in two batched UPDATEs (one per byte-offset rule,
+        // see [DownloadStates.keepsResumeBytes]) instead of a per-row loop.
+        val keepBytesIds = mutableListOf<String>()
+        val fromZeroIds = mutableListOf<String>()
         for (row in candidates) {
+            // A user-paused download stays paused until the user resumes it.
+            if (DownloadStates.isUserPaused(row.status, row.pausedReason)) continue
+            // Exhausted the auto-retry budget — leave it FAILED for a manual
+            // retry rather than spinning on every reconnect.
+            if (DownloadStates.isExhausted(row.retryCount)) continue
+            if (DownloadStates.keepsResumeBytes(row.status)) keepBytesIds += row.id else fromZeroIds += row.id
+        }
+        // Rows are only enqueued once their status flip succeeded — a failed
+        // batch UPDATE must not leave FAILED/PAUSED rows enqueued. The two
+        // batches are isolated: one failing must not abort the other (the old
+        // per-row resume loop let every independent row proceed).
+        suspend fun resumeBatch(
+            ids: List<String>,
+            label: String,
+            update: suspend (List<String>) -> Unit,
+        ): List<String> = try {
+            update(ids)
+            ids
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to resume $label", e)
+            emptyList()
+        }
+
+        // Paused rows keep their contiguous byte prefix (untouched here);
+        // FAILED partials were deleted by cleanupStuckDownloads (multi-
+        // connection scattered writes can't be appended to) and resume
+        // from 0. Status + cleared pause reason in one UPDATE each; the
+        // retry budget is deliberately preserved (the eligibility checks
+        // above already dead-lettered exhausted rows).
+        val resumedIds = buildList {
+            if (keepBytesIds.isNotEmpty()) addAll(
+                resumeBatch(keepBytesIds, "paused downloads") {
+                    downloadDao.updateStatusWithPausedReasonForIds(it, DownloadStatus.PENDING.name, null)
+                },
+            )
+            if (fromZeroIds.isNotEmpty()) addAll(
+                resumeBatch(fromZeroIds, "failed downloads") {
+                    downloadDao.markResumedFromZeroForIds(it, DownloadStatus.PENDING.name, null)
+                },
+            )
+        }
+        for (id in resumedIds) {
             try {
-                // A user-paused download stays paused until the user resumes it.
-                if (DownloadStates.isUserPaused(row.status, row.pausedReason)) continue
-                // Exhausted the auto-retry budget — leave it FAILED for a manual
-                // retry rather than spinning on every reconnect.
-                if (DownloadStates.isExhausted(row.retryCount)) continue
-                // A FAILED partial was deleted by cleanupStuckDownloads (multi-
-                // connection scattered writes can't be appended to), so resume
-                // FAILED rows from 0. A NETWORK-paused single-connection row has
-                // a contiguous prefix, so preserve its byte offset. The rule
-                // lives in [DownloadStates.resumeByteOffset] — the single home
-                // shared with the recovery initializer and the multi-connection
-                // strategy.
-                val startBytes = DownloadStates.resumeByteOffset(row.status, row.downloadedBytes)
-                // Status + cleared pause reason in one UPDATE; the retry budget
-                // is deliberately preserved (the eligibility check above already
-                // dead-lettered exhausted rows).
-                downloadDao.updateProgressWithPausedReason(
-                    row.id, startBytes, DownloadStatus.PENDING.name, null,
-                )
-                enqueueDownload(row.id)
+                enqueueDownload(id)
             } catch (e: Exception) {
-                // One bad row/enqueue must not abort the whole batch — the other
+                // One bad enqueue must not abort the whole batch — the other
                 // interrupted downloads still resume this pass.
-                Log.w(TAG, "Failed to resume interrupted download ${row.id}", e)
+                Log.w(TAG, "Failed to resume interrupted download $id", e)
             }
         }
         refreshDownloadSummary()
@@ -410,11 +463,11 @@ class DownloadRepositoryImpl(
 
         if (seriesId != null && offlineMediaDao.getById(seriesId) == null) {
             // The lazy accessor itself may throw (desktop: no MediaRepository
-            // definition until Phase X). Degrade to the minimal-row fallback
+            // definition until ). Degrade to the minimal-row fallback
             // below — the same shape as a failed detail fetch on Android —
             // so episode downloads still seed their parent series/season
             // rows instead of aborting the whole metadata block.
-            val seriesDetail = runCatching { mediaRepository().getMediaDetail(seriesId) }
+            val seriesDetail = runCatchingRethrowingCancellation { mediaRepository().getMediaDetail(seriesId) }
                 .getOrNull()
                 ?.getOrNull()
             if (seriesDetail != null) {
@@ -499,7 +552,7 @@ class DownloadRepositoryImpl(
     override suspend fun downloadSeries(
         seriesId: String,
         episodeIds: Map<String, List<String>>?,
-    ): Result<List<String>> = runCatching {
+    ): Result<List<String>> = runCatchingRethrowingCancellation {
         withContext(Dispatchers.IO) {
             val prefs = downloadsStore.downloads.first()
             // The storage cap only needs to be evaluated once for the whole
@@ -820,7 +873,7 @@ class DownloadRepositoryImpl(
         if (itemId != null) {
             val scopedFile = File(dir, "${DownloadArtifacts.subtitlesDir(itemId)}/${DownloadArtifacts.SUBTITLE_MANIFEST_FILE}")
             if (scopedFile.exists()) {
-                return@withContext runCatching { json.decodeFromString<OfflineSubtitleManifest>(scopedFile.readText()) }
+                return@withContext runCatchingRethrowingCancellation { json.decodeFromString<OfflineSubtitleManifest>(scopedFile.readText()) }
                     .onFailure { Log.w(TAG, "Failed to decode local subtitle manifest", it) }
                     .getOrNull()
             }
@@ -828,7 +881,7 @@ class DownloadRepositoryImpl(
         // Fall back to legacy un-scoped path (pre-fix downloads).
         val file = File(dir, "${DownloadArtifacts.LEGACY_SUBTITLES_DIR}/${DownloadArtifacts.SUBTITLE_MANIFEST_FILE}")
         if (!file.exists()) return@withContext null
-        runCatching { json.decodeFromString<OfflineSubtitleManifest>(file.readText()) }
+        runCatchingRethrowingCancellation { json.decodeFromString<OfflineSubtitleManifest>(file.readText()) }
             .onFailure { Log.w(TAG, "Failed to decode local subtitle manifest", it) }
             .getOrNull()
     }
@@ -843,7 +896,7 @@ class DownloadRepositoryImpl(
             if (!legacy.exists()) return@withContext null
             legacy
         }
-        runCatching { json.decodeFromString<List<MediaSegment>>(file.readText()) }
+        runCatchingRethrowingCancellation { json.decodeFromString<List<MediaSegment>>(file.readText()) }
             .onFailure { Log.w(TAG, "Failed to decode local segments", it) }
             .getOrNull()
     }
@@ -1095,7 +1148,7 @@ class DownloadRepositoryImpl(
                     syncedSegmentsSignature = null,
                     syncedMediaSourceId = baseline.mediaSourceId,
                     syncedMediaSizeBytes = baseline.mediaSizeBytes,
-                    lastSyncedAt = System.currentTimeMillis(),
+                    lastSyncedAt = timeSource.nowEpochMillis(),
                 ),
             )
         }
@@ -1118,7 +1171,7 @@ class DownloadRepositoryImpl(
         downloadEnqueuer.enqueue(downloadId)
     }
 
-    override suspend fun setDownloadPriority(id: String, priority: Int): Result<Unit> = runCatching {
+    override suspend fun setDownloadPriority(id: String, priority: Int): Result<Unit> = runCatchingRethrowingCancellation {
         downloadDao.updatePriority(id, priority)
     }
 
@@ -1205,38 +1258,37 @@ class DownloadRepositoryImpl(
         )
     }
 
+    /**
+     * Declared delta vs the former inline body, adopted from the majority
+     * choreography: the orphan prune now runs as the core's post-transaction
+     * step (the old body pruned inside the same transaction — the difference
+     * is observable only as transiently un-pruned orphan rows between the two
+     * transactions), and the cast-image prune the old body skipped now runs —
+     * its reference scan only deletes files no surviving offline row
+     * references, so the former skip leaked cast images rather than
+     * protecting them.
+     */
     private suspend fun cleanupDownloadFiles(entity: DownloadEntity) {
-        // File deletion + directory listing off the caller's (Main) dispatcher —
-        // same pattern as the sibling helpers below.
-        withContext(Dispatchers.IO) {
-            if (entity.downloadPath.isNotBlank()) {
-                val file = File(entity.downloadPath)
-                if (file.exists()) file.delete()
-                DownloadArtifacts.cleanup(file.parentFile, entity.mediaItemId)
-            }
-        }
-        database.withTransaction {
-            downloadDao.deleteDownloadById(entity.id)
-            offlineMediaDao.deleteById(entity.mediaItemId)
-            playbackStateDao.deleteById(entity.mediaItemId)
-            syncBaselineDao.deleteById(entity.mediaItemId)
-            offlineMediaDao.deleteOrphanedSeasons()
-            offlineMediaDao.deleteOrphanedSeries()
-            playbackStateDao.deleteUnreferenced()
-            syncBaselineDao.deleteUnreferenced()
-        }
+        deletionCore.delete(
+            downloads = listOf(entity),
+            deleteMetadataRows = {
+                offlineMediaDao.deleteById(entity.mediaItemId)
+                playbackStateDao.deleteById(entity.mediaItemId)
+                syncBaselineDao.deleteById(entity.mediaItemId)
+            },
+        )
     }
 
     private fun DownloadEntity.toDownloadItem() = DownloadItem(
         id = id,
         mediaItemId = mediaItemId,
         name = name,
-        mediaType = try { MediaType.valueOf(mediaType) } catch (_: Exception) { MediaType.UNKNOWN },
+        mediaType = mediaType.toEnumOrNull() ?: MediaType.UNKNOWN,
         downloadPath = downloadPath,
         downloadUrl = downloadUrl,
         totalSizeBytes = totalSizeBytes,
         downloadedBytes = downloadedBytes,
-        status = try { DownloadStatus.valueOf(status) } catch (_: Exception) { DownloadStatus.FAILED },
+        status = status.toEnumOrNull() ?: DownloadStatus.FAILED,
         speedBytesPerSec = speedBytesPerSec,
         mediaSourceId = mediaSourceId,
         imageUrl = imageUrl,
@@ -1250,6 +1302,13 @@ class DownloadRepositoryImpl(
         errorMessage = errorMessage,
         priority = priority,
         container = container,
+    )
+
+    /** DAO progress projection → feature-facing [DownloadProgress] (repository boundary keeps DAO types in). */
+    private fun DownloadProgressRow.toDownloadProgress() = DownloadProgress(
+        id = id,
+        downloadedBytes = downloadedBytes,
+        speedBytesPerSec = speedBytesPerSec,
     )
 
     /**

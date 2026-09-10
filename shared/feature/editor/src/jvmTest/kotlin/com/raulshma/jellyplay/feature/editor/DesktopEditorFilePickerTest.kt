@@ -14,7 +14,7 @@ import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
 
 /**
- * Wave 20A pure-helper coverage for the desktop file-picker actual. The AWT
+ * Pure-helper coverage for the desktop file-picker actual. The AWT
  * FileDialog is a native modal window and throws HeadlessException in a test
  * JVM, so the dialog interaction itself is manually-verified-only; what is
  * pinned here is everything around it: the advisory image-extension filter
@@ -83,7 +83,7 @@ class DesktopEditorFilePickerTest {
 
             val picked = assertNotNull(editorPickedFile(temp))
             assertEquals(temp.name, picked.fileName)
-            // The same URI form the player's wave 9 document picker emits;
+            // The same URI form the player's document picker emits;
             // coil3's common FileUriFetcher decodes it for the preview.
             assertEquals(temp.toURI().toString(), picked.previewUrl)
             assertTrue(picked.previewUrl?.startsWith("file:/") == true, picked.previewUrl)

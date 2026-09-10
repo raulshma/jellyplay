@@ -3,6 +3,7 @@ package com.raulshma.jellyplay
 import android.content.Intent
 import android.net.Uri
 import com.raulshma.jellyplay.core.data.remote.RemoteControlReceiver
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
@@ -16,6 +17,7 @@ import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.deeplink.DeepLinkHandler
+import com.raulshma.jellyplay.feature.shell.ShellSessionController
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolver
 import com.raulshma.jellyplay.shell.SessionCoordinator
@@ -23,9 +25,9 @@ import com.raulshma.jellyplay.shell.SyncPlayOpenCoordinator
 import com.raulshma.jellyplay.shell.UpdateCoordinator
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.withTimeout
@@ -82,19 +84,18 @@ class MainViewModel(
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), 0)
 
     /**
-     * Mirrors Home's offline→online in-flight flag at the app shell so the
-     * global nav overflow can show a spinner on "Go Online" (see #115). Cleared
-     * by observing [offlineMode] settling back to ONLINE below.
+     * True while a user-initiated offline→online transition is in flight, so
+     * the global nav overflow can show a spinner on "Go Online" (see #115).
+     * Pass-through of [OfflineModeManager.goingOnline] — the flag's single
+     * owner, beside the transition that raises it: the manager's manual
+     * toggle arms it when the direction is going online, and the mode flow's
+     * ONLINE emission (or the manager's lost-write watchdog) clears it. This
+     * shell used to keep a hand-synced mirror with its own clear collector;
+     * that second owner is exactly what stuck-spinner bugs bred on.
      */
-    private val _isGoingOnline = stateFlow(false)
-    val isGoingOnline = _isGoingOnline.flow
+    val isGoingOnline: StateFlow<Boolean> = offlineModeManager.goingOnline
 
     init {
-        // Clear the going-online busy flag once we're actually back online.
-        scope.launch {
-            offlineMode.collect { if (it == com.raulshma.jellyplay.core.model.OfflineMode.ONLINE) _isGoingOnline.set(false) }
-        }
-
         // Shell coordinators: session restore completes → run the launch-time
         // update check; the session, update, and SyncPlay-open collectors each
         // live inside their coordinator.
@@ -118,19 +119,21 @@ class MainViewModel(
     }
 
     /**
-     * App-shell offline toggle for the global nav overflow (#115). Going online
-     * is async (preference write → mode flip → network fetch); flip the busy
-     * flag so the UI can show a spinner, mirroring [HomeViewModel]'s logic.
+     * App-shell offline toggle for the global nav overflow (#115). Going
+     * online is async (preference write → mode flip → network fetch), but
+     * the busy flag's lifecycle is not this shell's problem anymore:
+     * [OfflineModeManager.toggleManualOffline] arms
+     * [OfflineModeManager.goingOnline] when the toggle's direction is going
+     * online, and the mode flow clears it — [isGoingOnline] is the
+     * pass-through the UI collects.
      */
     fun toggleOfflineMode() {
-        val goingOnline = offlineMode.value != com.raulshma.jellyplay.core.model.OfflineMode.ONLINE
-        if (goingOnline) _isGoingOnline.set(true)
         offlineModeManager.toggleManualOffline()
     }
 
     /** Persists the Home mode (Video / Music) switch from the app-shell nav. */
     fun setHomeMode(mode: com.raulshma.jellyplay.core.model.HomeMode) {
-        scope.launch { homeDiscoveryStore.setHomeMode(mode) }
+        sessionController.setHomeMode(mode)
     }
 
     /** Marks onboarding completed (TV skips the phone onboarding flow). */
@@ -152,9 +155,31 @@ class MainViewModel(
         _surpriseRequests.tryEmit(Unit)
     }
 
-    val isAdmin = authRepository.currentUser
-        .map { it?.isAdmin == true }
-        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
+    /**
+     * The shell session-policy wiring, owned by the shared
+     * [ShellSessionController] (ADR 0001) instead of duplicated here: admin
+     * status + [com.raulshma.jellyplay.feature.shell.AdminRefreshGate]
+     * arbitration, homeMode persist, and the revoke/plain logout fork.
+     * Constructed over this shell's own collaborators — logout lands in
+     * [sessionCoordinator] (remote-control stop + sign-out), the admin and
+     * homeMode seams in [authRepository] / [homeDiscoveryStore]. Android does
+     * NOT pass `homeModeChanges`: the rendered homeMode comes from the
+     * [preferences] pipeline below, so the controller's homeMode state stays
+     * unpopulated on this shell.
+     */
+    private val sessionController = ShellSessionController(
+        scope = scope,
+        nowMs = { System.currentTimeMillis() },
+        currentUser = authRepository.currentUser,
+        refreshCurrentUser = { authRepository.refreshCurrentUser() },
+        persistHomeMode = { mode -> homeDiscoveryStore.setHomeMode(mode) },
+        homeModeChanges = null,
+        signOut = { revoke ->
+            if (revoke) sessionCoordinator.revokeServerSession() else sessionCoordinator.logout()
+        },
+    )
+
+    val isAdmin: StateFlow<Boolean> get() = sessionController.isAdmin
 
     /**
      * True while a server admin-status refresh is in flight. Collected by the
@@ -162,18 +187,16 @@ class MainViewModel(
      * guard so it can show a brief loading state instead of flashing the
      * access-denied screen before the first refresh completes.
      */
-    private val _isRefreshingAdmin = stateFlow(false)
-    val isRefreshingAdmin = _isRefreshingAdmin.flow
+    val isRefreshingAdmin: StateFlow<Boolean> get() = sessionController.isRefreshingAdmin
 
     /**
-     * Wall-clock millis of the last successful [refreshAdminStatus]. Prevents
-     * every admin screen from re-fetching the policy on rapid back/forward
-     * navigation within the admin area. Read/written only on the Main thread
-     * (all callers run via [launch] on the viewModelScope's Main dispatcher),
-     * so a plain non-volatile field is safe here.
+     * Ends the session through [sessionCoordinator]: `revoke = true` also
+     * revokes the server session token, `false` signs out locally only.
+     * Dispatched by [ShellSessionController.logout] (the shared fork).
      */
-    private var lastAdminRefreshAt = 0L
-    private val adminRefreshIntervalMs = 30_000L
+    fun logout(revoke: Boolean) {
+        sessionController.logout(revoke)
+    }
 
     /**
      * Preferences read by the app-shell composables (MainActivity +
@@ -226,28 +249,15 @@ class MainViewModel(
     /**
      * Re-validates the current user's admin status against the server. Called
      * by [com.raulshma.jellyplay.feature.admin.navigation.AdminRouteContainer]
-     * on entering any admin screen, but de-duplicated to at most once per
-     * [adminRefreshIntervalMs] so navigation between admin screens doesn't
-     * hammer the server. Failures other than access-denied are swallowed
-     * (the cached value is kept) — see [AuthRepository.refreshCurrentUser].
+     * on entering any admin screen; the dedupe lives in
+     * [ShellSessionController.refreshAdminStatusNow] (the shared
+     * [com.raulshma.jellyplay.feature.shell.AdminRefreshGate] 30 s window +
+     * in-flight guard) so navigation between admin screens doesn't hammer the
+     * server. Failures other than access-denied are swallowed (the cached
+     * value is kept) — see [AuthRepository.refreshCurrentUser].
      */
     fun refreshAdminStatus() {
-        // Early-out synchronously (before launch) to guard against the window
-        // where two admin entries compose simultaneously during a transition
-        // and both fire LaunchedEffect. The in-flight flag serializes genuine
-        // concurrent entries; the timestamp bounds re-fetches to one per window.
-        if (_isRefreshingAdmin.value) return
-        val now = System.currentTimeMillis()
-        if (now - lastAdminRefreshAt < adminRefreshIntervalMs) return
-        launch {
-            _isRefreshingAdmin.set(true)
-            try {
-                authRepository.refreshCurrentUser()
-                lastAdminRefreshAt = System.currentTimeMillis()
-            } finally {
-                _isRefreshingAdmin.set(false)
-            }
-        }
+        sessionController.refreshAdminStatusNow()
     }
 
     fun handleShortcutIntent(intent: Intent) {
@@ -387,7 +397,7 @@ class MainViewModel(
 
     fun reportExternalPlaybackStart(playerLaunch: ExternalPlayerLaunch) {
         launch {
-            runCatching {
+            runCatchingRethrowingCancellation {
                 playbackRepository.reportPlaybackStart(
                     com.raulshma.jellyplay.core.model.PlaybackStartInfo(
                         itemId = playerLaunch.itemId,
@@ -402,7 +412,7 @@ class MainViewModel(
     fun reportExternalPlaybackStopped(playerLaunch: ExternalPlayerLaunch, finalPositionTicks: Long) {
         val positionTicks = if (finalPositionTicks > 0) finalPositionTicks else playerLaunch.startPositionTicks
         launch {
-            runCatching {
+            runCatchingRethrowingCancellation {
                 withTimeout(5_000) {
                     playbackRepository.reportPlaybackStopped(
                         itemId = playerLaunch.itemId,

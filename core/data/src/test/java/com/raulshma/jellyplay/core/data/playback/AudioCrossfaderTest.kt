@@ -17,6 +17,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import org.junit.Assert.assertEquals
@@ -56,7 +57,13 @@ class AudioCrossfaderTest {
     private val context: Context = ApplicationProvider.getApplicationContext()
     private val mediaRepository: MediaRepository = mockk(relaxed = true)
     private val playbackRepository: PlaybackRepository = mockk(relaxed = true)
-    private val effectsProcessor: AudioEffectsProcessor = mockk(relaxed = true)
+    private val effectsProcessor: AudioEffectsProcessor = mockk(relaxed = true) {
+        // Relaxed-mock StateFlow.value returns a bare Object, which explodes
+        // when the crossfade ramp unboxes it as Boolean — stub the flows the
+        // ramp reads with the real defaults.
+        every { nightModeEnabled } returns MutableStateFlow(false)
+        every { nightModeVolumeForStrength } returns 1.0f
+    }
     private val playbackSourceResolver: PlaybackSourceResolver = mockk(relaxed = true)
     private val primaryPlayer: ExoPlayer = mockk(relaxed = true)
     private val dataSourceFactory: DataSource.Factory = mockk(relaxed = true)
@@ -211,6 +218,12 @@ class AudioCrossfaderTest {
         onCrossfadeError = { },
         onCrossfadeFailed = { failedIndices += it },
         dataSourceFactoryProvider = { dataSourceFactory },
+        crossfadePlayerFactory = {
+            mockk<ExoPlayer>(relaxed = true) {
+                every { duration } returns 30_000L
+                every { currentMediaItemIndex } returns 1
+            }
+        },
     )
 
     private var lastTransition: Triple<ExoPlayer, Int, AudioQueueItem>? = null
@@ -233,7 +246,11 @@ class AudioCrossfaderTest {
     private fun pumpMainLooperUntil(timeoutMs: Long = 5_000, condition: () -> Boolean) {
         val deadline = System.currentTimeMillis() + timeoutMs
         while (!condition() && System.currentTimeMillis() < deadline) {
-            shadowOf(Looper.getMainLooper()).idle()
+            // The crossfade ramp parks on delay(stepDelay) scheduled on the
+            // Robolectric main looper's VIRTUAL clock; idle() only drains tasks
+            // that are already due, so the pump must advance the clock for the
+            // queued delays to ever fire.
+            shadowOf(Looper.getMainLooper()).runToEndOfTasks()
             Thread.sleep(10)
         }
         assertTrue("condition not met within ${timeoutMs}ms", condition())

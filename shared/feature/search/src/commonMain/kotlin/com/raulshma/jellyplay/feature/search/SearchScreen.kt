@@ -43,9 +43,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.components.ConfirmTone
+import com.raulshma.jellyplay.core.ui.components.DeferredRefreshEffect
 import com.raulshma.jellyplay.core.ui.components.JellyPlayBackHandler
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLinearProgressIndicator
-import com.raulshma.jellyplay.core.ui.components.progressFraction
+import com.raulshma.jellyplay.core.model.progressFraction
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SearchBarDefaults
 import androidx.compose.material3.Text
@@ -83,7 +84,6 @@ import com.raulshma.jellyplay.core.model.MediaQuickActionScope
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PlayedStatus
 import com.raulshma.jellyplay.core.model.SortOption
-import com.raulshma.jellyplay.core.model.quickActions
 import com.raulshma.jellyplay.core.ui.model.mediaTypeDisplayName
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.data.repository.SearchHistoryItem
@@ -93,13 +93,11 @@ import com.raulshma.jellyplay.core.ui.components.ExpressiveToolbarIconButton
 import com.raulshma.jellyplay.core.ui.components.GlassDismissTag
 import com.raulshma.jellyplay.core.ui.components.GlassFilterChip
 import com.raulshma.jellyplay.core.ui.components.LocalMediaQuickActionController
-import com.raulshma.jellyplay.core.ui.components.MediaQuickActionHost
 import com.raulshma.jellyplay.core.ui.components.PosterCard
-import com.raulshma.jellyplay.core.ui.components.QuickAction
-import com.raulshma.jellyplay.core.ui.components.RemoveDownloadConfirmHost
+import com.raulshma.jellyplay.core.ui.components.QuickActionAdapter
+import com.raulshma.jellyplay.core.ui.components.QuickActionIntakeHost
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
-import com.raulshma.jellyplay.core.ui.components.rememberMediaQuickActionController
-import com.raulshma.jellyplay.core.ui.components.rememberRemoveDownloadState
+import com.raulshma.jellyplay.core.ui.components.rememberQuickActionIntake
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
 import com.raulshma.jellyplay.core.ui.components.SeerrMediaCard
 import com.raulshma.jellyplay.core.ui.components.SeerrRequestDialog
@@ -176,7 +174,9 @@ fun SearchScreen(
             consumeQuery()
         }
     }
-    var requestItem by remember { mutableStateOf<com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem?>(null) }
+
+    DeferredRefreshEffect(viewModel.deferredRefresher)
+
     val seerrSnapshot by viewModel.seerrSnapshot.collectAsStateWithLifecycle()
     val seerrLoadingState = rememberSeerrCardLoadingState()
 
@@ -207,17 +207,11 @@ fun SearchScreen(
         networkStatus = networkStatus,
     )
 
-    // Active-filter detection covers every dimension (parity with the Library
-    // filter chip row) so the badge, BackHandler guard, and "Clear all" affordance
-    // all reflect the full filter set — not just mediaTypes/genres.
-    val hasNonDefaultSort = filters.sortBy != SortOption.YEAR_DESC
-    val hasActiveFilters = filters.mediaTypes.isNotEmpty() ||
-        filters.genres.isNotEmpty() ||
-        filters.years.isNotEmpty() ||
-        filters.tags.isNotEmpty() ||
-        filters.minRating > 0f ||
-        filters.playedStatus != PlayedStatus.ALL ||
-        hasNonDefaultSort
+    // Active-filter detection is the canonical [LibraryFilters.hasActiveFilters]
+    // fold — the exact predicate the Library screen reads, so the badge,
+    // BackHandler guard, and "Clear all" affordance all reflect the full
+    // filter set and the two screens can't drift apart again.
+    val hasActiveFilters = filters.hasActiveFilters()
 
     // Which immediate-apply single-select sheet is open (Sort / Status). The full
     // multi-dimension sheet is still driven by [showFilters] below; these are the
@@ -268,54 +262,41 @@ fun SearchScreen(
 
     val gridCellSize = adaptiveInfo.gridCellSize(isTv)
 
-    // Item awaiting a remove-download confirm from the quick-action menu.
-    // Hoisted so the dialog survives the card leaving composition while open.
-    val removeDownloadState = rememberRemoveDownloadState()
-
-    // Collected (not read as a .value snapshot inside the resolve lambda) so
-    // the resolver is rebuilt when the downloaded set changes — a download
-    // completing flips the card's Download↔Remove-download action without
-    // waiting for an unrelated recomposition. The set is distinct-collapsed
-    // upstream, so active transfers don't churn it.
+    // Collected (not read as a .value snapshot inside the intake's
+    // isDownloaded lambda) so the resolver is rebuilt when the downloaded set
+    // changes — a download completing flips the card's Download↔Remove-download
+    // action without waiting for an unrelated recomposition. The set is
+    // distinct-collapsed upstream, so active transfers don't churn it.
     val downloadedIds by viewModel.downloadedIds.collectAsStateWithLifecycle()
 
-    // Long-press / TV-Menu quick actions for search result cards. The
-    // controller is provided to every PosterCard below via
-    // CompositionLocal; the TV Menu key opens the focused card's actions.
-    // Download / Remove download ride the same intake as the library grid
-    // (#147): a downloaded result flips the slot to "Remove download".
-    val quickActionController = rememberMediaQuickActionController(
-        resolveActions = remember(viewModel, downloadedIds) {
-            { item: MediaItem ->
-                item.quickActions(
-                    MediaQuickActionScope.LIBRARY,
-                    includeDownload = true,
-                    isDownloaded = downloadedIds.contains(item.id),
-                )
-            }
+    // Long-press / TV-Menu quick actions for search result cards, on the
+    // shared intake (core/ui — see QuickActionIntake). The controller is
+    // provided to every PosterCard below via CompositionLocal; the TV Menu
+    // key opens the focused card's actions. Download / Remove download ride
+    // the same intake as the library grid (#147): a downloaded result flips
+    // the slot to "Remove download".
+    val quickActionIntake = rememberQuickActionIntake(
+        scope = MediaQuickActionScope.LIBRARY,
+        includeDownload = true,
+        isDownloaded = remember(downloadedIds) {
+            { item: MediaItem -> downloadedIds.contains(item.id) }
         },
-        executeAction = remember(viewModel, onItemClick) {
-            { item: MediaItem, action: QuickAction ->
-                when (action) {
-                    QuickAction.PLAY -> onItemClick(item.id, item.mediaType, item.parentId, item.name)
-                    QuickAction.MARK_WATCHED -> viewModel.markItemPlayed(item, true)
-                    QuickAction.MARK_UNWATCHED -> viewModel.markItemPlayed(item, false)
-                    // Result ids always echo the originating item (DownloadIntake),
-                    // so the captured metadata stays accurate.
-                    QuickAction.DOWNLOAD ->
-                        viewModel.downloadItem(item, onOpenDetail = { id ->
-                            onItemClick(id, item.mediaType, item.parentId, item.name)
-                        })
-                    QuickAction.REMOVE_DOWNLOAD -> removeDownloadState.request(item)
-                    QuickAction.DETAILS -> onItemClick(item.id, item.mediaType, item.parentId, item.name)
-                    else -> Unit
-                }
-            }
+        adapter = remember(viewModel, onItemClick) {
+            QuickActionAdapter(
+                onPlay = { item -> onItemClick(item.id, item.mediaType, item.parentId, item.name) },
+                onOpenDetail = { item -> onItemClick(item.id, item.mediaType, item.parentId, item.name) },
+                onMarkPlayed = viewModel::markItemPlayed,
+                // Result ids always echo the originating item (DownloadIntake),
+                // so the captured metadata stays accurate.
+                onDownload = { item ->
+                    viewModel.downloadItem(item, onOpenDetail = { id ->
+                        onItemClick(id, item.mediaType, item.parentId, item.name)
+                    })
+                },
+                onRemoveDownload = viewModel::removeItemDownload,
+            )
         },
     )
-    // TV-only: the card currently holding D-pad focus, so the Menu key can open
-    // its quick actions.
-    var tvFocusedItem by remember { mutableStateOf<MediaItem?>(null) }
 
     Box(
         modifier = Modifier
@@ -323,12 +304,12 @@ fun SearchScreen(
             .drawBehind { drawRect(backgroundColorState.value) }
             .onDpadKey(
                 onMenu = {
-                    tvFocusedItem?.let { quickActionController.show(it) }
+                    quickActionIntake.openFocusedItem()
                     true
                 },
             ),
     ) {
-        CompositionLocalProvider(LocalMediaQuickActionController provides quickActionController) {
+        CompositionLocalProvider(LocalMediaQuickActionController provides quickActionIntake.controller) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -438,7 +419,7 @@ fun SearchScreen(
                 ) {
                     GlassFilterChip(
                         label = filters.sortBy.displayName,
-                        selected = hasNonDefaultSort,
+                        selected = filters.sortBy != SortOption.YEAR_DESC,
                         onClick = { openSortSheet = true },
                     )
                     GlassFilterChip(
@@ -631,7 +612,10 @@ fun SearchScreen(
                             // Keyed on the whole item, not just id: a refreshed
                             // list can return a new object for the same id,
                             // and the request dialog must show that object.
-                            val onRequestClick = remember(seerrItem) { { requestItem = seerrItem } }
+                            // The open cascade itself is the holder's.
+                            val onRequestClick = remember(seerrItem) {
+                                { viewModel.openSeerrRequestDialog(seerrItem) }
+                            }
                             SeerrMediaCard(
                                 item = seerrItem,
                                 imageUrl = seerrItem.posterUrl,
@@ -804,7 +788,7 @@ fun SearchScreen(
                                         onItemClick = { item ->
                                             onItemClick(item.id, item.mediaType, item.parentId, item.name)
                                         },
-                                        onFocusedItemChange = { item -> tvFocusedItem = item },
+                                        onFocusedItemChange = { item -> quickActionIntake.tvFocusedItem = item },
                                     )
                                 }
 
@@ -929,12 +913,12 @@ fun SearchScreen(
                                 onFocusedIndexChange = { index ->
                                     if (index in 0 until pagedResults.itemCount) {
                                         try {
-                                            tvFocusedItem = pagedResults[index]
+                                            quickActionIntake.tvFocusedItem = pagedResults[index]
                                         } catch (_: IndexOutOfBoundsException) {
-                                            tvFocusedItem = null
+                                            quickActionIntake.tvFocusedItem = null
                                         }
                                     } else {
-                                        tvFocusedItem = null
+                                        quickActionIntake.tvFocusedItem = null
                                     }
                                 },
                             ) { index, itemModifier ->
@@ -1045,35 +1029,21 @@ fun SearchScreen(
         } // close Column
         } // close CompositionLocalProvider
     } // close Box
-    MediaQuickActionHost(quickActionController)
+    // Quick-action sheet + remove-download confirm — the shared intake hosts
+    // both (removal only ever deletes the local download; the server copy is
+    // untouched).
+    QuickActionIntakeHost(quickActionIntake)
 
-    // Remove-download confirm: quick-action removal only ever deletes the
-    // local download — the server copy is untouched.
-    RemoveDownloadConfirmHost(
-        state = removeDownloadState,
-        onConfirmRemove = { viewModel.removeItemDownload(it) },
-    )
-
-    // Seerr request dialog
-    requestItem?.let { item ->
-        // Fetch service details and TV seasons on-demand when dialog opens
-        LaunchedEffect(item.id) {
-            viewModel.loadSeerrServiceDetails(item.mediaType)
-            if (item.mediaType.equals("tv", ignoreCase = true)) {
-                viewModel.loadTvSeasons(item.id)
-            }
-        }
-
+    // Seerr request dialog — rendered from the holder snapshot's dialogItem;
+    // the open/dismiss choreography is the holder's.
+    seerrSnapshot.dialogItem?.let { item ->
         SeerrRequestDialog(
             item = item,
             snapshot = seerrSnapshot,
             onConfirm = { serverId, profileId, rootFolder, tags, seasons ->
                 viewModel.requestSeerrMedia(item, seasons, serverId, profileId, rootFolder, tags)
             },
-            onDismiss = {
-                requestItem = null
-                viewModel.clearRequestResult()
-            },
+            onDismiss = { viewModel.dismissSeerrRequestDialog() },
         )
     }
 

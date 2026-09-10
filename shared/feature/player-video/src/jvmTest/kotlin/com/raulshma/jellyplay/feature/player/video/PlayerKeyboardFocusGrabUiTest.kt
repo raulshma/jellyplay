@@ -28,8 +28,8 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * Wave 14A desktop compose UI test for the keyboard-focus grab
- * ([PlayerKeyboardFocusGrabEffect]) — the mechanism behind the wave 13B
+ * Desktop compose UI test for the keyboard-focus grab
+ * ([PlayerKeyboardFocusGrabEffect]) — the mechanism behind the
  * session-harness SPACE finding, reproduced at miniature scale (the real
  * VideoPlayerScreen needs its whole Koin VM graph, so the test mirrors its
  * focus topology instead of composing the screen):
@@ -46,9 +46,9 @@ import kotlin.test.assertTrue
  * only through the chain from the root down to the topmost key-input node
  * (the outer Box) — so an uninjected layer never sees SPACE (the second test
  * pins that bug shape), while the grab effect focuses the layer and SPACE
- * lands (the first test, the wave 14A fix).
+ * lands (the first test, the fix).
  *
- * WHY 14A PASSED HERE BUT FAILED THE REAL APP (wave 14D): these miniature
+ * WHY 14A PASSED HERE BUT FAILED THE REAL APP: these miniature
  * topologies have no mpv SwingPanel/HWND surface mounting a second after the
  * grab, so the initial `attempt=1 ok=true` grab was the last focus event and
  * the tests saw a stable focused layer forever. The live session pass proved
@@ -153,7 +153,7 @@ class PlayerKeyboardFocusGrabUiTest {
                 keyUp(Key.Spacebar)
             }
             waitForIdle()
-            // The wave 13B bug shape: nothing holds focus, so the dispatch
+            // The bug shape: nothing holds focus, so the dispatch
             // never descends past the topmost key-input node (the outer
             // preview Box) and the player layer sees nothing.
             assertFalse(spaceHandled, "unfocused layer must NOT receive SPACE")
@@ -162,7 +162,7 @@ class PlayerKeyboardFocusGrabUiTest {
     @Test
     fun `re-assert recovers focus when an outside node steals it after the grab`() =
         runComposeUiTest {
-            // The wave 14D live-pass failure shape: the mpv surface mount
+            // The live-pass failure shape: the mpv surface mount
             // (an OUTSIDE-of-the-layer focus consumer) drops the player Box's
             // Compose focus ~1–2 s after the initial grab succeeded, and the
             // 14A seam never re-grabbed. Here a sibling focusable steals

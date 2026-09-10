@@ -75,7 +75,7 @@ class NotificationSettingsViewModelTest {
     }
 
     private fun viewModel() = NotificationSettingsViewModel(
-        store, projections, appearanceStore, editor, mediaRepository, notificationSync,
+        store, projections, AdvancedSettingsGate(appearanceStore, editor), editor, mediaRepository, notificationSync,
     )
 
     @Test

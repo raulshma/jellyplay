@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.model.QuickConnectState
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.StateFlow
 
 interface AuthRepository {
 
@@ -14,9 +15,9 @@ interface AuthRepository {
 
     val currentUser: Flow<UserInfo?>
 
-    val isAuthenticated: Flow<Boolean>
+    val isAuthenticated: StateFlow<Boolean>
 
-    val currentServerUsers: Flow<List<UserInfo>>
+    val currentServerUsers: StateFlow<List<UserInfo>>
 
     suspend fun addServer(address: String): Result<ServerInfo>
 

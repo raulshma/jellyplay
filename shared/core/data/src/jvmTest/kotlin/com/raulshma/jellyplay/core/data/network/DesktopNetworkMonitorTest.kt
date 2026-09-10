@@ -7,7 +7,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 
 /**
- * Wave 17C: the testable half of DesktopNetworkMonitor — the pure
+ *: the testable half of DesktopNetworkMonitor — the pure
  * up/loopback/address decision ([networkStatusFromInterfaces]) over
  * interface-table snapshots, plus the synchronous-seed contract (a cold
  * `.value` read sees a real probe, not a hardcoded constant). The polling

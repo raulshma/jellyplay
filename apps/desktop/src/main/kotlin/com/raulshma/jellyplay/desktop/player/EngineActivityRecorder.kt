@@ -4,15 +4,17 @@ import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import com.raulshma.jellyplay.desktop.player.EngineActivitySnapshot.Companion.SURFACE_NO_OP
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 
 /**
- * Wave 13B session-harness instrumentation: records what every engine the
+ *  session-harness instrumentation: records what every engine the
  * [DesktopMpvPlayerEngineFactory] creates actually DID — playback-state
  * transitions, isPlaying observations and sampled playhead positions — on the
  * recorder's own SupervisorJob scope, without touching the shared modules.
@@ -23,15 +25,30 @@ import java.util.concurrent.CopyOnWriteArrayList
  * classification helpers the harness asserts with and the unit tests cover).
  *
  * Koin single (DesktopPlayerModule); app-lifetime, like the factory it serves.
- * Per-engine observers are NOT cancelled on engine release — reads stay safe
- * (volatile fields / StateFlow, `aliveCtx()` guards JNA) and sample caps bound
- * memory, but records accumulate across sessions; if the factory ever gains a
- * dispose path, cancel the observers there too.
+ * Per-engine observers are CANCELLED on engine release (they used to run for the process lifetime, so N released engines kept N×3
+ * coroutines waking 2×/s against dead JNA handles): the desktop factory wires
+ * every engine it owns into [onEngineReleased], which cancels the three observer
+ * jobs while KEEPING the record itself (accumulated evidence is the point —
+ * only the live observation stops). Engines without a desktop release hook
+ * (the shared no-op EXTERNAL engine) are never released, so their observers
+ * stop only when a later playback re-records the same instance — the
+ * displaced record's jobs are cancelled then ([recordCreated]); their reads
+ * are pure state (no JNA) and the sample caps still bound memory.
  */
 class EngineActivityRecorder {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val records = CopyOnWriteArrayList<MutableRecord>()
+
+    /**
+     * Live per-engine observers, engine instance → its record. An entry exists
+     * between [recordCreated] and [onEngineReleased] (the engine's release());
+     * the RECORD itself always stays in [records] for snapshot history, so
+     * cancelling observation never destroys evidence. Keyed by engine
+     * identity — engines do not override equals, so the map's equals-based
+     * lookups are reference comparisons.
+     */
+    private val observers = ConcurrentHashMap<MediaEngine, MutableRecord>()
 
     /** True when at least one engine was recorded (cheap poll guard). */
     val hasAnyEngine: Boolean get() = records.isNotEmpty()
@@ -51,39 +68,59 @@ class EngineActivityRecorder {
         )
         records.add(record)
 
-        scope.launch {
-            var last: String? = null
-            engine.playbackState.collect { state ->
-                // StateFlow replays the current value first; dedupe so the
-                // transition list holds real transitions only.
-                val name = state.name
-                if (name != last) {
-                    last = name
-                    record.addTransition(name)
+        record.jobs = listOf(
+            scope.launch {
+                var last: String? = null
+                engine.playbackState.collect { state ->
+                    // StateFlow replays the current value first; dedupe so the
+                    // transition list holds real transitions only.
+                    val name = state.name
+                    if (name != last) {
+                        last = name
+                        record.addTransition(name)
+                    }
                 }
-            }
-        }
-        scope.launch {
-            var last: Boolean? = null
-            engine.isPlaying.collect { playing ->
-                if (playing != last) {
-                    last = playing
-                    if (playing) record.markPlayingObserved()
+            },
+            scope.launch {
+                var last: Boolean? = null
+                engine.isPlaying.collect { playing ->
+                    if (playing != last) {
+                        last = playing
+                        if (playing) record.markPlayingObserved()
+                    }
                 }
-            }
-        }
-        scope.launch {
-            while (isActive) {
-                delay(SAMPLE_INTERVAL_MS)
-                record.addSample(
-                    EngineActivitySnapshot.PositionSample(
-                        atMs = System.currentTimeMillis(),
-                        positionMs = engine.currentPositionMs,
-                        isPlaying = engine.isPlaying.value,
-                    ),
-                )
-            }
-        }
+            },
+            scope.launch {
+                while (isActive) {
+                    delay(SAMPLE_INTERVAL_MS)
+                    record.addSample(
+                        EngineActivitySnapshot.PositionSample(
+                            atMs = System.currentTimeMillis(),
+                            positionMs = engine.currentPositionMs,
+                            isPlaying = engine.isPlaying.value,
+                        ),
+                    )
+                }
+            },
+        )
+        // put-and-cancel, not a plain put: every EXTERNAL playback re-records
+        // the SAME shared no-op engine, so the displaced record's three
+        // observer jobs would otherwise be orphaned mid-flight (unreachable,
+        // uncancellable). Its evidence stays in [records]; only the live
+        // observation hands over to the fresh record.
+        observers.put(engine, record)?.cancelObservers()
+    }
+
+    /**
+     * Stops the per-engine observers for a released engine: cancels
+     * the three [recordCreated] jobs — the 500 ms position sampler and the two
+     * flow collectors — while keeping everything recorded up to the release
+     * point (post-release samples would read a dead handle anyway). Idempotent
+     * by removal semantics; a call for an engine that was never recorded (or
+     * already released) is a no-op.
+     */
+    fun onEngineReleased(engine: MediaEngine) {
+        observers.remove(engine)?.cancelObservers()
     }
 
     /** Latest engine's snapshot, or [EngineActivitySnapshot.NONE]. */
@@ -111,6 +148,22 @@ class EngineActivityRecorder {
         private val transitions = ArrayList<EngineActivitySnapshot.StateTransition>()
         private val samples = ArrayList<EngineActivitySnapshot.PositionSample>()
         private var playingObserved = false
+
+        /**
+         * The record's three observer jobs (state collector, isPlaying
+         * collector, position sampler). Not a constructor val: the launch
+         * blocks capture this record, so the jobs can only exist after it
+         * does. The sole publication path to [cancelObservers] is the
+         * [recordCreated] put into the observers map, which is sequenced
+         * after this assignment and gives the cancelling thread its
+         * happens-before (ConcurrentHashMap) — @Volatile is kept purely as
+         * insurance should a second publication path ever appear.
+         */
+        @Volatile var jobs: List<Job> = emptyList()
+
+        fun cancelObservers() {
+            jobs.forEach { it.cancel() }
+        }
 
         fun addTransition(toState: String) = synchronized(this) {
             if (transitions.size < MAX_TRANSITIONS) {

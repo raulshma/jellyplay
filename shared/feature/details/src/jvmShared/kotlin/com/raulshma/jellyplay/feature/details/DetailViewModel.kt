@@ -19,13 +19,16 @@ import com.raulshma.jellyplay.core.model.DetailContext
 import com.raulshma.jellyplay.core.model.DetailOrigin
 import com.raulshma.jellyplay.core.model.DetailPreferences
 import com.raulshma.jellyplay.core.model.ExperimentalFeature
+import com.raulshma.jellyplay.core.model.CollectionSummary
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaDetailSnapshot
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.Playlist
 import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
-import com.raulshma.jellyplay.core.data.playback.AudioQueueOutcome
-import com.raulshma.jellyplay.core.model.seerr.buildPosterUrl
+import com.raulshma.jellyplay.core.data.playback.InstantMixError
+import com.raulshma.jellyplay.core.data.playback.InstantMixStateHolder
+import com.raulshma.jellyplay.core.data.playback.toInstantMixOutcome
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.isAudioType
@@ -44,6 +47,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -242,19 +246,18 @@ class DetailViewModel internal constructor(
         messages = _messages,
         strings = strings,
     )
-    private val playlistActions = actionFactories.playlists.create(
+    private val playlistTargets = actionFactories.playlists.create(
         scope = scope,
         session = _session,
         messages = _messages,
         strings = strings,
         mediaDetailProvider = mediaDetailProvider,
     )
-    private val collectionActions = CollectionActions(
+    private val collectionActions = AddToTargetActions(
         scope = scope,
         session = _session,
         messages = _messages,
-        strings = strings,
-        mediaRepository = mediaRepository,
+        adapter = CollectionAddTarget(strings, mediaRepository),
         mediaDetailProvider = mediaDetailProvider,
     )
     private val downloadLifecycleActions = actionFactories.downloads.create(
@@ -275,10 +278,13 @@ class DetailViewModel internal constructor(
     internal val downloads: DownloadLifecycleActions get() = downloadLifecycleActions
 
     /** Add-to-Playlist seam (picker + create dialog state and commands). */
-    internal val playlists: PlaylistActions get() = playlistActions
+    internal val playlists: AddToTargetActions<Playlist> get() = playlistTargets.picker
+
+    /** Watch-Later quick action (cached reserved playlist, no picker). */
+    internal val watchLater: WatchLaterActions get() = playlistTargets.watchLater
 
     /** Add-to-Collection seam (picker + create dialog state and commands). */
-    internal val collections: CollectionActions get() = collectionActions
+    internal val collections: AddToTargetActions<CollectionSummary> get() = collectionActions
 
     /** Resync / re-download / freshness-check seam. */
     internal val resync: ResyncActions get() = resyncActions
@@ -447,44 +453,13 @@ class DetailViewModel internal constructor(
         loadJob = launch {
             // Single atomic reset — collapses what used to be ~14 separate
             // composeState/stateFlow mutations into one emission so observers
-            // see one recomposition, not fourteen. On refresh the detail is
-            // kept so the content stays visible under the pull-to-refresh
-            // indicator; every subsidiary slice is still cleared so fresh data
-            // replaces it wholesale.
-            _uiState.update {
-                it.copy(
-                    detail = if (refresh) it.detail else null,
-                    loadState = if (refresh) DetailUiLoadState.Refreshing else DetailUiLoadState.Loading,
-                    origin = null,
-                    detailContext = null,
-                    capabilities = DetailUiState.DefaultCapabilities,
-                    assets = com.raulshma.jellyplay.core.model.DetailAssets(),
-                    localSubtitles = emptyList(),
-                    selectedLocalSubtitleIndex = null,
-                    seasons = emptyList(),
-                    episodes = emptyMap(),
-                    fetchedSeasonIds = emptySet(),
-                    collectionItems = emptyList(),
-                    relatedItems = emptyList(),
-                    localRelatedItems = emptyList(),
-                    specialFeatures = emptyList(),
-                    albumTracks = emptyList(),
-                    // Segment availability is only re-populated on the REMOTE
-                    // success path of triggerRemoteSideEffects; reset here so a
-                    // navigation to a LOCAL item (or a failed REMOTE fetch) can't
-                    // leave the prior item's "skip available" chip stale.
-                    hasIntroSegment = false,
-                    hasCreditSegment = false,
-                    smartPlayTarget = null,
-                    selectedSubtitleIndex = null,
-                    selectedAudioIndex = null,
-                    seerrRecommendations = emptyList(),
-                    seerrSimilar = emptyList(),
-                    relatedVideos = emptyList(),
-                    tmdbReviews = emptyList(),
-                    sonarrServersResolved = false,
-                )
-            }
+            // see one recomposition, not fourteen. The surviving leaves and
+            // the per-flavour load state are declared once in
+            // [DetailUiState.clearedForReload]: on refresh the detail stays
+            // visible under the Refreshing indicator; every content slice
+            // (sortedEpisodes included) is cleared so fresh data replaces it
+            // wholesale.
+            _uiState.update { it.clearedForReload(keepDetail = refresh) }
             // Drop the provider's catalogue cache for any series we were viewing
             // so the new item's load starts fresh (the VM is reused across
             // navigations). The provider owns the catalogue internally now.
@@ -654,7 +629,6 @@ class DetailViewModel internal constructor(
                 // Smart-play is recomputed below; cleared first so a stale target
                 // from the previous item never survives a resolution change.
                 smartPlayTarget = null,
-                contentGeneration = snapshot.contentGeneration,
                 loadState = DetailUiLoadState.Loaded,
             )
         }
@@ -837,8 +811,40 @@ class DetailViewModel internal constructor(
 
     // ── Instant mix ────────────────────────────────────────────────────
     // One facade call: the mix fetch, queue build, and dispatcher hop all live
-    // in [AudioQueueFacade]; the VM keeps only the audio-type gate, the
-    // navigation-drift guard, and the outcome → [DetailMessage] mapping.
+    // in [AudioQueueFacade]; the shared [InstantMixStateHolder] owns the
+    // outcome choreography. The VM keeps only the audio-type gate and folds
+    // holder errors into this screen's [DetailMessage] snackbar channel —
+    // clearing after each emit so a repeated identical failure re-fires
+    // (StateFlow equality would otherwise swallow it).
+
+    private val instantMixHolder = InstantMixStateHolder(
+        scope = scope,
+        startMix = { seedItemId, fallbackName ->
+            audioQueueFacade.startInstantMix(
+                seedItemId,
+                albumFallback = fallbackName,
+                guard = { currentItemId == seedItemId },
+            ).toInstantMixOutcome()
+        },
+    )
+
+    init {
+        launch {
+            instantMixHolder.state
+                .map { it.error }
+                .distinctUntilChanged()
+                .collect { mixError ->
+                    when (mixError) {
+                        InstantMixError.EmptyMix ->
+                            _messages.tryEmit(DetailMessage.Text(strings.get(Res.string.detail_instant_mix_empty)))
+                        is InstantMixError.Failed ->
+                            _messages.tryEmit(DetailMessage.Text(strings.get(Res.string.detail_instant_mix_failed)))
+                        null -> Unit
+                    }
+                    if (mixError != null) instantMixHolder.clearError()
+                }
+        }
+    }
 
     /**
      * Starts a Jellyfin instant mix for the current audio item. Fetches the
@@ -853,23 +859,7 @@ class DetailViewModel internal constructor(
         val detail = _uiState.value.detail ?: return
         val item = detail.item
         if (!item.mediaType.isAudioType) return
-        val itemId = item.id
-        launch {
-            when (
-                val outcome = audioQueueFacade.startInstantMix(
-                    itemId,
-                    albumFallback = item.album ?: item.name,
-                    guard = { currentItemId == itemId },
-                )
-            ) {
-                is AudioQueueOutcome.Started -> Unit
-                AudioQueueOutcome.Empty ->
-                    _messages.tryEmit(DetailMessage.Text(strings.get(Res.string.detail_instant_mix_empty)))
-                AudioQueueOutcome.Suppressed -> Unit
-                is AudioQueueOutcome.Failed ->
-                    _messages.tryEmit(DetailMessage.Text(strings.get(Res.string.detail_instant_mix_failed)))
-            }
-        }
+        instantMixHolder.start(item.id, item.album ?: item.name)
     }
 
     /**
@@ -881,7 +871,7 @@ class DetailViewModel internal constructor(
      * has its own local-source fallback (`resolveLocalSource`) when the server
      * fetch fails — so a downloaded track plays without a server round-trip.
      *
-     * Decision (plan §I): `AudioPlaybackManager.play(itemId)` exists and carries
+     * Decision: `AudioPlaybackManager.play(itemId)` exists and carries
      * the local-source fallback, so it is used directly rather than routing
      * through `onAudioClick` → `Route.AudioPlayer`. `play()` asserts the main
      * thread (ExoPlayer contract); the click handler runs on the main thread.
@@ -1287,9 +1277,6 @@ class DetailViewModel internal constructor(
         val generation = ++seerrDataGeneration
         loadSeerrData(detail, generation)
     }
-
-    fun getSeerrPosterUrl(posterPath: String?): String? =
-        posterPath?.let { buildPosterUrl(it) }
 
     // ── Offline / download-lifecycle management ──────────────────────────
     // Ports the operations previously owned by OfflineDetailViewModel and

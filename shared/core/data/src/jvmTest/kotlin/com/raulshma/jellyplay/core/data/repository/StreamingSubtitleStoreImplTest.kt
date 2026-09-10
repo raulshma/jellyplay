@@ -14,7 +14,7 @@ import kotlin.test.assertTrue
 
 /**
  * Pure-JVM coverage for [StreamingSubtitleStoreImpl] over a temp dir (the
- * impl is file-backed only — no platform Context since the wave 18B
+ * impl is file-backed only — no platform Context since the
  * promotion out of the Android :core:data shim).
  *
  * Verifies the durable save/load/delete/clear round-trip, manifest persistence,

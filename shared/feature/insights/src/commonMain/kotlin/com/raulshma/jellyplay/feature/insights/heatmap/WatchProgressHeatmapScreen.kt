@@ -154,10 +154,10 @@ fun WatchProgressHeatmapScreen(
     val scope = rememberCoroutineScope()
     val adaptiveInfo = LocalAdaptiveInfo.current
     // Share seam (editor picker gating pattern): the Android actual carries the
-    // capture + FileProvider chooser bodies; the desktop actual (wave 20C)
+    // capture + FileProvider chooser bodies; the desktop actual
     // snapshots the same layer and opens the PNG in the system viewer. The
     // chooser title resolves here in composition — the legacy body called
-    // Context.getString at share time. The F-23 capture: the grid records
+    // Context.getString at share time. The capture: the grid records
     // itself into this layer each draw pass and both actuals snapshot it
     // (subtree share, not whole-window).
     val captureLayer = rememberGraphicsLayer()
@@ -582,86 +582,6 @@ private fun FilterChips(
     }
 }
 
-@Immutable
-private data class HeatmapCell(
-    val date: LocalDate,
-    val level: Int,
-    val value: Long,
-)
-
-private fun LocalDate.dayOfWeekIndex(): Int = when (dayOfWeek) {
-    DayOfWeek.SUNDAY -> 0
-    DayOfWeek.MONDAY -> 1
-    DayOfWeek.TUESDAY -> 2
-    DayOfWeek.WEDNESDAY -> 3
-    DayOfWeek.THURSDAY -> 4
-    DayOfWeek.FRIDAY -> 5
-    DayOfWeek.SATURDAY -> 6
-}
-
-private fun calculateGrid(
-    year: Int,
-    dailyActivities: List<DailyWatchActivity>,
-    minActivityDate: LocalDate?,
-): Pair<Array<HeatmapCell?>, Int> {
-    val startDate = if (minActivityDate != null && minActivityDate.year == year) {
-        minActivityDate.minusDays(minActivityDate.dayOfWeekIndex().toLong())
-    } else {
-        LocalDate.of(year, 1, 1)
-    }
-    val endDate = LocalDate.of(year, 12, 31)
-    val today = LocalDate.now()
-    val formatter = DateTimeFormatter.ISO_LOCAL_DATE
-
-    val valueByDate = mutableMapOf<LocalDate, Long>()
-    for (activity in dailyActivities) {
-        runCatching { LocalDate.parse(activity.date, formatter) }
-            .getOrNull()
-            ?.let { date -> valueByDate[date] = activity.value }
-    }
-
-    val maxValue = valueByDate.values.maxOrNull()?.coerceAtLeast(1L) ?: 1L
-
-    val numWeeks = ChronoUnit.WEEKS.between(
-        startDate.with(DayOfWeek.SUNDAY),
-        endDate.with(DayOfWeek.SATURDAY),
-    ).toInt() + 1
-    val grid = arrayOfNulls<HeatmapCell>(numWeeks * 7)
-
-    var current = startDate
-    while (!current.isAfter(endDate) && !current.isAfter(today)) {
-        val weekIndex = ChronoUnit.WEEKS.between(
-            startDate.with(DayOfWeek.SUNDAY),
-            current.with(DayOfWeek.SUNDAY),
-        ).toInt()
-        val dayIndex = current.dayOfWeekIndex()
-        val pos = weekIndex * 7 + dayIndex
-        if (pos in grid.indices) {
-            val value = valueByDate[current] ?: 0L
-            val level = if (value > 0) {
-                val ratio = (value.toDouble() / maxValue).coerceIn(0.0, 1.0)
-                when {
-                    ratio <= 0.25 -> 1
-                    ratio <= 0.50 -> 2
-                    ratio <= 0.75 -> 3
-                    else -> 4
-                }
-            } else 0
-            grid[pos] = HeatmapCell(date = current, level = level, value = value)
-        }
-        current = current.plusDays(1)
-    }
-
-    return grid to numWeeks
-}
-
-// Start the TV cursor on today when the year covers it, otherwise on the first populated cell.
-private fun initialFocusedCellIndex(grid: Array<HeatmapCell?>): Int {
-    val todayIndex = grid.indexOfFirst { it?.date == LocalDate.now() }
-    if (todayIndex >= 0) return todayIndex
-    return grid.indexOfFirst { it != null }.coerceAtLeast(0)
-}
-
 @Composable
 private fun HeatmapGrid(
     year: Int,
@@ -671,7 +591,7 @@ private fun HeatmapGrid(
     captureLayer: GraphicsLayer? = null,
 ) {
     val (grid, numWeeks) = remember(year, dailyActivities, minActivityDate) {
-        calculateGrid(year, dailyActivities, minActivityDate)
+        HeatmapGridModel.calculateGrid(year, dailyActivities, minActivityDate, LocalDate.now())
     }
     val activeDays = remember(grid) { grid.count { it != null && it.level > 0 } }
     val heatmapSummary = pluralStringResource(Res.plurals.insights_heatmap_summary, activeDays, year, activeDays)
@@ -697,29 +617,11 @@ private fun HeatmapGrid(
     }
 
     val gridStartDate = remember(year, minActivityDate) {
-        if (minActivityDate != null && minActivityDate.year == year) {
-            minActivityDate.minusDays(minActivityDate.dayOfWeekIndex().toLong())
-        } else {
-            LocalDate.of(year, 1, 1)
-        }
+        HeatmapGridModel.gridStartDate(year, minActivityDate)
     }
 
     val monthPositions = remember(year, gridStartDate) {
-        val months = mutableMapOf<Int, String>()
-        val startMonth = gridStartDate.monthValue
-        for (month in startMonth..12) {
-            val firstOfMonth = LocalDate.of(year, month, 1)
-            if (firstOfMonth.isAfter(LocalDate.now())) break
-            val targetDate = if (firstOfMonth.isBefore(gridStartDate)) gridStartDate else firstOfMonth
-            val weekIndex = ChronoUnit.WEEKS.between(
-                gridStartDate.with(DayOfWeek.SUNDAY),
-                targetDate.with(DayOfWeek.SUNDAY),
-            ).toInt()
-            months[weekIndex] = firstOfMonth.month.name.take(3)
-                .lowercase()
-                .replaceFirstChar { it.uppercase() }
-        }
-        months
+        HeatmapGridModel.monthLabels(year, gridStartDate, LocalDate.now())
     }
 
     val sun = stringResource(Res.string.insights_day_sun)
@@ -739,14 +641,13 @@ private fun HeatmapGrid(
     // or year end), so clamping movement to that range clamps at the data edges without wrapping.
     val minCellIndex = remember(grid) { grid.indexOfFirst { it != null } }
     val maxCellIndex = remember(grid) { grid.indexOfLast { it != null } }
-    var focusedCellIndex by remember(grid) { mutableIntStateOf(initialFocusedCellIndex(grid)) }
+    var focusedCellIndex by remember(grid) { mutableIntStateOf(HeatmapGridModel.initialFocusedCellIndex(grid, LocalDate.now())) }
     var heatmapHasFocus by remember { mutableStateOf(false) }
     var viewportWidthPx by remember { mutableFloatStateOf(0f) }
 
     fun moveFocusedCell(delta: Int): Boolean {
-        if (minCellIndex < 0) return false
-        val next = (focusedCellIndex + delta).coerceIn(minCellIndex, maxCellIndex)
-        if (next == focusedCellIndex) return false
+        val next = HeatmapGridModel.clampFocus(focusedCellIndex, delta, minCellIndex, maxCellIndex)
+            ?: return false
         focusedCellIndex = next
         return true
     }
@@ -754,7 +655,7 @@ private fun HeatmapGrid(
     val focusRingColor = MaterialTheme.colorScheme.primary
     val focusRingWidthPx = with(LocalDensity.current) { TvFocusDefaults.BorderWidth.toPx() }
 
-    // F-23 share capture: when a layer is provided (Android share path), every
+    // Share capture: when a layer is provided (Android share path), every
     // draw pass re-records this subtree into it so the share seam can snapshot
     // the grid — labels, cells, legend — instead of the whole window. Recording
     // passes the content through the layer; on-screen output is unchanged.
@@ -792,12 +693,13 @@ private fun HeatmapGrid(
         LaunchedEffect(focusedCellIndex, heatmapHasFocus, viewportWidthPx) {
             if (!heatmapHasFocus || focusedCellIndex < 0) return@LaunchedEffect
             if (viewportWidthPx <= 0f) return@LaunchedEffect
-            val cellLeft = (focusedCellIndex / 7) * (cellSizePx + cellGapPx)
-            val target = when {
-                cellLeft < scrollState.value -> cellLeft
-                cellLeft + cellSizePx > scrollState.value + viewportWidthPx -> cellLeft + cellSizePx - viewportWidthPx
-                else -> return@LaunchedEffect
-            }
+            val target = HeatmapGridModel.scrollTargetForFocus(
+                focusedIndex = focusedCellIndex,
+                cellStridePx = cellSizePx + cellGapPx,
+                cellSizePx = cellSizePx,
+                scrollValuePx = scrollState.value,
+                viewportWidthPx = viewportWidthPx,
+            ) ?: return@LaunchedEffect
             scrollState.animateScrollTo(target.roundToInt().coerceIn(0, scrollState.maxValue))
         }
 
@@ -987,6 +889,33 @@ private fun DayLabels(
     }
 }
 
+/**
+ * The per-day aggregates [rememberedDayItemAggregates] produces: the max
+ * watched duration per item id plus the first-wins display-name map.
+ */
+private data class DayItemAggregates(
+    val maxDurationByItem: Map<String, Long>,
+    val nameByItem: Map<String, String>,
+)
+
+/**
+ * Aggregates once per [dayInfo]: max watched duration per item plus a
+ * first-wins name map (same winner as the previous sessions.first lookup),
+ * so the row loop is O(unique items) instead of re-scanning all sessions per
+ * unique item on every recomposition. Shared by the touch and TV variants
+ * of [DayDetailSheet].
+ */
+@Composable
+private fun rememberedDayItemAggregates(dayInfo: SelectedDayInfo): DayItemAggregates =
+    remember(dayInfo) {
+        val maxDurations = dayInfo.sessions
+            .groupBy { it.itemId }
+            .mapValues { (_, sessions) -> sessions.maxOf { it.duration } }
+        val names = HashMap<String, String>(maxDurations.size)
+        dayInfo.sessions.forEach { names.getOrPut(it.itemId) { it.name } }
+        DayItemAggregates(maxDurations, names)
+    }
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun DayDetailSheet(
@@ -1034,15 +963,11 @@ private fun DayDetailSheet(
 
                 Spacer(Modifier.height(12.dp))
 
-                val uniqueItems = remember(dayInfo) {
-                    dayInfo.sessions
-                        .groupBy { it.itemId }
-                        .mapValues { (_, sessions) -> sessions.maxOf { it.duration } }
-                }
+                val (maxDurationByItem, nameByItem) = rememberedDayItemAggregates(dayInfo)
 
-                uniqueItems.forEach { (itemId, durationTicks) ->
+                maxDurationByItem.forEach { (itemId, durationTicks) ->
                     val resolved = dayInfo.resolvedItems[itemId]
-                    val name = resolved?.name ?: dayInfo.sessions.first { it.itemId == itemId }.name
+                    val name = resolved?.name ?: nameByItem.getValue(itemId)
                     val imageUrl = resolved?.imageUrl
                     val posMinutes = durationTicks / 60_000_000_000L
 
@@ -1145,15 +1070,11 @@ private fun DayDetailSheet(
 
                 Spacer(Modifier.height(12.dp))
 
-                val uniqueItems = remember(dayInfo) {
-                    dayInfo.sessions
-                        .groupBy { it.itemId }
-                        .mapValues { (_, sessions) -> sessions.maxOf { it.duration } }
-                }
+                val (maxDurationByItem, nameByItem) = rememberedDayItemAggregates(dayInfo)
 
-                uniqueItems.forEach { (itemId, durationTicks) ->
+                maxDurationByItem.forEach { (itemId, durationTicks) ->
                     val resolved = dayInfo.resolvedItems[itemId]
-                    val name = resolved?.name ?: dayInfo.sessions.first { it.itemId == itemId }.name
+                    val name = resolved?.name ?: nameByItem.getValue(itemId)
                     val imageUrl = resolved?.imageUrl
                     val posMinutes = durationTicks / 60_000_000_000L
 

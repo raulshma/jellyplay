@@ -8,7 +8,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * Desktop actual of the [StorageAreas] seam (wave 21B — replaces the declared
+ * Desktop actual of the [StorageAreas] seam (replaces the declared
  * zeros/no-ops degrade whose "no desktop data seam owns the roots yet" note
  * outlived the downloads conveyor). The desktop app owns exactly two
  * persistent cache/downloads roots today, and this actual walks/clears
@@ -64,7 +64,7 @@ internal class DesktopStorageAreas(
  * cache directory never vanishes under it. A missing root is a no-op (the
  * cache is created lazily on first use).
  *
- * Best-effort on Windows (wave-21 review round): a live OkHttp cache holds
+ * Best-effort on Windows (review round): a live OkHttp cache holds
  * its journal file OPEN, so that one file may survive the wipe with a
  * delete-access-denied. Harmless — OkHttp treats the journal's missing
  * entries as cache misses and rewrites it — but callers must not read a

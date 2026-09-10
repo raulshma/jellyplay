@@ -116,6 +116,7 @@ import com.raulshma.jellyplay.feature.player.video.generated.resources.player_vi
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_remember_audio_language
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_remember_subtitle_language
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_remember_subtitles_off
+import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleFormatCatalog
 
 
 
@@ -138,7 +139,6 @@ import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.feature.player.video.components.DecoderPickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.EpisodePickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.HdrBadge
-import com.raulshma.jellyplay.feature.player.video.engine.TrackBadge
 import com.raulshma.jellyplay.feature.player.video.engine.ZoomSafeSubtitleStrategy
 import com.raulshma.jellyplay.feature.player.video.components.IntroSkipOverlay
 import com.raulshma.jellyplay.feature.player.video.components.SegmentSkipOverlay
@@ -211,7 +211,7 @@ private const val HOLD_SPEED_PILL_BOTTOM_CLEARANCE_DP = 180
 private const val TRICKPLAY_THUMB_BOTTOM_CLEARANCE_DP = 120
 
 /**
- * Platform seam (wave 9A): nudging the system media (STREAM_MUSIC) volume for
+ * Platform seam: nudging the system media (STREAM_MUSIC) volume for
  * the hardware-keyboard shortcuts (arrows / volume keys on non-TV) needs
  * AudioManager on Android; desktop is a no-op. Mirrors the gesture volume
  * path, which adjusts the stream volume rather than the engine volume so the
@@ -230,7 +230,7 @@ fun VideoPlayerScreen(
     onOpenSubtitleTester: () -> Unit = {},
     viewModel: VideoPlayerViewModel = koinViewModel(),
 ) {
-    // Host-window + input seams (wave 9A): the Activity/Context system-surface
+    // Host-window + input seams: the Activity/Context system-surface
     // work this screen used to do inline lives behind these now — androidMain
     // actuals keep it verbatim, the desktop actuals are no-ops.
     val windowOps = rememberPlayerWindowOps()
@@ -290,6 +290,16 @@ fun VideoPlayerScreen(
     var currentSheet by rememberSaveable(stateSaver = PlayerSheetSaver) {
         mutableStateOf(PlayerSheet.None)
     }
+    // Reset-first intent for the NEXT SubtitleHub open. The overflow
+    // "Subtitles" entry opens the hub with a cleared search/cultures slice
+    // ("stale results don't leak across items"); the Tracks-tab entry
+    // deliberately keeps prior state. The router's LaunchedEffect is the
+    // sheet's single load trigger (openSubtitleHub — the double-fetch
+    // removal), so the entry's decision rides in this flag from click to
+    // composition and is consumed there. Not saveable: a config-change
+    // restore of the sheet re-opens with resetFirst = false, the same
+    // no-reset re-load the former router effect performed.
+    var subtitleHubResetFirst by remember { mutableStateOf(false) }
     // Transparent subtitle-delay overlay (VLC-style). Not saveable: dismissed on
     // recreation, same as the gesture-driven seek/brightness pills.
     var showDelayOverlay by remember { mutableStateOf(false) }
@@ -305,7 +315,7 @@ fun VideoPlayerScreen(
     // DeX). Drives the non-TV keyboard-shortcut handler so phones/tablets with
     // a keyboard get space/arrows/F/M/Esc controls while touch-only devices
     // attach no extra key handler. TV keeps its dedicated D-pad scheme below.
-    // Platform seam (wave 9A): the Configuration read lives in the androidMain
+    // Platform seam: the Configuration read lives in the androidMain
     // actual; desktop always reports true.
     val hasHardwareKeyboard = rememberHasHardwareKeyboard()
 
@@ -314,7 +324,7 @@ fun VideoPlayerScreen(
     val tvCinemaIntroFocusRequester = remember { FocusRequester() }
     val tvNextEpisodeFocusRequester = remember { FocusRequester() }
     val keyboardFocusRequester = remember { FocusRequester() }
-    // Wave 14D (desktop only — updated by the jvm-gated onFocusChanged below,
+    // (desktop only — updated by the jvm-gated onFocusChanged below,
     // so it stays false on Android where the grab seam no-ops anyway): whether
     // ANYTHING under the keyboard layer holds focus; drives the grab seam's
     // re-assert-on-loss against the mpv surface-mount focus drop.
@@ -334,13 +344,7 @@ fun VideoPlayerScreen(
     }
 
     val localSubtitlePicker = rememberDocumentPicker(
-        mimeTypes = arrayOf(
-            "application/x-subrip",
-            "text/vtt",
-            "text/plain",
-            "text/x-ssa",
-            "application/ttml+xml",
-        ),
+        mimeTypes = SubtitleFormatCatalog.pickerMimeTypes,
     ) { uriString: String? ->
         if (uriString != null) {
             val fileName = pickedDocumentDisplayName(uriString) ?: "subtitle.srt"
@@ -354,9 +358,7 @@ fun VideoPlayerScreen(
         mimeTypes = arrayOf("*/*"),
     ) { uriString: String? ->
         if (uriString != null) {
-            val name = pickedDocumentDisplayName(uriString)?.lowercase().orEmpty()
-            val isFont = name.endsWith(".ttf") || name.endsWith(".otf")
-            if (isFont) {
+            if (isSupportedUserFontFile(pickedDocumentDisplayName(uriString))) {
                 viewModel.installUserFont(uriString)
             } else {
                 scope.launch {
@@ -593,21 +595,16 @@ fun VideoPlayerScreen(
     val syncPlayIgnoreWait by viewModel.syncPlay.ignoreWait.collectAsStateWithLifecycle()
 
     LaunchedEffect(isCastConnected, uiState.uiPrefs.defaultOrientation) {
-        if (isTv) {
-            windowOps.lockOrientation(PlayerOrientationLock.TV_LANDSCAPE)
-        } else if (isCastConnected) {
-            windowOps.lockOrientation(PlayerOrientationLock.USER)
-        } else {
-            delay(400)
-            windowOps.lockOrientation(
-                when (uiState.uiPrefs.defaultOrientation) {
-                    OrientationMode.SENSOR_LANDSCAPE -> PlayerOrientationLock.SENSOR_LANDSCAPE
-                    OrientationMode.SENSOR_PORTRAIT -> PlayerOrientationLock.SENSOR_PORTRAIT
-                    OrientationMode.SENSOR -> PlayerOrientationLock.SENSOR
-                    OrientationMode.LOCKED_LANDSCAPE -> PlayerOrientationLock.LOCKED_LANDSCAPE
-                    OrientationMode.LOCKED_PORTRAIT -> PlayerOrientationLock.LOCKED_PORTRAIT
-                }
-            )
+        when (val decision = orientationLockDecision(
+            isTv = isTv,
+            isCastConnected = isCastConnected,
+            preference = uiState.uiPrefs.defaultOrientation,
+        )) {
+            is OrientationLockDecision.Immediate -> windowOps.lockOrientation(decision.lock)
+            is OrientationLockDecision.SettleFirst -> {
+                delay(400)
+                windowOps.lockOrientation(decision.lock)
+            }
         }
     }
 
@@ -626,14 +623,9 @@ fun VideoPlayerScreen(
     val isNextEpisodeLoading by viewModel.isNextEpisodeLoading.collectAsStateWithLifecycle()
 
     LaunchedEffect(aspectRatio, detectedAspectRatio, engine) {
-        val effectiveRatio = if (aspectRatio == AspectRatio.AUTO) {
-            detectedAspectRatio ?: AspectRatio.FIT
-        } else {
-            aspectRatio
-        }
         // The engine maps the enum to its native mode (media3 resize mode / mpv
         // panscan / VLC aspectRatio) — no media3 constant crosses the seam here.
-        engine?.setAspectRatio(effectiveRatio)
+        engine?.setAspectRatio(effectiveAspectRatio(aspectRatio, detectedAspectRatio))
     }
 
     val playMethod = uiState.media.playMethod
@@ -646,11 +638,13 @@ fun VideoPlayerScreen(
 
     val isNextEpisodeVisible = nextEpisode != null && shouldShowUpNext
     val isCinemaIntroVisible = cinemaIntroState != null && !isInPipMode
-    val isSkipSegmentVisible = activeSegment != null &&
-            activeSegmentBehavior == com.raulshma.jellyplay.core.model.SegmentBehavior.SHOW_BUTTON &&
-            !isInPipMode &&
-            !isCinemaIntroVisible &&
-            !(activeSegment.type == com.raulshma.jellyplay.core.model.MediaSegmentType.OUTRO && shouldShowUpNext)
+    val isSkipSegmentVisible = isSkipSegmentButtonVisible(
+        activeSegment = activeSegment,
+        segmentBehavior = activeSegmentBehavior,
+        isInPipMode = isInPipMode,
+        isCinemaIntroVisible = isCinemaIntroVisible,
+        shouldShowUpNext = shouldShowUpNext,
+    )
 
     LaunchedEffect(showControls, isTv, isNextEpisodeVisible, isSkipSegmentVisible, isCinemaIntroVisible) {
         if (isTv && !showControls) {
@@ -668,7 +662,7 @@ fun VideoPlayerScreen(
         }
     }
 
-    // Desktop (wave 14A): the hardware-keyboard layer must OWN focus whenever
+    // Desktop: the hardware-keyboard layer must OWN focus whenever
     // it composes, not only once the controls have hidden — see
     // [grabsKeyboardFocusWithControlsVisible]. The at-HEAD effect above fires
     // on the showControls→false edge, but the controls START visible
@@ -677,7 +671,7 @@ fun VideoPlayerScreen(
     // press in that window had no focused node to land on: Compose's
     // null-focus fallback dispatch stops at the topmost key-input node (the
     // desktop shell's scaffold onPreviewKeyEvent Row) — ESC popped, SPACE
-    // never reached this screen's handler (wave 13B harness finding).
+    // never reached this screen's handler (harness finding).
     // [layerComposed] tracks the keyboard layer's modifier branch above, so
     // the grab re-arms when it re-composes after a sheet closes. The Android
     // actual returns false, so the effect composes nothing on Android (phone
@@ -713,27 +707,16 @@ fun VideoPlayerScreen(
             else viewModel.seekTo(ms)
         }
     }
-    val doSeekBack: () -> Unit = remember(engine, uiState.gestures.seekDurationMs, doSeekTo, isCastConnected) {
-        {
-            val pos = viewModel.playerEngineRef?.currentPositionMs ?: 0L
-            val target = (pos - uiState.gestures.seekDurationMs).coerceAtLeast(0)
-            doSeekTo(target)
-        }
+    // Skip steps route through the VM's single funnel (C3): the clamp math
+    // lives in PlayerScreenPolicies.stepSeekTargetMs and the SyncPlay/cast/
+    // local routing in VideoPlayerViewModel.seekByStep — this screen and the
+    // PiP transport's SKIP actions can no longer diverge. The funnel reads
+    // the live gesture step, so no step-duration remember keys are needed.
+    val doSeekBack: () -> Unit = remember {
+        { viewModel.seekByStep(-1) }
     }
-    val doSeekForward: () -> Unit = remember(engine, uiState.gestures.seekDurationMs, doSeekTo, isCastConnected) {
-        {
-            val pos = viewModel.playerEngineRef?.currentPositionMs ?: 0L
-            val dur = viewModel.playerEngineRef?.durationMs ?: 0L
-            // For live streams dur is 0 until resolved, which previously pinned every
-            // forward seek to 0. Skip the upper clamp when there is no known duration;
-            // the engine clamps on its own at seek time. Mirrors the gesture path.
-            val target = if (dur <= 0L) {
-                (pos + uiState.gestures.seekDurationMs).coerceAtLeast(0L)
-            } else {
-                (pos + uiState.gestures.seekDurationMs).coerceAtMost(dur)
-            }
-            doSeekTo(target)
-        }
+    val doSeekForward: () -> Unit = remember {
+        { viewModel.seekByStep(+1) }
     }
     val doTogglePlayPause: () -> Unit = remember(isPlaying, doPlay, doPause) {
         { if (isPlaying) doPause() else doPlay() }
@@ -804,85 +787,75 @@ fun VideoPlayerScreen(
         }
     }
 
-    // Wave 14E: the hardware-keyboard layer's media-key interpretation,
-    // extracted VERBATIM from the Box's onKeyEvent below so both delivery
-    // paths run this exact when-block: (a) the normal focused dispatch chain
-    // (the Box's onKeyEvent, when the layer or a descendant holds Compose
+    // The hardware-keyboard layer's media-key interpretation, so
+    // both delivery paths run the same table: (a) the normal focused dispatch
+    // chain (the Box's onKeyEvent, when the layer or a descendant holds Compose
     // focus) and (b) the desktop shell's deterministic forward (the sink
     // installed below, called from DesktopNavScaffold.onPreviewKeyEvent when
     // Route.VideoPlayer is current and the layer holds no focus — the AWT
     // focus flap leaves focus-less gaps in which the null-focus fallback
     // dispatch dies at the shell's Row). The screen stays the single
     // interpreter of media-key semantics; the shell forwards raw events.
+    // The key→action decision table itself lives in PlayerKeyPolicy.mediaKeyAction
+    // (pure, JVM-tested); this shell keeps only the effects — the lambdas,
+    // haptics, controls visibility — plus the interaction bookkeeping, which
+    // fires for every KeyDown before the policy lookup (matched or not),
+    // exactly as the pre-extraction closure did.
     val handleMediaKeyDown: (KeyEvent) -> Boolean = { keyEvent ->
-        val keyCode = keyEvent.playerKeyCode
         userInteractionCount++
         viewModel.onUserInteraction()
-        when (keyCode) {
-            PlayerKeyCodes.KEYCODE_SPACE,
-            PlayerKeyCodes.KEYCODE_MEDIA_PLAY,
-            PlayerKeyCodes.KEYCODE_MEDIA_PAUSE,
-            PlayerKeyCodes.KEYCODE_MEDIA_PLAY_PAUSE -> {
+        when (mediaKeyAction(keyCode = keyEvent.playerKeyCode, controlsVisible = showControls)) {
+            PlayerKeyAction.TogglePlayPause -> {
                 doTogglePlayPause()
                 performConfirmHaptic()
                 showControls = true
                 true
             }
-            PlayerKeyCodes.KEYCODE_DPAD_RIGHT,
-            PlayerKeyCodes.KEYCODE_MEDIA_FAST_FORWARD,
-            PlayerKeyCodes.KEYCODE_L -> {
+            PlayerKeyAction.SeekForward -> {
                 doSeekForward()
                 performConfirmHaptic()
                 showControls = true
                 true
             }
-            PlayerKeyCodes.KEYCODE_DPAD_LEFT,
-            PlayerKeyCodes.KEYCODE_MEDIA_REWIND,
-            PlayerKeyCodes.KEYCODE_J -> {
+            PlayerKeyAction.SeekBack -> {
                 doSeekBack()
                 performConfirmHaptic()
                 showControls = true
                 true
             }
-            PlayerKeyCodes.KEYCODE_DPAD_UP,
-            PlayerKeyCodes.KEYCODE_VOLUME_UP -> {
+            PlayerKeyAction.VolumeUp -> {
                 streamVolumeAdjuster(true)
                 showControls = true
                 true
             }
-            PlayerKeyCodes.KEYCODE_DPAD_DOWN,
-            PlayerKeyCodes.KEYCODE_VOLUME_DOWN -> {
+            PlayerKeyAction.VolumeDown -> {
                 streamVolumeAdjuster(false)
                 showControls = true
                 true
             }
-            PlayerKeyCodes.KEYCODE_F,
-            PlayerKeyCodes.KEYCODE_F1, PlayerKeyCodes.KEYCODE_F2,
-            PlayerKeyCodes.KEYCODE_F3, PlayerKeyCodes.KEYCODE_F4 -> {
+            PlayerKeyAction.ToggleOrientation -> {
                 toggleOrientation()
                 showControls = true
                 true
             }
-            PlayerKeyCodes.KEYCODE_M -> {
+            PlayerKeyAction.ToggleMute -> {
                 viewModel.toggleMute()
                 showControls = true
                 true
             }
-            PlayerKeyCodes.KEYCODE_ESCAPE,
-            PlayerKeyCodes.KEYCODE_BACK -> {
-                if (showControls) {
-                    showControls = false
-                    true
-                } else {
-                    onBack()
-                    true
-                }
+            PlayerKeyAction.HideControls -> {
+                showControls = false
+                true
             }
-            else -> false
+            PlayerKeyAction.Exit -> {
+                onBack()
+                true
+            }
+            null -> false
         }
     }
 
-    // Wave 14E deterministic desktop delivery (desktop only — the seam is
+    //  deterministic desktop delivery (desktop only — the seam is
     // Android-inert, see [grabsKeyboardFocusWithControlsVisible]): publish the
     // handler above to the shell's bridge while this screen composes. The
     // sink declines (returns false) when the normal focused dispatch chain
@@ -1054,7 +1027,7 @@ fun VideoPlayerScreen(
                         // Esc=back, J/L=seek like YouTube.
                         Modifier
                             .focusRequester(keyboardFocusRequester)
-                            // Wave 14D focus diagnostics — desktop-only (the
+                            //  focus diagnostics — desktop-only (the
                             // grab seam is the same gate), so the Android
                             // modifier chain is byte-identical: `.then(Modifier)`
                             // short-circuits to `this`. onFocusChanged observes
@@ -1090,7 +1063,7 @@ fun VideoPlayerScreen(
                             .focusable()
                             .onKeyEvent { keyEvent ->
                                 if (keyEvent.type != KeyEventType.KeyDown) return@onKeyEvent false
-                                // Wave 14D diagnostic (desktop-only, harness-gated
+                                //  diagnostic (desktop-only, harness-gated
                                 // no-op): proves the key HANDLER ran, separating
                                 // "no Compose focus target" failures from
                                 // "handler ran but the play state flipped back".
@@ -1099,7 +1072,7 @@ fun VideoPlayerScreen(
                                         "player-keyboard-box onKeyEvent: key=${keyEvent.key}",
                                     )
                                 }
-                                // Wave 14E: the interpretation moved into
+                                // The interpretation moved into
                                 // [handleMediaKeyDown] above so the shell's
                                 // deterministic forward (the bridge sink) runs
                                 // the exact same when-block.
@@ -1192,13 +1165,13 @@ fun VideoPlayerScreen(
             val effectiveZoom = if (isInPipMode) 1f else videoZoom * tvBaselineZoom
             val zoomed = effectiveZoom > 1f
 
-            // Platform surface seam (wave 9A): Android hosts the engine's
+            // Platform surface seam: Android hosts the engine's
             // SurfaceView (or the empty fallback view for non-View-surface
             // engines — the V2a degrade); desktop hosts the SwingPanel/HWND
             // child window mpv embeds into. Zoom transform + PiP bounds
             // tracking stay with the platform actuals.
             //
-            // Wave 14B: composed UNCONDITIONALLY — `engine` is null while the
+            // Composed UNCONDITIONALLY — `engine` is null while the
             // session is still creating one, and the desktop actual mounts its
             // SwingPanel host exactly then: mpv's `wid` captures the embed
             // target at engine construction, so the surface must exist BEFORE
@@ -1610,22 +1583,25 @@ fun VideoPlayerScreen(
             val onSeekPositionChange by remember { mutableStateOf({ positionMs: Long -> seekPositionMs = positionMs }) }
             val onSpeedClick by remember { mutableStateOf({ currentSheet = PlayerSheet.Speed }) }
             val onAudioClick by remember { mutableStateOf({ currentSheet = PlayerSheet.Audio }) }
-            // Primary subtitle button opens the hub on the Tracks tab.
+            // Primary subtitle button opens the hub on the Tracks tab. No
+            // reset (deliberate — reopening on the same item keeps prior
+            // search state) and no loads here: the router's LaunchedEffect
+            // is the sheet's single openSubtitleHub trigger, so the hub no
+            // longer double-fetches the server-default list (fetch starts at
+            // composition rather than at click; the hub's loading spinner
+            // already covers the in-flight window).
             val onSubtitleClick by remember { mutableStateOf({
-                viewModel.subtitles.loadRemoteSubtitles()
-                viewModel.subtitles.loadSubtitleCultures()
-                viewModel.subtitles.loadConfiguredProviders()
+                subtitleHubResetFirst = false
                 currentSheet = PlayerSheet.SubtitleHub
             }) }
             // Overflow "Subtitles" entry opens the hub on the Get tab (the
             // former "Get Subtitles" entry point's most useful landing spot).
             val onSubtitleHubClick by remember { mutableStateOf({
                 // Reset search/cultures state from any previous item before
-                // loading fresh data, so stale results don't leak across items.
-                viewModel.subtitles.resetSubtitleManagerState()
-                viewModel.subtitles.loadRemoteSubtitles()
-                viewModel.subtitles.loadSubtitleCultures()
-                viewModel.subtitles.loadConfiguredProviders()
+                // loading fresh data, so stale results don't leak across
+                // items. The reset rides to the router's single load trigger
+                // as the flag below — no loads at click (see onSubtitleClick).
+                subtitleHubResetFirst = true
                 currentSheet = PlayerSheet.SubtitleHub
             }) }
             val onChapterClick by remember { mutableStateOf({ currentSheet = PlayerSheet.Chapter }) }
@@ -1938,12 +1914,17 @@ fun VideoPlayerScreen(
     }
 
     LaunchedEffect(showControls, controlsHasFocus, isSeeking, currentSheet, isOverflowMenuOpen, userInteractionCount) {
-        if (showControls && !isSeeking && currentSheet == PlayerSheet.None && !isOverflowMenuOpen) {
-            if (!isTv && controlsHasFocus) {
-                return@LaunchedEffect
-            }
-            val timeout = if (isTv) uiState.uiPrefs.controlsTimeoutMs * 2 else uiState.uiPrefs.controlsTimeoutMs
-            delay(timeout)
+        if (
+            shouldScheduleControlsAutoHide(
+                showControls = showControls,
+                isSeeking = isSeeking,
+                isSheetOpen = currentSheet != PlayerSheet.None,
+                isOverflowMenuOpen = isOverflowMenuOpen,
+                isTv = isTv,
+                controlsHasFocus = controlsHasFocus,
+            )
+        ) {
+            delay(controlsAutoHideTimeoutMs(uiState.uiPrefs.controlsTimeoutMs, isTv))
             showControls = false
         }
     }
@@ -1994,6 +1975,8 @@ fun VideoPlayerScreen(
             currentSheet = PlayerSheet.None
             showDelayOverlay = true
         },
+        subtitleHubResetFirst = subtitleHubResetFirst,
+        onSubtitleHubResetConsumed = { subtitleHubResetFirst = false },
     )
 
     val playerError = uiState.playerError
@@ -2171,6 +2154,10 @@ private fun PlayerSheetRouter(
     onPickFont: () -> Unit,
     onOpenSubtitleTester: () -> Unit,
     onOpenSubtitleDelayOverlay: () -> Unit,
+    /** The pending reset-first intent for this SubtitleHub open — see [onSubtitleHubResetConsumed]. */
+    subtitleHubResetFirst: Boolean,
+    /** Clears the consumed [subtitleHubResetFirst] flag so it stays single-shot. */
+    onSubtitleHubResetConsumed: () -> Unit,
 ) {
     when (val sheet = currentSheet) {
         is PlayerSheet.Speed -> {
@@ -2199,12 +2186,9 @@ private fun PlayerSheetRouter(
                             label = stringResource(Res.string.player_video_remember_audio_language),
                             checked = trackState.hasSeriesAudioPref,
                             onToggle = { remember ->
-                                val lang = if (remember) {
-                                    trackState.audioTracks.firstOrNull { it.isSelected && it.index >= 0 }?.language
-                                } else {
-                                    null
-                                }
-                                viewModel.setSeriesAudioLanguagePreference(lang)
+                                viewModel.setSeriesAudioLanguagePreference(
+                                    seriesAudioPreferenceIntent(trackState.audioTracks, remember),
+                                )
                             },
                         )
                     }
@@ -2212,10 +2196,22 @@ private fun PlayerSheetRouter(
             )
         }
         is PlayerSheet.SubtitleHub -> {
+            // The sheet's SINGLE hub-open load trigger ([SubtitleManager.openSubtitleHub]):
+            // both entry clicks (Tracks tab / overflow) only route here, so an
+            // open costs one remote-subtitles request — the former hand-copied
+            // click cascades double-fetched (click loads, then this effect
+            // cancelled and re-fetched). Declared timing delta: the fetch
+            // starts at sheet composition rather than at click (the hub's
+            // loading spinner already covers the in-flight window). The reset
+            // intent is per-entry: the overflow entry opens with a cleared
+            // search/cultures slice (stale results must not leak across
+            // items), the Tracks tab deliberately keeps prior state — the
+            // flag rides from the click and is consumed single-shot. A
+            // config-change sheet restore re-enters with the flag reset to
+            // false, i.e. the same no-reset re-load this effect always did.
             LaunchedEffect(Unit) {
-                viewModel.subtitles.loadRemoteSubtitles()
-                viewModel.subtitles.loadSubtitleCultures()
-                viewModel.subtitles.loadConfiguredProviders()
+                viewModel.subtitles.openSubtitleHub(resetFirst = subtitleHubResetFirst)
+                onSubtitleHubResetConsumed()
             }
             // Track + subtitle-workflow slices: collected inside the
             // branch — only this hub consumes them while the sheet is open.
@@ -2237,10 +2233,9 @@ private fun PlayerSheetRouter(
                         // episode restores the right same-language track; with the
                         // "Off" row selected it saves a "subtitles off" intent so
                         // every episode loads with subs off. Toggling off forgets
-                        // whichever intent was saved.
-                        val selectedOff = trackState.subtitleTracks
-                            .firstOrNull { it.isSelected && it.index < 0 } != null
-                        val label = if (selectedOff || trackState.hasSeriesSubtitleOffPref) {
+                        // whichever intent was saved. The intent derivation lives
+                        // in [seriesSubtitlePreferenceIntent].
+                        val label = if (seriesSubtitlePrefersOffLabel(trackState.subtitleTracks, trackState.hasSeriesSubtitleOffPref)) {
                             stringResource(Res.string.player_video_remember_subtitles_off)
                         } else {
                             stringResource(Res.string.player_video_remember_subtitle_language)
@@ -2249,17 +2244,17 @@ private fun PlayerSheetRouter(
                             label = label,
                             checked = trackState.hasSeriesSubtitlePref,
                             onToggle = { remember ->
-                                val sel = trackState.subtitleTracks.firstOrNull { it.isSelected }
-                                if (sel != null && sel.index < 0) {
-                                    viewModel.setSeriesSubtitleDisabled(remember)
-                                } else if (remember) {
-                                    viewModel.setSeriesSubtitlePreference(
-                                        language = sel?.language,
-                                        forced = sel?.badges?.contains(TrackBadge.FORCED)?.takeIf { it },
-                                        hearingImpaired = sel?.badges?.contains(TrackBadge.SDH)?.takeIf { it },
-                                    )
-                                } else {
-                                    viewModel.setSeriesSubtitlePreference(language = null)
+                                when (val intent = seriesSubtitlePreferenceIntent(trackState.subtitleTracks, remember)) {
+                                    is SeriesSubtitlePrefIntent.Off ->
+                                        viewModel.setSeriesSubtitleDisabled(intent.disabled)
+                                    is SeriesSubtitlePrefIntent.Track ->
+                                        viewModel.setSeriesSubtitlePreference(
+                                            language = intent.language,
+                                            forced = intent.forced,
+                                            hearingImpaired = intent.hearingImpaired,
+                                        )
+                                    SeriesSubtitlePrefIntent.Forget ->
+                                        viewModel.setSeriesSubtitlePreference(language = null)
                                 }
                             },
                         )
@@ -2299,7 +2294,7 @@ private fun PlayerSheetRouter(
                 onUseSubtitle = { rowKey -> viewModel.useDownloadedSubtitle(rowKey) },
                 isUploading = subtitleState.isUploadingSubtitle,
                 onUpload = { uriStr, fileName, language, isForced, isHearingImpaired ->
-                    // KMP seam (wave 7C): the sheets hand the picked SAF
+                    // KMP seam: the sheets hand the picked SAF
                     // document as its string form; SubtitleManager consumes it.
                     viewModel.subtitles.uploadSubtitle(
                         uriStr,

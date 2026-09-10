@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.core.database.dao.PlaybackStateDao
 import com.raulshma.jellyplay.core.database.dao.SyncBaselineDao
 import com.raulshma.jellyplay.core.database.dao.UnplayedCountRow
 import com.raulshma.jellyplay.core.database.entity.OfflineMediaEntity
+import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.model.OFFLINE_WATCHED_THRESHOLD
 import com.raulshma.jellyplay.core.model.MediaType
 import io.mockk.coEvery
@@ -40,7 +41,18 @@ class OfflineRepositoryImplUnplayedCountsTest {
 
     @Before
     fun setup() {
-        repository = OfflineRepositoryImpl(offlineMediaDao, playbackStateDao, syncBaselineDao, downloadDao, database)
+        repository = OfflineRepositoryImpl(
+            offlineMediaDao,
+            playbackStateDao,
+            syncBaselineDao,
+            downloadDao,
+            database,
+            timeSource = object : TimeSource {
+                override fun nowEpochMillis(): Long = System.currentTimeMillis()
+                override fun nowElapsedRealtimeMillis(): Long = System.currentTimeMillis()
+                override fun today(zone: java.time.ZoneId): java.time.LocalDate = java.time.LocalDate.now(zone)
+            },
+        )
     }
 
     private fun seriesRow(id: String) = OfflineMediaWithPlayback(

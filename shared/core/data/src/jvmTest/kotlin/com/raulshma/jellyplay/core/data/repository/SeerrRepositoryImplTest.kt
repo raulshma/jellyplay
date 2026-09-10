@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.repository
 
+import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
 import com.raulshma.jellyplay.core.datastore.SeerrSecureCredentialsStore
 import com.raulshma.jellyplay.core.model.MediaType
@@ -18,6 +19,7 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -80,7 +82,37 @@ class SeerrRepositoryImplTest {
         val result = repository.testConnection()
 
         assertTrue(result.isFailure)
-        assertTrue(result.exceptionOrNull()?.message?.contains("required") == true)
+        assertTrue(result.exceptionOrNull()?.message?.contains("not configured") == true)
+    }
+
+    @Test
+    fun `unconfigured seerr yields the one canonical failure across session-bound members`() = runTest {
+        every { seerrPreferencesStore.preferences } returns MutableStateFlow(
+            SeerrPreferences(enabled = true, serverUrl = "")
+        )
+        every { secureCredentialsStore.getApiKey() } returns ""
+        repository = SeerrRepositoryImpl(seerrApiClient, tmdbApiClient, seerrPreferencesStore, secureCredentialsStore, homeSession, sessionCacheRegistry, repoScope)
+
+        // A sample across the folded ladder: plain members, a cache-through
+        // getter, a mutation, and the poll-driven members.
+        val results = listOf(
+            repository.testConnection(),
+            repository.search("query"),
+            repository.getMovieDetails(1),
+            repository.getTrending(1),
+            repository.approveRequest(7),
+            repository.getRequestCount(),
+            repository.getCurrentUser(),
+        )
+
+        results.forEach { result ->
+            assertTrue(result.isFailure)
+            val error = result.exceptionOrNull()
+            assertTrue(error is IllegalStateException, "expected IllegalStateException, got $error")
+            assertEquals("Seerr not configured", error.message)
+        }
+        // An unconfigured getter must not reach the network at all.
+        coVerify(exactly = 0) { seerrApiClient.getMovieDetails(any(), any(), any()) }
     }
 
     @Test
@@ -163,5 +195,87 @@ class SeerrRepositoryImplTest {
         assertTrue(first.isSuccess)
         assertEquals(listOf(review), second.getOrNull())
         coVerify(exactly = 1) { tmdbApiClient.getReviews(123, MediaType.MOVIE) }
+    }
+
+    // ── poll-loop lifecycle ──────────────────────────────────────────────────
+    // All three pin the loop's gating/refcount with the test scheduler's
+    // virtual time: the repository is rebuilt over runTest's backgroundScope
+    // so the infinite loop's delays are virtual and die with the test.
+
+    @Test
+    fun `stopPolling stops the poll loop only after every starter has stopped`() = runTest {
+        repository = SeerrRepositoryImpl(seerrApiClient, tmdbApiClient, seerrPreferencesStore, secureCredentialsStore, homeSession, sessionCacheRegistry, backgroundScope)
+        // A live badge collector pins the fast (60s) cadence — see the poll
+        // loop's subscription gate.
+        backgroundScope.launch { repository.pendingRequestCount.collect {} }
+
+        repository.startPolling() // consumer 1 (the Requests screen)
+        repository.startPolling() // consumer 2 (a second surface)
+        testScheduler.runCurrent() // the prefs collector fires the immediate on-enable poll
+        repository.stopPolling() // one surface leaves — the shared loop must survive it
+        testScheduler.advanceTimeBy(61_000) // past the 60s tick, short of the next
+        testScheduler.runCurrent()
+
+        // Immediate poll + one 60s tick while polling was still shared.
+        coVerify(exactly = 2) { seerrApiClient.getRequestCount(any(), any()) }
+
+        repository.stopPolling() // the LAST consumer leaves — the loop stops now
+        testScheduler.advanceTimeBy(61_000)
+        testScheduler.runCurrent()
+        coVerify(exactly = 2) { seerrApiClient.getRequestCount(any(), any()) }
+    }
+
+    @Test
+    fun `an unpaired stopPolling is a no-op`() = runTest {
+        repository = SeerrRepositoryImpl(seerrApiClient, tmdbApiClient, seerrPreferencesStore, secureCredentialsStore, homeSession, sessionCacheRegistry, backgroundScope)
+
+        repository.stopPolling() // floors at zero — must not throw or cancel anything
+        repository.startPolling()
+        testScheduler.runCurrent() // immediate on-enable poll — the loop survived the stray stop
+
+        coVerify(exactly = 1) { seerrApiClient.getRequestCount(any(), any()) }
+        repository.stopPolling()
+    }
+
+    @Test
+    fun `polling skips polls while the offline manager reports offline`() = runTest {
+        val offlineModeManager = mockk<OfflineModeManager> {
+            every { isOffline } returns true
+        }
+        repository = SeerrRepositoryImpl(seerrApiClient, tmdbApiClient, seerrPreferencesStore, secureCredentialsStore, homeSession, sessionCacheRegistry, backgroundScope, offlineModeManager)
+        // Badge collector live: the loop runs the FAST cadence, so ticks do
+        // fire — the offline gate, not the idle cadence, is what must
+        // suppress the polls.
+        backgroundScope.launch { repository.pendingRequestCount.collect {} }
+
+        repository.startPolling()
+        testScheduler.runCurrent() // the immediate on-enable poll — gated
+        testScheduler.advanceTimeBy(2 * 60_000)
+        testScheduler.runCurrent()
+
+        coVerify(exactly = 0) { seerrApiClient.getRequestCount(any(), any()) }
+        repository.stopPolling()
+    }
+
+    @Test
+    fun `poll slows to the idle cadence while no collector watches the badge`() = runTest {
+        repository = SeerrRepositoryImpl(seerrApiClient, tmdbApiClient, seerrPreferencesStore, secureCredentialsStore, homeSession, sessionCacheRegistry, backgroundScope)
+
+        repository.startPolling()
+        testScheduler.runCurrent() // immediate on-enable poll — nobody collects the badge anywhere
+        coVerify(exactly = 1) { seerrApiClient.getRequestCount(any(), any()) }
+
+        // 60s passes with nobody watching: the idle cadence (15min) must NOT
+        // have ticked yet.
+        testScheduler.advanceTimeBy(61_000)
+        testScheduler.runCurrent()
+        coVerify(exactly = 1) { seerrApiClient.getRequestCount(any(), any()) }
+
+        // Well past the 15min mark: the idle tick fires; the next (30min) is
+        // still away, so exactly one more poll.
+        testScheduler.advanceTimeBy(15 * 60_000)
+        testScheduler.runCurrent()
+        coVerify(exactly = 2) { seerrApiClient.getRequestCount(any(), any()) }
+        repository.stopPolling()
     }
 }

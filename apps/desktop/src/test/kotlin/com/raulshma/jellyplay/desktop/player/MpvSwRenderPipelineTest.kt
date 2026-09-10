@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.io.TempDir
 
 /**
- * The wave-12B software-render pixel pipeline against real libmpv, fully
+ * The software-render pixel pipeline against real libmpv, fully
  * offscreen (`vo=libmpv`, `ao=null`) — no window, no GL context, no display
  * dependency. A tiny synthetic clip is generated ONCE per test method with the
  * host's ffmpeg (`testsrc2`, 320x240@15fps, 2 s) into a JUnit temp dir.

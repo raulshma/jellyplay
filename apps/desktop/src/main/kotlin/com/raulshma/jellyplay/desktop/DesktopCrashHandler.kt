@@ -16,7 +16,7 @@ import kotlin.io.path.readText
 import kotlin.io.path.writeText
 
 /**
- * Crash-log scaffold (wave 10A release engineering): writes timestamped plain-
+ * Crash-log scaffold (release engineering): writes timestamped plain-
  * text reports for uncaught exceptions into `DesktopPaths.logsDirNio`
  * (`<appdata>/JellyPlay/data/logs` on Windows) and leaves a marker file that
  * the NEXT boot consumes to surface "the previous session ended unexpectedly"

@@ -4,7 +4,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 /**
- * Pins the [TimedCue] value type. Ported with the wave-7C review round from
+ * Pins the [TimedCue] value type. Ported with the review round from
  * the legacy `subtitle`-packaged suite: the sibling `FindActiveCue( s )Test`
  * classes were NOT portable — `SubtitleParserHelper.findActiveCue(s)` stayed
  * in the player-video module's androidMain (media3-coupled), so those tests

@@ -58,7 +58,7 @@
     <string name="player_video_ass_force_hint">Eingebetteten Stil mit Ihren Farben, Schriftart &amp; Rahmen überschreiben</string>
     <string name="player_video_font_color">Schriftfarbe</string>
     <string name="player_video_background_color">Hintergrundfarbe</string>
-    <string name="player_video_background_opacity">Hintergrunddeckkraft: %1$d%%</string>
+    <string name="player_video_background_opacity">Hintergrunddeckkraft: %1$d%</string>
     <string name="player_video_edge_type">Kantenart</string>
     <string name="player_video_edge_none">Keine</string>
     <string name="player_video_edge_outline">Kontur</string>
@@ -73,7 +73,7 @@
     <string name="player_video_border_width">Rahmenbreite: %1$s</string>
     <string name="player_video_shadow_offset">Schattenversatz: %1$s</string>
     <string name="player_video_subtitle_offset">Untertitelversatz: %1$s</string>
-    <string name="player_video_vertical_position">Vertikale Position: %1$d%%</string>
+    <string name="player_video_vertical_position">Vertikale Position: %1$d%</string>
 
     <!-- Sleep timer sheet -->
     <string name="player_video_sleep_timer">Sleeptimer</string>

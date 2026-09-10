@@ -19,7 +19,7 @@ import org.robolectric.annotation.Config
  * `buildIntent` + `fromIntent` must be byte-compatible with the hand-written
  * build/parse pair this class replaced (same keys, same presence rules), and
  * [fromIntent] must return null when the variant's mandatory id is absent —
- * PlayerActivity's `finish()` path depends on that null. Wave 19C sealed the
+ * PlayerActivity's `finish()` path depends on that null. That seal froze the
  * contract into a Video/Live pair; the pins cover both variants, the
  * variant-discriminator extra, and the pre-seal backward-compat fallback
  * (no discriminator → Video).
@@ -99,7 +99,7 @@ class PlayerActivityArgsTest {
         assertNull(parsed.audioStreamIndex)
     }
 
-    // ── Live variant (wave 19C live PiP) ───────────────────────────────────
+    // ── Live variant (live PiP) ───────────────────────────────────
 
     @Test
     fun `full live args round-trip`() {

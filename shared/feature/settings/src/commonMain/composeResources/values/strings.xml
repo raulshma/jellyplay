@@ -27,13 +27,22 @@
     <string name="settings_newsletter_cd">Newsletter</string>
     <string name="settings_advanced_badge">Adv</string>
     <string name="settings_power_user_mode">Power User Mode</string>
+    <string name="settings_power_user_mode_desc">Expose advanced codecs, cache tools &amp; experimental flags</string>
     <string name="settings_admin_badge">Admin</string>
     <string name="settings_member_badge">Member</string>
     <string name="settings_connected_server">Connected to server</string>
     <string name="settings_no_matches">No matching settings found</string>
+    <string name="settings_no_matches_hint">Try searching by keyword or checking for typos</string>
     <string name="settings_search_hint">Type to search settings</string>
     <string name="settings_recents_title">Recent</string>
     <string name="settings_clear_recents">Clear</string>
+    <string name="settings_clear_query">Clear query</string>
+    <string name="settings_filter_all">All</string>
+    <string name="settings_browse_categories">Browse Categories</string>
+    <string name="settings_quick_actions">Quick Actions</string>
+    <string name="settings_server_settings">Server</string>
+    <string name="settings_switch_user_action">Switch User</string>
+    <string name="settings_whats_new">What\'s New</string>
     <string name="settings_account">Account</string>
     <string name="settings_signed_in_as_name">Signed in as %1$s</string>
     <string name="settings_sign_out">Sign Out</string>
@@ -944,7 +953,7 @@
     <string name="settings_reduce_motion">Reduce Motion</string>
     <string name="settings_reduce_motion_subtitle">Disable heavy parallax and card animations</string>
     <string name="settings_comfort_eye_care">Comfort &amp; Eye Care</string>
-    <string name="settings_blue_light_filter_summary">Blue light filter · %1$d%%</string>
+    <string name="settings_blue_light_filter_summary">Blue light filter · %1$d%</string>
     <string name="settings_blue_light_filter">Blue Light Filter</string>
     <string name="settings_blue_light_filter_subtitle">Tint the screen amber to reduce eye strain at night</string>
     <string name="settings_blue_light_filter_strength">Blue Light Filter Strength</string>
@@ -1004,7 +1013,7 @@
     <string name="settings_tv_zoom_mode">TV Zoom Mode</string>
     <string name="settings_tv_zoom_mode_subtitle">Crop/zoom video to fill screen (0% = off)</string>
     <string name="settings_tv_zoom_none">No zoom (original aspect ratio)</string>
-    <string name="settings_tv_zoom_percent">Crop and zoom video by %1$d%% to fill screen</string>
+    <string name="settings_tv_zoom_percent">Crop and zoom video by %1$d% to fill screen</string>
     <string name="settings_episode_browser">Episode Browser</string>
     <string name="settings_episode_browser_on">Show episode list during playback</string>
     <string name="settings_episode_browser_off">Hide episode list</string>
@@ -1577,6 +1586,8 @@
     <string name="ss_clear_image_cache_subtitle">Clear cached posters and images (reloads on next view)</string>
     <string name="ss_wifi_only_downloads_title">WiFi Only Downloads</string>
     <string name="ss_wifi_only_downloads_subtitle">Restricts downloads to unmetered WiFi connections</string>
+    <string name="ss_auto_delete_after_watch_title">Auto-Delete After Watching</string>
+    <string name="ss_auto_delete_after_watch_subtitle">Remove downloads once fully watched</string>
     <string name="ss_auto_delete_cache_title">Auto-delete Cache</string>
     <string name="ss_auto_delete_cache_subtitle">Automatically clear cached files on low storage threshold</string>
     <string name="ss_max_cache_size_title">Max Cache Size Limit</string>

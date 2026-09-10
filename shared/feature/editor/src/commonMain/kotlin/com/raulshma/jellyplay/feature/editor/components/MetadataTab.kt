@@ -51,7 +51,6 @@ import com.raulshma.jellyplay.core.ui.components.ImeAlertDialog
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.RequestOrRestoreFocus
-import com.raulshma.jellyplay.feature.editor.EditorUiState
 import com.raulshma.jellyplay.feature.editor.EditorViewModel
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
@@ -159,6 +158,10 @@ fun MetadataTab(
 
     val mediaType = state.mediaDetail?.item?.mediaType
 
+    // The metadata form value slice (layout/behavior identical to the former
+    // flat UiState fields — reads re-pointed, writes unchanged).
+    val form = state.metadata.value
+
     val isTv = LocalTvMode.current
     val initialFocus = remember { FocusRequester() }
     RequestOrRestoreFocus(
@@ -180,28 +183,28 @@ fun MetadataTab(
             modifier = Modifier.focusRequester(initialFocus),
         ) {
             OutlinedTextField(
-                value = state.name,
+                value = form.name,
                 onValueChange = { viewModel.updateField { s -> s.copy(name = it) } },
                 label = { Text(stringResource(Res.string.editor_field_title)) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
             )
             OutlinedTextField(
-                value = state.originalTitle,
+                value = form.originalTitle,
                 onValueChange = { viewModel.updateField { s -> s.copy(originalTitle = it) } },
                 label = { Text(stringResource(Res.string.editor_field_original_title)) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
             )
             OutlinedTextField(
-                value = state.sortName,
+                value = form.sortName,
                 onValueChange = { viewModel.updateField { s -> s.copy(sortName = it) } },
                 label = { Text(stringResource(Res.string.editor_field_sort_title)) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
             )
             OutlinedTextField(
-                value = state.overview,
+                value = form.overview,
                 onValueChange = { viewModel.updateField { s -> s.copy(overview = it) } },
                 label = { Text(stringResource(Res.string.editor_field_overview)) },
                 modifier = Modifier.fillMaxWidth(),
@@ -210,7 +213,7 @@ fun MetadataTab(
             )
             if (mediaType == MediaType.MOVIE || mediaType == MediaType.SERIES) {
                 OutlinedTextField(
-                    value = state.tagline,
+                    value = form.tagline,
                     onValueChange = { viewModel.updateField { s -> s.copy(tagline = it) } },
                     label = { Text(stringResource(Res.string.editor_field_tagline)) },
                     modifier = Modifier.fillMaxWidth(),
@@ -220,9 +223,9 @@ fun MetadataTab(
         }
 
         SectionHeader(title = stringResource(Res.string.editor_section_ratings)) {
-            val communityInvalid = state.communityRating.isNotEmpty() && state.communityRating.toFloatOrNull() == null
+            val communityInvalid = form.communityRating.isNotEmpty() && form.communityRating.toFloatOrNull() == null
             OutlinedTextField(
-                value = state.communityRating,
+                value = form.communityRating,
                 onValueChange = { viewModel.updateField { s -> s.copy(communityRating = it) } },
                 label = { Text(stringResource(Res.string.editor_field_community_rating)) },
                 modifier = Modifier.fillMaxWidth(),
@@ -232,9 +235,9 @@ fun MetadataTab(
                 keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Decimal),
             )
             if (mediaType == MediaType.MOVIE) {
-                val criticInvalid = state.criticRating.isNotEmpty() && state.criticRating.toFloatOrNull() == null
+                val criticInvalid = form.criticRating.isNotEmpty() && form.criticRating.toFloatOrNull() == null
                 OutlinedTextField(
-                    value = state.criticRating,
+                    value = form.criticRating,
                     onValueChange = { viewModel.updateField { s -> s.copy(criticRating = it) } },
                     label = { Text(stringResource(Res.string.editor_field_critic_rating)) },
                     modifier = Modifier.fillMaxWidth(),
@@ -252,7 +255,7 @@ fun MetadataTab(
                 onExpandedChange = { officialExpanded = it },
             ) {
                 OutlinedTextField(
-                    value = state.officialRating,
+                    value = form.officialRating,
                     onValueChange = { viewModel.updateField { s -> s.copy(officialRating = it) } },
                     label = { Text(stringResource(Res.string.editor_field_official_rating)) },
                     modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryEditable),
@@ -281,7 +284,7 @@ fun MetadataTab(
                 onExpandedChange = { customExpanded = it },
             ) {
                 OutlinedTextField(
-                    value = state.customRating,
+                    value = form.customRating,
                     onValueChange = { viewModel.updateField { s -> s.copy(customRating = it) } },
                     label = { Text(stringResource(Res.string.editor_field_custom_rating)) },
                     modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryEditable),
@@ -306,9 +309,9 @@ fun MetadataTab(
         }
 
         SectionHeader(title = stringResource(Res.string.editor_section_dates_numbers)) {
-            val yearInvalid = state.productionYear.isNotEmpty() && state.productionYear.toIntOrNull() == null
+            val yearInvalid = form.productionYear.isNotEmpty() && form.productionYear.toIntOrNull() == null
             OutlinedTextField(
-                value = state.productionYear,
+                value = form.productionYear,
                 onValueChange = { viewModel.updateField { s -> s.copy(productionYear = it) } },
                 label = { Text(stringResource(Res.string.editor_field_production_year)) },
                 modifier = Modifier.fillMaxWidth(),
@@ -318,7 +321,7 @@ fun MetadataTab(
                 keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Number),
             )
             OutlinedTextField(
-                value = state.premiereDate,
+                value = form.premiereDate,
                 onValueChange = { viewModel.updateField { s -> s.copy(premiereDate = it) } },
                 label = { Text(stringResource(Res.string.editor_field_premiere_date)) },
                 modifier = Modifier.fillMaxWidth(),
@@ -327,16 +330,16 @@ fun MetadataTab(
             )
             if (mediaType == MediaType.SERIES) {
                 OutlinedTextField(
-                    value = state.endDate,
+                    value = form.endDate,
                     onValueChange = { viewModel.updateField { s -> s.copy(endDate = it) } },
                     label = { Text(stringResource(Res.string.editor_field_end_date)) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     placeholder = { Text(stringResource(Res.string.editor_date_format_hint)) },
                 )
-                val runtimeInvalid = state.runtimeMinutes.isNotEmpty() && state.runtimeMinutes.toIntOrNull() == null
+                val runtimeInvalid = form.runtimeMinutes.isNotEmpty() && form.runtimeMinutes.toIntOrNull() == null
                 OutlinedTextField(
-                    value = state.runtimeMinutes,
+                    value = form.runtimeMinutes,
                     onValueChange = { viewModel.updateField { s -> s.copy(runtimeMinutes = it) } },
                     label = { Text(stringResource(Res.string.editor_field_runtime_minutes)) },
                     modifier = Modifier.fillMaxWidth(),
@@ -347,9 +350,9 @@ fun MetadataTab(
                 )
             }
             if (mediaType == MediaType.EPISODE) {
-                val indexInvalid = state.indexNumber.isNotEmpty() && state.indexNumber.toIntOrNull() == null
+                val indexInvalid = form.indexNumber.isNotEmpty() && form.indexNumber.toIntOrNull() == null
                 OutlinedTextField(
-                    value = state.indexNumber,
+                    value = form.indexNumber,
                     onValueChange = { viewModel.updateField { s -> s.copy(indexNumber = it) } },
                     label = { Text(stringResource(Res.string.editor_field_episode_number)) },
                     modifier = Modifier.fillMaxWidth(),
@@ -359,7 +362,7 @@ fun MetadataTab(
                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Number),
                 )
                 OutlinedTextField(
-                    value = state.parentIndexNumber,
+                    value = form.parentIndexNumber,
                     onValueChange = { viewModel.updateField { s -> s.copy(parentIndexNumber = it) } },
                     label = { Text(stringResource(Res.string.editor_field_season_number)) },
                     modifier = Modifier.fillMaxWidth(),
@@ -390,7 +393,7 @@ fun MetadataTab(
                     onExpandedChange = { statusExpanded = it },
                 ) {
                     OutlinedTextField(
-                        value = state.status,
+                        value = form.status,
                         onValueChange = { viewModel.updateField { s -> s.copy(status = it) } },
                         label = { Text(stringResource(Res.string.editor_field_status)) },
                         modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryEditable),
@@ -419,7 +422,7 @@ fun MetadataTab(
                     onExpandedChange = { displayExpanded = it },
                 ) {
                     OutlinedTextField(
-                        value = state.displayOrder,
+                        value = form.displayOrder,
                         onValueChange = { viewModel.updateField { s -> s.copy(displayOrder = it) } },
                         label = { Text(stringResource(Res.string.editor_field_display_order)) },
                         modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryEditable),
@@ -443,7 +446,7 @@ fun MetadataTab(
                 }
 
                 OutlinedTextField(
-                    value = state.airTime,
+                    value = form.airTime,
                     onValueChange = { viewModel.updateField { s -> s.copy(airTime = it) } },
                     label = { Text(stringResource(Res.string.editor_field_air_time)) },
                     modifier = Modifier.fillMaxWidth(),
@@ -458,12 +461,12 @@ fun MetadataTab(
                     val dayKeys = dayLabel.map { it.first }
                     dayLabel.forEach { (day, labelRes) ->
                         FilterChip(
-                            selected = day in state.airDays,
+                            selected = day in form.airDays,
                             onClick = {
-                                val newDays = if (day in state.airDays) {
-                                    state.airDays - day
+                                val newDays = if (day in form.airDays) {
+                                    form.airDays - day
                                 } else {
-                                    (state.airDays + day).sortedBy { dayKeys.indexOf(it) }
+                                    (form.airDays + day).sortedBy { dayKeys.indexOf(it) }
                                 }
                                 viewModel.updateField { s -> s.copy(airDays = newDays) }
                             },
@@ -476,7 +479,7 @@ fun MetadataTab(
 
         SectionHeader(title = stringResource(Res.string.editor_section_genres)) {
             EditableChipGroup(
-                items = state.genres,
+                items = form.genres,
                 onAdd = { viewModel.updateField { s -> s.copy(genres = (s.genres + it).sortedBy { g -> g.lowercase() }) } },
                 onRemove = { viewModel.updateField { s -> s.copy(genres = s.genres - it) } },
             )
@@ -484,7 +487,7 @@ fun MetadataTab(
 
         SectionHeader(title = stringResource(Res.string.editor_section_tags)) {
             EditableChipGroup(
-                items = state.tags,
+                items = form.tags,
                 onAdd = { viewModel.updateField { s -> s.copy(tags = (s.tags + it).sortedBy { t -> t.lowercase() }) } },
                 onRemove = { viewModel.updateField { s -> s.copy(tags = s.tags - it) } },
             )
@@ -492,7 +495,7 @@ fun MetadataTab(
 
         SectionHeader(title = stringResource(Res.string.editor_section_studios)) {
             EditableChipGroup(
-                items = state.studios,
+                items = form.studios,
                 onAdd = { viewModel.updateField { s -> s.copy(studios = (s.studios + it).sortedBy { st -> st.lowercase() }) } },
                 onRemove = { viewModel.updateField { s -> s.copy(studios = s.studios - it) } },
             )
@@ -500,7 +503,7 @@ fun MetadataTab(
 
         SectionHeader(title = stringResource(Res.string.editor_section_people)) {
             PeopleEditor(
-                people = state.people,
+                people = form.people,
                 onAdd = { person -> viewModel.updateField { s -> s.copy(people = s.people + person) } },
                 onRemove = { person -> viewModel.updateField { s -> s.copy(people = s.people - person) } },
                 onUpdate = { old, new -> viewModel.updateField { s ->
@@ -513,7 +516,7 @@ fun MetadataTab(
         if (externalIds.isNotEmpty()) {
             SectionHeader(title = stringResource(Res.string.editor_section_external_ids)) {
                 externalIds.forEach { extId ->
-                    val currentValue = state.providerIds[extId.key] ?: ""
+                    val currentValue = form.providerIds[extId.key] ?: ""
                     OutlinedTextField(
                         value = currentValue,
                         onValueChange = { newValue ->
@@ -539,12 +542,12 @@ fun MetadataTab(
             ) {
                 Text(stringResource(Res.string.editor_lock_all_metadata), modifier = Modifier.weight(1f))
                 Switch(
-                    checked = state.lockData,
+                    checked = form.lockData,
                     onCheckedChange = { viewModel.updateField { s -> s.copy(lockData = it) } },
                 )
             }
 
-            if (!state.lockData) {
+            if (!form.lockData) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(stringResource(Res.string.editor_lock_individual_fields), style = MaterialTheme.typography.titleSmall)
                 val lockableFields = listOf(
@@ -564,7 +567,7 @@ fun MetadataTab(
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Checkbox(
-                            checked = key !in state.lockedFields,
+                            checked = key !in form.lockedFields,
                             onCheckedChange = { checked ->
                                 viewModel.updateField { s ->
                                     s.copy(
@@ -578,7 +581,7 @@ fun MetadataTab(
                             },
                         )
                         Text(stringResource(label), modifier = Modifier.focusIndicator().clickable {
-                            val checked = key !in state.lockedFields
+                            val checked = key !in form.lockedFields
                             viewModel.updateField { s ->
                                 s.copy(
                                     lockedFields = if (!checked) {

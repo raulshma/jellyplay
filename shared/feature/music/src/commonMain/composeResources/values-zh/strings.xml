@@ -56,10 +56,10 @@
     <string name="music_open">打开</string>
 
     <!-- Counts -->
-    <string name="music_items_count">%d 项</string>
-    <string name="music_tracks_count">%d 首曲目</string>
+    <string name="music_items_count">%1$d 项</string>
+    <string name="music_tracks_count">%1$d 首曲目</string>
     <string name="music_one_track">1 首曲目</string>
-    <string name="music_playlist_tracks_count">%d 首曲目</string>
+    <string name="music_playlist_tracks_count">%1$d 首曲目</string>
 
     <!-- Home sections -->
     <string name="music_player_screens">播放器界面</string>

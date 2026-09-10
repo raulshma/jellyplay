@@ -14,7 +14,7 @@ kotlin {
         namespace = "com.raulshma.jellyplay.shared.feature.admin"
         compileSdk = 37
         minSdk = 28
-        // Compose-resources packaging (wave-21 device-pass finding): with the
+        // Compose-resources packaging (device-pass finding): with the
         // AGP-9 KMP library plugin, android resources are OFF by default, so
         // copyAndroidMainComposeResourcesToAndroidAssets never runs and the
         // app APK ships this module's Res accessors with NO backing .cvr
@@ -46,6 +46,10 @@ kotlin {
             implementation(project(":shared:core:model"))
             implementation(project(":shared:core:designsystem"))
             implementation(project(":shared:core:data"))
+            // runCatchingRethrowingCancellation in the AdminLoad fetch
+            // variants (Dashboard/Logs preserve their historical catch
+            // semantics without masking cancellation).
+            implementation(project(":shared:core:concurrency"))
             implementation(project(":shared:core:ui"))
             // JetBrains CMP distribution (see catalog note): Android targets
             // redirect to the androidx artifacts.

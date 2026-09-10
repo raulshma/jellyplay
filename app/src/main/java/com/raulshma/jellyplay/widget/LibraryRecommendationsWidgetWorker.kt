@@ -2,7 +2,6 @@ package com.raulshma.jellyplay.widget
 
 import android.content.Context
 import android.util.Log
-import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
@@ -14,12 +13,17 @@ import com.raulshma.jellyplay.core.model.LibraryWidgetItem
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.SearchResult
+import com.raulshma.jellyplay.widget.skeleton.RecommendationWorkerSkeleton
 import kotlinx.coroutines.flow.first
 
 /**
- * Plain CoroutineWorker constructed by [AppWidgetWorkerFactory] (wave 8B —
- * Hilt removal: the former Hilt worker assisted-injection ctor became this
- * explicit constructor; deps resolve from the Koin container).
+ * Plain CoroutineWorker constructed by [AppWidgetWorkerFactory]
+ * (Hilt removal: the former Hilt worker assisted-injection ctor became this
+ * explicit constructor; deps resolve from the Koin container). A thin adapter
+ * over [RecommendationWorkerSkeleton], which owns the guard → fetch →
+ * empty-keep → persist → retry-fold chassis; this class supplies the Library
+ * seams (session guard, source-routed fetches, the poster-resolving mapper,
+ * the persist call) and the every-failure logging arm.
  */
 class LibraryRecommendationsWidgetWorker(
     appContext: Context,
@@ -28,9 +32,13 @@ class LibraryRecommendationsWidgetWorker(
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
     private val authRepository: AuthRepository,
-) : CoroutineWorker(appContext, params) {
+) : RecommendationWorkerSkeleton<MediaItem, LibraryWidgetItem>(
+    appContext = appContext,
+    params = params,
+    maxItems = MAX_ITEMS,
+) {
 
-    override suspend fun doWork(): Result = runCatching {
+    override suspend fun skipFetch(): Boolean {
         // Best-effort session restore. We must NOT fail the whole worker if
         // this returns a failure (e.g. transient DB or api-client error): the
         // `currentServer` check below decides whether we have enough state to
@@ -38,15 +46,15 @@ class LibraryRecommendationsWidgetWorker(
         // because no persist (and therefore no notify) ever happens.
         authRepository.restoreSession()
         val server = authRepository.currentServer.first()
-        if (server == null) {
-            // No server: leave existing cached items intact so the widget
-            // keeps showing the last good snapshot instead of going blank
-            // during the window before the app restores the session.
-            return@runCatching
-        }
+        // No server: leave existing cached items intact so the widget
+        // keeps showing the last good snapshot instead of going blank
+        // during the window before the app restores the session.
+        return server == null
+    }
 
+    override suspend fun fetchItems(): List<MediaItem> {
         val config = widgetDataStore.widgetConfig.first()
-        val items: List<MediaItem> = when (config.librarySource) {
+        return when (config.librarySource) {
             LibraryRecommendationsSource.SIMILAR_TO_RECENT -> fetchSimilarToRecent()
                 ?: fetchLatest()
 
@@ -56,25 +64,17 @@ class LibraryRecommendationsWidgetWorker(
 
             LibraryRecommendationsSource.SURPRISE_ME -> fetchSurprise()
         }
+    }
 
-        if (items.isEmpty()) {
-            // Keep existing data instead of clearing the widget.
-            return@runCatching
-        }
+    override fun mapItem(raw: MediaItem): LibraryWidgetItem = raw.toWidgetItem()
 
-        val mapped = items.take(MAX_ITEMS).map { it.toWidgetItem() }
-        WidgetPersistHelper.persistLibraryItems(applicationContext, widgetDataStore, mapped, versionBumpOnly = false)
-    }.fold(
-        onSuccess = { Result.success() },
-        onFailure = { e ->
-            Log.e(TAG, "Worker execution failed", e)
-            if (isPermanentWidgetFailure(e)) {
-                Result.failure()
-            } else {
-                Result.retry()
-            }
-        },
-    )
+    override suspend fun persist(items: List<LibraryWidgetItem>) {
+        WidgetPersistHelper.persistLibraryItems(applicationContext, widgetDataStore, items)
+    }
+
+    override fun logFailure(error: Throwable) {
+        Log.e(TAG, "Worker execution failed", error)
+    }
 
     private suspend fun fetchSimilarToRecent(): List<MediaItem>? {
         val seed = widgetDataStore.continueWatching.first().firstOrNull() ?: return null
@@ -124,8 +124,13 @@ class LibraryRecommendationsWidgetWorker(
     }
 
     private fun MediaItem.toWidgetItem(): LibraryWidgetItem {
-        val imageId = seriesId ?: id
-        val poster = runCatching { playbackRepository.getImageUrl(imageId, maxWidth = 400) }
+        val imageId = WidgetPosterIdentity.libraryRecommendationsPosterImageId(this)
+        val poster = runCatching {
+            playbackRepository.getImageUrl(
+                imageId,
+                maxWidth = WidgetPosterIdentity.LIBRARY_RECOMMENDATIONS_POSTER_MAX_WIDTH,
+            )
+        }
             .getOrNull()
             ?.takeIf { it.isNotBlank() }
         return LibraryWidgetItem(

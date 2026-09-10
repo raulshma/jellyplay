@@ -246,7 +246,7 @@ fun DevicesScreen(
                                 grouped.forEach { (userName, devices) ->
                                     // Section header per user (only when grouping yields >1 group).
                                     if (grouped.size > 1) {
-                                        item(key = "header_$userName") {
+                                        item(key = "header_$userName", contentType = "deviceHeader") {
                                             Text(
                                                 userName,
                                                 style = MaterialTheme.typography.labelLarge,
@@ -259,6 +259,7 @@ fun DevicesScreen(
                                     itemsIndexed(
                                         items = devices,
                                         key = { index, device -> "${userName}_${index}_${device.id}" },
+                                        contentType = { _, _ -> "deviceItem" },
                                     ) { _, device ->
                                         DeviceItem(
                                             device = device,

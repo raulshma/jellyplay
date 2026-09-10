@@ -67,12 +67,13 @@ import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.sharedElementBoundsSpec
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.hasWatchProgress
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
 import com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope
 import com.raulshma.jellyplay.core.ui.components.formatDurationFromTicks
 import com.raulshma.jellyplay.core.ui.components.formatRelativeTime
 import com.raulshma.jellyplay.core.ui.components.formatRemainingTimeFromTicks
-import com.raulshma.jellyplay.core.ui.components.progressFraction
+import com.raulshma.jellyplay.core.model.progressFraction
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.rowCardWidth
 import com.raulshma.jellyplay.core.ui.image.MediaImage
@@ -719,8 +720,7 @@ internal fun EpisodeCard(
                     .padding(8.dp)
             )
 
-            val positionTicks = episode.playbackPositionTicks
-            if (positionTicks != null && positionTicks > 0 && !episode.isPlayed) {
+            if (episode.hasWatchProgress) {
                 val progress = episode.progressFraction() ?: 0f
                 Box(
                     modifier = Modifier
@@ -798,7 +798,7 @@ internal fun EpisodeCard(
             )
             val runtimeTicks = episode.runTimeTicks
             val positionTicks = episode.playbackPositionTicks
-            val hasWatchProgress = positionTicks != null && positionTicks > 0 && !episode.isPlayed
+            val hasWatchProgress = episode.hasWatchProgress
             val remainingTime = if (hasWatchProgress && runtimeTicks != null && positionTicks != null) {
                 formatRemainingTimeFromTicks(runtimeTicks, positionTicks)
             } else null
@@ -994,8 +994,7 @@ private fun CompactEpisodeRow(
                     .padding(6.dp)
             )
 
-            val positionTicks = episode.playbackPositionTicks
-            if (positionTicks != null && positionTicks > 0 && !episode.isPlayed) {
+            if (episode.hasWatchProgress) {
                 val progress = episode.progressFraction() ?: 0f
                 Box(
                     modifier = Modifier
@@ -1043,7 +1042,7 @@ private fun CompactEpisodeRow(
             )
             val runtimeTicks = episode.runTimeTicks
             val positionTicks = episode.playbackPositionTicks
-            val hasWatchProgress = positionTicks != null && positionTicks > 0 && !episode.isPlayed
+            val hasWatchProgress = episode.hasWatchProgress
             val remainingTime = if (hasWatchProgress && runtimeTicks != null && positionTicks != null) {
                 formatRemainingTimeFromTicks(runtimeTicks, positionTicks)
             } else null

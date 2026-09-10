@@ -19,7 +19,7 @@ import kotlinx.coroutines.flow.StateFlow
  * [RemoteControlReceiver] that run on [kotlinx.coroutines.Dispatchers.Default]
  * from triggering [IllegalStateException]s in strict engines such as ExoPlayer.
  *
- * Home note (Phase W.3): this file moved verbatim from shared/core:data's
+ * Home note: this file moved verbatim from shared/core:data's
  * commonMain (SAME package, so no consumer import changes) because `MediaEngine`
  * extends it and this module needs a wasmJs target for `HtmlVideoEngine` —
  * shared/core:data has no wasm build (Room). The core:data consumers
@@ -34,7 +34,7 @@ interface RemotePlayableEngine {
      * Opaque native player handle for platform integrations, or `null` when
      * the engine has no exposed native player. Android consumers cast to
      * `androidx.media3.common.Player` (ExoPlayer); implementations may narrow
-     * the type via val covariance. Was a media3 `Player?` before the Phase V2
+     * the type via val covariance. Was a media3 `Player?` before the 
      * common-ization — kept type-erased so this interface stays commonMain-pure.
      */
     val underlyingPlayer: Any?

@@ -71,7 +71,7 @@ fun interface OfflineImagePreloader {
  * `startDownload` never touches it. Resolving the repository lazily breaks the
  * DownloadRepository ↔ MediaRepository construction cycle.
  *
- * Since the Phase X cluster flip both platform defs (androidDataModule,
+ * Since the cluster flip both platform defs (androidDataModule,
  * desktopDataModule) resolve the Koin `MediaRepositoryImpl` single directly —
  * desktop series downloads and auto-download are live.
  */

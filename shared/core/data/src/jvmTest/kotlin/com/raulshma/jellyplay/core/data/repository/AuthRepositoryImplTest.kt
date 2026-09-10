@@ -26,11 +26,13 @@ import io.mockk.verify
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.assertEquals
@@ -41,6 +43,9 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.test.BeforeTest
 import kotlin.test.Test
+import com.raulshma.jellyplay.core.data.util.TimeSource
+import java.time.LocalDate
+import java.time.ZoneId
 
 class AuthRepositoryImplTest {
 
@@ -111,6 +116,7 @@ class AuthRepositoryImplTest {
             tokenCipher = tokenCipher,
             json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true },
             externalScope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined),
+            timeSource = FakeTimeSource(),
         )
     }
 
@@ -277,6 +283,63 @@ class AuthRepositoryImplTest {
         assertTrue(result.isSuccess)
         coVerify { apiClient.setUser(any()) }
         coVerify(exactly = 0) { apiClient.disconnect() }
+    }
+
+    @Test
+    fun `restoreSession releases the gate on a slow validation and still tears down on the deferred 401`() = runTest {
+        // The restore-time token
+        // check is bounded on the first-frame gate; a server slower than the
+        // bound releases the gate with the DB-restored session kept (the same
+        // outcome a non-401 validation failure already produces), and the
+        // definitive 401 from the deferred pass still tears the session down
+        // through disconnect + clearSession — the path the shell's
+        // isAuthenticated collection turns into the shell → login swap.
+        every { serverIdentityStore.activeServerId } returns flowOf("server-1")
+        every { serverIdentityStore.activeUserId } returns flowOf("user-1")
+        coEvery { serverDao.getServerById("server-1") } returns testServerEntity
+        coEvery { userDao.getUserById("user-1") } returns testUserEntity
+        // Slower than the ~2 s gate bound, so the on-gate validation times
+        // out and the deferred pass pays the full wait instead.
+        coEvery { apiClient.getCurrentUser() } coAnswers {
+            delay(3_000)
+            Result.failure(
+                ApiException(
+                    isRetryable = false,
+                    httpCode = 401,
+                    isAccessDenied = true,
+                    message = "Authentication required. Please sign in again.",
+                ),
+            )
+        }
+        // The deferred pass re-runs on the application scope; back it with
+        // the test scheduler so its virtual-time delay is deterministic
+        // (same local-construction pattern as the session-flow test below).
+        val repo = AuthRepositoryImpl(
+            apiClient = apiClient,
+            webSocketClient = webSocketClient,
+            database = database,
+            serverDao = serverDao,
+            userDao = userDao,
+            serverIdentityStore = serverIdentityStore,
+            tokenCipher = tokenCipher,
+            json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true },
+            externalScope = CoroutineScope(UnconfinedTestDispatcher(testScheduler)),
+            timeSource = FakeTimeSource(),
+        )
+
+        val result = repo.restoreSession()
+
+        // Bounded gate: the restored session stands exactly as a successful
+        // validation would leave it — no teardown before the gate released.
+        assertTrue(result.isSuccess)
+        coVerify { apiClient.setUser(any()) }
+        coVerify(exactly = 0) { apiClient.disconnect() }
+
+        // The deferred validation lands off the gate and the 401 teardown
+        // fires through the same path an on-gate 401 uses.
+        advanceUntilIdle()
+        coVerify { apiClient.disconnect() }
+        coVerify { serverIdentityStore.clearSession() }
     }
 
     @Test
@@ -517,6 +580,7 @@ class AuthRepositoryImplTest {
             tokenCipher = tokenCipher,
             json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true },
             externalScope = CoroutineScope(UnconfinedTestDispatcher(testScheduler)),
+            timeSource = FakeTimeSource(),
         )
 
         val states = mutableListOf<Boolean>()
@@ -850,4 +914,15 @@ class AuthRepositoryImplTest {
 
     private suspend fun <T> kotlinx.coroutines.flow.Flow<T>.first(): T? =
         firstOrNull()
+
+    /**
+     * Controllable [TimeSource] — same shape as the fake in
+     * LyricsRepositoryImplTest (core:data deliberately hosts no shared test
+     * fakes; see TimeSource's KDoc).
+     */
+    private class FakeTimeSource(var nowMs: Long = 1_000L) : TimeSource {
+        override fun nowEpochMillis(): Long = nowMs
+        override fun nowElapsedRealtimeMillis(): Long = nowMs
+        override fun today(zone: ZoneId): LocalDate = LocalDate.of(2026, 1, 1)
+    }
 }
