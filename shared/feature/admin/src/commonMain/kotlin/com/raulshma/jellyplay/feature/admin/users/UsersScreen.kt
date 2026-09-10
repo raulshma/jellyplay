@@ -169,7 +169,7 @@ fun UsersScreen(
                                 ),
                                 verticalArrangement = Arrangement.spacedBy(6.dp),
                             ) {
-                                itemsIndexed(items = state.users, key = { _, u -> u.id }) { _, user ->
+                                itemsIndexed(items = state.users, key = { _, u -> u.id }, contentType = { _, _ -> "user" }) { _, user ->
                                     // Pure URL assembly over (id, tag) — never changes mid-row.
                                     val avatarUrl = remember(user.id, user.primaryImageTag) {
                                         viewModel.avatarUrl(user)

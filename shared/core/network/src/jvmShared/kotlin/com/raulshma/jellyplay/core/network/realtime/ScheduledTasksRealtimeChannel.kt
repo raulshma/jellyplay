@@ -80,8 +80,17 @@ class ScheduledTasksRealtimeChannel(
         }
 
         // If the socket wasn't connected when we started, wait for it then subscribe.
+        // Tracked like the two collector jobs above: this runs on [scope],
+        // NOT the flow's own context, so without the awaitClose cancel a
+        // collector that goes away while the socket is still down would leak
+        // it — the job would later send `ScheduledTasksInfoStart` with no
+        // owner left to send the matching Stop (awaitClose's sendStop has
+        // already run). No-op guard needed on sendStart itself: cancelling
+        // before it runs is the fix; if it already ran, the Stop in awaitClose
+        // balances it.
+        var deferredStartJob: Job? = null
         if (!lastConnected) {
-            scope.launch {
+            deferredStartJob = scope.launch {
                 // Suspend until the socket reports connected, then subscribe.
                 webSocketClient.isConnected.first { it }
                 sendStart()
@@ -91,6 +100,7 @@ class ScheduledTasksRealtimeChannel(
         awaitClose {
             connectionJob.cancel()
             eventsJob.cancel()
+            deferredStartJob?.cancel()
             sendStop()
         }
     }

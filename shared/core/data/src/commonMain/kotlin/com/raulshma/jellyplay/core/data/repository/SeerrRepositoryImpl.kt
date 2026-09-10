@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.data.repository
 
 import com.raulshma.jellyplay.core.data.cache.getOrFetchTyped
+import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.session.SessionIdentityProvider
 import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
@@ -12,6 +13,7 @@ import com.raulshma.jellyplay.core.network.api.TmdbApiClient
 import com.raulshma.jellyplay.core.network.seerr.SeerrApiClient
 import kotlin.concurrent.Volatile
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -19,8 +21,22 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
-/** Cadence of the Seerr pending-request / current-user background poll. */
+/**
+ * Cadence of the Seerr pending-request / current-user background poll while
+ * a UI is actively collecting [SeerrRepositoryImpl.pendingRequestCount] —
+ * the badge surfaces collect lifecycle-aware, so a collector attached is the
+ * poll-loop equivalent of HomeRefresher's "app in foreground".
+ */
 private const val POLL_INTERVAL_MS = 60_000L
+
+/**
+ * Idle cadence for the same poll while NO collector watches the badge flow
+ * (app backgrounded, or polling kept alive by a consumer with no badge on
+ * screen): 15 minutes, matching HomeRefresher's
+ * `HomeFreshness.REFRESH_INTERVAL_BACKGROUND_MS` discipline — the singleton
+ * keeps the shared count warm, but at 1/15th of the foreground rate.
+ */
+private const val POLL_INTERVAL_IDLE_MS = 15 * 60_000L
 
 /** The one failure message every session-bound member reports when Seerr is unconfigured. */
 private const val NOT_CONFIGURED_MESSAGE = "Seerr not configured"
@@ -46,6 +62,16 @@ class SeerrRepositoryImpl(
      * `ServerIdentityStore`; never cancelled for this singleton).
      */
     private val cacheScope: CoroutineScope,
+    /**
+     * Offline gate for the background poll — the SAME signal
+     * `HomeRefresher`'s periodic loop consults (`isOffline` skip), resolved
+     * by the jvmShared DI module from the platform OfflineModeManager
+     * binding. Nullable because the promoted commonMain constructor must
+     * also serve the wasmJs slice (see `dataWasmModule`), which binds no
+     * OfflineModeManager — web polling runs ungated and leans on browser
+     * background-timer throttling instead.
+     */
+    private val offlineModeManager: OfflineModeManager? = null,
 ) : SeerrRepository {
 
     // Both fields carried @Volatile on the pre-15B JVM sources; the promotion
@@ -395,6 +421,12 @@ class SeerrRepositoryImpl(
     override suspend fun getRequestCount(): Result<SeerrRequestCount> =
         withSeerrSession { url, credentials ->
             seerrApiClient.getRequestCount(url, credentials)
+        }.also { result ->
+            // Stamp the shared badge StateFlow on success — the same
+            // contract as getCurrentUser below — so ONE-SHOT callers
+            // (Settings' badge refresh, RequestsViewModel's init) refresh
+            // every surface watching the count, not just their own result.
+            result.getOrNull()?.let { _pendingRequestCount.value = it.pending }
         }
 
     override suspend fun getCurrentUser(): Result<SeerrCurrentUser> =
@@ -411,22 +443,50 @@ class SeerrRepositoryImpl(
     private var pollingJob: kotlinx.coroutines.Job? = null
 
     /**
-     * Starts a 60s background poll that refreshes [pendingRequestCount] and
-     * [currentUser]. No-op if already running. Safe to call repeatedly.
+     * Pairing refcount for [startPolling]/[stopPolling]: the poll loop stops
+     * only when the LAST starter has stopped. A plain var on purpose — it
+     * follows [pollingJob]'s access discipline (touched only from the VM
+     * init/onCleared main-dispatcher call sites, never from inside the loop).
+     */
+    private var pollingConsumers = 0
+
+    /**
+     * Starts the background poll that refreshes [pendingRequestCount] and
+     * [currentUser]. No-op for the loop if already running. Safe to call
+     * repeatedly; [stopPolling] is refcounted against these calls (see
+     * [pollingConsumers]).
      *
      * Polling is intentionally NOT auto-started from `init {}` — the
      * repository is a Singleton instantiated at app start, so auto-starting
-     * would wake up every 60s for users who have never configured Seerr.
+     * would wake up on a timer for users who have never configured Seerr.
      * Callers (currently [com.raulshma.jellyplay.feature.requests.RequestsViewModel])
      * start polling when their UI is entered and stop it when cleared.
+     * Settings' Activity Insights badge does NOT poll — it refetches once
+     * per badge activation via [getRequestCount] (which stamps
+     * [pendingRequestCount]) instead of keeping this loop alive.
      *
      * The timer cadence is decoupled from the preferences collector: a `delay`
      * inside `collect {}` would serialize pref emissions and fire back-to-back
      * network calls after a burst of unrelated Seerr-pref edits, instead of
      * coalescing. The latest enabled flag is tracked reactively and the poll
-     * loop runs on its own fixed cadence gated on that flag.
+     * loop runs on its own cadence gated on that flag.
+     *
+     * Cadence + offline gating mirror HomeRefresher's periodic-loop
+     * discipline (60s foreground / 15min background / skip offline), but the
+     * repository layer has no lifecycle owner — HomeRefresher is told
+     * foreground/background by its VM's start/stop, which no core consumer
+     * can hand us here. The foreground signal is therefore flow-driven: the
+     * badge StateFlow's [MutableStateFlow.subscriptionCount]. Badge surfaces
+     * collect lifecycle-aware (`collectAsStateWithLifecycle` through a
+     * `WhileSubscribed` chain), so an attached collector means a UI is on
+     * screen and the app is foregrounded, and backgrounding drops the
+     * subscription — the exact 60s/15min switch without a new lifecycle
+     * abstraction. The offline skip consults the injected
+     * [OfflineModeManager] (HomeRefresher's gate) inside [doPoll].
      */
+    @OptIn(ExperimentalCoroutinesApi::class)
     override fun startPolling() {
+        pollingConsumers++
         if (pollingJob?.isActive == true) return
         pollingJob = cacheScope.launch {
             // Track the latest enabled flag without delaying the collector.
@@ -435,13 +495,21 @@ class SeerrRepositoryImpl(
                 seerrPreferencesStore.preferences.collect { prefs ->
                     enabled = prefs.enabled
                     // Refresh immediately when Seerr is (re)enabled so the UI
-                    // doesn't wait up to 60s for the first poll.
+                    // doesn't wait a full interval for the first poll.
                     if (enabled) doPoll()
                 }
             }
             try {
                 while (isActive) {
-                    kotlinx.coroutines.delay(POLL_INTERVAL_MS)
+                    // 60s while a UI watches the badge, 15min otherwise —
+                    // re-read per tick so a collector arriving mid-delay
+                    // restores the fast cadence on the next one (same
+                    // per-iteration interval pick as HomeRefresher's
+                    // fg/bg loop).
+                    val interval =
+                        if (_pendingRequestCount.subscriptionCount.value > 0) POLL_INTERVAL_MS
+                        else POLL_INTERVAL_IDLE_MS
+                    kotlinx.coroutines.delay(interval)
                     if (enabled) doPoll()
                 }
             } finally {
@@ -451,17 +519,34 @@ class SeerrRepositoryImpl(
     }
 
     private suspend fun doPoll() {
-        getRequestCount().onSuccess { count ->
-            _pendingRequestCount.value = count.pending
-        }
+        // Skip while the device is offline — the same gate HomeRefresher's
+        // periodic loop applies (`if (offlineModeManager.isOffline)
+        // continue`), placed here rather than in the loop so the prefs
+        // collector's immediate-on-enable poll is gated too. Null manager =
+        // the wasmJs slice, which binds no OfflineModeManager.
+        if (offlineModeManager?.isOffline == true) return
+        // getRequestCount stamps _pendingRequestCount on success (its own
+        // .also) — the badge StateFlow is the poll's output channel.
+        getRequestCount()
         if (_currentUser.value == null) {
             getCurrentUser()
         }
     }
 
+    /**
+     * Stops the poll loop started by [startPolling] — but only once every
+     * starter has stopped: the loop is shared singleton state, so one
+     * surface's teardown (e.g. a ViewModel's onCleared) must not cut the
+     * poll out from under surfaces still using it. A stop without a
+     * matching start is a no-op (the count floors at zero).
+     */
     override fun stopPolling() {
-        pollingJob?.cancel()
-        pollingJob = null
+        if (pollingConsumers == 0) return
+        pollingConsumers--
+        if (pollingConsumers == 0) {
+            pollingJob?.cancel()
+            pollingJob = null
+        }
     }
 
     /**

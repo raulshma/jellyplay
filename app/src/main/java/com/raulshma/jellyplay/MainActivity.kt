@@ -65,13 +65,24 @@ class MainActivity : FragmentActivity() {
     // Cross-cutting shell infrastructure, resolved from the Koin container
     // (wave 8B — Hilt removal) instead of re-exported through MainViewModel —
     // the ViewModel exposes only the signals it owns plus the coordinator
-    // seam. Memoizing lazies preserve the old deferred field-inject timing.
-    private val userMessageBus: UserMessageBus by lazy { KoinPlatform.getKoin()!!.get() }
+    // seam. STA-12 (2026-09 perf audit): the four ShellInfra-bundled members
+    // became Lazy PROVIDERS (mirroring audioPlaybackManagerLazy below) so
+    // MainActivity.onCreate constructs none of them — JellyPlayApp resolves
+    // the bus/network pair at their composition branches and the
+    // remote-control pair inside their post-frame collection effects,
+    // keeping NetworkMonitor's connectivity-callback registration and the
+    // remote-control objects off the cold-start critical path (and out of
+    // auth/onboarding-only sessions entirely). Memoizing lazies preserve the
+    // old deferred field-inject timing.
+    private val userMessageBusLazy: kotlin.Lazy<UserMessageBus> =
+        lazy { KoinPlatform.getKoin()!!.get() }
     private val pinRateLimiter: PinRateLimiter by lazy { KoinPlatform.getKoin()!!.get() }
     private val securityStore: SecurityStore by lazy { KoinPlatform.getKoin()!!.get() }
     private val networkMonitor: NetworkMonitor by lazy { KoinPlatform.getKoin()!!.get() }
-    private val remoteNavigationBridge: RemoteNavigationBridge by lazy { KoinPlatform.getKoin()!!.get() }
-    private val remoteControlReceiver: RemoteControlReceiver by lazy { KoinPlatform.getKoin()!!.get() }
+    private val remoteNavigationBridgeLazy: kotlin.Lazy<RemoteNavigationBridge> =
+        lazy { KoinPlatform.getKoin()!!.get() }
+    private val remoteControlReceiverLazy: kotlin.Lazy<RemoteControlReceiver> =
+        lazy { KoinPlatform.getKoin()!!.get() }
     // Lazy deferral is load-bearing: the playback engine (AudioPlaybackManager
     // and its 14-dep graph) stays unbuilt for auth/onboarding-only sessions —
     // resolved only inside ShellInfra's authenticated branch (JellyPlayApp).
@@ -178,15 +189,16 @@ class MainActivity : FragmentActivity() {
         handleIncomingIntent(intent)
 
         // Bundled once here so the shell host's five cross-cutting services
-        // travel to JellyPlayApp → MainContent as one value; the
-        // AudioPlaybackManager stays lazy inside it (resolved only in the
-        // authenticated branch).
+        // travel to JellyPlayApp → MainContent as one value. STA-12: all
+        // five are lazy providers — nothing below resolves any Koin single;
+        // each `.value` fires at the consumer's first real use (see
+        // ShellInfra's KDoc).
         val shellInfra = com.raulshma.jellyplay.shell.ShellInfra(
-            userMessageBus = userMessageBus,
-            networkStatus = networkMonitor.networkStatus,
+            userMessageBusLazy = userMessageBusLazy,
+            networkStatusLazy = lazy { networkMonitor.networkStatus },
             audioPlaybackManagerLazy = audioPlaybackManagerLazy,
-            remoteNavigationBridge = remoteNavigationBridge,
-            remoteControlReceiver = remoteControlReceiver,
+            remoteNavigationBridgeLazy = remoteNavigationBridgeLazy,
+            remoteControlReceiverLazy = remoteControlReceiverLazy,
         )
 
         // Pre-Android 13 per-app language: observe the saved language and apply

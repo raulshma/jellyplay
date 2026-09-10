@@ -138,7 +138,16 @@ interface SeerrRepository {
      * and [currentUser]. Consumers (e.g. RequestsViewModel) should call
      * [startPolling] when their UI is active and [stopPolling] when cleared to
      * avoid background battery drain for users who never enter the requests
-     * screen. Both methods are idempotent.
+     * screen.
+     *
+     * Calls are refcounted per starter: each [startPolling] must be paired
+     * with a [stopPolling], and the shared loop stops only when the LAST
+     * starter has stopped — one surface's teardown cannot cut polling out
+     * from under another that is still active. An unpaired [stopPolling] is
+     * a no-op. The loop also self-gates: it polls at the fast cadence only
+     * while a UI collector watches [pendingRequestCount] (lifecycle-aware
+     * collection), slows to an idle cadence otherwise, and skips polls
+     * while the device is offline.
      */
     fun startPolling()
     fun stopPolling()

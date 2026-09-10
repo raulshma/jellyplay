@@ -1123,7 +1123,7 @@ fun SettingsScreen(
                                 SearchResultsColumn(
                                     onBack = { dismissSearchAndRefocus() }
                                 ) {
-                                    itemsIndexed(displayItems, key = { _, item -> item.id }) { index, item ->
+                                    itemsIndexed(displayItems, key = { _, item -> item.id }, contentType = { _, _ -> "searchResult" }) { index, item ->
                                         SettingsSearchResultRow(
                                             item = item,
                                             query = searchPanel.searchQuery,
@@ -1229,7 +1229,7 @@ fun SettingsScreen(
                                             }
                                         }
                                     }
-                                    itemsIndexed(recentItems, key = { _, item -> item.id }) { index, item ->
+                                    itemsIndexed(recentItems, key = { _, item -> item.id }, contentType = { _, _ -> "recentResult" }) { index, item ->
                                         SettingsSearchResultRow(
                                             item = item,
                                             query = "",

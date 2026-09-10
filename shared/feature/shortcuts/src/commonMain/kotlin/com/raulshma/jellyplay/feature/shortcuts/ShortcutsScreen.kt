@@ -360,7 +360,7 @@ fun ShortcutsScreen(
 
                         if (numColumns > 1) {
                             val chunks = shortcuts.chunked(numColumns)
-                            itemsIndexed(chunks, key = { index, _ -> "chunk_${category.name}_$index" }) { _, chunk ->
+                            itemsIndexed(chunks, key = { index, _ -> "chunk_${category.name}_$index" }, contentType = { _, _ -> "shortcutChunk" }) { _, chunk ->
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()

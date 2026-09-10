@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.downloads
 
+import com.raulshma.jellyplay.core.data.repository.DownloadProgress
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.sync.OfflineSyncManager
@@ -19,6 +20,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -47,6 +49,9 @@ class DownloadsViewModelTest {
     /** Backing flow behind getAllDownloads so tests can push list changes. */
     private lateinit var downloadsFlow: MutableStateFlow<List<DownloadItem>>
 
+    /** Backing flow behind getActiveDownloadProgress so tests can push ticks. */
+    private lateinit var progressFlow: MutableStateFlow<Map<String, DownloadProgress>>
+
     @BeforeTest
     fun setUp() {
         Dispatchers.setMain(mainDispatcher)
@@ -54,7 +59,9 @@ class DownloadsViewModelTest {
         offlineRepository = mockk(relaxed = true)
         syncManager = mockk(relaxed = true)
         downloadsFlow = MutableStateFlow(emptyList())
+        progressFlow = MutableStateFlow(emptyMap())
         every { downloadRepository.getAllDownloads() } returns downloadsFlow
+        every { downloadRepository.getActiveDownloadProgress() } returns progressFlow
         // forceResyncCandidates() reads the suspend snapshot; answer with the
         // flow's current value so pushItems drives both paths.
         coEvery { downloadRepository.getAllDownloadsSnapshot() } answers { downloadsFlow.value }
@@ -80,6 +87,10 @@ class DownloadsViewModelTest {
 
     @Test
     fun init_collects_downloads_and_sums_storage_bytes() = runTest(mainDispatcher) {
+        // totalStorageBytes is a WhileSubscribed stateIn flow (collected only
+        // by the screen's storage-header leaf) — warm it so the settled .value
+        // is observable here.
+        backgroundScope.launch { viewModel.totalStorageBytes.collect { /* warm */ } }
         pushItems(
             listOf(
                 item("d1", downloadedBytes = 100, totalBytes = 200),
@@ -90,9 +101,55 @@ class DownloadsViewModelTest {
 
         val state = viewModel.uiState.value
         assertEquals(2, state.downloads.size)
-        assertEquals(150L, state.totalStorageBytes)
+        assertEquals(150L, viewModel.totalStorageBytes.value)
         assertFalse(state.isLoading)
         assertNull(state.error)
+    }
+
+    // ── progress/structure split (per-tick bytes are not structural) ──────
+
+    @Test
+    fun progress_tick_updates_live_progress_but_not_the_structural_list() = runTest(mainDispatcher) {
+        backgroundScope.launch { viewModel.progressById.collect { /* warm */ } }
+        backgroundScope.launch { viewModel.totalStorageBytes.collect { /* warm */ } }
+        val downloading = item("d1", downloadedBytes = 100, totalBytes = 200, status = DownloadStatus.DOWNLOADING)
+        pushItems(listOf(downloading))
+        advanceUntilIdle()
+        assertEquals(100L, viewModel.uiState.value.downloads.single().downloadedBytes)
+
+        // 2 s tick: same ids in order, same statuses, bytes moved — the list
+        // emission is suppressed downstream of the change filter, and the
+        // moving values surface through progressById instead.
+        pushItems(listOf(downloading.copy(downloadedBytes = 180)))
+        progressFlow.value = mapOf("d1" to DownloadProgress("d1", 180, 40))
+        advanceUntilIdle()
+
+        assertEquals(100L, viewModel.uiState.value.downloads.single().downloadedBytes)
+        assertEquals(180L, viewModel.progressById.value["d1"]?.downloadedBytes)
+        assertEquals(40L, viewModel.progressById.value["d1"]?.speedBytesPerSec)
+        // The live total still follows the tick (structural bytes + live override).
+        assertEquals(180L, viewModel.totalStorageBytes.value)
+    }
+
+    @Test
+    fun status_change_re_emits_the_structural_list_and_clears_the_progress_entry() = runTest(mainDispatcher) {
+        backgroundScope.launch { viewModel.progressById.collect { /* warm */ } }
+        backgroundScope.launch { viewModel.totalStorageBytes.collect { /* warm */ } }
+        pushItems(listOf(item("d1", downloadedBytes = 200, totalBytes = 200, status = DownloadStatus.DOWNLOADING)))
+        progressFlow.value = mapOf("d1" to DownloadProgress("d1", 150, 40))
+        advanceUntilIdle()
+
+        // Completion: the row leaves the in-flight projection and the status
+        // flip re-emits the list with the row's final bytes.
+        pushItems(listOf(item("d1", downloadedBytes = 200, totalBytes = 200, status = DownloadStatus.COMPLETED)))
+        progressFlow.value = emptyMap()
+        advanceUntilIdle()
+
+        val row = viewModel.uiState.value.downloads.single()
+        assertEquals(DownloadStatus.COMPLETED, row.status)
+        assertEquals(200L, row.downloadedBytes)
+        assertTrue(viewModel.progressById.value.isEmpty())
+        assertEquals(200L, viewModel.totalStorageBytes.value)
     }
 
     @Test

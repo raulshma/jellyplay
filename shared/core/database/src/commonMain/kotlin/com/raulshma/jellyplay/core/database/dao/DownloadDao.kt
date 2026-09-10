@@ -61,8 +61,10 @@ interface DownloadDao {
      * download notification group summary so it collapses to one shade item and
      * dismisses itself when the last transfer finishes.
      */
-    @Query("SELECT COUNT(*) FROM downloads WHERE status IN ('PENDING', 'QUEUED', 'DOWNLOADING')")
-    suspend fun getInFlightDownloadCount(): Int
+    @Query("SELECT COUNT(*) FROM downloads WHERE status IN (:statuses)")
+    suspend fun getInFlightDownloadCount(
+        statuses: List<String> = IN_FLIGHT_STATUSES,
+    ): Int
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertDownload(download: DownloadEntity)
@@ -135,6 +137,35 @@ interface DownloadDao {
      */
     @Query("SELECT id, downloadedBytes FROM downloads WHERE status = :status LIMIT 500")
     suspend fun getRecoveryRows(status: String): List<RecoveryRow>
+
+    /**
+     * Narrow live-progress projection of the in-flight rows (`PENDING`/
+     * `QUEUED`/`DOWNLOADING` — the [getInFlightDownloadCount] status set; the
+     * 2 s ticker writes land on `DOWNLOADING` rows, the other two statuses
+     * only sit in the window around transitions). Perf audit: Room
+     * invalidation is table-level, so every [updateProgressWithSpeed] tick
+     * re-ran the downloads screen's full 23-column [getAllDownloads] window
+     * and re-executed the whole screen per event; the screen now takes its
+     * moving bytes/speed from this 3-column projection keyed by id instead.
+     * Same narrow-projection rationale as [getRecoveryRows] / [getStatus].
+     * Served by the `status` index.
+     */
+    @Query("SELECT id, downloadedBytes, speedBytesPerSec FROM downloads WHERE status IN (:statuses)")
+    fun getActiveDownloadProgress(
+        statuses: List<String> = IN_FLIGHT_STATUSES,
+    ): Flow<List<DownloadProgressRow>>
+
+    companion object {
+        /**
+         * The in-flight status set — `PENDING`/`QUEUED`/`DOWNLOADING` only
+         * (excludes `PAUSED`, which the summary counts as resolved). One
+         * home for the set [getInFlightDownloadCount] and
+         * [getActiveDownloadProgress] filter on; every other status set in
+         * this DAO is deliberately different (e.g. [getActiveDownloadCount]
+         * also counts `PAUSED`).
+         */
+        val IN_FLIGHT_STATUSES = listOf("PENDING", "QUEUED", "DOWNLOADING")
+    }
 
     /**
      * Lightweight rows for downloads whose [status] is in [statuses], used by the
@@ -396,4 +427,15 @@ data class SeriesSizeAggregate(
     val seriesId: String,
     val totalSizeBytes: Long,
     val downloadedBytes: Long,
+)
+
+/**
+ * Narrow per-row live-progress projection for the downloads screen's hot
+ * path — see [DownloadDao.getActiveDownloadProgress]. Carries only the
+ * columns that move on a 2 s progress tick.
+ */
+data class DownloadProgressRow(
+    val id: String,
+    val downloadedBytes: Long,
+    val speedBytesPerSec: Long,
 )

@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.arrqueue
 
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.State
+import com.raulshma.jellyplay.core.concurrency.mapConcurrent
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
 import com.raulshma.jellyplay.core.model.ExperimentalFeature
@@ -21,6 +22,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.sync.Semaphore
 
 /**
  * Inline action dialog shown for a queue row. Drives a small confirmation
@@ -178,6 +180,13 @@ class ArrQueueViewModel(
         }
     }
 
+    /**
+     * Bounds [deleteSelected]'s search-again fan-out at 4 concurrent
+     * searches — same idiom as WatchProgressHeatmapViewModel's
+     * resolveSemaphore and MusicHomeViewModel's fetchSemaphore.
+     */
+    private val searchSemaphore = Semaphore(4)
+
     /** Bulk-delete every selected row. */
     fun deleteSelected(blocklist: Boolean, searchAgain: Boolean) {
         val selected = _state.value.queue.filter { it.rowKey in _state.value.selectedIds }
@@ -192,9 +201,17 @@ class ArrQueueViewModel(
             arrRepository.deleteQueueItems(selected, options)
                 .onSuccess {
                     if (searchAgain) {
-                        // Fire-and-forget per-item searches; grouped bulk
-                        // search is not exposed by the repository.
-                        selected.forEach { item ->
+                        // Per-item searches at bounded parallelism — a
+                        // 30-row selection used to pay 30 sequential
+                        // round-trips while actionInProgress blocked
+                        // further actions. mapConcurrent awaits every
+                        // search before returning, so clearSelection()
+                        // stays behind the whole fan-out exactly like the
+                        // old forEach; each searchForTmdb Result is
+                        // discarded per item (a failed search never aborts
+                        // the rest) and rows without a tmdbId are skipped.
+                        // Grouped bulk search is not exposed by the repository.
+                        searchSemaphore.mapConcurrent(selected) { item ->
                             item.tmdbId?.let { arrRepository.searchForTmdb(it, item.serverKind) }
                         }
                     }

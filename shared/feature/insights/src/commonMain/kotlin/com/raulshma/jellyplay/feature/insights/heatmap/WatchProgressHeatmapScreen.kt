@@ -889,6 +889,33 @@ private fun DayLabels(
     }
 }
 
+/**
+ * The per-day aggregates [rememberedDayItemAggregates] produces: the max
+ * watched duration per item id plus the first-wins display-name map.
+ */
+private data class DayItemAggregates(
+    val maxDurationByItem: Map<String, Long>,
+    val nameByItem: Map<String, String>,
+)
+
+/**
+ * Aggregates once per [dayInfo]: max watched duration per item plus a
+ * first-wins name map (same winner as the previous sessions.first lookup),
+ * so the row loop is O(unique items) instead of re-scanning all sessions per
+ * unique item on every recomposition. Shared by the touch and TV variants
+ * of [DayDetailSheet].
+ */
+@Composable
+private fun rememberedDayItemAggregates(dayInfo: SelectedDayInfo): DayItemAggregates =
+    remember(dayInfo) {
+        val maxDurations = dayInfo.sessions
+            .groupBy { it.itemId }
+            .mapValues { (_, sessions) -> sessions.maxOf { it.duration } }
+        val names = HashMap<String, String>(maxDurations.size)
+        dayInfo.sessions.forEach { names.getOrPut(it.itemId) { it.name } }
+        DayItemAggregates(maxDurations, names)
+    }
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun DayDetailSheet(
@@ -936,15 +963,11 @@ private fun DayDetailSheet(
 
                 Spacer(Modifier.height(12.dp))
 
-                val uniqueItems = remember(dayInfo) {
-                    dayInfo.sessions
-                        .groupBy { it.itemId }
-                        .mapValues { (_, sessions) -> sessions.maxOf { it.duration } }
-                }
+                val (maxDurationByItem, nameByItem) = rememberedDayItemAggregates(dayInfo)
 
-                uniqueItems.forEach { (itemId, durationTicks) ->
+                maxDurationByItem.forEach { (itemId, durationTicks) ->
                     val resolved = dayInfo.resolvedItems[itemId]
-                    val name = resolved?.name ?: dayInfo.sessions.first { it.itemId == itemId }.name
+                    val name = resolved?.name ?: nameByItem.getValue(itemId)
                     val imageUrl = resolved?.imageUrl
                     val posMinutes = durationTicks / 60_000_000_000L
 
@@ -1047,15 +1070,11 @@ private fun DayDetailSheet(
 
                 Spacer(Modifier.height(12.dp))
 
-                val uniqueItems = remember(dayInfo) {
-                    dayInfo.sessions
-                        .groupBy { it.itemId }
-                        .mapValues { (_, sessions) -> sessions.maxOf { it.duration } }
-                }
+                val (maxDurationByItem, nameByItem) = rememberedDayItemAggregates(dayInfo)
 
-                uniqueItems.forEach { (itemId, durationTicks) ->
+                maxDurationByItem.forEach { (itemId, durationTicks) ->
                     val resolved = dayInfo.resolvedItems[itemId]
-                    val name = resolved?.name ?: dayInfo.sessions.first { it.itemId == itemId }.name
+                    val name = resolved?.name ?: nameByItem.getValue(itemId)
                     val imageUrl = resolved?.imageUrl
                     val posMinutes = durationTicks / 60_000_000_000L
 

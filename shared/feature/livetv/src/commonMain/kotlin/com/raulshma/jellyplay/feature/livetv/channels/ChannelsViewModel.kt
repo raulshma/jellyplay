@@ -55,10 +55,13 @@ class ChannelsViewModel(
                 fetch = { mediaRepository.getLiveTvChannels(limit = 100) },
                 onSuccess = { channels ->
                     val favorites = appRuntimeStateStore.state.value.favoriteChannels
+                    // Stable partition, not an O(n log n) sort: favorites lead
+                    // in server order, then the rest — identical output to the
+                    // old (stable) sortedByDescending { it.id in favorites }.
                     val sorted = if (favorites.isEmpty()) {
                         channels
                     } else {
-                        channels.sortedByDescending { it.id in favorites }
+                        channels.partition { it.id in favorites }.let { (fav, rest) -> fav + rest }
                     }
                     _uiState.update { it.copy(channels = sorted, isLoading = false) }
                 },
@@ -74,10 +77,12 @@ class ChannelsViewModel(
             appRuntimeStateStore.setFavoriteChannels(updated)
             val favorites = updated
             _uiState.update { state ->
+                // Same stable partition as loadChannels — identical output to
+                // the old stable sort, O(n) instead of O(n log n).
                 val sorted = if (favorites.isEmpty()) {
                     state.channels
                 } else {
-                    state.channels.sortedByDescending { it.id in favorites }
+                    state.channels.partition { it.id in favorites }.let { (fav, rest) -> fav + rest }
                 }
                 state.copy(channels = sorted)
             }

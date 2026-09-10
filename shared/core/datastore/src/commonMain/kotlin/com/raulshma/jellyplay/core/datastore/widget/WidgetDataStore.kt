@@ -124,12 +124,6 @@ class WidgetDataStore constructor(
     fun continueWatchingSnapshot(): List<MediaItem> =
         snapshotOrFallback(continueWatchingLoaded, continueWatching)
 
-    fun libraryWidgetItemsSnapshot(): List<LibraryWidgetItem> =
-        snapshotOrFallback(libraryItemsLoaded, libraryWidgetItems)
-
-    fun seerrWidgetItemsSnapshot(): List<SeerrWidgetItem> =
-        snapshotOrFallback(seerrItemsLoaded, seerrWidgetItems)
-
     fun getWidgetConfigForId(appWidgetId: Int): Flow<WidgetConfig> =
         sharedPrefs.map { prefs ->
             val perWidgetConfig = prefs[Keys.WIDGET_CONFIGS]?.let { configsJson ->

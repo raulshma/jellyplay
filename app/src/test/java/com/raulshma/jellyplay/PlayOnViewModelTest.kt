@@ -156,7 +156,7 @@ class PlayOnViewModelTest {
         assertEquals("", vm.uiState.value.artist)
     }
 
-    // Declared delta (2026-09-08): this test replaces
+    // Declared delta: this test replaces
     // `canFling stays at its initial false because nothing subscribes it
     // (likely bug)` — the dead WhileSubscribed seam it pinned is deleted
     // (see PlayOnUiState's KDoc); the fling gate it gestured at is pinned

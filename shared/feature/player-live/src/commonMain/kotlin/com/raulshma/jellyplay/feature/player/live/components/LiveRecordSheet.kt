@@ -193,7 +193,7 @@ fun LiveRecordSheet(
 
             if (isTv) {
                 LazyColumn(modifier = Modifier.verticalWrapAround()) {
-                    itemsIndexed(actions, key = { _, action -> action.key }) { index, action ->
+                    itemsIndexed(actions, key = { _, action -> action.key }, contentType = { _, _ -> "recordAction" }) { index, action ->
                         val actionFocusState = rememberTvFocusState(focusedScale = 1.02f)
                         val shape = ShapeCache.smooth8
                         val isFirst = index == 0

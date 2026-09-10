@@ -2014,7 +2014,16 @@ byte-identical factory chassis — snapshot read → poster preload → dims
 refresh → deep-link `getViewAt` — plus refresh-scope, height thresholds
 and the grid PendingIntent wiring (`WidgetGridFactory`, provider bases,
 one generic persist; the blank-widget version-bump bug class is fixed in
-one copy). The 2026-09-07 review completed the straggler family:
+one copy). STA-11 (2026-09 perf audit) narrowed the bind path to
+memory-only reads — the store's eagerly-warmed StateFlow value and
+`WidgetImageLoader`'s poster cache — with a new `remoteAdapterViewId`
+ctor param and an async warmup-repaint tail (`scheduleWarmupRepaint`,
+one pass per data generation) that warms a cold snapshot/uncached
+posters off the bind path and repaints via
+`notifyAppWidgetViewDataChanged`; `WidgetDataStore` keeps only
+`continueWatchingSnapshot` (the broadcaster's read) — the Library/Seerr
+`*Snapshot()` accessors are deleted with the bind no longer blocking on
+them. The 2026-09-07 review completed the straggler family:
 `widgetIdsFor` / `notifyProviderDataChanged` / `updateAllProviderWidgets`
 (`WidgetProviderSkeleton.kt`, internal) own the `getInstance` →
 `ComponentName` → `getAppWidgetIds` triple the package hand-copied 12× —
@@ -2112,6 +2121,12 @@ green across every touched module.
   adopts the majority post-transaction prune and the reference-scanned cast
   prune (the old skip leaked orphaned cast image files — the scan only
   deletes images no surviving row references; see the method's KDoc).
+  2026-09-10 perf audit: the reference check is now a per-candidate
+  EXISTS scan over `peopleJson` (`OfflineMediaDao.isPersonReferenced` +
+  `personReferenceLikePattern`) instead of the whole-table load + JSON
+  decode of every surviving row's cast blob — semantics unchanged
+  (a person's image survives iff at least one surviving row references
+  them), `getAllPeopleJson` is deleted.
   `OfflineRepositoryImpl` now injects `TimeSource`
   for the `lastPlayedDate` stamps (two inline `OffsetDateTime.now()` gone).
   Pinned by `OfflineRepositoryDeletionTest` (three scopes, shared cast image
@@ -2610,6 +2625,76 @@ crossing modules, and the last dark test lanes opening.
   `AddToTargetActions.resolveTargetItemIds` — is converted (details now
   depends on core/concurrency); the two deliberate sites are named in the
   test KDoc. See the Concurrency section.
+
+## The 2026-09-10 perf-audit wave (STA-8..12 + review pass)
+
+Staged batch against the startup/tick hot paths; each item carries its
+STA tag in the code KDoc. Declared deltas the earlier sections now
+reference:
+
+- **STA-8 app-lock gate prewarm**: `PlayerActivity`'s persisted-security
+  `runBlocking` keeps its fail-closed timeout but the Application's IO
+  prewarm hydrates the same slice off main at process start — the common
+  case is an instant memory replay.
+- **STA-10 device-id fallback bounded + folded**: the in-definition
+  `ensureDeviceId()` fallback (both network picks) went UNBOUNDED
+  `runBlocking` → bounded (10 s) → random-UUID last resort with a
+  fire-and-forget `runCatchingRethrowingCancellation` re-ensure into the
+  application scope. The whole ladder is ONE jvmShared
+  `DeviceIdResolution.resolveDeviceId(store, scope)` — the Android/desktop
+  twins are deleted; the platforms keep only the Koin scope resolution.
+- **STA-11 widget bind memory-first**: see the App widgets section —
+  `*Snapshot()` accessors deleted except `continueWatchingSnapshot`.
+- **STA-12 ShellInfra lazy providers**: every `ShellInfra` field is a
+  lazy provider and the shell's NetworkMonitor/remote-control members
+  resolve at first composition (AUTHENTICATED branch) instead of
+  `MainActivity.onCreate` — startup no longer constructs the full shell
+  graph before the UI exists.
+- **downloads uiState split**: the 2 s transfer tick no longer
+  re-emits the downloads list; moving bytes/speed ride
+  `DownloadRepository.getActiveDownloadProgress()` (narrow 3-column
+  projection, no `status` — structural status stays on
+  `getAllDownloads`) into `DownloadsViewModel.progressById` /
+  `totalStorageBytes`, with exit-transition retention for rows the
+  structural list still shows DOWNLOADING.
+- **Play On transport narrowing**: `PlayOnUiState` lost
+  `positionMs`/`durationMs`/`volume` (the ~1 Hz WebSocket session ticks
+  recomposed the whole app shell); they are leaf-collected
+  `positionMsFlow`/`durationMsFlow`/`volumeFlow`, the video-player rule.
+  The seek and volume sliders are one shared pair of leaf components
+  (`PlayOnCastSeekSlider` / `PlayOnCastVolumeSlider`, mini bar + companion
+  screen) — the seek slider arbitrates drag-vs-server-push (local mirror
+  wins while the thumb is down, commit on release), which the old mini-bar
+  inline slider lacked (each tick overwrote the thumb mid-drag).
+- **Seerr poll refcounted + self-gating**: `startPolling`/`stopPolling`
+  are per-starter refcounted (last-starter-wins teardown, unpaired stop
+  is a no-op — the old blanket "idempotent" contract is gone), the loop
+  polls fast (60 s) only while a collector watches
+  `pendingRequestCount`, idles at 15 min otherwise, and skips polls
+  offline.
+- **Offline deletion cast-prune**: per-candidate EXISTS reference scan —
+  see the OfflineDeletionCore entry in the 2026-09-07 wave.
+- **Review pass amendments**: `DownloadProgress.status` deleted
+  (speculative — no caller), the heatmap day-sheet aggregation is one
+  `rememberedDayItemAggregates` (touch + TV variants), CI gains the
+  baseline-profile generation and startup-benchmark lanes.
+- **Review-pass sweep, same batch** (no STA tag — each rides the wave's
+  hot-path theme): DB schema 52→53 gains the covering index
+  `offline_media(mediaType, seriesId, seasonNumber, episodeNumber)` for
+  `getDownloadedEpisodes`'s WHERE + ORDER BY (SQLite was sorting up to
+  2000 joined rows per re-emission; `MIGRATION_52_53`);
+  `JellyfinWebSocketClient`'s background reconnect backoff is exponential
+  (60 s doubling to 15 min, reset on connect) instead of a flat retry;
+  `getRequestCount()` now stamps `pendingRequestCount` on one-shot calls
+  (Settings' badge refreshes via an `onSubscription` refetch instead of
+  holding the poll loop); the heatmap's day-detail resolution fans out at
+  `Semaphore(4)` parallelism; `EpgScreen`'s 30 s now-tick is hoisted to a
+  leaf `NowIndicatorLine` so the grid doesn't recompose; Lazy lists gain
+  `contentType` lambdas (~8 screens); `ArrQueueViewModel`'s search fan-out
+  is bounded, `ChannelsViewModel` partitions favorites (stable, not an
+  O(n log n) sort), `ScheduledTasksRealtimeChannel` cancels its
+  deferred-start job on stop (leak); stale "Declared delta" date stamps
+  stripped from older KDoc.
 
 ## Rejected designs
 

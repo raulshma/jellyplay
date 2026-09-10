@@ -65,6 +65,7 @@ class DownloadsViewModelGlobalActionBoundaryTest {
         syncManager = mockk(relaxed = true)
         downloadsFlow = MutableStateFlow(emptyList())
         every { downloadRepository.getAllDownloads() } returns downloadsFlow
+        every { downloadRepository.getActiveDownloadProgress() } returns MutableStateFlow(emptyMap())
         coEvery { downloadRepository.getAllDownloadsSnapshot() } answers { downloadsFlow.value }
         every { syncManager.batchProgress } returns MutableStateFlow(ResyncBatchProgress())
         every { offlineRepository.getUpdatesCount() } returns MutableStateFlow(0)

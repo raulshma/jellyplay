@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.database.dao.DownloadDao
 import com.raulshma.jellyplay.core.database.dao.OfflineMediaDao
 import com.raulshma.jellyplay.core.database.dao.PlaybackStateDao
 import com.raulshma.jellyplay.core.database.dao.SyncBaselineDao
+import com.raulshma.jellyplay.core.database.dao.personReferenceLikePattern
 import com.raulshma.jellyplay.core.database.entity.DownloadEntity
 import com.raulshma.jellyplay.core.database.entity.OfflineMediaEntity
 import java.io.File
@@ -166,34 +167,29 @@ internal class OfflineDeletionCore(
      * can appear across many movies/episodes and the `personId`-keyed image file
      * serves all of them, so a file is deleted only when its person is no longer
      * referenced anywhere. **Must be called after the deleted rows are removed
-     * from the DB** so [offlineMediaDao.getAllPeopleJson] reflects only surviving
-     * references — otherwise the just-deleted rows would still count as references
-     * and nothing would be pruned.
+     * from the DB** so the per-candidate reference check reflects only surviving
+     * rows — otherwise the just-deleted rows would still count as references and
+     * nothing would be pruned.
+     *
+     * Reference checking is a per-candidate existence scan over `peopleJson`
+     * ([OfflineMediaDao.isPersonReferenced]), not the former whole-table load +
+     * JSON decode of every surviving row's multi-KB cast blob: the candidates
+     * (≤ dozens — the union of the deleted rows' cast) are already known here,
+     * so each one needs only a "does any surviving blob mention this person"
+     * answer, and the EXISTS short-circuits at the first surviving reference.
+     * Semantics are unchanged: a person's image survives iff at least one
+     * surviving row references them; empty candidates (or no dirs) run zero
+     * queries.
      */
     private suspend fun cleanupOrphanedCastArtwork(
         parentDirs: List<File>,
         candidateCastIds: List<String>,
     ) {
         if (parentDirs.isEmpty() || candidateCastIds.isEmpty()) return
-        val stillReferenced = referencedPersonIds()
-        val orphans = candidateCastIds.filter { it !in stillReferenced }
+        val orphans = candidateCastIds.filter { candidate ->
+            !offlineMediaDao.isPersonReferenced(personReferenceLikePattern(candidate))
+        }
         if (orphans.isEmpty()) return
         parentDirs.forEach { DownloadArtifacts.cleanupCastArtwork(it, orphans) }
-    }
-
-    /**
-     * Person ids that still appear in any surviving offline row's `peopleJson`.
-     * A coarse scan over the decoded cast is sufficient: Jellyfin person ids are
-     * stable UUIDs, so membership means the person is still referenced and their
-     * shared image file must be kept. Reflects the post-delete state because it
-     * is called after the deletion transaction commits.
-     */
-    private suspend fun referencedPersonIds(): Set<String> {
-        val rows = offlineMediaDao.getAllPeopleJson()
-        return buildSet {
-            for (row in rows) {
-                for (person in decodeCast(row.peopleJson)) add(person.id)
-            }
-        }
     }
 }

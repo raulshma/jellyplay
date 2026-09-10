@@ -365,6 +365,12 @@ class PlayerActivity : FragmentActivity() {
         // lands — warm-process callers return from the cached snapshot
         // without disk IO — bounded by a timeout so a pathological read can
         // never wedge cold start (timeout handling: fail CLOSED, see below).
+        // STA-8 (2026-09 perf audit): the Application's IO prewarm hydrates
+        // this same persisted slice off main at process start, so in the
+        // common case the read below is an instant memory replay — the
+        // runBlocking + timeout stays exactly as the fail-closed safety net
+        // for the cold-start race the prewarm cannot fully close (this
+        // activity can beat the prewarm coroutine to the CPU).
         val persisted = runBlocking {
             withTimeoutOrNull(APP_LOCK_GATE_READ_TIMEOUT_MS) {
                 securityStore.firstPersistedSecurity()

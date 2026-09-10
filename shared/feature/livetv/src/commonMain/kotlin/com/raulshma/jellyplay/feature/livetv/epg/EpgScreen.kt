@@ -30,11 +30,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import com.raulshma.jellyplay.core.ui.components.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -152,7 +152,7 @@ fun EpgScreen(
                 ) {
                     EpgGrid(
                         gridData = viewModel.gridData,
-                        now = viewModel.now.collectAsStateWithLifecycle().value,
+                        now = viewModel.now.collectAsStateWithLifecycle(),
                         contentPadding = contentPad,
                         bottomPadding = bottomPad,
                         onProgramClick = onProgramClick,
@@ -179,7 +179,10 @@ fun EpgScreen(
 @Composable
 private fun EpgGrid(
     gridData: EpgGridData,
-    now: java.time.Instant,
+    // Held as a State (same idiom as KaraokeLyricsView's LongState) so the
+    // 30s now-tick never recomposes this grid or its channel rows: only the
+    // derived live-cell check and the now-line leaf below read it.
+    now: State<java.time.Instant>,
     contentPadding: androidx.compose.ui.unit.Dp,
     bottomPadding: androidx.compose.ui.unit.Dp,
     onProgramClick: (LiveTvProgram) -> Unit,
@@ -189,11 +192,6 @@ private fun EpgGrid(
     val density = LocalDensity.current
     val horizontalScrollState = rememberScrollState()
     val lazyListState = rememberLazyListState()
-    val nowOffsetDp = remember(now, gridData.windowStart) {
-        if (now < gridData.windowStart) 0f
-        else if (now > gridData.windowEnd) gridData.totalWidthDp
-        else now.offsetDp(gridData.windowStart)
-    }
     val channelColumnWidth = EpgGridLayout.CHANNEL_COLUMN_WIDTH
     val scope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
@@ -238,7 +236,6 @@ private fun EpgGrid(
                     totalWidthDp = gridData.totalWidthDp,
                     channelColumnWidth = channelColumnWidth,
                     horizontalScrollState = horizontalScrollState,
-                    nowOffsetDp = nowOffsetDp,
                 )
             }
 
@@ -272,34 +269,58 @@ private fun EpgGrid(
         // ── "Now" vertical indicator line ──
         // Rendered as an overlay across the full grid height, offset by the
         // current horizontal scroll so it tracks the current time accurately.
-        // The scroll value is read only inside the offset/graphicsLayer
-        // lambdas (layout/draw phase) so EPG scrolling never recomposes the
-        // grid; visibility is gated by a draw-phase alpha instead of the
-        // former composition-time range check.
-        if (now >= gridData.windowStart && now <= gridData.windowEnd) {
-            val channelColPx = with(density) { channelColumnWidth.toPx() }
-            val nowOffsetPx = with(density) { nowOffsetDp.dp.toPx() }
-            val totalWidthPx = with(density) { gridData.totalWidthDp.dp.toPx() }
-            Box(
-                modifier = Modifier
-                    .offset {
-                        val scrollPx = horizontalScrollState.value
-                        IntOffset(
-                            x = (channelColPx + nowOffsetPx - scrollPx).roundToInt(),
-                            y = 0,
-                        )
-                    }
-                    .graphicsLayer {
-                        val scrollPx = horizontalScrollState.value
-                        val xPx = channelColPx + nowOffsetPx - scrollPx
-                        alpha = if (xPx >= channelColPx && xPx <= channelColPx + totalWidthPx) 1f else 0f
-                    }
-                    .fillMaxHeight()
-                    .width(2.dp)
-                    .background(MaterialTheme.colorScheme.error.copy(alpha = 0.7f)),
-            )
-        }
+        // `now` is read only inside [NowIndicatorLine], so the 30s tick that
+        // moves the line recomposes just that leaf — never the channel rows
+        // or the time header above.
+        NowIndicatorLine(
+            now = now,
+            windowStart = gridData.windowStart,
+            windowEnd = gridData.windowEnd,
+            totalWidthDp = gridData.totalWidthDp,
+            channelColumnWidth = channelColumnWidth,
+            horizontalScrollState = horizontalScrollState,
+        )
     }
+}
+
+@Composable
+private fun NowIndicatorLine(
+    now: State<java.time.Instant>,
+    windowStart: java.time.Instant,
+    windowEnd: java.time.Instant,
+    totalWidthDp: Float,
+    channelColumnWidth: androidx.compose.ui.unit.Dp,
+    horizontalScrollState: androidx.compose.foundation.ScrollState,
+) {
+    val nowValue = now.value
+    if (nowValue < windowStart || nowValue > windowEnd) return
+
+    val density = LocalDensity.current
+    val channelColPx = with(density) { channelColumnWidth.toPx() }
+    val nowOffsetPx = with(density) { nowValue.offsetDp(windowStart).dp.toPx() }
+    val totalWidthPx = with(density) { totalWidthDp.dp.toPx() }
+    // The scroll value is read only inside the offset/graphicsLayer lambdas
+    // (layout/draw phase) so EPG scrolling never recomposes this leaf;
+    // visibility is gated by a draw-phase alpha instead of the former
+    // composition-time range check.
+    Box(
+        modifier = Modifier
+            .offset {
+                val scrollPx = horizontalScrollState.value
+                IntOffset(
+                    x = (channelColPx + nowOffsetPx - scrollPx).roundToInt(),
+                    y = 0,
+                )
+            }
+            .graphicsLayer {
+                val scrollPx = horizontalScrollState.value
+                val xPx = channelColPx + nowOffsetPx - scrollPx
+                alpha = if (xPx >= channelColPx && xPx <= channelColPx + totalWidthPx) 1f else 0f
+            }
+            .fillMaxHeight()
+            .width(2.dp)
+            .background(MaterialTheme.colorScheme.error.copy(alpha = 0.7f)),
+    )
 }
 
 @Composable
@@ -309,7 +330,6 @@ private fun TimeHeaderRow(
     totalWidthDp: Float,
     channelColumnWidth: androidx.compose.ui.unit.Dp,
     horizontalScrollState: androidx.compose.foundation.ScrollState,
-    nowOffsetDp: Float,
 ) {
     val markers = remember(windowStart, windowEnd) { buildTimeMarkers(windowStart, windowEnd) }
     Row(modifier = Modifier.fillMaxWidth()) {
@@ -357,7 +377,7 @@ private fun TimeHeaderRow(
 private fun ChannelProgramsRow(
     rowLayout: ChannelRowLayout,
     windowStart: java.time.Instant,
-    now: java.time.Instant,
+    now: State<java.time.Instant>,
     channelColumnWidth: androidx.compose.ui.unit.Dp,
     totalWidthDp: Float,
     horizontalScrollState: androidx.compose.foundation.ScrollState,
@@ -366,19 +386,19 @@ private fun ChannelProgramsRow(
     modifier: Modifier = Modifier,
 ) {
     // Derive the single currently-live program id for this row from `now`.
-    // The whole row recomposes on a 30s tick, but [ProgramCell] only re-reads
-    // this State via a derived check, so only the one cell whose live status
-    // actually flips is invalidated — not the entire program strip layout.
-    // `now` is held in a State so the derived value re-evaluates on each tick
-    // instead of capturing the parameter from the first composition.
-    val currentNow by rememberUpdatedState(now)
-    val liveProgramId by remember(rowLayout, windowStart) {
+    // `now` arrives as a State so the 30s tick never recomposes this row:
+    // the derived value re-evaluates on each tick and notifies readers only
+    // when the live program id actually flips — so just the one cell whose
+    // live status changes is invalidated, not the entire program strip.
+    // `now` is a remember key so a new State instance (e.g. VM swap) is not
+    // captured stale by the cached derived block.
+    val liveProgramId by remember(rowLayout, windowStart, now) {
         derivedStateOf {
             // The shared airing predicate over the already-parsed layout
             // Instants (non-null on both bounds → the same half-open
             // [start, end) comparison this used to inline).
             val live = rowLayout.programLayouts.firstOrNull { layout ->
-                isAiringAt(start = layout.start, end = layout.end, now = currentNow)
+                isAiringAt(start = layout.start, end = layout.end, now = now.value)
             }
             live?.program?.id
         }

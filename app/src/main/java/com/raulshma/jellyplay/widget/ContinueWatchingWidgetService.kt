@@ -27,22 +27,22 @@ import org.koin.mp.KoinPlatform
  * [WidgetDataStore.continueWatching].
  *
  * The factory is an adapter over [WidgetGridFactory], which owns the
- * lifecycle choreography (snapshot read → poster preload → dims refresh →
- * deep-link `getViewAt`); this class supplies the Continue Watching seams:
- * the snapshot read (capped by the widget's per-widget item count), the
- * progress-bar/remaining-text row decisions, and the
- * `jellyfin://media/{id}` fill-in link. It is also the one factory whose
- * poster cache is keyed by the image id from
+ * lifecycle choreography (memory-first snapshot + poster read → dims refresh
+ * → async warmup repaint — STA-11; deep-link `getViewAt`); this class
+ * supplies the Continue Watching seams: the snapshot read (capped by the
+ * widget's per-widget item count), the progress-bar/remaining-text row
+ * decisions, and the `jellyfin://media/{id}` fill-in link. It is also the
+ * one factory whose poster cache is keyed by the image id from
  * [WidgetPosterIdentity.continueWatchingPosterImageId] (the series id when the
  * row is an episode) rather than by url, so it overrides the skeleton's
  * poster pipeline instead of [WidgetGridFactory.posterUrlOf].
  *
  * `onDataSetChanged` runs on the main thread; the list is read from the
- * store's eagerly-warmed [kotlinx.coroutines.flow.StateFlow] snapshot, so
- * no DataStore disk IO blocks it once warmed. On a cold process the first
- * read pays one bounded (≤1 s) warm-up — see [WidgetDataStore]'s
- * *Snapshot() docs. The
- * [ContinueWatchingWidget] calls
+ * store's eagerly-warmed [kotlinx.coroutines.flow.StateFlow] snapshot —
+ * memory-only, no DataStore disk IO (STA-11: the former bounded ≤1 s
+ * blocking warm-up read is gone from the bind; a cold snapshot renders the
+ * empty view and the skeleton's async tail repaints once the eager flow
+ * lands). The [ContinueWatchingWidget] calls
  * [AppWidgetManager.notifyAppWidgetViewDataChanged] whenever the data
  * changes, which re-binds the factory.
  */
@@ -74,22 +74,46 @@ class ContinueWatchingWidgetService : RemoteViewsService() {
         titleViewId = R.id.cw_item_title,
         subtitleViewId = R.id.cw_item_subtitle,
         defaultHeightDp = WidgetLayoutThresholds.CONTINUE_WATCHING_DEFAULT_HEIGHT_DP,
+        remoteAdapterViewId = R.id.cw_widget_list,
     ) {
 
+        // STA-11: memory-only — the StateFlow's current value; the store's
+        // *Snapshot() accessor (bounded BLOCKING disk read when cold) is
+        // deliberately NOT taken on the bind path anymore.
         override fun snapshotProvider(): List<MediaItem> =
-            store.continueWatchingSnapshot()
-                .take(store.getWidgetConfigForIdSync(appWidgetId).continueWatchingItemCount)
+            capped(store.continueWatching.value)
+
+        /**
+         * STA-11: the async tail's cold-snapshot wait — the skeleton's
+         * [awaitWarmed] on this store's flow, capped by the same take-rule
+         * as [snapshotProvider].
+         */
+        override suspend fun awaitWarmedSnapshot(): List<MediaItem>? =
+            awaitWarmed(store.continueWatching)?.let(::capped)
+
+        // The per-widget item cap, shared by the bind read and the warm tail.
+        private fun capped(items: List<MediaItem>): List<MediaItem> =
+            items.take(store.getWidgetConfigForIdSync(appWidgetId).continueWatchingItemCount)
+
+        // The (imageId → url) rows both poster paths derive — the preload's
+        // fetch and the bind's cachedPoster lookup.
+        private fun posterEntries(items: List<MediaItem>): List<ContinueWatchingPosterEntry> =
+            items.map { WidgetImageLoader.continueWatchingPosterEntry(it, playbackRepository) }
 
         // The cache is keyed by the continue-watching image id (the series id
         // when the row is an episode — the same key [posterFor] looks up), so
         // the preload maps url → bitmap back into (imageId → bitmap).
         override suspend fun preloadPosters(items: List<MediaItem>): Map<String, Bitmap?> {
-            val entries = items.map { item ->
-                WidgetImageLoader.continueWatchingPosterEntry(item, playbackRepository)
-            }
+            val entries = posterEntries(items)
             val urlToBitmap = WidgetImageLoader.fetchPosters(context, entries.map { it.url })
             return entries.associate { it.imageId to urlToBitmap[it.url] }
         }
+
+        // STA-11: the bind's memory-only poster read — same entries as
+        // [preloadPosters], resolved against WidgetImageLoader.cachedPoster
+        // instead of a fetch.
+        override fun cachedPosters(items: List<MediaItem>): Map<String, Bitmap?> =
+            posterEntries(items).associate { it.imageId to WidgetImageLoader.cachedPoster(it.url) }
 
         override fun posterFor(item: MediaItem): Bitmap? =
             posterCache[WidgetPosterIdentity.continueWatchingPosterImageId(item)]

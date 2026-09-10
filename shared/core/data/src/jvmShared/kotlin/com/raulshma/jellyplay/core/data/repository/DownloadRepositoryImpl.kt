@@ -12,6 +12,7 @@ import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.database.JellyPlayDatabase
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
+import com.raulshma.jellyplay.core.database.dao.DownloadProgressRow
 import com.raulshma.jellyplay.core.database.dao.OfflineMediaDao
 import com.raulshma.jellyplay.core.database.dao.PlaybackStateDao
 import com.raulshma.jellyplay.core.database.dao.SyncBaselineDao
@@ -160,6 +161,14 @@ class DownloadRepositoryImpl(
         downloadDao.getAllDownloads().map { entities ->
             entities.map { it.toDownloadItem() }
         }.distinctUntilChanged { old, new -> old.rendersSameAs(new) }
+
+    override fun getActiveDownloadProgress(): Flow<Map<String, DownloadProgress>> =
+        downloadDao.getActiveDownloadProgress()
+            .map { rows -> rows.associate { row -> row.id to row.toDownloadProgress() } }
+            // The map is structurally compared, so invalidations that didn't
+            // move an active row's bytes/speed (e.g. a COMPLETED flip on some
+            // other row) collapse to nothing downstream.
+            .distinctUntilChanged()
 
     override suspend fun getAllDownloadsSnapshot(): List<DownloadItem> =
         downloadDao.getAllDownloadsSnapshot().map { it.toDownloadItem() }
@@ -1293,6 +1302,13 @@ class DownloadRepositoryImpl(
         errorMessage = errorMessage,
         priority = priority,
         container = container,
+    )
+
+    /** DAO progress projection → feature-facing [DownloadProgress] (repository boundary keeps DAO types in). */
+    private fun DownloadProgressRow.toDownloadProgress() = DownloadProgress(
+        id = id,
+        downloadedBytes = downloadedBytes,
+        speedBytesPerSec = speedBytesPerSec,
     )
 
     /**

@@ -15,7 +15,7 @@ data class StorageBytesValue(val value: Double, val unit: StorageBytesUnit)
  * The ONE storage-byte band ladder (the ÷1024 house convention): below 1024
  * stays in bytes, each larger band divides by another 1024. [formatBytes] and
  * localized wrappers that need the number+unit parts separately both read
- * this, so the divisor policy lives exactly here. Declared delta (2026-09-08):
+ * this, so the divisor policy lives exactly here. Declared delta:
  * the four drifted storage formatters (admin Logs, PhotoViewer,
  * DetailDownloadDialog, ArrQueue) now route through this table — PhotoViewer
  * and DetailDownloadDialog switch from ÷1000 to ÷1024 conventions (small

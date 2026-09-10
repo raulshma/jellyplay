@@ -649,6 +649,12 @@ val dataJvmModule: Module = module {
             sessionIdentity = get(),
             sessionCacheRegistry = get(),
             cacheScope = get(DatastoreQualifiers.applicationScope),
+            // The poll loop's offline gate — the same platform
+            // OfflineModeManager binding every other jvmShared consumer
+            // (PlaybackRepositoryImpl, OfflineSyncManager, …) resolves;
+            // the wasm slice stays on the ctor default (null) since no
+            // wasm OfflineModeManager exists.
+            offlineModeManager = get(),
         )
     }
     single<SeerrRepository> { get<SeerrRepositoryImpl>() }

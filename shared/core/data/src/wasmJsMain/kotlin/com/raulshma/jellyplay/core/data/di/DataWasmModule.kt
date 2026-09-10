@@ -66,6 +66,10 @@ val dataWasmModule: Module = module {
             sessionIdentity = get(),
             sessionCacheRegistry = get(),
             cacheScope = get(DatastoreQualifiers.applicationScope),
+            // offlineModeManager stays at its ctor default (null): the wasm
+            // graph binds no OfflineModeManager, so the poll loop's offline
+            // skip is JVM-only — web leans on browser background-timer
+            // throttling instead (see the ctor param's kdoc).
         )
     }
     single<SeerrRepository> { get<SeerrRepositoryImpl>() }

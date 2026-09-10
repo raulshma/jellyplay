@@ -193,7 +193,10 @@ fun JellyPlayApp(
     }
 
     CompositionLocalProvider(
-        LocalUserMessageBus provides infra.userMessageBus,
+        // STA-12: resolved here (first composition) instead of MainActivity's
+        // onCreate — the bus is needed by every branch below, so this is as
+        // late as its provider can fire without redesigning the local.
+        LocalUserMessageBus provides infra.userMessageBusLazy.value,
         com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus provides sharedUserMessageBus,
     ) {
         when {
@@ -221,7 +224,11 @@ fun JellyPlayApp(
                     )
                 }
                 CompositionLocalProvider(
-                    com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus provides infra.networkStatus,
+                    // STA-12: resolved in the AUTHENTICATED branch only, so
+                    // NetworkMonitor (and its connectivity-callback
+                    // registration) is never built for auth/onboarding
+                    // sessions.
+                    com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus provides infra.networkStatusLazy.value,
                     com.raulshma.jellyplay.core.ui.components.LocalServerHealth provides session.serverHealth,
                     com.raulshma.jellyplay.core.ui.components.LocalSurpriseOnLaunch provides surpriseController,
                 ) {
@@ -524,9 +531,11 @@ private fun MainContent(
     // Remote "Play" / "Playstate" / "GeneralCommand" navigation requests
     // emitted by the WebSocket receiver; the target→route mapping and the
     // multi-back-stack player pop live in RemoteNavigationRouting.kt (pure,
-    // pinned by RemoteNavigationRoutingTest).
-    LaunchedEffect(infra.remoteNavigationBridge) {
-        navRequests.collectRemoteNavigation(infra.remoteNavigationBridge.targets)
+    // pinned by RemoteNavigationRoutingTest). STA-12: the bridge resolves
+    // INSIDE the effect body — LaunchedEffect runs after the frame applies,
+    // so its Koin construction no longer runs during any composition pass.
+    LaunchedEffect(infra.remoteNavigationBridgeLazy) {
+        navRequests.collectRemoteNavigation(infra.remoteNavigationBridgeLazy.value.targets)
     }
 
     // SyncPlay auto-open: a joined group started playing (or switched items)
@@ -538,11 +547,12 @@ private fun MainContent(
     }
 
     // Remote-control "now playing" snackbar; the title fallback + template
-    // format live in the collector's pure fold.
+    // format live in the collector's pure fold. STA-12: resolved inside the
+    // effect body for the same post-frame reason as the bridge above.
     val nowPlayingTemplate = stringResource(R.string.snackbar_now_playing)
-    androidx.compose.runtime.LaunchedEffect(infra.remoteControlReceiver) {
+    androidx.compose.runtime.LaunchedEffect(infra.remoteControlReceiverLazy) {
         navRequests.collectNowPlayingSnackbars(
-            events = infra.remoteControlReceiver.playEvents,
+            events = infra.remoteControlReceiverLazy.value.playEvents,
             messageTemplate = nowPlayingTemplate,
         )
     }
@@ -1044,6 +1054,10 @@ private fun PhoneContent(
     // threaded from MainContent's single construction site — this wiring
     // (mini bar + device sheet), MainNavDisplay's companion entry and the
     // Home redirect all read that one instance; nothing resolves it here.
+    // uiState is the LOW-FREQUENCY slice only (connection, metadata,
+    // play/pause): the per-tick position/duration/volume streams pass to the
+    // mini bar as narrow flows and are collected at its leaf sliders, so the
+    // ~1 Hz cast position tick no longer recomposes this whole shell scope.
     val playOnState by playOn.uiState.collectAsStateWithLifecycle()
     var showPlayOnSheet by remember { mutableStateOf(false) }
     val playOnContext = LocalContext.current
@@ -1194,7 +1208,10 @@ private fun PhoneContent(
                     }
                 }                // Play On persistent transport bar — visible while a Jellyfin
                 // remote session is active and the full-screen companion is not
-                // already open. Sits above the floating nav bar.
+                // already open. Sits above the floating nav bar. The per-tick
+                // transport streams pass through as narrow flows (collected at
+                // the bar's leaf sliders) so this scope only recomposes on the
+                // low-frequency slice — connection, metadata, play/pause.
                 if (playOnState.isConnected && !isPlayOnCompanionOpen) {
                     com.raulshma.jellyplay.components.PlayOnMiniBar(
                         isVisible = playOnState.isConnected,
@@ -1202,9 +1219,9 @@ private fun PhoneContent(
                         title = playOnState.title,
                         subtitle = playOnState.artist,
                         isPlaying = playOnState.isPlaying,
-                        positionMs = playOnState.positionMs,
-                        durationMs = playOnState.durationMs,
-                        volume = playOnState.volume,
+                        positionMsFlow = playOn.positionMsFlow,
+                        durationMsFlow = playOn.durationMsFlow,
+                        volumeFlow = playOn.volumeFlow,
                         onPlayPause = {
                             if (playOnState.isPlaying) playOn.castPause() else playOn.castPlay()
                         },
@@ -1536,7 +1553,7 @@ private fun MainNavDisplay(
             // HomePlayOnRedirect seam (the concrete strategy is Android-
             // bound); the probe + fling choreography lives on the controller
             // (flingIfConnected), so the strategy never leaves it. Declared
-            // delta (2026-09-08): the redirect is active on EVERY host now —
+            // delta: the redirect is active on EVERY host now —
             // it used to be phone-layout-only (the TV and full-screen
             // MainNavDisplay calls passed no strategy). Only observable when
             // a remote session is already connected, which itself can only

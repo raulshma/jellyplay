@@ -126,6 +126,18 @@ object WidgetImageLoader {
     }
 
     /**
+     * STA-11 (2026-09 perf audit): memory-only poster lookup for the widget
+     * factories' bind path — the synchronous twin of [loadPoster]. Serves
+     * whatever [posterMemoryCache] holds (from a prior fetch or a
+     * [prewarmPosters] pass in this process) with zero fetch/decode work, or
+     * null when cold. Nulls render the factory's placeholder — the exact
+     * render a failed/missed bounded fetch always produced — and the
+     * factory's async repaint tail (WidgetGridFactory) does the actual
+     * warming off the bind path.
+     */
+    fun cachedPoster(url: String?): Bitmap? = posterMemoryCache.get(url)
+
+    /**
      * Awaited batch poster fetch so `RemoteViewsFactory.getViewAt` can read
      * from the resulting cache instead of doing per-cell network I/O on the
      * binder thread. Distinct from [prewarmPosters]: this one suspends until

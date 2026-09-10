@@ -118,7 +118,7 @@ fun RepositoriesTab(
             }
         }
 
-        itemsIndexed(repositories, key = { _, repo -> repo.url }) { index, repo ->
+        itemsIndexed(repositories, key = { _, repo -> repo.url }, contentType = { _, _ -> "repository" }) { index, repo ->
             RepositoryListItem(
                 repository = repo,
                 onToggle = { enabled -> onToggleRepository(index, enabled) },

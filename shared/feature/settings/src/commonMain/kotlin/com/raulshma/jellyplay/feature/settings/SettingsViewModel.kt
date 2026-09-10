@@ -18,6 +18,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onSubscription
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.distinctUntilChanged
 import java.io.IOException
@@ -67,7 +68,25 @@ class SettingsViewModel(
         .map { it?.address ?: "" }
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), "")
 
+    /**
+     * The Seerr pending-request count for the Activity Insights badge.
+     * Backed by the repository's shared StateFlow, but with a ONE-SHOT
+     * refetch wired to subscription instead of the 60s background poll:
+     * whenever the badge surface becomes active (the first lifecycle-aware
+     * collector appears, or re-appears after the [SharingStarted.WhileSubscribed]
+     * grace window) exactly one [SeerrRepository.getRequestCount] fires, and
+     * the repository stamps its shared flow on success — same contract as
+     * [SeerrRepository.currentUser].
+     *
+     * Settings deliberately does NOT keep the repository's poll loop alive
+     * for this badge (an earlier `init { startPolling() }` woke every 60s
+     * for any user who merely opened Settings, and `onCleared` then stopped
+     * the singleton loop even while the Requests screen was still consuming
+     * it). The loop's only owner is the Requests screen's
+     * start/stop pair; see [SeerrRepository.startPolling].
+     */
     val pendingRequestCount: kotlinx.coroutines.flow.StateFlow<Int> = seerrRepository.pendingRequestCount
+        .onSubscription { refreshPendingRequestCount() }
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), 0)
 
     /**
@@ -117,7 +136,6 @@ class SettingsViewModel(
                 isLoadingUsers = false
             }
         }
-        seerrRepository.startPolling()
     }
 
     /**
@@ -200,7 +218,19 @@ class SettingsViewModel(
     override fun onCleared() {
         super.onCleared()
         sessionRefreshJob?.cancel()
-        seerrRepository.stopPolling()
+    }
+
+    /**
+     * One-shot Seerr pending-count refresh behind the Activity Insights
+     * badge ([pendingRequestCount]). Fire-and-forget: the repository writes
+     * its shared StateFlow on success, so the badge flow above updates
+     * without this VM re-plumbing the value. Triggered by subscription, not
+     * [init] — same screen-entry discipline as [refreshCacheSize] — so the
+     * fetch only fires when the badge is actually being observed, never on a
+     * 60s loop while Settings sits in the back stack.
+     */
+    private fun refreshPendingRequestCount() {
+        launch { seerrRepository.getRequestCount() }
     }
 
     /**

@@ -22,17 +22,18 @@ import org.koin.mp.KoinPlatform
  * [WidgetDataStore.libraryWidgetItems].
  *
  * The factory is an adapter over [WidgetGridFactory], which owns the
- * lifecycle choreography (snapshot read → poster preload → dims refresh →
- * deep-link `getViewAt`); this class supplies only the Library seams: the
- * store accessor, the row's view ids, its title/subtitle decisions, and the
- * `jellyfin://media/{id}` fill-in link.
+ * lifecycle choreography (memory-first snapshot + poster read → dims refresh
+ * → async warmup repaint — STA-11; deep-link `getViewAt`); this class
+ * supplies only the Library seams: the store accessor, the row's view ids,
+ * its title/subtitle decisions, and the `jellyfin://media/{id}` fill-in
+ * link.
  *
  * `onDataSetChanged` runs on the main thread; items are read from the
- * store's eagerly-warmed [kotlinx.coroutines.flow.StateFlow] snapshots, so
- * no DataStore disk IO blocks them once warmed. On a cold process the
- * first read pays one bounded (≤1 s) warm-up — see [WidgetDataStore]'s
- * *Snapshot() docs. The
- * [LibraryRecommendationsWidget] calls
+ * store's eagerly-warmed [kotlinx.coroutines.flow.StateFlow] snapshot —
+ * memory-only, no DataStore disk IO (STA-11: the former bounded ≤1 s
+ * blocking warm-up read is gone from the bind; a cold snapshot renders the
+ * empty view and the skeleton's async tail repaints once the eager flow
+ * lands). The [LibraryRecommendationsWidget] calls
  * [AppWidgetManager.notifyAppWidgetViewDataChanged] whenever the data
  * changes, which re-binds the factory.
  */
@@ -61,9 +62,20 @@ class LibraryRecommendationsWidgetService : RemoteViewsService() {
         titleViewId = R.id.lr_item_title,
         subtitleViewId = R.id.lr_item_subtitle,
         defaultHeightDp = WidgetLayoutThresholds.RECOMMENDATION_GRID_DEFAULT_HEIGHT_DP,
+        remoteAdapterViewId = R.id.lr_widget_grid,
     ) {
 
-        override fun snapshotProvider(): List<LibraryWidgetItem> = store.libraryWidgetItemsSnapshot()
+        // STA-11: memory-only — the StateFlow's current value; the store's
+        // *Snapshot() accessor (bounded BLOCKING disk read when cold) is
+        // deliberately NOT taken on the bind path anymore.
+        override fun snapshotProvider(): List<LibraryWidgetItem> = store.libraryWidgetItems.value
+
+        /**
+         * STA-11: the async tail's cold-snapshot wait — the skeleton's
+         * [awaitWarmed] on this store's flow.
+         */
+        override suspend fun awaitWarmedSnapshot(): List<LibraryWidgetItem>? =
+            awaitWarmed(store.libraryWidgetItems)
 
         override fun posterUrlOf(item: LibraryWidgetItem): String? = item.posterUrl
 

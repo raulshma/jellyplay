@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.downloads
 
 import androidx.compose.runtime.Immutable
+import com.raulshma.jellyplay.core.data.repository.DownloadProgress
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.sync.OfflineSyncManager
@@ -25,14 +26,16 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.scan
 import kotlinx.coroutines.flow.stateIn
 
 @Immutable
 data class DownloadsUiState(
     val downloads: List<DownloadItem> = emptyList(),
-    val totalStorageBytes: Long = 0L,
     val isLoading: Boolean = true,
     val error: String? = null,
     /** Stable ids currently in selection mode. */
@@ -98,27 +101,99 @@ class DownloadsViewModel(
     private val _checking = MutableStateFlow(false)
     val checking: StateFlow<Boolean> = _checking.asStateFlow()
 
+    /**
+     * Structural (status-change-only) projection of the list, shared between
+     * the uiState collector and the [totalStorageBytes] combine so the
+     * repository flow has a single upstream subscription.
+     */
+    private val structuralItems = MutableStateFlow<List<DownloadItem>>(emptyList())
+
+    /**
+     * Live per-row byte/speed for in-flight downloads, keyed by download id —
+     * the moving half of the split uiState. Perf audit: the 2 s transfer tick
+     * used to re-emit the whole list (and re-execute the entire screen) per
+     * progress event; rows now read their moving values from here while the
+     * list itself only re-emits on structural change. The backing StateFlow
+     * is conflated by construction (stateIn), so a burst of ticks collapses
+     * to the latest map.
+     *
+     * Exit-transition retention: the live query drops a row the moment its
+     * status leaves the in-flight set, which can land a frame BEFORE the
+     * structural list re-emits with the row's new status — without retention
+     * the still-DOWNLOADING row would flash back to its stale structural
+     * bytes for that frame. The scan accumulator keeps the last live value
+     * for every row the structural list still shows as DOWNLOADING and
+     * forgets a row once its structural status moves on (or it leaves the
+     * list).
+     */
+    val progressById: StateFlow<Map<String, DownloadProgress>> =
+        downloadRepository.getActiveDownloadProgress()
+            .combine(structuralItems) { live, items -> live to items }
+            .scan(emptyMap<String, DownloadProgress>()) { retained, (live, structural) ->
+                val stillDownloading = structural
+                    .asSequence()
+                    .filter { it.status == DownloadStatus.DOWNLOADING }
+                    .mapTo(HashSet()) { it.id }
+                val merged = HashMap(retained)
+                merged.keys.retainAll(stillDownloading)
+                merged.putAll(live)
+                merged
+            }
+            .distinctUntilChanged()
+            .stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    /**
+     * Total bytes used, kept live across progress ticks. Lives OUTSIDE
+     * [uiState] on purpose: folding it in would re-emit uiState per tick and
+     * drag the whole screen body along with it. Computed as the structural
+     * sum with each in-flight row's bytes overridden by its live value —
+     * exactly the Σ downloadedBytes the pre-split uiState carried — and
+     * collected by the screen only inside the storage-header leaf.
+     */
+    val totalStorageBytes: StateFlow<Long> =
+        combine(structuralItems, progressById) { items, progress ->
+            items.sumOf { item -> progress[item.id]?.downloadedBytes ?: item.downloadedBytes }
+        }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), 0L)
+
     init {
         launch {
-            // Change-filtering already lives in the repository (id order +
-            // per-item bytes/status), so only list-affecting changes land here.
+            // Change-filtering lives in two layers. The repository's filter
+            // (id order + per-item bytes/status) still forwards byte movement
+            // because other consumers render live progress from the item list
+            // itself (album detail's per-track bars). This screen no longer
+            // does — bytes/speed arrive through [progressById] — so a second
+            // projection drops the per-tick fields and only list-structure
+            // changes (ids in order, per-item status) re-emit uiState.
             downloadRepository.getAllDownloads()
                 .catch { e ->
                     _uiState.update {
                         it.copy(error = e.localizedMessage ?: "Failed to load downloads", isLoading = false)
                     }
                 }
+                .distinctUntilChanged { old, new -> sameListStructure(old, new) }
                 .collectLatest { items ->
+                    structuralItems.value = items
                     _uiState.update {
                         it.copy(
                             downloads = items,
                             error = null,
                             isLoading = false,
-                            totalStorageBytes = items.sumOf { item -> item.downloadedBytes },
                         )
                     }
                 }
         }
+    }
+
+    /**
+     * True when two lists differ only in per-tick progress fields — i.e. the
+     * screen has nothing structural to re-render. Every real transition
+     * (queue admission, pause/resume, completion, failure, insert/delete)
+     * changes some row's status or the id sequence, so id order + status is
+     * the complete structural key.
+     */
+    private fun sameListStructure(old: List<DownloadItem>, new: List<DownloadItem>): Boolean {
+        if (old.size != new.size) return false
+        return old.zip(new).all { (o, n) -> o.id == n.id && o.status == n.status }
     }
 
     /**

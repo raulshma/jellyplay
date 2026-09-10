@@ -95,6 +95,14 @@ import org.koin.mp.KoinPlatform
 /** Bound on the STA-3 device-id prewarm await; see the launch in [onCreate]. */
 private const val DEVICE_ID_PREWARM_TIMEOUT_MS = 5_000L
 
+/**
+ * Bound on the STA-8 persisted-security-slice prewarm — DELIBERATELY the
+ * same constant the lock-gate reader it exists to warm runs under
+ * ([PlayerActivity.APP_LOCK_GATE_READ_TIMEOUT_MS]), so the prewarm can
+ * never wait on the persisted read longer than the gate itself.
+ */
+private const val SECURITY_SLICE_PREWARM_TIMEOUT_MS = PlayerActivity.APP_LOCK_GATE_READ_TIMEOUT_MS
+
 class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Configuration.Provider {
 
     override val workManagerConfiguration: Configuration
@@ -130,6 +138,20 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
     // runBlocking branch never fires — same UUID either way, and DataStore
     // serializes the (first-launch-only) write.
     private val serverIdentityStore: com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore by lazyFromKoin()
+    // STA-8 (2026-09 perf audit): resolved ONLY inside the IO prewarm block
+    // below (same deferred-construction pattern as serverIdentityStore above).
+    // PlayerActivity's lock-gate check reads the PERSISTED security slice via
+    // `runBlocking { withTimeoutOrNull(1s) { firstPersistedSecurity() } }` on
+    // main (onCreate/onNewIntent/onResume/PiP-expand) — on a cold process that
+    // read pays DataStore's initial disk read, blocking main up to the full
+    // 1 s budget. firstPersistedSecurity() collects the same cold flow this
+    // prewarm collects, and DataStore caches the file snapshot in memory after
+    // the first read, so hydrating the slice here (off main, started at t=0 of
+    // the process) makes every later gate read a memory replay that resolves
+    // without disk IO. PlayerActivity keeps its bounded runBlocking EXACTLY as
+    // the fail-closed safety net (timeout ⇒ gate configured) — the prewarm
+    // only widens the warm window, it changes no gate semantics.
+    private val securityStore: com.raulshma.jellyplay.core.datastore.security.SecurityStore by lazyFromKoin()
     // (Wave 7C: the FontProvider/VideoStreamCache prewarm Providers that used
     // to live here left with the player-video migration — both impls are
     // Koin-owned in shared/feature/player-video's androidPlayerVideoModule, so
@@ -437,6 +459,19 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                 withTimeoutOrNull(DEVICE_ID_PREWARM_TIMEOUT_MS) {
                     serverIdentityStore.ensureDeviceId()
                     serverIdentityStore.identity.first { !it.deviceId.isNullOrEmpty() }
+                }
+            }
+            // STA-8: hydrate the persisted security slice for PlayerActivity's
+            // lock-gate read (see the field comment above). Shares the same
+            // "user_prefs" DataStore file as the two reads above, so this
+            // piggybacks their already-in-flight/completed initial read and is
+            // effectively free on a warm one. Bounded like the STA-3 wait so a
+            // wedged read can never gate the font/stream prewarms below; on
+            // timeout we proceed anyway — PlayerActivity's own 1 s-bounded
+            // fail-closed read is unchanged and remains the gate's authority.
+            runCatchingRethrowingCancellation {
+                withTimeoutOrNull(SECURITY_SLICE_PREWARM_TIMEOUT_MS) {
+                    securityStore.firstPersistedSecurity()
                 }
             }
             // Wave 7C: Koin-owned since the player-video migration (the Hilt
