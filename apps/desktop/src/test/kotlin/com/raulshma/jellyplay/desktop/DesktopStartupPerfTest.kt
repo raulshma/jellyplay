@@ -127,7 +127,11 @@ class DesktopStartupPerfTest {
     fun flushedJsonCarriesAllFieldsWithNullsForMissingMarks() {
         val dir = newLogsDir()
         System.setProperty(DesktopStartupPerf.PROP_PERSIST, "true")
-        val boot = 1_000_000_000_000L
+        // The boot mark must come from the same nanoTime regime the unmarked
+        // marks (windowShown stamps System.nanoTime()) read: a fixed constant
+        // can sit in the future of a freshly-started JVM/VM and turn the
+        // window-shown delta negative.
+        val boot = System.nanoTime()
         val perf = DesktopStartupPerf(logsDirNio = dir, bootT0Nanos = boot)
 
         perf.markWindowShown()

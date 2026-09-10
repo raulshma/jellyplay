@@ -24,8 +24,10 @@ import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeoutOrNull
@@ -426,13 +428,17 @@ class OfflineSyncManagerTest {
     }
 
     @Test
-    fun `resyncBatch drives every item through batchProgress to DONE`() = runTest {
+    fun `resyncBatch drives every item through batchProgress to DONE`() = runBlocking {
         val fresh = detail()
         coEvery { mediaRepository.getMediaDetail(any(), any()) } returns Result.success(fresh)
         coEvery { syncBaselineDao.getBaseline(any()) } returns null
         coEvery { downloadRepository.getDownloadByMediaItemId(any()) } returns null
         coEvery { writer.saveOfflineMediaDetail(any(), any(), any()) } returns Unit
-        val batchScope = CoroutineScope(UnconfinedTestDispatcher(testScheduler))
+        // Real dispatchers end to end: the manager's resyncItem hops through
+        // Dispatchers.IO, so a runTest virtual clock would fire the wait's
+        // timeout during the first real-thread pause. runBlocking keeps the
+        // withTimeoutOrNull below in real time.
+        val batchScope = CoroutineScope(Dispatchers.Unconfined)
         val batchManager = OfflineSyncManager(
             mediaRepository = mediaRepository,
             writer = writer,

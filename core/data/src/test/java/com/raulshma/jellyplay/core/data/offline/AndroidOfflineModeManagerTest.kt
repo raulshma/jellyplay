@@ -304,13 +304,19 @@ class AndroidOfflineModeManagerTest {
 
     @Test
     fun `a validated internet network exits OFFLINE_AUTO`() {
+        // The monitor status must mirror the probe's view of the network: with
+        // the status still Online here, the collector's (async) initial
+        // emission can land after checkNetworkAndAutoDetect's synchronous
+        // OFFLINE_AUTO and "restore" ONLINE from the stale status.
         setNoActiveNetwork()
+        statusFlow.value = NetworkStatus.Offline
         sliceFlow.value = NetworkOfflineSlice(autoOfflineEnabled = true)
         val manager = manager()
         manager.checkNetworkAndAutoDetect()
         assertEquals(OfflineMode.OFFLINE_AUTO, manager.offlineMode.value)
 
         setReachableNetwork(validated = true)
+        statusFlow.value = NetworkStatus.Online
         manager.checkNetworkAndAutoDetect()
 
         assertEquals(OfflineMode.ONLINE, manager.offlineMode.value)

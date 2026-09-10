@@ -152,8 +152,14 @@ class StaleReadGroupTest {
             }
             startGate.countDown()
             val staleReads = consumer.get()
+            // Join the arm fan-out before judging the settle: a straggler arm
+            // landing after the consumer's last iteration may still hold the
+            // marker — the drain guarantee only exists once every arm landed.
+            pool.shutdown()
+            pool.awaitTermination(10, java.util.concurrent.TimeUnit.SECONDS)
 
             assertTrue(staleReads >= 1, "at least one consume must observe the announced staleness")
+            group.consume() // absorb a straggler arm that raced past the consumer
             assertFalse(group.consume(), "after the burst drains, the marker is not stale")
         } finally {
             pool.shutdownNow()

@@ -22,11 +22,13 @@ class RestartableJobTest {
     @Test
     fun `launchIn cancels the previous occupant before launching the replacement`() = runBlocking {
         val scope = CoroutineScope(Dispatchers.Default)
+        val firstStarted = CompletableDeferred<Unit>()
         val firstCancelled = CompletableDeferred<Unit>()
         val secondStarted = CompletableDeferred<Unit>()
         val jobs = RestartableJob()
 
         jobs.launchIn(scope) {
+            firstStarted.complete(Unit)
             try {
                 awaitCancellation()
             } catch (e: CancellationException) {
@@ -34,6 +36,11 @@ class RestartableJobTest {
                 throw e
             }
         }
+        // Wait until the first occupant is actually running: a replacement
+        // launched while it is still queued on the dispatcher cancels it
+        // before its block ever executes, and the cancellation callback in
+        // the block would never fire.
+        withTimeout(10_000) { firstStarted.await() }
         jobs.launchIn(scope) { secondStarted.complete(Unit) }
 
         withTimeout(10_000) {

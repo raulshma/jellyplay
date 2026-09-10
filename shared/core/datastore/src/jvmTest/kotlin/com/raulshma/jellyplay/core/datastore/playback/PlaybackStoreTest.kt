@@ -21,6 +21,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -47,13 +49,29 @@ class PlaybackStoreTest {
             store = PlaybackStore(dataStore, scope)
             // Drain the Eagerly-cached slice so the cleared state is observed
             // before each test writes + reads.
-            store.playback.first()
+            settledSlice()
+        }
+    }
+
+    /**
+     * The Eagerly-cached slice is updated by a collector racing this test, so
+     * a plain `playback.first()` samples whatever is current — the stateIn
+     * seed (whose defaults differ from an empty-store read, e.g. playbackMode
+     * AUTO vs the FORCE_DIRECT_PLAY legacy migration), or the previous test's
+     * leftovers. Await until the cached slice equals the projection of the
+     * CURRENT disk state and return it. The wait runs off runTest's virtual
+     * clock: the collector it races lives on real dispatchers.
+     */
+    private suspend fun settledSlice(): PlaybackSlice {
+        val expected = store.read(dataStore.data.first())
+        return withContext(Dispatchers.Default) {
+            withTimeout(5_000) { store.playback.first { it == expected } }
         }
     }
 
     @Test
     fun `defaults when empty`() = runTest {
-        val slice = store.playback.first()
+        val slice = settledSlice()
         // The raw stored default is EXO_PLAYER; the read clamps it to whatever
         // engine this binary actually ships (desktop → MPV).
         assertEquals(platformEngineSupport.default, slice.preferredPlayer)
@@ -70,7 +88,7 @@ class PlaybackStoreTest {
     @Test
     fun `setFrameRateMatching true seeds refresh rate mode when unset`() = runTest {
         store.setFrameRateMatching(true)
-        val slice = store.playback.first()
+        val slice = settledSlice()
         assertTrue(slice.frameRateMatching)
         assertEquals(RefreshRateMode.FRAME_RATE_ONLY, slice.refreshRateMode)
     }
@@ -79,7 +97,7 @@ class PlaybackStoreTest {
     fun `setFrameRateMatching false forces refresh rate mode off`() = runTest {
         store.setRefreshRateMode(RefreshRateMode.FRAME_RATE_AND_RESOLUTION)
         store.setFrameRateMatching(false)
-        val slice = store.playback.first()
+        val slice = settledSlice()
         assertFalse(slice.frameRateMatching)
         assertEquals(RefreshRateMode.OFF, slice.refreshRateMode)
     }
@@ -87,12 +105,12 @@ class PlaybackStoreTest {
     @Test
     fun `setRefreshRateMode keeps boolean in sync`() = runTest {
         store.setRefreshRateMode(RefreshRateMode.FRAME_RATE_AND_RESOLUTION)
-        var slice = store.playback.first()
+        var slice = settledSlice()
         assertTrue(slice.frameRateMatching)
         assertEquals(RefreshRateMode.FRAME_RATE_AND_RESOLUTION, slice.refreshRateMode)
 
         store.setRefreshRateMode(RefreshRateMode.OFF)
-        slice = store.playback.first()
+        slice = settledSlice()
         assertFalse(slice.frameRateMatching)
     }
 
@@ -101,7 +119,7 @@ class PlaybackStoreTest {
         dataStore.edit {
             it[booleanPreferencesKey("force_direct_play")] = true
         }
-        val slice = store.playback.first()
+        val slice = settledSlice()
         assertEquals(PlaybackMode.FORCE_DIRECT_PLAY, slice.playbackMode)
     }
 
@@ -110,7 +128,7 @@ class PlaybackStoreTest {
         dataStore.edit {
             it[booleanPreferencesKey("force_direct_play")] = false
         }
-        val slice = store.playback.first()
+        val slice = settledSlice()
         assertEquals(PlaybackMode.AUTO, slice.playbackMode)
     }
 
@@ -120,14 +138,14 @@ class PlaybackStoreTest {
             it[booleanPreferencesKey("force_direct_play")] = true
             it[stringPreferencesKey("playback_mode")] = PlaybackMode.AUTO.name
         }
-        val slice = store.playback.first()
+        val slice = settledSlice()
         assertEquals(PlaybackMode.AUTO, slice.playbackMode)
     }
 
     @Test
     fun `setPlaybackMode round-trips`() = runTest {
         store.setPlaybackMode(PlaybackMode.FORCE_DIRECT_PLAY)
-        assertEquals(PlaybackMode.FORCE_DIRECT_PLAY, store.playback.first().playbackMode)
+        assertEquals(PlaybackMode.FORCE_DIRECT_PLAY, settledSlice().playbackMode)
     }
 
     @Test
@@ -138,7 +156,7 @@ class PlaybackStoreTest {
             // Legacy lowercase casing matches no enum name either.
             it[stringPreferencesKey("decoder_mode")] = "hw_preferred"
         }
-        val slice = store.playback.first()
+        val slice = settledSlice()
         assertEquals(StreamingQuality.AUTO, slice.streamingQuality)
         assertEquals(DecoderMode.HW_PREFERRED, slice.decoderMode)
         assertEquals(false, slice.keepScreenOnDuringVideo)
@@ -150,9 +168,9 @@ class PlaybackStoreTest {
         // rescues the legacy frame_rate_matching boolean: off → OFF, on →
         // FRAME_RATE_ONLY (the old single-resolution behaviour).
         dataStore.edit { it[stringPreferencesKey("refresh_rate_mode")] = "nonsense" }
-        assertEquals(RefreshRateMode.OFF, store.playback.first().refreshRateMode)
+        assertEquals(RefreshRateMode.OFF, settledSlice().refreshRateMode)
         dataStore.edit { it[booleanPreferencesKey("frame_rate_matching")] = true }
-        assertEquals(RefreshRateMode.FRAME_RATE_ONLY, store.playback.first().refreshRateMode)
+        assertEquals(RefreshRateMode.FRAME_RATE_ONLY, settledSlice().refreshRateMode)
     }
 
     @Test
@@ -179,6 +197,6 @@ class PlaybackStoreTest {
 
         store.restore(slice)
 
-        assertEquals(slice, store.playback.first())
+        assertEquals(slice, settledSlice())
     }
 }

@@ -14,20 +14,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
-import kotlin.concurrent.Volatile
-
-/**
- * Common replacement for the JVM atomic boolean — the flag is only ever
- * set once from a flow collector and read on the UI thread, so volatile
- * write/read visibility is all that is required.
- */
-private class LoadedFlag {
-    @Volatile var value: Boolean = false
-}
 
 /**
  * Widget cache sink for home-screen widgets (continue-watching, library
@@ -53,16 +41,8 @@ class WidgetDataStore constructor(
     private val sharedPrefs: Flow<Preferences> = dataStore.data
     private val json = Json { ignoreUnknownKeys = true }
 
-    // Set by the onEach probes below the moment each eager snapshot receives
-    // its first real emission — separates "warmed, memory reads from here on"
-    // from "still warming, the StateFlow holds the placeholder default" for
-    // the sync *Snapshot() accessors.
-    private val continueWatchingLoaded = LoadedFlag()
-    private val libraryItemsLoaded = LoadedFlag()
-    private val seerrItemsLoaded = LoadedFlag()
-
     val continueWatching: StateFlow<List<MediaItem>> =
-        decodedListStateFlow(Keys.CONTINUE_WATCHING, continueWatchingLoaded)
+        decodedListStateFlow(Keys.CONTINUE_WATCHING)
 
     val widgetConfig: Flow<WidgetConfig> =
         sharedPrefs.map { prefs ->
@@ -72,10 +52,10 @@ class WidgetDataStore constructor(
         }
 
     val libraryWidgetItems: StateFlow<List<LibraryWidgetItem>> =
-        decodedListStateFlow(Keys.LIBRARY_WIDGET_ITEMS, libraryItemsLoaded)
+        decodedListStateFlow(Keys.LIBRARY_WIDGET_ITEMS)
 
     val seerrWidgetItems: StateFlow<List<SeerrWidgetItem>> =
-        decodedListStateFlow(Keys.SEERR_WIDGET_ITEMS, seerrItemsLoaded)
+        decodedListStateFlow(Keys.SEERR_WIDGET_ITEMS)
 
     suspend fun setWidgetConfig(config: WidgetConfig) {
         dataStore.edit { it[Keys.WIDGET_CONFIG] = json.encodeToString(config) }
@@ -115,14 +95,15 @@ class WidgetDataStore constructor(
      * Sync item snapshots for the AppWidget render path — `onDataSetChanged`
      * runs on the main thread. Instant memory read once the eager snapshot
      * has materialized. On a cold process (store just constructed, snapshot
-     * still warming) each does ONE bounded disk read (1 s cap) so the first
-     * widget refresh after process death renders the persisted payload
-     * instead of the empty placeholder — which could otherwise sit on the
-     * home screen until the next worker-triggered refresh. A timed-out
-     * warmup falls back to the placeholder, same as before.
+     * still warming) each makes ONE bounded wait (1 s cap) for the first real
+     * emission so the first widget refresh after process death renders the
+     * persisted payload instead of the empty placeholder — which could
+     * otherwise sit on the home screen until the next worker-triggered
+     * refresh. A timed-out warmup falls back to the placeholder, same as
+     * before.
      */
     fun continueWatchingSnapshot(): List<MediaItem> =
-        snapshotOrFallback(continueWatchingLoaded, continueWatching)
+        snapshotOrFallback(continueWatching, emptyList())
 
     fun getWidgetConfigForId(appWidgetId: Int): Flow<WidgetConfig> =
         sharedPrefs.map { prefs ->
@@ -182,17 +163,26 @@ class WidgetDataStore constructor(
     }
 
     /**
-     * The shape every eager widget-item flow shares: flag the store as warmed
-     * on first emission, leniently decode the JSON column (a corrupt blob
-     * degrades to the empty placeholder, never throws), and hot-start in the
-     * application scope.
+     * The warm/cold read every *Snapshot() accessor shares: await the eager
+     * snapshot's settled value (see [blockingAwaitFresh]) — instant once the
+     * eager flow has emitted, else ONE bounded wait for the first real
+     * emission to replace the stateIn seed placeholder.
+     */
+    private fun <T> snapshotOrFallback(
+        flow: StateFlow<T>,
+        seed: T,
+    ): T = blockingAwaitFresh(flow, seed, SNAPSHOT_WARMUP_TIMEOUT_MS)
+
+    /**
+     * The shape every eager widget-item flow shares: leniently decode the JSON
+     * column (a corrupt blob degrades to the empty placeholder, never throws)
+     * and hot-start in the application scope.
      */
     private inline fun <reified T> decodedListStateFlow(
         key: Preferences.Key<String>,
-        loaded: LoadedFlag,
     ): StateFlow<List<T>> {
         var cached = ParsedCache(null, emptyList<T>())
-        return sharedPrefs.onEach { loaded.value = true }.map { prefs ->
+        return sharedPrefs.map { prefs ->
             val raw = prefs[key]
             if (raw == cached.raw) {
                 cached.value
@@ -217,23 +207,6 @@ class WidgetDataStore constructor(
     private fun decodeWidgetConfig(raw: String?): WidgetConfig? =
         raw?.let {
             try { json.decodeFromString<WidgetConfig>(it) } catch (_: Exception) { null }
-        }
-
-    /**
-     * The warm/cold read every *Snapshot() accessor shares: instant memory
-     * read once the eager flow has emitted, else ONE bounded disk read (see
-     * [SNAPSHOT_WARMUP_TIMEOUT_MS]) so the first widget refresh after process
-     * death renders the persisted payload; a timed-out warmup falls back to
-     * the placeholder.
-     */
-    private fun <T> snapshotOrFallback(
-        loaded: LoadedFlag,
-        flow: StateFlow<T>,
-    ): T =
-        if (loaded.value) {
-            flow.value
-        } else {
-            blockingFirstOrNull(flow, SNAPSHOT_WARMUP_TIMEOUT_MS) ?: flow.value
         }
 
     private object Keys {

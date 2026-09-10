@@ -142,8 +142,12 @@ class DesktopOfflineModeManagerTest {
     fun `going-online toggle arms the flag synchronously and the ONLINE derivation clears it`() = runBlocking {
         sliceFlow.value = NetworkOfflineSlice(manualOfflineEnabled = true)
         // The write lands: the slice flips, the collector derives ONLINE, and
-        // the flag's clear rides the same emission.
-        io.mockk.coEvery { store.setManualOffline(any()) } answers {
+        // the flag's clear rides the same emission. The write is held behind a
+        // gate so the arm assertion cannot race the clear — the whole chain
+        // (write → ONLINE derivation → flag clear) must stay downstream of it.
+        val writeGate = kotlinx.coroutines.CompletableDeferred<Unit>()
+        io.mockk.coEvery { store.setManualOffline(any()) } coAnswers {
+            writeGate.await()
             sliceFlow.value = NetworkOfflineSlice(manualOfflineEnabled = firstArg())
         }
         val manager = manager()
@@ -152,6 +156,7 @@ class DesktopOfflineModeManagerTest {
         manager.toggleManualOffline() // snapshot: manual=true → going online
         assertTrue(manager.goingOnline.value, "the flag must arm on the toggle, before the write lands")
 
+        writeGate.complete(Unit) // release the write; the ONLINE derivation clears the flag
         withTimeout(5_000) { manager.goingOnline.first { !it } }
         assertFalse(manager.goingOnline.value)
     }
