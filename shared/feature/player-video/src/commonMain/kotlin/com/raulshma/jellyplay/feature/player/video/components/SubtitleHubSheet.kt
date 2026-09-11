@@ -170,7 +170,7 @@ internal fun SubtitleHubSheet(
     val safeIndex = selectedTabIndex.coerceIn(0, visibleTabs.lastIndex)
     val activeTab = visibleTabs.getOrElse(safeIndex) { SubtitleHubTab.TRACKS }
 
-    // "Get" tab hoisted state — mirrors SubtitleManagerSheet's own.
+    // "Get" tab hoisted state — owned here, passed down to SubtitleManagerSection.
     var getTabIndex by rememberSaveable { mutableIntStateOf(0) }
     val downloadFocus = remember { FocusRequester() }
     val searchFocus = remember { FocusRequester() }

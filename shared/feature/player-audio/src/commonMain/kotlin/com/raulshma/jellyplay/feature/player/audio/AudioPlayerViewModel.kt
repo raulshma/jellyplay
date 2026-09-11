@@ -126,6 +126,35 @@ class AudioPlayerViewModel(
     var karaokeMode by composeState(false)
         private set
 
+    // ── Controller slices (the VideoEffectsController / SleepTimerController
+    //    player-video pattern, applied to the audio player) ──────────────────
+    // The effects setters' apply→persist choreography and the sleep-timer
+    // workflow live in the two controllers below; the VM funs are one-line
+    // delegates. The [updateEffects]/[updateState] lambdas are the
+    // SettingsProjector-style seam over this VM's uiState slices — the mirror
+    // collectors above keep flowing manager state INTO uiState; the seam is
+    // only the write path (and it never feeds persistence: the controllers
+    // read the manager's StateFlow values, not this mirror).
+
+    /** Owns the effects setters' apply→mirror→persist choreography + play() seeding. */
+    internal val effects = AudioEffectsController(
+        scope = scope,
+        effectsManager = effectsManager,
+        engine = engine,
+        audioStore = audioStore,
+        audioEffectsStore = audioEffectsStore,
+        updateEffects = { transform -> _uiState.update { it.copy(effects = transform(it.effects)) } },
+    )
+
+    /** Owns the sleep-timer starts/cancel/expiry + store writes + slice updates. */
+    internal val sleepTimer = AudioSleepTimerController(
+        scope = scope,
+        sleepTimerManager = sleepTimerManager,
+        audioStore = audioStore,
+        engine = engine,
+        updateState = { transform -> _uiState.update { it.copy(sleepTimer = transform(it.sleepTimer)) } },
+    )
+
     private var downloadJob: Job? = null
 
     private val _currentDownloadItem = stateFlow<com.raulshma.jellyplay.core.model.DownloadItem?>(null)
@@ -327,36 +356,17 @@ class AudioPlayerViewModel(
         engine.play(itemId)
 
         launch {
-            val (audio, effects) = combine(audioStore.audio, audioEffectsStore.audioEffects) { a, e -> a to e }.first()
+            val (audio, fx) = combine(audioStore.audio, audioEffectsStore.audioEffects) { a, e -> a to e }.first()
             if (audio.audioDefaultSpeed != 1.0f) {
                 engine.changePlaybackSpeed(audio.audioDefaultSpeed)
             }
             nightModeVolume = audio.audioNightModeVolume
             nightModeGain = audio.audioNightModeGain
             skipPreviousThresholdMs = audio.audioSkipPreviousThresholdMs
-            effectsManager.setNightModeParams(audio.audioNightModeVolume, audio.audioNightModeGain)
             engine.setSkipPreviousThreshold(audio.audioSkipPreviousThresholdMs)
-            effectsManager.setDialogueBoostStrength(effects.dialogueBoostStrength)
-            effectsManager.setNightModeStrength(effects.nightModeStrength)
-            engine.setCrossfadeDurationMs(audio.audioCrossfadeDurationMs)
-            engine.setGaplessEnabled(audio.audioGaplessEnabled)
-            effectsManager.setReplayGainMode(audio.audioNormalizationMode)
-            effectsManager.setReplayGainPreAmpDb(audio.replayGainPreAmpDb)
-            effectsManager.setBassBoostStrength(effects.bassBoostStrength)
-            effectsManager.setVirtualizerStrength(effects.virtualizerStrength)
-            effectsManager.setLrBalance(effects.lrBalance)
-            effectsManager.setPitchSemitones(effects.pitchSemitones)
-            effectsManager.setAutoEqByGenre(effects.autoEqByGenre)
-            // Strength fields are not flow-exposed by the manager; seed them into uiState from prefs.
-            _uiState.update {
-                it.copy(
-                    effects = it.effects.copy(
-                        dialogueBoostStrength = effects.dialogueBoostStrength,
-                        nightModeStrength = effects.nightModeStrength,
-                        bassBoostStrength = effects.bassBoostStrength,
-                    ),
-                )
-            }
+            // The prefs→effects field list lives in ONE place: the controller's
+            // seeding entry (apply-only — the values came FROM the stores).
+            effects.seedForPlayback(audio, fx)
         }
 
         fetchBlurHash(itemId)
@@ -454,142 +464,44 @@ class AudioPlayerViewModel(
         queueManager.playFromQueue(index)
     }
 
-    fun toggleDialogueBoost() {
-        effectsManager.toggleDialogueBoost()
-        launch {
-            audioEffectsStore.setDialogueBoostEnabled(_uiState.value.effects.dialogueBoostEnabled)
-        }
-    }
+    // Effects setters: one-line delegates — the apply→mirror→persist
+    // choreography lives on [effects] (AudioEffectsController).
 
-    fun setDialogueBoostStrength(strength: EffectStrength) {
-        effectsManager.setDialogueBoostStrength(strength)
-        _uiState.update {
-            it.copy(effects = it.effects.copy(dialogueBoostStrength = strength))
-        }
-        launch {
-            audioEffectsStore.setDialogueBoostStrength(strength)
-        }
-    }
+    fun toggleDialogueBoost() = effects.toggleDialogueBoost()
 
-    fun toggleNightMode() {
-        effectsManager.toggleNightMode()
-        launch {
-            audioEffectsStore.setNightModeEnabled(_uiState.value.effects.nightModeEnabled)
-        }
-    }
+    fun setDialogueBoostStrength(strength: EffectStrength) = effects.setDialogueBoostStrength(strength)
 
-    fun setNightModeStrength(strength: EffectStrength) {
-        effectsManager.setNightModeStrength(strength)
-        _uiState.update {
-            it.copy(effects = it.effects.copy(nightModeStrength = strength))
-        }
-        launch {
-            audioEffectsStore.setNightModeStrength(strength)
-        }
-    }
+    fun toggleNightMode() = effects.toggleNightMode()
 
-    fun setReplayGainMode(mode: AudioNormalizationMode) {
-        effectsManager.setReplayGainMode(mode)
-        launch {
-            audioStore.setAudioNormalizationMode(mode)
-        }
-    }
+    fun setNightModeStrength(strength: EffectStrength) = effects.setNightModeStrength(strength)
 
-    fun setReplayGainPreAmpDb(db: Float) {
-        effectsManager.setReplayGainPreAmpDb(db)
-        launch {
-            audioStore.setReplayGainPreAmpDb(db)
-        }
-    }
+    fun setReplayGainMode(mode: AudioNormalizationMode) = effects.setReplayGainMode(mode)
 
-    fun toggleEqualizer() {
-        effectsManager.toggleEqualizer()
-        launch {
-            audioEffectsStore.setEqualizerEnabled(_uiState.value.effects.equalizerEnabled)
-        }
-    }
+    fun setReplayGainPreAmpDb(db: Float) = effects.setReplayGainPreAmpDb(db)
 
-    fun setEqualizerBand(bandIndex: Int, levelDb: Int) {
-        effectsManager.setEqualizerBand(bandIndex, levelDb)
-        launch {
-            audioEffectsStore.setEqualizerSettings(_uiState.value.effects.equalizerSettings)
-        }
-    }
+    fun toggleEqualizer() = effects.toggleEqualizer()
 
-    fun resetEqualizer() {
-        effectsManager.resetEqualizer()
-        launch {
-            audioEffectsStore.setEqualizerSettings(_uiState.value.effects.equalizerSettings)
-            audioEffectsStore.setEqualizerPreset(_uiState.value.effects.equalizerPreset)
-        }
-    }
+    fun setEqualizerBand(bandIndex: Int, levelDb: Int) = effects.setEqualizerBand(bandIndex, levelDb)
 
-    fun applyEqualizerPreset(preset: EqualizerPreset) {
-        effectsManager.setEqualizerPreset(preset)
-        launch {
-            audioEffectsStore.setEqualizerPreset(preset)
-            audioEffectsStore.setEqualizerSettings(_uiState.value.effects.equalizerSettings)
-        }
-    }
+    fun resetEqualizer() = effects.resetEqualizer()
 
-    fun toggleBassBoost() {
-        effectsManager.toggleBassBoost()
-        launch {
-            audioEffectsStore.setBassBoostEnabled(_uiState.value.effects.bassBoostEnabled)
-        }
-    }
+    fun setEqualizerPreset(preset: EqualizerPreset) = effects.setEqualizerPreset(preset)
 
-    fun setBassBoostStrength(strength: EffectStrength) {
-        effectsManager.setBassBoostStrength(strength)
-        _uiState.update {
-            it.copy(effects = it.effects.copy(bassBoostStrength = strength))
-        }
-        launch {
-            audioEffectsStore.setBassBoostStrength(strength)
-        }
-    }
+    fun toggleBassBoost() = effects.toggleBassBoost()
 
-    fun toggleVirtualizer() {
-        effectsManager.toggleVirtualizer()
-        launch {
-            audioEffectsStore.setVirtualizerEnabled(_uiState.value.effects.virtualizerEnabled)
-        }
-    }
+    fun setBassBoostStrength(strength: EffectStrength) = effects.setBassBoostStrength(strength)
 
-    fun applyVirtualizerStrength(strength: Int) {
-        effectsManager.setVirtualizerStrength(strength)
-        launch {
-            audioEffectsStore.setVirtualizerStrength(strength)
-        }
-    }
+    fun toggleVirtualizer() = effects.toggleVirtualizer()
 
-    fun applyReverbPreset(preset: ReverbPreset) {
-        effectsManager.setReverbPreset(preset)
-        launch {
-            audioEffectsStore.setReverbPreset(preset)
-        }
-    }
+    fun setVirtualizerStrength(strength: Int) = effects.setVirtualizerStrength(strength)
 
-    fun applyLrBalance(balance: Float) {
-        effectsManager.setLrBalance(balance)
-        launch {
-            audioEffectsStore.setLrBalance(balance)
-        }
-    }
+    fun setReverbPreset(preset: ReverbPreset) = effects.setReverbPreset(preset)
 
-    fun applyPitchSemitones(semitones: Float) {
-        effectsManager.setPitchSemitones(semitones)
-        launch {
-            audioEffectsStore.setPitchSemitones(semitones)
-        }
-    }
+    fun setLrBalance(balance: Float) = effects.setLrBalance(balance)
 
-    fun applyAutoEqByGenre(enabled: Boolean) {
-        effectsManager.setAutoEqByGenre(enabled)
-        launch {
-            audioEffectsStore.setAutoEqByGenre(enabled)
-        }
-    }
+    fun setPitchSemitones(semitones: Float) = effects.setPitchSemitones(semitones)
+
+    fun setAutoEqByGenre(enabled: Boolean) = effects.setAutoEqByGenre(enabled)
 
     fun getImageUrl(itemId: String): String =
         engine.getImageUrl(itemId)
@@ -621,67 +533,22 @@ class AudioPlayerViewModel(
         engine.setLyricsOffset(offsetMs)
     }
 
-    fun updateCrossfadeDuration(ms: Long) {
-        engine.setCrossfadeDurationMs(ms)
-        launch {
-            audioStore.setAudioCrossfadeDurationMs(ms)
-        }
-    }
+    fun updateCrossfadeDuration(ms: Long) = effects.updateCrossfadeDuration(ms)
 
-    fun updateGaplessPlayback(enabled: Boolean) {
-        engine.setGaplessEnabled(enabled)
-        launch {
-            audioStore.setAudioGaplessEnabled(enabled)
-        }
-    }
+    fun updateGaplessPlayback(enabled: Boolean) = effects.updateGaplessPlayback(enabled)
 
-    fun startSleepTimer(durationMs: Long) {
-        launch {
-            audioStore.setSleepTimerDurationMs(durationMs)
-            audioStore.setSleepTimerEndOfEpisode(false)
-        }
-        sleepTimerManager.setOnTimerExpired {
-            // Explicit pause rather than togglePlayPause(): if the user paused
-            // manually after arming the timer, the toggle would otherwise RESUME
-            // playback — the opposite of the timer's intent.
-            engine.pause()
-        }
-        sleepTimerManager.start(durationMs)
-        _uiState.update {
-            it.copy(
-                sleepTimer = it.sleepTimer.copy(
-                    active = true,
-                    endOfEpisode = false,
-                    lastUsedDurationMs = durationMs,
-                ),
-            )
-        }
-    }
+    // Sleep timer: delegates onto [sleepTimer] (AudioSleepTimerController),
+    // which owns the store writes, the expiry callback (explicit pause, in ONE
+    // place), and the synchronous uiState slice updates. The flow collectors in
+    // init keep mirroring manager/prefs state into the same slice.
 
-    fun startSleepTimerEndOfEpisode() {
-        launch {
-            audioStore.setSleepTimerEndOfEpisode(true)
-        }
-        sleepTimerManager.setOnTimerExpired {
-            // Explicit pause rather than togglePlayPause(): see startSleepTimer.
-            engine.pause()
-        }
-        sleepTimerManager.startEndOfEpisode()
-        _uiState.update {
-            it.copy(sleepTimer = it.sleepTimer.copy(active = true, endOfEpisode = true))
-        }
-    }
+    fun startSleepTimer(durationMs: Long) = sleepTimer.startSleepTimer(durationMs)
 
-    fun cancelSleepTimer() {
-        sleepTimerManager.cancel()
-        _uiState.update {
-            it.copy(sleepTimer = it.sleepTimer.copy(active = false, endOfEpisode = false))
-        }
-    }
+    fun startSleepTimerEndOfEpisode() = sleepTimer.startSleepTimerEndOfEpisode()
 
-    fun triggerSleepTimerEndOfEpisode() {
-        sleepTimerManager.triggerEndOfEpisode()
-    }
+    fun cancelSleepTimer() = sleepTimer.cancelSleepTimer()
+
+    fun triggerSleepTimerEndOfEpisode() = sleepTimer.triggerSleepTimerEndOfEpisode()
 
     fun stopPlayback() {
         engine.stopAndRelease()

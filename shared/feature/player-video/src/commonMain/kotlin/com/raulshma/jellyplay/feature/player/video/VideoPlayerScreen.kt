@@ -152,7 +152,6 @@ import com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet
 import com.raulshma.jellyplay.feature.player.video.components.SubtitleDelayOverlay
 import com.raulshma.jellyplay.feature.player.video.components.SubtitleHubSheet
 import com.raulshma.jellyplay.feature.player.video.components.SubtitleHubTab
-import com.raulshma.jellyplay.feature.player.video.components.SubtitleManagerSheet
 import com.raulshma.jellyplay.feature.player.video.components.CastIndicatorOverlay
 import com.raulshma.jellyplay.feature.player.video.components.CompanionDashboard
 import com.raulshma.jellyplay.feature.player.video.components.ChapterPickerSheet
@@ -671,7 +670,7 @@ fun VideoPlayerScreen(
     // press in that window had no focused node to land on: Compose's
     // null-focus fallback dispatch stops at the topmost key-input node (the
     // desktop shell's scaffold onPreviewKeyEvent Row) — ESC popped, SPACE
-    // never reached this screen's handler (harness finding).
+    // never reached this screen's handler.
     // [layerComposed] tracks the keyboard layer's modifier branch above, so
     // the grab re-arms when it re-composes after a sheet closes. The Android
     // actual returns false, so the effect composes nothing on Android (phone
@@ -2200,7 +2199,7 @@ private fun PlayerSheetRouter(
             // both entry clicks (Tracks tab / overflow) only route here, so an
             // open costs one remote-subtitles request — the former hand-copied
             // click cascades double-fetched (click loads, then this effect
-            // cancelled and re-fetched). Declared timing delta: the fetch
+            // cancelled and re-fetched). Timing change: the fetch
             // starts at sheet composition rather than at click (the hub's
             // loading spinner already covers the in-flight window). The reset
             // intent is per-entry: the overflow entry opens with a cleared

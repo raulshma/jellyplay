@@ -16,6 +16,17 @@ interface AudioEffectsManager {
     val equalizerPreset: StateFlow<EqualizerPreset>
     val bassBoostEnabled: StateFlow<Boolean>
     val bassBoostStrengthState: EffectStrength
+
+    /**
+     * Synchronous read accessors for the two strengths that (unlike their
+     * `*Enabled` siblings and virtualizer) carry no flow — the setters below
+     * are their only writers, so the value is authoritative immediately after
+     * a set. Kept as plain vals (not flows) to match [bassBoostStrengthState]
+     * and avoid an interface-wide shape change; consumers mirror them at
+     * apply/seed time instead of collecting.
+     */
+    val dialogueBoostStrengthState: EffectStrength
+    val nightModeStrengthState: EffectStrength
     val virtualizerEnabled: StateFlow<Boolean>
     val virtualizerStrength: StateFlow<Int>
     val reverbPresetState: StateFlow<ReverbPreset>

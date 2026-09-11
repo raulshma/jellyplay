@@ -289,6 +289,15 @@
     <string name="settings_connected_to">Connesso a %1$s</string>
     <string name="settings_connection_failed">Connessione non riuscita</string>
     <string name="settings_connecting">Connessione\u2026</string>
+    <!-- ConnectionProbe.kt fallback texts (probe failures without a usable server message) -->
+    <string name="settings_probe_login_failed">Accesso non riuscito</string>
+    <string name="settings_probe_unexpected_error">Si è verificato un errore imprevisto</string>
+    <string name="settings_probe_server_url_required">L\'URL del server è obbligatorio</string>
+    <string name="settings_probe_api_key_required">La chiave API è obbligatoria</string>
+    <string name="settings_probe_username_password_required">Nome utente e password obbligatori</string>
+    <string name="settings_probe_email_password_required">Email e password obbligatorie</string>
+    <string name="settings_probe_enter_credentials">Inserisci prima le credenziali</string>
+    <string name="settings_probe_provider_not_configured">Provider non configurato</string>
     <string name="settings_credentials_configured">Credenziali configurate</string>
     <string name="settings_configure_server_address">Configura l\'indirizzo del server</string>
     <string name="settings_clear_cd">Cancella</string>
@@ -1143,8 +1152,6 @@
     <string name="settings_subtitles_password">Password</string>
     <string name="settings_subtitles_save">Salva</string>
     <string name="settings_subtitles_test">Test</string>
-    <string name="settings_subtitles_testing">Test in corso…</string>
-    <string name="settings_subtitles_connected">Connesso</string>
 
     <!-- Settings search items (moved from core/ui; ss_cat_* categories stay there) -->
     <string name="ss_logout_title">Esci</string>

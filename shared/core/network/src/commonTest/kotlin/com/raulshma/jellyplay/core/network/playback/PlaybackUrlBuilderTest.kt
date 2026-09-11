@@ -74,6 +74,25 @@ class PlaybackUrlBuilderTest {
     }
 
     @Test
+    fun `trailing slash on the base url is trimmed`() {
+        // Regression guard: the jvmShared impl once interpolated
+        // activeBaseUrl raw, so a trailing-slash base used to
+        // yield "//Videos/…" on the JVM only.
+        assertEquals(
+            "$BASE/Videos/i/stream?static=true&mediaSourceId=m&startTimeTicks=0&api_key=$KEY",
+            buildStreamUrl("$BASE/", KEY, USER, null, "i", "m"),
+        )
+        assertEquals(
+            "$BASE/Videos/i/m/Subtitles/0/Stream.srt?api_key=$KEY",
+            buildSubtitleDeliveryUrl("$BASE/", KEY, "i", "m", 0, null),
+        )
+        assertEquals(
+            "$BASE/Videos/i/m/Subtitles/1/Stream.vtt?api_key=$KEY",
+            resolveSubtitleDeliveryUrl("$BASE/", KEY, "/Videos/i/m/Subtitles/1/Stream.vtt"),
+        )
+    }
+
+    @Test
     fun `subtitle delivery url maps codecs and refuses image formats`() {
         assertEquals(
             "$BASE/Videos/i/m/Subtitles/2/Stream.srt?api_key=$KEY",

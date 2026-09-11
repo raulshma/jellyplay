@@ -71,6 +71,9 @@ class AudioEffectsProcessor() {
     private var _bassBoostStrength = EffectStrength.MODERATE
     val bassBoostStrengthState: EffectStrength get() = _bassBoostStrength
 
+    val dialogueBoostStrengthState: EffectStrength get() = _dialogueBoostStrength
+    val nightModeStrengthState: EffectStrength get() = _nightModeStrength
+
     private val _virtualizerEnabled = MutableStateFlow(false)
     val virtualizerEnabled: StateFlow<Boolean> = _virtualizerEnabled.asStateFlow()
 

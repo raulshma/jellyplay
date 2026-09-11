@@ -16,6 +16,7 @@ import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.AudioPlayerUiPreferences
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.EqualizerPreset
+import com.raulshma.jellyplay.core.model.EqualizerSettings
 import com.raulshma.jellyplay.core.model.ReverbPreset
 import io.mockk.coVerify
 import io.mockk.every
@@ -76,6 +77,9 @@ class AudioPlayerViewModelTest {
         every { projections.audioPlayerUiPreferences } returns MutableStateFlow(AudioPlayerUiPreferences())
         every { audioStore.audio } returns MutableStateFlow(AudioSlice())
         every { audioEffectsStore.audioEffects } returns MutableStateFlow(AudioEffectsSlice())
+        // The effects flows the AudioEffectsController persist legs read
+        // synchronously — see stubAudioEffectsReadSurface.
+        stubAudioEffectsReadSurface(effectsManager)
 
         viewModel = AudioPlayerViewModel(
             queueManager = queueManager,
@@ -317,43 +321,43 @@ class AudioPlayerViewModelTest {
     }
 
     @Test
-    fun applyVirtualizerStrength_delegatesAndPersists() {
-        viewModel.applyVirtualizerStrength(800)
+    fun setVirtualizerStrength_delegatesAndPersists() {
+        viewModel.setVirtualizerStrength(800)
         verify { effectsManager.setVirtualizerStrength(800) }
         coVerify { audioEffectsStore.setVirtualizerStrength(800) }
     }
 
     @Test
-    fun applyReverbPreset_delegatesAndPersists() {
-        viewModel.applyReverbPreset(ReverbPreset.LARGE_HALL)
+    fun setReverbPreset_delegatesAndPersists() {
+        viewModel.setReverbPreset(ReverbPreset.LARGE_HALL)
         verify { effectsManager.setReverbPreset(ReverbPreset.LARGE_HALL) }
         coVerify { audioEffectsStore.setReverbPreset(ReverbPreset.LARGE_HALL) }
     }
 
     @Test
-    fun applyLrBalance_delegatesAndPersists() {
-        viewModel.applyLrBalance(-0.5f)
+    fun setLrBalance_delegatesAndPersists() {
+        viewModel.setLrBalance(-0.5f)
         verify { effectsManager.setLrBalance(-0.5f) }
         coVerify { audioEffectsStore.setLrBalance(-0.5f) }
     }
 
     @Test
-    fun applyPitchSemitones_delegatesAndPersists() {
-        viewModel.applyPitchSemitones(2f)
+    fun setPitchSemitones_delegatesAndPersists() {
+        viewModel.setPitchSemitones(2f)
         verify { effectsManager.setPitchSemitones(2f) }
         coVerify { audioEffectsStore.setPitchSemitones(2f) }
     }
 
     @Test
-    fun applyAutoEqByGenre_delegatesAndPersists() {
-        viewModel.applyAutoEqByGenre(true)
+    fun setAutoEqByGenre_delegatesAndPersists() {
+        viewModel.setAutoEqByGenre(true)
         verify { effectsManager.setAutoEqByGenre(true) }
         coVerify { audioEffectsStore.setAutoEqByGenre(true) }
     }
 
     @Test
-    fun applyEqualizerPreset_delegatesAndPersists() {
-        viewModel.applyEqualizerPreset(EqualizerPreset.ROCK)
+    fun setEqualizerPreset_delegatesAndPersists() {
+        viewModel.setEqualizerPreset(EqualizerPreset.ROCK)
         verify { effectsManager.setEqualizerPreset(EqualizerPreset.ROCK) }
         coVerify { audioEffectsStore.setEqualizerPreset(EqualizerPreset.ROCK) }
     }

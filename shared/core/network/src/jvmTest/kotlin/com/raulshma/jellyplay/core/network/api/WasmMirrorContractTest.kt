@@ -7,8 +7,10 @@ import kotlin.test.assertTrue
 
 /**
  * The wasm↔JVM mirror contract (the drift ratchet): the wasmJs Ktor clients
- * ([KtorWasmLibraryApiClient], [KtorWasmUserApiClient]) hand-mirror the
- * jvmShared SDK clients ([LibraryApiClientImpl], [UserApiClientImpl])
+ * ([KtorWasmLibraryApiClient], [KtorWasmUserApiClient],
+ * [KtorWasmAuthApiClient], [KtorWasmPlaybackApiClient]) hand-mirror the
+ * jvmShared SDK clients ([LibraryApiClientImpl], [UserApiClientImpl],
+ * [AuthApiClientImpl], [PlaybackApiClientImpl])
  * request-for-request because the wasm target has no Jellyfin SDK — and the
  * wasmJsTest lane never executes in CI, so a per-endpoint drift (wrong path,
  * wrong query param name, an endpoint missing on one side) is invisible until
@@ -32,9 +34,13 @@ import kotlin.test.assertTrue
  *  - which query params the SDK implicitly sends (e.g. getItems always adds
  *    enableTotalRecordCount/enableImages — the wasm `itemsEndpointDefaults`).
  *
- * Follow-ups (same machinery, not yet mirrored): the auth and playback wasm
- * client pairs. The ARR/Seerr/Tmdb wasm mirrors are OUT of scope for this
- * extraction — they use a different URL-builder idiom on both sides.
+ * All four wasm client pairs are mirrored here (auth + playback landed as
+ * the recorded follow-up; playback waited for the JVM impl's hand-built
+ * stream-URL table to fold onto the shared PlaybackUrlBuilders, and the JVM
+ * impl's raw-OkHttp getBodyText probes are extracted by [jvmWireCalls] to
+ * match wasm's getBodyTextWithEmbyToken). The ARR/Seerr/Tmdb wasm mirrors
+ * are OUT of scope for this extraction — they use a different URL-builder
+ * idiom on both sides.
  */
 class WasmMirrorContractTest {
 
@@ -165,6 +171,43 @@ class WasmMirrorContractTest {
             SdkEndpoint("GET", "/Library/MediaFolders"),
         "localizationApi.getParentalRatings" to
             SdkEndpoint("GET", "/Localization/ParentalRatings"),
+        // ── used by AuthApiClientImpl ─────────────────────────────────────
+        "userApi.authenticateUserByName" to
+            SdkEndpoint("POST", "/Users/AuthenticateByName"),
+        "userApi.authenticateWithQuickConnect" to
+            SdkEndpoint("POST", "/Users/AuthenticateWithQuickConnect"),
+        "quickConnectApi.getQuickConnectEnabled" to
+            SdkEndpoint("GET", "/QuickConnect/Enabled"),
+        "quickConnectApi.initiateQuickConnect" to
+            SdkEndpoint("POST", "/QuickConnect/Initiate"),
+        "quickConnectApi.getQuickConnectState" to
+            SdkEndpoint("GET", "/QuickConnect/Connect"),
+        "quickConnectApi.authorizeQuickConnect" to
+            SdkEndpoint("POST", "/QuickConnect/Authorize"),
+        // The SDK's `id` param defaults null (never on the wire); `data` is the body.
+        "sessionApi.postFullCapabilities" to
+            SdkEndpoint("POST", "/Sessions/Capabilities/Full"),
+        // ── used by PlaybackApiClientImpl ─────────────────────────────────
+        "playStateApi.reportPlaybackStart" to
+            SdkEndpoint("POST", "/Sessions/Playing"),
+        "playStateApi.reportPlaybackProgress" to
+            SdkEndpoint("POST", "/Sessions/Playing/Progress"),
+        "playStateApi.reportPlaybackStopped" to
+            SdkEndpoint("POST", "/Sessions/Playing/Stopped"),
+        "mediaInfoApi.getPostedPlaybackInfo" to
+            SdkEndpoint("POST", "/Items/{itemId}/PlaybackInfo", pathArgs = setOf("itemId")),
+        "sessionApi.getSessions" to
+            SdkEndpoint("GET", "/Sessions"),
+        "mediaSegmentsApi.getItemSegments" to
+            SdkEndpoint("GET", "/MediaSegments/{itemId}", pathArgs = setOf("itemId")),
+        "subtitleApi.downloadRemoteSubtitles" to
+            SdkEndpoint("POST", "/Items/{itemId}/RemoteSearch/Subtitles/{subtitleId}", pathArgs = setOf("itemId", "subtitleId")),
+        "trickplayApi.getTrickplayTileImage" to
+            SdkEndpoint("GET", "/Videos/{itemId}/Trickplay/{width}/{index}.jpg", pathArgs = setOf("itemId", "width", "index")),
+        "imageApi.getItemImage" to
+            SdkEndpoint("GET", "/Items/{itemId}/Images/{imageType}", pathArgs = setOf("itemId", "imageType")),
+        "timeSyncApi.getUtcTime" to
+            SdkEndpoint("GET", "/GetUtcTime"),
     )
 
     /** SDK calls that build a URL string but issue no wire request. */
@@ -201,6 +244,12 @@ class WasmMirrorContractTest {
         val label: String,
         val jvmRelativePath: String,
         val wasmRelativePath: String,
+        /**
+         * Scan floor for the broken-scan guard: the auth pair is small enough
+         * that the library-shaped ≥12 default would be unreachable, so each
+         * pair declares the wire-call count its scan must clear.
+         */
+        val minWireCalls: Int = 12,
     )
 
     private val pairs = listOf(
@@ -214,10 +263,26 @@ class WasmMirrorContractTest {
             jvmRelativePath = "src/jvmShared/kotlin/com/raulshma/jellyplay/core/network/api/UserApiClientImpl.kt",
             wasmRelativePath = "src/wasmJsMain/kotlin/com/raulshma/jellyplay/core/network/api/KtorWasmUserApiClient.kt",
         ),
+        MirrorPair(
+            label = "KtorWasmAuthApiClient ↔ AuthApiClientImpl",
+            jvmRelativePath = "src/jvmShared/kotlin/com/raulshma/jellyplay/core/network/api/AuthApiClientImpl.kt",
+            wasmRelativePath = "src/wasmJsMain/kotlin/com/raulshma/jellyplay/core/network/api/KtorWasmAuthApiClient.kt",
+            minWireCalls = 8,
+        ),
+        MirrorPair(
+            label = "KtorWasmPlaybackApiClient ↔ PlaybackApiClientImpl",
+            jvmRelativePath = "src/jvmShared/kotlin/com/raulshma/jellyplay/core/network/api/PlaybackApiClientImpl.kt",
+            wasmRelativePath = "src/wasmJsMain/kotlin/com/raulshma/jellyplay/core/network/api/KtorWasmPlaybackApiClient.kt",
+            // 13 wire calls today; the floor sits at the exact count (not the
+            // library-shaped default) so silently dropping any single
+            // one-call endpoint trips the broken-scan guard.
+            minWireCalls = 13,
+        ),
     )
 
     private class MirrorAnalysis(
         val label: String,
+        val minWireCalls: Int,
         val jvmMembers: Map<String, List<WireCall>>,
         val wasmMembers: Map<String, List<WireCall>>,
     )
@@ -238,6 +303,7 @@ class WasmMirrorContractTest {
             val itemsDefaults = wasmItemsEndpointDefaults(wasmText)
             MirrorAnalysis(
                 label = pair.label,
+                minWireCalls = pair.minWireCalls,
                 jvmMembers = memberBlocks(jvmText)
                     .filterValues { block -> !block.startsWith("    private val") || jvmHasTransport(block) }
                     .mapValues { (_, block) -> jvmWireCalls(block) },
@@ -324,7 +390,9 @@ class WasmMirrorContractTest {
         return sites.mapNotNull { match ->
             val openParen = block.indexOf('(', match.range.endInclusive - 1)
             val args = balancedArgs(block, openParen) ?: return@mapNotNull null
-            val path = Regex("apiUrl\\([^,]+,\\s*\"([^\"]*)\"\\)").find(args)?.groupValues?.get(1)
+            // The path is always apiUrl's LAST argument; getItemImageBytes
+            // wraps it onto its own line, so tolerate `",\n )` closings.
+            val path = Regex("apiUrl\\([^,]+,\\s*\"([^\"]*)\"\\s*,?\\s*\\)").find(args)?.groupValues?.get(1)
                 ?: return@mapNotNull null
             // The SDK's non-null getItems defaults, replicated where the
             // client appends `+ itemsEndpointDefaults` to the query — either
@@ -338,12 +406,26 @@ class WasmMirrorContractTest {
             } else {
                 emptySet()
             }
+            val normalized = normalizePath(path, wasmPlaceholders = true)
             WireCall(
                 verb = wasmVerbs.getValue(match.groupValues[1]),
-                path = normalizePath(path, wasmPlaceholders = true),
-                params = queryKeys(if (singleCall) block else args) + sdkDefaults,
+                path = normalized.substringBefore('?'),
+                params = queryKeys(if (singleCall) block else args) + sdkDefaults + inlinedQueryKeys(normalized),
             )
         }
+    }
+
+    /**
+     * The wasm client inlines a lone query parameter into the path literal
+     * where the JVM SDK call carries it as a named arg (getItemImageBytes'
+     * `…Images/$imageType?maxWidth=$maxWidth`); split it out so the wire
+     * shapes compare as path + param name on both sides.
+     */
+    private fun inlinedQueryKeys(normalizedPath: String): Set<String> {
+        if ('?' !in normalizedPath) return emptySet()
+        return normalizedPath.substringAfter('?').split('&').mapNotNull { segment ->
+            Regex("([A-Za-z][A-Za-z0-9]*)=").find(segment)?.groupValues?.get(1)
+        }.toSet()
     }
 
     /** Query keys: every `"key" to …` pair (the only to-pair usage in these clients). */
@@ -391,6 +473,16 @@ class WasmMirrorContractTest {
             val verb = Regex("method\\s*=\\s*HttpMethod\\.(\\w+)").find(args)?.groupValues?.get(1) ?: continue
             val path = Regex("pathTemplate\\s*=\\s*\"([^\"]*)\"").find(args)?.groupValues?.get(1) ?: continue
             calls.add(WireCall(verb, normalizePath(path), emptySet()))
+        }
+
+        // Raw-OkHttp calls through JellyfinRawRequester — getBodyText is the
+        // X-Emby-Token GET that the wasm side names getBodyTextWithEmbyToken
+        // (the token rides the header on both sides, never the query).
+        for (match in Regex("\\brawRequester\\.getBodyText\\s*\\(").findAll(block)) {
+            val openParen = block.indexOf('(', match.range.endInclusive - 1)
+            val args = balancedArgs(block, openParen) ?: continue
+            val path = Regex("path\\s*=\\s*\"([^\"]*)\"").find(args)?.groupValues?.get(1) ?: continue
+            calls.add(WireCall("GET", normalizePath(path), queryKeys(args)))
         }
 
         return calls
@@ -515,10 +607,10 @@ class WasmMirrorContractTest {
             val wasmCallCount = analysis.wasmMembers.values.sumOf { it.size }
             assertTrue(
                 analysis.jvmMembers.size >= 10 && analysis.wasmMembers.size >= 10 &&
-                    jvmCallCount >= 12 && wasmCallCount >= 12,
+                    jvmCallCount >= analysis.minWireCalls && wasmCallCount >= analysis.minWireCalls,
                 "${analysis.label}: scan is broken — found ${analysis.jvmMembers.size}/${analysis.wasmMembers.size} " +
-                    "members and $jvmCallCount/$wasmCallCount wire calls (an empty scan would vacuously pass " +
-                    "every parity assertion above).",
+                    "members and $jvmCallCount/$wasmCallCount wire calls, below the ${analysis.minWireCalls}-call " +
+                    "floor (an empty scan would vacuously pass every parity assertion above).",
             )
         }
     }

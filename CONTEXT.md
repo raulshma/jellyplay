@@ -1588,9 +1588,12 @@ per-method wire-shape equality, with declared-divergence exception slots
 (currently empty; one documented placeholder alias: wasm's `entryId`
 names the SDK's `{itemId}` segment in `movePlaylistItem`). The same
 machinery covers the user-client pair (`KtorWasmUserApiClient` ↔
-`UserApiClientImpl`); the auth and playback wasm clients are noted
-follow-ups, and the ARR/Seerr/Tmdb wasm mirrors use a different
-URL-builder idiom on both sides so they would need different extraction.
+`UserApiClientImpl`) and — since the 2026-09-11 second wave — the auth
+pair (`KtorWasmAuthApiClient` ↔ `AuthApiClientImpl`) and the playback
+pair (`KtorWasmPlaybackApiClient` ↔ `PlaybackApiClientImpl`); the
+ARR/Seerr/Tmdb wasm mirrors still use a different URL-builder idiom on
+both sides, so they would need different extraction (the deferred
+wire-request unification below).
 Its first run caught a real drift — the wasm `emptyLibraryFallback`'s
 latest-media probe omitted the SDK's always-sent `groupItems=true`.
 `JellyfinApiEngine.requireUserId()` / `currentUserId()` (internal, beside
@@ -2763,6 +2766,127 @@ confirm; the call site owns any clear) and points here for the
 typed-payload machine. DevicesViewModel's dead `selectDevice` (zero
 callers, inexpressible against the machine pair) died in the migration.
 
+## The 2026-09-11 second wave (7 deepenings)
+
+Landed autonomously via parallel workstreams (one rate-limit restart), each with
+pinned tests; a consolidated gradle pass green across every touched module. The
+theme: verbatim platform twins collapsing onto shared cores, and hand-copied
+probe/persist choreographies getting homes.
+
+- **`PlaybackUrlBuilders` adoption (JVM)**: `PlaybackApiClientImpl`'s three
+  hand-rolled URL methods (stream/subtitle delivery — the audio-vs-video
+  endpoint pick, the `static=true` rule, the `LiveStreamId` echo, the
+  `deviceId`/`userId` pair, the subrip→srt table) now delegate to the commonMain
+  builders the wasm client already used; ~40 inline lines deleted. Declared
+  delta: the helper's trailing-slash trim now applies on the JVM path (the old
+  inline code interpolated `activeBaseUrl` raw; no test pinned the raw form).
+  `PlaybackUrlBuilderTest` gains the trim pin; `PlaybackApiClientTest`'s nine
+  folded assertions tightened from `contains()` to exact-string.
+- **`WasmMirrorContractTest` covers all four pairs**: the recorded follow-up
+  landed — auth (8 wire calls) and playback (13) join library/user; 17 new
+  `sdkEndpoints` entries verified against the jellyfin-api 1.8.12 sources;
+  method-set parity both directions, wire-shape per method, exceptions table
+  still empty. One named-arg adoption in `AuthApiClientImpl`
+  (`getQuickConnectState(secret = secret)`) so the harness derives the wire
+  name. Test-only — no implementation behaviour moved.
+- **`AutoDownloadCheck`** (shared/core/data jvmShared `worker/`, the
+  `PlaybackOutboxDrainer`/`ScanWorkerHelper` shape): the verbatim
+  Android↔desktop auto-download twin is ONE `checkOnce(attempt)` over injected
+  seams (prefs gate, series index, per-season `startSeries`, the `isStopped`
+  lambda) returning a 3-arm `Outcome` (`Complete`/`RetriesPending`/`Exhausted`)
+  the adapters map to `Result.retry()` / in-process passes. `MAX_RETRIES` is
+  declared once in the core; `RETRY_DELAY_MS` now references
+  `DownloadRepositoryImpl.DOWNLOAD_BACKOFF_DELAY_MS` for real (the comment-only
+  mirror is gone). `AutoDownloadWorker` 99→55 lines,
+  `DesktopAutoDownloadScheduler` loses its verbatim `runCheck` and gains its
+  first behavioural suite (`DesktopAutoDownloadSchedulerTest` +
+  `AutoDownloadCheckTest`, the CI-gated jvmTest lane). One micro-drift folded
+  to the Android-tested shape (null-tolerant prefs read).
+- **`AudioEffectsController` + `AudioSleepTimerController`** (player-audio
+  commonMain, the `VideoEffectsController` shape): 20 hand-copied
+  "apply → launch persist" VM setters are one-line delegates; toggles persist
+  the manager's synchronous `.value` flip instead of reading the lagging
+  uiState mirror inside a launch (the wrong-value-persist hazard is
+  structurally gone and pinned end-to-end); the two homeless strengths got
+  manager read accessors (`dialogueBoostStrengthState`/`nightModeStrengthState`
+  on `AudioEffectsManager`, implemented by `AudioEffectsProcessor` and
+  `DesktopAudioEffectsManager` — the interface is the seam) and the VM's shadow
+  copies died; `play()` seeding is one ordered `effects.seedForPlayback` entry
+  pinned by a reflection coverage guard (a new `AudioEffectsState` field fails
+  the suite until seeded or declared-not). `AudioSleepTimerController` folds
+  the four hand-rolled sleep functions — the explicit-pause rationale comment
+  lives once. Video's `SleepTimerController` is NOT reused (player-audio cannot
+  depend on player-video; video's variant carries video-only fade concerns).
+  The `AudioPreferencesReducer` double-apply timing is untouched (the recorded
+  `AudioPlaybackManager`-fold blocker stands; this wave is deliberately
+  VM-local). `AudioEffectsController.applyAndPersist` mirrors
+  `VideoEffectsController`'s apply→mirror→persist shape (module direction
+  blocks direct reuse) — a shared-core extraction (the `AutoDownloadCheck`
+  precedent) is a recorded candidate, do with the next effects-controller
+  touch in either module.
+- **`ConnectionProbe`** (settings commonMain, generic over request/key/details):
+  the three isomorphic service-probe machines (Arr / Seerr / SubtitleProvider —
+  three status seals, three lifecycles, three visuals, drifted) are one status
+  machine (`Idle`/`Testing`/`Connected(details)`/`Error(Failure)`) with RESTART
+  single-flight (a second probe cancels and supersedes; a stale outcome never
+  lands), `runCatchingRethrowingCancellation` discipline (a cancelled probe
+  never lands as Error — previously only Seerr had it), a `refused` pre-flight
+  seam (Subtitle's blank-credential guard), and localized failure text (the
+  three baked English literals + the required-field texts are `settings_probe_*`
+  resources in all 9 locales; `Failure.Reported` carries server text verbatim,
+  `Failure.Declared` resolves at render). Arr's semaphore cap stays at its
+  adapter (the batch is the only integration that needs it); one shared
+  `ConnectionProbeStatusIndicator` (pip/message/inline/banner styles) replaces
+  the three drifted visuals. Declared deltas: a crash degrades to a fallback
+  Error instead of killing the scope; a refusal supersedes an in-flight probe
+  (Seerr's old in-flight result could overwrite a fresh validation error);
+  Subtitle double-tap restarts instead of racing; and Arr's `testAllServers`
+  lost its batch-level cancellation frame — a second wave supersedes a
+  still-running prior wave key by key under the board's RESTART policy
+  (leaving-set probes are reaped by `retain`), instead of cancelling the
+  prior wave wholesale.
+- **Music collection chassis** (the deferred music load-ladder fold's landing
+  vehicle): `MusicCollectionKind` is the pure decision table (sort admission,
+  media-type binding, layout, empty/error presentation) for the five
+  collections; `PagedGrid` grew into
+  the ONE ladder (refresh-phase folds, append footer, pull-to-refresh, a
+  `PagedList` variant for tracks, `SimpleCollectionGrid` for the list-sourced
+  genres/playlists — its rung decision is the pure `simpleCollectionRung`,
+  pinned beside `pagedCollectionRung` in `PagedCollectionLadderTest`) — the
+  browse pages' bare grids, TracksPage's hand-rolled
+  ladder and the four standalone screens' hand-copied ladders are gone;
+  `MusicSortMenuButton` + `musicArtUrl` kill the 4-copy dropdown and image-url
+  copies; `SortedPagedCollection` now takes the kind. Error presentation rides
+  the table for both families: `SimpleListCollection`'s error is the failure
+  `Throwable` itself and the ladder renders `error.message` with the kind's
+  `errorFallbackRes` as the null-message fallback (no baked English literals);
+  its refresh is supersession-guarded — only the newest refresh may write
+  state back, so a stale in-flight load can neither clear the loading flag
+  early nor overwrite a newer refresh (`SimpleListCollectionTest` pins both
+  directions). Route signatures
+  unchanged (shell/`NavKey`/Koin untouched). Declared exception: the standalone
+  playlists screen keeps its own scaffolding around the chassis (the
+  create/edit/delete dialog host, per-row command menu, FAB and custom rows are
+  genuinely per-collection surface) — its load ladder still rides
+  `SimpleListCollection`; the browse tab's playlists page is the one rendering
+  `SimpleCollectionGrid`. The screen's command/mutation errors are the
+  resource-carrying `PlaylistCommandError` (`Reported` carries server text
+  verbatim, `Declared` resolves at render) over the `music_playlist_*` set in
+  all 9 locales — the recorded deferred fold landed with this wave. Declared
+  deltas: browse pages gain
+  pull-to-refresh/status/footer, browse artists gains `DATE_PLAYED` (the
+  standalone list is canonical), sort admission is data
+  (`MusicCollectionSortTableTest`; menus offer exactly `kind.sortOptions`).
+- **Dead `SubtitleManagerSheet` wrapper deleted**: the ~100-line public wrapper
+  had no production caller (production routes `SubtitleHubSheet` → the internal
+  `SubtitleManagerSection`) and was kept alive only by its own androidTest —
+  which pinned the wrapper's own title/progress chrome, surfaces the live
+  section never renders. File renamed `SubtitleManagerSection.kt` (the
+  section went public — the `:app` androidTest convention in that package);
+  the test retargets the live surface (15 tests ported, the two wrapper-chrome
+  pins — title + loading progress — deleted, one new chassis pin added:
+  `loading_hidesList`). Zero `SubtitleManagerSheet` references remain.
+
 ## Rejected designs
 
 Recorded with evidence so future reviews don't re-suggest them.
@@ -2880,10 +3004,12 @@ re-derives the designs nor lands them casually.
   deserves the grilling loop, not an autonomous batch.
 - **Feature-VM load-ladder fold**: the `isLoading = true, error = null`
   suspend-guard ladder is hand-copied across requests,
-  calendar, editor, music, syncplay (the livetv slice
-  LANDED 2026-09-08 as `LiveTvLoad` and the admin slice — 10 VMs, both
-  ladder shapes — as `AdminLoad` in the same day's third wave; see those
-  waves). Settle arms are
+  calendar, editor, syncplay (the livetv slice
+  LANDED 2026-09-08 as `LiveTvLoad`, the admin slice — 10 VMs, both
+  ladder shapes — as `AdminLoad` the same day, and the music slice
+  LANDED 2026-09-11 with the collection chassis — `SimpleListCollection`
+  + the `PagedGrid` ladders are genres'/playlists'/tracks' load homes).
+  Settle arms are
   drifted per copy (final-update vs per-arm vs getOrDefault — a missed arm
   leaves a stuck spinner). Design: one `loadInto`-shaped helper in core:ui
   next to `JellyPlayViewModel` (or a per-module helper like `LiveTvLoad`),
@@ -2993,3 +3119,45 @@ re-derives the designs nor lands them casually.
   feature whose screen already defers to `UserMessageHost`; needs a
   per-shell presentation mapping decision first. Deferred: deserves the
   grilling loop, not an autonomous batch.
+- **Audio queue-semantics fold** (2026-09-11 review candidate, not
+  landed): every queue rule — skipToNext wrap-under-repeat,
+  skipToPrevious's 3-second-seek-0 window, `removeFromQueue` index
+  coercion, `moveQueueItem` remap, `toggleShuffle`'s
+  move-current-to-head, undo-snapshot admission — is implemented twice
+  (`AudioPlaybackManager` over media3, `DesktopAudioQueueManager` over
+  mpv) with parity maintained by a 20-row prose table in the desktop
+  KDoc. Design: extract the pure queue-state decisions into a commonMain
+  module beside `QueueUndoStack`; the prose table becomes the executable
+  parity test. Deferred: both sides have separate suites (consolidation
+  value, not rescue) — land with the next queue-behaviour change.
+- **Settings row-admission functions** (2026-09-11 review candidate):
+  "which rows render" is decided 2–3× per screen — Playback's inline
+  count `when` + id-prefix engine totals (`startsWith("mpv_")` against
+  catalog ids), Storage's ~30 hand-incremented index counters, Appearance's
+  count — while Audio already has the intended idiom
+  (`audioScreenRowTotal`, contract-test-pinned). Design: pure per-group
+  admission functions beside `SettingsScreenGroups`; counts and index
+  sequences derive. Deferred: pure testability win with zero behaviour —
+  do with the next settings-screen touch, never bundled with the
+  section-host composition item.
+- **`Resilient*` wrapper deletion** (2026-09-11 review candidate): five
+  pass-through wrapper modules (~504 lines — Seerr/Sonarr/Radarr/Tmdb/
+  SubtitleProvider) exist only to force hand-forwarding
+  `RetryPolicy.executeWithRetry`; retry sits outside the impls (direct
+  construction silently loses it), 4 wrappers retry 4× vs Subtitle's 3×
+  (unpinned divergence), and the wasm twins apply retry inside their base
+  — two idioms for one policy. Design: move retry into each family's
+  single request funnel (`SeerrApiClientImpl.executeRequest`,
+  `ArrClientSupport`, Tmdb's helper, `SubtitleHttp`) and delete the
+  wrappers + their DI indirection. Deferred: one semantic check first
+  (method-level vs HTTP-call-level retry equivalence for the login/cookie
+  paths) and it touches five network families at once — its own session.
+- **Small folds** (2026-09-11 review candidates, opportunistic only):
+  `SearchScreen`'s paged-item access (~:894-933) re-derives the
+  bounds-check + peek three times — fold onto core/ui's `safeItemKey`
+  with the next SearchScreen touch. The three `*SecureCredentialsStore`
+  classes (Arr/Seerr/SubtitleProvider) are three get/put/clear + memo
+  copies over `SecureKeyValueStorage` with an inconsistent memo policy —
+  fold onto a keyed-credentials core only if touched for other reasons
+  (field sets genuinely differ; the deletion test only marginally
+  concentrates).

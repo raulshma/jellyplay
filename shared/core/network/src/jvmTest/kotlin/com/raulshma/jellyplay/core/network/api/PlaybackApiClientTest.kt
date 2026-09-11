@@ -11,7 +11,6 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class PlaybackApiClientImplTest {
@@ -19,6 +18,7 @@ class PlaybackApiClientImplTest {
     private lateinit var mockWebServer: MockWebServer
     private lateinit var engine: JellyfinApiEngine
     private lateinit var playbackClient: PlaybackApiClientImpl
+    private lateinit var baseUrl: String
 
     private val testServer = ServerInfo(
         id = "server-1",
@@ -38,7 +38,7 @@ class PlaybackApiClientImplTest {
     fun setup() {
         mockWebServer = MockWebServer()
         mockWebServer.start()
-        val baseUrl = mockWebServer.url("/").toString().trimEnd('/')
+        baseUrl = mockWebServer.url("/").toString().trimEnd('/')
 
         val jellyfin = mockk<Jellyfin>(relaxed = true)
         val okHttpClient = OkHttpClient()
@@ -63,25 +63,27 @@ class PlaybackApiClientImplTest {
         mockWebServer.shutdown()
     }
 
+    // The stream/subtitle URL methods delegate to the shared commonMain
+    // builders (PlaybackUrlBuilders), so the exact strings are pinned here
+    // rather than loose contains() fragments.
+
     @Test
     fun `getStreamUrl constructs correct URL`() {
         val url = playbackClient.getStreamUrl("item-1", "source-1", 5000L)
-        assertTrue(url.contains("/Videos/item-1/stream"))
-        assertTrue(url.contains("static=true"))
-        assertTrue(url.contains("mediaSourceId=source-1"))
-        assertTrue(url.contains("startTimeTicks=5000"))
-        assertTrue(url.contains("api_key=token-123"))
+        assertEquals(
+            "$baseUrl/Videos/item-1/stream?static=true&mediaSourceId=source-1&startTimeTicks=5000&api_key=token-123",
+            url,
+        )
     }
 
     @Test
     fun `getStreamUrl appends LiveStreamId and drops static for live sources`() {
         val url = playbackClient.getStreamUrl("channel-1", "source-1", 0L, liveStreamId = "live-abc")
-        assertTrue(url.contains("/Videos/channel-1/stream"))
         // static=true would break a non-seekable live tuner stream
-        assertFalse(url.contains("static=true"))
-        assertTrue(url.contains("LiveStreamId=live-abc"))
-        assertTrue(url.contains("mediaSourceId=source-1"))
-        assertTrue(url.contains("api_key=token-123"))
+        assertEquals(
+            "$baseUrl/Videos/channel-1/stream?mediaSourceId=source-1&startTimeTicks=0&LiveStreamId=live-abc&api_key=token-123",
+            url,
+        )
     }
 
     @Test
@@ -94,19 +96,19 @@ class PlaybackApiClientImplTest {
     @Test
     fun `getSubtitleDeliveryUrl appends api key`() {
         val url = playbackClient.getSubtitleDeliveryUrl("/Videos/item/Subtitles/0")
-        assertTrue(url.contains("api_key=token-123"))
+        assertEquals("$baseUrl/Videos/item/Subtitles/0?api_key=token-123", url)
     }
 
     @Test
     fun `getSubtitleDeliveryUrl handles query params in delivery URL`() {
         val url = playbackClient.getSubtitleDeliveryUrl("/Videos/item/Subtitles/0?format=srt")
-        assertTrue(url.contains("&api_key=token-123"))
+        assertEquals("$baseUrl/Videos/item/Subtitles/0?format=srt&api_key=token-123", url)
     }
 
     @Test
     fun `getSubtitleDeliveryUrl handles full URL`() {
         val url = playbackClient.getSubtitleDeliveryUrl("https://other.server/video.srt")
-        assertTrue(url.contains("api_key=token-123"))
+        assertEquals("https://other.server/video.srt?api_key=token-123", url)
     }
 
     @Test
@@ -119,20 +121,19 @@ class PlaybackApiClientImplTest {
     @Test
     fun `buildSubtitleDeliveryUrl with srt codec`() {
         val url = playbackClient.buildSubtitleDeliveryUrl("item-1", "source-1", 0, "srt")
-        assertTrue(url.contains("/Subtitles/0/Stream.srt"))
-        assertTrue(url.contains("api_key=token-123"))
+        assertEquals("$baseUrl/Videos/item-1/source-1/Subtitles/0/Stream.srt?api_key=token-123", url)
     }
 
     @Test
     fun `buildSubtitleDeliveryUrl with subrip codec converts to srt`() {
         val url = playbackClient.buildSubtitleDeliveryUrl("item-1", "source-1", 0, "subrip")
-        assertTrue(url.contains("/Subtitles/0/Stream.srt"))
+        assertEquals("$baseUrl/Videos/item-1/source-1/Subtitles/0/Stream.srt?api_key=token-123", url)
     }
 
     @Test
     fun `buildSubtitleDeliveryUrl with null codec defaults to srt`() {
         val url = playbackClient.buildSubtitleDeliveryUrl("item-1", "source-1", 0, null)
-        assertTrue(url.contains("/Subtitles/0/Stream.srt"))
+        assertEquals("$baseUrl/Videos/item-1/source-1/Subtitles/0/Stream.srt?api_key=token-123", url)
     }
 
     @Test
@@ -167,7 +168,7 @@ class PlaybackApiClientImplTest {
     @Test
     fun `buildSubtitleDeliveryUrl still serves ASS text codec`() {
         val url = playbackClient.buildSubtitleDeliveryUrl("item-1", "source-1", 0, "ass")
-        assertTrue(url.contains("/Subtitles/0/Stream.ass"))
+        assertEquals("$baseUrl/Videos/item-1/source-1/Subtitles/0/Stream.ass?api_key=token-123", url)
     }
 
     @Test

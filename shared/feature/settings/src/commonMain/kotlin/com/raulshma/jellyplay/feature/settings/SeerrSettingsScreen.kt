@@ -26,8 +26,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -48,15 +46,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import org.koin.compose.viewmodel.koinViewModel
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
-import com.raulshma.jellyplay.core.designsystem.theme.StatusColors
 import com.raulshma.jellyplay.core.designsystem.theme.expressiveListShape
 import com.raulshma.jellyplay.core.model.seerr.SeerrAuthMethod
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
@@ -74,7 +69,6 @@ import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.SettingListItem
 import com.raulshma.jellyplay.core.ui.components.SettingToggleItem
-import com.raulshma.jellyplay.feature.settings.SeerrSettingsViewModel.ConnectionStatus
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 import org.jetbrains.compose.resources.stringResource
@@ -83,11 +77,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_adva
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_advanced_discover_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_api_key_label
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_api_key_placeholder
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_connected
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_connected_to
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_connecting
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_connection_failed
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_connection_failed_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_content_regions
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_content_regions_summary
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_configure_server_address
@@ -150,9 +141,10 @@ fun SeerrSettingsScreen(
     viewModel: SeerrSettingsViewModel = koinViewModel(),
 ) {
     val preferences by viewModel.preferences.collectAsStateWithLifecycle()
-    val connectionStatus = viewModel.connectionStatus
-    val isTesting = viewModel.isTesting
-    val isConnected = connectionStatus is ConnectionStatus.Connected
+    // Non-delegated local so the status arms smart-cast in the folds below.
+    val connectionStatus = viewModel.connectionStatus.collectAsStateWithLifecycle().value
+    val isTesting = connectionStatus is ConnectionProbe.Status.Testing
+    val isConnected = connectionStatus is ConnectionProbe.Status.Connected
 
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
@@ -224,11 +216,11 @@ fun SeerrSettingsScreen(
                         title = stringResource(Res.string.settings_server_connection),
                         summary = {
                             when (connectionStatus) {
-                                is ConnectionStatus.Connected -> {
-                                    val versionText = if (connectionStatus.version.isNotBlank()) " (v${connectionStatus.version})" else ""
+                                is ConnectionProbe.Status.Connected -> {
+                                    val versionText = if (connectionStatus.details.version.isNotBlank()) " (v${connectionStatus.details.version})" else ""
                                     stringResource(Res.string.settings_connected_to, "${viewModel.serverUrl}$versionText")
                                 }
-                                is ConnectionStatus.Error -> stringResource(Res.string.settings_connection_failed)
+                                is ConnectionProbe.Status.Error -> probeFailureText(connectionStatus.failure)
                                 else -> {
                                     if (isTesting) stringResource(Res.string.settings_connecting)
                                     else if (viewModel.serverUrl.isNotBlank()) stringResource(Res.string.settings_credentials_configured)
@@ -298,9 +290,9 @@ fun SeerrSettingsScreen(
                             }
 
                             when (viewModel.authMethod) {
-                                SeerrAuthMethod.API_KEY -> ApiKeyFields(viewModel)
-                                SeerrAuthMethod.JELLYFIN -> JellyfinAuthFields(viewModel)
-                                SeerrAuthMethod.LOCAL -> LocalAuthFields(viewModel)
+                                SeerrAuthMethod.API_KEY -> ApiKeyFields(viewModel, isTesting)
+                                SeerrAuthMethod.JELLYFIN -> JellyfinAuthFields(viewModel, isTesting)
+                                SeerrAuthMethod.LOCAL -> LocalAuthFields(viewModel, isTesting)
                             }
 
                             Row(
@@ -347,11 +339,27 @@ fun SeerrSettingsScreen(
                             }
 
                             AnimatedVisibility(
-                                visible = connectionStatus is ConnectionStatus.Connected || connectionStatus is ConnectionStatus.Error,
+                                visible = connectionStatus is ConnectionProbe.Status.Connected || connectionStatus is ConnectionProbe.Status.Error,
                                 enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) + expandVertically(animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec()),
                                 exit = fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec()) + shrinkVertically(animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec()),
                             ) {
-                                ConnectionStatusBanner(connectionStatus)
+                                // Banner retention (declared): Seerr keeps the
+                                // full banner because its subtitle carries the
+                                // integration-specific version text; the
+                                // retry/login actions stay in the form above.
+                                ConnectionProbeStatusIndicator(
+                                    status = connectionStatus,
+                                    style = ConnectionProbeIndicatorStyle.Banner,
+                                    connectedSubtitle = when (val status = connectionStatus) {
+                                        is ConnectionProbe.Status.Connected ->
+                                            if (status.details.version.isNotBlank()) {
+                                                stringResource(Res.string.settings_server_reached_version, status.details.version)
+                                            } else {
+                                                stringResource(Res.string.settings_seerr_server_reached)
+                                            }
+                                        else -> null
+                                    },
+                                )
                             }
                         }
                     }
@@ -631,7 +639,7 @@ private fun SeerrHeader() {
 }
 
 @Composable
-private fun ApiKeyFields(viewModel: SeerrSettingsViewModel) {
+private fun ApiKeyFields(viewModel: SeerrSettingsViewModel, isTesting: Boolean) {
     PasswordTextField(
         value = viewModel.apiKey,
         onValueChange = viewModel::onApiKeyChanged,
@@ -639,13 +647,13 @@ private fun ApiKeyFields(viewModel: SeerrSettingsViewModel) {
         placeholder = { Text(stringResource(Res.string.settings_api_key_placeholder)) },
         leadingIcon = { Icon(Tabler.Outline.Key, contentDescription = null) },
         modifier = Modifier.fillMaxWidth(),
-        enabled = !viewModel.isTesting,
+        enabled = !isTesting,
         shape = ShapeCache.smooth16,
     )
 }
 
 @Composable
-private fun JellyfinAuthFields(viewModel: SeerrSettingsViewModel) {
+private fun JellyfinAuthFields(viewModel: SeerrSettingsViewModel, isTesting: Boolean) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         OutlinedTextField(
             value = viewModel.username,
@@ -657,7 +665,7 @@ private fun JellyfinAuthFields(viewModel: SeerrSettingsViewModel) {
             },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
-            enabled = !viewModel.isTesting,
+            enabled = !isTesting,
             shape = ShapeCache.smooth16,
         )
         PasswordTextField(
@@ -667,14 +675,14 @@ private fun JellyfinAuthFields(viewModel: SeerrSettingsViewModel) {
             placeholder = { Text(stringResource(Res.string.settings_jellyfin_password_placeholder)) },
             leadingIcon = { Icon(Tabler.Outline.Lock, contentDescription = null) },
             modifier = Modifier.fillMaxWidth(),
-            enabled = !viewModel.isTesting,
+            enabled = !isTesting,
             shape = ShapeCache.smooth16,
         )
     }
 }
 
 @Composable
-private fun LocalAuthFields(viewModel: SeerrSettingsViewModel) {
+private fun LocalAuthFields(viewModel: SeerrSettingsViewModel, isTesting: Boolean) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         OutlinedTextField(
             value = viewModel.email,
@@ -687,7 +695,7 @@ private fun LocalAuthFields(viewModel: SeerrSettingsViewModel) {
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
             modifier = Modifier.fillMaxWidth(),
-            enabled = !viewModel.isTesting,
+            enabled = !isTesting,
             shape = ShapeCache.smooth16,
         )
         PasswordTextField(
@@ -697,80 +705,11 @@ private fun LocalAuthFields(viewModel: SeerrSettingsViewModel) {
             placeholder = { Text(stringResource(Res.string.settings_seerr_password_placeholder)) },
             leadingIcon = { Icon(Tabler.Outline.Lock, contentDescription = null) },
             modifier = Modifier.fillMaxWidth(),
-            enabled = !viewModel.isTesting,
+            enabled = !isTesting,
             shape = ShapeCache.smooth16,
         )
     }
 }
-
-@Composable
-private fun ConnectionStatusBanner(status: ConnectionStatus) {
-    val (icon, title, subtitle, color) = when (status) {
-        is ConnectionStatus.Connected -> Quadruple(
-            Tabler.Outline.CircleCheck,
-            stringResource(Res.string.settings_connected),
-            if (status.version.isNotBlank()) stringResource(Res.string.settings_server_reached_version, status.version) else stringResource(Res.string.settings_seerr_server_reached),
-            StatusColors.success
-        )
-        is ConnectionStatus.Error -> Quadruple(
-            Tabler.Outline.AlertTriangle,
-            stringResource(Res.string.settings_connection_failed_title),
-            status.message,
-            MaterialTheme.colorScheme.error
-        )
-        else -> return
-    }
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
-        shape = ShapeCache.smooth16,
-        colors = CardDefaults.cardColors(
-            containerColor = color.copy(alpha = 0.08f),
-        ),
-        border = androidx.compose.foundation.BorderStroke(1.dp, color.copy(alpha = 0.2f)),
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(CircleShape)
-                    .background(color.copy(alpha = 0.12f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = color,
-                    modifier = Modifier.size(20.dp),
-                )
-            }
-            Spacer(Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = color,
-                )
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-    }
-}
-
-private data class Quadruple<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)
 
 private val COMMON_REGIONS = listOf(
     "US" to "\uD83C\uDDFA\uD83C\uDDF8 United States",

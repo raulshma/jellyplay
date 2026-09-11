@@ -13,7 +13,7 @@ import org.jetbrains.compose.resources.stringResource
  *
  * The model enum itself has no resource access, so the provider name is resolved
  * at the UI layer. This is the single source of truth shared by the player
- * (`SubtitleManagerSheet`) and the metadata editor (`SubtitlesTab`).
+ * (`SubtitleManagerSection`) and the metadata editor (`SubtitlesTab`).
  *
  * The `@StringRes Int` half stays in the legacy `:core:ui` shim until every
  * consumer has migrated off resource ids.

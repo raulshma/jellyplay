@@ -23,11 +23,11 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import com.raulshma.jellyplay.core.ui.components.PullToRefreshBox
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -43,6 +43,8 @@ import androidx.compose.ui.unit.dp
 import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.model.Playlist
+import com.raulshma.jellyplay.feature.music.collection.MusicCollectionKind
+import com.raulshma.jellyplay.feature.music.collection.SimpleListCollection
 import com.raulshma.jellyplay.feature.music.generated.resources.Res
 import com.raulshma.jellyplay.feature.music.generated.resources.music_cancel
 import com.raulshma.jellyplay.feature.music.generated.resources.music_create
@@ -56,7 +58,13 @@ import com.raulshma.jellyplay.feature.music.generated.resources.music_more_optio
 import com.raulshma.jellyplay.feature.music.generated.resources.music_name_label
 import com.raulshma.jellyplay.feature.music.generated.resources.music_new_playlist
 import com.raulshma.jellyplay.feature.music.generated.resources.music_open
+import com.raulshma.jellyplay.feature.music.generated.resources.music_failed_load
+import com.raulshma.jellyplay.feature.music.generated.resources.music_playlist_create_failed
+import com.raulshma.jellyplay.feature.music.generated.resources.music_playlist_delete_failed
+import com.raulshma.jellyplay.feature.music.generated.resources.music_playlist_not_deletable
+import com.raulshma.jellyplay.feature.music.generated.resources.music_playlist_read_only
 import com.raulshma.jellyplay.feature.music.generated.resources.music_playlist_tracks_count
+import com.raulshma.jellyplay.feature.music.generated.resources.music_playlist_update_failed
 import com.raulshma.jellyplay.feature.music.generated.resources.music_playlists
 import com.raulshma.jellyplay.feature.music.generated.resources.music_save
 import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
@@ -81,6 +89,15 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
+/**
+ * Standalone playlists route — the deliberate chassis exception among the
+ * music collections: its create/edit/delete dialog host, per-row command
+ * menu, FAB and custom rows are genuinely per-collection surface, so the
+ * screen keeps its own scaffolding (the load ladder itself still rides the
+ * chassis via [PlaylistsViewModel]'s [SimpleListCollection]). The browse
+ * tab's playlists page is the one that renders the shared
+ * [com.raulshma.jellyplay.feature.music.components.SimpleCollectionGrid].
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlaylistsScreen(
@@ -89,11 +106,23 @@ fun PlaylistsScreen(
     viewModel: PlaylistsViewModel = koinViewModel(),
 ) {
     val networkStatus by LocalNetworkStatus.current.collectAsStateWithLifecycle()
+    val playlists by viewModel.playlists.collectAsStateWithLifecycle()
+    val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+    val loadError by viewModel.loadError.collectAsStateWithLifecycle()
+    // Command/dialog/mutation state is Compose snapshot state — plain reads are observed.
+    val commandError = viewModel.commandError
     val headerStatus = resolveHeaderStatus(
-        isLoading = viewModel.isLoading,
+        isLoading = isLoading,
         hasError = false,
         networkStatus = networkStatus,
     )
+    // Load and command failures stay separate: the empty-rung ErrorScreen is a
+    // LOAD failure (its retry re-runs the load), command failures are banners
+    // over whatever the list currently shows.
+    val loadErrorText = loadError?.let {
+        it.message ?: stringResource(MusicCollectionKind.PLAYLISTS.errorFallbackRes)
+    }
+    val commandErrorText = commandError?.let { playlistCommandErrorText(it) }
 
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
@@ -104,13 +133,9 @@ fun PlaylistsScreen(
     val listFocusRequester = remember { FocusRequester() }
     TvGrabInitialFocus(
         focusRequester = listFocusRequester,
-        itemCount = viewModel.playlists.size,
+        itemCount = playlists.size,
         tag = "playlists_init",
     )
-
-    LaunchedEffect(viewModel.error) {
-        // Errors are surfaced via the dialogs/state; we keep state-based clearing
-    }
 
     JellyPlayScreenScaffold(
         title = stringResource(Res.string.music_playlists),
@@ -124,16 +149,16 @@ fun PlaylistsScreen(
     ) { innerPadding ->
         Box(modifier = Modifier.fillMaxSize()) {
             PullToRefreshBox(
-                isRefreshing = viewModel.isLoading && viewModel.playlists.isNotEmpty(),
+                isRefreshing = isLoading && playlists.isNotEmpty(),
                 onRefresh = {
                     viewModel.load()
                 },
                 modifier = Modifier.fillMaxSize(),
             ) {
                 when {
-                    viewModel.error != null && viewModel.playlists.isEmpty() -> {
+                    loadErrorText != null && playlists.isEmpty() -> {
                         ErrorScreen(
-                            message = viewModel.error!!,
+                            message = loadErrorText,
                             onRetry = { viewModel.load() },
                         )
                     }
@@ -150,7 +175,7 @@ fun PlaylistsScreen(
                             ),
                         ) {
                             items(
-                                items = viewModel.playlists,
+                                items = playlists,
                                 key = { it.id },
                                 contentType = { "playlist" },
                             ) { playlist ->
@@ -161,6 +186,38 @@ fun PlaylistsScreen(
                                     onDelete = { viewModel.openDeleteDialog(playlist) },
                                 )
                             }
+                        }
+                    }
+                }
+            }
+
+            // Command/mutation errors surface as a dismissible banner over
+            // whatever the list currently shows (rows on screen or the empty
+            // state) — they are never the full-screen ErrorScreen, whose
+            // retry only re-runs the load.
+            if (commandErrorText != null) {
+                Surface(
+                    color = MaterialTheme.colorScheme.errorContainer,
+                    contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                    shape = ShapeCache.smooth16,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 8.dp),
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(start = 16.dp),
+                    ) {
+                        Text(
+                            text = commandErrorText,
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
+                        IconButton(onClick = { viewModel.clearError() }) {
+                            Icon(
+                                imageVector = Tabler.Outline.X,
+                                contentDescription = stringResource(Res.string.music_cancel),
+                            )
                         }
                     }
                 }
@@ -182,6 +239,20 @@ fun PlaylistsScreen(
     }
 
     PlaylistDialogHost(viewModel = viewModel)
+}
+
+/**
+ * Renders a [PlaylistCommandError] at the screen boundary: [PlaylistCommandError.Reported]
+ * shows server text verbatim, [PlaylistCommandError.Declared] resolves its resource.
+ */
+@Composable
+private fun playlistCommandErrorText(error: PlaylistCommandError): String = when (error) {
+    is PlaylistCommandError.Reported -> error.message
+    PlaylistCommandError.Declared.ReadOnly -> stringResource(Res.string.music_playlist_read_only)
+    PlaylistCommandError.Declared.NotDeletable -> stringResource(Res.string.music_playlist_not_deletable)
+    PlaylistCommandError.Declared.CreateFailed -> stringResource(Res.string.music_playlist_create_failed)
+    PlaylistCommandError.Declared.UpdateFailed -> stringResource(Res.string.music_playlist_update_failed)
+    PlaylistCommandError.Declared.DeleteFailed -> stringResource(Res.string.music_playlist_delete_failed)
 }
 
 @Composable

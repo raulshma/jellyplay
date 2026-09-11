@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
@@ -30,14 +29,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Bolt
-import com.raulshma.jellyplay.core.designsystem.theme.StatusColors
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderCredentials
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind
 import com.raulshma.jellyplay.core.ui.components.CircleBgBackButton
@@ -48,13 +45,11 @@ import org.jetbrains.compose.resources.stringResource
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_integrations_subtitles
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_subtitles_api_key
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_subtitles_connected
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_subtitles_opensubtitles
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_subtitles_opensubtitles_help
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_subtitles_password
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_subtitles_save
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_subtitles_test
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_subtitles_testing
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_subtitles_username
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_subtitles_wyzie
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_subtitles_wyzie_help
@@ -148,7 +143,8 @@ fun SubtitleProviderSettingsScreen(
                         initialUsername = null,
                         passwordLabel = null,
                         initialPassword = null,
-                        status = providerStatus[SubtitleProviderKind.WYZIE],
+                        status = providerStatus[SubtitleProviderKind.WYZIE]
+                            ?: ConnectionProbe.Status.Idle,
                         onSave = { apiKey, _, _ -> viewModel.saveWyzieApiKey(apiKey) },
                         onTest = { apiKey, _, _ -> viewModel.testWyzieApiKey(apiKey) },
                         helperText = stringResource(Res.string.settings_subtitles_wyzie_help),
@@ -169,7 +165,8 @@ fun SubtitleProviderSettingsScreen(
                         initialUsername = osCreds?.username.orEmpty(),
                         passwordLabel = stringResource(Res.string.settings_subtitles_password),
                         initialPassword = osCreds?.password.orEmpty(),
-                        status = providerStatus[SubtitleProviderKind.OPENSUBTITLES],
+                        status = providerStatus[SubtitleProviderKind.OPENSUBTITLES]
+                            ?: ConnectionProbe.Status.Idle,
                         onSave = { _, username, password ->
                             viewModel.saveOpenSubtitlesCredentials(username, password)
                         },
@@ -200,7 +197,7 @@ private fun ProviderSection(
     initialUsername: String?,
     passwordLabel: String?,
     initialPassword: String?,
-    status: SubtitleProviderSettingsViewModel.ProviderStatus?,
+    status: ConnectionProbe.Status<Unit>,
     onSave: (apiKey: String, username: String?, password: String?) -> Unit,
     onTest: (apiKey: String, username: String?, password: String?) -> Unit,
     helperText: String,
@@ -277,38 +274,11 @@ private fun ProviderSection(
             ) {
                 Text(stringResource(Res.string.settings_subtitles_test))
             }
-            StatusIndicator(status)
+            // Shared probe affordance (Inline: pip + label); the unified
+            // amber pip + "Connecting…" label replaces the former per-card
+            // spinner.
+            ConnectionProbeStatusIndicator(status, style = ConnectionProbeIndicatorStyle.Inline)
         }
-    }
-}
-
-@Composable
-private fun StatusIndicator(status: SubtitleProviderSettingsViewModel.ProviderStatus?) {
-    when (status) {
-        is SubtitleProviderSettingsViewModel.ProviderStatus.Testing -> Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator(
-                modifier = Modifier.size(14.dp),
-            )
-            Text(stringResource(Res.string.settings_subtitles_testing),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        is SubtitleProviderSettingsViewModel.ProviderStatus.Connected -> Text(
-            stringResource(Res.string.settings_subtitles_connected),
-            style = MaterialTheme.typography.labelSmall,
-            color = StatusColors.success,
-            fontWeight = FontWeight.SemiBold,
-        )
-        is SubtitleProviderSettingsViewModel.ProviderStatus.Error -> Text(
-            status.message,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.error,
-            maxLines = 2,
-        )
-        null, SubtitleProviderSettingsViewModel.ProviderStatus.Idle -> Unit
     }
 }
 

@@ -8,14 +8,9 @@ import com.raulshma.jellyplay.core.model.arr.ArrServerConfig
 import com.raulshma.jellyplay.core.model.arr.ArrServiceKind
 import com.raulshma.jellyplay.core.model.arr.ArrServiceSummary
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 
@@ -37,6 +32,14 @@ import kotlinx.coroutines.sync.withPermit
  * the first upstream emission, so reading `preferences.value.manualServers`
  * before that emission would overwrite the encrypted store with just the
  * single new entry and silently delete all prior manual servers.
+ *
+ * Server probes ride the shared [ConnectionProbe] board (single-flight
+ * restart, cancellation-never-lands-as-Error, localized fallback texts — its
+ * KDoc declares the machine policies; this adapter owns the concurrency cap).
+ * Behavior changes vs the former hand-rolled sealed map: a probe failure with
+ * no server message now localizes "Connection failed" at render time (was a
+ * hardcoded literal), and an unexpected probe crash degrades to a declared
+ * fallback Error instead of crashing the scope.
  */
 class ArrSettingsViewModel(
     private val arrRepository: ArrRepository,
@@ -53,35 +56,39 @@ class ArrSettingsViewModel(
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
     /**
-     * Per-server reachability status keyed by [ArrServerConfig.id]. Populated
-     * by [testServer] / [testAllServers]; reset to [ServerConnectionStatus.Idle]
-     * whenever the server set mutates (add/remove/discovery toggle) so stale
-     * entries never linger. Consumers read via [serverStatus].
-     */
-    private val _serverStatus = MutableStateFlow<Map<String, ServerConnectionStatus>>(emptyMap())
-    val serverStatus: StateFlow<Map<String, ServerConnectionStatus>> = _serverStatus.asStateFlow()
-
-    /**
      * Caps concurrent network probes so a large server list doesn't fan out
      * into dozens of simultaneous connections. Probes are short-lived HTTP
      * calls; a small window keeps the UI responsive while bounding load.
+     * Applied inside the board's [ConnectionProbe] action lambda below.
      */
     private val probePermit = Semaphore(4)
 
     /**
-     * Tracks the in-flight [testAllServers] wave so a second invocation (e.g.
-     * the user toggling discovery or adding a server while one wave is still
-     * running) cancels the prior instead of stacking overlapping probes.
+     * Per-server reachability status keyed by [ArrServerConfig.id], owned by
+     * the shared [ConnectionProbe] board (the former hand-rolled sealed map).
+     * Populated by [testServer] / [testAllServers]; reset via
+     * [ConnectionProbe.retain] whenever the server set mutates
+     * (add/remove/discovery toggle) so stale entries never linger.
      */
-    private var testAllJob: Job? = null
+    private val probeBoard: ConnectionProbe<ArrServerConfig, String, Unit> = ConnectionProbe(
+        scope = scope,
+        keyOf = { server -> server.id },
+        action = { server ->
+            // The concurrency cap stays HERE, in the Arr adapter —
+            // the shared probe deliberately owns no concurrency policy (see
+            // its KDoc), and this is the one integration that batches.
+            probePermit.withPermit {
+                arrRepository.testServer(server).fold(
+                    onSuccess = { ConnectionProbe.Outcome.Reachable(Unit) },
+                    onFailure = { ConnectionProbe.unreachable(it.message) },
+                )
+            }
+        },
+    )
+    val serverStatus: StateFlow<Map<String, ConnectionProbe.Status<Unit>>> = probeBoard.status
 
     init {
         refreshServers()
-    }
-
-    override fun onCleared() {
-        super.onCleared()
-        testAllJob?.cancel()
     }
 
     fun refreshServers() {
@@ -91,10 +98,11 @@ class ArrSettingsViewModel(
             // so no try/catch needed here.
             val summary = arrRepository.resolveServers().getOrDefault(ArrServiceSummary())
             _servers.value = summary
-            // Drop status for servers no longer present; seed the rest as Idle so
-            // a resolved set that lost an entry doesn't keep a stale Error on screen.
+            // Drop status (and cancel in-flight probes) for servers no longer
+            // present, so a resolved set that lost an entry doesn't keep a
+            // stale Error on screen.
             val liveIds = (summary.radarrServers + summary.sonarrServers).map { it.id }.toSet()
-            _serverStatus.update { it.filterKeys { key -> key in liveIds } }
+            probeBoard.retain(liveIds)
             _isRefreshing.value = false
             // Auto-probe so the user sees reachability on entry instead of having
             // to click Test. Skipped when empty (nothing to test).
@@ -103,49 +111,27 @@ class ArrSettingsViewModel(
     }
 
     /**
-     * Probes a single resolved server and pushes the result into [serverStatus].
-     * Concurrent-safe: each call writes only its own key via an atomic CAS
-     * (`update`), so [testAllServers] can fan these out without a coordinating
-     * lock even when many probes resolve near-simultaneously.
+     * Probes a single resolved server. Single-flight is the board's RESTART
+     * policy: a [testServer] while that id is already probing cancels
+     * the in-flight probe (the screen disables the row button while Testing;
+     * an in-flight batch supersedes cleanly per key).
      */
     fun testServer(server: ArrServerConfig) {
-        launch { probeServer(server) }
+        probeBoard.probe(server)
     }
 
     /**
      * Probes every server in [summary] (or the current [_servers] value when
-     * null). Probes run with a bounded concurrency cap ([probePermit]) so a
-     * large list doesn't open dozens of simultaneous connections. A new wave
-     * cancels a still-running prior wave so rapid mutations don't stack.
+     * null). Unlike the former batch job, there is no batch-level
+     * cancellation anymore — each probe rides the board's per-key RESTART
+     * policy, so a new batch supersedes a still-running prior batch key by
+     * key instead of cancelling it wholesale (and probes of servers that left
+     * the set are reaped by [ConnectionProbe.retain] in [refreshServers]).
      */
     fun testAllServers(summary: ArrServiceSummary? = null) {
-        testAllJob?.cancel()
         val targets = (summary ?: _servers.value).let { it.radarrServers + it.sonarrServers }
         if (targets.isEmpty()) return
-        testAllJob = launch {
-            coroutineScope {
-                targets.map { async { probeServer(it) } }.awaitAll()
-            }
-        }
-    }
-
-    /**
-     * The actual probe: marks the server [ServerConnectionStatus.Testing],
-     * waits its turn through [probePermit], then resolves and stores the
-     * result. Factored out so both [testServer] (single) and [testAllServers]
-     * (batched) share one code path and the concurrency cap applies uniformly.
-     */
-    private suspend fun probeServer(server: ArrServerConfig) {
-        _serverStatus.update { it + (server.id to ServerConnectionStatus.Testing) }
-        probePermit.withPermit {
-            val result = arrRepository.testServer(server)
-            _serverStatus.update {
-                it + (server.id to result.fold(
-                    onSuccess = { ServerConnectionStatus.Connected },
-                    onFailure = { err -> ServerConnectionStatus.Error(err.message ?: "Connection failed") },
-                ))
-            }
-        }
+        targets.forEach { probeBoard.probe(it) }
     }
 
     fun setUseSeerrDiscovery(enabled: Boolean) {
@@ -192,22 +178,5 @@ class ArrSettingsViewModel(
     private suspend fun invalidateAndRefresh() {
         arrRepository.invalidateServers()
         refreshServers()
-    }
-
-    /**
-     * Reachability state for a single resolved *arr server, surfaced in the
-     * settings list so the user can tell at a glance whether the Coming Soon
-     * calendar / queue features will be able to reach that instance. Mirrors
-     * the [SeerrSettingsViewModel.ConnectionStatus] shape.
-     */
-    sealed class ServerConnectionStatus {
-        /** Not yet probed (or the server set just changed). */
-        data object Idle : ServerConnectionStatus()
-        /** Probe in flight. */
-        data object Testing : ServerConnectionStatus()
-        /** `GET /api/v3/system/status` returned 2xx. */
-        data object Connected : ServerConnectionStatus()
-        /** Probe failed; [message] is the friendly ApiException text. */
-        data class Error(val message: String) : ServerConnectionStatus()
     }
 }

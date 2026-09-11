@@ -60,6 +60,11 @@
     <string name="music_tracks_count">%1$d개 트랙</string>
     <string name="music_one_track">트랙 1개</string>
     <string name="music_playlist_tracks_count">%1$d개 트랙</string>
+    <string name="music_playlist_read_only">이 재생목록은 읽기 전용입니다</string>
+    <string name="music_playlist_not_deletable">이 재생목록은 삭제할 수 없습니다</string>
+    <string name="music_playlist_create_failed">재생목록을 만들지 못했습니다</string>
+    <string name="music_playlist_update_failed">재생목록을 업데이트하지 못했습니다</string>
+    <string name="music_playlist_delete_failed">재생목록을 삭제하지 못했습니다</string>
 
     <!-- Home sections -->
     <string name="music_player_screens">플레이어 화면</string>

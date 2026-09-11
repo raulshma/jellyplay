@@ -124,8 +124,6 @@
     <string name="settings_subtitles_password">Password</string>
     <string name="settings_subtitles_save">Save</string>
     <string name="settings_subtitles_test">Test</string>
-    <string name="settings_subtitles_testing">Testing…</string>
-    <string name="settings_subtitles_connected">Connected</string>
     <string name="settings_sign_out_confirm_title_server">Sign Out from Server?</string>
     <string name="settings_sign_out_confirm_title">Sign Out?</string>
     <string name="settings_sign_out_confirm_message_server">This will revoke this device\'s session on the server. You\'ll need to sign in again to use the app.</string>
@@ -348,6 +346,15 @@
     <string name="settings_connected_to">Connected to %1$s</string>
     <string name="settings_connection_failed">Connection failed</string>
     <string name="settings_connecting">Connecting\u2026</string>
+    <!-- ConnectionProbe.kt fallback texts (probe failures without a usable server message) -->
+    <string name="settings_probe_login_failed">Login failed</string>
+    <string name="settings_probe_unexpected_error">Unexpected error occurred</string>
+    <string name="settings_probe_server_url_required">Server URL is required</string>
+    <string name="settings_probe_api_key_required">API key is required</string>
+    <string name="settings_probe_username_password_required">Username and password are required</string>
+    <string name="settings_probe_email_password_required">Email and password are required</string>
+    <string name="settings_probe_enter_credentials">Enter credentials first</string>
+    <string name="settings_probe_provider_not_configured">Provider not configured</string>
     <string name="settings_credentials_configured">Credentials configured</string>
     <string name="settings_configure_server_address">Configure server address</string>
     <string name="settings_server_url">Server URL</string>

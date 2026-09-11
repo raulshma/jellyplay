@@ -215,7 +215,7 @@ class AuthApiClientImpl @Inject constructor(
     override suspend fun getQuickConnectState(secret: String): Result<QuickConnectState> = engine.apiResultWithRetry {
         val server = engine.currentServer.value ?: throw IllegalStateException("Not connected to server")
         val client = engine.api ?: engine.jellyfin.createApi(server.address)
-        val result = client.quickConnectApi.getQuickConnectState(secret).content
+        val result = client.quickConnectApi.getQuickConnectState(secret = secret).content
         QuickConnectState(
             authenticated = result.authenticated,
             secret = result.secret,

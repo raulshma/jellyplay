@@ -289,6 +289,15 @@
     <string name="settings_connected_to">%1$s에 연결됨</string>
     <string name="settings_connection_failed">연결 실패</string>
     <string name="settings_connecting">연결 중\u2026</string>
+    <!-- ConnectionProbe.kt fallback texts (probe failures without a usable server message) -->
+    <string name="settings_probe_login_failed">로그인 실패</string>
+    <string name="settings_probe_unexpected_error">예기치 않은 오류가 발생했습니다</string>
+    <string name="settings_probe_server_url_required">서버 URL은 필수입니다</string>
+    <string name="settings_probe_api_key_required">API 키는 필수입니다</string>
+    <string name="settings_probe_username_password_required">사용자 이름과 비밀번호는 필수입니다</string>
+    <string name="settings_probe_email_password_required">이메일과 비밀번호는 필수입니다</string>
+    <string name="settings_probe_enter_credentials">먼저 자격 증명을 입력하세요</string>
+    <string name="settings_probe_provider_not_configured">공급자가 구성되지 않았습니다</string>
     <string name="settings_credentials_configured">자격 증명 구성됨</string>
     <string name="settings_configure_server_address">서버 주소 구성</string>
     <string name="settings_clear_cd">지우기</string>
@@ -1139,8 +1148,6 @@
     <string name="settings_subtitles_password">비밀번호 (선택)</string>
     <string name="settings_subtitles_save">저장</string>
     <string name="settings_subtitles_test">테스트</string>
-    <string name="settings_subtitles_testing">테스트 중…</string>
-    <string name="settings_subtitles_connected">연결됨</string>
 
     <!-- Settings search items (moved from core/ui; ss_cat_* categories stay there) -->
     <string name="ss_logout_title">로그아웃</string>

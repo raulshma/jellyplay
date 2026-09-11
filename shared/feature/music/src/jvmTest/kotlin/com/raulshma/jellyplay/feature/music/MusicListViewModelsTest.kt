@@ -14,6 +14,7 @@ import com.raulshma.jellyplay.feature.music.artists.ArtistsViewModel
 import com.raulshma.jellyplay.feature.music.browse.MusicBrowseViewModel
 import com.raulshma.jellyplay.feature.music.collection.MusicSortOption
 import com.raulshma.jellyplay.feature.music.genres.GenresViewModel
+import com.raulshma.jellyplay.feature.music.playlists.PlaylistCommandError
 import com.raulshma.jellyplay.feature.music.playlists.PlaylistDialogState
 import com.raulshma.jellyplay.feature.music.playlists.PlaylistsViewModel
 import io.mockk.coEvery
@@ -35,6 +36,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
 /**
@@ -75,9 +77,9 @@ class PlaylistsViewModelTest {
     fun init_loadsPlaylists() = runTest(mainDispatcher) {
         advanceUntilIdle()
 
-        assertEquals(playlists, viewModel.playlists)
-        assertFalse(viewModel.isLoading)
-        assertNull(viewModel.error)
+        assertEquals(playlists, viewModel.playlists.value)
+        assertFalse(viewModel.isLoading.value)
+        assertNull(viewModel.commandError)
     }
 
     @Test
@@ -87,8 +89,8 @@ class PlaylistsViewModelTest {
         viewModel.load()
         advanceUntilIdle()
 
-        assertEquals("boom", viewModel.error)
-        assertFalse(viewModel.isLoading)
+        assertEquals("boom", viewModel.loadError.value?.message)
+        assertFalse(viewModel.isLoading.value)
     }
 
     @Test
@@ -97,7 +99,7 @@ class PlaylistsViewModelTest {
 
         viewModel.openEditDialog(playlists[1])
 
-        assertEquals("This playlist is read-only", viewModel.error)
+        assertEquals(PlaylistCommandError.Declared.ReadOnly, viewModel.commandError)
         assertEquals(PlaylistDialogState.None, viewModel.dialogState)
     }
 
@@ -144,7 +146,7 @@ class PlaylistsViewModelTest {
         viewModel.createPlaylist("New", "")
         advanceUntilIdle()
 
-        assertEquals("Failed to create playlist", viewModel.error)
+        assertEquals(PlaylistCommandError.Declared.CreateFailed, viewModel.commandError)
         assertEquals(PlaylistDialogState.Create(), viewModel.dialogState)
         assertFalse(viewModel.isMutating)
     }
@@ -157,7 +159,7 @@ class PlaylistsViewModelTest {
 
         viewModel.openDeleteDialog(playlists[1])
 
-        assertEquals("This playlist cannot be deleted", viewModel.error)
+        assertEquals(PlaylistCommandError.Declared.NotDeletable, viewModel.commandError)
         assertEquals(PlaylistDialogState.None, viewModel.dialogState)
     }
 
@@ -202,7 +204,7 @@ class PlaylistsViewModelTest {
         viewModel.deletePlaylist(playlists[0])
         advanceUntilIdle()
 
-        assertEquals("locked", viewModel.error)
+        assertEquals(PlaylistCommandError.Reported("locked"), viewModel.commandError)
         assertFalse(viewModel.isMutating)
     }
 
@@ -242,7 +244,7 @@ class PlaylistsViewModelTest {
         viewModel.updatePlaylist("pl1", "Renamed", "")
         advanceUntilIdle()
 
-        assertEquals("Failed to update playlist", viewModel.error)
+        assertEquals(PlaylistCommandError.Declared.UpdateFailed, viewModel.commandError)
         assertFalse(viewModel.isMutating)
     }
 
@@ -252,11 +254,11 @@ class PlaylistsViewModelTest {
     fun clearError_resetsTheErrorState() = runTest(mainDispatcher) {
         advanceUntilIdle()
         viewModel.openEditDialog(playlists[1]) // read-only → error
-        assertEquals("This playlist is read-only", viewModel.error)
+        assertEquals(PlaylistCommandError.Declared.ReadOnly, viewModel.commandError)
 
         viewModel.clearError()
 
-        assertEquals(null, viewModel.error)
+        assertEquals(null, viewModel.commandError)
     }
 }
 
@@ -395,6 +397,56 @@ class MusicBrowseViewModelTest {
 
         assertEquals("img", viewModel.getImageUrl("i1"))
     }
+
+    // ── List-sourced tab ladders (SimpleListCollection; the pages' declared gain) ──
+
+    @Test
+    fun genresFailure_surfacesTheFailureAndClearsLoading() = runTest(mainDispatcher) {
+        coEvery { mediaRepository.getGenres() } returns Result.failure(RuntimeException())
+        val failing = MusicBrowseViewModel(mediaRepository, playlistRepository, imageUrlProvider)
+        advanceUntilIdle()
+
+        // Message-less failures surface the Throwable itself; the ladder
+        // renders the kind's declared errorFallbackRes under a null message.
+        val genresError = failing.genresError.value
+        assertNotNull(genresError)
+        assertNull(genresError.message)
+        assertFalse(failing.genresLoading.value)
+    }
+
+    @Test
+    fun playlistsFailure_setsErrorAndClearsLoading() = runTest(mainDispatcher) {
+        coEvery { playlistRepository.getPlaylists() } returns Result.failure(RuntimeException("no pl"))
+        val failing = MusicBrowseViewModel(mediaRepository, playlistRepository, imageUrlProvider)
+        advanceUntilIdle()
+
+        assertEquals("no pl", failing.playlistsError.value?.message)
+        assertFalse(failing.playlistsLoading.value)
+    }
+
+    @Test
+    fun refreshGenres_forcesTheServerRead() = runTest(mainDispatcher) {
+        advanceUntilIdle()
+        coEvery { mediaRepository.getGenres(null, true) } returns Result.success(emptyList())
+
+        viewModel.refreshGenres()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { mediaRepository.getGenres(null, true) }
+        assertFalse(viewModel.genresLoading.value)
+        assertNull(viewModel.genresError.value)
+    }
+
+    @Test
+    fun refreshPlaylists_requeriesThePlaylistSource() = runTest(mainDispatcher) {
+        advanceUntilIdle()
+
+        viewModel.refreshPlaylists()
+        advanceUntilIdle()
+
+        coVerify(exactly = 2) { playlistRepository.getPlaylists() } // init load + forced refresh
+        assertFalse(viewModel.playlistsLoading.value)
+    }
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -525,12 +577,15 @@ class GenresViewModelTest {
     }
 
     @Test
-    fun load_failure_setsFallbackError() = runTest(mainDispatcher) {
-        // Null exception message → the "Failed to load genres" fallback pins.
+    fun load_failure_surfacesTheThrowable() = runTest(mainDispatcher) {
+        // Null exception message → the failure itself surfaces; the ladder
+        // renders the GENRES kind's declared fallback at render time.
         createViewModel(Result.failure(RuntimeException()))
         advanceUntilIdle()
 
-        assertEquals("Failed to load genres", viewModel.error.value)
+        val error = viewModel.error.value
+        assertNotNull(error)
+        assertNull(error.message)
         assertFalse(viewModel.isLoading.value)
     }
 

@@ -299,6 +299,8 @@ class AudioPlaybackManager(
     override val equalizerPreset: StateFlow<EqualizerPreset> get() = effectsProcessor.equalizerPreset
     override val bassBoostEnabled: StateFlow<Boolean> get() = effectsProcessor.bassBoostEnabled
     override val bassBoostStrengthState: EffectStrength get() = effectsProcessor.bassBoostStrengthState
+    override val dialogueBoostStrengthState: EffectStrength get() = effectsProcessor.dialogueBoostStrengthState
+    override val nightModeStrengthState: EffectStrength get() = effectsProcessor.nightModeStrengthState
     override val virtualizerEnabled: StateFlow<Boolean> get() = effectsProcessor.virtualizerEnabled
     override val virtualizerStrength: StateFlow<Int> get() = effectsProcessor.virtualizerStrength
     override val reverbPresetState: StateFlow<ReverbPreset> get() = effectsProcessor.reverbPresetState

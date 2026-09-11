@@ -3,23 +3,23 @@ package com.raulshma.jellyplay.core.network.playback
 import com.raulshma.jellyplay.core.model.isImageSubtitleCodec
 
 /**
- * Pure stream/subtitle URL builders for the wasm playback client — verbatim
- * ports of the jvmShared `PlaybackApiClientImpl.getStreamUrl` /
- * `buildSubtitleDeliveryUrl` / `getSubtitleDeliveryUrl` string construction
- * (byte-identical output for the same inputs, including the `static=true`
- * prefix, the `LiveStreamId` echo, the audio-universal `deviceId`/`userId`
- * pair, and the trailing `api_key`), extracted pure so commonTest can pin
- * the exact query parameters.
+ * The ONE stream/subtitle URL policy for the playback clients: pure builders
+ * that BOTH platform clients delegate to — the wasm `KtorWasmPlaybackApiClient`
+ * (ported from the jvmShared impl's original inline string building) and, since
+ * that impl's hand copies were replaced with delegation, the jvmShared
+ * `PlaybackApiClientImpl` itself (output unchanged apart from the trailing-'/'
+ * base trim noted at the delegation sites). Pure so commonTest can pin the
+ * exact query parameters.
  *
  * Session inputs ([baseUrl]/[apiKey]/[userId]/[userServerId]) are supplied
  * per call by the client from the atomic session state.
  */
 
 /**
- * Builds the stream URL. Mirrors the JVM overload with `maxBitrate` /
- * `useAudioEndpoint`; [userServerId] is the `UserInfo.serverId` the JVM impl
- * interpolates into `deviceId=` (never populated by either login path — both
- * platforms emit `deviceId=null` today; kept for parity, KDoc'd delta).
+ * Builds the stream URL. The jvmShared impl's overload with `maxBitrate` /
+ * `useAudioEndpoint` delegates here; [userServerId] is the `UserInfo.serverId`
+ * the JVM impl interpolates into `deviceId=` (never populated by either login
+ * path — both platforms emit `deviceId=null` today; kept for parity).
  */
 fun buildStreamUrl(
     baseUrl: String?,

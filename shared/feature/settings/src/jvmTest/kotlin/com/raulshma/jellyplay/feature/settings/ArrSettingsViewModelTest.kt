@@ -34,8 +34,8 @@ import kotlin.test.assertTrue
  * authoritative [ArrSecureCredentialsStore] (never the seeding StateFlow —
  * the cold-start race documented on the ViewModel), writes invalidate the
  * repository's resolved-server cache so the UI re-resolves immediately, and
- * resolved servers are auto-probed with the per-server Result folded into
- * [ArrSettingsViewModel.ServerConnectionStatus].
+ * resolved servers are auto-probed with the per-server Result folded into the
+ * shared [ConnectionProbe.Status] board.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class ArrSettingsViewModelTest {
@@ -111,11 +111,11 @@ class ArrSettingsViewModelTest {
         advanceUntilIdle()
 
         assertEquals(
-            ArrSettingsViewModel.ServerConnectionStatus.Connected,
+            ConnectionProbe.Status.Connected(Unit),
             viewModel.serverStatus.value["radarr-1"],
         )
         assertEquals(
-            ArrSettingsViewModel.ServerConnectionStatus.Connected,
+            ConnectionProbe.Status.Connected(Unit),
             viewModel.serverStatus.value["sonarr-1"],
         )
     }
@@ -134,7 +134,7 @@ class ArrSettingsViewModelTest {
         advanceUntilIdle()
 
         assertEquals(
-            ArrSettingsViewModel.ServerConnectionStatus.Error("401"),
+            ConnectionProbe.Status.Error(ConnectionProbe.Failure.Reported("401")),
             viewModel.serverStatus.value["radarr-1"],
         )
     }

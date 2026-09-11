@@ -759,7 +759,7 @@ fun AudioPlayerScreen(
             onToggle = { viewModel.toggleEqualizer() },
             onBandChange = { index, level -> viewModel.setEqualizerBand(index, level) },
             onReset = { viewModel.resetEqualizer() },
-            onPresetChange = { viewModel.applyEqualizerPreset(it) },
+            onPresetChange = { viewModel.setEqualizerPreset(it) },
             onDismiss = { showEqualizer = false },
         )
     }
@@ -857,15 +857,15 @@ fun AudioPlayerScreen(
             onToggleBassBoost = { viewModel.toggleBassBoost() },
             onBassBoostStrength = { viewModel.setBassBoostStrength(it) },
             onToggleVirtualizer = { viewModel.toggleVirtualizer() },
-            onVirtualizerStrength = { viewModel.applyVirtualizerStrength(it) },
-            onReverbPreset = { viewModel.applyReverbPreset(it) },
+            onVirtualizerStrength = { viewModel.setVirtualizerStrength(it) },
+            onReverbPreset = { viewModel.setReverbPreset(it) },
             onToggleDialogueBoost = { viewModel.toggleDialogueBoost() },
             onDialogueBoostStrength = { viewModel.setDialogueBoostStrength(it) },
             onToggleNightMode = { viewModel.toggleNightMode() },
             onNightModeStrength = { viewModel.setNightModeStrength(it) },
-            onLrBalance = { viewModel.applyLrBalance(it) },
-            onPitchSemitones = { viewModel.applyPitchSemitones(it) },
-            onAutoEqByGenre = { viewModel.applyAutoEqByGenre(it) },
+            onLrBalance = { viewModel.setLrBalance(it) },
+            onPitchSemitones = { viewModel.setPitchSemitones(it) },
+            onAutoEqByGenre = { viewModel.setAutoEqByGenre(it) },
         )
     }
 

@@ -25,7 +25,6 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
@@ -34,7 +33,7 @@ import kotlin.test.assertTrue
  * Main-dispatcher rule). The init block seeds the form + connection status
  * from the preferences and secure-credential stores (cookie-backed auth
  * included), connection tests persist before probing and route the Result
- * into [SeerrSettingsViewModel.ConnectionStatus], blank input fails fast
+ * into the shared [ConnectionProbe.Status] board, blank input fails fast
  * without touching the repository, and toggles/disconnect route to the
  * preferences store.
  *
@@ -106,7 +105,7 @@ class SeerrSettingsViewModelTest {
         assertEquals("user@example.com", viewModel.email)
         assertEquals(SeerrAuthMethod.API_KEY, viewModel.authMethod)
         // A stored key for an API_KEY server means "connected".
-        assertTrue(viewModel.connectionStatus is SeerrSettingsViewModel.ConnectionStatus.Connected)
+        assertTrue(viewModel.connectionStatus.value is ConnectionProbe.Status.Connected)
     }
 
     @Test
@@ -117,7 +116,7 @@ class SeerrSettingsViewModelTest {
         every { secureCredentialsStore.getSessionCookie() } returns "cookie"
         val viewModel = viewModel()
 
-        awaitUntil { viewModel.connectionStatus is SeerrSettingsViewModel.ConnectionStatus.Connected }
+        awaitUntil { viewModel.connectionStatus.value is ConnectionProbe.Status.Connected }
 
         assertEquals(SeerrAuthMethod.JELLYFIN, viewModel.authMethod)
     }
@@ -130,8 +129,10 @@ class SeerrSettingsViewModelTest {
         advanceUntilIdle()
 
         assertEquals(
-            SeerrSettingsViewModel.ConnectionStatus.Error("Server URL is required"),
-            viewModel.connectionStatus,
+            ConnectionProbe.Status.Error(
+                ConnectionProbe.Failure.Declared(ConnectionProbe.FallbackText.ServerUrlRequired)
+            ),
+            viewModel.connectionStatus.value,
         )
         coVerify(exactly = 0) { seerrRepository.testApiKeyConnection() }
     }
@@ -148,7 +149,8 @@ class SeerrSettingsViewModelTest {
         viewModel.testConnection()
 
         awaitUntil {
-            viewModel.connectionStatus == SeerrSettingsViewModel.ConnectionStatus.Connected("2.0", true)
+            viewModel.connectionStatus.value ==
+                ConnectionProbe.Status.Connected(SeerrSettingsViewModel.SeerrConnectionDetails("2.0"))
         }
         coVerify(exactly = 1) { seerrPreferencesStore.setServerUrl("https://seerr.example") }
         coVerify(exactly = 1) { seerrPreferencesStore.setAuthMethod(SeerrAuthMethod.API_KEY) }
@@ -168,9 +170,9 @@ class SeerrSettingsViewModelTest {
         viewModel.testConnection()
 
         awaitUntil {
-            viewModel.connectionStatus == SeerrSettingsViewModel.ConnectionStatus.Error("refused")
+            viewModel.connectionStatus.value ==
+                ConnectionProbe.Status.Error(ConnectionProbe.Failure.Reported("refused"))
         }
-        assertFalse(viewModel.isTesting)
     }
 
     @Test
@@ -190,9 +192,6 @@ class SeerrSettingsViewModelTest {
         coVerify(exactly = 1) { seerrPreferencesStore.disconnect() }
         assertEquals("", viewModel.serverUrl)
         assertEquals("", viewModel.apiKey)
-        assertEquals(
-            SeerrSettingsViewModel.ConnectionStatus.Idle,
-            viewModel.connectionStatus,
-        )
+        assertEquals(ConnectionProbe.Status.Idle, viewModel.connectionStatus.value)
     }
 }

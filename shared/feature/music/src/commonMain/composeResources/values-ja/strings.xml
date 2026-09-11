@@ -60,6 +60,11 @@
     <string name="music_tracks_count">%1$d トラック</string>
     <string name="music_one_track">1 トラック</string>
     <string name="music_playlist_tracks_count">%1$d トラック</string>
+    <string name="music_playlist_read_only">このプレイリストは読み取り専用です</string>
+    <string name="music_playlist_not_deletable">このプレイリストは削除できません</string>
+    <string name="music_playlist_create_failed">プレイリストを作成できませんでした</string>
+    <string name="music_playlist_update_failed">プレイリストを更新できませんでした</string>
+    <string name="music_playlist_delete_failed">プレイリストを削除できませんでした</string>
 
     <!-- Home sections -->
     <string name="music_player_screens">プレーヤー画面</string>

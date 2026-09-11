@@ -31,7 +31,7 @@ import kotlinx.coroutines.flow.asStateFlow
  * a frozen flow would write the PREVIOUS value back to the store, silently
  * undoing every toggle.
  *
- * Still absent (declared): the visualizer taps — `fftData`/`waveformData`
+ * Declared on the interface but absent here: the visualizer taps — `fftData`/`waveformData`
  * stay empty because mpv offers no in-sink PCM tap without a full render-API
  * audio pull (Android taps the audio session id). `enableVisualizer` is a
  * state-only no-op.
@@ -102,6 +102,8 @@ class DesktopAudioEffectsManager : AudioEffectsManager {
 
     private var dialogueBoostStrengthInternal: EffectStrength = EffectStrength.MODERATE
     private var nightModeStrengthInternal: EffectStrength = EffectStrength.MODERATE
+    override val dialogueBoostStrengthState: EffectStrength get() = dialogueBoostStrengthInternal
+    override val nightModeStrengthState: EffectStrength get() = nightModeStrengthInternal
 
     /** `setNightModeParams` mirrors — stored like Android's public fields. */
     internal var nightModeVolumeInternal: Float = 0.4f

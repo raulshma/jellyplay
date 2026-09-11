@@ -289,6 +289,15 @@
     <string name="settings_connected_to">%1$s に接続済み</string>
     <string name="settings_connection_failed">接続に失敗しました</string>
     <string name="settings_connecting">接続中\u2026</string>
+    <!-- ConnectionProbe.kt fallback texts (probe failures without a usable server message) -->
+    <string name="settings_probe_login_failed">ログインに失敗しました</string>
+    <string name="settings_probe_unexpected_error">予期しないエラーが発生しました</string>
+    <string name="settings_probe_server_url_required">サーバーURLは必須です</string>
+    <string name="settings_probe_api_key_required">APIキーは必須です</string>
+    <string name="settings_probe_username_password_required">ユーザー名とパスワードは必須です</string>
+    <string name="settings_probe_email_password_required">メールアドレスとパスワードは必須です</string>
+    <string name="settings_probe_enter_credentials">先に資格情報を入力してください</string>
+    <string name="settings_probe_provider_not_configured">プロバイダーが未設定です</string>
     <string name="settings_credentials_configured">認証情報が設定済み</string>
     <string name="settings_configure_server_address">サーバーアドレスを設定</string>
     <string name="settings_clear_cd">クリア</string>
@@ -1139,8 +1148,6 @@
     <string name="settings_subtitles_password">パスワード（任意）</string>
     <string name="settings_subtitles_save">保存</string>
     <string name="settings_subtitles_test">テスト</string>
-    <string name="settings_subtitles_testing">テスト中…</string>
-    <string name="settings_subtitles_connected">接続済み</string>
 
     <!-- Settings search items (moved from core/ui; ss_cat_* categories stay there) -->
     <string name="ss_logout_title">サインアウト</string>

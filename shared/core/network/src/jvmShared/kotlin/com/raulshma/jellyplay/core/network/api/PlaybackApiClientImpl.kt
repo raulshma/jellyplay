@@ -9,10 +9,13 @@ import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.MediaSource
 import com.raulshma.jellyplay.core.model.PlaybackInfoResult
 import com.raulshma.jellyplay.core.model.ServerInfo
-import com.raulshma.jellyplay.core.model.isImageSubtitleCodec
+import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
+import com.raulshma.jellyplay.core.network.playback.buildStreamUrl
+import com.raulshma.jellyplay.core.network.playback.buildSubtitleDeliveryUrl
+import com.raulshma.jellyplay.core.network.playback.resolveSubtitleDeliveryUrl
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -32,7 +35,7 @@ class PlaybackApiClientImpl @Inject constructor(
     private val rawRequester = JellyfinRawRequester(engine)
 
     /**
-     * Base URL for the hand-built URL builders (stream/subtitle URLs): the
+     * Base URL for the shared stream/subtitle URL builders: the
      * router's active endpoint, falling back to the current server's primary
      * address when routing is not configured. [server] must be the non-null
      * current server the caller already checked. The raw-OkHttp endpoints go
@@ -41,6 +44,17 @@ class PlaybackApiClientImpl @Inject constructor(
      */
     private fun activeBaseUrl(server: ServerInfo): String =
         engine.activeServerAddress ?: server.address
+
+    /**
+     * The authenticated server/user session pair behind every URL the client
+     * builds, or null when either half is missing — callers yield the
+     * empty-URL sentinel in that case.
+     */
+    private fun activeSession(): Pair<ServerInfo, UserInfo>? {
+        val server = engine.currentServer.value ?: return null
+        val user = engine.currentUser.value ?: return null
+        return server to user
+    }
 
     override suspend fun reportPlaybackStart(
         itemId: String,
@@ -136,33 +150,24 @@ class PlaybackApiClientImpl @Inject constructor(
         useAudioEndpoint: Boolean,
         liveStreamId: String?,
     ): String {
-        val server = engine.currentServer.value ?: return ""
-        val user = engine.currentUser.value ?: return ""
-        val isLive = !liveStreamId.isNullOrBlank()
-        val path = if (useAudioEndpoint) {
-            "/Audio/$itemId/universal"
-        } else {
-            "/Videos/$itemId/stream"
-        }
-        val baseParams = buildString {
-            append("mediaSourceId=$mediaSourceId")
-            append("&startTimeTicks=$startTimeTicks")
-            if (maxBitrate != null && maxBitrate > 0) {
-                append("&maxBitrate=$maxBitrate")
-            }
-            if (useAudioEndpoint) {
-                append("&deviceId=${user.serverId}")
-                append("&userId=${user.id}")
-            }
-            // Echo the live-stream id so the server opens/attaches the tuner
-            // session. Required for Live TV channels; omitted for VOD.
-            if (isLive) append("&LiveStreamId=$liveStreamId")
-        }
-        // Static direct-play only applies to VOD files. Live sources are
-        // opened as a (growing) direct stream — `static=true` makes the server
-        // try a byte-range seek on a non-seekable stream and fail.
-        val paramPrefix = if (useAudioEndpoint || isLive) "?" else "?static=true&"
-        return "${activeBaseUrl(server)}$path$paramPrefix$baseParams&api_key=${user.accessToken}"
+        val (server, user) = activeSession() ?: return ""
+        // Unlike the former inline string building, the shared helper trims
+        // a trailing '/' off the base, so a trailing-slash
+        // active endpoint no longer yields "//Videos/…" (the wasm side
+        // always had the trim — it only ever went through this helper).
+        // Pinned exact-string by PlaybackUrlBuilderTest (commonTest).
+        return buildStreamUrl(
+            baseUrl = activeBaseUrl(server),
+            apiKey = user.accessToken,
+            userId = user.id,
+            userServerId = user.serverId,
+            itemId = itemId,
+            mediaSourceId = mediaSourceId,
+            startTimeTicks = startTimeTicks,
+            maxBitrate = maxBitrate,
+            useAudioEndpoint = useAudioEndpoint,
+            liveStreamId = liveStreamId,
+        )
     }
 
     override suspend fun fetchPlaybackInfo(
@@ -234,11 +239,14 @@ class PlaybackApiClientImpl @Inject constructor(
         }
 
     override fun getSubtitleDeliveryUrl(deliveryUrl: String): String {
-        val server = engine.currentServer.value ?: return ""
-        val user = engine.currentUser.value ?: return ""
-        val baseUrl = if (deliveryUrl.startsWith("http")) deliveryUrl else "${activeBaseUrl(server)}$deliveryUrl"
-        val separator = if ("?" in baseUrl) "&" else "?"
-        return "$baseUrl${separator}api_key=${user.accessToken}"
+        val (server, user) = activeSession() ?: return ""
+        // Trailing-slash handling as in getStreamUrl: the shared helper owns the
+        // base handling (trimEnd) for both platforms now.
+        return resolveSubtitleDeliveryUrl(
+            baseUrl = activeBaseUrl(server),
+            apiKey = user.accessToken,
+            deliveryUrl = deliveryUrl,
+        )
     }
 
     override fun buildSubtitleDeliveryUrl(
@@ -247,19 +255,17 @@ class PlaybackApiClientImpl @Inject constructor(
         index: Int,
         codec: String?,
     ): String {
-        val server = engine.currentServer.value ?: return ""
-        val user = engine.currentUser.value ?: return ""
-        // The Jellyfin subtitle endpoint only serves text formats. Refusing
-        // image codecs (PGS/VOBSUB/DVB) here — instead of emitting a URL the
-        // endpoint will reject — lets the caller drop the stream cleanly and
-        // fall back to burn-in / container demux.
-        if (isImageSubtitleCodec(codec)) return ""
-        val format = when ((codec ?: "srt").lowercase()) {
-            "subrip" -> "srt"
-            "ass", "ssa" -> codec!!.lowercase()
-            else -> (codec ?: "srt").lowercase()
-        }
-        return "${activeBaseUrl(server)}/Videos/$itemId/$mediaSourceId/Subtitles/$index/Stream.$format?api_key=${user.accessToken}"
+        val (server, user) = activeSession() ?: return ""
+        // Trailing-slash handling as in getStreamUrl: the shared helper owns the
+        // base handling (trimEnd) for both platforms now.
+        return buildSubtitleDeliveryUrl(
+            baseUrl = activeBaseUrl(server),
+            apiKey = user.accessToken,
+            itemId = itemId,
+            mediaSourceId = mediaSourceId,
+            index = index,
+            codec = codec,
+        )
     }
 
     override suspend fun getIntroTimestamps(itemId: String): Result<IntroTimestamps> = engine.apiResultWithRetry {

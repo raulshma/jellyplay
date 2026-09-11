@@ -289,6 +289,15 @@
     <string name="settings_connected_to">已连接到 %1$s</string>
     <string name="settings_connection_failed">连接失败</string>
     <string name="settings_connecting">正在连接\u2026</string>
+    <!-- ConnectionProbe.kt fallback texts (probe failures without a usable server message) -->
+    <string name="settings_probe_login_failed">登录失败</string>
+    <string name="settings_probe_unexpected_error">发生意外错误</string>
+    <string name="settings_probe_server_url_required">必须填写服务器 URL</string>
+    <string name="settings_probe_api_key_required">必须填写 API 密钥</string>
+    <string name="settings_probe_username_password_required">必须填写用户名和密码</string>
+    <string name="settings_probe_email_password_required">必须填写邮箱和密码</string>
+    <string name="settings_probe_enter_credentials">请先输入凭据</string>
+    <string name="settings_probe_provider_not_configured">提供方未配置</string>
     <string name="settings_credentials_configured">凭据已配置</string>
     <string name="settings_configure_server_address">配置服务器地址</string>
     <string name="settings_clear_cd">清除</string>
@@ -1141,8 +1150,6 @@
     <string name="settings_subtitles_password">密码（可选）</string>
     <string name="settings_subtitles_save">保存</string>
     <string name="settings_subtitles_test">测试</string>
-    <string name="settings_subtitles_testing">测试中…</string>
-    <string name="settings_subtitles_connected">已连接</string>
 
     <!-- Settings search items (moved from core/ui; ss_cat_* categories stay there) -->
     <string name="ss_logout_title">退出登录</string>

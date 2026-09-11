@@ -289,6 +289,15 @@
     <string name="settings_connected_to">Verbunden mit %1$s</string>
     <string name="settings_connection_failed">Verbindung fehlgeschlagen</string>
     <string name="settings_connecting">Verbindung wird hergestellt\u2026</string>
+    <!-- ConnectionProbe.kt fallback texts (probe failures without a usable server message) -->
+    <string name="settings_probe_login_failed">Anmeldung fehlgeschlagen</string>
+    <string name="settings_probe_unexpected_error">Unerwarteter Fehler ist aufgetreten</string>
+    <string name="settings_probe_server_url_required">Server-URL ist erforderlich</string>
+    <string name="settings_probe_api_key_required">API-Schl\u00fcssel ist erforderlich</string>
+    <string name="settings_probe_username_password_required">Benutzername und Passwort sind erforderlich</string>
+    <string name="settings_probe_email_password_required">E-Mail und Passwort sind erforderlich</string>
+    <string name="settings_probe_enter_credentials">Zuerst Anmeldedaten eingeben</string>
+    <string name="settings_probe_provider_not_configured">Anbieter nicht konfiguriert</string>
     <string name="settings_credentials_configured">Anmeldedaten konfiguriert</string>
     <string name="settings_configure_server_address">Server-Adresse konfigurieren</string>
     <string name="settings_clear_cd">Leeren</string>
@@ -1139,8 +1148,6 @@
     <string name="settings_subtitles_password">Passwort (optional)</string>
     <string name="settings_subtitles_save">Speichern</string>
     <string name="settings_subtitles_test">Testen</string>
-    <string name="settings_subtitles_testing">Wird getestet…</string>
-    <string name="settings_subtitles_connected">Verbunden</string>
 
     <!-- Settings search items (moved from core/ui; ss_cat_* categories stay there) -->
     <string name="ss_logout_title">Abmelden</string>

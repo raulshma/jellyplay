@@ -29,11 +29,9 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -56,6 +54,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.CultureInfo
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind
+import com.raulshma.jellyplay.core.model.subtitle.SubtitleSearchResult
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
 import com.raulshma.jellyplay.core.ui.components.SubtitleResultMetadata
 import com.raulshma.jellyplay.core.ui.model.localizedDisplayName
@@ -82,33 +81,10 @@ import com.raulshma.jellyplay.feature.player.video.generated.resources.player_vi
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_upload
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_uploading
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_use
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 import com.raulshma.jellyplay.feature.player.video.SubtitleDownloadState
 import com.raulshma.jellyplay.feature.player.video.SubtitleDownloadStatus
 import com.raulshma.jellyplay.feature.player.video.state.providerSubtitleRowKey
-import com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet
 import com.raulshma.jellyplay.core.ui.components.SheetTabRow
-import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvFocusState
 import com.raulshma.jellyplay.core.ui.tv.ifElse
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
@@ -116,122 +92,30 @@ import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.verticalWrapAround
 
-private enum class SubtitleManagerTab(val label: String) {
-    DOWNLOAD("Download"),
-    SEARCH("Search"),
-    UPLOAD("Upload"),
+// Tab labels render from player_video_* resources (the sheet's localized
+// vocabulary); the enum only routes focus and content.
+private enum class SubtitleManagerTab {
+    DOWNLOAD,
+    SEARCH,
+    UPLOAD,
 }
 
 /**
- * In-player subtitle manager. A single bottom sheet with three tabs:
+ * In-player subtitle manager tabbed content — Download / Search / Upload — the
+ * body of the unified subtitle hub's "Get" tab, without its own sheet chrome.
  *
  * - **Download** — the server's default remote-subtitle browse + "Load from
- *   device" (the former [SubtitleDownloadSheet] surface).
+ *   device" (the former `SubtitleDownloadSheet` surface).
  * - **Search** — language-scoped remote subtitle search (OpenSubtitles via the
  *   server), reusing the editor's search flow.
  * - **Upload** — upload a local subtitle file with language + forced/SDH flags,
  *   reusing the editor's upload flow via `MetadataApiClient.uploadSubtitle`.
  *
- * Replaces the single-purpose `SubtitleDownloadSheet` without leaving playback.
- */
-@OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
-@Composable
-fun SubtitleManagerSheet(
-    // Download tab
-    downloadSubtitles: List<RemoteSubtitleInfo>,
-    isDownloading: Boolean,
-    remoteSubtitlesError: String? = null,
-    onDownload: (RemoteSubtitleInfo) -> Unit,
-    onLoadLocalFile: () -> Unit,
-    // Search tab
-    searchResults: List<RemoteSubtitleInfo>,
-    isSearching: Boolean,
-    hasSearched: Boolean,
-    searchError: String?,
-    cultures: List<CultureInfo>,
-    defaultLanguage: String,
-    onSearch: (String) -> Unit,
-    onDownloadSearched: (RemoteSubtitleInfo) -> Unit,
-    // Multi-provider search (Jellyfin + Wyzie + OpenSubtitles). When external
-    // providers are configured, the Search tab merges these into one list with
-    // provider filter chips; otherwise only the legacy Jellyfin list shows.
-    providerSearchResults: List<com.raulshma.jellyplay.core.model.subtitle.SubtitleSearchResult> = emptyList(),
-    providerSearchErrors: Map<com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind, String> = emptyMap(),
-    configuredProviders: Set<com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind> = setOf(com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind.JELLYFIN),
-    onSearchAllProviders: (String) -> Unit = {},
-    onDownloadProviderSubtitle: (com.raulshma.jellyplay.core.model.subtitle.SubtitleSearchResult) -> Unit = {},
-    // Shared: per-subtitle-id download status (spinner / ✓-Downloaded / delayed /
-    // failed) for both Download + Search rows, and the "Use" affordance that opens
-    // the subtitle track picker once a download has surfaced.
-    downloadingSubtitles: Map<String, SubtitleDownloadStatus> = emptyMap(),
-    /** Row key: the remote-subtitle id (Jellyfin rows) or `"provider:id"` composite (external rows). */
-    onUseSubtitle: (String) -> Unit = {},
-    // Upload tab
-    isUploading: Boolean,
-    // KMP seam: the picked SAF document travels as its string form
-    // (android.net.Uri died with the commonMain move); the Android host
-    // re-parses it at the call site.
-    onUpload: (String, String, String?, Boolean, Boolean) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    val isTv = LocalTvMode.current
-    // selectedTabIndex is remembered *saveably* so a config change (rotation,
-    // locale switch) while the sheet is open restores the active tab.
-    var selectedTab by rememberSaveable { mutableIntStateOf(SubtitleManagerTab.DOWNLOAD.ordinal) }
-    // One focus requester per tab's primary action so D-pad focus lands on a
-    // real, on-screen target whenever the tab changes — not just the Download
-    // tab. Without this the Search/Upload tabs are unreachable on a TV remote.
-    val downloadFocus = remember { FocusRequester() }
-    val searchFocus = remember { FocusRequester() }
-    val uploadFocus = remember { FocusRequester() }
-    val loadBtnFocus = rememberTvFocusState()
-
-    PlayerModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(),
-    ) {
-        SubtitleManagerSection(
-            downloadSubtitles = downloadSubtitles,
-            isDownloading = isDownloading,
-            remoteSubtitlesError = remoteSubtitlesError,
-            onDownload = onDownload,
-            onLoadLocalFile = onLoadLocalFile,
-            searchResults = searchResults,
-            isSearching = isSearching,
-            hasSearched = hasSearched,
-            searchError = searchError,
-            cultures = cultures,
-            defaultLanguage = defaultLanguage,
-            onSearch = onSearch,
-            onDownloadSearched = onDownloadSearched,
-            providerSearchResults = providerSearchResults,
-            providerSearchErrors = providerSearchErrors,
-            configuredProviders = configuredProviders,
-            onSearchAllProviders = onSearchAllProviders,
-            onDownloadProviderSubtitle = onDownloadProviderSubtitle,
-            downloadingSubtitles = downloadingSubtitles,
-            onUseSubtitle = onUseSubtitle,
-            isUploading = isUploading,
-            onUpload = onUpload,
-            isTv = isTv,
-            selectedTab = selectedTab,
-            onTabChange = { selectedTab = it },
-            downloadFocus = downloadFocus,
-            searchFocus = searchFocus,
-            uploadFocus = uploadFocus,
-            loadBtnFocus = loadBtnFocus,
-        )
-    }
-}
-
-/**
- * The body of [SubtitleManagerSheet] (Download / Search / Upload tabbed
- * content) without its own sheet chrome, for embedding inside the unified
- * subtitle hub's "Get" tab. The host owns the selected-tab state + focus
- * requesters so it can hoist them when needed.
+ * The host ([SubtitleHubSheet]) owns the selected-tab state + focus requesters
+ * so it can hoist them when needed.
  */
 @Composable
-internal fun androidx.compose.foundation.layout.ColumnScope.SubtitleManagerSection(
+fun androidx.compose.foundation.layout.ColumnScope.SubtitleManagerSection(
     downloadSubtitles: List<RemoteSubtitleInfo>,
     isDownloading: Boolean,
     remoteSubtitlesError: String? = null,
@@ -245,11 +129,11 @@ internal fun androidx.compose.foundation.layout.ColumnScope.SubtitleManagerSecti
     defaultLanguage: String,
     onSearch: (String) -> Unit,
     onDownloadSearched: (RemoteSubtitleInfo) -> Unit,
-    providerSearchResults: List<com.raulshma.jellyplay.core.model.subtitle.SubtitleSearchResult>,
-    providerSearchErrors: Map<com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind, String>,
-    configuredProviders: Set<com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind>,
+    providerSearchResults: List<SubtitleSearchResult>,
+    providerSearchErrors: Map<SubtitleProviderKind, String>,
+    configuredProviders: Set<SubtitleProviderKind>,
     onSearchAllProviders: (String) -> Unit,
-    onDownloadProviderSubtitle: (com.raulshma.jellyplay.core.model.subtitle.SubtitleSearchResult) -> Unit,
+    onDownloadProviderSubtitle: (SubtitleSearchResult) -> Unit,
     downloadingSubtitles: Map<String, SubtitleDownloadStatus>,
     /** Row key: the remote-subtitle id (Jellyfin rows) or `"provider:id"` composite (external rows). */
     onUseSubtitle: (String) -> Unit,
@@ -691,11 +575,11 @@ private fun SearchTab(
     isTv: Boolean,
     focusRequester: FocusRequester,
     // Multi-provider search state.
-    providerSearchResults: List<com.raulshma.jellyplay.core.model.subtitle.SubtitleSearchResult>,
-    providerSearchErrors: Map<com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind, String>,
-    configuredProviders: Set<com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind>,
+    providerSearchResults: List<SubtitleSearchResult>,
+    providerSearchErrors: Map<SubtitleProviderKind, String>,
+    configuredProviders: Set<SubtitleProviderKind>,
     onSearchAllProviders: (String) -> Unit,
-    onDownloadProviderSubtitle: (com.raulshma.jellyplay.core.model.subtitle.SubtitleSearchResult) -> Unit,
+    onDownloadProviderSubtitle: (SubtitleSearchResult) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var searchLanguage by rememberSaveable { mutableStateOf(defaultLanguage) }
@@ -840,18 +724,18 @@ private fun LegacySearchResults(
 
 @Composable
 private fun ProviderSearchResults(
-    results: List<com.raulshma.jellyplay.core.model.subtitle.SubtitleSearchResult>,
-    errors: Map<com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind, String>,
+    results: List<SubtitleSearchResult>,
+    errors: Map<SubtitleProviderKind, String>,
     isLoading: Boolean,
     hasSearched: Boolean,
-    configuredProviders: Set<com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind>,
+    configuredProviders: Set<SubtitleProviderKind>,
     downloadingSubtitles: Map<String, SubtitleDownloadStatus>,
-    onDownload: (com.raulshma.jellyplay.core.model.subtitle.SubtitleSearchResult) -> Unit,
-    onUse: (com.raulshma.jellyplay.core.model.subtitle.SubtitleSearchResult) -> Unit,
+    onDownload: (SubtitleSearchResult) -> Unit,
+    onUse: (SubtitleSearchResult) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var filter by rememberSaveable {
-        mutableStateOf<com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind?>(null)
+        mutableStateOf<SubtitleProviderKind?>(null)
     }
     val visible = remember(results, filter) {
         if (filter == null) results else results.filter { it.provider == filter }
@@ -970,10 +854,10 @@ private fun ProviderSearchResults(
 
 @Composable
 private fun ProviderFilterRow(
-    configuredProviders: Set<com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind>,
-    errors: Map<com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind, String>,
-    selected: com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind?,
-    onSelect: (com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind?) -> Unit,
+    configuredProviders: Set<SubtitleProviderKind>,
+    errors: Map<SubtitleProviderKind, String>,
+    selected: SubtitleProviderKind?,
+    onSelect: (SubtitleProviderKind?) -> Unit,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -1004,7 +888,7 @@ private fun providerDisplayName(kind: SubtitleProviderKind): String = kind.local
 
 @Composable
 private fun ProviderSubtitleRow(
-    result: com.raulshma.jellyplay.core.model.subtitle.SubtitleSearchResult,
+    result: SubtitleSearchResult,
     isLast: Boolean,
     itemCount: Int,
     status: SubtitleDownloadStatus?,
@@ -1084,11 +968,11 @@ private fun ProviderSubtitleRow(
 }
 
 @Composable
-private fun providerShortName(kind: com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind): String =
+private fun providerShortName(kind: SubtitleProviderKind): String =
     when (kind) {
-        com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind.JELLYFIN -> "JF"
-        com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind.WYZIE -> "WYZ"
-        com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind.OPENSUBTITLES -> "OS"
+        SubtitleProviderKind.JELLYFIN -> "JF"
+        SubtitleProviderKind.WYZIE -> "WYZ"
+        SubtitleProviderKind.OPENSUBTITLES -> "OS"
     }
 
 // endregion

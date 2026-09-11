@@ -59,7 +59,10 @@ import kotlin.test.assertTrue
  *     delete, not-completed → detail + intake, no item → no-op) and the
  *     current-download mirror;
  *  5. the blurHash LRU cache (one detail fetch per item, including the
- *     negative-result sentinel) and the sleep-timer expiry pause contract.
+ *     negative-result sentinel) and the sleep-timer expiry pause contract;
+ *  6. effects persistence sourcing: a toggle persists the value computed from
+ *     the manager's StateFlow (AudioEffectsController), NOT the lagging
+ *     uiState mirror — the hazard the controller extraction fixed.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class AudioPlayerViewModelGapsTest {
@@ -131,6 +134,9 @@ class AudioPlayerViewModelGapsTest {
         every { projections.audioPlayerUiPreferences } returns MutableStateFlow(AudioPlayerUiPreferences())
         every { audioStore.audio } returns MutableStateFlow(AudioSlice())
         every { audioEffectsStore.audioEffects } returns MutableStateFlow(AudioEffectsSlice())
+        // The effects flows the AudioEffectsController persist legs read
+        // synchronously — see stubAudioEffectsReadSurface.
+        stubAudioEffectsReadSurface(effectsManager)
         every { effectsManager.replayGainMode } returns MutableStateFlow(com.raulshma.jellyplay.core.model.AudioNormalizationMode.NONE)
         every { effectsManager.replayGainPreAmpDb } returns MutableStateFlow(0.0f)
         every { queueManager.currentPlayingItemId } returns currentItemIdFlow
@@ -520,6 +526,25 @@ class AudioPlayerViewModelGapsTest {
 
         verify(exactly = 1) { engine.pause() }
         verify(exactly = 0) { engine.togglePlayPause() }
+    }
+
+    // ── 6. Effects persistence sources the manager, not the uiState mirror ──
+
+    @Test
+    fun toggleNightMode_persistsTheManagerComputedValue_evenWhenTheMirrorHasNotCaughtUp() {
+        val nightMode = MutableStateFlow(false)
+        every { effectsManager.nightModeEnabled } returns nightMode
+        every { effectsManager.toggleNightMode() } answers { nightMode.value = !nightMode.value }
+
+        viewModel.toggleNightMode()
+
+        // The manager flipped synchronously inside the setter and no mirror
+        // collector has re-emitted: persisting the mirror would write `false`
+        // and silently undo the toggle (the pre-controller behaviour, correct
+        // only by dispatch-order luck).
+        assertTrue(nightMode.value)
+        assertFalse(viewModel.uiState.value.effects.nightModeEnabled)
+        coVerify(exactly = 1) { audioEffectsStore.setNightModeEnabled(true) }
     }
 
     @Test

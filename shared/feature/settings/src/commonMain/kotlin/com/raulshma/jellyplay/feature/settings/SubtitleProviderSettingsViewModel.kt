@@ -7,12 +7,9 @@ import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderCredentials
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderPreferences
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.update
 
 /**
  * ViewModel for [SubtitleProviderSettingsScreen]. Mirrors [ArrSettingsViewModel]:
@@ -28,7 +25,12 @@ import kotlinx.coroutines.flow.update
  * [testWyzieApiKey] / [testOpenSubtitlesCredentials], which build the credential
  * object and route it through [SubtitleProviderRepository.verifyCredentials] —
  * OpenSubtitles performs a real `/login` there, so a wrong password is caught.
- * Status is a small sealed class mirroring Arr's `ServerConnectionStatus`.
+ * Status is the shared [ConnectionProbe] board (the former seal mirrored Arr's
+ * `ServerConnectionStatus`; both now ride one machine, whose KDoc declares the
+ * single-flight RESTART policy, the cancellation-never-lands-as-Error rule,
+ * and the localized fallback texts). One behavior change: the repository's Skipped
+ * outcome still lands as Error, but as the localized ProviderNotConfigured
+ * fallback instead of the hardcoded "Provider not configured" literal.
  */
 class SubtitleProviderSettingsViewModel(
     private val preferencesStore: SubtitleProviderPreferencesStore,
@@ -38,8 +40,35 @@ class SubtitleProviderSettingsViewModel(
     val preferences: StateFlow<SubtitleProviderPreferences> = preferencesStore.preferences
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), SubtitleProviderPreferences())
 
-    private val _providerStatus = MutableStateFlow<Map<SubtitleProviderKind, ProviderStatus>>(emptyMap())
-    val providerStatus: StateFlow<Map<SubtitleProviderKind, ProviderStatus>> = _providerStatus.asStateFlow()
+    /** Per-provider reachability via the shared [ConnectionProbe] board, keyed by [SubtitleProviderKind]. */
+    private val probeBoard: ConnectionProbe<SubtitleProbeRequest, SubtitleProviderKind, Unit> = ConnectionProbe(
+        scope = scope,
+        keyOf = { request -> request.kind },
+        refused = { request ->
+            // Fail-fast on unconfigured credentials so the user gets immediate
+            // feedback without a network round-trip (a machine-level refusal —
+            // no Testing frame, no action call).
+            if (!request.credentials.isConfigured) ConnectionProbe.FallbackText.EnterCredentialsFirst
+            else null
+        },
+        action = { request ->
+            // verifyCredentials probes this one provider against the passed-in
+            // credentials alone, ignoring the enable toggle and the saved store —
+            // so a freshly pasted key/password verifies before the user turns the
+            // provider on or saves. Same rate-limit/retry path the player uses.
+            when (val outcome = subtitleProviderRepository.verifyCredentials(request.kind, request.credentials)) {
+                is ProviderSearchOutcome.Success -> ConnectionProbe.Outcome.Reachable(Unit)
+                is ProviderSearchOutcome.Error -> ConnectionProbe.unreachable(outcome.message)
+                // Skipped still lands as Error, but as the
+                // localized ProviderNotConfigured fallback (was the hardcoded
+                // "Provider not configured" literal).
+                ProviderSearchOutcome.Skipped -> ConnectionProbe.Outcome.Failed(
+                    ConnectionProbe.Failure.Declared(ConnectionProbe.FallbackText.ProviderNotConfigured),
+                )
+            }
+        },
+    )
+    val providerStatus: StateFlow<Map<SubtitleProviderKind, ConnectionProbe.Status<Unit>>> = probeBoard.status
 
     /** Synchronous credential snapshot for form seeding (read from the secure store). */
     fun credentialSnapshot(kind: SubtitleProviderKind): SubtitleProviderCredentials? =
@@ -125,37 +154,20 @@ fun saveOpenSubtitlesCredentials(username: String?, password: String?) {
 
     /**
      * Shared Test path for both providers. Builds nothing from the store — the
-     * caller passes the in-progress form credentials — and surfaces
-     * [ProviderStatus] for [kind]. Fail-fast on unconfigured credentials so the
-     * user gets immediate feedback without a network round-trip.
+     * caller passes the in-progress form credentials — and surfaces the
+     * shared board's status for [kind]. Unconfigured credentials are refused
+     * synchronously by the board (no Testing frame, no network round-trip).
+     * Single-flight is the machine's declared RESTART policy: a second Test
+     * tap cancels the in-flight probe for that provider (previously two taps
+     * raced, last write winning).
      */
     private fun testCredentials(kind: SubtitleProviderKind, credentials: SubtitleProviderCredentials) {
-        if (!credentials.isConfigured) {
-            _providerStatus.update { it + (kind to ProviderStatus.Error("Enter credentials first")) }
-            return
-        }
-        launch {
-            _providerStatus.update { it + (kind to ProviderStatus.Testing) }
-            // verifyCredentials probes this one provider against the passed-in
-            // credentials alone, ignoring the enable toggle and the saved store —
-            // so a freshly pasted key/password verifies before the user turns the
-            // provider on or saves. Same rate-limit/retry path the player uses.
-            val outcome = subtitleProviderRepository.verifyCredentials(kind, credentials)
-            _providerStatus.update {
-                it + (kind to when (outcome) {
-                    is ProviderSearchOutcome.Success -> ProviderStatus.Connected
-                    is ProviderSearchOutcome.Error -> ProviderStatus.Error(outcome.message)
-                    is ProviderSearchOutcome.Skipped -> ProviderStatus.Error("Provider not configured")
-                })
-            }
-        }
+        probeBoard.probe(SubtitleProbeRequest(kind, credentials))
     }
 
-    /** Connection status for a single subtitle provider, mirroring Arr's. */
-    sealed class ProviderStatus {
-        data object Idle : ProviderStatus()
-        data object Testing : ProviderStatus()
-        data object Connected : ProviderStatus()
-        data class Error(val message: String) : ProviderStatus()
-    }
+    /** One provider Test request: the form credentials under test + the keyed kind. */
+    private data class SubtitleProbeRequest(
+        val kind: SubtitleProviderKind,
+        val credentials: SubtitleProviderCredentials,
+    )
 }
