@@ -34,6 +34,7 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.formatBytes
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.MediaQuickActionScope
+import com.raulshma.jellyplay.core.model.PendingConfirmation
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.components.ConfirmState
@@ -169,10 +170,20 @@ fun MediaDetailScreen(
     // ── Unified-provider action dialog state. Delete / resync /
     // re-download get the same TV/mobile focus, back, and snackbar handling as
     // the existing detail actions. ──
-    /** Pending delete of the current item's attached download (single item or episode). */
-    var pendingDelete by remember { mutableStateOf<PendingDelete?>(null) }
+    /**
+     * Delete-confirm machines ([PendingConfirmation]). The deletes are
+     * fire-and-forget (the VM-owned `OfflineDeleteActions` launches on its own
+     * scope and returns immediately), so the machine settles SYNCHRONOUSLY at
+     * the confirm tap — `clear()` runs before the handler returns, which makes
+     * double-fire structurally impossible and leaves the machine's in-flight
+     * guard arm unreachable here (dismiss/confirm are called with
+     * `inFlight = false`). Settle arm: an explicit [PendingConfirmation.clear]
+     * at confirm — these dialogs previously never cleared (the pending item
+     * died with navigation).
+     */
+    var pendingDelete by remember { mutableStateOf(PendingConfirmation<PendingDelete>()) }
     /** Pending delete of a downloaded episode from the seasons section. */
-    var pendingDeleteEpisode by remember { mutableStateOf<PendingEpisodeDelete?>(null) }
+    var pendingDeleteEpisode by remember { mutableStateOf(PendingConfirmation<PendingEpisodeDelete>()) }
     /** Resync bottom-sheet visibility (banner tap). */
     var showResyncSheet by remember { mutableStateOf(false) }
     /** Full download-details bottom-sheet visibility (DownloadInfoCard tap). */
@@ -546,19 +557,23 @@ fun MediaDetailScreen(
                         onDeleteDownload = {
                             val target = detail?.item
                             val isEpisode = target?.mediaType == MediaType.EPISODE
-                            pendingDelete = PendingDelete(
-                                itemId = target?.id ?: itemId,
-                                name = target?.name ?: "",
-                                sizeBytes = uiState.detailContext?.download?.totalSizeBytes ?: 0L,
-                                isEpisode = isEpisode,
+                            pendingDelete = pendingDelete.hold(
+                                PendingDelete(
+                                    itemId = target?.id ?: itemId,
+                                    name = target?.name ?: "",
+                                    sizeBytes = uiState.detailContext?.download?.totalSizeBytes ?: 0L,
+                                    isEpisode = isEpisode,
+                                ),
                             )
                         },
                         onDeleteDownloadedEpisodes = { showDeleteEpisodesSheet = true },
                         onDeleteEpisode = { episodeId ->
                             val ep = uiState.episodes.values.flatten().firstOrNull { it.id == episodeId }
-                            pendingDeleteEpisode = PendingEpisodeDelete(
-                                episodeId = episodeId,
-                                name = ep?.name ?: "",
+                            pendingDeleteEpisode = pendingDeleteEpisode.hold(
+                                PendingEpisodeDelete(
+                                    episodeId = episodeId,
+                                    name = ep?.name ?: "",
+                                ),
                             )
                         },
                         onOpenResync = { showResyncSheet = true },
@@ -928,7 +943,7 @@ fun MediaDetailScreen(
         // Single item: deletes the current item's attached download. Episode: a
         // downloaded episode from the seasons section. Both route through the
         // merged DetailViewModel offline-delete methods.
-        pendingDelete?.let { target ->
+        pendingDelete.item?.let { target ->
             ConfirmDialog(
                 title = stringResource(Res.string.detail_delete_download_title),
                 message = stringResource(
@@ -941,16 +956,18 @@ fun MediaDetailScreen(
                 icon = Tabler.Outline.Trash,
                 tone = ConfirmTone.DESTRUCTIVE,
                 onConfirm = {
-                    viewModel.offline.deleteOfflineItem(target.itemId)
+                    val item = pendingDelete.confirm(inFlight = false) ?: return@ConfirmDialog
+                    viewModel.offline.deleteOfflineItem(item.itemId)
+                    pendingDelete = pendingDelete.clear()
                     // A LOCAL origin has nothing left once its only download is
                     // removed — pop back instead of stranding the user on an
                     // empty detail (matches the series batch-delete behavior).
                     if (uiState.origin?.isLocal == true) onBack()
                 },
-                onDismiss = { pendingDelete = null },
+                onDismiss = { pendingDelete = pendingDelete.dismiss(inFlight = false) },
             )
         }
-        pendingDeleteEpisode?.let { ep ->
+        pendingDeleteEpisode.item?.let { ep ->
             ConfirmDialog(
                 title = stringResource(Res.string.detail_delete_episode_title),
                 message = stringResource(Res.string.detail_delete_episode_message, ep.name),
@@ -958,8 +975,12 @@ fun MediaDetailScreen(
                 dismissText = stringResource(Res.string.detail_cancel),
                 icon = Tabler.Outline.Trash,
                 tone = ConfirmTone.DESTRUCTIVE,
-                onConfirm = { viewModel.offline.deleteOfflineEpisode(ep.episodeId) },
-                onDismiss = { pendingDeleteEpisode = null },
+                onConfirm = {
+                    val item = pendingDeleteEpisode.confirm(inFlight = false) ?: return@ConfirmDialog
+                    viewModel.offline.deleteOfflineEpisode(item.episodeId)
+                    pendingDeleteEpisode = pendingDeleteEpisode.clear()
+                },
+                onDismiss = { pendingDeleteEpisode = pendingDeleteEpisode.dismiss(inFlight = false) },
             )
         }
 

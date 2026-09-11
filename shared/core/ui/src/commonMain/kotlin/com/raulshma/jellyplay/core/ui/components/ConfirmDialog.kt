@@ -156,8 +156,19 @@ fun ConfirmDialog(
         pendingExit = null
     }
 
+    // The confirm tap plays the exit before invoking the caller's action, so a
+    // caller that raises [confirmLoading] only afterwards (VM in-flight flags)
+    // reports the dialog must stay up. Rescind the exit: the panel returns
+    // showing the loading state and stays until the caller settles (clears the
+    // pending item and removes the dialog, or drops the loading flag).
+    LaunchedEffect(confirmLoading) {
+        if (confirmLoading) transitionState.targetState = true
+    }
+
+    // While the action is in flight, exit requests (back, scrim tap, Cancel)
+    // are refused — the visual counterpart of the call site's guarded dismiss.
     val requestExit: (() -> Unit) -> Unit = { action ->
-        if (pendingExit == null) pendingExit = action
+        if (pendingExit == null && !confirmLoading) pendingExit = action
     }
 
     Dialog(
@@ -419,8 +430,12 @@ class ConfirmState internal constructor() {
     val isVisible: Boolean get() = pending != null
 
     /**
-     * Show the dialog; [onConfirm] runs only if the user confirms, then is
-     * cleared regardless of the outcome.
+     * Show the dialog; [onConfirm] runs only if the user confirms. The holder
+     * itself does NOT clear on confirm — the [ConfirmDialog] host keeps the
+     * dialog up while the action runs, and the call site owns any clear (many
+     * closure-payload sites just navigate away, which drops the state).
+     * For a typed-payload machine with an in-flight guard, see
+     * `core:model`'s `PendingConfirmation<T>`.
      */
     fun request(onConfirm: () -> Unit) {
         pending = onConfirm

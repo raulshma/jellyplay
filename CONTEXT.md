@@ -2696,6 +2696,73 @@ reference:
   deferred-start job on stop (leak); stale "Declared delta" date stamps
   stripped from older KDoc.
 
+**`PendingConfirmation<T>`** (`shared/core/model` commonMain, beside
+`SelectionState`, pinned by `PendingConfirmationTest`) is the ONE
+confirm-dialog pending-item machine behind the 17 former hand copies. Pure
+value + pure folds: `item`/`isPending`, `hold(t)`, `dismiss(inFlight)`,
+`confirm(inFlight): T?`, `clear()`. The invariant: one pending item, at most
+one in-flight action — BOTH dismiss and confirm are silent no-ops while
+in-flight (the dialog stays open until the action settles; refused confirm
+additionally cannot drop the pending item mid-flight). The guard RULE lives
+in the machine; the in-flight FACT is caller-owned (a per-site flag passed
+into each call — `isDeleting`/`isStoppingSession`/`actionInProgress`, or a
+screen-local `remember` boolean), never a second machine-held truth.
+`confirm` GATES but never clears: settle timing (success-only clear vs
+clear-on-both-outcomes vs clear-at-action-start vs clear-at-pop) is a
+DECLARED PER-SITE ARM, named in each site's KDoc — the machine cannot
+enforce it and the sites' pinned failure behaviours (Recordings' and Users'
+failure-keeps-dialog, MediaCleanup's failure-closes-dialog) survive as the
+proof of the fold: every existing suite passed UNMODIFIED except the three
+that gained first-ever pins (AdminDashboard's stop-session choreography,
+Devices'/Users' new flags).
+
+Landed arms, per site: Recordings (the reference site — dismiss was
+already guarded; the review pass routed `deleteRecording` through the
+`confirm(isDeleting)` gate too, so a second confirm tap is refused),
+AdminDashboard stop, and
+SyncPlay (clear-at-action-start preserved; a refused confirm can no longer
+drop the pending join). Guard added where the flag already existed but was
+unchecked: ArrQueue (`actionInProgress`), MediaCleanup (`isDeleting`; its
+payload is the selection snapshot at hold-time, not the live selection —
+equivalent under a modal dialog), ManageSeries (`isDeleting`, hoisted into
+`ManageSeriesUiState` during the review pass so the fact is observable —
+rendered by the dialog's `confirmLoading`, matching Devices/Users). Flags
+are NEW at Devices/Users (with `confirmLoading` wiring — the
+double-tap-delete hole is closed) and SyncPlay (`isJoining`).
+Screen-held machines split by how their action runs: the FIRE-AND-FORGET
+sites (MediaDetailScreen ×2, DownloadsScreen ×2, PrivacyData,
+FactoryReset, editor Images/Subtitles tabs) call non-suspend VM commands
+that launch internally and return immediately, so the machine settles
+SYNCHRONOUSLY at the confirm tap — `clear()` runs before the handler
+returns, which makes double-fire structurally impossible and leaves the
+in-flight guard arm unreachable there (dismiss/confirm pass
+`inFlight = false`; no screen-local flag exists). ImportPreview is the
+exception: its `All` arm owns a REAL screen-local flag (`actionInFlight`)
+that gates dismiss while the import runs, keeps the pending as the loading
+state, and resets on terminal import events (the one declared addition —
+a Failed import would otherwise park the dialog loading with dismiss
+refused); its Category/Extras completion callbacks now carry NO dialog
+writes, so a late callback cannot clobber a new dialog staged mid-import.
+
+The visual half of "the dialog stays open" is host-owned and landed in the
+review pass: `ConfirmDialog`'s exit choreography plays the fade BEFORE
+invoking `onConfirm`, so the `confirmLoading` the VMs raise afterwards
+rendered into an already-invisible panel (and a failure-keeps-dialog site
+left scrim over nothing). The host now rescinds the exit when
+`confirmLoading` turns on — the panel returns showing the spinner — and
+refuses exit requests (back, scrim tap, Cancel) while loading, the visual
+counterpart of the machine's silent-no-op dismiss. Fire-and-forget sites
+(passing `confirmLoading = false`) are untouched.
+
+Deliberately OUT of scope: the boolean-only ring (12 `showX` confirm
+booleans + 2 `rememberConfirmState()` sites — expressible as
+`PendingConfirmation<Unit>`, no drift problem), and core/ui's
+`ConfirmState` (the composition-scoped closure-payload machine), which
+COEXISTS — its KDoc now states the truth (request does NOT clear on
+confirm; the call site owns any clear) and points here for the
+typed-payload machine. DevicesViewModel's dead `selectDevice` (zero
+callers, inexpressible against the machine pair) died in the migration.
+
 ## Rejected designs
 
 Recorded with evidence so future reviews don't re-suggest them.
@@ -2853,19 +2920,7 @@ re-derives the designs nor lands them casually.
 - **`ExternalPlayerHost`** (`app`): LANDED — see
   `navigation/playbackhost/ExternalPlayerHost.kt`; the shell-churn trigger
   had fired (two waves since the record).
-- **`PendingConfirmation<T>`**: the confirm-dialog pending-item machine
-  (hold item → dismiss = null-write → confirm clears + runs + reloads)
-  was recorded hand-copied in 6 places (Devices/Users/Recordings/
-  ManageSeries/ArrQueue VMs + two `remember`-state machines inside
-  `MediaDetailScreen`); the 2026-09-08 third-wave census counted ~14
-  (new copies: Downloads' two, ImportPreview, PrivacyData, FactoryReset,
-  SyncPlay's join pair, AdminDashboard's stop-session pair — itself the
-  in-flight-flag variant vocabulary this record warned about — editor's
-  image delete). Drift-shaped variance: only Recordings has the
-  dismiss-during-in-flight guard; only ArrQueue generalized to a sealed
-  action. Deferred: universalizing the guard changes dismiss behaviour at
-  ~13 sites — the decision deserves to be made explicitly, and the
-  leverage grows with every copy.
+- **`PendingConfirmation<T>`**: LANDED (2026-09-11) — see the 2026-09-11 wave.
 - **Settings/Library section hosts**: `SettingsScreen`'s root composable
   holds ~1150 lines (every section inline; the leaves are already
   extracted); `LibraryScreen` similar (~1270-line body). Design: a

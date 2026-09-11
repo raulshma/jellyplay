@@ -123,6 +123,7 @@ fun DevicesScreen(
             confirmText = stringResource(Res.string.admin_delete),
             dismissText = stringResource(Res.string.admin_cancel),
             tone = ConfirmTone.DESTRUCTIVE,
+            confirmLoading = state.isDeleting,
             onConfirm = { viewModel.deleteDevice() },
             onDismiss = { viewModel.dismissDeleteDialog() },
         )

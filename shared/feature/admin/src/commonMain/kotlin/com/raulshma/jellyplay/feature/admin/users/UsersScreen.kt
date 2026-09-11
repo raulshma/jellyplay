@@ -116,6 +116,7 @@ fun UsersScreen(
             confirmText = stringResource(Res.string.admin_delete),
             dismissText = stringResource(Res.string.admin_cancel),
             tone = ConfirmTone.DESTRUCTIVE,
+            confirmLoading = state.isDeleting,
             onConfirm = { viewModel.deleteUser() },
             onDismiss = { viewModel.dismissDeleteDialog() },
         )

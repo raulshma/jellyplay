@@ -4,6 +4,7 @@ import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.model.AuditLogEntry
 import com.raulshma.jellyplay.core.model.MediaCleanupConfig
 import com.raulshma.jellyplay.core.model.MediaItemStub
+import com.raulshma.jellyplay.core.model.PendingConfirmation
 import com.raulshma.jellyplay.core.model.ScanPhase
 import com.raulshma.jellyplay.core.model.ScanProgress
 import com.raulshma.jellyplay.core.model.SelectionState
@@ -55,12 +56,23 @@ data class MediaCleanupScanState(
     val scanProgress: ScanProgress = ScanProgress(),
     val rawScanResults: List<MediaItemStub> = emptyList(),
     val selectedItems: Set<String> = emptySet(),
-    val showDeleteConfirmation: Boolean = false,
+    /**
+     * Delete-confirmation machine (replaces the old showDeleteConfirmation
+     * boolean); the payload is the selected-id set held at dialog open.
+     * Settle arm: clears on BOTH outcomes — a failure also closes the dialog
+     * while keeping the selection. Guard source: the machine's dismiss/
+     * confirm rule; [isDeleting] is the caller-owned in-flight fact.
+     */
+    val pendingDeleteConfirmation: PendingConfirmation<Set<String>> = PendingConfirmation(),
     val isDeleting: Boolean = false,
     val canDeleteContent: Boolean = true,
     val auditEntries: List<AuditLogEntry> = emptyList(),
     val sortOption: MediaSortOption = MediaSortOption.DEFAULT,
 ) {
+    /** The delete-confirmation dialog's open flag, derived from the pending machine. */
+    val showDeleteConfirmation: Boolean
+        get() = pendingDeleteConfirmation.isPending
+
     /** The raw results re-sorted per [sortOption] — the results tab's read model. */
     val scanResults: List<MediaItemStub>
         get() = when (sortOption) {
@@ -205,28 +217,39 @@ class MediaCleanupScanStateHolder(
         }
     }
 
+    /** Holds the current selection as the delete confirmation's payload. */
     fun showDeleteConfirmation() {
-        _state.update { it.copy(showDeleteConfirmation = true) }
+        _state.update { it.copy(pendingDeleteConfirmation = it.pendingDeleteConfirmation.hold(it.selectedItems)) }
     }
 
+    /**
+     * Refused while a delete is in flight (machine rule; [MediaCleanupScanState.isDeleting]
+     * is the caller-owned fact) — the dialog stays open until the request settles.
+     */
     fun dismissDeleteConfirmation() {
-        _state.update { it.copy(showDeleteConfirmation = false) }
+        _state.update { it.copy(pendingDeleteConfirmation = it.pendingDeleteConfirmation.dismiss(it.isDeleting)) }
     }
 
+    /**
+     * Deletes the confirmed selection. Settle arm: clears on BOTH outcomes —
+     * a failure closes the dialog too, keeping the selection so it can be
+     * retried (success clears it). [MediaCleanupScanState.isDeleting] spans
+     * the request so a second confirm and a dismiss are refused.
+     */
     fun deleteSelected() {
+        val selectedIds = _state.value.pendingDeleteConfirmation.confirm(inFlight = _state.value.isDeleting) ?: return
         scope.launch {
             _state.update { it.copy(isDeleting = true) }
-            val selectedItems = _state.value.selectedItems.toList()
             val nameMap = _state.value.scanResults.associate { it.itemId to it.name }
 
-            removeMediaItems(selectedItems, nameMap, _state.value.config)
+            removeMediaItems(selectedIds.toList(), nameMap, _state.value.config)
                 .onSuccess {
                     _state.update {
                         it.copy(
                             isDeleting = false,
-                            showDeleteConfirmation = false,
+                            pendingDeleteConfirmation = it.pendingDeleteConfirmation.clear(),
                             selectedItems = emptySet(),
-                            rawScanResults = it.rawScanResults.filterNot { selectedItems.contains(it.itemId) },
+                            rawScanResults = it.rawScanResults.filterNot { selectedIds.contains(it.itemId) },
                         )
                     }
                 }
@@ -234,7 +257,7 @@ class MediaCleanupScanStateHolder(
                     _state.update {
                         it.copy(
                             isDeleting = false,
-                            showDeleteConfirmation = false,
+                            pendingDeleteConfirmation = it.pendingDeleteConfirmation.clear(),
                             error = e.message,
                         )
                     }

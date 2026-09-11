@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.admin.dashboard
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.data.repository.AdminRepository
 import com.raulshma.jellyplay.core.model.ItemCounts
+import com.raulshma.jellyplay.core.model.PendingConfirmation
 import com.raulshma.jellyplay.core.model.ScheduledTaskInfo
 import com.raulshma.jellyplay.core.model.SessionInfo
 import com.raulshma.jellyplay.core.model.SystemInfo
@@ -25,8 +26,13 @@ data class AdminDashboardState(
     val isRestarting: Boolean = false,
     val isShuttingDown: Boolean = false,
     val libraryScanState: LibraryScanState = LibraryScanState.Idle,
-    /** Session awaiting a stop confirmation, if any. Null hides the dialog. */
-    val pendingStopSession: SessionInfo? = null,
+    /**
+     * Stop-confirmation machine (replaces the old nullable pendingStopSession).
+     * Settle arm: clears on SUCCESS only — a failed stop keeps the dialog open
+     * over the "Stop failed" error. Guard source: the machine's dismiss/
+     * confirm rule; [isStoppingSession] is the caller-owned in-flight fact.
+     */
+    val pendingStopSession: PendingConfirmation<SessionInfo> = PendingConfirmation(),
     /** True while a stop request is in flight (disables the confirm button). */
     val isStoppingSession: Boolean = false,
 )
@@ -183,28 +189,37 @@ class AdminDashboardViewModel(
 
     /** Opens the "stop this session's playback?" confirm dialog. */
     fun showStopSessionDialog(session: SessionInfo) {
-        _uiState.update { it.copy(pendingStopSession = session) }
+        _uiState.update { it.copy(pendingStopSession = it.pendingStopSession.hold(session)) }
     }
 
+    /**
+     * Refused while a stop is in flight (machine rule; [AdminDashboardState.isStoppingSession]
+     * is the caller-owned fact) — the dialog stays open until the request settles.
+     */
     fun dismissStopSessionDialog() {
-        if (!_uiState.value.isStoppingSession) {
-            _uiState.update { it.copy(pendingStopSession = null) }
-        }
+        _uiState.update { it.copy(pendingStopSession = it.pendingStopSession.dismiss(it.isStoppingSession)) }
     }
 
     /**
      * Stops active playback on the session currently pending confirmation.
      * Issues Jellyfin's play-state STOP command, then refreshes the dashboard
-     * so the card reflects the stopped state.
+     * so the card reflects the stopped state. Settle arm: clears on SUCCESS
+     * only — the failure arm leaves the pending session held so the dialog
+     * stays open over the "Stop failed" error. [AdminDashboardState.isStoppingSession]
+     * spans the request so a second confirm and a dismiss are refused.
      */
     fun stopSession() {
-        val session = _uiState.value.pendingStopSession ?: return
+        val session = _uiState.value.pendingStopSession.confirm(inFlight = _uiState.value.isStoppingSession) ?: return
         launch {
             _uiState.update { it.copy(isStoppingSession = true) }
             val result = adminRepository.stopSession(session.id)
             if (result.isSuccess) {
                 _uiState.update {
-                    it.copy(isStoppingSession = false, pendingStopSession = null, error = null)
+                    it.copy(
+                        isStoppingSession = false,
+                        pendingStopSession = it.pendingStopSession.clear(),
+                        error = null,
+                    )
                 }
                 loadDashboard()
             } else {

@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.details
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.model.PendingConfirmation
 import com.raulshma.jellyplay.core.model.arr.ArrSeriesEpisode
 import com.raulshma.jellyplay.core.model.arr.ArrSeriesResolution
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
@@ -165,18 +166,21 @@ class ManageSeriesViewModel internal constructor(
         }
     }
 
+    /** Stages the episode in the [PendingConfirmation] hold write. */
     fun requestDeleteEpisode(episode: ArrSeriesEpisode) {
-        _uiState.update { it.copy(pendingDeleteEpisode = episode) }
+        _uiState.update { it.copy(pendingDelete = it.pendingDelete.hold(episode)) }
     }
 
+    /** The dismiss write — refused while a delete is in flight ([ManageSeriesUiState.isDeleting]). */
     fun cancelDeleteEpisode() {
-        _uiState.update { it.copy(pendingDeleteEpisode = null) }
+        _uiState.update { it.copy(pendingDelete = it.pendingDelete.dismiss(it.isDeleting)) }
     }
 
     fun confirmDeleteEpisode() {
         val tvdb = tvdbId ?: return
-        val pending = _uiState.value.pendingDeleteEpisode ?: return
-        _uiState.update { it.copy(pendingDeleteEpisode = null, actionTarget = ActionTarget.Episode(pending.id)) }
+        val state = _uiState.value
+        val pending = state.pendingDelete.confirm(inFlight = state.isDeleting) ?: return
+        _uiState.update { it.copy(actionTarget = ActionTarget.Episode(pending.id), isDeleting = true) }
         launch {
             arrRepository.deleteSonarrEpisodeFile(tvdb, pending.episodeFileId)
                 .onSuccess {
@@ -190,6 +194,10 @@ class ManageSeriesViewModel internal constructor(
                         it.copy(actionTarget = null, userMessage = e.message ?: "Couldn't delete the file.")
                     }
                 }
+            // Settle arm: the flag drops on BOTH outcomes and [PendingConfirmation.clear]
+            // runs on BOTH outcomes — pre-fold this was a clear-before-action write, so
+            // failure left the pending episode cleared too.
+            _uiState.update { it.copy(isDeleting = false, pendingDelete = it.pendingDelete.clear()) }
         }
     }
 
@@ -350,11 +358,21 @@ data class ManageSeriesUiState(
     val expandedSeasons: Set<Int> = emptySet(),
     /** One-shot snackbar message for action feedback. */
     val userMessage: String? = null,
-    /** Episode awaiting delete confirmation. */
-    val pendingDeleteEpisode: ArrSeriesEpisode? = null,
+    /**
+     * Episode-delete confirm machine ([PendingConfirmation]). The guard RULE
+     * lives in the machine, fed the [ManageSeriesUiState.isDeleting] flag;
+     * the settle arm is an explicit [PendingConfirmation.clear] on BOTH
+     * delete outcomes.
+     */
+    val pendingDelete: PendingConfirmation<ArrSeriesEpisode> = PendingConfirmation(),
+    /** True while the staged episode-file delete is in flight — the machine's guard fact. */
+    val isDeleting: Boolean = false,
     /** Which target (episode/season/series) has an in-flight action, for spinners. */
     val actionTarget: ActionTarget? = null,
 ) {
+    /** The staged delete target — the pre-fold `pendingDeleteEpisode` field, now derived from [pendingDelete]. */
+    val pendingDeleteEpisode: ArrSeriesEpisode? get() = pendingDelete.item
+
     /** Updates a single episode in-place across the season map. */
     fun updateEpisode(updated: ArrSeriesEpisode): ManageSeriesUiState {
         val newMap = episodesBySeason.mapValues { (season, eps) ->

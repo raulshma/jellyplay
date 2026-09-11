@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.admin.devices
 
 import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.model.DeviceInfo
+import com.raulshma.jellyplay.core.model.PendingConfirmation
 import com.raulshma.jellyplay.core.data.repository.AdminRepository
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.feature.admin.AdminLoad
@@ -11,12 +12,31 @@ data class DevicesState(
     val error: String? = null,
     val devices: List<DeviceInfo> = emptyList(),
     val isRefreshing: Boolean = false,
-    val selectedDevice: DeviceInfo? = null,
-    val showDeleteDialog: Boolean = false,
+    /**
+     * Delete-confirmation machine (replaces the old showDeleteDialog +
+     * selectedDevice pair). Settle arm: clears on BOTH outcomes — the dialog
+     * always closed on delete and the reload stayed unconditional. Guard
+     * source: the machine's dismiss/confirm rule; [isDeleting] is the
+     * caller-owned in-flight fact it reads.
+     */
+    val pendingDelete: PendingConfirmation<DeviceInfo> = PendingConfirmation(),
+    /** True while a delete request is in flight — also the dialog's confirmLoading. */
+    val isDeleting: Boolean = false,
     val showEditNameDialog: Boolean = false,
     val editDeviceId: String = "",
     val editCustomName: String = "",
-)
+) {
+    /** The delete dialog's open flag, derived from the pending machine. */
+    val showDeleteDialog: Boolean get() = pendingDelete.isPending
+
+    /**
+     * The device awaiting delete confirmation — the dialog's payload.
+     * Compatibility alias for the pre-fold `selectedDevice` field name (the
+     * screen and suite read it unchanged); the value is the machine's
+     * pending delete target.
+     */
+    val selectedDevice: DeviceInfo? get() = pendingDelete.item
+}
 
 class DevicesViewModel(
     private val adminRepository: AdminRepository,
@@ -57,30 +77,40 @@ class DevicesViewModel(
         }
     }
 
-    fun selectDevice(device: DeviceInfo?) {
-        _state.value = _state.value.copy(selectedDevice = device)
-    }
-
+    /** Opens the delete-confirm dialog for [device]. */
     fun showDeleteDialog(device: DeviceInfo) {
-        _state.value = _state.value.copy(selectedDevice = device, showDeleteDialog = true)
+        _state.value = _state.value.copy(pendingDelete = _state.value.pendingDelete.hold(device))
     }
 
+    /**
+     * Refused while a delete is in flight (machine rule; [DevicesState.isDeleting]
+     * is the caller-owned fact) — the dialog stays open until the request settles.
+     */
     fun dismissDeleteDialog() {
-        _state.value = _state.value.copy(showDeleteDialog = false, selectedDevice = null)
+        _state.value = _state.value.copy(pendingDelete = _state.value.pendingDelete.dismiss(_state.value.isDeleting))
     }
 
+    /**
+     * Deletes the pending device. Settle arm: clears on BOTH outcomes — the
+     * dialog always closed on delete (the delete Result is and stays
+     * unhandled) and the reload is unconditional. [DevicesState.isDeleting]
+     * spans the request so a second confirm and a dismiss are refused.
+     */
     fun deleteDevice() {
-        val deviceId = _state.value.selectedDevice?.id ?: return
+        val device = _state.value.pendingDelete.confirm(inFlight = _state.value.isDeleting) ?: return
         launch {
-            adminRepository.deleteDevice(deviceId)
-            _state.value = _state.value.copy(showDeleteDialog = false, selectedDevice = null)
+            _state.value = _state.value.copy(isDeleting = true)
+            adminRepository.deleteDevice(device.id)
+            _state.value = _state.value.copy(
+                isDeleting = false,
+                pendingDelete = _state.value.pendingDelete.clear(),
+            )
             loadDevices()
         }
     }
 
     fun showEditNameDialog(device: DeviceInfo) {
         _state.value = _state.value.copy(
-            selectedDevice = device,
             showEditNameDialog = true,
             editDeviceId = device.id,
             editCustomName = device.customName ?: "",

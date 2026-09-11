@@ -4,6 +4,7 @@ import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.LiveTvRecording
+import com.raulshma.jellyplay.core.model.PendingConfirmation
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.feature.livetv.LiveTvLoad
 
@@ -12,10 +13,14 @@ data class RecordingsUiState(
     val recordings: List<LiveTvRecording> = emptyList(),
     val isLoading: Boolean = false,
     val error: String? = null,
-    /** Recording awaiting a delete confirmation, if any. Null hides the dialog. */
-    val pendingDelete: LiveTvRecording? = null,
+    /** Delete-confirmation machine behind [pendingDelete]. */
+    val deleteConfirmation: PendingConfirmation<LiveTvRecording> = PendingConfirmation(),
     val isDeleting: Boolean = false,
-)
+) {
+    /** Recording awaiting a delete confirmation, if any. Null hides the dialog. */
+    val pendingDelete: LiveTvRecording?
+        get() = deleteConfirmation.item
+}
 
 /**
  * Recordings tab — mirrors jellyfin-web `livetvrecordings.js`: fetches the
@@ -57,22 +62,27 @@ class RecordingsViewModel(
 
     /** Opens the confirm dialog for deleting [recording] (and cancelling its series timer if set). */
     fun showDeleteDialog(recording: LiveTvRecording) {
-        _uiState.update { it.copy(pendingDelete = recording) }
+        _uiState.update { it.copy(deleteConfirmation = it.deleteConfirmation.hold(recording)) }
     }
 
+    /** Dismiss fold: the machine's in-flight guard, fed the site's [RecordingsUiState.isDeleting] flag. */
     fun dismissDeleteDialog() {
-        if (!_uiState.value.isDeleting) {
-            _uiState.update { it.copy(pendingDelete = null) }
-        }
+        _uiState.update { it.copy(deleteConfirmation = it.deleteConfirmation.dismiss(it.isDeleting)) }
     }
 
     /**
      * Deletes the recording pending confirmation. If it has a [LiveTvRecording.seriesTimerId]
      * the series timer is cancelled first so future episodes aren't recorded,
      * then the recorded item itself is deleted.
+     *
+     * Confirm never clears — the settle arm is success-only: explicit
+     * [PendingConfirmation.clear] where the reload triggers; failure keeps
+     * the dialog open with the error. The [PendingConfirmation.confirm] gate
+     * refuses a second tap while [RecordingsUiState.isDeleting] is raised.
      */
     fun deleteRecording() {
-        val recording = _uiState.value.pendingDelete ?: return
+        val state = _uiState.value
+        val recording = state.deleteConfirmation.confirm(inFlight = state.isDeleting) ?: return
         launch {
             _uiState.update { it.copy(isDeleting = true) }
             // Cancel the series timer (best-effort) if one is attached.
@@ -80,7 +90,11 @@ class RecordingsViewModel(
             val result = mediaRepository.deleteRecording(recording.id)
             if (result.isSuccess) {
                 _uiState.update {
-                    it.copy(isDeleting = false, pendingDelete = null, error = null)
+                    it.copy(
+                        isDeleting = false,
+                        deleteConfirmation = it.deleteConfirmation.clear(),
+                        error = null,
+                    )
                 }
                 load()
             } else {

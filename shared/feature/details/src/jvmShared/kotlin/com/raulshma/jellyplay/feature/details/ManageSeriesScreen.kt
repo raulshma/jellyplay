@@ -194,6 +194,7 @@ fun ManageSeriesScreen(
                 "S${episode.seasonNumber}E${episode.episodeNumber}",
             ),
             confirmText = stringResource(Res.string.detail_manage_delete_confirm),
+            confirmLoading = uiState.isDeleting,
             dismissText = stringResource(Res.string.detail_cancel),
             icon = Tabler.Outline.Trash,
             tone = ConfirmTone.DESTRUCTIVE,

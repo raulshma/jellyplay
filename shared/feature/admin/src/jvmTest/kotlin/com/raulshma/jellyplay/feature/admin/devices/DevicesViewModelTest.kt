@@ -5,12 +5,14 @@ import com.raulshma.jellyplay.core.model.DeviceInfo
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlin.test.AfterTest
@@ -147,6 +149,50 @@ class DevicesViewModelTest {
         viewModel.dismissDeleteDialog()
 
         assertFalse(viewModel.state.showDeleteDialog)
+        assertNull(viewModel.state.selectedDevice)
+    }
+
+    @Test
+    fun `dismiss during an in-flight delete retains the pending device`() = runTest(mainDispatcher) {
+        val viewModel = loadedViewModel()
+        // Park the delete mid-flight so isDeleting stays raised.
+        val gate = CompletableDeferred<Unit>()
+        coEvery { adminRepository.deleteDevice("d-1") } coAnswers { gate.await(); Result.success(Unit) }
+
+        viewModel.showDeleteDialog(phone)
+        viewModel.deleteDevice()
+        runCurrent() // run the launch until it suspends on the gate
+        assertTrue(viewModel.state.isDeleting)
+
+        viewModel.dismissDeleteDialog()
+
+        // The machine refuses a dismiss while in flight — the dialog stays open.
+        assertEquals(phone, viewModel.state.selectedDevice)
+        assertTrue(viewModel.state.showDeleteDialog)
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+        // Settle arm: clears on BOTH outcomes.
+        assertNull(viewModel.state.selectedDevice)
+        assertFalse(viewModel.state.showDeleteDialog)
+    }
+
+    @Test
+    fun `a second confirm while a delete is in flight is refused`() = runTest(mainDispatcher) {
+        val viewModel = loadedViewModel()
+        val gate = CompletableDeferred<Unit>()
+        coEvery { adminRepository.deleteDevice("d-1") } coAnswers { gate.await(); Result.success(Unit) }
+
+        viewModel.showDeleteDialog(phone)
+        viewModel.deleteDevice()
+        runCurrent()
+        assertTrue(viewModel.state.isDeleting)
+
+        viewModel.deleteDevice()
+
+        coVerify(exactly = 1) { adminRepository.deleteDevice("d-1") }
+        gate.complete(Unit)
+        advanceUntilIdle()
         assertNull(viewModel.state.selectedDevice)
     }
 

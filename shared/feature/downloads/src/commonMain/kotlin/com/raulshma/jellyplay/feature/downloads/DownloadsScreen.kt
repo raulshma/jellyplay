@@ -82,6 +82,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.data.repository.DownloadProgress
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
+import com.raulshma.jellyplay.core.model.PendingConfirmation
 import com.raulshma.jellyplay.core.model.ResyncCategory
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
@@ -207,11 +208,24 @@ fun DownloadsScreen(
         }
     }
 
-    // Pending delete confirmation. Deleting a completed download removes the
+    // Pending delete confirmations. Deleting a completed download removes the
     // file from disk, so we confirm first — matching the unified
-    // MediaDetailScreen delete confirmations.
-    var pendingDelete by remember { mutableStateOf<DownloadItem?>(null) }
-    var pendingBulkDelete by remember { mutableStateOf(false) }
+    // MediaDetailScreen delete confirmations. Two separate machines
+    // ([PendingConfirmation]): single-item and bulk selection.
+    /**
+     * Pending single-item delete. Settle arm: [PendingConfirmation.clear] in
+     * the confirm handler (previously the confirm write never cleared —
+     * declared delta). The deletes are fire-and-forget VM calls, so the
+     * machine settles synchronously and the guard's in-flight arm is
+     * unreachable here (dismiss/confirm pass `inFlight = false`).
+     */
+    var pendingDelete by remember { mutableStateOf(PendingConfirmation<DownloadItem>()) }
+    /**
+     * Pending bulk delete of the current selection. Settle arm:
+     * [PendingConfirmation.clear] in the confirm handler (previously never
+     * cleared — declared delta). Same synchronous settle as [pendingDelete].
+     */
+    var pendingBulkDelete by remember { mutableStateOf(PendingConfirmation<Unit>()) }
     var showResyncSheet by remember { mutableStateOf(false) }
     var showForceResyncSheet by remember { mutableStateOf(false) }
 
@@ -460,7 +474,7 @@ fun DownloadsScreen(
                             onCancel = { viewModel.applyBulkAction(DownloadBulkAction.CANCEL, DownloadActionScope.Item(download.id)) },
                             onPause = { viewModel.applyBulkAction(DownloadBulkAction.PAUSE, DownloadActionScope.Item(download.id)) },
                             onResume = { viewModel.applyBulkAction(DownloadBulkAction.RESUME, DownloadActionScope.Item(download.id)) },
-                            onDelete = { pendingDelete = download },
+                            onDelete = { pendingDelete = pendingDelete.hold(download) },
                             onRetry = { viewModel.applyBulkAction(DownloadBulkAction.RETRY_FAILED, DownloadActionScope.Item(download.id)) },
                             onMoveToFront = { viewModel.moveToFront(download) },
                             onLowerPriority = { viewModel.lowerPriority(download) },
@@ -481,7 +495,7 @@ fun DownloadsScreen(
                         onPause = { viewModel.applyBulkAction(DownloadBulkAction.PAUSE, DownloadActionScope.Selected) },
                         onResume = { viewModel.applyBulkAction(DownloadBulkAction.RESUME, DownloadActionScope.Selected) },
                         onCancel = { viewModel.applyBulkAction(DownloadBulkAction.CANCEL, DownloadActionScope.Selected) },
-                        onBulkDelete = { pendingBulkDelete = true },
+                        onBulkDelete = { pendingBulkDelete = pendingBulkDelete.hold(Unit) },
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
                             .fillMaxWidth()
@@ -500,7 +514,7 @@ fun DownloadsScreen(
         }
     }
 
-    pendingDelete?.let { item ->
+    pendingDelete.item?.let { item ->
         ConfirmDialog(
             title = stringResource(Res.string.downloads_delete_download_title),
             message = stringResource(Res.string.downloads_delete_download_message, item.name, viewModel.formatBytes(item.totalSizeBytes)),
@@ -508,12 +522,18 @@ fun DownloadsScreen(
             dismissText = stringResource(Res.string.downloads_cancel),
             icon = Tabler.Outline.Trash,
             tone = ConfirmTone.DESTRUCTIVE,
-            onConfirm = { viewModel.deleteDownload(item) },
-            onDismiss = { pendingDelete = null },
+            onConfirm = {
+                val target = pendingDelete.confirm(inFlight = false) ?: return@ConfirmDialog
+                viewModel.deleteDownload(target)
+                // Settle: clear the machine (was never cleared on confirm
+                // before the migration).
+                pendingDelete = pendingDelete.clear()
+            },
+            onDismiss = { pendingDelete = pendingDelete.dismiss(inFlight = false) },
         )
     }
 
-    if (pendingBulkDelete) {
+    if (pendingBulkDelete.isPending) {
         val count = selectedIds.size
         val freedBytes = selectedItems.sumOf { it.totalSizeBytes }
         ConfirmDialog(
@@ -524,8 +544,14 @@ fun DownloadsScreen(
             dismissText = stringResource(Res.string.downloads_cancel),
             icon = Tabler.Outline.Trash,
             tone = ConfirmTone.DESTRUCTIVE,
-            onConfirm = { viewModel.applyBulkAction(DownloadBulkAction.DELETE, DownloadActionScope.Selected) },
-            onDismiss = { pendingBulkDelete = false },
+            onConfirm = {
+                pendingBulkDelete.confirm(inFlight = false) ?: return@ConfirmDialog
+                viewModel.applyBulkAction(DownloadBulkAction.DELETE, DownloadActionScope.Selected)
+                // Settle: clear the machine (was never cleared on confirm
+                // before the migration).
+                pendingBulkDelete = pendingBulkDelete.clear()
+            },
+            onDismiss = { pendingBulkDelete = pendingBulkDelete.dismiss(inFlight = false) },
         )
     }
 

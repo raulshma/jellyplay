@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.concurrency.mapConcurrent
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
 import com.raulshma.jellyplay.core.model.ExperimentalFeature
+import com.raulshma.jellyplay.core.model.PendingConfirmation
 import com.raulshma.jellyplay.core.model.SelectionState
 import com.raulshma.jellyplay.core.model.arr.ArrQueueDeleteOptions
 import com.raulshma.jellyplay.core.model.arr.ArrQueueItem
@@ -48,8 +49,8 @@ data class ArrQueueUiState(
     /** Stable row keys currently in selection mode. */
     val selection: SelectionState<String> = SelectionState(),
     val actionInProgress: Boolean = false,
-    /** Inline action dialog to show, if any. */
-    val pendingAction: ArrQueueAction? = null,
+    /** Inline action-confirmation machine behind [pendingAction]. */
+    val actionConfirmation: PendingConfirmation<ArrQueueAction> = PendingConfirmation(),
 ) {
     /** Selection reads, delegated from the shared [SelectionState] algebra. */
     val selectedIds: Set<String>
@@ -57,6 +58,10 @@ data class ArrQueueUiState(
 
     val selectionMode: Boolean
         get() = selection.active
+
+    /** Inline action dialog to show, if any. */
+    val pendingAction: ArrQueueAction?
+        get() = actionConfirmation.item
 }
 
 class ArrQueueViewModel(
@@ -136,32 +141,37 @@ class ArrQueueViewModel(
     // ── Per-row actions ──────────────────────────────────────────────────
 
     fun showDeleteDialog(item: ArrQueueItem) {
-        _state.value = _state.value.copy(pendingAction = ArrQueueAction.Delete(item))
+        _state.value = _state.value.copy(actionConfirmation = _state.value.actionConfirmation.hold(ArrQueueAction.Delete(item)))
     }
 
     fun showBulkDeleteDialog() {
-        _state.value = _state.value.copy(pendingAction = ArrQueueAction.BulkDelete)
+        _state.value = _state.value.copy(actionConfirmation = _state.value.actionConfirmation.hold(ArrQueueAction.BulkDelete))
     }
 
     fun showGrabDialog(item: ArrQueueItem) {
-        _state.value = _state.value.copy(pendingAction = ArrQueueAction.Grab(item))
+        _state.value = _state.value.copy(actionConfirmation = _state.value.actionConfirmation.hold(ArrQueueAction.Grab(item)))
     }
 
     fun showImportDialog(item: ArrQueueItem) {
-        _state.value = _state.value.copy(pendingAction = ArrQueueAction.Import(item))
+        _state.value = _state.value.copy(actionConfirmation = _state.value.actionConfirmation.hold(ArrQueueAction.Import(item)))
     }
 
+    /** Dismiss fold: the machine's in-flight guard, fed the site's [ArrQueueUiState.actionInProgress] flag. */
     fun dismissAction() {
-        _state.value = _state.value.copy(pendingAction = null)
+        _state.value = _state.value.copy(actionConfirmation = _state.value.actionConfirmation.dismiss(_state.value.actionInProgress))
     }
 
     /**
      * Deletes a single queue row. [blocklist] adds the release to the *arr
      * blocklist; [searchAgain] triggers a fresh search for a replacement.
+     *
+     * Confirm settle arm: clear-before-action — the pending dialog item is
+     * explicitly cleared at action start; failure surfaces via the message
+     * channel and never reopens it.
      */
     fun deleteItem(item: ArrQueueItem, blocklist: Boolean, searchAgain: Boolean) {
         launch {
-            _state.value = _state.value.copy(actionInProgress = true, pendingAction = null)
+            _state.value = _state.value.copy(actionInProgress = true, actionConfirmation = _state.value.actionConfirmation.clear())
             val options = ArrQueueDeleteOptions(
                 removeFromClient = true,
                 blocklist = blocklist,
@@ -188,12 +198,12 @@ class ArrQueueViewModel(
      */
     private val searchSemaphore = Semaphore(DEFAULT_FANOUT_PARALLELISM)
 
-    /** Bulk-delete every selected row. */
+    /** Bulk-delete every selected row (same clear-before-action settle arm as [deleteItem]). */
     fun deleteSelected(blocklist: Boolean, searchAgain: Boolean) {
         val selected = _state.value.queue.filter { it.rowKey in _state.value.selectedIds }
         if (selected.isEmpty()) return
         launch {
-            _state.value = _state.value.copy(actionInProgress = true, pendingAction = null)
+            _state.value = _state.value.copy(actionInProgress = true, actionConfirmation = _state.value.actionConfirmation.clear())
             val options = ArrQueueDeleteOptions(
                 removeFromClient = true,
                 blocklist = blocklist,
@@ -225,9 +235,10 @@ class ArrQueueViewModel(
         }
     }
 
+    /** Grabs a failed queue row (same clear-before-action settle arm as [deleteItem]). */
     fun grabItem(item: ArrQueueItem) {
         launch {
-            _state.value = _state.value.copy(actionInProgress = true, pendingAction = null)
+            _state.value = _state.value.copy(actionInProgress = true, actionConfirmation = _state.value.actionConfirmation.clear())
             arrRepository.grabQueueItem(item)
                 .onSuccess {
                     messageChannel.trySend(ArrQueueMessage.Info(Res.string.arrqueue_grab_sent, listOf(item.title)))
@@ -240,9 +251,10 @@ class ArrQueueViewModel(
         }
     }
 
+    /** Imports a queue row (same clear-before-action settle arm as [deleteItem]). */
     fun importItem(item: ArrQueueItem) {
         launch {
-            _state.value = _state.value.copy(actionInProgress = true, pendingAction = null)
+            _state.value = _state.value.copy(actionInProgress = true, actionConfirmation = _state.value.actionConfirmation.clear())
             arrRepository.importQueueItem(item)
                 .onSuccess {
                     messageChannel.trySend(ArrQueueMessage.Info(Res.string.arrqueue_import_sent, listOf(item.title)))

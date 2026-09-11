@@ -4,9 +4,11 @@ import com.raulshma.jellyplay.core.data.repository.AdminRepository
 import com.raulshma.jellyplay.core.model.ManagedUser
 import com.raulshma.jellyplay.core.model.ManagedUserPolicy
 import com.raulshma.jellyplay.core.model.UsersOverview
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.setMain
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -15,6 +17,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -121,6 +124,57 @@ class UsersViewModelTest {
         // must NOT reload on failure
         coVerify(exactly = 1) { adminRepository.getUsersOverview() } // only the initial load
     }
+
+    @Test
+    fun `dismiss during an in-flight delete retains the pending user`() = runTest {
+        coEvery { adminRepository.getUsersOverview() } returns
+            Result.success(overview(listOf(admin, regular), "me", 1))
+        // Park the delete mid-flight so isDeleting stays raised.
+        val gate = CompletableDeferred<Unit>()
+        coEvery { adminRepository.deleteUser("u-reg") } coAnswers { gate.await(); Result.success(Unit) }
+
+        val viewModel = UsersViewModel(adminRepository)
+        advanceUntilIdle()
+        viewModel.showDeleteDialog(regular)
+        viewModel.deleteUser()
+        runCurrent() // run the launch until it suspends on the gate
+        assertTrue(viewModel.state.isDeleting)
+
+        viewModel.dismissDeleteDialog()
+
+        // The machine refuses a dismiss while in flight — the dialog stays open.
+        assertEquals(regular, viewModel.state.selectedUser)
+        assertTrue(viewModel.state.showDeleteDialog)
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+        // Settle arm: success-only clear — the delete succeeded, dialog closed.
+        assertNull(viewModel.state.selectedUser)
+        assertFalse(viewModel.state.showDeleteDialog)
+    }
+
+    @Test
+    fun `a second confirm while a delete is in flight is refused`() = runTest {
+        coEvery { adminRepository.getUsersOverview() } returns
+            Result.success(overview(listOf(admin, regular), "me", 1))
+        val gate = CompletableDeferred<Unit>()
+        coEvery { adminRepository.deleteUser("u-reg") } coAnswers { gate.await(); Result.success(Unit) }
+
+        val viewModel = UsersViewModel(adminRepository)
+        advanceUntilIdle()
+        viewModel.showDeleteDialog(regular)
+        viewModel.deleteUser()
+        runCurrent()
+        assertTrue(viewModel.state.isDeleting)
+
+        viewModel.deleteUser()
+
+        coVerify(exactly = 1) { adminRepository.deleteUser("u-reg") }
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertNull(viewModel.state.selectedUser)
+    }
+
     @AfterTest
     fun tearDown() {
         Dispatchers.resetMain()

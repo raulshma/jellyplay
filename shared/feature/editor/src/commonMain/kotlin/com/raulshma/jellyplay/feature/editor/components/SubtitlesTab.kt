@@ -48,6 +48,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.MediaStream
+import com.raulshma.jellyplay.core.model.PendingConfirmation
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind
@@ -98,7 +99,14 @@ fun SubtitlesTab(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var showUploadSheet by remember { mutableStateOf(false) }
     var showSearchSheet by remember { mutableStateOf(false) }
-    var showDeleteConfirm by remember { mutableStateOf<MediaStream?>(null) }
+    /**
+     * Pending subtitle delete ([PendingConfirmation]). Settle arm: clear()
+     * after the delete call inside the confirm handler — action-then-clear,
+     * as before. The delete is a fire-and-forget VM call, so the machine
+     * settles synchronously and the guard's in-flight arm is unreachable
+     * here (dismiss/confirm pass `inFlight = false`).
+     */
+    var pendingDelete by remember { mutableStateOf(PendingConfirmation<MediaStream>()) }
 
     // Load configured providers once so the search sheet knows whether to show
     // provider filter chips + the merged provider list.
@@ -167,7 +175,7 @@ fun SubtitlesTab(
                         },
                         trailingContent = {
                             if (subtitle.isExternal) {
-                                IconButton(onClick = { showDeleteConfirm = subtitle }) {
+                                IconButton(onClick = { pendingDelete = pendingDelete.hold(subtitle) }) {
                                     Icon(
                                         Tabler.Outline.Trash,
                                         contentDescription = stringResource(Res.string.editor_subtitles_delete_action),
@@ -185,21 +193,23 @@ fun SubtitlesTab(
         }
     }
 
-    showDeleteConfirm?.let { subtitle ->
+    pendingDelete.item?.let { subtitle ->
         AlertDialog(
-            onDismissRequest = { showDeleteConfirm = null },
+            onDismissRequest = { pendingDelete = pendingDelete.dismiss(inFlight = false) },
             title = { Text(stringResource(Res.string.editor_subtitles_delete_title)) },
             text = { Text(stringResource(Res.string.editor_subtitles_delete_message)) },
             confirmButton = {
                 TextButton(
                     onClick = {
-                        viewModel.deleteSubtitle(subtitle.index)
-                        showDeleteConfirm = null
+                        val target = pendingDelete.confirm(inFlight = false) ?: return@TextButton
+                        viewModel.deleteSubtitle(target.index)
+                        // Settle: action-then-clear, as before.
+                        pendingDelete = pendingDelete.clear()
                     },
                 ) { Text(stringResource(Res.string.editor_subtitles_delete_action)) }
             },
             dismissButton = {
-                TextButton(onClick = { showDeleteConfirm = null }) { Text(stringResource(Res.string.editor_action_cancel)) }
+                TextButton(onClick = { pendingDelete = pendingDelete.dismiss(inFlight = false) }) { Text(stringResource(Res.string.editor_action_cancel)) }
             },
         )
     }

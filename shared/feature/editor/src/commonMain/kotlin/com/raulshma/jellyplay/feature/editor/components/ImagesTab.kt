@@ -59,6 +59,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.raulshma.jellyplay.core.model.ImageInfo
+import com.raulshma.jellyplay.core.model.PendingConfirmation
 import com.raulshma.jellyplay.core.model.RemoteImageInfo
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.feature.editor.EditorUiState
@@ -134,7 +135,14 @@ fun ImagesTab(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var showUploadSheet by remember { mutableStateOf(false) }
     var showBrowseSheet by remember { mutableStateOf(false) }
-    var showDeleteConfirm by remember { mutableStateOf<ImageInfo?>(null) }
+    /**
+     * Pending image delete ([PendingConfirmation]). Settle arm: clear() after
+     * the delete call inside the confirm handler — action-then-clear, as
+     * before. The delete is a fire-and-forget VM call, so the machine settles
+     * synchronously and the guard's in-flight arm is unreachable here
+     * (dismiss/confirm pass `inFlight = false`).
+     */
+    var pendingDelete by remember { mutableStateOf(PendingConfirmation<ImageInfo>()) }
     var selectedImageInfo by remember { mutableStateOf<ImageInfo?>(null) }
 
     if (state.isLoading) {
@@ -187,7 +195,7 @@ fun ImagesTab(
                 ImageCard(
                     imageInfo = imageInfo,
                     imageUrl = viewModel.getImageUrl(itemId, imageInfo),
-                    onDelete = { showDeleteConfirm = imageInfo },
+                    onDelete = { pendingDelete = pendingDelete.hold(imageInfo) },
                     onClick = { selectedImageInfo = imageInfo },
                     modifier = itemModifier,
                 )
@@ -195,7 +203,7 @@ fun ImagesTab(
         }
     }
 
-    showDeleteConfirm?.let { imageInfo ->
+    pendingDelete.item?.let { imageInfo ->
         ConfirmDialog(
             title = stringResource(Res.string.editor_images_delete_title),
             message = stringResource(
@@ -204,12 +212,15 @@ fun ImagesTab(
             ),
             confirmText = stringResource(Res.string.editor_images_delete_action),
             onConfirm = {
+                val target = pendingDelete.confirm(inFlight = false) ?: return@ConfirmDialog
                 viewModel.deleteImage(
-                    imageInfo.imageType,
-                    if (imageInfo.imageIndex > 0) imageInfo.imageIndex else null,
+                    target.imageType,
+                    if (target.imageIndex > 0) target.imageIndex else null,
                 )
+                // Settle: action-then-clear, as before.
+                pendingDelete = pendingDelete.clear()
             },
-            onDismiss = { showDeleteConfirm = null },
+            onDismiss = { pendingDelete = pendingDelete.dismiss(inFlight = false) },
             dismissText = stringResource(Res.string.editor_action_cancel),
             tone = ConfirmTone.DESTRUCTIVE,
             icon = Tabler.Outline.Trash,

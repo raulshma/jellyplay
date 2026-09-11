@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.data.repository.SyncPlayRepository
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayEvent
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
 import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore
+import com.raulshma.jellyplay.core.model.PendingConfirmation
 import com.raulshma.jellyplay.core.model.SyncPlayGroup
 import com.raulshma.jellyplay.core.model.SyncPlayGroupInfo
 import com.raulshma.jellyplay.core.model.SyncPlayJoinBehavior
@@ -54,8 +55,15 @@ data class SyncPlayUiState(
     val error: SyncPlayMessage? = null,
     val isInGroup: Boolean = false,
     val showCreateDialog: Boolean = false,
-    val pendingJoin: SyncPlayGroup? = null,
-)
+    /** Join-confirmation machine behind [pendingJoin]. */
+    val joinConfirmation: PendingConfirmation<SyncPlayGroup> = PendingConfirmation(),
+    /** True while a joinGroup call is in flight — the confirm/dismiss guard fact. */
+    val isJoining: Boolean = false,
+) {
+    /** Group awaiting join confirmation, if any. Null hides the dialog. */
+    val pendingJoin: SyncPlayGroup?
+        get() = joinConfirmation.item
+}
 
 /**
  * Group list + join/leave state for the SyncPlay screen.
@@ -127,24 +135,34 @@ class SyncPlayViewModel(
     fun requestJoin(group: SyncPlayGroup) {
         when (syncPlayCastStore.syncPlayCast.value.syncPlayJoinBehavior) {
             SyncPlayJoinBehavior.ALWAYS_JOIN -> joinGroup(group.groupId)
-            SyncPlayJoinBehavior.ASK -> _uiState.update { it.copy(pendingJoin = group) }
+            SyncPlayJoinBehavior.ASK -> _uiState.update { it.copy(joinConfirmation = it.joinConfirmation.hold(group)) }
             SyncPlayJoinBehavior.NEVER_JOIN -> _notifications.tryEmit(SyncPlayMessage.Resource(Res.string.syncplay_join_disabled))
         }
     }
 
+    /**
+     * Confirm never clears — this site's settle arm is clear-before-action:
+     * [PendingConfirmation.clear] the moment the item is handed to
+     * [joinGroup]. [SyncPlayUiState.isJoining] is the guard fact, so a
+     * confirm while a join is in flight is a refused no-op.
+     */
     fun confirmJoin() {
-        val pending = _uiState.value.pendingJoin
-        _uiState.update { it.copy(pendingJoin = null) }
-        if (pending != null) joinGroup(pending.groupId)
+        val state = _uiState.value
+        val pending = state.joinConfirmation.confirm(state.isJoining)
+        if (pending != null) {
+            _uiState.update { it.copy(joinConfirmation = it.joinConfirmation.clear()) }
+            joinGroup(pending.groupId)
+        }
     }
 
+    /** Dismiss fold: the machine's in-flight guard, fed the site's [SyncPlayUiState.isJoining] flag. */
     fun cancelJoin() {
-        _uiState.update { it.copy(pendingJoin = null) }
+        _uiState.update { it.copy(joinConfirmation = it.joinConfirmation.dismiss(it.isJoining)) }
     }
 
     fun joinGroup(groupId: String) {
         launch {
-            _uiState.update { it.copy(isLoading = true, error = null) }
+            _uiState.update { it.copy(isJoining = true, isLoading = true, error = null) }
             syncPlayManager.joinGroup(groupId)
                 .onSuccess {
                     _uiState.update { it.copy(isInGroup = true) }
@@ -159,7 +177,7 @@ class SyncPlayViewModel(
                         )
                     }
                 }
-            _uiState.update { it.copy(isLoading = false) }
+            _uiState.update { it.copy(isJoining = false, isLoading = false) }
         }
     }
 

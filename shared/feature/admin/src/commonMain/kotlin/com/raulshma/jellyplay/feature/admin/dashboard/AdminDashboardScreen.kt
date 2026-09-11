@@ -133,7 +133,7 @@ fun AdminDashboardScreen(
 
     // Stop active playback confirm dialog. Session to stop is held in VM
     // state so it survives recomposition; dismissed on confirm/cancel/away-tap.
-    state.pendingStopSession?.let { session ->
+    state.pendingStopSession.item?.let { session ->
         ConfirmDialog(
             title = stringResource(Res.string.admin_stop_session_title),
             message = stringResource(

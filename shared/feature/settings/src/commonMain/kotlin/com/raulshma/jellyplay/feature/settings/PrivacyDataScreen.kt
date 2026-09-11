@@ -25,6 +25,7 @@ import com.composables.icons.tabler.outline.Logout
 import com.composables.icons.tabler.outline.Photo
 import com.composables.icons.tabler.outline.Refresh
 import com.composables.icons.tabler.outline.Trash
+import com.raulshma.jellyplay.core.model.PendingConfirmation
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
@@ -102,8 +103,14 @@ fun PrivacyDataScreen(
         }
     }
 
-    // One pending confirmation at a time: null = none.
-    var pendingAction by remember { mutableStateOf<PendingPrivacyAction?>(null) }
+    /**
+     * Pending destructive action ([PendingConfirmation]). Settle arm: clear()
+     * after the action call inside the confirm handler — action-then-clear,
+     * preserving the previous order. The actions are fire-and-forget VM
+     * calls, so the machine settles synchronously and the guard's in-flight
+     * arm is unreachable here (dismiss/confirm pass `inFlight = false`).
+     */
+    var pendingAction by remember { mutableStateOf(PendingConfirmation<PendingPrivacyAction>()) }
 
     // Grab focus into the list so the first D-pad press lands on content, not the drawer rail.
     val focusRequester = remember { FocusRequester() }
@@ -134,7 +141,7 @@ fun PrivacyDataScreen(
                     title = stringResource(Res.string.settings_clear_cache),
                     subtitle = stringResource(Res.string.settings_clear_cache_subtitle),
                     index = 0, count = 6,
-                    onClick = { pendingAction = PendingPrivacyAction.ClearCache },
+                    onClick = { pendingAction = pendingAction.hold(PendingPrivacyAction.ClearCache) },
                 )
             }
             item(key = "item_clear_image_cache") {
@@ -143,7 +150,7 @@ fun PrivacyDataScreen(
                     title = stringResource(Res.string.settings_clear_image_cache),
                     subtitle = stringResource(Res.string.settings_clear_image_cache_subtitle),
                     index = 1, count = 6,
-                    onClick = { pendingAction = PendingPrivacyAction.ClearImageCache },
+                    onClick = { pendingAction = pendingAction.hold(PendingPrivacyAction.ClearImageCache) },
                 )
             }
             item(key = "item_clear_search_history") {
@@ -152,7 +159,7 @@ fun PrivacyDataScreen(
                     title = stringResource(Res.string.settings_clear_search_history),
                     subtitle = stringResource(Res.string.settings_clear_search_history_subtitle),
                     index = 2, count = 6,
-                    onClick = { pendingAction = PendingPrivacyAction.ClearSearchHistory },
+                    onClick = { pendingAction = pendingAction.hold(PendingPrivacyAction.ClearSearchHistory) },
                 )
             }
             item(key = "item_factory_reset") {
@@ -162,7 +169,7 @@ fun PrivacyDataScreen(
                     subtitle = stringResource(Res.string.settings_factory_reset_message),
                     isDestructive = true,
                     index = 3, count = 6,
-                    onClick = { pendingAction = PendingPrivacyAction.FactoryReset },
+                    onClick = { pendingAction = pendingAction.hold(PendingPrivacyAction.FactoryReset) },
                 )
             }
             item(key = "item_sign_out") {
@@ -172,7 +179,7 @@ fun PrivacyDataScreen(
                     subtitle = stringResource(Res.string.settings_sign_out_subtitle),
                     isDestructive = true,
                     index = 4, count = 6,
-                    onClick = { pendingAction = PendingPrivacyAction.SignOut(fromServer = false) },
+                    onClick = { pendingAction = pendingAction.hold(PendingPrivacyAction.SignOut(fromServer = false)) },
                 )
             }
             item(key = "item_sign_out_from_server") {
@@ -182,29 +189,31 @@ fun PrivacyDataScreen(
                     subtitle = stringResource(Res.string.settings_sign_out_from_server_subtitle),
                     isDestructive = true,
                     index = 5, count = 6,
-                    onClick = { pendingAction = PendingPrivacyAction.SignOut(fromServer = true) },
+                    onClick = { pendingAction = pendingAction.hold(PendingPrivacyAction.SignOut(fromServer = true)) },
                 )
             }
         }
     }
 
     // ---- Single shared confirmation dialog ------------------------------
-    pendingAction?.let { action ->
+    pendingAction.item?.let { action ->
         ConfirmDialog(
             title = stringResource(action.titleRes),
             message = stringResource(action.messageRes),
             confirmText = stringResource(Res.string.settings_reset),
             onConfirm = {
-                when (action) {
+                val confirmed = pendingAction.confirm(inFlight = false) ?: return@ConfirmDialog
+                when (confirmed) {
                     PendingPrivacyAction.ClearCache -> viewModel.clearCache()
                     PendingPrivacyAction.ClearImageCache -> viewModel.clearImageCache()
                     PendingPrivacyAction.ClearSearchHistory -> viewModel.clearSearchHistory()
                     PendingPrivacyAction.FactoryReset -> viewModel.factoryReset()
-                    is PendingPrivacyAction.SignOut -> onLogout(action.fromServer)
+                    is PendingPrivacyAction.SignOut -> onLogout(confirmed.fromServer)
                 }
-                pendingAction = null
+                // Settle: action-then-clear, as before.
+                pendingAction = pendingAction.clear()
             },
-            onDismiss = { pendingAction = null },
+            onDismiss = { pendingAction = pendingAction.dismiss(inFlight = false) },
             dismissText = stringResource(Res.string.settings_cancel),
         )
     }
