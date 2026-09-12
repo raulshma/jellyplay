@@ -475,55 +475,6 @@ class VideoPlayerStore constructor(
     }
 
     /**
-     * Restore-backup participation: writes the in-player video keys owned by
-     * this store from a decoded [UserPreferences], mirroring the facade's
-     * restore body exactly (segment behaviours re-encoded via the enum-keyed
-     * map; the four legacy booleans are not written back —
-     * [readSegmentBehaviors] migrates them from the JSON blob).
-     */
-    internal suspend fun restorePreferences(
-        userPreferences: com.raulshma.jellyplay.core.model.legacy.UserPreferences,
-    ) {
-        dataStore.edit { prefs ->
-            prefs[Keys.VIDEO_SEEK_DURATION_MS] = userPreferences.videoSeekDurationMs
-            prefs[Keys.VIDEO_CONTROLS_TIMEOUT_MS] = userPreferences.videoControlsTimeoutMs
-            prefs[Keys.VIDEO_DEFAULT_ORIENTATION] = userPreferences.videoDefaultOrientation.name
-            prefs[Keys.VIDEO_DEFAULT_ASPECT_RATIO] = userPreferences.videoDefaultAspectRatio
-            prefs[Keys.VIDEO_GESTURES_ENABLED] = userPreferences.videoGesturesEnabled
-            prefs[Keys.VIDEO_PASS_OUT_PROTECTION_HOURS] = userPreferences.videoPassOutProtectionHours
-            prefs[Keys.VIDEO_SKIP_BACK_ON_RESUME_MS] = userPreferences.videoSkipBackOnResumeMs
-            prefs[Keys.VIDEO_HOLD_SPEED_ENABLED] = userPreferences.videoHoldSpeedEnabled
-            prefs[Keys.VIDEO_HOLD_SPEED_MULTIPLIER] = userPreferences.videoHoldSpeedMultiplier
-            prefs[Keys.VIDEO_DEFAULT_SPEED] = userPreferences.videoDefaultSpeed
-            prefs[Keys.VIDEO_AUTOPLAY_NEXT] = userPreferences.videoAutoplayNext
-            prefs[Keys.TRAILER_AUTOPLAY] = userPreferences.trailerAutoplay
-            prefs[Keys.CINEMA_MODE_ENABLED] = userPreferences.cinemaModeEnabled
-            prefs[Keys.VIDEO_SWIPE_SEEK_MAX_MS] = userPreferences.videoSwipeSeekMaxMs
-            prefs[Keys.VIDEO_REMEMBER_BRIGHTNESS] = userPreferences.videoRememberBrightness
-            prefs[Keys.VIDEO_BRIGHTNESS_LEVEL] = userPreferences.videoBrightnessLevel
-            prefs[Keys.VIDEO_AUTO_SKIP_INTRO] = userPreferences.videoAutoSkipIntro
-            prefs[Keys.VIDEO_AUTO_SKIP_OUTRO] = userPreferences.videoAutoSkipOutro
-            prefs[Keys.VIDEO_REMEMBER_MUTED] = userPreferences.videoRememberMuted
-            prefs[Keys.VIDEO_MUTED] = userPreferences.videoMuted
-            prefs[Keys.VIDEO_GESTURE_INDICATOR_SIDE] = userPreferences.videoGestureIndicatorSide.name
-            prefs[Keys.TRICKPLAY_ENABLED] = userPreferences.trickplayEnabled
-            prefs[Keys.TRICKPLAY_ON_SEEK_GESTURE] = userPreferences.trickplayOnSeekGesture
-            prefs[Keys.SEGMENT_BEHAVIORS] = PreferenceCodec.encodeDefaultsJson.encodeToString(
-                kotlinx.serialization.serializer<Map<MediaSegmentType, SegmentBehavior>>(),
-                userPreferences.segmentBehaviors,
-            )
-            prefs[Keys.VIDEO_EPISODE_BROWSER_ENABLED] = userPreferences.videoEpisodeBrowserEnabled
-            prefs[Keys.VIDEO_SHOW_PLAYBACK_METADATA] = userPreferences.videoShowPlaybackMetadata
-            prefs[Keys.VIDEO_PRELOAD_BUFFER_SIZE] = userPreferences.videoPreloadBufferSize.name
-            prefs[Keys.VIDEO_CACHE_SIZE_MB] = userPreferences.videoCacheSizeMb
-            prefs[Keys.SHOW_CLOCK_IN_PLAYER] = userPreferences.showClockInPlayer
-            prefs[Keys.SHOW_TIME_REMAINING] = userPreferences.showTimeRemaining
-            prefs[Keys.TV_ZOOM_MODE_PERCENT] = userPreferences.tvZoomModePercent
-            prefs[Keys.INCOGNITO_MODE_ENABLED] = userPreferences.incognitoModeEnabled
-        }
-    }
-
-    /**
      * Faithful inverse of [read]: writes every field of [slice] back to the
      * DataStore using the same encoding as [restorePreferences] (segment
      * behaviours re-encoded via the enum-keyed map with defaults).

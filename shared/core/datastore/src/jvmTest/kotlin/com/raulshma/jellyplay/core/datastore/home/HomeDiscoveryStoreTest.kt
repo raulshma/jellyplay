@@ -14,7 +14,7 @@ import com.raulshma.jellyplay.core.model.ContinueWatchingClickBehavior
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
-import com.raulshma.jellyplay.core.model.legacy.UserPreferences
+import com.raulshma.jellyplay.core.datastore.home.HomeDiscoverySlice
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -437,11 +437,9 @@ class HomeDiscoveryStoreTest {
     @Test
     fun `backup restore applies canonical payload into the current user's namespace`() = runTest {
         activate("userA")
-        // A v1 backup carries canonical (user-portable) values; restoring it
+        // A backup carries canonical (user-portable) values; restoring it
         // writes into whoever is active — userA here.
-        store.restorePreferences(
-            UserPreferences(homeMode = HomeMode.MUSIC, nextUpExcludedSeriesIds = setOf("fromBackup")),
-        )
+        store.restore(HomeDiscoverySlice(homeMode = HomeMode.MUSIC, nextUpExcludedSeriesIds = setOf("fromBackup")))
         val restored = slice()
         assertEquals(HomeMode.MUSIC, restored.homeMode)
         assertEquals(setOf("fromBackup"), restored.nextUpExcludedSeriesIds)

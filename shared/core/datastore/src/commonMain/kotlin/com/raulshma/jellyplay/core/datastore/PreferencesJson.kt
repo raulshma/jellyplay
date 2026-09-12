@@ -22,6 +22,6 @@ object PreferencesJson {
         encodeDefaults = true
     }
 
-    /** Config used to serialize the full [com.raulshma.jellyplay.core.model.legacy.UserPreferences]. */
+    /** Alias of [export] — the full-preferences export config. */
     val fullPreferences: Json = export
 }

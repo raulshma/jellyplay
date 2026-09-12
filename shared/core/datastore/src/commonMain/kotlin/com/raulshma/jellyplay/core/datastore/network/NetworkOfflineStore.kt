@@ -204,30 +204,6 @@ class NetworkOfflineStore constructor(
     }
 
     /**
-     * Restore-backup participation: writes the network/offline keys owned by
-     * this store from a decoded [UserPreferences]. The facade calls this (and
-     * every other store's hook) instead of writing these keys itself.
-     *
-     * Mirrors the legacy facade behaviour exactly.
-     */
-    internal suspend fun restorePreferences(
-        userPreferences: com.raulshma.jellyplay.core.model.legacy.UserPreferences,
-    ) {
-        dataStore.edit { it ->
-            it[Keys.MAX_CACHE_SIZE_MB] = userPreferences.maxCacheSizeMb
-            it[Keys.AUTO_DELETE_CACHE] = userPreferences.autoDeleteCache
-            it[Keys.MANUAL_OFFLINE_ENABLED] = userPreferences.manualOfflineEnabled
-            it[Keys.AUTO_OFFLINE_ENABLED] = userPreferences.autoOfflineEnabled
-            it[Keys.MANUAL_BANDWIDTH_CAP] = userPreferences.manualBandwidthCap
-            it[Keys.METERED_NETWORK_BEHAVIOR] = userPreferences.meteredNetworkBehavior.name
-            it[Keys.ADAPTIVE_BITRATE_ENABLED] = userPreferences.adaptiveBitrateEnabled
-            it[Keys.DATA_SAVER_ENABLED] = userPreferences.dataSaverEnabled
-            it[Keys.VERBOSE_NETWORK_LOGGING] = userPreferences.verboseNetworkLogging
-            it[Keys.NETWORK_TIMEOUT_PRESET] = userPreferences.networkTimeoutPreset.name
-        }
-    }
-
-    /**
      * Faithful inverse of [read]: writes every field of [slice] back to the
      * DataStore using the same encoding as [restorePreferences].
      */

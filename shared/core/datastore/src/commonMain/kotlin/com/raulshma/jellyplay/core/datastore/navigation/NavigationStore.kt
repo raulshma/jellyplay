@@ -130,24 +130,6 @@ class NavigationStore constructor(
     }
 
     /**
-     * Restore-backup participation: writes the bottom-navigation keys owned by
-     * this store from a decoded [UserPreferences]. The facade calls this (and
-     * every other store's hook) instead of writing these keys itself.
-     *
-     * Mirrors the legacy facade behaviour exactly.
-     */
-    internal suspend fun restorePreferences(
-        userPreferences: com.raulshma.jellyplay.core.model.legacy.UserPreferences,
-    ) {
-        dataStore.edit { it ->
-            it[Keys.NAV_BAR_SHOW_LABELS] = userPreferences.navBarShowLabels
-            it[Keys.HIDE_BOTTOM_NAV_ON_SCROLL] = userPreferences.hideBottomNavOnScroll
-            it[Keys.HIDDEN_NAV_ITEMS] = json.encodeToString(userPreferences.hiddenNavItems)
-            it[Keys.NAV_ITEM_ORDER] = json.encodeToString(userPreferences.navItemOrder)
-        }
-    }
-
-    /**
      * Faithful inverse of [read]: writes every field of [slice] back to the
      * DataStore using the same encoding as [restorePreferences] (Set/List via
      * this store's [json] codec).

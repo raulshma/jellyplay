@@ -148,7 +148,7 @@ class SettingsViewModelTest {
         // The dead twin used to read + classify here; the surviving path owns
         // all of that — staging must not touch the file or any store.
         coVerify(exactly = 0) { settingsBackupIo.openImportSource(any()) }
-        coVerify(exactly = 0) { preferencesStore.restorePreferences(any(), any()) }
+        coVerify(exactly = 0) { preferencesStore.restoreV2(any(), any()) }
         coVerify(exactly = 0) { preferencesStore.restoreV2(any(), any()) }
     }
 
@@ -161,7 +161,7 @@ class SettingsViewModelTest {
         vm.cancelImport()
 
         assertNull(vm.stagedImportUri)
-        coVerify(exactly = 0) { preferencesStore.restorePreferences(any(), any()) }
+        coVerify(exactly = 0) { preferencesStore.restoreV2(any(), any()) }
         coVerify(exactly = 0) { preferencesStore.restoreV2(any(), any()) }
     }
 

@@ -217,41 +217,6 @@ class AudioEffectsStore constructor(
     }
 
     /**
-     * Restore-backup participation: writes the audio-effects keys owned by this
-     * store from a decoded [UserPreferences]. The facade calls this (and every
-     * other store's hook) instead of writing these keys itself.
-     *
-     * Mirrors the legacy facade behaviour exactly, including the
-     * [EqualizerSettings] JSON blob written via [PreferenceCodec.encodeDefaultsJson].
-     */
-    internal suspend fun restorePreferences(
-        userPreferences: com.raulshma.jellyplay.core.model.legacy.UserPreferences,
-    ) {
-        dataStore.edit { it ->
-            it[Keys.DIALOGUE_BOOST_ENABLED] = userPreferences.dialogueBoostEnabled
-            it[Keys.DIALOGUE_BOOST_STRENGTH] = userPreferences.dialogueBoostStrength.name
-            it[Keys.EQUALIZER_ENABLED] = userPreferences.equalizerEnabled
-            it[Keys.EQUALIZER_SETTINGS] = PreferenceCodec.encodeDefaultsJson.encodeToString(
-                kotlinx.serialization.serializer<EqualizerSettings>(),
-                userPreferences.equalizerSettings,
-            )
-            it[Keys.EQUALIZER_PRESET] = userPreferences.equalizerPreset.name
-            it[Keys.NIGHT_MODE_ENABLED] = userPreferences.nightModeEnabled
-            it[Keys.NIGHT_MODE_STRENGTH] = userPreferences.nightModeStrength.name
-            it[Keys.BASS_BOOST_ENABLED] = userPreferences.bassBoostEnabled
-            it[Keys.BASS_BOOST_STRENGTH] = userPreferences.bassBoostStrength.name
-            it[Keys.VIRTUALIZER_ENABLED] = userPreferences.virtualizerEnabled
-            it[Keys.VIRTUALIZER_STRENGTH] = userPreferences.virtualizerStrength
-            it[Keys.REVERB_PRESET] = userPreferences.reverbPreset.name
-            it[Keys.VOLUME_BOOST_ENABLED] = userPreferences.volumeBoostEnabled
-            it[Keys.VOLUME_BOOST_GAIN] = userPreferences.volumeBoostGain
-            it[Keys.LR_BALANCE] = userPreferences.lrBalance
-            it[Keys.AUTO_EQ_BY_GENRE] = userPreferences.autoEqByGenre
-            it[Keys.PITCH_SEMITONES] = userPreferences.pitchSemitones
-        }
-    }
-
-    /**
      * Faithful inverse of [read]: writes every field of [slice] back to the
      * DataStore using the same encoding as [restorePreferences], including the
      * [EqualizerSettings] JSON blob via [PreferenceCodec.encodeDefaultsJson].

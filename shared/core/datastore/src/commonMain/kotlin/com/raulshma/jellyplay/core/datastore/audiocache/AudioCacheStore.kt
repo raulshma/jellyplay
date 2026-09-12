@@ -119,26 +119,6 @@ class AudioCacheStore constructor(
     }
 
     /**
-     * Restore-backup participation: writes the audio-cache keys owned by this
-     * store from a decoded [UserPreferences]. The facade calls this (and every
-     * other store's hook) instead of writing these keys itself.
-     *
-     * Mirrors the legacy facade behaviour exactly.
-     */
-    internal suspend fun restorePreferences(
-        userPreferences: com.raulshma.jellyplay.core.model.legacy.UserPreferences,
-    ) {
-        dataStore.edit { it ->
-            it[Keys.AUDIO_CACHING_ENABLED] = userPreferences.audioCachingEnabled
-            it[Keys.AUDIO_CACHE_SIZE_MB] = userPreferences.audioCacheSizeMb
-            it[Keys.AUDIO_PREFETCH_LOOKAHEAD] = userPreferences.audioPrefetchLookahead
-            it[Keys.AUDIO_PREFETCH_BACKFILL] = userPreferences.audioPrefetchBackfill
-            it[Keys.AUDIO_CACHE_NETWORK_POLICY] = userPreferences.audioCacheNetworkPolicy.name
-            it[Keys.AUDIO_CACHE_CELLULAR_MONTHLY_CAP_MB] = userPreferences.audioCacheCellularMonthlyCapMb
-        }
-    }
-
-    /**
      * Faithful inverse of [read]: writes every field of [slice] back to the
      * DataStore using the same encoding as [restorePreferences].
      */

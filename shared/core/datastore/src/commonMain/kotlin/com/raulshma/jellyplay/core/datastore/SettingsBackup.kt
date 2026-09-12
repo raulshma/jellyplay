@@ -2,7 +2,6 @@ package com.raulshma.jellyplay.core.datastore
 
 import com.raulshma.jellyplay.core.model.wallNowMillis
 import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeState
-import com.raulshma.jellyplay.core.model.legacy.UserPreferences
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
@@ -19,9 +18,8 @@ import kotlinx.serialization.json.JsonElement
  * round-trips through the decommissioned `UserPreferences` aggregate and a
  * single domain can evolve its slice without touching the others.
  *
- * **Legacy v0/v1** (un-enveloped / single-aggregate) backups are decoded by
- * [LegacySettingsBackup] on import and fanned back to the per-store
- * `restorePreferences(UserPreferences)` path; they cannot be produced anymore.
+ * Legacy v0/v1 (un-enveloped / single-aggregate) backups stopped importing in
+ * v0.11 — [BackupParser.parse] rejects them with a clear message.
  *
  * [CURRENT_SCHEMA_VERSION] is bumped only on a breaking change to the backup
  * shape; minor additive slice changes are covered by [PreferencesJson] ignoring
@@ -41,38 +39,8 @@ data class SettingsBackup(
     companion object {
         /** Schema version stamped on every new export. */
         const val CURRENT_SCHEMA_VERSION = 2
-
-        /**
-         * Version stamped on v1 exports — a single enveloped [UserPreferences]
-         * aggregate. Decoded by [LegacySettingsBackup] on import.
-         */
-        const val LEGACY_AGGREGATE_SCHEMA_VERSION = 1
-
-        /**
-         * Version reported for the pre-versioning legacy (un-enveloped) format —
-         * a bare [UserPreferences] JSON object — so import can still surface it
-         * with a clear warning rather than rejecting it.
-         */
-        const val LEGACY_UNENVELOPED_SCHEMA_VERSION = 0
     }
 }
-
-/**
- * Decode-only shape for v0/v1 backups. v1 wraps a single [UserPreferences]
- * aggregate; v0 is a bare [UserPreferences] object (no envelope) and is
- * detected by import before this type is consulted. Retained solely so import
- * can fan legacy fields back to the per-store `restorePreferences` path; do not
- * extend — new preferences belong on a domain slice.
- */
-@Serializable
-data class LegacySettingsBackup(
-    @SerialName("schemaVersion")
-    val schemaVersion: Int = SettingsBackup.LEGACY_AGGREGATE_SCHEMA_VERSION,
-    @SerialName("exportedAt")
-    val exportedAt: Long = 0L,
-    @SerialName("preferences")
-    val preferences: UserPreferences,
-)
 
 /**
  * Stable string keys for the [SettingsBackup.slices] map. Each key names one

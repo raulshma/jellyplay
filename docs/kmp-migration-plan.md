@@ -62,13 +62,14 @@ ledger tracks *where the migration stands*.
    workers, notification, remote controls, shortcuts, TV watch-next) lives
    there as plain androidMain code; the Robolectric suites execute in the
    new AGP-9 `androidHostTest` lanes (`withHostTest`, `forkEvery = 1` for
-   core:data); `:app` is the only Android-only module left. Residual (non-
-   blocking): collapse the strangler-fig seam adapters that bridged legacy
-   shapes (the messenger adapters, LocalNetworkAccessState, app interop
-   twins), scrub the stale "dies at Phase X" comments in feature build
-   files, and retire the sunset-gated back-compat islands (v0/v1 backup
-   import, typed-key prefs migration, PIN legacy hashes, container
-   sniffing).
+   core:data); `:app` is the only Android-only module left. Residual: the seam-
+   adapter comments were scrubbed (the adapters themselves stay — they bridge
+   real platform gaps); the v0/v1 settings-backup import sunset in v0.11
+   (parser rejects legacy envelopes; the aggregate restore ladder,
+   `LegacySettingsBackup` and the legacy preview paths are deleted); the
+   typed-key prefs migration and PIN legacy-hash verify stay through v0.11
+   (remove at v0.12); the legacy-download container sniffer needs a backfill
+   migration before it can be deleted.
 2. **Web breadth**: 3 routes → full app requires the wasm target roll-out
    above; Room-coupled repositories are the first blocker per module.
 3. **iOS**: no target work started (deliberate; commonMain purity is the only

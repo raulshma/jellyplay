@@ -230,30 +230,6 @@ class ExperimentalStore constructor(
     }
 
     /**
-     * Restore-backup participation: writes the keys owned by this store from a
-     * decoded [UserPreferences]. The experimental-feature set is written with
-     * this store's own [json] codec (name-string set, same shape
-     * `setEnabledExperimentalFeatures` uses). One-time state
-     * ([Keys.DISMISSED_UPDATE_VERSION] / [Keys.DISMISSED_UPDATE_AT_MS]) is not
-     * written back.
-     */
-    internal suspend fun restorePreferences(
-        userPreferences: com.raulshma.jellyplay.core.model.legacy.UserPreferences,
-    ) {
-        dataStore.edit { it ->
-            it[Keys.ENABLED_EXPERIMENTAL_FEATURES] = json.encodeToString(userPreferences.enabledExperimentalFeatures.map { feature -> feature.name }.toSet())
-            it[Keys.SELF_UPDATE_CHECK_ENABLED] = userPreferences.selfUpdateCheckEnabled
-            it[Keys.SELF_UPDATE_DOWNLOAD_ENABLED] = userPreferences.selfUpdateDownloadEnabled
-            it[Keys.UPDATE_DISMISS_PERIOD] = userPreferences.updateDismissPeriod.name
-            userPreferences.appLanguage?.let { language -> it[Keys.APP_LANGUAGE] = language }
-            it[Keys.SHOW_SHARE_MEDIA_OPTION] = userPreferences.showShareMediaOption
-            it[Keys.HIDE_SEARCH_HISTORY] = userPreferences.hideSearchHistory
-            it[Keys.PREFER_AUDIO_DESCRIPTION] = userPreferences.preferAudioDescription
-            it[Keys.SHOW_ADVANCED_SETTINGS] = userPreferences.showAdvancedSettings
-        }
-    }
-
-    /**
      * Faithful inverse of [read]: writes every field of [slice] back to the
      * DataStore using the same encoding as [restorePreferences] (experimental
      * features as a name-string set via [json], appLanguage nullable). Unlike

@@ -304,7 +304,6 @@ object DesktopNativeDialogHarness {
                     "the export was never parsed by the import preview"
                 }
                 check(preview.error == null) { "import preview failed to load: ${preview.error}" }
-                check(!preview.isLegacy) { "exported v2 backup classified legacy" }
                 check(!preview.versionMismatch) {
                     "version mismatch on our own fresh export (schema ${preview.schemaVersion})"
                 }

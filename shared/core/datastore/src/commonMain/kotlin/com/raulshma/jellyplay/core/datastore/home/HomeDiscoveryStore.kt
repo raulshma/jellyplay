@@ -821,49 +821,6 @@ class HomeDiscoveryStore constructor(
     }
 
     /**
-     * Restore-backup participation: writes the home keys owned by this store
-     * from a decoded [UserPreferences] into the CURRENT active user's
-     * namespace — backups carry canonical (user-portable) values and are
-     * applied on behalf of whoever restores them. The legacy model's home
-     * fields are name- and type-identical to [HomeDiscoverySlice]'s, so this
-     * maps onto the slice and delegates to [restore] — ONE shared key/encoding
-     * list, so adding a home pref means adding it to the slice (and [restore])
-     * only. `lastViewedSeasonBySeries` has no legacy counterpart and restores
-     * as empty. The legacy `home_hidden_library_section_ids` key is not
-     * written back — it exists only as a migration source. Pre-login the
-     * restore is skipped along with every other write ([editForUser]).
-     */
-    internal suspend fun restorePreferences(
-        userPreferences: com.raulshma.jellyplay.core.model.legacy.UserPreferences,
-    ) {
-        restore(
-            HomeDiscoverySlice(
-                homeMode = userPreferences.homeMode,
-                homeHeroEnabled = userPreferences.homeHeroEnabled,
-                homeBackdropEnabled = userPreferences.homeBackdropEnabled,
-                enabledHomeSectionTypes = userPreferences.enabledHomeSectionTypes,
-                homeSectionOrder = userPreferences.homeSectionOrder,
-                libraryHomeSectionOverrides = userPreferences.libraryHomeSectionOverrides,
-                pinnedHomeSections = userPreferences.pinnedHomeSections,
-                homeLayoutPresets = userPreferences.homeLayoutPresets,
-                continueWatchingClickBehavior = userPreferences.continueWatchingClickBehavior,
-                showUnwatchedBadge = userPreferences.showUnwatchedBadge,
-                hideWatchedItems = userPreferences.hideWatchedItems,
-                showWatchedCheckmark = userPreferences.showWatchedCheckmark,
-                showExternalRatings = userPreferences.showExternalRatings,
-                mergeContinueWatchingAndNextUp = userPreferences.mergeContinueWatchingAndNextUp,
-                nextUpMaxDays = userPreferences.nextUpMaxDays,
-                nextUpRewatching = userPreferences.nextUpRewatching,
-                nextUpExcludedSeriesIds = userPreferences.nextUpExcludedSeriesIds,
-                hiddenCwItemIds = userPreferences.hiddenCwItemIds,
-                showClockOnHome = userPreferences.showClockOnHome,
-                showSettingsInHomeSearch = userPreferences.showSettingsInHomeSearch,
-                hideTopHeaderOnScroll = userPreferences.hideTopHeaderOnScroll,
-            )
-        )
-    }
-
-    /**
      * Faithful inverse of [read]: writes every field of [slice] back to the
      * DataStore — into the CURRENT active user's namespace — using the same
      * encoding as [restorePreferences] (section types and order encoded as

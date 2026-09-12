@@ -238,20 +238,6 @@ class SecurityStore constructor(
     }
 
     /**
-     * Restore-backup participation: writes the non-security-sensitive key owned
-     * by this store (the remote-control switch) from a decoded [UserPreferences].
-     * The remote-control switch is independent of the lock config and restored
-     * unconditionally.
-     */
-    internal suspend fun restorePreferences(
-        userPreferences: com.raulshma.jellyplay.core.model.legacy.UserPreferences,
-    ) {
-        dataStore.edit { prefs ->
-            prefs[Keys.REMOTE_CONTROL_ENABLED] = userPreferences.remoteControlEnabled
-        }
-    }
-
-    /**
      * Restores the security-sensitive lock config (PIN lock/hash, biometric,
      * use-PIN-for-player-lock, auto-lock timer) from a decoded [UserPreferences].
      * Called separately by the facade so an imported backup can never silently

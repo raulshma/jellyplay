@@ -213,39 +213,6 @@ class AudioStore constructor(
     }
 
     /**
-     * Restore-backup participation: writes the audio-player keys owned by this
-     * store from a decoded [UserPreferences]. The facade calls this (and every
-     * other store's hook) instead of writing these keys itself.
-     *
-     * Mirrors the legacy facade behaviour exactly. [Keys.AUDIO_LYRICS_VISIBLE]
-     * is runtime reading-state that the projection reads from its stored slot,
-     * so it is not written back.
-     */
-    internal suspend fun restorePreferences(
-        userPreferences: com.raulshma.jellyplay.core.model.legacy.UserPreferences,
-    ) {
-        dataStore.edit { it ->
-            it[Keys.AUDIO_DEFAULT_SPEED] = userPreferences.audioDefaultSpeed
-            it[Keys.AUDIO_NIGHT_MODE_VOLUME] = userPreferences.audioNightModeVolume
-            it[Keys.AUDIO_NIGHT_MODE_GAIN] = userPreferences.audioNightModeGain
-            it[Keys.AUDIO_SKIP_PREVIOUS_THRESHOLD_MS] = userPreferences.audioSkipPreviousThresholdMs
-            it[Keys.AUDIO_AUTOPLAY_NEXT] = userPreferences.audioAutoplayNext
-            it[Keys.AUDIO_PRELOAD_BUFFER_SIZE] = userPreferences.audioPreloadBufferSize.name
-            it[Keys.AUDIO_NORMALIZATION_MODE] = userPreferences.audioNormalizationMode.name
-            it[Keys.AUDIO_NORMALIZATION_ENABLED] = userPreferences.audioNormalizationEnabled
-            it[Keys.REPLAYGAIN_PRE_AMP_DB] = userPreferences.replayGainPreAmpDb
-            it[Keys.CHANNEL_MIX_MODE] = userPreferences.channelMixMode.name
-            it[Keys.CHANNEL_MIX_ENABLED] = userPreferences.channelMixEnabled
-            it[Keys.AUDIO_GAPLESS_ENABLED] = userPreferences.audioGaplessEnabled
-            it[Keys.AUDIO_CROSSFADE_DURATION_MS] = userPreferences.audioCrossfadeDurationMs
-            it[Keys.AUDIO_DELAY_MS] = userPreferences.audioDelayMs
-            it[Keys.AUDIO_VISUALIZER_ENABLED] = userPreferences.audioVisualizerEnabled
-            it[Keys.SLEEP_TIMER_DURATION_MS] = userPreferences.sleepTimerDurationMs
-            it[Keys.SLEEP_TIMER_END_OF_EPISODE] = userPreferences.sleepTimerEndOfEpisode
-        }
-    }
-
-    /**
      * Faithful inverse of [read]: writes every field of [slice] back to the
      * DataStore using the same encoding as [restorePreferences], plus the
      * `audio_lyrics_visible` gap key that [restorePreferences] omits.
