@@ -1,11 +1,11 @@
 package com.raulshma.jellyplay.core.data.repository
 
-import androidx.room.RoomDatabase
-import androidx.room.Transactor
-import androidx.room.useWriterConnection
+import androidx.room3.RoomDatabase
+import androidx.room3.Transactor
+import androidx.room3.useWriterConnection
 
 /**
- * KMP replacement for the Android-only `androidx.room.withTransaction`
+ * KMP replacement for the Android-only Room 2 `withTransaction`
  * extension (C4 part 2 move note).
  *
  * Room 2.8 declares that extension only in room-runtime's `androidMain`

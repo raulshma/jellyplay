@@ -141,7 +141,10 @@ kotlin {
             implementation(libs.kotlinx.serialization.json)
             implementation(libs.paging.runtime)
             implementation(libs.work.runtime.ktx)
-            implementation(libs.room.ktx)
+            // (room-ktx dropped in the room3 spike: no room3-ktx artifact
+            // exists — coroutine APIs live in room3-runtime, which arrives
+            // transitively via the jvmShared api(:shared:core:database)
+            // edge; no androidMain source imports room.)
             implementation(libs.media3.session)
             implementation(libs.media3.exoplayer)
             implementation(libs.media3.cast)

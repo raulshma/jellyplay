@@ -62,11 +62,20 @@ coilAndroid = "3.5.0"
 # same MarkdownText (the mini parser + wasm actual were deleted). Revisit on
 # any future Kotlin 2.4 toolchain move.
 multiplatformMarkdownRenderer = "0.41.0"
-room = "2.8.4"
+# Room 3 (spike/room3): androidx.room3 package, KSP-only, coroutine DB ops.
+# 3.0.3 is the latest stable (2026-09-09). Its POM pins androidx.sqlite 2.7.1
+# (sqlite + sqlite-async) — matched below. wasmJs klib variants confirmed in
+# room3-runtime-3.0.3.module (wasmJsRuntimeElements-published) for.
+room3 = "3.0.3"
 datastore = "1.2.1"
 okio = "3.9.0"
 javakeyring = "1.0.4"
-androidxSqlite = "2.6.2"
+# Aligned with room3-runtime 3.0.3's POM (androidx.sqlite:sqlite 2.7.1,
+# sqlite-async 2.7.1, sqlite-framework 2.7.0). sqlite 2.7.1 ships js + wasmJs
+# klib variants (checked in sqlite-2.7.1.module) — the line's
+# sqlite-web/WebWorkerSQLiteDriver (OPFS) driver rides on. Bundled driver for
+# desktop stays compatible per the same release train.
+androidxSqlite = "2.7.1"
 paging = "3.5.0"
 pagingCompose = "3.5.0"
 workManager = "2.11.2"
@@ -239,10 +248,12 @@ coil-network-ktor3 = { group = "io.coil-kt.coil3", name = "coil-network-ktor3", 
 multiplatform-markdown-renderer = { group = "com.mikepenz", name = "multiplatform-markdown-renderer", version.ref = "multiplatformMarkdownRenderer" }
 multiplatform-markdown-renderer-m3 = { group = "com.mikepenz", name = "multiplatform-markdown-renderer-m3", version.ref = "multiplatformMarkdownRenderer" }
 
-# Room
-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
+# Room 3 — new androidx.room3 coordinates; no room3-ktx exists (coroutine APIs
+# live in room3-runtime; ktx/guava/rxjava split into room3-{guava,rxjava3}
+# artifacts nobody consumes here).
+room3-runtime = { group = "androidx.room3", name = "room3-runtime", version.ref = "room3" }
+room3-compiler = { group = "androidx.room3", name = "room3-compiler", version.ref = "room3" }
+room3-testing = { group = "androidx.room3", name = "room3-testing", version.ref = "room3" }
 
 # DataStore
 datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastore" }

@@ -1,13 +1,13 @@
 package com.raulshma.jellyplay.core.database.entity
 
-import androidx.room.Entity
-import androidx.room.Index
-import androidx.room.PrimaryKey
+import androidx.room3.Entity
+import androidx.room3.Index
+import androidx.room3.PrimaryKey
 
 /**
  * Persisted form of a per-item / per-series playback-language preference.
  * The `(scope, key)` pair is unique, making an
- * [androidx.room.OnConflictStrategy.REPLACE] insert behave as an upsert.
+ * [androidx.room3.OnConflictStrategy.REPLACE] insert behave as an upsert.
  *
  * Mapped to/from the domain [com.raulshma.jellyplay.core.model.ItemPlaybackPreference]
  * by the repository layer. `scope`/`updatedAt` are stored as the enum/text +

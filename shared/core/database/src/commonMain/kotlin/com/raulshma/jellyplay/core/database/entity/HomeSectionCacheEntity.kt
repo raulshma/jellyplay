@@ -1,8 +1,8 @@
 package com.raulshma.jellyplay.core.database.entity
 
-import androidx.room.ColumnInfo
-import androidx.room.Entity
-import androidx.room.Index
+import androidx.room3.ColumnInfo
+import androidx.room3.Entity
+import androidx.room3.Index
 import com.raulshma.jellyplay.core.model.HomeSectionsResult
 
 /**

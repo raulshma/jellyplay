@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.core.database.migration
 
-import androidx.room.Room
+import androidx.room3.Room
 import androidx.sqlite.SQLiteConnection
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import com.raulshma.jellyplay.core.database.JELLY_PLAY_DATABASE_VERSION
@@ -474,7 +474,7 @@ class MigrationTest {
      * v24 index/column just to test the token-encryption logic.
      */
     @Test
-    fun migrateV24_encryptsExistingPlaintextTokens() {
+    fun migrateV24_encryptsExistingPlaintextTokens() = runTest {
         val db = openRawDatabase(24) { db ->
 
                 db.execSQL(
@@ -542,7 +542,7 @@ class MigrationTest {
      * them (cipher is idempotent) and must NOT corrupt the data.
      */
     @Test
-    fun migrateV24_isIdempotentWhenRunTwice() {
+    fun migrateV24_isIdempotentWhenRunTwice() = runTest {
         val db = openRawDatabase(24) { db ->
 
                 db.execSQL(
@@ -608,11 +608,11 @@ class MigrationTest {
      * matching what SupportSQLiteOpenHelper.Callback did pre-KMP) and runs
      * [block]'s DDL/seed statements against it on the bundled JVM driver.
      */
-    private fun createDatabase(version: Int, block: (SQLiteConnection) -> Unit) {
+    private suspend fun createDatabase(version: Int, block: suspend (SQLiteConnection) -> Unit) {
         openRawDatabase(version, block).close()
     }
 
-    private fun openRawDatabase(version: Int, block: (SQLiteConnection) -> Unit): SQLiteConnection {
+    private suspend fun openRawDatabase(version: Int, block: suspend (SQLiteConnection) -> Unit): SQLiteConnection {
         val connection = BundledSQLiteDriver().open(dbFile.absolutePath)
         connection.execSQL("PRAGMA user_version = $version")
         block(connection)
@@ -852,12 +852,12 @@ class MigrationTest {
         val migrations = allMigrations(tokenCipher)
         // One migration per step from v1 up to the current schema version,
         // each handing off to the next with no gaps or duplicate starts.
-        // androidx.room.Database has CLASS retention, so getAnnotation() returns
+        // androidx.room3.Database has CLASS retention, so getAnnotation() returns
         // null at runtime — the fallback below is the same constant the
         // annotation was compiled from ([JELLY_PLAY_DATABASE_VERSION]), so a
         // version bump lands here automatically.
         val expected = JellyPlayDatabase::class.java
-            .getAnnotation(androidx.room.Database::class.java)?.version
+            .getAnnotation(androidx.room3.Database::class.java)?.version
             ?: JELLY_PLAY_DATABASE_VERSION
         val startVersions = migrations.map { it.startVersion }
         assertEquals((1 until expected).toList(), startVersions, "every version 1..<current must start exactly one migration")
@@ -914,7 +914,7 @@ class MigrationTest {
      * instead of only on device.
      */
     @Test
-    fun migrateV50_51_retiresLegacyMetadataSignatures() {
+    fun migrateV50_51_retiresLegacyMetadataSignatures() = runTest {
         openRawDatabase(50) { db ->
             execSchema(db, 50)
             // Seed against the REAL v50 schema: one row whose v50-format
@@ -1031,7 +1031,7 @@ class MigrationTest {
      * real v52 shape fails loudly here instead of only on device.
      */
     @Test
-    fun migrateV52_53_addsEpisodeOrderingCoveringIndex() {
+    fun migrateV52_53_addsEpisodeOrderingCoveringIndex() = runTest {
         openRawDatabase(52) { db ->
             execSchema(db, 52)
 
