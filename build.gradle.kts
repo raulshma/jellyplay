@@ -32,10 +32,12 @@ if (enableCoverage.get()) {
     pluginManager.apply("org.jetbrains.kotlinx.kover")
 }
 
-// Kover instrumentation is meaningless for the macrobenchmark producer, the
-// docs site, and the shared test-fixtures module. Single source for both the
-// plugin gate above and the aggregation wiring below.
-val koverExcludedModules = setOf("website", "baselineprofile", "testing")
+// Kover instrumentation is meaningless for the macrobenchmark producer.
+// Single source for both the plugin gate above and the aggregation wiring
+// below. (The former "website" and "testing" entries died with those
+// modules — the legacy-cutover dissolved :core:testing and the docs site
+// is no longer a Gradle module.)
+val koverExcludedModules = setOf("baselineprofile")
 
 subprojects {
     if (enableCoverage.get() && name !in koverExcludedModules) {

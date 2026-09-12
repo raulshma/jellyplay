@@ -617,7 +617,7 @@ A fourth workflow keeps the Kotlin Multiplatform tree honest:
 
 ## Project Structure
 
-The codebase is mid-migration to Kotlin Multiplatform: features and core live in the `shared/` KMP tree (commonMain + platform actuals), while the Android-only remainder and the new shells sit alongside it.
+The codebase is Kotlin Multiplatform: features and core live in the `shared/` KMP tree (commonMain + platform actuals). The legacy Android-only core modules were folded in at the 2026-09-12 cutover — their Android halves are now `androidMain` source sets of the shared core modules — leaving `app/` the only Android-only Gradle module, beside the desktop and web shells.
 
 ```
 apps/
@@ -626,13 +626,14 @@ apps/
 app/                      Android application module (deep links, widgets, Cast, PiP host activity, shortcuts, TV)
 shared/
   core/
+    concurrency/          Coroutine utilities (map-concurrent, task bundling, cancellation-safe runCatching)
     model/                Pure Kotlin data models (93 model files)
     designsystem/         Theming (8 variants), colors, shapes, typography, motion
     datastore/            DataStore preferences (~391 settings), encrypted credentials, OS keyring seam
-    database/             Room KMP database (18 DAOs), v51 migration chain
+    database/             Room KMP database (17 DAOs), v54 migration chain
     network/              Jellyfin API clients, Radarr/Sonarr (Arr) clients, Seerr client, TMDB, LRCLIB, Wyzie/OpenSubtitles, GitHub Releases, server discovery, address failover
-    data/                 Repositories, playback managers, audio effects, SyncPlay, downloads
-    ui/                   Shared UI components, adaptive layouts, TV focus, animations, navigation
+    data/                 Repositories, playback managers, audio effects, SyncPlay, downloads; Android-only machinery (workers, receivers, media session, Cast, notifications) lives in its androidMain
+    ui/                   Shared UI components, adaptive layouts, TV focus, animations, navigation; Android shims (biometric, WebView trailer, TV bits) in its androidMain
     player-contract/      Engine-agnostic MediaEngine contract + engine-shared machinery
   feature/
     auth/                 Server selection and authentication
@@ -644,6 +645,7 @@ shared/
     player-video/         Video playback UI, multi-engine support, SyncPlay integration, Play On
     player-audio/         Audio playback UI, lyrics, equalizer, ambient mode
     player-live/          Live TV playback UI, delivery-method selection, play-method badge, error recovery
+    player-book/          Book/EPUB reader (reader screen, page cache, decode seam)
     downloads/            Download management, offline library, and offline playback
     settings/             Settings, server/user management, Seerr & Arr configuration, settings search, import preview
     music/                Music browsing, smart/mood playlists, artist/album details
@@ -658,11 +660,7 @@ shared/
     calendar/             Upcoming releases calendar from Radarr/Sonarr libraries
     shortcuts/            App shortcuts (static + dynamic, e.g. Continue Listening)
     subtitle-tester/      Subtitle parser & styling test harness (dev/diagnostic tool, Android-only)
-core/
-  data/                   Android-only remainder: WorkManager workers, receivers, media3 audio stack, Cast, playback session
-  ui/                     Android-only UI shims (biometric, WebView trailer, D-pad/TV bits)
-  notification/           New media notification system (worker, scheduler, dispatcher, channels)
-  testing/                Shared test utilities
+    shell/                Shell-graph aggregator (appSections nav graph + ShellHostHooks shared by the Android and desktop shells)
 baselineprofile/         Baseline profile generator for phone startup optimization
 tools/                   Dev/CI drivers: e2e/ (web-verify, web-cache-eviction, web-soak, foreign-origin, serve.mjs, bootstrap-jellyfin, desktop-session/msi-boot passes, input-probe — headless-Edge CDP lane scripts; device-locale/device-pip passes — physical-phone adb+uiautomator lanes), perf/ (desktop-baseline.sh), and the gitignored mpv/ drop-in dir for libmpv-2.dll (wired into :apps:desktop:test, see Building)
 website/                 Landing page (GitHub Pages)
@@ -704,8 +702,8 @@ Other open-source projects in the Jellyfin ecosystem:
 
 | Metric | Value |
 | --- | --- |
-| Gradle modules | 40 (app + 4 legacy core + 8 shared core + 23 shared feature + desktop & web shells + 2 baseline profiles) |
-| Feature modules | 23 (KMP, under `shared/feature/`) |
+| Gradle modules | 38 (app + 9 shared core + 25 shared feature + desktop & web shells + baseline profile) |
+| Feature modules | 25 (KMP, under `shared/feature/`) |
 | Configurable settings | ~391 |
 | Data models | 88 |
 | API clients | 20+ |

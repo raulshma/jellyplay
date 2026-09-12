@@ -1,7 +1,7 @@
 # JellyPlay → Kotlin Multiplatform Migration — Status Ledger
 
-Status: **In progress — Phase X cutover landed; web breadth, e2e tail and release engineering remain** · Living doc,
-re-anchored 2026-08-31.
+Status: **In progress — completion plan (Phases R/D/W/E/X) in execution; Phase X cutover landed 2026-09-12** · Living doc,
+re-anchored 2026-09-12.
 
 This file re-anchors the ~50 references across build scripts, KDocs and CI
 that point at `docs/kmp-migration-plan.md`. The original 385-line draft plan
@@ -26,7 +26,7 @@ ledger tracks *where the migration stands*.
 
 **Done:**
 
-- `shared/` tree complete: `core/{model,designsystem,datastore,database,network,data,ui,player-contract}`
+- `shared/` tree complete: `core/{concurrency,model,designsystem,datastore,database,network,data,ui,player-contract}`
   + 23 `feature/*` modules; every commonMain expect has actuals; zero stubs
   in shipped surfaces. `:app` builds phone+TV flavors on top of the shared
   modules exclusively.
@@ -52,34 +52,67 @@ ledger tracks *where the migration stands*.
 - e2e ledgers under `docs/e2e/`: desktop native dialogs (3/3 PASS),
   device-locale pass 10/10, web cache-eviction and input-dead-region closed.
 
-**Remaining before the migration is complete (Phase X):**
+**Remaining before the migration is complete (approved completion plan):**
 
 1. ~~**Cutover of the legacy tree**~~ **DONE (2026-09-12, branch
    `chore/legacy-cutover`)**: `:core:ui`, `:core:data`, `:core:notification`
    and `:core:testing` dissolved — every Android-coupled file moved into
    `:shared:core:ui` / `:shared:core:data` `androidMain` under identical
-   packages; the Android-native remainder (cast, MediaSessionService,
-   workers, notification, remote controls, shortcuts, TV watch-next) lives
-   there as plain androidMain code; the Robolectric suites execute in the
-   new AGP-9 `androidHostTest` lanes (`withHostTest`, `forkEvery = 1` for
-   core:data); `:app` is the only Android-only module left. Residual: the seam-
-   adapter comments were scrubbed (the adapters themselves stay — they bridge
-   real platform gaps); the v0/v1 settings-backup import sunset in v0.11
-   (parser rejects legacy envelopes; the aggregate restore ladder,
-   `LegacySettingsBackup` and the legacy preview paths are deleted); the
-   typed-key prefs migration and PIN legacy-hash verify stay through v0.11
-   (remove at v0.12); the legacy-download container sniffer needs a backfill
-   migration before it can be deleted.
-2. **Web breadth**: 3 routes → full app requires the wasm target roll-out
-   above; Room-coupled repositories are the first blocker per module.
-3. **iOS**: no target work started (deliberate; commonMain purity is the only
+   packages; the Robolectric suites execute in the new AGP-9
+   `androidHostTest` lanes; `:app` is the only Android-only module left.
+   The v0/v1 settings-backup import sunset lands in v0.11; the typed-key
+   prefs migration, the PIN legacy-hash verify and the legacy-download
+   container sniffer outlived the cutover and are tracked below as R1/R3.
+2. **Phase R — cutover residuals:**
+   - R1: legacy-download container-sniffer backfill migration
+     `Migration53To54` (lands v0.11) — the precondition for deleting the
+     sniffer.
+   - R2: docs truth pass (README structure/counts, root build exclusion
+     list, this ledger) — this change.
+   - R3: v0.12 removal wave — typed-key prefs fallback, PIN legacy-hash
+     verify, sniffer runtime fallback — only after R1 has shipped one
+     full release. Accepted consequences: pre-typed-key skip-upgraders
+     lose their legacy prefs; never-unlocked-since-PBKDF2 users
+     re-onboard.
+3. **Phase D — Room 3 foundation** (unblocks real-DB repositories on
+   wasmJs):
+   - D0: timeboxed spike on `spike/room3` — androidx.room3 3.0.3. Gates:
+     Kotlin 2.3.21 / KSP 2.3.10 compatibility, wasm klib availability,
+     schema-JSON identity for the tracked schemas 13–54, and
+     room3-testing's MigrationTestHelper. Fallback if the spike fails:
+     online-first web with in-memory repos.
+   - D1: core migration on android+jvm — package renames,
+     `@TypeConverter`→`@ColumnTypeConverter`, the room3 schema plugin,
+     SQLiteMigrationCompat retarget, builder flags.
+   - D2: `RoomTransactions.kt` port + its 10 call sites.
+   - D3: wasmJs target on `:shared:core:database` via
+     WebWorkerSQLiteDriver (OPFS, single connection pool).
+   - D4: promote Room-coupled repositories from core:data jvmShared to
+     commonMain; retire `WebMediaRepositoryNarrow`.
+4. **Phase W — web breadth** (3 routes → full app). Per-module checklist:
+   wasmJs target → java.*-in-commonMain split (kotlinx-datetime /
+   kotlin.io.encoding / okio; core:data's wave-15B split is the template)
+   → repositories reachable from `dataWasmModule` → apps/web dep + Koin +
+   route + URL parse → KoinModuleRegistrationGuardTest allowlist → CI
+   wasm lane → browser smoke.
+   - W1: leaf modules — arrqueue, shortcuts, onboarding, auth.
+   - W2: small splits — newsletter, editor, search, library,
+     player-book.
+   - W3: data work — livetv, insights, settings, player-audio (the
+     first real-DB-on-web consumers).
+   - W4: hard — music, home, downloads, syncplay, admin, player-live
+     (some may ship web-gated).
+   - W5: last — player-video via HtmlVideoEngine best-effort and
+     subtitle-tester; shell optional while web keeps `WebAppRoot`.
+5. **Phase E — e2e tail** (runs parallel with W): harness click-reach
+   fix, native-dialog flows 3–6, PiP expand/dismiss rerun, web smoke
+   lane.
+6. **Phase X — release engineering**: desktop auto-update per
+   `docs/adr/desktop-auto-update.md` (replacing the 999999.0.0 version
+   sentinel), macOS/Linux real-machine passes, signed installers
+   (Authenticode / notarization).
+7. **iOS**: remains excluded (deliberate; commonMain purity is the only
    standing pre-investment).
-4. **e2e checklist-only items**: native-dialog flows 3–6 (editor pickers,
-   heatmap share, subtitle upload, row-click wiring) and the PiP
-   expand/dismiss device rerun.
-5. **Release engineering**: desktop is "a preview, not a release" per README
-   — macOS/Linux untested beyond CI packaging, auto-update ADR pending
-   implementation.
 
 ## Verification quick reference
 
