@@ -89,18 +89,31 @@ ledger tracks *where the migration stands*.
    - D2: ~~`RoomTransactions.kt` port + its 10 call sites~~ **DONE
      (same merge)** — room3 kept `Transactor`/`useWriterConnection`
      verbatim, so the port was imports-only.
-   - D3: wasmJs target on `:shared:core:database` via
-     WebWorkerSQLiteDriver (OPFS, single connection pool) — in
-     progress.
-   - D4: promote Room-coupled repositories from core:data jvmShared to
-     commonMain; retire `WebMediaRepositoryNarrow`.
+   - D3: ~~wasmJs target on `:shared:core:database` via
+     WebWorkerSQLiteDriver~~ **DONE (2026-09-12, f32b1b53c)** — OPFS via
+     opfs-sahpool (no COOP/COEP headers; single-tab constraint
+     documented); wasmJsBrowserTest roundtrip proves the chain; guard
+     test needed no change (platformPrefixes).
+   - D4: ~~promote Room-coupled repositories from core:data jvmShared to
+     commonMain~~ **DONE (2026-09-13, 398878208)** — 23 types promoted
+     (the Room-backed repo slice + managers), new EpochMillisSource/
+     ioDispatcher seams, Uuid swap; JVM-heavy machinery deliberately
+     stays jvmShared. WebMediaRepositoryNarrow retirement deferred to
+     the wave that ports the MediaRepository cluster (D4 left it: the
+     promoted slice covers playlists/search-history/seen-state/outbox,
+     not MediaRepository).
 4. **Phase W — web breadth** (3 routes → full app). Per-module checklist:
    wasmJs target → java.*-in-commonMain split (kotlinx-datetime /
    kotlin.io.encoding / okio; core:data's wave-15B split is the template)
    → repositories reachable from `dataWasmModule` → apps/web dep + Koin +
    route + URL parse → KoinModuleRegistrationGuardTest allowlist → CI
    wasm lane → browser smoke.
-   - W1: leaf modules — arrqueue, shortcuts, onboarding, auth.
+   - W1: ~~leaf modules — arrqueue, shortcuts, onboarding, auth~~
+     **DONE (2026-09-12/13, 465f884bf + 98a8c6a59)** — all four compile
+     for wasm (auth needed the add-server failure-classifier seam);
+     arrqueue + onboarding ROUTED on web (entries + Koin + guard-test
+     allowlist); shortcuts + auth target-only this wave (no wasm
+     AuthRepository binding; grid routes mostly non-wasm).
    - W2: small splits — newsletter, editor, search, library,
      player-book.
    - W3: data work — livetv, insights, settings, player-audio (the
