@@ -148,6 +148,8 @@ object DesktopFlowHarness {
         private val lock = Any()
         private val steps = ArrayList<StepResult>()
         private var fatal: Throwable? = null
+        @Volatile
+        private var reportOverallPass: Boolean = false
 
         private val workspaceProp = System.getProperty(PROP_WORKSPACE)?.trim().orEmpty()
         private val serverUrl = System.getProperty(PROP_SERVER_URL)?.trim().orEmpty()
@@ -662,14 +664,17 @@ object DesktopFlowHarness {
             if (!finished.compareAndSet(false, true)) return
             synchronized(lock) { fatal = e }
             runCatching { writeReport() }
-            exitProcess(0)
+            exitProcess(1)
         }
 
         private fun writeReportAndExit() {
             if (!finished.compareAndSet(false, true)) return
             runCatching { writeReport() }
-            exitProcess(0)
+            exitProcess(if (lastReportOverallPass()) 0 else 1)
         }
+
+        /** Mirrors the report's overallPass so the process exit code can be wired to CI directly. */
+        private fun lastReportOverallPass(): Boolean = reportOverallPass
 
         private suspend fun step(
             name: String,
@@ -705,10 +710,12 @@ object DesktopFlowHarness {
 
         private fun writeReport() {
             val (stepList, fatalErr) = synchronized(lock) { steps.toList() to fatal }
+            val overallPass = stepList.isNotEmpty() && stepList.all { it.pass } && fatalErr == null
+            reportOverallPass = overallPass
             val json = SessionHarnessReport(
                 startedAtMs = startedAtMs,
                 finishedAtMs = System.currentTimeMillis(),
-                overallPass = stepList.isNotEmpty() && stepList.all { it.pass } && fatalErr == null,
+                overallPass = overallPass,
                 fatal = fatalErr?.toString(),
                 machine = mapOf(
                     "os.name" to System.getProperty("os.name"),

@@ -120,10 +120,11 @@ if [[ "$HAVE_SIZE" == "$SAMPLE_SIZE" && -f "$POSTER" ]]; then
 fi
 
 # ── 4. app image ───────────────────────────────────────────────────────────
-if [[ ! -f "$EXE" ]]; then
-    echo "== app image missing — building (:apps:desktop:createDistributable)…"
-    (cd "$REPO_ROOT" && ./gradlew :apps:desktop:createDistributable) || fail "createDistributable failed"
-fi
+# Always rebuild with caches disabled: a stale configuration-cache/classpath
+# has already served pre-fix shared-module classes and produced a false
+# green lane (run-5/6/7 lesson in docs/e2e/desktop-native-dialogs.md).
+echo "== building app image fresh (--no-configuration-cache --no-build-cache)…"
+(cd "$REPO_ROOT" && ./gradlew --no-configuration-cache --no-build-cache :apps:desktop:createDistributable) || fail "createDistributable failed"
 [[ -f "$EXE" ]] || fail "app image not found at $EXE"
 [[ -f "$MPV_DIR/libmpv-2.dll" ]] || fail "libmpv missing at $MPV_DIR/libmpv-2.dll (per-machine, gitignored)"
 
@@ -137,8 +138,8 @@ LOG_OUT="$PROFILE_NIX/app.out"; LOG_ERR="$PROFILE_NIX/app.err"
 # The JVM whitespace-splits JAVA_TOOL_OPTIONS, so space-bearing overrides
 # would silently truncate the -D value. Fail fast instead (fixture creds
 # follow bootstrap-jellyfin.sh and contain no spaces by default).
-for __v in "$USERNAME" "$PASSWORD" "$SERVER_URL" "$ITEM_ID"; do
-  case "$__v" in *" "*) echo "FATAL: username/password/serverUrl/itemId must not contain spaces (JAVA_TOOL_OPTIONS limitation)" >&2; exit 2;; esac
+for __v in "$USERNAME" "$PASSWORD" "$SERVER_URL" "$ITEM_ID" "$MPV_MIXED" "$REPO_ROOT"; do
+  case "$__v" in *" "*) echo "FATAL: a credential, the repo path or the libmpv path contains a space (JAVA_TOOL_OPTIONS would truncate it): '$__v'" >&2; exit 2;; esac
 done
 echo "== launching $APP_NAME (profile: $PROFILE_NIX)"
 export JAVA_TOOL_OPTIONS="-Djellyplay.flowpass.enabled=true -Djellyplay.flowpass.workspace=$WORKSPACE_MIXED -Djellyplay.flowpass.serverUrl=$SERVER_URL -Djellyplay.flowpass.username=$USERNAME -Djellyplay.flowpass.password=$PASSWORD -Djellyplay.flowpass.itemId=$ITEM_ID -Djellyplay.flowpass.autoExitSeconds=$AUTO_EXIT_SECONDS -Djellyplay.flowpass.screenshotDir=$WORKSPACE_MIXED/shots -Djellyplay.perf.dataDir=$PROFILE_MIXED/profile -Djava.io.tmpdir=$TMPDIR_MIXED -Djna.library.path=$MPV_MIXED"

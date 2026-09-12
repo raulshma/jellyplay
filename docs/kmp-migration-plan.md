@@ -127,6 +127,11 @@ ledger tracks *where the migration stands*.
      (some may ship web-gated).
    - W5: last — player-video via HtmlVideoEngine best-effort and
      subtitle-tester; shell optional while web keeps `WebAppRoot`.
+   - Follow-up (from wave E's production fix): setItemImage now always
+     sends the base64 body Jellyfin 10.11 requires; servers older than
+     10.11 whose ImageSaver predates base64 decoding will fail image
+     upload. Deliberate cut (no server-version detection available at
+     the call site) — revisit if pre-10.11 server support matters.
 5. **Phase E — e2e tail** (runs parallel with W): harness click-reach
    fix, native-dialog flows 3–6, PiP expand/dismiss rerun, web smoke
    lane.
