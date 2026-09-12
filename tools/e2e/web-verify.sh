@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Web E2E verification lane (wave 13C; extended wave 15C): builds the webpack
+# Web E2E verification lane: builds the webpack
 # bundle, then drives headless Edge through the canvas app against a real
 # Jellyfin server via CDP (see tools/e2e/web-verify.mjs) — diagnostics flow,
 # then the first feature screen (Route.Requests) with its honest

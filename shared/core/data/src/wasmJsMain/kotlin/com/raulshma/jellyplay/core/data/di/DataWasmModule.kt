@@ -14,7 +14,7 @@ import org.koin.core.module.Module
 import org.koin.dsl.module
 
 /**
- *: the wasmJs slice of the data graph — exactly the repos the
+ * the wasmJs slice of the data graph — exactly the repos the
  * requests feature consumes, wired the same way `DataKoinModule` wires them
  * on the JVM:
  *  - [SessionIdentityProvider] is the [WasmSessionIdentityProvider] over the

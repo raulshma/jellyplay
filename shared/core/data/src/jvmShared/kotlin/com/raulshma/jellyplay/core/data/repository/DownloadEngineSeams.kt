@@ -6,7 +6,7 @@ package com.raulshma.jellyplay.core.data.repository
  * surfaces directly — WorkManager enqueue/cancel, the notification group
  * summary, and Coil's image cache — which kept it welded to the legacy module.
  * Each seam below covers exactly one of those call-site clusters; the Android
- * actuals live in the legacy :core:data shim (bridged into Koin by the app
+ * actuals live in this module's androidMain (bound into Koin by the app
  * composition root), and the desktop actuals in :shared:core:data jvmMain.
  */
 

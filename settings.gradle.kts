@@ -23,8 +23,8 @@ dependencyResolutionManagement {
         // KCEF (the desktop EPUB host) resolves jogamp gluegen/jogl through
         // JogAmp's own repository — not mirrored on Maven Central.
         maven { url = uri("https://jogamp.org/deployment/maven") }
-        // KGP tool-distribution governance (wave 13C — the settings-level
-        // decision the wave-12D lanes deferred, see the wasmJsNodeTest notes
+        // KGP tool-distribution governance ( — the settings-level
+        // decision the lanes deferred, see the wasmJsNodeTest notes
         // in shared/core/{model,ui}/build.gradle.kts): Kotlin's
         // kotlinWasmNodeJsSetup / kotlinWasmYarnSetup / kotlinWasmBinaryenSetup
         // tasks DOWNLOAD their tool archives through an ivy repository they
@@ -81,10 +81,6 @@ dependencyResolutionManagement {
 
 rootProject.name = "JellyPlay"
 include(":app")
-include(":core:data")
-include(":core:ui")
-include(":core:notification")
-include(":core:testing")
 
 
 

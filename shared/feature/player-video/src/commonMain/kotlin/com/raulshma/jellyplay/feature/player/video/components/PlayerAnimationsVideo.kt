@@ -10,7 +10,7 @@ import androidx.compose.runtime.Composable
 /**
  * Motion specs used only inside :feature:player:video (skip buttons, gesture
  * feedback pill, edge bars). The shared top/bottom/play-button specs live in
- * :core:ui/player/PlayerMotion.kt.
+ * core:ui/player/PlayerMotion.kt.
  */
 @Composable
 fun playerSkipButtonEnter() = fadeIn(MaterialTheme.motionScheme.fastEffectsSpec()) + scaleIn(

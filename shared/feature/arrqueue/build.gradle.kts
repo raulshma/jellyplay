@@ -87,11 +87,8 @@ kotlin {
         }
         getByName("androidMain").dependencies {
             // The user-messenger actual bridges to the app-wide
-            // LocalUserMessageBus, which still lives in the legacy Android-only
-            // :core:ui shim until its own conveyor move — same
-            // transition-period relationship as the library/livetv/admin/
-            // calendar conveyor messengers, dies at .
-            implementation(project(":core:ui"))
+            // LocalUserMessageBus (:shared:core:ui androidMain since the
+            // cutover dissolved the legacy :core:ui shim).
         }
     }
 }

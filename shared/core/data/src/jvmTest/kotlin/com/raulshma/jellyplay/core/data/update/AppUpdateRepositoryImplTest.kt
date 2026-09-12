@@ -20,7 +20,7 @@ import java.io.File
 
 /**
  * kotlin.test port of the legacy Robolectric AppUpdateRepositoryImplTest
- * (AppUpdate split, Wave xB): the moved ctor made the PackageManager/filesDir
+ * (AppUpdate split,): the moved ctor made the PackageManager/filesDir
  * Context stubs unnecessary — the updates dir is a temp directory and the
  * installed version is a mutable lambda capture. Uses a MockWebServer to
  * exercise the actual download path end-to-end; download/.part/sidecar logic

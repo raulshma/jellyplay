@@ -11,6 +11,19 @@ kotlin {
         namespace = "com.raulshma.jellyplay.shared.core.data"
         compileSdk = 37
         minSdk = 28
+        // The moved notification drawables/strings (media-session icons,
+        // playback-sync + download notifications) are real android res —
+        // same packaging note as :shared:core:ui.
+        androidResources {
+            enable = true
+        }
+        // cutover: the legacy :core:data module's Robolectric suites
+        // moved here (androidHostTest). Flags carried over from the legacy
+        // module's testOptions verbatim.
+        withHostTest {
+            isIncludeAndroidResources = true
+            isReturnDefaultValues = true
+        }
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_17)
         }
@@ -117,8 +130,37 @@ kotlin {
             // ProcessLifecycleOwner (C4 part 2 offline-mode seam).
             implementation(libs.lifecycle.process)
             // ApkInstallBuilderImpl (FileProvider) + the AndroidDataModule
-            // version probe (PackageInfoCompat) — AppUpdate split (Wave xB).
+            // version probe (PackageInfoCompat) — AppUpdate split.
             implementation(libs.androidx.core.ktx)
+            // ── cutover: the legacy :core:data module's Android
+            // halves moved here wholesale (same packages) — cast stack,
+            // media3 audio stack, WorkManager workers, remote controls,
+            // shortcuts, TV watch-next, download seams. Dependencies are
+            // the legacy module's implementation set carried over.
+            implementation(libs.kotlinx.coroutines.android)
+            implementation(libs.kotlinx.serialization.json)
+            implementation(libs.paging.runtime)
+            implementation(libs.work.runtime.ktx)
+            implementation(libs.room.ktx)
+            implementation(libs.media3.session)
+            implementation(libs.media3.exoplayer)
+            implementation(libs.media3.cast)
+            implementation(libs.media3.datasource)
+            implementation(libs.media3.datasource.okhttp)
+            implementation(libs.media3.database)
+            // FFmpeg software audio decoder for codecs MediaCodec lacks on
+            // most devices (DTS, MLP/TrueHD, EAC3...). Auto-loaded by
+            // DefaultRenderersFactory via reflection.
+            implementation(libs.media3.ffmpeg.decoder)
+            implementation(libs.play.services.cast.framework)
+            implementation(libs.okhttp)
+            implementation(libs.palette.ktx)
+            implementation(libs.coil.compose)
+            implementation(libs.coil.network.okhttp)
+            implementation(libs.navigation3.runtime)
+            // TV provider (Watch Next / preview channels) — R8 strips for
+            // phone release.
+            implementation(libs.tvprovider)
         }
         getByName("jvmMain").dependencies {
             // Real org.json for the desktop target (SyncPlayEventHandler in
@@ -148,4 +190,36 @@ kotlin {
             implementation(libs.androidx.sqlite.bundled)
         }
     }
+}
+
+// ── cutover: the legacy :core:data Robolectric suites moved here
+// wholesale (70 files + the MediaSessionPlayerStubs helper + the
+// MainDispatcherRule from the dissolved :core:testing module). AGP 9.4's
+// withHostTest names the lane's source set androidHostTest and materializes
+// it only in afterEvaluate, so the dependency wiring rides a configureEach.
+kotlin.sourceSets.configureEach {
+    if (name == "androidHostTest") {
+        dependencies {
+            implementation(kotlin("test"))
+            implementation(libs.junit)
+            implementation(libs.mockk)
+            implementation(libs.coroutines.test)
+            implementation(libs.robolectric)
+            implementation(libs.work.testing)
+            implementation(libs.androidx.junit)
+            implementation(libs.androidx.test.core)
+            implementation(libs.okhttp.mockwebserver)
+            // MediaSessionPlayerStubs builds a mockk<Player> against media3.
+            implementation(libs.media3.session)
+            implementation(libs.media3.exoplayer)
+        }
+    }
+}
+
+// Run each test class in a fresh worker JVM (carried over from the legacy
+// module): the suite mixes Robolectric shadows, async receivers and
+// coroutine scopes; a late in-flight coroutine from one class can leak an
+// uncaught exception into the *next* class's TestScope on the same worker.
+tasks.withType<Test>().matching { it.name.contains("AndroidHostTest") || it.name == "testAndroidHostTest" }.configureEach {
+    forkEvery = 1
 }

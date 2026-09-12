@@ -91,7 +91,6 @@ kotlin {
         // the Android messenger actual bridges legacy LocalUserMessageBus so
         // the Hilt-owned bus singleton stays the single instance.
         getByName("androidMain").dependencies {
-            implementation(project(":core:ui"))
         }
     }
 }

@@ -7,7 +7,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStoreOwner
 import com.raulshma.jellyplay.MainViewModel
 import com.raulshma.jellyplay.PlayOnViewModel
-import com.raulshma.jellyplay.core.data.R
+import com.raulshma.jellyplay.shared.core.data.R
 import com.raulshma.jellyplay.core.data.cast.CastManager
 import com.raulshma.jellyplay.core.data.download.DownloadOutcomeMessenger
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager

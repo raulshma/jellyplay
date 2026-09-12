@@ -3,7 +3,7 @@ package com.raulshma.jellyplay.core.ui.player
 /**
  * Localized transcode-reason value: the "why is this transcoding"
  * rows the video player's stats overlay and playback-error dialog render.
- * Implemented on Android by the legacy core:ui `FormattedTranscodeReason`
+ * Implemented on Android by `FormattedTranscodeReason` (androidMain, moved
  * (localized through TranscodeReasonsFormatter); desktop builds same-shape
  * values with a raw-token echo until the formatter's string tables migrate
  * into this module.

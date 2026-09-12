@@ -386,7 +386,7 @@ private fun MainContent(
             notifyNoPlayerFound = {
                 currentMessageBus.error(
                     com.raulshma.jellyplay.core.ui.feedback.uiTextOf(
-                        com.raulshma.jellyplay.core.ui.R.string.msg_no_video_player_found,
+                        com.raulshma.jellyplay.shared.core.ui.R.string.msg_no_video_player_found,
                     ),
                 )
             },

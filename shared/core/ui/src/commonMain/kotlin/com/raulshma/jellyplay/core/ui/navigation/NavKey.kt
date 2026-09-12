@@ -740,7 +740,7 @@ val TOP_LEVEL_ROUTES = VIDEO_TOP_LEVEL_ROUTES
 // them the wasmJs frontend unifies the vararg Pair keys up to `out Any` (a
 // first attempt at an explicit union type argument failed differently) and
 // every downstream Set<Route> use breaks. JVM/android inference is
-// unaffected. Spike w-10C class E.
+// unaffected. class E.
 val ALL_TOP_LEVEL_ROUTE_KEYS: Set<Route> =
     VIDEO_TOP_LEVEL_ROUTES.keys.union(MUSIC_TOP_LEVEL_ROUTES.keys)
 

@@ -9,7 +9,7 @@ import org.koin.dsl.module
 
 /**
  * Koin construction owner for the subtitle tester (docs/kmp-migration-plan.md
- * , subtitle-tester conveyor — final feature). The whole feature is
+ *,  subtitle-tester conveyor — final feature). The whole feature is
  * Android-only: the ViewModel, screen, preview engine host and raw-asset
  * factory live in this module's androidMain (admin androidAdminModule
  * pattern), so — unlike every earlier conveyor feature — there is NO

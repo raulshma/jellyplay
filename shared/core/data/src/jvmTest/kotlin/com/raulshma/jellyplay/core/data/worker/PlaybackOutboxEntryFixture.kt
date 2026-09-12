@@ -8,7 +8,7 @@ import com.raulshma.jellyplay.core.model.PlayMethod
  * The outbox entry shape the drain suites (`PlaybackOutboxDrainerTest`,
  * `PlaybackOutboxDrainerResilienceTest`) build identically — one definition
  * so the fixture defaults cannot drift apart. Copy of the legacy
- * :core:data test fixture (same package/name) so both lanes stay in sync;
+ * core:data test fixture (same package/name) so both lanes stay in sync;
  * the Android lane's copy still serves its worker suites.
  */
 internal fun entry(

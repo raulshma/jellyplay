@@ -8,7 +8,6 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import com.raulshma.jellyplay.core.datastore.ParsedCache
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
 import com.raulshma.jellyplay.core.model.DlnaDeviceRef
-import com.raulshma.jellyplay.core.model.legacy.UserPreferences
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
@@ -175,20 +174,6 @@ class AppRuntimeStateStore constructor(
             }
             prefs[Keys.ONBOARDING_COMPLETED] = slice.onboardingCompleted
             prefs[Keys.RECENT_DLNA_DEVICES] = json.encodeToString(slice.recentDlnaDevices)
-        }
-    }
-
-    /**
-     * Legacy v0/v1 backup-import path: projects the matching fields off a
-     * decoded `UserPreferences` aggregate. Retained until v2 backups
-     * supersede the legacy single-aggregate format; removed once v1 import
-     * is dropped.
-     */
-    internal suspend fun restorePreferences(userPreferences: UserPreferences) {
-        dataStore.edit { prefs ->
-            prefs[Keys.ONBOARDING_COMPLETED] = userPreferences.onboardingCompleted
-            userPreferences.watchLaterPlaylistId?.let { prefs[Keys.WATCH_LATER_PLAYLIST_ID] = it }
-            prefs[Keys.FAVORITE_CHANNELS] = json.encodeToString(userPreferences.favoriteChannels)
         }
     }
 

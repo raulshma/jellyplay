@@ -319,7 +319,6 @@
     <string name="settings_import_preview_import_all">Import All</string>
     <string name="settings_import_preview_import_category">Import Category</string>
     <string name="settings_import_preview_security_option">Also restore PIN / biometric lock</string>
-    <string name="settings_import_preview_legacy_warning">This is a legacy backup (older app version). Settings will be migrated where possible.</string>
     <string name="settings_import_preview_version_warning">Backup was exported from a newer app version (%1$d). Some settings may be ignored.</string>
     <string name="settings_import_preview_confirm">Import</string>
     <string name="settings_import_preview_confirm_all_title">Import All Settings?</string>

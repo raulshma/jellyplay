@@ -44,7 +44,7 @@ fun Modifier.verticalWrapAround(): Modifier = composed {
  *     val wrap = Modifier.wrapAroundVertical(
  *         isFirst = index == 0,
  *         isLast = index == items.lastIndex,
- *     )
+ *    )
  *     ListItem(modifier = wrap, ...)
  * }
  * ```

@@ -14,7 +14,7 @@ import org.koin.dsl.module
 
 /**
  * Koin construction owner for the Live TV feature (docs/kmp-migration-plan.md
- * , fourth conveyor item after search, library and music). The
+ *,  fourth conveyor item after search, library and music). The
  * HiltViewModel/@Inject annotations were stripped at the move — Koin is the
  * single constructor owner (one framework per type). Ctor deps split three
  * ways:

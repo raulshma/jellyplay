@@ -33,7 +33,7 @@ import org.koin.dsl.module
  * since the jvmShared promotion of its impl (it was a throwing
  * empty-store stub before that).
  *
- *: the desktop playback host is live (SwingPanel/HWND surface +
+ * the desktop playback host is live (SwingPanel/HWND surface +
  * Route.VideoPlayer unguarded on Windows), and the per-session engine
  * factory is NOT bound here — [PlayerEngineFactory] must return an mpv
  * engine carrying the composing surface's HWND, which only the app layer

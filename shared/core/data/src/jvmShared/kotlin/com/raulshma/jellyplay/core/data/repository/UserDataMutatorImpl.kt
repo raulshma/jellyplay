@@ -4,7 +4,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 //  MediaRepository cluster flip: moved verbatim from the legacy
-// :core:data shim (same package/name). Ctor-level transforms only, plus the
+// core:data shim (same package/name). Ctor-level transforms only, plus the
 // one mechanical body edit they force:
 //  - `@Singleton` / `@Inject` stripped (one framework per type — Koin's
 //    dataJvmModule constructs this single; the legacy DataModule bridges the

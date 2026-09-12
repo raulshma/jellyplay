@@ -277,38 +277,6 @@ class NotificationStore constructor(
     }
 
     /**
-     * Restore-backup participation: writes the notification + newsletter keys
-     * owned by this store from a decoded [UserPreferences]. The facade calls
-     * this (and every other store's hook) instead of writing these keys itself.
-     *
-     * Mirrors the legacy facade behaviour exactly. Unlike [resetKeysFor], the
-     * one-time `NEWSLETTER_LAST_VIEWED_MS` view-state IS written back, matching
-     * the legacy restore.
-     */
-    internal suspend fun restorePreferences(
-        userPreferences: com.raulshma.jellyplay.core.model.legacy.UserPreferences,
-    ) {
-        dataStore.edit { it ->
-            val np = userPreferences.notificationPreferences
-            it[Keys.NOTIFICATIONS_ENABLED] = np.enabled
-            it[Keys.NOTIFICATIONS_CHECK_FREQUENCY] = np.checkFrequency.name
-            it[Keys.NOTIFICATIONS_QUIET_HOURS_ENABLED] = np.quietHoursEnabled
-            it[Keys.NOTIFICATIONS_QUIET_HOURS_START] = np.quietHoursStart
-            it[Keys.NOTIFICATIONS_QUIET_HOURS_END] = np.quietHoursEnd
-            it[Keys.NOTIFICATIONS_SOUND_ENABLED] = np.soundEnabled
-            it[Keys.NOTIFICATIONS_VIBRATE_ENABLED] = np.vibrateEnabled
-            it[Keys.NOTIFICATIONS_LIGHTS_ENABLED] = np.lightsEnabled
-            it[Keys.NOTIFICATIONS_MAX_PER_CHECK] = np.maxPerCheck
-            it[Keys.NOTIFICATIONS_LIBRARY_CONFIGS] = json.encodeToString(np.libraryConfigs)
-            it[Keys.NEWSLETTER_ENABLED] = userPreferences.newsletterEnabled
-            it[Keys.NEWSLETTER_DAY_OF_WEEK] = userPreferences.newsletterDayOfWeek
-            it[Keys.NEWSLETTER_LAST_VIEWED_MS] = userPreferences.newsletterLastViewedMs
-            it[Keys.ENABLED_NEWSLETTER_SECTIONS] = json.encodeToString(userPreferences.enabledNewsletterSections)
-            it[Keys.NEWSLETTER_SECTION_ORDER] = json.encodeToString(userPreferences.newsletterSectionOrder)
-        }
-    }
-
-    /**
      * Faithful inverse of [read]: writes every field of [slice] back to the
      * DataStore using the same encoding as [restorePreferences]. The notification
      * sub-domain is read from [NotificationSlice.notificationPreferences];

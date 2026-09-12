@@ -55,7 +55,7 @@ kotlin {
                 // (networkWasmModule — .1 chunk 3: AtomicSessionState
                 // + WasmClientIdentity + the three Ktor wasm clients +
                 // AuthApiClient/LibraryApiClient/PlaybackApiClient bindings).
-                // Deliberately absent: paging-compose (spike w-10C §1 proves
+                // Deliberately absent: paging-compose ( §1 proves
                 // its 3.5.0 wasm klibs exist, but no consuming web module
                 // needs LazyPagingItems yet) and database (no Room on wasm
                 // v1 — core:data's wasm slice is the Room-free repository
@@ -87,7 +87,7 @@ kotlin {
                 // detailsModule + webDetailsPlatformModule (the narrow
                 // MediaRepository for the SeerrDetail cross-link).
                 implementation(project(":shared:feature:details"))
-                // Wave wC (HtmlVideoEngine): the wasm-visible MediaEngine
+                // (HtmlVideoEngine): the wasm-visible MediaEngine
                 // contract + EnginePositionTicker/WebPlaybackMappings the
                 // web video engine implements. The engine class is landed and
                 // browser-verified through the WebDiagnostics harness; the
@@ -177,15 +177,15 @@ kotlin {
 }
 
 // google's androidx.navigation3:navigation3-ui ships NO web targets at all
-// (android AAR + jvm/linux stubs only — spike w-10C §1), so every wasmJs
+// (android AAR + jvm/linux stubs only — §1), so every wasmJs
 // configuration of this module — including ones that only pull
-// :shared:core:ui and its transitive google -ui leaf — fails dependency
+// shared:core:ui and its transitive google -ui leaf — fails dependency
 // resolution unless it points at JetBrains' fork of the same release line:
 // same package, ABI-stable surface, real wasm klibs at the pinned 1.1.1.
 // The fork's POM depends on google's runtime artifact, so only -ui is
 // swapped. Graph-wide shape mirrored from apps/desktop/build.gradle.kts
 // (its configurations.all block); :shared:core:ui keeps the same swap scoped
-// to its own wasmJs-named configurations (spike w-10C S1/R2).
+// to its own wasmJs-named configurations.
 configurations.all {
     resolutionStrategy.dependencySubstitution {
         substitute(module("androidx.navigation3:navigation3-ui"))

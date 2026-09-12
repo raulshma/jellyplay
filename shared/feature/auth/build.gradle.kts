@@ -84,13 +84,10 @@ kotlin {
             implementation(libs.mockk)
         }
         getByName("androidMain").dependencies {
-            // Documented shared→legacy :core:ui androidMain edge (library/
-            // livetv/admin/calendar/downloads/settings/onboarding/arrqueue
-            // precedents; dies at ): the local-network seam actuals
-            // bridge the legacy LocalNetworkAccess object, which keeps the
-            // Android 17 permission logic (and its MainActivity consumer) in
-            // one place.
-            implementation(project(":core:ui"))
+            // The local-network seam actuals bridge LocalNetworkAccess
+            // (:shared:core:ui androidMain since the cutover), which
+            // keeps the Android 17 permission logic (and its MainActivity
+            // consumer) in one place.
         }
     }
 }

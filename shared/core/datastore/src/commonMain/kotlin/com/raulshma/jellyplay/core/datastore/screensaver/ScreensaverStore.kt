@@ -142,24 +142,6 @@ class ScreensaverStore constructor(
     }
 
     /**
-     * Restore-backup participation: writes the dream keys owned by this store
-     * from a decoded [UserPreferences]. The JSON image-category set is written
-     * with this store's own [json] codec (same shape `setDreamImageCategories`
-     * uses).
-     */
-    internal suspend fun restorePreferences(
-        userPreferences: com.raulshma.jellyplay.core.model.legacy.UserPreferences,
-    ) {
-        dataStore.edit { it ->
-            it[Keys.DREAM_IMAGE_CATEGORIES] = json.encodeToString(userPreferences.dreamImageCategories)
-            it[Keys.DREAM_SLIDESHOW_INTERVAL_MS] = userPreferences.dreamSlideshowIntervalMs
-            it[Keys.DREAM_KEN_BURNS_ENABLED] = userPreferences.dreamKenBurnsEnabled
-            it[Keys.DREAM_TRANSITION_STYLE] = userPreferences.dreamTransitionStyle.name
-            it[Keys.DREAM_SHOW_TITLE] = userPreferences.dreamShowTitle
-        }
-    }
-
-    /**
      * Faithful inverse of [read]: writes every field of [slice] back to the
      * DataStore using the same encoding as [restorePreferences] (image-category
      * set via this store's [json] codec).

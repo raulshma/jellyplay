@@ -1,14 +1,14 @@
 package com.raulshma.jellyplay.di
 
 import android.content.Context
-import com.raulshma.jellyplay.core.data.R
+import com.raulshma.jellyplay.shared.core.data.R
 import com.raulshma.jellyplay.core.data.repository.AdminStatisticsLabelProvider
 import org.koin.core.module.Module
 import org.koin.dsl.module
 
 /**
  * App-authored Koin definitions for the Android actuals of the admin
- * statistics seams (Wave wB admin flip — the AndroidDownloadSeamsModule
+ * statistics seams ( admin flip — the AndroidDownloadSeamsModule
  * precedent: legacy-side resources the shared module cannot see get their
  * Koin defs in the composition root that sees both).
  *

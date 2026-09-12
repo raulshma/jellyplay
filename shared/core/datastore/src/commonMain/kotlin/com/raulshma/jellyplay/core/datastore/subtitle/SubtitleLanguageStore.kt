@@ -246,39 +246,6 @@ class SubtitleLanguageStore constructor(
     }
 
     /**
-     * Restore-backup participation: writes the subtitle &amp; language keys owned
-     * by this store from a decoded [UserPreferences], mirroring the facade's
-     * restore body exactly (including the nullable language guards and the
-     * JSON map / style round-trips).
-     */
-    internal suspend fun restorePreferences(
-        userPreferences: com.raulshma.jellyplay.core.model.legacy.UserPreferences,
-    ) {
-        dataStore.edit { prefs ->
-            userPreferences.preferredSubtitleLanguage?.let { prefs[Keys.PREFERRED_SUBTITLE_LANG] = it }
-            prefs[Keys.SUBTITLES_FORCED_ONLY] = userPreferences.subtitlesForcedOnly
-            userPreferences.preferredAudioLanguage?.let { prefs[Keys.PREFERRED_AUDIO_LANG] = it }
-            prefs[Keys.SUBTITLE_DELAY_BY_ITEM] = PreferenceCodec.encodeDefaultsJson.encodeToString(
-                kotlinx.serialization.serializer<Map<String, Long>>(),
-                userPreferences.subtitleDelayByItem,
-            )
-            prefs[Keys.SUBTITLE_STYLE] = PreferenceCodec.encodeDefaultsJson.encodeToString(
-                kotlinx.serialization.serializer<SubtitleStyle>(),
-                userPreferences.subtitleStyle,
-            )
-            prefs[Keys.SUBTITLE_PREVIEW_IN_SETTINGS] = userPreferences.subtitlePreviewInSettings
-            prefs[Keys.PREFER_AUDIO_DESCRIPTION] = userPreferences.preferAudioDescription
-            prefs[Keys.HIGH_CONTRAST_SUBTITLES] = userPreferences.highContrastSubtitles
-            userPreferences.appLanguage?.let { prefs[Keys.APP_LANGUAGE] = it }
-            prefs[Keys.HDR_SUBTITLE_STYLE_ENABLED] = userPreferences.hdrSubtitleStyleEnabled
-            prefs[Keys.HDR_SUBTITLE_STYLE] = PreferenceCodec.encodeDefaultsJson.encodeToString(
-                kotlinx.serialization.serializer<SubtitleStyle>(),
-                userPreferences.hdrSubtitleStyle,
-            )
-        }
-    }
-
-    /**
      * Faithful inverse of [read]: writes every field of [slice] back to the
      * DataStore using the same encoding as [restorePreferences] (nullable
      * language guards + JSON map/style round-trips with defaults).

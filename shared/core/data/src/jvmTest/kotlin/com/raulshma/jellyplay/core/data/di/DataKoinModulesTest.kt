@@ -229,7 +229,7 @@ class DataKoinModulesTest {
             assertResolves<AdminRepository>(koin)
             assertResolves<AdminStatisticsRepository>(koin)
 
-            // ── AppUpdate split (Wave xB) ──────────────────────────────────
+            // ── AppUpdate split ──────────────────────────────────
             // The update repository resolves on desktop (About's update-check
             // row): GitHubReleasesApi from networkJvmModule, the download
             // client from desktopNetworkModule's qualified single, and the

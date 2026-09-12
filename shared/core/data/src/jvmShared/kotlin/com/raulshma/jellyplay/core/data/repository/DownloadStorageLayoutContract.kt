@@ -8,7 +8,7 @@ import java.io.File
  *
  * Extracted from the Android-only `DownloadStorageLayout` so the portable
  * [DownloadRepositoryImpl] depends on the *rule*, not the platform: the Android
- * actual (legacy :core:data shim) keeps its Context/Environment/StatFs logic
+ * actual (androidMain, moved at the cutover) keeps its Context/Environment/StatFs logic
  * verbatim (filesDir vs N app-private external roots), the desktop actual
  * resolves under the appdata dir with `File.getUsableSpace()`.
  *

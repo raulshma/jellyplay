@@ -308,39 +308,6 @@ class PlaybackStore constructor(
     }
 
     /**
-     * Restore-backup participation: writes the media-delivery keys owned by
-     * this store from a decoded [UserPreferences]. The facade calls this (and
-     * every other store's hook) instead of writing these keys itself.
-     *
-     * Mirrors the legacy facade behaviour exactly. The legacy
-     * `force_direct_play` boolean is not written back — [readPlaybackMode]
-     * migrates it from [PlaybackSlice.playbackMode],
-     * and the typed key takes precedence, so re-entering the enum is enough.
-     */
-    internal suspend fun restorePreferences(
-        userPreferences: com.raulshma.jellyplay.core.model.legacy.UserPreferences,
-    ) {
-        dataStore.edit { it ->
-            it[Keys.PREFERRED_PLAYER] = userPreferences.preferredPlayer.name
-            it[Keys.STREAMING_QUALITY] = userPreferences.streamingQuality.name
-            it[Keys.CELLULAR_STREAMING_QUALITY] = userPreferences.cellularStreamingQuality.name
-            it[Keys.PLAYBACK_MODE] = userPreferences.playbackMode.name
-            it[Keys.DECODER_MODE] = userPreferences.decoderMode.name
-            it[Keys.AUDIO_PASSTHROUGH] = userPreferences.audioPassthrough
-            it[Keys.FRAME_RATE_MATCHING] = userPreferences.frameRateMatching
-            it[Keys.REFRESH_RATE_MODE] = userPreferences.refreshRateMode.name
-            it[Keys.KEEP_SCREEN_ON_DURING_VIDEO] = userPreferences.keepScreenOnDuringVideo
-            it[Keys.PAUSE_ON_AUDIO_FOCUS_LOSS] = userPreferences.pauseOnAudioFocusLoss
-            it[Keys.DUCK_ON_TRANSIENT_FOCUS_LOSS] = userPreferences.duckOnTransientFocusLoss
-            it[Keys.AUTO_PLAY_COUNTDOWN_SEC] = userPreferences.autoPlayCountdownSec
-            it[Keys.BACKGROUND_VIDEO_AUDIO_ENABLED] = userPreferences.backgroundVideoAudioEnabled
-            it[Keys.PGS_SUBTITLE_DIRECT_PLAY] = userPreferences.pgsSubtitleDirectPlay
-            it[Keys.USER_DATA_SYNC_ENABLED] = userPreferences.userDataSyncEnabled
-            it[Keys.ANDROID_TV_WATCH_NEXT_ENABLED] = userPreferences.androidTvWatchNextEnabled
-        }
-    }
-
-    /**
      * Faithful inverse of [read]: writes every field of [slice] back to the
      * DataStore using the same encoding as [restorePreferences], plus the
      * `live_stream_option` gap key that [restorePreferences] omits.

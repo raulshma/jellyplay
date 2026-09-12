@@ -227,28 +227,6 @@ class LibraryStore constructor(
     }
 
     /**
-     * Restore-backup participation: writes the library keys owned by this store
-     * from a decoded [UserPreferences]. JSON maps are written with this store's
-     * own [json] codec.
-     */
-    internal suspend fun restorePreferences(
-        userPreferences: com.raulshma.jellyplay.core.model.legacy.UserPreferences,
-    ) {
-        dataStore.edit { it ->
-            it[Keys.LIBRARY_VIEW_MODE] = userPreferences.libraryViewMode.name
-            it[Keys.DEFAULT_LIBRARY_SORT_ORDERS] = json.encodeToString(userPreferences.defaultLibrarySortOrders)
-            it[Keys.LIBRARY_VIEW_MODES] = json.encodeToString(userPreferences.libraryViewModes)
-            it[Keys.LIBRARY_FILTERS] = json.encodeToString(userPreferences.libraryFilters)
-            it[Keys.HIDE_EPISODE_THUMBNAILS] = userPreferences.hideEpisodeThumbnails
-            it[Keys.EPISODES_DESCENDING] = userPreferences.episodesDescending
-            it[Keys.SKIP_SPECIALS] = userPreferences.skipSpecials
-            it[Keys.COMPACT_EPISODE_LIST] = userPreferences.compactEpisodeList
-            it[Keys.SHOW_DETAIL_UP_NEXT] = true
-            it[Keys.CONFIRM_LIBRARY_RESET] = true
-        }
-    }
-
-    /**
      * Faithful inverse of [read]: writes every field of [slice] back to the
      * DataStore using the same encoding as [restorePreferences] (JSON maps via
      * this store's [json] codec).

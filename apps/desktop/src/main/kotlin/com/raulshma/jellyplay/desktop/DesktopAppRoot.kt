@@ -166,7 +166,7 @@ import java.util.concurrent.atomic.AtomicReference
  * render below (the settings drill-ins SeerrSettings/ArrSettings included —
  * their Seerr/Arr/datastore ctor deps are all Koin-native).
  *
- * Music went live next (Wave wC) — browse-only at first, and fully playable
+ * Music went live next — browse-only at first, and fully playable
  * since: the last unresolved music ctor dep (AudioQueueFacade) binds
  * to the shared DefaultAudioQueueFacade over the desktop
  * DesktopAudioQueueManager (audio-only MpvDesktopEngine behind it), so
@@ -383,7 +383,7 @@ private fun DesktopNavScaffold(
     // and title bar observe; flows are read at click time, not collected).
     val audioQueueManager: DesktopAudioQueueManager = koinInject()
 
-    // AppUpdate split (Wave xB): the About screen's "Check for updates" row —
+    // AppUpdate split: the About screen's "Check for updates" row —
     // this shell's OWN update surface. The check→message MAPPING is shared
     // (ShellSessionController.updateCheckMessage, ADR 0001's split); only the
     // wording below is desktop's. Desktop has no self-update (the

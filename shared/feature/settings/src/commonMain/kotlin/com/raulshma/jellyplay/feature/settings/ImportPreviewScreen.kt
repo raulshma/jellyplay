@@ -63,7 +63,6 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_impo
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_import_preview_error
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_import_preview_import_all
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_import_preview_import_category
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_import_preview_legacy_warning
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_import_preview_loading
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_import_preview_security_option
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_import_preview_summary_card
@@ -239,15 +238,7 @@ fun ImportPreviewScreen(
             }
 
             // Warnings
-            if (viewModel.isLegacy) {
-                item(key = "legacy_warn") {
-                    WarningCard(
-                        icon = Tabler.Outline.InfoCircle,
-                        text = stringResource(Res.string.settings_import_preview_legacy_warning),
-                    )
-                }
-            }
-            if (viewModel.versionMismatch && !viewModel.isLegacy) {
+            if (viewModel.versionMismatch) {
                 item(key = "version_warn") {
                     WarningCard(
                         icon = Tabler.Outline.AlertTriangle,

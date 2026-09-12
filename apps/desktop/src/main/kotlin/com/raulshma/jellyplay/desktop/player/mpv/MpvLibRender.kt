@@ -45,18 +45,18 @@ object MpvLibRender {
     // MPV_RENDER_PARAM_OPENGL_FBO = 3 (render.h L203) is deliberately absent —
     // it describes GL-context render targets, which the sw path never has
     // (FLIP_Y=4/DEPTH=5 ARE mapped below only because the table stays dense;
-    // header marks both ignored by the sw backend).
+    // header marks both ignored by the sw backend). AMBIENT_LIGHT = 7 (L233)
+    // and DRM_DISPLAY = 14 (L338) are likewise absent — both deprecated
+    // upstream and never referenced here.
     const val PARAM_FLIP_Y = 4                  // L211 (int*)
     const val PARAM_DEPTH = 5                   // L219 (int*)
     const val PARAM_ICC_PROFILE = 6             // L226
-    const val PARAM_AMBIENT_LIGHT = 7           // L233 (deprecated)
     const val PARAM_X11_DISPLAY = 8             // L240
     const val PARAM_WL_DISPLAY = 9              // L247
     const val PARAM_ADVANCED_CONTROL = 10       // L287 (int*)
     const val PARAM_NEXT_FRAME_INFO = 11        // L300
     const val PARAM_BLOCK_FOR_TARGET_TIME = 12  // L317 (int*)
     const val PARAM_SKIP_RENDERING = 13         // L333 (int*)
-    const val PARAM_DRM_DISPLAY = 14            // L338 (deprecated)
     const val PARAM_DRM_DRAW_SURFACE_SIZE = 15  // L344
     const val PARAM_DRM_DISPLAY_V2 = 16         // L350
     const val PARAM_SW_SIZE = 17                // L360 (int[2] {w, h})

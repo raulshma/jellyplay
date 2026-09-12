@@ -161,7 +161,7 @@ import org.koin.dsl.module
  *
  * `DefaultAudioQueueFacade` is the one playback-graph type NOT defined here:
  * its AudioQueueManager ctor dep is the media3 AudioPlaybackManager, so its
- * Koin single lives in the legacy core:data androidCoreDataModule (owned
+ * Koin single lives in this module's androidMain AndroidCoreDataKoinModule (
  * there since then; desktopPlayerModule binds the desktop twin).
  * `AudioLyricsManager` left that Android-only set when its sole dep (the
  * LyricsRepository view of MediaRepository) became the single below;
@@ -216,7 +216,7 @@ val dataJvmModule: Module = module {
 
     // ── Repository layer (C4 part 2, batch 2) ─────────────────────────────
     // DAOs resolve from :shared:core:database's databaseDaosModule, stores from
-    // :shared:core:datastore's modules, API clients from networkJvmModule.
+    // shared:core:datastore's modules, API clients from networkJvmModule.
     // Constructors are mirrored verbatim from the moved impls.
 
     single {
@@ -331,7 +331,7 @@ val dataJvmModule: Module = module {
     single<AudioSleepTimerManager> { get<SleepTimerManager>() }
 
     // Playback-flips wave: AdaptiveBitrateManager moved from the legacy
-    // :core:data shim — ConnectivityManager became the NetworkMonitor seam
+    // core:data shim — ConnectivityManager became the NetworkMonitor seam
     // (null-network/metered parity documented on the class). Its consumers
     // (feature:details DownloadLifecycleActions, feature:player:video
     // PlayerCastController / PlaybackSession / PlayerSessionManager /
@@ -339,7 +339,7 @@ val dataJvmModule: Module = module {
     single { AdaptiveBitrateManager(get(), get(), get()) }
 
     // V3 livetv conveyor: the mini-player holder moved from the legacy
-    // :core:data shim (one framework per type — @Singleton/@Inject stripped at
+    // core:data shim (one framework per type — @Singleton/@Inject stripped at
     // the move). Consumers (app FloatingPlayerState, feature:player:video
     // VideoPlayerViewModel, livetv's ChannelsViewModel) resolve this single
     // directly from Koin; ChannelsViewModel resolves it
@@ -480,7 +480,7 @@ val dataJvmModule: Module = module {
     single<MediaSearchEngine> { get<MediaSearchEngineImpl>() }
 
     // Playback-flips wave: PlaybackSourceResolverImpl moved from the legacy
-    // :core:data shim (Uri.fromFile → File.toURI, see the impl's URI-shape
+    // core:data shim (Uri.fromFile → File.toURI, see the impl's URI-shape
     // note) — UnifiedMediaDetailProviderImpl's ctor dep below now resolves
     // from this module on BOTH platforms, and the app's HiltInterop reverse
     // single for the interface was deleted with the Hilt extinction.

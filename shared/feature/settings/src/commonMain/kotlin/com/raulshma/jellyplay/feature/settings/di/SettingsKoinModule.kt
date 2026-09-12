@@ -40,7 +40,7 @@ import org.koin.dsl.module
  *  - repository deps (AuthRepository/SeerrRepository/AdminRepository/MediaRepository/
  *    SearchHistoryRepository/...) resolve from shared :core:data — the Admin/
  *    Media-repository cluster impls flipped to Koin singles in dataJvmModule
- *    (wave wB + MediaRepository flip), so these resolve on BOTH platforms;
+ *, so these resolve on BOTH platforms;
  *  - the platform seams (SettingsBackupIo, AppLocaleSetter, StorageAreas,
  *    StorageMountsProvider, AppMetaProvider, LogCollector, AboutLibrariesJsonSource)
  *    resolve from the androidMain/jvmMain platform modules

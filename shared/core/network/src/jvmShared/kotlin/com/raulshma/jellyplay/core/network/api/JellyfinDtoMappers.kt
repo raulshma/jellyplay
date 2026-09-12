@@ -49,8 +49,8 @@ import java.time.format.DateTimeFormatter
 // (toScheduledTaskInfo / toActivityLogEntry + their private helpers) stay in
 // the legacy Android shim (core/network/src/main/.../api/WsDtoMappers.kt):
 // their consumers — the realtime channels — inject the Hilt-qualified
-// @ApplicationScope CoroutineScope whose annotation lives in the legacy
-// :core:datastore shim, so the channels (and thus the org.json mappers)
+// @ApplicationScope CoroutineScope whose annotation lives in
+// core:datastore shim, so the channels (and thus the org.json mappers)
 // could not move into this module.
 
 internal fun BaseItemDto.toMediaItem() = MediaItem(

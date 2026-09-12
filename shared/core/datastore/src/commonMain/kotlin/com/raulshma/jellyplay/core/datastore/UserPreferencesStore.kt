@@ -55,7 +55,6 @@ import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.SubtitleEdgeType
 import com.raulshma.jellyplay.core.model.ThemeMode
 import com.raulshma.jellyplay.core.model.NotificationPreferences
-import com.raulshma.jellyplay.core.model.legacy.UserPreferences
 import com.raulshma.jellyplay.core.model.VideoEffectsConfig
 import com.raulshma.jellyplay.core.model.CastingStrategy
 import com.raulshma.jellyplay.core.model.SyncPlayJoinBehavior
@@ -224,45 +223,6 @@ class UserPreferencesStore constructor(
 
     private fun readBool(prefs: Preferences, key: Preferences.Key<Boolean>, name: String, default: Boolean): Boolean =
         PreferenceCodec.readBool(prefs, key, name, default)
-
-    suspend fun restorePreferences(prefs: UserPreferences, restoreSecuritySensitive: Boolean = true) {
-        playbackStore.restorePreferences(prefs)
-        appearanceStore.restorePreferences(prefs)
-        videoPlayerStore.restorePreferences(prefs)
-        downloadsStore.restorePreferences(prefs)
-        engineStore.restorePreferences(prefs)
-        homeDiscoveryStore.restorePreferences(prefs)
-        audioStore.restorePreferences(prefs)
-        audioEffectsStore.restorePreferences(prefs)
-        audioCacheStore.restorePreferences(prefs)
-        libraryStore.restorePreferences(prefs)
-        navigationStore.restorePreferences(prefs)
-        networkOfflineStore.restorePreferences(prefs)
-        notificationStore.restorePreferences(prefs)
-        screensaverStore.restorePreferences(prefs)
-        // SecurityStore is the only store with security-sensitive keys. The
-        // remote-control switch restores unconditionally; the lock config only
-        // when the caller explicitly opts in via restoreSecuritySensitive.
-        securityStore.restorePreferences(prefs)
-        if (restoreSecuritySensitive) {
-            securityStore.restoreSecuritySensitive(prefs)
-        }
-        subtitleLanguageStore.restorePreferences(prefs)
-        syncPlayCastStore.restorePreferences(prefs)
-        experimentalStore.restorePreferences(prefs)
-
-        engineStore.restorePerItemMaps(
-            mediaStreamSelections = prefs.mediaStreamSelections,
-            videoEffectsByItem = prefs.videoEffectsByItem,
-        )
-
-        val json = ENCODE_DEFAULTS_JSON
-        dataStore.edit { settings ->
-            settings[Keys.ONBOARDING_COMPLETED] = prefs.onboardingCompleted
-            prefs.watchLaterPlaylistId?.let { settings[Keys.WATCH_LATER_PLAYLIST_ID] = it }
-            settings[Keys.FAVORITE_CHANNELS] = json.encodeToString(prefs.favoriteChannels)
-        }
-    }
 
     // ----------------------------------------------------------------------
     // Backup v2 — per-slice export / import (no aggregate round-trip)

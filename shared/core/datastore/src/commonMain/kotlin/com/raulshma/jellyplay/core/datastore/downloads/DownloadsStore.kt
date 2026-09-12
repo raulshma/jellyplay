@@ -195,31 +195,6 @@ class DownloadsStore constructor(
     }
 
     /**
-     * Restore-backup participation: writes the download keys owned by this
-     * store (that the legacy restore wrote) from a decoded [UserPreferences].
-     * The facade calls this (and every other store's hook) instead of writing
-     * these keys itself.
-     *
-     * Mirrors the legacy facade behaviour exactly: the legacy restore never wrote
-     * `CELLULAR_DOWNLOAD_SIZE_WARNING_MB` or the `DOWNLOAD_SCHEDULE_*` keys, so
-     * they are not written here either.
-     */
-    internal suspend fun restorePreferences(
-        userPreferences: com.raulshma.jellyplay.core.model.legacy.UserPreferences,
-    ) {
-        dataStore.edit { it ->
-            it[Keys.WIFI_ONLY_DOWNLOADS] = userPreferences.wifiOnlyDownloads
-            it[Keys.DOWNLOAD_CONNECTIONS] = userPreferences.downloadConnections
-            it[Keys.MAX_CONCURRENT_DOWNLOADS] = userPreferences.maxConcurrentDownloads
-            it[Keys.DOWNLOAD_QUALITY] = userPreferences.downloadQuality.name
-            it[Keys.SMART_DOWNLOADS_ENABLED] = userPreferences.smartDownloadsEnabled
-            it[Keys.AUTO_DOWNLOAD_NEW_EPISODES] = userPreferences.autoDownloadNewEpisodes
-            it[Keys.MAX_DOWNLOAD_STORAGE_GB] = userPreferences.maxDownloadStorageGb
-            it[Keys.DOWNLOAD_STORAGE_LOCATION] = userPreferences.downloadStorageLocation
-        }
-    }
-
-    /**
      * Faithful inverse of [read]: writes every field of [slice] back to the
      * DataStore using the same encoding as [restorePreferences], plus the gap
      * keys [restorePreferences] omits (`cellular_download_size_warning_mb`,

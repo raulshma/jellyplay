@@ -100,7 +100,7 @@ class ConfirmAction(
  *     message = "This removes the server and all saved users on it.",
  *     confirmText = "Remove",
  *     icon = Tabler.Outline.Trash,
- * )
+ *)
  * ```
  *
  * **2. Explicit gate.** Callers that already own a `Boolean` gate can render the
@@ -116,7 +116,7 @@ class ConfirmAction(
  *         icon = Tabler.Outline.Trash,
  *         onConfirm = { viewModel.removeServer(id) },
  *         onDismiss = { showConfirm = false },
- *     )
+ *    )
  * }
  * ```
  */

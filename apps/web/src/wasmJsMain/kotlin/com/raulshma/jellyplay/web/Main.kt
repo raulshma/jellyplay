@@ -322,7 +322,7 @@ private fun e2eVariantParam(): String? = js("new URLSearchParams(window.location
 private fun e2eRouteParam(): String? = js("new URLSearchParams(window.location.search).get('e2eRoute')")
 
 /**
- *: process-lifetime counters for the web Coil singleton, surfaced in
+ * process-lifetime counters for the web Coil singleton, surfaced in
  * the WebDiagnostics pane as the load-bearing `COIL_STATS:` / `COIL_CACHE:`
  * lines (see that pane's strings-contract note) and read by the long-session
  * soak lane (tools/e2e/web-soak.mjs). Deliberately dumb totals — no reset, no
@@ -428,7 +428,7 @@ internal object CoilStatsEventListener : EventListener() {
  * ImageLoader.Builder.build() uses when no cache is supplied — so eviction
  * bounds, weak-reference behavior, and cache keys are all unchanged; only the
  * lookup outcome is observed. initialMaxSize is @ExperimentalCoilApi in the
- * interface (the one opt-in this wave needs; a decorator must implement it).
+ * interface (the one opt-in for now needs; a decorator must implement it).
  */
 @OptIn(ExperimentalCoilApi::class)
 internal class CountingMemoryCache(private val delegate: MemoryCache) : MemoryCache by delegate {

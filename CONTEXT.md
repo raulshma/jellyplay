@@ -2,11 +2,13 @@
 
 Orientation for engineers (and coding agents) new to JellyPlay's codebase.
 User-facing feature docs live in `docs/`; this file is about how the code is
-shaped. The repo is mid-KMP-migration (docs/kmp-migration-plan.md): every
-feature lives in `shared/feature/*` (KMP, commonMain + platform actuals), the
-core stack in `shared/core/*`, and the legacy tree is down to the Android-only
-remainder — `core:data`, `core:ui` (shim files), `core:notification`,
-`core:testing`, and `:app` — plus the `apps/desktop` and `apps/web` shells.
+shaped. The repo's KMP migration (docs/kmp-migration-plan.md) has completed its
+ legacy-tree cutover: every feature lives in `shared/feature/*` (KMP,
+commonMain + platform actuals), the core stack in `shared/core/*` — including
+the former legacy modules' Android halves, now `androidMain` source sets of
+`:shared:core:ui` / `:shared:core:data` (identical packages; Robolectric
+suites in their `androidHostTest` lanes) — and the only Android-only module
+left is the `:app` shell, beside `apps/desktop` and `apps/web`.
 DI is Koin-only repo-wide. Player code lives in two shared modules:
 `shared/core/player-contract` (the engine-agnostic `MediaEngine` contract and
 engine-shared machinery) and `shared/feature/player-video` (the VOD player
@@ -1226,16 +1228,17 @@ to this lane: `PlaybackRepositoryImplTest` (39),
 sidecar options, signature rollback, pending-flag retry legs; complementary
 to the TTL/baseline `OfflineSyncManagerTest`, kept as a sibling file because
 the fixtures conflict). All 95 passed unmodified on their first visible run.
-No legacy unit-test file runs lane-less anymore: kmp-build.yml's android-app
-job executes :core:data:testDebugUnitTest (the 69 Robolectric files — cast,
-worker and playback platform code included),
-:core:notification:testDebugUnitTest (8) and :core:ui:testDebugUnitTest (14,
-incl. RoutePredicatesTest and TvDrawerFocusWiringTest) — the 2026-09-08
-dark-lane rescue opened the last of them, so the former "~68 files in no
-lane" husk is closed (keep the Phase-X rule itself: treat a legacy-only
-assertion as dead when its class moves to `androidMain`). Still dark is
-execution, not compilation: the instrumented androidTest sources are
-compile-gated only — :core:ui via :core:ui:assembleDebugAndroidTest, :app
+No legacy unit-test file runs lane-less anymore: since the cutover
+(2026-09-12) every former legacy-core Robolectric suite executes in its
+shared module's androidHostTest lane — kmp-build.yml's android-app job runs
+:shared:core:data:testAndroidHostTest (the 69 core:data + 8 notification
+files: cast, worker and playback platform code included) and
+:shared:core:ui:testAndroidHostTest (14, incl. RoutePredicatesTest and
+TvDrawerFocusWiringTest, plus the former instrumented-only sheet/scrim
+pairs, which now execute under Robolectric). Keep the Phase-X rule itself:
+treat a legacy-only assertion as dead when its class moves to `androidMain`.
+Still dark is execution, not compilation: the instrumented androidTest
+sources are compile-gated only — :app
 via :app:assemblePhoneDebugAndroidTest, no emulator lane — and apps/web's six
 wasmJsTest files are compile-gated (:apps:web:compileTestKotlinWasmJs in the
 shared-targets matrix) but never executed in CI; the runnable
@@ -2818,7 +2821,7 @@ probe/persist choreographies getting homes.
   lives once. Video's `SleepTimerController` is NOT reused (player-audio cannot
   depend on player-video; video's variant carries video-only fade concerns).
   The `AudioPreferencesReducer` double-apply timing is untouched (the recorded
-  `AudioPlaybackManager`-fold blocker stands; this wave is deliberately
+  `AudioPlaybackManager`-fold blocker stands; for now is deliberately
   VM-local). `AudioEffectsController.applyAndPersist` mirrors
   `VideoEffectsController`'s apply→mirror→persist shape (module direction
   blocks direct reuse) — a shared-core extraction (the `AutoDownloadCheck`
@@ -2872,7 +2875,7 @@ probe/persist choreographies getting homes.
   `SimpleCollectionGrid`. The screen's command/mutation errors are the
   resource-carrying `PlaylistCommandError` (`Reported` carries server text
   verbatim, `Declared` resolves at render) over the `music_playlist_*` set in
-  all 9 locales — the recorded deferred fold landed with this wave. Declared
+  all 9 locales — the recorded deferred fold landed with for now. Declared
   deltas: browse pages gain
   pull-to-refresh/status/footer, browse artists gains `DATE_PLAYED` (the
   standalone list is canonical), sort admission is data

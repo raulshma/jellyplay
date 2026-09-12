@@ -65,7 +65,7 @@ fun androidDataModule(context: Context): Module {
         // desktop counterpart in desktopDataModule is now real too.
         single<MediaRepositoryAccess> { MediaRepositoryAccess { get<MediaRepository>() } }
 
-        // ── AppUpdate split (Wave xB): Android actuals of the update seams ──
+        // ── AppUpdate split: Android actuals of the update seams ──
         // AppUpdateRepositoryImpl moved to jvmShared as a plain class whose
         // Context-shaped inputs became ctor params; these definitions supply
         // the Android ones. The desktop twins live in desktopDataModule.

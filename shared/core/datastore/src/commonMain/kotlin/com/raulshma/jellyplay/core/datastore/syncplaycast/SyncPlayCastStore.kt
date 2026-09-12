@@ -159,28 +159,6 @@ class SyncPlayCastStore constructor(
     }
 
     /**
-     * Restore-backup participation: writes the SyncPlay + casting + DVR keys
-     * owned by this store from a decoded [UserPreferences], mirroring the
-     * facade's restore body exactly (including the nullable
-     * [Keys.PREFERRED_RENDERER] guard).
-     */
-    internal suspend fun restorePreferences(
-        userPreferences: com.raulshma.jellyplay.core.model.legacy.UserPreferences,
-    ) {
-        dataStore.edit { prefs ->
-            prefs[Keys.SYNC_PLAY_JOIN_BEHAVIOR] = userPreferences.syncPlayJoinBehavior.name
-            prefs[Keys.SYNC_PLAY_TOLERANCE_MS] = userPreferences.syncPlayToleranceMs
-            prefs[Keys.SYNC_PLAY_AUTO_ACCEPT_INVITES] = userPreferences.syncPlayAutoAcceptInvites
-            prefs[Keys.DEFAULT_CASTING_STRATEGY] = userPreferences.defaultCastingStrategy.name
-            prefs[Keys.BACKGROUND_CASTING_ENABLED] = userPreferences.backgroundCastingEnabled
-            userPreferences.preferredRenderer?.let { prefs[Keys.PREFERRED_RENDERER] = it }
-            prefs[Keys.DVR_PRE_PADDING_MINUTES] = userPreferences.dvrPrePaddingMinutes
-            prefs[Keys.DVR_POST_PADDING_MINUTES] = userPreferences.dvrPostPaddingMinutes
-            prefs[Keys.DVR_RECORDING_QUALITY] = userPreferences.dvrRecordingQuality
-        }
-    }
-
-    /**
      * Faithful inverse of [read]: writes every field of [slice] back to the
      * DataStore using the same encoding as [restorePreferences] (including the
      * nullable [Keys.PREFERRED_RENDERER] guard).

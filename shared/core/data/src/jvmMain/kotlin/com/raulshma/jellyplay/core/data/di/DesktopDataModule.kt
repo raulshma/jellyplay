@@ -64,7 +64,7 @@ fun desktopDataModule(dataDir: Path): Module {
     // possibly as early as single construction, so the flag must be set when
     // the module function runs. Desktop defaults to debug logging on unless
     // `jellyplay.debug=false` is set on the JVM command line (desktop app
-    // builds arrive at ; jvmTest smoke tests get verbose logs).
+    // builds arrive at;  jvmTest smoke tests get verbose logs).
     DataBuildFlags.debugBuild = System.getProperty("jellyplay.debug")?.toBoolean() ?: true
 
     return module {
@@ -257,7 +257,7 @@ fun desktopDataModule(dataDir: Path): Module {
             )
         }
 
-        // ── AppUpdate split (Wave xB): the desktop update-check actual ──────
+        // ── AppUpdate split: the desktop update-check actual ──────
         // The repository resolves (the About screen's "Check for updates" row
         // calls it through DesktopAppRoot), but desktop has NO self-update: the
         // version sentinel below beats every real release tag, so

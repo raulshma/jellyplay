@@ -324,35 +324,6 @@ class AppearanceStore constructor(
     }
 
     /**
-     * Restore-backup participation: writes the appearance keys owned by this
-     * store from a decoded [UserPreferences]. The facade calls this (and every
-     * other store's hook) instead of writing these keys itself.
-     *
-     * Mirrors the legacy facade behaviour exactly: the mutually-exclusive
-     * accent-theme toggles, font scale, date format, color-blind/hand mode and
-     * scheduled-theme keys are not written back (the projection reads them
-     * straight from their stored slots).
-     */
-    internal suspend fun restorePreferences(
-        userPreferences: com.raulshma.jellyplay.core.model.legacy.UserPreferences,
-    ) {
-        dataStore.edit { it ->
-            it[Keys.DYNAMIC_THEMING] = userPreferences.dynamicTheming
-            it[Keys.THEME_MODE] = userPreferences.themeMode.name
-            it[Keys.CONTRAST_LEVEL] = userPreferences.contrastLevel.name
-            it[Keys.OLED_MODE] = userPreferences.oledMode
-            it[Keys.ACCENT_COLOR_SWATCH] = userPreferences.accentColorSwatch
-            it[Keys.COLOR_STYLE] = userPreferences.colorStyle.name
-            it[Keys.PERFORMANCE_MODE] = userPreferences.performanceMode
-            it[Keys.SHOW_ADVANCED_SETTINGS] = userPreferences.showAdvancedSettings
-            it[Keys.REDUCE_MOTION_ENABLED] = userPreferences.reduceMotionEnabled
-            it[Keys.BLUE_LIGHT_FILTER_ENABLED] = userPreferences.blueLightFilterEnabled
-            it[Keys.BLUE_LIGHT_FILTER_STRENGTH] = userPreferences.blueLightFilterStrength
-            it[Keys.BACKDROP_THEME_MUSIC_ENABLED] = userPreferences.backdropThemeMusicEnabled
-        }
-    }
-
-    /**
      * Faithful inverse of [read]: writes every field of [slice] back to the
      * DataStore using the same encoding as [restorePreferences], plus the gap
      * keys [restorePreferences] omits (the theme-variant + accent keys,

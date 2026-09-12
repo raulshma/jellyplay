@@ -245,31 +245,6 @@ class PlayerEngineStore constructor(
     }
 
     /**
-     * Restore-backup participation: writes the three JSON-encoded engine
-     * configs owned by this store from a decoded [UserPreferences], mirroring
-     * the facade's `encodeDefaultsJson` round-trips exactly. The per-item
-     * recall maps are runtime state and are not restored here (facade rule).
-     */
-    internal suspend fun restorePreferences(
-        userPreferences: com.raulshma.jellyplay.core.model.legacy.UserPreferences,
-    ) {
-        dataStore.edit { prefs ->
-            prefs[Keys.MPV_CONFIG] = PreferenceCodec.encodeDefaultsJson.encodeToString(
-                kotlinx.serialization.serializer<MpvEngineConfig>(),
-                userPreferences.mpvConfig,
-            )
-            prefs[Keys.LIBVLC_CONFIG] = PreferenceCodec.encodeDefaultsJson.encodeToString(
-                kotlinx.serialization.serializer<LibVlcEngineConfig>(),
-                userPreferences.libVlcConfig,
-            )
-            prefs[Keys.EXO_CONFIG] = PreferenceCodec.encodeDefaultsJson.encodeToString(
-                kotlinx.serialization.serializer<ExoPlayerEngineConfig>(),
-                userPreferences.exoPlayerConfig,
-            )
-        }
-    }
-
-    /**
      * Faithful inverse of [read]: writes every field of [slice] back to the
      * DataStore. The three engine configs use the `encodeDefaultsJson` +
      * serializer round-trip from [restorePreferences]; the two per-item maps use
