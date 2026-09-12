@@ -1,0 +1,20 @@
+<resources>
+    <!-- Book reader (shared/feature:player-book) -->
+    <string name="book_reader_title_fallback">Book</string>
+    <string name="book_reader_page_indicator">Page %1$d of %2$d</string>
+    <string name="book_reader_settings">Reading settings</string>
+    <string name="book_reader_direction_ltr">Left to right</string>
+    <string name="book_reader_direction_rtl">Right to left</string>
+    <string name="book_reader_error_cannot_open">Cannot open this book</string>
+    <string name="book_reader_error_unsupported">Unsupported book format</string>
+    <string name="book_reader_loading">Preparing your book…</string>
+    <string name="book_reader_preparing_locations">Preparing reading locations…</string>
+    <string name="book_reader_downloading_viewer">Downloading viewer components %1$d%%</string>
+    <string name="book_reader_percent">%1$d%% read</string>
+    <string name="book_reader_theme">Theme</string>
+    <string name="book_reader_theme_dark">Dark</string>
+    <string name="book_reader_theme_sepia">Sepia</string>
+    <string name="book_reader_theme_light">Light</string>
+    <string name="book_reader_font_size">Font size</string>
+    <string name="book_reader_toc">Table of contents</string>
+</resources>

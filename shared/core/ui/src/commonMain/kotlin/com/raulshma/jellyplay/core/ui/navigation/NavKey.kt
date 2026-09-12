@@ -209,6 +209,11 @@ sealed class Route : NavKey {
         override val isPlayer = true
     }
 
+    @Serializable data class BookReader(val itemId: String) : Route() {
+        override val isFullScreen = true
+        override val isPlayer = true
+    }
+
     /**
      * Full-screen remote-control overlay for an active "Play On" (Jellyfin
      * remote session) cast. Reached by tapping the persistent [PlayOnMiniBar].

@@ -26,6 +26,9 @@
     <!-- ── Primary action button labels ─────────────────────────────────── -->
     <string name="detail_play_play">Lire</string>
     <string name="detail_play_resume">Reprendre</string>
+    <string name="detail_read">Lire</string>
+    <string name="detail_continue_page">Continuer — page %1$d</string>
+    <string name="detail_continue_percent">Continuer — %1$d %</string>
     <string name="detail_play_finding_episode">Recherche de l\'épisode</string>
     <string name="detail_play_no_episodes_available">Aucun épisode disponible</string>
     <string name="detail_play_no_episodes">Aucun épisode</string>

@@ -278,6 +278,7 @@ private fun PlaybackOutboxEntry.eventTypeLabel(): String = when (eventType) {
     PlaybackOutboxEventType.UNPLAYED -> stringResource(Res.string.sync_event_unplayed)
     PlaybackOutboxEventType.FAVORITE -> stringResource(Res.string.sync_event_favorite)
     PlaybackOutboxEventType.UNFAVORITE -> stringResource(Res.string.sync_event_unfavorite)
+    PlaybackOutboxEventType.BOOK_PROGRESS -> stringResource(Res.string.sync_event_progress)
 }
 
 /**

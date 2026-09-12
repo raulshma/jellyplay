@@ -387,11 +387,18 @@ class PlaybackOutboxDrainerImpl(
          */
         private const val MAX_INTENT_RETRIES = 10
 
-        /** START/PROGRESS/STOP — position telemetry, superseded by a played flip. */
+        /**
+         * Position telemetry, superseded by a played flip. BOOK_PROGRESS rides
+         * with the session trio: a stale page position is as harmless as a
+         * stale tick, and — since Jellyfin never auto-marks a book played — a
+         * staged book position is the drain's only surfacing for the derived
+         * watched-flip pass.
+         */
         private val TELEMETRY_EVENT_TYPES = setOf(
             PlaybackOutboxEventType.START,
             PlaybackOutboxEventType.PROGRESS,
             PlaybackOutboxEventType.STOP,
+            PlaybackOutboxEventType.BOOK_PROGRESS,
         )
 
         /** User-driven state intents — carry their own large retry budget. */

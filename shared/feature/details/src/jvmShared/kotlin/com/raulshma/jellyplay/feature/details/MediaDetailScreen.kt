@@ -91,6 +91,8 @@ fun MediaDetailScreen(
     itemId: String,
     onPlayClick: (itemId: String, mediaSourceId: String?, startPosition: Long, subtitleStreamIndex: Int?, audioStreamIndex: Int?) -> Unit,
     onAudioClick: (itemId: String) -> Unit,
+    /** Open the book reader for a BOOK item (details screen Read button). */
+    onReadClick: (itemId: String) -> Unit = {},
     onItemClick: (itemId: String) -> Unit,
     onPersonClick: (personId: String) -> Unit,
     onNavigateToSeries: (seriesId: String) -> Unit,
@@ -486,7 +488,7 @@ fun MediaDetailScreen(
                     )
                 }
 
-                val playbackCallbacks = remember(viewModel, onPlayClick, onAudioClick, itemId) {
+                val playbackCallbacks = remember(viewModel, onPlayClick, onAudioClick, onReadClick, itemId) {
                     PlaybackCallbacks(
                         onPlayClick = { playItemId: String, sourceId: String?, start: Long ->
                             // Stream selection (local-origin subtitle index when offline)
@@ -533,6 +535,7 @@ fun MediaDetailScreen(
                             onPlayClick(extra.id, null, 0L, null, null)
                         },
                         onAudioClick = { onAudioClick(itemId) },
+                        onReadClick = { onReadClick(itemId) },
                         onPlayAlbumTrack = { index: Int -> viewModel.playAlbum(index) },
                         onSubtitleSelect = { idx: Int? -> viewModel.selectSubtitle(idx) },
                         onAudioSelect = { idx: Int? -> viewModel.selectAudio(idx) },

@@ -65,7 +65,15 @@ class DownloadStorageLayout(
         container: String?,
     ): ResolvedDownloadPath {
         val isAudioType = mediaType == MediaType.AUDIO.name || mediaType == MediaType.MUSIC.name
-        val dirType = if (isAudioType) Environment.DIRECTORY_MUSIC else Environment.DIRECTORY_MOVIES
+        val isBookType = mediaType == MediaType.BOOK.name
+        // Books land next to the reader's own container (app-private), not a
+        // media-scanned public collection — DIRECTORY_DOCUMENTS keeps them out
+        // of Movies/Music while still scoping the external roots per app.
+        val dirType = when {
+            isBookType -> Environment.DIRECTORY_DOCUMENTS
+            isAudioType -> Environment.DIRECTORY_MUSIC
+            else -> Environment.DIRECTORY_MOVIES
+        }
         // "INTERNAL" → filesDir (app-private, never media-scanned).
         // "EXTERNAL" / "EXTERNAL_2" / "EXTERNAL_3" / ... → the Nth app-private
         // external root from Context.getExternalFilesDirs(dirType) (plural).
@@ -77,11 +85,14 @@ class DownloadStorageLayout(
         // mounts surface to the UI without reworking the download stack onto
         // content:// URIs.
         val pref = StorageLocationPref(storageLocationPref)
+        val internalSubdir = when {
+            isBookType -> "downloads/books"
+            isAudioType -> "downloads/music"
+            else -> "downloads"
+        }
         val baseDir = when {
-            pref.isInternal && !isAudioType -> File(context.filesDir, "downloads")
-            pref.isInternal && isAudioType -> File(context.filesDir, "downloads/music")
-            else -> externalRootForPref(pref, dirType)
-                ?: File(context.filesDir, if (isAudioType) "downloads/music" else "downloads")
+            pref.isInternal -> File(context.filesDir, internalSubdir)
+            else -> externalRootForPref(pref, dirType) ?: File(context.filesDir, internalSubdir)
         }
         if (!baseDir.exists()) baseDir.mkdirs()
 
@@ -90,7 +101,7 @@ class DownloadStorageLayout(
         }
 
         val safeName = sanitizeName(name)
-        val extension = deriveExtension(container, isAudioType)
+        val extension = deriveExtension(container, isAudioType, isBookType)
         val file = File(baseDir, "${safeName}_${idHint}.$extension")
         return ResolvedDownloadPath(
             baseDir = baseDir,
@@ -190,11 +201,11 @@ class DownloadStorageLayout(
     /**
      * File extension for the download. Delegates to the shared contract
      * companion (single rule across platforms). Falls back to the legacy
-     * hardcoded extension for audio/video when the container is missing or
-     * unsafe (path-traversal / weird chars).
+     * hardcoded extension for audio/video, and to epub for book types, when
+     * the container is missing or unsafe (path-traversal / weird chars).
      */
-    internal fun deriveExtension(container: String?, isAudioType: Boolean): String =
-        DownloadStorageLayoutContract.deriveExtension(container, isAudioType)
+    internal fun deriveExtension(container: String?, isAudioType: Boolean, isBookType: Boolean = false): String =
+        DownloadStorageLayoutContract.deriveExtension(container, isAudioType, isBookType)
 
     /**
      * True iff [dir] has at least [DownloadStorageLayoutContract.MIN_FREE_BYTES]

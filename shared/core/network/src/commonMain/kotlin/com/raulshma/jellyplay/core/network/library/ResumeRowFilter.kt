@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.network.library
 
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.MediaType
 
 /**
  * Resume rows the user can actually continue — the client-side half of the
@@ -23,5 +24,9 @@ import com.raulshma.jellyplay.core.model.MediaItem
  * shrinking the gap. Over-fetching to compensate was considered and
  * rejected: the pre-existing parental-rating filter trims post-limit the
  * same way, so the row already accepts under-fill there.
+ *
+ * BOOK rows are excluded outright: books get their own Continue-Reading
+ * surface (later work) and must not pollute the video resume row.
  */
-fun List<MediaItem>.resumableOnly(): List<MediaItem> = filter { !it.isPlayed }
+fun List<MediaItem>.resumableOnly(): List<MediaItem> =
+    filter { !it.isPlayed && it.mediaType != MediaType.BOOK }

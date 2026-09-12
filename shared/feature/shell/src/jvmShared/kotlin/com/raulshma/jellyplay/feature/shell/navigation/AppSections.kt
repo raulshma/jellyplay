@@ -22,6 +22,7 @@ import com.raulshma.jellyplay.feature.music.navigation.musicSection
 import com.raulshma.jellyplay.feature.newsletter.navigation.newsletterSection
 import com.raulshma.jellyplay.feature.onboarding.navigation.onboardingSection
 import com.raulshma.jellyplay.feature.player.audio.navigation.audioPlayerSection
+import com.raulshma.jellyplay.feature.book.navigation.bookReaderSection
 import com.raulshma.jellyplay.feature.requests.navigation.requestsSection
 import com.raulshma.jellyplay.feature.search.navigation.searchSection
 import com.raulshma.jellyplay.feature.settings.navigation.settingsSection
@@ -74,6 +75,7 @@ fun EntryProviderScope<NavKey>.appSections(
     detailsSection(navigator)
     editorSection(navigator)
     audioPlayerSection(navigator)
+    bookReaderSection(navigator)
     downloadsSection(navigator)
     authSection(navigator) { navigator.goBack() }
     settingsSection(

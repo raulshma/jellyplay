@@ -126,6 +126,19 @@ class PlaybackApiClientImpl @Inject constructor(
         )
     }
 
+    override suspend fun reportBookProgress(itemId: String, positionTicks: Long): Result<Unit> =
+        engine.apiResultWithRetry {
+            // Books never open a playback session; the session-less book
+            // endpoint takes the position as a query parameter. Raw (not the
+            // SDK's playStateApi): jellyfin-api 1.8.12 has no typed binding
+            // for /Users/{userId}/PlayingItems/{itemId}/Progress.
+            val userId = engine.requireUserId()
+            rawRequester.postStatusOnly(
+                path = "/Users/$userId/PlayingItems/$itemId/Progress?positionTicks=$positionTicks",
+                failureMessage = "Report book progress failed",
+            )
+        }
+
     override fun getStreamUrl(
         itemId: String,
         mediaSourceId: String,

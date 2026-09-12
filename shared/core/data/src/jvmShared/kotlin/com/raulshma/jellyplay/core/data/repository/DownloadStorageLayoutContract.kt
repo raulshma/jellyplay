@@ -52,6 +52,14 @@ interface DownloadStorageLayoutContract {
         private val FILENAME_CONTAINER_REGEX = Regex("[A-Za-z0-9]{2,8}")
 
         /**
+         * Book containers the reader accepts (see `BookFormat` in core/model).
+         * The container string arrives from the item's wire MediaSource; books
+         * are listed here so a blank/unsafe container still falls back to a
+         * book extension instead of mp3/mp4.
+         */
+        private val BOOK_CONTAINERS = setOf("epub", "pdf", "cbz", "cbr", "cb7", "cbt", "mobi", "azw3")
+
+        /**
          * The download display name with characters that are unsafe on the local
          * filesystem (or in a URI) replaced with `_`. Shared by every platform
          * actual so filenames match across platforms for the same inputs.
@@ -64,14 +72,19 @@ interface DownloadStorageLayoutContract {
          * reported by the Jellyfin MediaSource so the on-disk extension reflects
          * the real bytes — ExoPlayer selects its extractor from the URI extension
          * and hangs silently when the extension lies (e.g. an MKV stream saved
-         * as `.mp4`). Falls back to the legacy hardcoded extension for
-         * audio/video when the container is missing or unsafe (path-traversal /
-         * weird chars).
+         * as `.mp4`). For book types the container must be a known book
+         * container ([BOOK_CONTAINERS] — the reader paginates by extension);
+         * anything missing/unsafe/unknown falls back to epub (audio/video keep
+         * the legacy hardcoded fallbacks).
          */
-        fun deriveExtension(container: String?, isAudioType: Boolean): String =
-            container
+        fun deriveExtension(container: String?, isAudioType: Boolean, isBookType: Boolean = false): String {
+            val safe = container
                 ?.takeIf { it.isNotBlank() && FILENAME_CONTAINER_REGEX.matches(it) }
-                ?: if (isAudioType) "mp3" else "mp4"
+            if (isBookType) {
+                return safe?.lowercase()?.takeIf { it in BOOK_CONTAINERS } ?: "epub"
+            }
+            return safe ?: if (isAudioType) "mp3" else "mp4"
+        }
 
         /** True iff [availableBytes] clears the [MIN_FREE_BYTES] floor. */
         fun hasMinimumFreeSpace(availableBytes: Long): Boolean =

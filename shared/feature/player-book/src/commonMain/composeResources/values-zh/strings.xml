@@ -1,0 +1,19 @@
+<resources>
+    <string name="book_reader_title_fallback">图书</string>
+    <string name="book_reader_page_indicator">第 %1$d 页，共 %2$d 页</string>
+    <string name="book_reader_settings">阅读设置</string>
+    <string name="book_reader_direction_ltr">从左到右</string>
+    <string name="book_reader_direction_rtl">从右到左</string>
+    <string name="book_reader_error_cannot_open">无法打开此图书</string>
+    <string name="book_reader_error_unsupported">不支持的图书格式</string>
+    <string name="book_reader_loading">正在准备图书…</string>
+    <string name="book_reader_preparing_locations">正在准备阅读位置…</string>
+    <string name="book_reader_downloading_viewer">正在下载查看器组件 %1$d%%</string>
+    <string name="book_reader_percent">已读 %1$d%%</string>
+    <string name="book_reader_theme">主题</string>
+    <string name="book_reader_theme_dark">深色</string>
+    <string name="book_reader_theme_sepia">复古</string>
+    <string name="book_reader_theme_light">浅色</string>
+    <string name="book_reader_font_size">字号</string>
+    <string name="book_reader_toc">目录</string>
+</resources>

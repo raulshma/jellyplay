@@ -7,6 +7,8 @@ import com.raulshma.jellyplay.core.ui.generated.resources.core_media_album
 import com.raulshma.jellyplay.core.ui.generated.resources.core_media_album_plural
 import com.raulshma.jellyplay.core.ui.generated.resources.core_media_artist
 import com.raulshma.jellyplay.core.ui.generated.resources.core_media_artist_plural
+import com.raulshma.jellyplay.core.ui.generated.resources.core_media_book
+import com.raulshma.jellyplay.core.ui.generated.resources.core_media_book_plural
 import com.raulshma.jellyplay.core.ui.generated.resources.core_media_channel
 import com.raulshma.jellyplay.core.ui.generated.resources.core_media_channel_plural
 import com.raulshma.jellyplay.core.ui.generated.resources.core_media_collection
@@ -62,6 +64,7 @@ fun MediaType.mediaTypeDisplayName(): String = stringResource(
         MediaType.PHOTO_FOLDER -> Res.string.core_media_photo_album
         MediaType.LIVE_TV -> Res.string.core_media_live_tv
         MediaType.CHANNEL -> Res.string.core_media_channel
+        MediaType.BOOK -> Res.string.core_media_book
         MediaType.UNKNOWN -> Res.string.core_media_unknown
     },
 )
@@ -83,6 +86,7 @@ fun MediaType.mediaTypeDisplayNamePlural(): String = stringResource(
         MediaType.PHOTO_FOLDER -> Res.string.core_media_photo_album_plural
         MediaType.LIVE_TV -> Res.string.core_media_live_tv_plural
         MediaType.CHANNEL -> Res.string.core_media_channel_plural
+        MediaType.BOOK -> Res.string.core_media_book_plural
         MediaType.UNKNOWN -> Res.string.core_media_unknown_plural
     },
 )

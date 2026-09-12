@@ -48,6 +48,8 @@
     <string name="core_media_album">앨범</string>
     <string name="core_media_artist">아티스트</string>
     <string name="core_media_music_video">뮤직 비디오</string>
+    <string name="core_media_book">책</string>
+
     <string name="core_media_collection">컬렉션</string>
     <string name="core_media_photo">사진</string>
     <string name="core_media_photo_album">사진 앨범</string>
@@ -64,6 +66,8 @@
     <string name="core_media_album_plural">앨범</string>
     <string name="core_media_artist_plural">아티스트</string>
     <string name="core_media_music_video_plural">뮤직 비디오</string>
+    <string name="core_media_book_plural">책</string>
+
     <string name="core_media_collection_plural">컬렉션</string>
     <string name="core_media_photo_plural">사진</string>
     <string name="core_media_photo_album_plural">사진 앨범</string>

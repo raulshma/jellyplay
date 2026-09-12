@@ -26,6 +26,9 @@
     <!-- ── Primary action button labels ─────────────────────────────────── -->
     <string name="detail_play_play">播放</string>
     <string name="detail_play_resume">继续播放</string>
+    <string name="detail_read">阅读</string>
+    <string name="detail_continue_page">继续阅读 — 第 %1$d 页</string>
+    <string name="detail_continue_percent">继续阅读 — %1$d%</string>
     <string name="detail_play_finding_episode">正在查找剧集</string>
     <string name="detail_play_no_episodes_available">没有可用的剧集</string>
     <string name="detail_play_no_episodes">没有剧集</string>

@@ -371,6 +371,7 @@ dependencies {
     implementation(project(":shared:feature:search"))
     implementation(project(":shared:feature:details"))
     implementation(project(":shared:feature:player-audio"))
+    implementation(project(":shared:feature:player-book"))
     implementation(project(":shared:feature:player-live"))
     implementation(project(":shared:feature:player-video"))
     implementation(project(":shared:feature:settings"))

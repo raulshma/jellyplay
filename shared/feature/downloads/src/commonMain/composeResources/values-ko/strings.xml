@@ -74,6 +74,7 @@
     <string name="downloads_filter_all">전체</string>
     <string name="downloads_filter_videos">동영상</string>
     <string name="downloads_filter_music">음악</string>
+    <string name="downloads_filter_books">책</string>
     <!-- Offline download resync -->
     <string name="downloads_resync">동기화</string>
     <string name="downloads_resync_media_changed">미디어 파일이 변경됨 — 재다운로드 필요</string>

@@ -365,6 +365,47 @@ class PlaybackOutboxRepositoryImplTest {
         assertEquals(PlaybackOutboxEventType.PROGRESS, entry.eventType)
     }
 
+    // ── BOOK_PROGRESS: reader page-position channel ───────────────────
+
+    @Test
+    fun `enqueueBookProgress coalesces multiple reports for same item into one`() = runTest {
+        repository.enqueueBookProgress("book-1", 10_000L)
+        repository.enqueueBookProgress("book-1", 20_000L)
+        repository.enqueueBookProgress("book-1", 30_000L)
+
+        val pending = repository.drain()
+
+        assertEquals(1, pending.size)
+        assertEquals(30_000L, pending[0].positionTicks)
+        assertEquals(PlaybackOutboxEventType.BOOK_PROGRESS, pending[0].eventType)
+        assertEquals(1, repository.count())
+    }
+
+    @Test
+    fun `enqueueBookProgress keeps separate entries for different items`() = runTest {
+        repository.enqueueBookProgress("book-1", 10_000L)
+        repository.enqueueBookProgress("book-2", 20_000L)
+
+        val pending = repository.drain()
+
+        assertEquals(2, pending.size)
+    }
+
+    @Test
+    fun `enqueueBookProgress does not coalesce with PROGRESS for the same item`() = runTest {
+        repository.enqueueProgress("item-1", "s1", 100L, false, PlayMethod.DIRECT_PLAY, null)
+        repository.enqueueBookProgress("item-1", 30_000L)
+
+        val pending = repository.drain()
+
+        // The two channels are independent — a book has no playback session,
+        // so a PROGRESS row must never swallow a page position (or vice versa).
+        assertEquals(2, pending.size)
+        val byType = pending.associateBy { it.eventType }
+        assertEquals(PlaybackOutboxEventType.PROGRESS, byType[PlaybackOutboxEventType.PROGRESS]?.eventType)
+        assertEquals(30_000L, byType[PlaybackOutboxEventType.BOOK_PROGRESS]?.positionTicks)
+    }
+
     /**
      * Controllable [TimeSource] — same shape as the fake in
      * LyricsRepositoryImplTest (core:data deliberately hosts no shared test

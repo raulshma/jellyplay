@@ -74,6 +74,7 @@
     <string name="downloads_filter_all">全部</string>
     <string name="downloads_filter_videos">视频</string>
     <string name="downloads_filter_music">音乐</string>
+    <string name="downloads_filter_books">图书</string>
     <!-- Offline download resync -->
     <string name="downloads_resync">同步</string>
     <string name="downloads_resync_media_changed">媒体文件已更改 — 需要重新下载</string>

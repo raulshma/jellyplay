@@ -58,41 +58,69 @@ class PlaybackOutboxRepositoryImpl constructor(
         isPaused: Boolean,
         playMethod: PlayMethod,
         mediaSourceId: String?,
+    ) = upsertCoalesced(
+        itemId = itemId,
+        eventType = PlaybackOutboxEventType.PROGRESS,
+        positionTicks = positionTicks,
+        sessionId = sessionId,
+        isPaused = isPaused,
+        playMethod = playMethod,
+        mediaSourceId = mediaSourceId,
+    )
+
+    override suspend fun enqueueBookProgress(itemId: String, positionTicks: Long) = upsertCoalesced(
+        itemId = itemId,
+        eventType = PlaybackOutboxEventType.BOOK_PROGRESS,
+        positionTicks = positionTicks,
+        // Books have no playback session; the session-shaped columns stay at
+        // their STOP-style placeholders.
+        sessionId = "",
+        isPaused = false,
+        playMethod = PlayMethod.DIRECT_PLAY,
+        mediaSourceId = null,
+    )
+
+    /**
+     * Coalesced telemetry upsert shared by the position channels (PROGRESS,
+     * BOOK_PROGRESS): a newer report supersedes the older one for this item —
+     * the existing row's id is reused so REPLACE lands in place, and
+     * createdAt is bumped so the entry keeps its drain ordering at the new
+     * capture time.
+     */
+    private suspend fun upsertCoalesced(
+        itemId: String,
+        eventType: PlaybackOutboxEventType,
+        positionTicks: Long,
+        sessionId: String,
+        isPaused: Boolean,
+        playMethod: PlayMethod,
+        mediaSourceId: String?,
     ) = withContext(Dispatchers.IO) {
         mutex.withLock {
             val now = nowMillis()
-            val existing = dao.getForItemByType(itemId, PlaybackOutboxEventType.PROGRESS.name)
-            if (existing != null) {
-                // Coalesce: a newer PROGRESS supersedes the older one for this
-                // item. Reuse the id so REPLACE lands in place; bump createdAt
-                // so the entry keeps its drain ordering at the new capture time.
-                dao.upsert(
-                    existing.copy(
-                        sessionId = sessionId,
-                        positionTicks = positionTicks,
-                        isPaused = isPaused,
-                        playMethod = playMethod.name,
-                        mediaSourceId = mediaSourceId,
-                        recordedAt = now,
-                        createdAt = now,
-                    )
-                )
-            } else {
-                dao.upsert(
-                    PlaybackOutboxEntity(
-                        id = UUID.randomUUID().toString(),
-                        itemId = itemId,
-                        eventType = PlaybackOutboxEventType.PROGRESS.name,
-                        sessionId = sessionId,
-                        positionTicks = positionTicks,
-                        isPaused = isPaused,
-                        playMethod = playMethod.name,
-                        mediaSourceId = mediaSourceId,
-                        recordedAt = now,
-                        createdAt = now,
-                    )
-                )
-            }
+            val existing = dao.getForItemByType(itemId, eventType.name)
+            dao.upsert(
+                existing?.copy(
+                    sessionId = sessionId,
+                    positionTicks = positionTicks,
+                    isPaused = isPaused,
+                    playMethod = playMethod.name,
+                    mediaSourceId = mediaSourceId,
+                    recordedAt = now,
+                    createdAt = now,
+                ) ?: PlaybackOutboxEntity(
+                    id = UUID.randomUUID().toString(),
+                    itemId = itemId,
+                    eventType = eventType.name,
+                    sessionId = sessionId,
+                    positionTicks = positionTicks,
+                    isPaused = isPaused,
+                    playMethod = playMethod.name,
+                    mediaSourceId = mediaSourceId,
+                    recordedAt = now,
+                    createdAt = now,
+                ),
+            )
         }
     }
 

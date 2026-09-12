@@ -134,6 +134,8 @@ internal data class PlaybackCallbacks(
     /** Play a special feature / extra (featurette, deleted scene, etc.) in the player. */
     val onPlayExtra: (MediaItem) -> Unit = {},
     val onAudioClick: () -> Unit = {},
+    /** Open the book reader for the current item (BOOK media type, readable format). */
+    val onReadClick: (itemId: String) -> Unit = {},
     val onPlayAlbumTrack: (Int) -> Unit = {},
     val onSubtitleSelect: (Int?) -> Unit = {},
     val onAudioSelect: (Int?) -> Unit = {},

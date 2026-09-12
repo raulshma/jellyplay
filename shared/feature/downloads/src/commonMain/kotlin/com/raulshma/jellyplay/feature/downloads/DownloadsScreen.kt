@@ -693,6 +693,7 @@ private fun DownloadItemRow(
                             com.raulshma.jellyplay.core.model.MediaType.AUDIO,
                             com.raulshma.jellyplay.core.model.MediaType.MUSIC,
                             com.raulshma.jellyplay.core.model.MediaType.ALBUM -> Tabler.Outline.Music
+                            com.raulshma.jellyplay.core.model.MediaType.BOOK -> Tabler.Outline.Book
                             else -> Tabler.Outline.Movie
                         },
                         contentDescription = null,

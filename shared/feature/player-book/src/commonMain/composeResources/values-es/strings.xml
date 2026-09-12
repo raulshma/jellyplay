@@ -1,0 +1,19 @@
+<resources>
+    <string name="book_reader_title_fallback">Libro</string>
+    <string name="book_reader_page_indicator">Página %1$d de %2$d</string>
+    <string name="book_reader_settings">Ajustes de lectura</string>
+    <string name="book_reader_direction_ltr">Izquierda a derecha</string>
+    <string name="book_reader_direction_rtl">Derecha a izquierda</string>
+    <string name="book_reader_error_cannot_open">No se puede abrir este libro</string>
+    <string name="book_reader_error_unsupported">Formato de libro no compatible</string>
+    <string name="book_reader_loading">Preparando tu libro…</string>
+    <string name="book_reader_preparing_locations">Preparando posiciones de lectura…</string>
+    <string name="book_reader_downloading_viewer">Descargando componentes del visor %1$d%%</string>
+    <string name="book_reader_percent">%1$d%% leído</string>
+    <string name="book_reader_theme">Tema</string>
+    <string name="book_reader_theme_dark">Oscuro</string>
+    <string name="book_reader_theme_sepia">Sepia</string>
+    <string name="book_reader_theme_light">Claro</string>
+    <string name="book_reader_font_size">Tamaño de fuente</string>
+    <string name="book_reader_toc">Tabla de contenidos</string>
+</resources>

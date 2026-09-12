@@ -74,6 +74,7 @@
     <string name="downloads_filter_all">すべて</string>
     <string name="downloads_filter_videos">動画</string>
     <string name="downloads_filter_music">音楽</string>
+    <string name="downloads_filter_books">ブック</string>
     <!-- Offline download resync -->
     <string name="downloads_resync">同期</string>
     <string name="downloads_resync_media_changed">メディアファイルが変更されました — 再ダウンロードが必要です</string>

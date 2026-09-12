@@ -7,7 +7,8 @@ import java.nio.file.Path
 /**
  * Desktop actual of the [DownloadStorageLayoutContract] (V3 downloads
  * conveyor): resolves downloads under the app's appdata dir
- * (`<dataDir>/downloads`, `<dataDir>/downloads/music` for audio — the same
+ * (`<dataDir>/downloads`, `<dataDir>/downloads/music` for audio,
+ * `<dataDir>/downloads/books` for books — the same
  * subtree names as the Android filesDir layout) via `java.nio.Path`, matching
  * the desktopDataModule's java.nio dataDir parameter.
  *
@@ -32,7 +33,15 @@ class DesktopDownloadStorageLayout(
         container: String?,
     ): ResolvedDownloadPath {
         val isAudioType = mediaType == MediaType.AUDIO.name || mediaType == MediaType.MUSIC.name
-        val baseDir = File(dataDir.toFile(), if (isAudioType) "downloads/music" else "downloads")
+        val isBookType = mediaType == MediaType.BOOK.name
+        val baseDir = File(
+            dataDir.toFile(),
+            when {
+                isBookType -> "downloads/books"
+                isAudioType -> "downloads/music"
+                else -> "downloads"
+            },
+        )
         if (!baseDir.exists()) baseDir.mkdirs()
 
         check(DownloadStorageLayoutContract.hasMinimumFreeSpace(baseDir.usableSpace)) {
@@ -40,7 +49,7 @@ class DesktopDownloadStorageLayout(
         }
 
         val safeName = DownloadStorageLayoutContract.sanitizeName(name)
-        val extension = DownloadStorageLayoutContract.deriveExtension(container, isAudioType)
+        val extension = DownloadStorageLayoutContract.deriveExtension(container, isAudioType, isBookType)
         val file = File(baseDir, "${safeName}_${idHint}.$extension")
         return ResolvedDownloadPath(
             baseDir = baseDir,

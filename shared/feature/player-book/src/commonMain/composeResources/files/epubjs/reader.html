@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<!--
+  JellyPlay EPUB reader shell. The three inject markers are replaced at load
+  time with the inlined jszip.min.js, epub.min.js and reader.js script bodies
+  (see EpubReaderHtml) — the resulting page is fully self-contained.
+-->
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            overflow: hidden;
+        }
+        #viewer { width: 100%; height: 100%; }
+    </style>
+    <!--JELLYPLAY-INJECT:jszip-->
+    <!--JELLYPLAY-INJECT:epub-->
+    <!--JELLYPLAY-INJECT:reader-->
+</head>
+<body>
+    <div id="viewer"></div>
+</body>
+</html>

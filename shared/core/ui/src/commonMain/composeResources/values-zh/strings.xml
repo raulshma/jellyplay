@@ -48,6 +48,8 @@
     <string name="core_media_album">专辑</string>
     <string name="core_media_artist">艺术家</string>
     <string name="core_media_music_video">音乐视频</string>
+    <string name="core_media_book">图书</string>
+
     <string name="core_media_collection">合集</string>
     <string name="core_media_photo">照片</string>
     <string name="core_media_photo_album">相册</string>
@@ -64,6 +66,8 @@
     <string name="core_media_album_plural">专辑</string>
     <string name="core_media_artist_plural">艺术家</string>
     <string name="core_media_music_video_plural">音乐视频</string>
+    <string name="core_media_book_plural">图书</string>
+
     <string name="core_media_collection_plural">合集</string>
     <string name="core_media_photo_plural">照片</string>
     <string name="core_media_photo_album_plural">相册</string>

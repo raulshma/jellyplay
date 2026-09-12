@@ -159,6 +159,9 @@ dependencies {
     // clicks open the now-playing screen.
     implementation(project(":shared:feature:player-audio"))
 
+    // …player-book, conveyor: the CBZ/PDF reader behind Route.BookReader.
+    implementation(project(":shared:feature:player-book"))
+
     // …player-video, the conveyor slice → playback LIVE on
     // Windows: the ViewModel/session cluster is commonMain and
     // desktop-resolvable (desktopPlayerVideoModule registers the VM + no-op
@@ -677,6 +680,17 @@ val generatePackagingIcons = tasks.register<GeneratePackagingIconsTask>("generat
 compose.desktop {
     application {
         mainClass = "com.raulshma.jellyplay.desktop.MainKt"
+
+        // KCEF (the desktop EPUB reader's Chromium host) needs the AWT
+        // module opens or CEF init fails with an accessibility error. Module
+        // access flags only — no heap/perf semantics (unlike the heap pins
+        // deliberately omitted above).
+        jvmArgs(
+            "--add-opens", "java.desktop/sun.awt=ALL-UNNAMED",
+            "--add-opens", "java.desktop/java.awt.peer=ALL-UNNAMED",
+            "--add-opens", "java.desktop/sun.lwawt=ALL-UNNAMED",
+            "--add-opens", "java.desktop/sun.lwawt.macosx=ALL-UNNAMED",
+        )
 
         // Deliberately NOT applied: the
         // suggested -Xms256m/-Xmx2g pins a heap ceiling BELOW the JVM default

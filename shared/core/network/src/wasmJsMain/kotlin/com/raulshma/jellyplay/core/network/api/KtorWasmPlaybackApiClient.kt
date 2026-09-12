@@ -135,6 +135,22 @@ class KtorWasmPlaybackApiClient(
         )
     }
 
+    override suspend fun reportBookProgress(itemId: String, positionTicks: Long): Result<Unit> =
+        apiResultWithRetry {
+            // Books never open a playback session; the session-less book
+            // endpoint takes the position as a query parameter (mirror of the
+            // JVM impl's raw postStatusOnly call).
+            val server = requireConnectedServer()
+            val userId = requireCurrentUser().id
+            postStatusOnly(
+                url = apiUrl(
+                    server.address,
+                    "/Users/$userId/PlayingItems/$itemId/Progress?positionTicks=$positionTicks",
+                ),
+                accessToken = currentToken(),
+            )
+        }
+
     // ── Stream / subtitle URL builders (pure; ported verbatim) ─────────────
 
     override fun getStreamUrl(

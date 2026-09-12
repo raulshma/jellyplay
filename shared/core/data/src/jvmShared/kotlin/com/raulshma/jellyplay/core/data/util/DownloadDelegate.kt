@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.pathExtension
 import com.raulshma.jellyplay.core.model.StreamType
 
 // V3 downloads conveyor: moved verbatim from the legacy :core:data shim
@@ -69,13 +70,22 @@ class DownloadDelegate(
         selectedSubtitleIndices: Set<Int>? = null,
     ): DownloadRequest? {
         val item = detail.item
-        val source = detail.mediaSources.firstOrNull() ?: return null
-        val streamUrl = playbackRepository.getStreamUrl(
-            itemId = item.id,
-            mediaSourceId = source.id,
-            maxBitrate = maxBitrate,
-        )
-        if (streamUrl.isBlank()) return null
+        // Books have no MediaSources at all — the transfer URL is the
+        // direct-download endpoint so the original file lands on disk
+        // byte-for-byte (the reader paginates the file itself). The fork must
+        // precede the source resolution or every real book no-ops here.
+        val isBook = item.mediaType == MediaType.BOOK
+        val source = detail.mediaSources.firstOrNull()
+        if (!isBook && source == null) return null
+        val downloadUrl = when {
+            isBook -> playbackRepository.getBookDownloadUrl(item.id)
+            else -> playbackRepository.getStreamUrl(
+                itemId = item.id,
+                mediaSourceId = source?.id ?: item.id,
+                maxBitrate = maxBitrate,
+            )
+        }
+        if (downloadUrl.isBlank()) return null
         val imageUrl = playbackRepository.getImageUrl(item.id, maxWidth = 300)
         val mediaType = when (item.mediaType) {
             MediaType.AUDIO, MediaType.MUSIC -> MediaType.AUDIO.name
@@ -85,14 +95,16 @@ class DownloadDelegate(
             mediaItemId = item.id,
             name = item.name,
             mediaType = mediaType,
-            mediaSourceId = source.id,
-            downloadUrl = streamUrl,
+            mediaSourceId = source?.id ?: item.id,
+            downloadUrl = downloadUrl,
             imageUrl = imageUrl,
             imageBlurHash = item.blurHashes.primary,
-            trickplayInfo = source.trickplayInfo,
-            mediaStreams = source.mediaStreams,
+            trickplayInfo = source?.trickplayInfo,
+            mediaStreams = source?.mediaStreams ?: emptyList(),
             detail = detail,
-            container = source.container,
+            container = source?.container
+                // Books: the extension rides the file Path (their only format carrier).
+                ?: detail.path?.pathExtension()?.ifBlank { null },
             selectedSubtitleIndices = selectedSubtitleIndices,
         )
     }

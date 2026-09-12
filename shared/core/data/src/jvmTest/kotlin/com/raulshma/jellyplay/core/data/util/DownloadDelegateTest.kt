@@ -362,6 +362,33 @@ class DownloadDelegateTest {
         assertNull(result)
     }
 
+    @Test
+    fun `prepareDownloadRequest uses the book download URL for BOOK items`() = runTest {
+        // Books have no streamable media source — the transfer URL must come
+        // from getBookDownloadUrl (the direct-download endpoint), never
+        // getStreamUrl.
+        coEvery { playbackRepository.getBookDownloadUrl("item-1") } returns "https://server/Items/item-1/Download?api_key=tok"
+        coEvery { playbackRepository.getImageUrl("item-1", "Primary", 300) } returns "https://img"
+        // Real server payload: books carry NO MediaSources — the format only
+        // rides detail.path. The fork must precede the source guard.
+        val detail = MediaDetail(
+            item = MediaItem(id = "item-1", name = "Test", mediaType = MediaType.BOOK),
+            mediaSources = emptyList(),
+            path = "/books/Some Comic.cbr",
+        )
+
+        val request = delegate.prepareDownloadRequest(detail)
+
+        assertNotNull(request)
+        assertEquals("https://server/Items/item-1/Download?api_key=tok", request.downloadUrl)
+        assertEquals(MediaType.BOOK.name, request.mediaType)
+        assertEquals("cbr", request.container)
+        assertEquals("item-1", request.mediaSourceId)
+        coVerify(exactly = 0) {
+            playbackRepository.getStreamUrl(any(), any(), any(), any(), any(), any())
+        }
+    }
+
     // --- helpers -------------------------------------------------------------
 
     private fun buildRequest(

@@ -360,6 +360,11 @@ class LibraryApiClientImpl @Inject constructor(
             mediaSources = mediaSources,
             externalUrls = externalUrls,
             providerIds = providerIds,
+            // Books have no MediaSources — path is their only format carrier;
+            // progress is denested from UserData for detail-only surfaces.
+            path = item.path,
+            playbackPositionTicks = item.userData?.playbackPositionTicks ?: 0L,
+            isPlayed = item.userData?.played == true,
         )
     }
 

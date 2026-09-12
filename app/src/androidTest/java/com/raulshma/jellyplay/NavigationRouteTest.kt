@@ -53,6 +53,7 @@ class NavigationRouteTest {
             audioStreamIndex = 1,
         ),
         Route.AudioPlayer("audio-001"),
+        Route.BookReader("book-001"),
         Route.PlayOnCompanion,
         Route.Ambient(imageUrl = "http://test.com/img.jpg", title = "Test Song", artist = "Artist"),
         Route.LiveTvChannelPlayer(

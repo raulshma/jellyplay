@@ -1,0 +1,19 @@
+<resources>
+    <string name="book_reader_title_fallback">ブック</string>
+    <string name="book_reader_page_indicator">%1$d / %2$d ページ</string>
+    <string name="book_reader_settings">読書設定</string>
+    <string name="book_reader_direction_ltr">左から右</string>
+    <string name="book_reader_direction_rtl">右から左</string>
+    <string name="book_reader_error_cannot_open">この本を開けません</string>
+    <string name="book_reader_error_unsupported">サポートされていない本の形式です</string>
+    <string name="book_reader_loading">本を準備しています…</string>
+    <string name="book_reader_preparing_locations">読書位置を準備しています…</string>
+    <string name="book_reader_downloading_viewer">ビューアー コンポーネントをダウンロード中 %1$d%%</string>
+    <string name="book_reader_percent">%1$d%% 読了</string>
+    <string name="book_reader_theme">テーマ</string>
+    <string name="book_reader_theme_dark">ダーク</string>
+    <string name="book_reader_theme_sepia">セピア</string>
+    <string name="book_reader_theme_light">ライト</string>
+    <string name="book_reader_font_size">文字サイズ</string>
+    <string name="book_reader_toc">目次</string>
+</resources>

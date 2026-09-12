@@ -74,6 +74,14 @@ class PlaybackUrlBuilderTest {
     }
 
     @Test
+    fun `book download url is the raw Download endpoint with api key`() {
+        assertEquals(
+            "$BASE/Items/item1/Download?api_key=$KEY",
+            buildBookDownloadUrl(BASE, KEY, "item1"),
+        )
+    }
+
+    @Test
     fun `trailing slash on the base url is trimmed`() {
         // Regression guard: the jvmShared impl once interpolated
         // activeBaseUrl raw, so a trailing-slash base used to
@@ -89,6 +97,10 @@ class PlaybackUrlBuilderTest {
         assertEquals(
             "$BASE/Videos/i/m/Subtitles/1/Stream.vtt?api_key=$KEY",
             resolveSubtitleDeliveryUrl("$BASE/", KEY, "/Videos/i/m/Subtitles/1/Stream.vtt"),
+        )
+        assertEquals(
+            "$BASE/Items/item1/Download?api_key=$KEY",
+            buildBookDownloadUrl("$BASE/", KEY, "item1"),
         )
     }
 

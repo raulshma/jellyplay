@@ -26,6 +26,9 @@
     <!-- ── Primary action button labels ─────────────────────────────────── -->
     <string name="detail_play_play">재생</string>
     <string name="detail_play_resume">이어보기</string>
+    <string name="detail_read">읽기</string>
+    <string name="detail_continue_page">이어 읽기 — %1$d쪽</string>
+    <string name="detail_continue_percent">이어 읽기 — %1$d%</string>
     <string name="detail_play_finding_episode">에피소드 찾는 중</string>
     <string name="detail_play_no_episodes_available">재생 가능한 에피소드 없음</string>
     <string name="detail_play_no_episodes">에피소드 없음</string>

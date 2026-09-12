@@ -33,6 +33,7 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.formatDurationFromTicks
 import com.raulshma.jellyplay.core.ui.image.MediaImage
+import com.raulshma.jellyplay.core.ui.model.mediaTypeDisplayName
 import com.raulshma.jellyplay.feature.newsletter.generated.resources.Res
 import com.raulshma.jellyplay.feature.newsletter.generated.resources.newsletter_recently_added
 import org.jetbrains.compose.resources.stringResource
@@ -128,7 +129,7 @@ fun NewsletterMediaCard(
                         .padding(horizontal = 5.dp, vertical = 2.dp),
                 ) {
                     Text(
-                        text = type.label,
+                        text = type.mediaTypeDisplayName(),
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
                         color = MaterialTheme.colorScheme.onPrimary,
                     )
@@ -254,21 +255,3 @@ fun NewsletterMediaCard(
         }
     }
 }
-
-internal val MediaType.label: String
-    get() = when (this) {
-        MediaType.MOVIE -> "Movie"
-        MediaType.SERIES -> "Series"
-        MediaType.EPISODE -> "Episode"
-        MediaType.MUSIC -> "Music"
-        MediaType.AUDIO -> "Audio"
-        MediaType.ALBUM -> "Album"
-        MediaType.ARTIST -> "Artist"
-        MediaType.MUSIC_VIDEO -> "Music Video"
-        MediaType.COLLECTION -> "Collection"
-        MediaType.PHOTO, MediaType.PHOTO_FOLDER -> "Photo"
-        MediaType.LIVE_TV -> "Live TV"
-        MediaType.CHANNEL -> "Channel"
-        MediaType.SEASON -> "Season"
-        MediaType.UNKNOWN -> ""
-    }

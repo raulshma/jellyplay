@@ -55,6 +55,8 @@
     <string name="core_media_album">Album</string>
     <string name="core_media_artist">Artiste</string>
     <string name="core_media_music_video">Vidéo musicale</string>
+    <string name="core_media_book">Livre</string>
+
     <string name="core_media_collection">Collection</string>
     <string name="core_media_photo">Photo</string>
     <string name="core_media_photo_album">Album photo</string>
@@ -71,6 +73,8 @@
     <string name="core_media_album_plural">Albums</string>
     <string name="core_media_artist_plural">Artistes</string>
     <string name="core_media_music_video_plural">Vidéos musicales</string>
+    <string name="core_media_book_plural">Livres</string>
+
     <string name="core_media_collection_plural">Collections</string>
     <string name="core_media_photo_plural">Photos</string>
     <string name="core_media_photo_album_plural">Albums photo</string>

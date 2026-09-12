@@ -30,18 +30,22 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.filled.Heart
+import com.composables.icons.tabler.outline.Book
 import com.composables.icons.tabler.outline.Eye
 import com.composables.icons.tabler.outline.EyeOff
 import com.composables.icons.tabler.outline.Heart
 import com.composables.icons.tabler.outline.PlayerPlay
 import com.composables.icons.tabler.outline.PlayerTrackNext
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.model.BookFormat
+import com.raulshma.jellyplay.core.model.BookProgressPolicy
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.isAudioType
 import com.raulshma.jellyplay.core.model.progressFraction
@@ -60,10 +64,15 @@ import com.raulshma.jellyplay.feature.details.generated.resources.detail_play_no
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_play_no_episodes_available
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_play_play
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_play_resume
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_continue_percent
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_continue_page
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_read
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_skip_available_both
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_skip_available_credits
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_skip_available_intro
 import org.jetbrains.compose.resources.stringResource
+
+import kotlin.math.roundToInt
 
 /**
  * Play / mark-watched / favorite buttons for the media-detail screen, in both a
@@ -89,6 +98,23 @@ internal fun DetailActionButtons(
     val item = detail.item
     val isAudio = item.mediaType.isAudioType
     val isAlbum = item.mediaType == MediaType.ALBUM
+    // Books fork before the audio/video playability ladder: a readable format
+    // (CBZ/CBR/PDF/EPUB) gets a Read button; anything else is download-only —
+    // the primary button is hidden and never dispatches Route.VideoPlayer.
+    val isBook = item.mediaType == MediaType.BOOK
+    val bookFormat = if (isBook) BookFormat.fromPath(detail.path) else null
+    val isReadableBook = bookFormat != null
+    // Resume decode by format through BookProgressPolicy (the single owner of
+    // the ticks↔page/percent encodings): paged books (CBZ/CBR/PDF) store
+    // 0-based page-position ticks → 1-based label; EPUB (reflowable) stores
+    // percent ticks → rounded percent, clamped 0..100.
+    val bookPage = item.playbackPositionTicks
+        ?.takeIf { it > 0 && bookFormat?.isReflowable != true }
+        ?.let { BookProgressPolicy.ticksToPage(it) + 1 }
+    val bookPercent = item.playbackPositionTicks
+        ?.takeIf { it > 0 && bookFormat?.isReflowable == true }
+        ?.let { (BookProgressPolicy.ticksToPercent(it) * 100).roundToInt().coerceIn(0, 100) }
+        ?.takeIf { it > 0 }
 
     val isSeriesOrEpisode = item.mediaType == MediaType.SERIES || item.mediaType == MediaType.EPISODE
     val isSeries = item.mediaType == MediaType.SERIES
@@ -105,7 +131,8 @@ internal fun DetailActionButtons(
     val hasNoEpisodes = isSeries && allSeasonsFetched && (allEpisodesEmpty || state.episodes.isEmpty())
     // A series with no episodes has no valid play target — never let the primary button
     // dispatch play on the series root item. The button already dims when this is false.
-    val canPlayPrimary = isAudio || !isSeries || target != null
+    // A book is playable only when its format is readable in-app (else download-only).
+    val canPlayPrimary = if (isBook) isReadableBook else (isAudio || !isSeries || target != null)
     val progress = if (target != null) {
         // Smart-play resume math: the position is the resolver's
         // startPositionTicks, not the episode's saved playbackPositionTicks.
@@ -115,6 +142,9 @@ internal fun DetailActionButtons(
     } else 0f
 
     val playLabel = when {
+        isReadableBook && bookPage != null -> stringResource(Res.string.detail_continue_page, bookPage)
+        isReadableBook && bookPercent != null -> stringResource(Res.string.detail_continue_percent, bookPercent)
+        isReadableBook -> stringResource(Res.string.detail_read)
         target != null -> target.label
         isResolvingSeriesTarget -> stringResource(Res.string.detail_play_finding_episode)
         hasNoEpisodes -> stringResource(Res.string.detail_play_no_episodes_available)
@@ -147,10 +177,12 @@ internal fun DetailActionButtons(
 
     // Shared click handler — identical for vertical and horizontal so the two
     // branches can never diverge in play-resolution logic.
-    val onPlay = remember(canPlayPrimary, isAlbum, isAudio, target, item, detail, callbacks, state.albumTracks) {
+    val onPlay = remember(canPlayPrimary, isBook, isAlbum, isAudio, target, item, detail, callbacks, state.albumTracks) {
         {
             if (!canPlayPrimary) return@remember
-            if (isAlbum && state.albumTracks.isNotEmpty()) {
+            if (isBook) {
+                callbacks.playback.onReadClick(item.id)
+            } else if (isAlbum && state.albumTracks.isNotEmpty()) {
                 callbacks.playback.onPlayAlbumTrack(0)
                 state.albumTracks.firstOrNull()?.let { track ->
                     callbacks.navigation.onNavigate(Route.AudioPlayer(track.id))
@@ -173,16 +205,19 @@ internal fun DetailActionButtons(
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             FadingItem {
-                PlayButton(
-                    style = PlayButtonStyle.Vertical,
-                    label = playLabel,
-                    canPlayPrimary = canPlayPrimary,
-                    progress = progress,
-                    playScale = playScale,
-                    interactionSource = playInteractionSource,
-                    contentFocusRequester = contentFocusRequester,
-                    onClick = onPlay,
-                )
+                if (!isBook || isReadableBook) {
+                    PlayButton(
+                        style = PlayButtonStyle.Vertical,
+                        label = playLabel,
+                        icon = if (isBook) Tabler.Outline.Book else Tabler.Outline.PlayerPlay,
+                        canPlayPrimary = canPlayPrimary,
+                        progress = progress,
+                        playScale = playScale,
+                        interactionSource = playInteractionSource,
+                        contentFocusRequester = contentFocusRequester,
+                        onClick = onPlay,
+                    )
+                }
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -225,16 +260,19 @@ internal fun DetailActionButtons(
             val favoriteHFocusState = rememberTvFocusState(focusedScale = 1.08f)
 
             FadingItem {
-                PlayButton(
-                    style = PlayButtonStyle.Horizontal,
-                    label = playLabel,
-                    canPlayPrimary = canPlayPrimary,
-                    progress = progress,
-                    playScale = playScale,
-                    interactionSource = playInteractionSource,
-                    contentFocusRequester = contentFocusRequester,
-                    onClick = onPlay,
-                )
+                if (!isBook || isReadableBook) {
+                    PlayButton(
+                        style = PlayButtonStyle.Horizontal,
+                        label = playLabel,
+                        icon = if (isBook) Tabler.Outline.Book else Tabler.Outline.PlayerPlay,
+                        canPlayPrimary = canPlayPrimary,
+                        progress = progress,
+                        playScale = playScale,
+                        interactionSource = playInteractionSource,
+                        contentFocusRequester = contentFocusRequester,
+                        onClick = onPlay,
+                    )
+                }
             }
 
             FadingItem {
@@ -272,6 +310,7 @@ private enum class IconButtonStyle { Vertical, Horizontal }
 private fun PlayButton(
     style: PlayButtonStyle,
     label: String,
+    icon: ImageVector = Tabler.Outline.PlayerPlay,
     canPlayPrimary: Boolean,
     progress: Float,
     playScale: Float,
@@ -324,7 +363,7 @@ private fun PlayButton(
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(
-                Tabler.Outline.PlayerPlay,
+                icon,
                 contentDescription = null,
                 modifier = Modifier.size(iconSize),
                 tint = if (isTv && playFocusState.isFocused) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onPrimary,

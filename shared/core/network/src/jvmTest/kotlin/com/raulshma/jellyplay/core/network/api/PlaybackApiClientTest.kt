@@ -198,4 +198,28 @@ class PlaybackApiClientImplTest {
         assertTrue(result.isSuccess)
         assertEquals("item-1", result.getOrNull()!!.itemId)
     }
+
+    @Test
+    fun `reportBookProgress posts position ticks to the session-less book endpoint`() = kotlinx.coroutines.test.runTest {
+        mockWebServer.enqueue(MockResponse().setResponseCode(204))
+
+        val result = playbackClient.reportBookProgress("book-1", 12_340_000L)
+
+        assertTrue(result.isSuccess)
+        val request = mockWebServer.takeRequest()
+        assertEquals("POST", request.method)
+        assertEquals(
+            "/Users/user-1/PlayingItems/book-1/Progress?positionTicks=12340000",
+            request.path,
+        )
+    }
+
+    @Test
+    fun `reportBookProgress surfaces non-2xx as failure`() = kotlinx.coroutines.test.runTest {
+        mockWebServer.enqueue(MockResponse().setResponseCode(500))
+
+        val result = playbackClient.reportBookProgress("book-1", 1L)
+
+        assertTrue(result.isFailure)
+    }
 }

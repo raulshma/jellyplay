@@ -104,3 +104,13 @@ fun buildSubtitleDeliveryUrl(
     }
     return "${baseUrl.trimEnd('/')}/Videos/$itemId/$mediaSourceId/Subtitles/$index/Stream.$format?api_key=$apiKey"
 }
+
+/**
+ * The book download URL (`/Items/{itemId}/Download?api_key=…`). Books have
+ * no stream URL — the reader fetches the file verbatim from the Download
+ * endpoint and renders it locally. Callers hold a resolved server address +
+ * token (no session-null sentinels, unlike the stream builders above); only
+ * the base's trailing slash is trimmed so the path can never start `//`.
+ */
+fun buildBookDownloadUrl(baseUrl: String, apiKey: String, itemId: String): String =
+    "${baseUrl.trimEnd('/')}/Items/$itemId/Download?api_key=$apiKey"

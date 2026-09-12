@@ -129,6 +129,26 @@ class LibraryWireMapperTest {
         assertEquals("MusicAlbum", MediaType.ALBUM.toWireItemKind())
         assertEquals("Audio", MediaType.MUSIC.toWireItemKind())
         assertNull(MediaType.UNKNOWN.toWireItemKind(), "UNKNOWN drops the include filter")
+        assertEquals(MediaType.BOOK, "Book".toMediaType())
+        assertEquals("Book", MediaType.BOOK.toWireItemKind())
+        assertEquals(MediaType.AUDIO, "AudioBook".toMediaType(), "audiobooks ride the audio player")
+    }
+
+    @Test
+    fun `book detail maps path and denested reading progress`() {
+        val detail = json.decodeFromString<BaseItemDtoWire>(
+            """{"Id":"b1","Type":"Book","Path":"/books/lotr.epub",
+               "UserData":{"PlaybackPositionTicks":200000,"Played":true}}""",
+        ).toMediaDetail()
+        assertEquals(MediaType.BOOK, detail.item.mediaType)
+        assertEquals("/books/lotr.epub", detail.path)
+        assertEquals(200000L, detail.playbackPositionTicks)
+        assertEquals(true, detail.isPlayed)
+
+        val bare = json.decodeFromString<BaseItemDtoWire>("""{"Id":"b2","Type":"Book"}""").toMediaDetail()
+        assertNull(bare.path, "Path is only projected for the detail query")
+        assertEquals(0L, bare.playbackPositionTicks, "no UserData means no position")
+        assertEquals(false, bare.isPlayed)
     }
 
     @Test

@@ -30,6 +30,16 @@ interface PlaybackApiClient {
         positionTicks: Long,
     ): Result<Unit>
 
+    /**
+     * Reports book reading progress without a playback session: books never
+     * open a `/Sessions/Playing` session, so the position rides the
+     * session-less `POST /Users/{userId}/PlayingItems/{itemId}/Progress`
+     * endpoint as a `positionTicks` query parameter. For page-based formats
+     * ([com.raulshma.jellyplay.core.model.BookFormat]) the ecosystem
+     * convention is `pageIndex (0-based) × 10,000` ticks.
+     */
+    suspend fun reportBookProgress(itemId: String, positionTicks: Long): Result<Unit>
+
     fun getStreamUrl(
         itemId: String,
         mediaSourceId: String,

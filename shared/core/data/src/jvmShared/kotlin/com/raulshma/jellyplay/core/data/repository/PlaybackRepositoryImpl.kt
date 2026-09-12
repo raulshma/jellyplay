@@ -19,6 +19,7 @@ import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
 import com.raulshma.jellyplay.core.model.ResolvedPlayback
 import com.raulshma.jellyplay.core.model.TtlCache
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.playback.buildBookDownloadUrl
 import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.data.concurrency.SingleFlightFetcher
 import kotlinx.coroutines.async
@@ -178,6 +179,40 @@ class PlaybackRepositoryImpl(
         return result
     }
 
+    override suspend fun reportBookProgress(
+        itemId: String,
+        positionTicks: Long,
+        final: Boolean,
+    ): Result<Unit> {
+        // Same stage-or-send choreography as the session telemetry (see
+        // docs/playback-progress-sync.md decision matrix): online sends
+        // straight through, offline/failed enqueues a coalesced BOOK_PROGRESS
+        // row. The result is swallowed on purpose — the reader is
+        // fire-and-forget and the staged row guarantees eventual delivery.
+        // Debounced page turns skip the cache purge exactly like the video
+        // player's per-tick PROGRESS reports (purging per page would thrash);
+        // the exit flush carries `final` and mirrors the STOP choreography —
+        // pre-send purge, post-send purge, announcement — because the resume
+        // position is a session-end fact then.
+        if (!final) {
+            reportOrStage(
+                stage = { outbox.enqueueBookProgress(itemId, positionTicks) },
+                send = { apiClient.reportBookProgress(itemId, positionTicks) },
+            )
+            return Result.success(Unit)
+        }
+        mediaCacheInvalidation.invalidateForUserDataChange(itemId)
+        reportOrStage(
+            stage = { outbox.enqueueBookProgress(itemId, positionTicks) },
+            send = { apiClient.reportBookProgress(itemId, positionTicks) },
+        )
+        mediaCacheInvalidation.invalidateForUserDataChange(itemId)
+        if (!offlineModeManager.isOffline) {
+            mediaRepository.value.notifyUserDataChanged(listOf(itemId))
+        }
+        return Result.success(Unit)
+    }
+
     override suspend fun replayOutboxEntry(entry: PlaybackOutboxEntry): Boolean =
         // Pure dispatch — no offline check, no enqueue. The worker owns the
         // drain loop (delete on success, retry/dead-letter on failure); this is
@@ -196,6 +231,8 @@ class PlaybackRepositoryImpl(
                 ).isSuccess
             PlaybackOutboxEventType.STOP ->
                 apiClient.reportPlaybackStopped(entry.itemId, entry.sessionId, entry.positionTicks).isSuccess
+            PlaybackOutboxEventType.BOOK_PROGRESS ->
+                apiClient.reportBookProgress(entry.itemId, entry.positionTicks).isSuccess
             PlaybackOutboxEventType.PLAYED ->
                 apiClient.markPlayed(entry.itemId).isSuccess
             PlaybackOutboxEventType.UNPLAYED ->
@@ -358,6 +395,16 @@ class PlaybackRepositoryImpl(
 
     override fun getSubtitleDeliveryUrl(deliveryUrl: String): String =
         apiClient.getSubtitleDeliveryUrl(deliveryUrl)
+
+    override fun getBookDownloadUrl(itemId: String): String {
+        // Same pure-builder split as getStreamUrl: the shared
+        // buildBookDownloadUrl does the string shaping and both platform
+        // clients stay out of it. The session guard mirrors the URL builders'
+        // null-base/-key → "" sentinel.
+        val baseUrl = apiClient.getServerUrl() ?: return ""
+        val apiKey = apiClient.getAccessToken() ?: return ""
+        return buildBookDownloadUrl(baseUrl = baseUrl, apiKey = apiKey, itemId = itemId)
+    }
 
     override fun getServerUrl(): String? = apiClient.getServerUrl()
 

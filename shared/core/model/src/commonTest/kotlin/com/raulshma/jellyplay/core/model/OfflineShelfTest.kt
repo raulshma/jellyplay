@@ -30,13 +30,14 @@ class OfflineShelfTest {
     )
 
     @Test
-    fun `video and music groups partition the top-level shelf types`() {
+    fun `video music and book groups partition the top-level shelf types`() {
         assertEquals(OfflineMediaTypeGroup.VIDEO, item(mediaType = MediaType.MOVIE).typeGroup)
         assertEquals(OfflineMediaTypeGroup.VIDEO, item(mediaType = MediaType.SERIES).typeGroup)
         assertEquals(OfflineMediaTypeGroup.MUSIC, item(mediaType = MediaType.AUDIO).typeGroup)
         assertEquals(OfflineMediaTypeGroup.MUSIC, item(mediaType = MediaType.MUSIC).typeGroup)
         assertEquals(OfflineMediaTypeGroup.MUSIC, item(mediaType = MediaType.ALBUM).typeGroup)
         assertEquals(OfflineMediaTypeGroup.MUSIC, item(mediaType = MediaType.ARTIST).typeGroup)
+        assertEquals(OfflineMediaTypeGroup.BOOK, item(mediaType = MediaType.BOOK).typeGroup)
         assertNull(item(mediaType = MediaType.PHOTO_FOLDER).typeGroup)
         assertNull(item(mediaType = MediaType.EPISODE).typeGroup)
     }

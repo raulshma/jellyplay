@@ -29,6 +29,11 @@
     <!-- ── Primary action button labels ─────────────────────────────────── -->
     <string name="detail_play_play">Play</string>
     <string name="detail_play_resume">Resume</string>
+    <string name="detail_read">Read</string>
+    <!-- Positional arg: %1$d = resume page number. -->
+    <string name="detail_continue_page">Continue — page %1$d</string>
+    <!-- Positional arg: %1$d = resume percent (0-100). EPUB reflowable books. -->
+    <string name="detail_continue_percent">Continue — %1$d%</string>
     <string name="detail_play_finding_episode">Finding Episode</string>
     <string name="detail_play_no_episodes_available">No Episodes Available</string>
     <string name="detail_play_no_episodes">No Episodes</string>

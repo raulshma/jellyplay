@@ -886,4 +886,69 @@ class PlaybackRepositoryImplTest {
         // No re-enqueue — the drain loop owns retry/dead-letter.
         coVerify(exactly = 0) { outbox.enqueueStart(any(), any(), any(), any()) }
     }
+
+    // ── books: reportBookProgress + BOOK_PROGRESS drain + download URL ──
+
+    @Test
+    fun `reportBookProgress delegates online and returns success`() = runTest {
+        coEvery { apiClient.reportBookProgress("item-1", 30_000L) } returns Result.success(Unit)
+
+        val result = repository.reportBookProgress("item-1", 30_000L)
+
+        assertTrue(result.isSuccess)
+        coVerify(exactly = 1) { apiClient.reportBookProgress("item-1", 30_000L) }
+        coVerify(exactly = 0) { outbox.enqueueBookProgress(any(), any()) }
+    }
+
+    @Test
+    fun `reportBookProgress stages when offline and still returns success`() = runTest {
+        every { offlineModeManager.isOffline } returns true
+
+        val result = repository.reportBookProgress("item-1", 30_000L)
+
+        assertTrue(result.isSuccess)
+        coVerify(exactly = 0) { apiClient.reportBookProgress(any(), any()) }
+        coVerify(exactly = 1) { outbox.enqueueBookProgress("item-1", 30_000L) }
+    }
+
+    @Test
+    fun `reportBookProgress stages on send failure and still returns success`() = runTest {
+        coEvery { apiClient.reportBookProgress("item-1", any()) } returns
+            Result.failure(RuntimeException("down"))
+
+        val result = repository.reportBookProgress("item-1", 40_000L)
+
+        assertTrue(result.isSuccess)
+        coVerify(exactly = 1) { outbox.enqueueBookProgress("item-1", 40_000L) }
+    }
+
+    @Test
+    fun `replayOutboxEntry BOOK_PROGRESS dispatches reportBookProgress without a session`() = runTest {
+        repository.replayOutboxEntry(
+            outboxEntry(PlaybackOutboxEventType.BOOK_PROGRESS, positionTicks = 70_000L),
+        )
+
+        coVerify(exactly = 1) { apiClient.reportBookProgress("item-1", 70_000L) }
+        // Pure dispatch: never touches the outbox.
+        coVerify(exactly = 0) { outbox.enqueueBookProgress(any(), any()) }
+    }
+
+    @Test
+    fun `getBookDownloadUrl builds from the active session`() {
+        every { apiClient.getServerUrl() } returns "http://server:8096"
+        every { apiClient.getAccessToken() } returns "tok"
+
+        val url = repository.getBookDownloadUrl("item-1")
+
+        assertTrue(url.startsWith("http://server:8096"))
+        assertTrue(url.contains("item-1"))
+        assertTrue(url.contains("api_key=tok"))
+    }
+
+    @Test
+    fun `getBookDownloadUrl returns empty without a session`() {
+        every { apiClient.getServerUrl() } returns null
+
+        assertEquals("", repository.getBookDownloadUrl("item-1"))
+    }
 }

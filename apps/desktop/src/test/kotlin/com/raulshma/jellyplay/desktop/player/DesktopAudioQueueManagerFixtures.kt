@@ -88,6 +88,12 @@ internal class FakePlaybackRepository : PlaybackRepository {
     }
 
     override suspend fun replayOutboxEntry(entry: PlaybackOutboxEntry): Boolean = true
+    override suspend fun reportBookProgress(
+        itemId: String,
+        positionTicks: Long,
+        final: Boolean,
+    ): Result<Unit> = Result.success(Unit)
+    override fun getBookDownloadUrl(itemId: String): String = "" 
     override fun getImageUrl(itemId: String, imageType: String, maxWidth: Int?) = "img://$itemId"
     override fun getChapterImageUrl(itemId: String, imageIndex: Int, tag: String?, maxWidth: Int?) = ""
     override fun getBackdropUrl(itemId: String, maxWidth: Int) = ""

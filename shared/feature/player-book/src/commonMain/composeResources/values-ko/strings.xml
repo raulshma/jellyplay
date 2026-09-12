@@ -1,0 +1,19 @@
+<resources>
+    <string name="book_reader_title_fallback">책</string>
+    <string name="book_reader_page_indicator">%2$d페이지 중 %1$d페이지</string>
+    <string name="book_reader_settings">독서 설정</string>
+    <string name="book_reader_direction_ltr">왼쪽에서 오른쪽</string>
+    <string name="book_reader_direction_rtl">오른쪽에서 왼쪽</string>
+    <string name="book_reader_error_cannot_open">이 책을 열 수 없습니다</string>
+    <string name="book_reader_error_unsupported">지원되지 않는 책 형식입니다</string>
+    <string name="book_reader_loading">책을 준비하는 중…</string>
+    <string name="book_reader_preparing_locations">독서 위치를 준비하는 중…</string>
+    <string name="book_reader_downloading_viewer">뷰어 구성 요소 다운로드 중 %1$d%%</string>
+    <string name="book_reader_percent">%1$d%% 읽음</string>
+    <string name="book_reader_theme">테마</string>
+    <string name="book_reader_theme_dark">다크</string>
+    <string name="book_reader_theme_sepia">세피아</string>
+    <string name="book_reader_theme_light">라이트</string>
+    <string name="book_reader_font_size">글자 크기</string>
+    <string name="book_reader_toc">목차</string>
+</resources>

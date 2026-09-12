@@ -23,6 +23,7 @@ import com.raulshma.jellyplay.core.datastore.navigation.NavigationStore
 import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
 import com.raulshma.jellyplay.core.datastore.notification.NotificationStore
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
+import com.raulshma.jellyplay.core.datastore.reader.ReaderStore
 import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore
 import com.raulshma.jellyplay.core.datastore.screensaver.ScreensaverStore
 import com.raulshma.jellyplay.core.datastore.search.SearchFiltersStore
@@ -162,6 +163,13 @@ val datastoreCommonModule = module {
 
     single {
         PlaybackStore(
+            get(DatastoreQualifiers.userPreferencesDataStore),
+            get(DatastoreQualifiers.applicationScope),
+        )
+    }
+
+    single {
+        ReaderStore(
             get(DatastoreQualifiers.userPreferencesDataStore),
             get(DatastoreQualifiers.applicationScope),
         )

@@ -74,6 +74,8 @@ import com.raulshma.jellyplay.feature.auth.di.authModule
 import com.raulshma.jellyplay.feature.details.androidDetailsModule
 import com.raulshma.jellyplay.feature.details.detailsModule
 import com.raulshma.jellyplay.feature.player.audio.di.playerAudioModule
+import com.raulshma.jellyplay.feature.book.di.androidBookPlayerModule
+import com.raulshma.jellyplay.feature.book.di.playerBookModule
 import com.raulshma.jellyplay.feature.onboarding.di.onboardingModule
 
 
@@ -399,6 +401,11 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                 // cast seams are the androidAppInteropAdaptersModule adapters
                 // above over the same single + CastManager.
                 playerAudioModule,
+                // Book reader conveyor: the CBZ/PDF reader ViewModel over
+                // Route.BookReader (details Read button + offline downloads).
+                // Reader engine seams are the module's android platform module.
+                playerBookModule,
+                androidBookPlayerModule(this@JellyPlayApplication),
 
                 // Player-live conveyor: the shared live-player
                 // ViewModel (Koin-native deps + the three platform seams

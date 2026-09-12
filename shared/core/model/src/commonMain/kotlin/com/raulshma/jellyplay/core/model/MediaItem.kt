@@ -20,6 +20,7 @@ enum class MediaType {
     PHOTO_FOLDER,
     LIVE_TV,
     CHANNEL,
+    BOOK,
     UNKNOWN,
 }
 

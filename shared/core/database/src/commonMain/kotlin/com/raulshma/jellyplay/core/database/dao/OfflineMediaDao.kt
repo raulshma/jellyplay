@@ -26,7 +26,7 @@ interface OfflineMediaDao {
     @Query(
         """
         SELECT * FROM offline_media_with_playback
-        WHERE mediaType IN ('SERIES', 'MOVIE', 'AUDIO', 'MUSIC')
+        WHERE mediaType IN ($TOP_LEVEL_MEDIA_TYPES)
         ORDER BY createdAt DESC
         LIMIT 500
         """
@@ -46,7 +46,7 @@ interface OfflineMediaDao {
         """
         SELECT * FROM offline_media_with_playback
         WHERE parentId = :libraryId
-          AND mediaType IN ('SERIES', 'MOVIE', 'AUDIO', 'MUSIC')
+          AND mediaType IN ($TOP_LEVEL_MEDIA_TYPES)
         ORDER BY createdAt DESC
         """
     )
@@ -214,7 +214,7 @@ interface OfflineMediaDao {
         deleteOrphanedSeries()
     }
 
-    @Query("SELECT COUNT(*) FROM offline_media WHERE mediaType IN ('SERIES', 'MOVIE', 'AUDIO', 'MUSIC')")
+    @Query("SELECT COUNT(*) FROM offline_media WHERE mediaType IN ($TOP_LEVEL_MEDIA_TYPES)")
     fun getOfflineItemCount(): Flow<Int>
 
     @Query(
@@ -229,8 +229,12 @@ interface OfflineMediaDao {
     )
     suspend fun search(pattern: String, prefixPattern: String, limit: Int): List<OfflineMediaWithPlayback>
 
-    /** Ids of every top-level offline item (for batch freshness checks). */
-    @Query("SELECT id FROM offline_media WHERE mediaType IN ('SERIES', 'MOVIE', 'AUDIO', 'MUSIC', 'EPISODE')")
+    /**
+     * Ids of every offline item that gets a batch freshness check — the
+     * top-level shelf types plus EPISODE (episodes hang off series rows but
+     * are still checked individually).
+     */
+    @Query("SELECT id FROM offline_media WHERE mediaType IN ($TOP_LEVEL_MEDIA_TYPES, 'EPISODE')")
     suspend fun getDownloadedItemIds(): List<String>
 
     /**
@@ -299,6 +303,16 @@ interface OfflineMediaDao {
         """
     )
     suspend fun getRelatedByStudio(currentId: String, studio: String, limit: Int): List<OfflineMediaWithPlayback>
+
+    companion object {
+        /**
+         * The top-level shelf media types — one literal interpolated into the
+         * queries above so the lists can't drift apart when a type is added
+         * (BOOK was the latest). Compile-time constant, so Room resolves it
+         * inside @Query.
+         */
+        const val TOP_LEVEL_MEDIA_TYPES = "'SERIES', 'MOVIE', 'AUDIO', 'MUSIC', 'BOOK'"
+    }
 }
 
 /** Local on-disk image path projection for resync path preservation. */

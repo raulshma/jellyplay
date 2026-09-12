@@ -2,21 +2,23 @@ package com.raulshma.jellyplay.core.model
 
 /**
  * The canonical top-level grouping of offline items. Every surface that
- * partitions the offline store by "video vs music" — the home's mode filter,
- * the downloads screen's filter chips — reads THIS enum instead of declaring
- * its own media-type set (three copies used to exist, and they disagreed:
- * the home kept ARTIST rows in music mode while the downloads screen's MUSIC
- * filter didn't).
+ * partitions the offline store by "video vs music vs books" — the home's mode
+ * filter, the downloads screen's filter chips — reads THIS enum instead of
+ * declaring its own media-type set (three copies used to exist, and they
+ * disagreed: the home kept ARTIST rows in music mode while the downloads
+ * screen's MUSIC filter didn't).
  *
  * Deliberately Kotlin-side only: the DAO's SQL literals stay as they are —
- * `getTopLevelItems` matches `('SERIES','MOVIE','AUDIO','MUSIC')` and
+ * `getTopLevelItems` matches `('SERIES','MOVIE','AUDIO','MUSIC','BOOK')` and
  * deliberately omits ALBUM/ARTIST there, so a divergence in this enum cannot
  * silently change what a query returns. The DAO's type list is the storage
- * contract; this enum is the presentation partition.
+ * contract; this enum is the presentation partition (and [typeGroup] stays
+ * the single lookup).
  */
 enum class OfflineMediaTypeGroup(val mediaTypes: Set<MediaType>) {
     VIDEO(setOf(MediaType.SERIES, MediaType.MOVIE)),
     MUSIC(setOf(MediaType.AUDIO, MediaType.MUSIC, MediaType.ALBUM, MediaType.ARTIST)),
+    BOOK(setOf(MediaType.BOOK)),
 }
 
 /** Which [OfflineMediaTypeGroup] an offline row belongs to, null for rows with no home-shelf presence (photos, folders, …). */

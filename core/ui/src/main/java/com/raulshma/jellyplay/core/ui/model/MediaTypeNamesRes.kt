@@ -27,6 +27,7 @@ fun MediaType.mediaTypeDisplayNameRes(): Int = when (this) {
     MediaType.PHOTO_FOLDER -> R.string.core_media_photo_album
     MediaType.LIVE_TV -> R.string.core_media_live_tv
     MediaType.CHANNEL -> R.string.core_media_channel
+    MediaType.BOOK -> R.string.core_media_book
     MediaType.UNKNOWN -> R.string.core_media_unknown
 }
 
@@ -46,5 +47,6 @@ fun MediaType.mediaTypeDisplayNamePluralRes(): Int = when (this) {
     MediaType.PHOTO_FOLDER -> R.string.core_media_photo_album_plural
     MediaType.LIVE_TV -> R.string.core_media_live_tv_plural
     MediaType.CHANNEL -> R.string.core_media_channel_plural
+    MediaType.BOOK -> R.string.core_media_book_plural
     MediaType.UNKNOWN -> R.string.core_media_unknown_plural
 }

@@ -81,6 +81,8 @@ import com.raulshma.jellyplay.feature.insights.di.insightsModule
 import com.raulshma.jellyplay.feature.details.desktopDetailsPlatformModule
 import com.raulshma.jellyplay.feature.details.detailsModule
 import com.raulshma.jellyplay.feature.player.audio.di.playerAudioModule
+import com.raulshma.jellyplay.feature.book.di.desktopBookPlayerModule
+import com.raulshma.jellyplay.feature.book.di.playerBookModule
 import com.raulshma.jellyplay.feature.onboarding.di.onboardingModule
 
 import com.raulshma.jellyplay.core.ui.di.coreUiMessageModule
@@ -358,6 +360,14 @@ fun main() {
             // audioPlayerSection and music track clicks navigate to
             // Route.AudioPlayer for real.
             playerAudioModule,
+
+            // …player-book, conveyor: the CBZ/PDF reader ViewModel over
+            // Route.BookReader (the details Read button + offline downloads
+            // tap). The desktop reader-engine seams live in
+            // desktopBookPlayerModule below, rooted at the same appdata dir
+            // the download storage uses (desktopDataModule pattern).
+            playerBookModule,
+            desktopBookPlayerModule(paths.dataDir),
 
 
 

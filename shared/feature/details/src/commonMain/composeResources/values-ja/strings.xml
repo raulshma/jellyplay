@@ -26,6 +26,9 @@
     <!-- ── Primary action button labels ─────────────────────────────────── -->
     <string name="detail_play_play">再生</string>
     <string name="detail_play_resume">再開</string>
+    <string name="detail_read">読む</string>
+    <string name="detail_continue_page">続きから読む — %1$dページ</string>
+    <string name="detail_continue_percent">続きから読む — %1$d%</string>
     <string name="detail_play_finding_episode">エピソードを検索中</string>
     <string name="detail_play_no_episodes_available">視聴可能なエピソードはありません</string>
     <string name="detail_play_no_episodes">エピソードがありません</string>

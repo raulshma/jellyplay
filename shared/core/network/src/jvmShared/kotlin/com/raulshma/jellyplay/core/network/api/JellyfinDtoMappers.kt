@@ -119,6 +119,9 @@ internal fun BaseItemKind.toMediaType(): MediaType = when (this) {
     BaseItemKind.BOX_SET -> MediaType.COLLECTION
     BaseItemKind.PHOTO -> MediaType.PHOTO
     BaseItemKind.PHOTO_ALBUM -> MediaType.PHOTO_FOLDER
+    BaseItemKind.BOOK -> MediaType.BOOK
+    // Audiobooks are audio files — they ride the audio player.
+    BaseItemKind.AUDIO_BOOK -> MediaType.AUDIO
     BaseItemKind.LIVE_TV_CHANNEL, BaseItemKind.TV_CHANNEL -> MediaType.CHANNEL
     BaseItemKind.LIVE_TV_PROGRAM, BaseItemKind.TV_PROGRAM -> MediaType.LIVE_TV
     else -> MediaType.UNKNOWN
@@ -136,6 +139,7 @@ internal fun MediaType.toBaseItemKind(): BaseItemKind? = when (this) {
     MediaType.COLLECTION -> BaseItemKind.BOX_SET
     MediaType.PHOTO -> BaseItemKind.PHOTO
     MediaType.PHOTO_FOLDER -> BaseItemKind.PHOTO_ALBUM
+    MediaType.BOOK -> BaseItemKind.BOOK
     MediaType.CHANNEL -> BaseItemKind.LIVE_TV_CHANNEL
     MediaType.LIVE_TV -> BaseItemKind.LIVE_TV_PROGRAM
     MediaType.MUSIC -> BaseItemKind.AUDIO

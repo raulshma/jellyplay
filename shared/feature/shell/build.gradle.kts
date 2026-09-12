@@ -57,6 +57,7 @@ kotlin {
             implementation(project(":shared:feature:details"))
             implementation(project(":shared:feature:editor"))
             implementation(project(":shared:feature:player-audio"))
+            implementation(project(":shared:feature:player-book"))
             implementation(project(":shared:feature:downloads"))
             implementation(project(":shared:feature:auth"))
             implementation(project(":shared:feature:settings"))

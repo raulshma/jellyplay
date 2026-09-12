@@ -38,7 +38,8 @@ import kotlin.test.assertTrue
  * the recorded follow-up; playback waited for the JVM impl's hand-built
  * stream-URL table to fold onto the shared PlaybackUrlBuilders, and the JVM
  * impl's raw-OkHttp getBodyText probes are extracted by [jvmWireCalls] to
- * match wasm's getBodyTextWithEmbyToken). The ARR/Seerr/Tmdb wasm mirrors
+ * match wasm's getBodyTextWithEmbyToken, and its raw-OkHttp postStatusOnly
+ * mutations to match wasm's postStatusOnly). The ARR/Seerr/Tmdb wasm mirrors
  * are OUT of scope for this extraction — they use a different URL-builder
  * idiom on both sides.
  */
@@ -273,10 +274,10 @@ class WasmMirrorContractTest {
             label = "KtorWasmPlaybackApiClient ↔ PlaybackApiClientImpl",
             jvmRelativePath = "src/jvmShared/kotlin/com/raulshma/jellyplay/core/network/api/PlaybackApiClientImpl.kt",
             wasmRelativePath = "src/wasmJsMain/kotlin/com/raulshma/jellyplay/core/network/api/KtorWasmPlaybackApiClient.kt",
-            // 13 wire calls today; the floor sits at the exact count (not the
+            // 14 wire calls today; the floor sits at the exact count (not the
             // library-shaped default) so silently dropping any single
             // one-call endpoint trips the broken-scan guard.
-            minWireCalls = 13,
+            minWireCalls = 14,
         ),
     )
 
@@ -483,6 +484,19 @@ class WasmMirrorContractTest {
             val args = balancedArgs(block, openParen) ?: continue
             val path = Regex("path\\s*=\\s*\"([^\"]*)\"").find(args)?.groupValues?.get(1) ?: continue
             calls.add(WireCall("GET", normalizePath(path), queryKeys(args)))
+        }
+
+        // Raw-OkHttp POSTs through JellyfinRawRequester — the wasm twin is
+        // postStatusOnly (the token rides the X-Emby-Token header on both
+        // sides); any lone query param rides the path template on both.
+        for (match in Regex("\\brawRequester\\.postStatusOnly\\s*\\(").findAll(block)) {
+            val openParen = block.indexOf('(', match.range.endInclusive - 1)
+            val args = balancedArgs(block, openParen) ?: continue
+            val path = Regex("path\\s*=\\s*\"([^\"]*)\"").find(args)?.groupValues?.get(1) ?: continue
+            val normalized = normalizePath(path)
+            calls.add(
+                WireCall("POST", normalized.substringBefore('?'), queryKeys(args) + inlinedQueryKeys(normalized)),
+            )
         }
 
         return calls

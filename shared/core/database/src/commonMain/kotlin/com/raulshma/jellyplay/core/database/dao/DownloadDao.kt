@@ -34,6 +34,10 @@ interface DownloadDao {
     @Query("SELECT * FROM downloads WHERE status = 'COMPLETED' AND mediaType IN ('MUSIC', 'AUDIO') ORDER BY createdAt DESC LIMIT :limit OFFSET :offset")
     suspend fun getCompletedAudioDownloads(limit: Int, offset: Int): List<DownloadEntity>
 
+    /** One page of `COMPLETED` book downloads, newest first — the audio ([getCompletedAudioDownloads]) precedent scoped to the reader's shelf. */
+    @Query("SELECT * FROM downloads WHERE status = 'COMPLETED' AND mediaType = 'BOOK' ORDER BY createdAt DESC LIMIT :limit OFFSET :offset")
+    suspend fun getCompletedBookDownloads(limit: Int, offset: Int): List<DownloadEntity>
+
     @Query("SELECT * FROM downloads WHERE id = :id")
     suspend fun getDownloadById(id: String): DownloadEntity?
 

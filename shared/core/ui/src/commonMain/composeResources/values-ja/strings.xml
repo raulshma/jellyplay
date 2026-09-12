@@ -48,6 +48,8 @@
     <string name="core_media_album">アルバム</string>
     <string name="core_media_artist">アーティスト</string>
     <string name="core_media_music_video">ミュージックビデオ</string>
+    <string name="core_media_book">ブック</string>
+
     <string name="core_media_collection">コレクション</string>
     <string name="core_media_photo">写真</string>
     <string name="core_media_photo_album">フォトアルバム</string>
@@ -64,6 +66,8 @@
     <string name="core_media_album_plural">アルバム</string>
     <string name="core_media_artist_plural">アーティスト</string>
     <string name="core_media_music_video_plural">ミュージックビデオ</string>
+    <string name="core_media_book_plural">ブック</string>
+
     <string name="core_media_collection_plural">コレクション</string>
     <string name="core_media_photo_plural">写真</string>
     <string name="core_media_photo_album_plural">フォトアルバム</string>

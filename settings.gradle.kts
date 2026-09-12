@@ -20,6 +20,9 @@ dependencyResolutionManagement {
         google()
         mavenCentral()
         maven { url = uri("https://jitpack.io") }
+        // KCEF (the desktop EPUB host) resolves jogamp gluegen/jogl through
+        // JogAmp's own repository — not mirrored on Maven Central.
+        maven { url = uri("https://jogamp.org/deployment/maven") }
         // KGP tool-distribution governance (wave 13C — the settings-level
         // decision the wave-12D lanes deferred, see the wasmJsNodeTest notes
         // in shared/core/{model,ui}/build.gradle.kts): Kotlin's
@@ -150,6 +153,7 @@ include(":shared:feature:shell")
 
 include(":shared:feature:auth")
 include(":shared:feature:player-audio")
+include(":shared:feature:player-book")
 
 
 // Desktop shell (plan §Phase V1b)
