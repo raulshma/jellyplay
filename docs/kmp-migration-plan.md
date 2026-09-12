@@ -114,8 +114,13 @@ ledger tracks *where the migration stands*.
      arrqueue + onboarding ROUTED on web (entries + Koin + guard-test
      allowlist); shortcuts + auth target-only this wave (no wasm
      AuthRepository binding; grid routes mostly non-wasm).
-   - W2: small splits — newsletter, editor, search, library,
-     player-book.
+   - W2: ~~small splits — newsletter, editor, search, library,
+     player-book~~ **DONE (2026-09-13, 053c6d78b)** — all five compile
+     for wasm. Seams: NewsletterDateLabels, EditorSubtitleStore,
+     QuickDownloadActions (screens gate the download CTA on
+     isSupported — hidden, not Failed-toasting on web), player-book
+     honest-degradation actuals. Not routed on web yet (orchestrator
+     integration pending).
    - W3: data work — livetv, insights, settings, player-audio (the
      first real-DB-on-web consumers).
    - W4: hard — music, home, downloads, syncplay, admin, player-live
