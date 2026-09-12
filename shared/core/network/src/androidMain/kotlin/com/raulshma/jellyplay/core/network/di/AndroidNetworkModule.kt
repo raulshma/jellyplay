@@ -28,7 +28,7 @@ import org.koin.dsl.module
  * owner changes, not the wiring.
  *
  * [OkHttpConfigProvider] is resolved from Koin (the app composition root
- * provides the impl definition; its class still lives in `core:data` until
+ * provides the impl definition; its class lives in :shared:core:data
  * that module migrates).
  */
 fun androidNetworkModule(context: Context): Module = module {

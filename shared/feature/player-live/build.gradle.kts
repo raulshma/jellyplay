@@ -94,15 +94,11 @@ kotlin {
         // state as the player-adjacent features).
         getByName("androidMain").dependencies {
             // findActivity (PlayerView window wiring), LocalUserMessageBus
-            // (screen-forward message collector) and
-            // TranscodeReasonsFormatter (renderer seam actual) still live in
-            // the legacy Android-only :core:ui shim until its own conveyor
-            // move — same transition-period relationship as the livetv
-            // conveyor's AndroidLiveTvMessenger, dies at.
-            // PlayerAudioLifecycle (audio-focus/becoming-noisy wrapper the
-            // Media3LivePlayerAudio seam delegates to) still lives in the
-            // legacy Android-only :core:data shim until its own conveyor
-            // move.
+            // (screen-forward message collector), TranscodeReasonsFormatter
+            // (renderer seam actual) and PlayerAudioLifecycle (audio-focus/
+            // becoming-noisy wrapper the Media3LivePlayerAudio seam delegates
+            // to) live in :shared:core:{ui,data} androidMain since the
+            // cutover dissolved the legacy core modules.
             // ExoLiveEngine + ExoLiveEngineFactory (streaming OkHttpClient).
             implementation(libs.media3.exoplayer)
             implementation(libs.media3.ui)

@@ -88,8 +88,8 @@ kotlin {
         // Second documented shared→legacy edge (library/livetv/settings
         // precedent): PluginConfigScreen's message bus and the WebView quartet
         // stay Android-only in this source set; the quartet also needs OkHttp
-        // (same-origin WebView request interception) which rides in through
-        // the legacy :core:ui classpath edge.
+        // (same-origin WebView request interception), declared explicitly
+        // below.
         getByName("androidMain").dependencies {
             // WebView quartet: interceptAuthedRequest re-issues same-origin
             // GETs through the plugin WebView session's OkHttpClient.

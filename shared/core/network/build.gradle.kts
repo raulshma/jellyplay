@@ -46,7 +46,7 @@ kotlin {
         // subtitle providers and the realtime WebSocket plumbing. Wasm gets a
         // pure-Kotlin HTTP stack when its consumers ship.
         // NOTE: the websocket event currency stays org.json —
-        // WebSocketEvent.data is consumed as JSONObject by legacy :core:data
+        // WebSocketEvent.data is consumed as JSONObject by :shared:core:data
         // (RemoteControlReceiver / SyncPlayManager), which must keep compiling
         // unchanged. The android target resolves org.json from android.jar;
         // the jvm target pulls the real org.json artifact (declared on jvmMain

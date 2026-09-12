@@ -83,10 +83,9 @@ kotlin {
             implementation(libs.coroutines.test)
             implementation(libs.mockk)
         }
-        // Documented shared→legacy :core:ui androidMain edge (library/livetv/
-        // admin/calendar/downloads/settings precedents; dies at ): the
-        // biometric-availability actual wraps the legacy BiometricAuthHelper,
-        // whose strong-authentication check has no shared counterpart yet.
+        // The biometric-availability actual wraps BiometricAuthHelper
+        // (:shared:core:ui androidMain since the cutover), whose
+        // strong-authentication check has no shared counterpart yet.
         getByName("androidMain").dependencies {
         }
     }

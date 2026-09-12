@@ -89,9 +89,9 @@ kotlin {
         }
         // androidMain needs no deps: unlike the library conveyor item (whose
         // user-messenger actual lives in the module), music's MusicMessageBus
-        // Android actual is app-provided — it bridges to the Hilt-owned
-        // UserMessageBus in the legacy :core:ui shim via the app's Hilt
-        // interop module (dies at ).
+        // Android actual is app-provided — it bridges to the Koin-owned
+        // UserMessageBus (:shared:core:ui androidMain since the
+        // cutover).
     }
 }
 

@@ -5,8 +5,8 @@ import androidx.compose.runtime.Composable
 /**
  * One-shot user-feedback seam for the admin statistics screens (settings
  * conveyor's SettingsMessenger pattern). Android posts through the app-wide
- * UserMessageBus — that bus still lives in the legacy Android-only :core:ui
- * shim until its own conveyor move — while desktop has no message host yet,
+ * UserMessageBus — that bus lives in :shared:core:ui since the cutover
+ * dissolved the legacy :core:ui module — while desktop has no message host yet,
  * so the actual returns null and messages drop. Messages are already resolved
  * [String]s at the call site.
  */

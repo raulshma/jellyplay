@@ -91,13 +91,11 @@ kotlin {
         }
         // androidMain needs no explicit deps: the photo-export actual's
         // MediaStore/FileProvider/coil3-android bits ride transitive edges
-        // (coil-compose → coil-core-android; core-ktx via core:ui re-exports).
+        // (coil-compose → coil-core-android; core-ktx via :shared:core:ui).
         getByName("androidMain").dependencies {
             // The user-messenger actual bridges to the app-wide
-            // LocalUserMessageBus, which still lives in the legacy Android-only
-            // core:ui shim until its own conveyor move — same
-            // transition-period relationship as the shim's api() re-export of
-            // the shared tree, dies at.
+            // LocalUserMessageBus (:shared:core:ui androidMain since the
+            // cutover dissolved the legacy :core:ui shim).
         }
     }
 }

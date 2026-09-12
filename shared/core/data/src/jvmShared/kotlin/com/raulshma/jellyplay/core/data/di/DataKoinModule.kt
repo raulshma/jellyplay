@@ -161,7 +161,7 @@ import org.koin.dsl.module
  *
  * `DefaultAudioQueueFacade` is the one playback-graph type NOT defined here:
  * its AudioQueueManager ctor dep is the media3 AudioPlaybackManager, so its
- * Koin single lives in the legacy core:data androidCoreDataModule (owned
+ * Koin single lives in this module's androidMain AndroidCoreDataKoinModule (
  * there since then; desktopPlayerModule binds the desktop twin).
  * `AudioLyricsManager` left that Android-only set when its sole dep (the
  * LyricsRepository view of MediaRepository) became the single below;

@@ -116,10 +116,9 @@ kotlin {
             implementation(libs.mockk)
         }
         getByName("androidMain").dependencies {
-            // The trailer-host actual delegates to legacy core:ui's WebView
-            // InlineTrailerPlayer (library/livetv/admin/calendar messenger
-            // precedent — documented shared→legacy androidMain edge; dies at
-            // ). The AudioPlaybackManager/ThemeMusicPlayer adapters
+            // The trailer-host actual delegates to InlineTrailerPlayer
+            // (:shared:core:ui androidMain since the cutover). The
+            // AudioPlaybackManager/ThemeMusicPlayer adapters
             // stay APP-side (AppKoinModule interop adapters; formerly the
             // HiltInteropModule singles) — a shared-module androidMain
             // actual would have to construct second instances. The share +

@@ -5,8 +5,8 @@ import androidx.compose.runtime.Composable
 /**
  * One-shot user-feedback seam for the settings rows (clipboard-copied hints,
  * advanced-settings toggles). Android posts through the app-wide
- * UserMessageBus — that bus still lives in the legacy Android-only :core:ui
- * shim until its own conveyor move — while desktop has no message host yet,
+ * UserMessageBus — that bus lives in :shared:core:ui since the cutover
+ * dissolved the legacy :core:ui module — while desktop has no message host yet,
  * so the actual returns null and messages drop (livetv conveyor's
  * LiveTvMessenger pattern; messages are already resolved [String]s at the
  * call site).
