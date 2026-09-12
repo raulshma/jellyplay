@@ -91,6 +91,17 @@ kotlin {
                 // detailsModule + webDetailsPlatformModule (the narrow
                 // MediaRepository for the SeerrDetail cross-link).
                 implementation(project(":shared:feature:details"))
+                // the third and fourth shared feature screens —
+                // WebAppRoot's `entry<Route.ArrQueue>` (arrqueueModule; the
+                // ArrRepository binding already lives in dataWasmModule) and
+                // `entry<Route.Onboarding>` (onboardingModule; datastore
+                // stores resolve from datastoreCommonModule/webDatastoreModule).
+                // shortcuts + auth also gained wasmJs targets in but stay
+                // unrouted/unregistered on web for now (no wasm
+                // AuthRepository binding; the grid's targets are mostly
+                // non-wasm; web drives sign-in via KtorWasmAuthApiClient).
+                implementation(project(":shared:feature:arrqueue"))
+                implementation(project(":shared:feature:onboarding"))
                 // (HtmlVideoEngine): the wasm-visible MediaEngine
                 // contract + EnginePositionTicker/WebPlaybackMappings the
                 // web video engine implements. The engine class is landed and

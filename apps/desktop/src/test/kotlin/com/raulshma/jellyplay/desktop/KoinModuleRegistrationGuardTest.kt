@@ -66,7 +66,9 @@ class KoinModuleRegistrationGuardTest {
      * the next feature gains a wasmJs target and a web nav entry,
      * register it in Main.kt AND add it here in the same commit.
      */
-    private val webForwardAllowlist = setOf("calendarModule", "requestsModule", "detailsModule")
+    private val webForwardAllowlist = setOf(
+        "calendarModule", "requestsModule", "detailsModule", "arrqueueModule", "onboardingModule",
+    )
 
     /**
      * Module-variant prefixes that are intentionally platform-/core-scoped:

@@ -18,6 +18,7 @@ import coil3.request.SuccessResult
 import coil3.request.crossfade
 import com.raulshma.jellyplay.core.data.di.dataWasmModule
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
+import com.raulshma.jellyplay.core.database.di.databaseDaosModule
 import com.raulshma.jellyplay.core.database.di.webDatabaseModule
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
 import com.raulshma.jellyplay.core.datastore.SeerrSecureCredentialsStore
@@ -30,8 +31,10 @@ import com.raulshma.jellyplay.core.network.auth.AtomicSessionState
 import com.raulshma.jellyplay.core.network.di.networkWasmModule
 import androidx.navigation3.runtime.NavKey
 import com.raulshma.jellyplay.core.ui.navigation.Route
+import com.raulshma.jellyplay.feature.arrqueue.di.arrqueueModule
 import com.raulshma.jellyplay.feature.calendar.di.calendarModule
 import com.raulshma.jellyplay.feature.details.detailsModule
+import com.raulshma.jellyplay.feature.onboarding.di.onboardingModule
 import com.raulshma.jellyplay.feature.requests.di.requestsModule
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.js.Js
@@ -125,6 +128,14 @@ fun main() {
             // MediaRepository (webDetailsPlatformModule below, over
             // networkWasmModule's LibraryApiClient) — all resolve on web.
             detailsModule,
+            // the ARR download queue (third shared feature screen —
+            // WebAppRoot's entry<Route.ArrQueue>). ArrRepository resolves
+            // from dataWasmModule; ExperimentalStore from datastoreCommonModule.
+            arrqueueModule,
+            // the onboarding wizard (fourth shared feature screen —
+            // entry<Route.Onboarding>). All four VM deps resolve from
+            // datastoreCommonModule + webDatastoreModule.
+            onboardingModule,
             webDetailsPlatformModule(),
             // infrastructure registration: the OPFS-backed Room database
             // (WebWorkerSQLiteDriver over the vendored worker — see
@@ -136,6 +147,19 @@ fun main() {
             // core modules are platform modules by its platformPrefixes rule,
             // same as webDatastoreModule.)
             webDatabaseModule(),
+            // the DAO bindings for the Room database above — the module
+            // promoted from database jvmShared to commonMain, so the
+            // promoted core:data repository impls (dataWasmModule's
+            // SearchHistory/ItemPlaybackPreference/SeenMedia/PlaybackOutbox/
+            // Smart+MoodPlaylist/QueuePersistenceHelper slice) resolve their
+            // ctor DAO deps on web. Listed after webDatabaseModule because
+            // every definition reads get<JellyPlayDatabase>() from it (Koin
+            // resolves lazily, so order is documentation, not a constraint).
+            // (No KoinModuleRegistrationGuardTest change needed: the test's
+            // reverse check skips 'database'-prefixed core modules via
+            // platformPrefixes, and its web forward check only covers
+            // shared/feature commonMain modules.)
+            databaseDaosModule,
         )
     }
 

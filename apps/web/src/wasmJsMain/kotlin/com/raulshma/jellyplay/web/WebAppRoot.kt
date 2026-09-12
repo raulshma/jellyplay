@@ -42,8 +42,10 @@ import com.raulshma.jellyplay.core.ui.components.LocalServerHealth
 import com.raulshma.jellyplay.core.ui.components.LocalWebBackDispatcher
 import com.raulshma.jellyplay.core.ui.components.WebBackDispatcher
 import com.raulshma.jellyplay.core.ui.navigation.Route
+import com.raulshma.jellyplay.feature.arrqueue.ArrQueueScreen
 import com.raulshma.jellyplay.feature.calendar.UpcomingCalendarScreen
 import com.raulshma.jellyplay.feature.details.SeerrDetailScreen
+import com.raulshma.jellyplay.feature.onboarding.OnboardingScreen
 import com.raulshma.jellyplay.feature.requests.RequestsScreen
 import kotlinx.browser.window
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -282,6 +284,9 @@ fun WebAppRoot(
                     onOpenCalendar = { addEntry(Route.UpcomingCalendar) },
                     // The Seerr credentials pane.
                     onOpenSeerr = { addEntry(WebSeerr) },
+                    // shared feature routes — same push-the-real-key shape.
+                    onOpenArrQueue = { addEntry(Route.ArrQueue) },
+                    onOpenOnboarding = { addEntry(Route.Onboarding) },
                 )
             }
             entry<WebStatus> { _ ->
@@ -368,6 +373,33 @@ fun WebAppRoot(
                         addEntry(Route.SeerrDetail(tmdbId, mediaType))
                     },
                 )
+            }
+            entry<Route.ArrQueue> { _ ->
+                // The THIRD shared feature screen on web — the ARR
+                // download queue, bare composition + shell-provided owners
+                // like every shared entry. onOpenArrSettings is a NO-OP
+                // stub by the calendar-precedent rule: feature/settings has
+                // no wasmJs target (yet), so nothing can render
+                // Route.ArrSettings on web.
+                ArrQueueScreen(
+                    onBack = ::requestPop,
+                    onOpenArrSettings = {
+                        // No-op — settings has no wasm target (calendar
+                        // entry documents the identical cut).
+                    },
+                )
+            }
+            entry<Route.Onboarding> { _ ->
+                // The FOURTH shared feature screen on web — the
+                // onboarding wizard. Web has NO persisted first-run gate
+                // (nothing boots into it; web sessions start at the
+                // landing), so the wizard is reachable only from the
+                // ConnectedCard button. onComplete therefore just POPS back
+                // to the landing — there is no "done" destination to push.
+                // The wizard's SeerrStep writes into the localStorage-backed
+                // Seerr credential store (webDatastoreModule), consistent
+                // with the web honesty carve-outs.
+                OnboardingScreen(onComplete = ::requestPop)
             }
             entry<Route.SeerrDetail> { key ->
                 // The SECOND shared feature screen on web. Same bare

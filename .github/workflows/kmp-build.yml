@@ -154,18 +154,22 @@ jobs:
           :shared:feature:requests:compileKotlinWasmJs
           :shared:feature:shortcuts:jvmJar
           :shared:feature:shortcuts:compileAndroidMain
+          :shared:feature:shortcuts:compileKotlinWasmJs
           :shared:feature:newsletter:jvmJar
           :shared:feature:newsletter:compileAndroidMain
           :shared:feature:insights:jvmJar
           :shared:feature:insights:compileAndroidMain
           :shared:feature:onboarding:jvmJar
           :shared:feature:onboarding:compileAndroidMain
+          :shared:feature:onboarding:compileKotlinWasmJs
           :shared:feature:subtitle-tester:jvmJar
           :shared:feature:subtitle-tester:compileAndroidMain
           :shared:feature:arrqueue:jvmJar
           :shared:feature:arrqueue:compileAndroidMain
+          :shared:feature:arrqueue:compileKotlinWasmJs
           :shared:feature:auth:jvmJar
           :shared:feature:auth:compileAndroidMain
+          :shared:feature:auth:compileKotlinWasmJs
           :shared:feature:details:jvmJar
           :shared:feature:details:compileAndroidMain
           :shared:feature:details:compileKotlinWasmJs

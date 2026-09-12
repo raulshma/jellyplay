@@ -254,6 +254,12 @@ internal fun WebConnectFlow(
     // Opens the Seerr credentials pane (WebSeerrPane) — the entry
     // point that makes the requests feature usable on web (API-key creds).
     onOpenSeerr: (() -> Unit)? = null,
+    // Opens the ARR download-queue screen (Route.ArrQueue →
+    // ArrQueueScreen). Same optionality contract as onOpenRequests.
+    onOpenArrQueue: (() -> Unit)? = null,
+    // Opens the onboarding wizard (Route.Onboarding →
+    // OnboardingScreen). Same optionality contract as onOpenRequests.
+    onOpenOnboarding: (() -> Unit)? = null,
 ) {
     // initial = null is honest on wasm v1: nothing restores a session at
     // boot (no persisted identity), so the flow genuinely starts empty. If a
@@ -271,6 +277,8 @@ internal fun WebConnectFlow(
             onOpenRequests = onOpenRequests,
             onOpenCalendar = onOpenCalendar,
             onOpenSeerr = onOpenSeerr,
+            onOpenArrQueue = onOpenArrQueue,
+            onOpenOnboarding = onOpenOnboarding,
             modifier = modifier,
         )
     } else {
@@ -289,6 +297,8 @@ private fun ConnectedCard(
     onOpenRequests: (() -> Unit)?,
     onOpenCalendar: (() -> Unit)?,
     onOpenSeerr: (() -> Unit)?,
+    onOpenArrQueue: (() -> Unit)?,
+    onOpenOnboarding: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     var loggingOut by remember { mutableStateOf(false) }
@@ -414,6 +424,22 @@ private fun ConnectedCard(
             if (onOpenSeerr != null) {
                 Button(onClick = onOpenSeerr) {
                     Text("Seerr")
+                }
+            }
+            // The third SHARED feature screen: the ARR download
+            // queue. Primary Button like the other shared features.
+            if (onOpenArrQueue != null) {
+                Button(onClick = onOpenArrQueue) {
+                    Text("Arr queue")
+                }
+            }
+            // The fourth SHARED feature screen: the onboarding
+            // wizard. Primary Button; completing pops back here (no
+            // persisted first-run gate exists on web — see the
+            // Route.Onboarding entry note in WebAppRoot).
+            if (onOpenOnboarding != null) {
+                Button(onClick = onOpenOnboarding) {
+                    Text("Onboarding")
                 }
             }
             //  E2E hook: gated entry into WebDiagnosticsPane. An
