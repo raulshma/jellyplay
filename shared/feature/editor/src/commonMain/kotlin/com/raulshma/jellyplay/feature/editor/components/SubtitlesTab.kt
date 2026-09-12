@@ -54,6 +54,7 @@ import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleSearchResult
 import com.raulshma.jellyplay.core.ui.components.SubtitleResultMetadata
+import com.raulshma.jellyplay.core.ui.harness.harnessClickTarget
 import com.raulshma.jellyplay.core.ui.model.localizedDisplayName
 import com.raulshma.jellyplay.feature.editor.EditorPickedFile
 import com.raulshma.jellyplay.feature.editor.EditorUiState
@@ -129,7 +130,11 @@ fun SubtitlesTab(
             modifier = Modifier.fillMaxWidth().padding(16.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            FilledTonalButton(onClick = { showUploadSheet = true }) {
+            FilledTonalButton(
+                onClick = { showUploadSheet = true },
+                // e2e: click-reach target (harness-gated no-op) — see HarnessClickBridge.
+                modifier = Modifier.harnessClickTarget("editor-subtitles-upload"),
+            ) {
                 Icon(Tabler.Outline.Upload, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(stringResource(Res.string.editor_subtitles_upload))
@@ -356,7 +361,10 @@ private fun SubtitleUploadSheet(
                     onClick = {
                         filePicker?.launch()
                     },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        // e2e: click-reach target (harness-gated no-op).
+                        .harnessClickTarget("editor-subtitles-select-file"),
                 ) {
                     Text(if (selectedFile != null) stringResource(Res.string.editor_subtitles_change_file, selectedFileName) else stringResource(Res.string.editor_subtitles_select_file))
                 }
@@ -370,7 +378,12 @@ private fun SubtitleUploadSheet(
                         value = selectedLanguage,
                         onValueChange = { selectedLanguage = it },
                         label = { Text(stringResource(Res.string.editor_field_language)) },
-                        modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryEditable),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .menuAnchor(MenuAnchorType.PrimaryEditable)
+                            // e2e: click-reach target (harness-gated no-op) — the
+                            // confirm button requires a non-blank language.
+                            .harnessClickTarget("editor-subtitles-language-field"),
                         singleLine = true,
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = langExpanded) },
                     )
@@ -405,7 +418,13 @@ private fun SubtitleUploadSheet(
                             onUploadFile(file, selectedFileName, selectedLanguage, isForced, isHearingImpaired)
                         }
                     },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        // e2e: click-reach target (harness-gated no-op).
+                        .harnessClickTarget(
+                            "editor-subtitles-upload-confirm",
+                            enabled = selectedFile != null && selectedLanguage.isNotBlank(),
+                        ),
                     enabled = selectedFile != null && selectedLanguage.isNotBlank(),
                 ) { Text(stringResource(Res.string.editor_subtitles_upload)) }
             }

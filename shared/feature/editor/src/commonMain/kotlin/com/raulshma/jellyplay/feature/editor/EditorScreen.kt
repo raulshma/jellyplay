@@ -41,6 +41,7 @@ import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.components.JellyPlayBackHandler
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
+import com.raulshma.jellyplay.core.ui.harness.harnessClickTarget
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
@@ -191,12 +192,16 @@ fun EditorScreen(
                     onClick = { scope.launch { pagerState.animateScrollToPage(1) } },
                     text = { Text(stringResource(Res.string.editor_tab_images)) },
                     icon = { Icon(Tabler.Outline.Photo, contentDescription = null) },
+                    // e2e: click-reach target (harness-gated no-op) — see HarnessClickBridge.
+                    modifier = Modifier.harnessClickTarget("editor-tab-images"),
                 )
                 Tab(
                     selected = pagerState.currentPage == 2,
                     onClick = { scope.launch { pagerState.animateScrollToPage(2) } },
                     text = { Text(stringResource(Res.string.editor_tab_subtitles)) },
                     icon = { Icon(Tabler.Outline.Subtitles, contentDescription = null) },
+                    // e2e: click-reach target (harness-gated no-op) — see HarnessClickBridge.
+                    modifier = Modifier.harnessClickTarget("editor-tab-subtitles"),
                 )
             }
 

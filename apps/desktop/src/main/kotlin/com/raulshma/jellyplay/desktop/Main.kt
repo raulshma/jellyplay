@@ -108,6 +108,15 @@ fun main() {
     // auto-exit timer) only arms when a jellyplay.perf.* property is set —
     // see DesktopStartupPerf.
     val bootT0Nanos = System.nanoTime()
+
+    // e2e click-reach bridge (HarnessClickBridge): armed BEFORE any screen
+    // composes so the flows lane's Modifier.harnessClickTarget annotations
+    // publish bounds from the very first frame. Zero cost on every normal
+    // boot (the flag stays false; nothing else reads it).
+    com.raulshma.jellyplay.core.ui.harness.HarnessClickBridge.enabled =
+        System.getProperty(DesktopFlowHarness.PROP_ENABLED)
+            ?.equals("true", ignoreCase = true) == true
+
     val paths = DesktopPaths.resolve()
     java.io.File(paths.dataDir.toString()).mkdirs()
     java.io.File(paths.configDir.toString()).mkdirs()

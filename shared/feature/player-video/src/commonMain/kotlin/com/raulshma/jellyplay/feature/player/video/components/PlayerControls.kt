@@ -91,6 +91,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.PointToPointEasing
 import com.raulshma.jellyplay.core.designsystem.theme.SyncStatusColors
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
+import com.raulshma.jellyplay.core.ui.harness.harnessClickTarget
 import com.raulshma.jellyplay.feature.player.video.PlatformCastButton
 import com.raulshma.jellyplay.feature.player.video.rememberIs24HourFormat
 import com.raulshma.jellyplay.feature.player.video.rememberIsPortraitOrientation
@@ -914,6 +915,8 @@ private fun PrimaryMediaControls(
         icon = Tabler.Outline.Subtitles,
         contentDescription = stringResource(Res.string.player_video_subtitles),
         onClick = onSubtitleClick,
+        // e2e: click-reach target (harness-gated no-op) — see HarnessClickBridge.
+        modifier = Modifier.harnessClickTarget("player-subtitles-trigger"),
     )
     if (chapters.isNotEmpty()) {
         PlayerIconButton(

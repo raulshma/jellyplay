@@ -233,6 +233,23 @@ internal fun DesktopAppRoot(
         DesktopNativeDialogHarnessHost()
     }
 
+    // Flows harness (DesktopFlowHarness KDoc): the lane for the four
+    // native-dialog flows (editor image/subtitle pickers, heatmap share,
+    // player subtitle upload) — composes NOTHING unless
+    // jellyplay.flowpass.enabled=true. Needs the real fixture + libmpv; the
+    // click-reach bridge (HarnessClickBridge) is armed by Main.kt under the
+    // same property, before any screen composes.
+    if (DesktopFlowHarness.requested()) {
+        val editorRepository: com.raulshma.jellyplay.core.data.repository.MetadataEditorRepository = koinInject()
+        val engineRecorder: com.raulshma.jellyplay.desktop.player.EngineActivityRecorder = koinInject()
+        DesktopFlowHarnessHost(
+            authRepository = authRepository,
+            editorRepository = editorRepository,
+            engineRecorder = engineRecorder,
+            windowRef = windowRef,
+        )
+    }
+
     // Session-restore probe: until it completes we cannot know whether a
     // persisted (server, user) pair exists, so hold on a neutral splash
     // instead of flashing the sign-in pane at every resuming session.

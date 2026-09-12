@@ -24,6 +24,7 @@ Toolset-wide (individual tools may need only a subset — see table):
 | `msi-boot-pass.sh` | The installed-MSI artifact's payload boots: builds the MSI via `:apps:desktop:packageMsi`, administrative-extracts it (`msiexec /a`, no elevation, no install), checks the extracted layout (`JellyPlay.exe` + `runtime/` + `app/`), then boots the EXTRACTED exe under perf-harness properties and requires a clean self-exit with `windowShownMs >= 0` and zero crash logs | wave 13A — live |
 | `desktop-session-pass.sh` | Extended desktop session against a live Jellyfin fixture: in-APP video playback through the whole shared pipeline + Esc/popup-ordering evidence | wave 13B — live |
 | `desktop-native-dialog-pass.sh` | Desktop native-dialog flows inside the real windowed app: the AWT FileDialog settings-backup export/import round trip (SAVE with the production prefill, LOAD, ESC cancel) typed into by a Robot driver, asserting the exported file's existence + v2 JSON shape and the VM's status lines — server-free, the audit-F9 lane | wave 22F — live |
+| `desktop-native-dialog-flows-pass.sh` | The four remaining native-dialog flows (editor image picker, editor subtitle picker, insights heatmap share, player subtitle upload): real sign-in + route pushes + REAL Robot mouse clicks through the harness-gated `HarnessClickBridge` (`jellyplay.flowpass.*` props), the REAL AWT LOAD dialogs typed by the shared driver, server-side post-conditions (Primary image tag change / subtitle stream deltas / heatmap PNG under the redirected tmpdir) | wave 23 — live |
 | `web-verify` | Web (wasm) shell against a live Jellyfin fixture: sign-in, Coil artwork, HtmlVideoEngine playback, via headless-Edge CDP AX-tree driving | wave 13C — live |
 | `foreign-origin.mjs` | Second-origin static server (serve.mjs fork) with `Access-Control-Allow-Origin: *` on every response — the CORS half of the web-cache-eviction lane | wave 20B — live |
 | `web-cache-eviction` | Coil wasm memory-cache LRU eviction under large-library pressure + cross-origin artwork from a non-Jellyfin host, via the Diagnostics pane's wave-20B cache-probe cards | wave 20B — live |
@@ -235,3 +236,33 @@ and killed by PID). Uses a 1400×2000 window (the wave-20B cards render
 below the pane's Back button) with a wheel-scroll fallback for smaller
 windows. Evidence (result.json with the step ledger + `eviction.png`)
 lands in the OS temp dir, outside the repo.
+
+## Running desktop-native-dialog-flows-pass.sh (wave 23)
+
+Closes the wave-22F checklist for items 3-6 (editor image picker, editor
+subtitle picker, insights heatmap share, player subtitle upload): every
+target row/sheet/button is reached by REAL Robot mouse clicks — the screens
+annotate their rows with `Modifier.harnessClickTarget(id)` and the
+harness-gated `HarnessClickBridge` (armed by `jellyplay.flowpass.enabled`
+in Main.kt, zero cost on every normal boot) publishes live window-space
+bounds; the harness converts them to screen coordinates (dividing out the
+AWT `defaultTransform` scale for HiDPI) and clicks. The AWT LOAD dialogs
+are typed by the same driver the wave-22F settings lane uses
+(`HarnessDialogDriver`). Post-conditions are SERVER-side: the item's
+Primary image tag must change, the subtitle stream count must grow (editor
+AND player flows), and the heatmap share must write a PNG under the
+redirected `-Djava.io.tmpdir`. It surfaced two real 10.11 wire-contract
+bugs in `MetadataApiClientImpl.setItemImage` (raw-binary body → 500;
+`image/*` Content-Type → 400) — both measured with curl and fixed.
+
+```bash
+tools/e2e/bootstrap-jellyfin.sh               # fixture first (Docker)
+tools/e2e/desktop-native-dialog-flows-pass.sh # exit 0 = PASS
+```
+
+Env overrides: `AUTO_EXIT_SECONDS` (300), `SERVER_URL`, `E2E_USERNAME`,
+`E2E_PASSWORD`, `ITEM_NAME`. Requires the interactive-display + libmpv +
+no-concurrent-JellyPlay hygiene of the sibling passes. If shared modules
+were just edited, build once with `--no-configuration-cache --no-build-cache`
+(the stale configuration-cache VFS can otherwise serve pre-edit classes —
+the wave-23 run-5/6/7 lesson). Full ledger: `docs/e2e/desktop-native-dialogs.md`.

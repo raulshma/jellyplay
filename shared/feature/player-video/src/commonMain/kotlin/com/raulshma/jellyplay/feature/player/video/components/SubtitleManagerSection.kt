@@ -85,6 +85,7 @@ import com.raulshma.jellyplay.feature.player.video.SubtitleDownloadState
 import com.raulshma.jellyplay.feature.player.video.SubtitleDownloadStatus
 import com.raulshma.jellyplay.feature.player.video.state.providerSubtitleRowKey
 import com.raulshma.jellyplay.core.ui.components.SheetTabRow
+import com.raulshma.jellyplay.core.ui.harness.harnessClickTarget
 import com.raulshma.jellyplay.core.ui.tv.TvFocusState
 import com.raulshma.jellyplay.core.ui.tv.ifElse
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
@@ -171,6 +172,13 @@ fun androidx.compose.foundation.layout.ColumnScope.SubtitleManagerSection(
                 Tab(
                     selected = selectedTab == index,
                     onClick = { onTabChange(index) },
+                    // e2e: click-reach target (harness-gated no-op) — the
+                    // harness lands on Upload to reach the file picker.
+                    modifier = if (tab == SubtitleManagerTab.UPLOAD) {
+                        Modifier.harnessClickTarget("player-subtitle-upload-tab")
+                    } else {
+                        Modifier
+                    },
                     text = {
                         Text(
                             when (tab) {
@@ -1017,7 +1025,9 @@ private fun UploadTab(
                 .fillMaxWidth()
                 .ifElse(isTv, Modifier.focusRequester(focusRequester))
                 .then(selectFileBtnFocus.focusModifier)
-                .tvFocusIndicator(selectFileBtnFocus, ShapeCache.smoothPill),
+                .tvFocusIndicator(selectFileBtnFocus, ShapeCache.smoothPill)
+                // e2e: click-reach target (harness-gated no-op).
+                .harnessClickTarget("player-subtitle-select-file"),
             enabled = !isUploading,
         ) {
             Icon(Tabler.Outline.Upload, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -1029,7 +1039,11 @@ private fun UploadTab(
             language = selectedLanguage,
             onLanguageChange = { selectedLanguage = it },
             cultures = cultures,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                // e2e: click-reach target (harness-gated no-op) — the confirm
+                // button requires a non-blank language.
+                .harnessClickTarget("player-subtitle-language-field"),
             label = stringResource(Res.string.player_video_language),
         )
 
@@ -1048,7 +1062,13 @@ private fun UploadTab(
                     onUpload(uriStr, selectedFileName, selectedLanguage, isForced, isHearingImpaired)
                 }
             },
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                // e2e: click-reach target (harness-gated no-op).
+                .harnessClickTarget(
+                    "player-subtitle-upload-confirm",
+                    enabled = !isUploading && selectedFile != null && selectedLanguage.isNotBlank(),
+                ),
             enabled = !isUploading && selectedFile != null && selectedLanguage.isNotBlank(),
         ) {
             if (isUploading) {

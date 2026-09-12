@@ -62,6 +62,7 @@ import com.raulshma.jellyplay.core.model.ImageInfo
 import com.raulshma.jellyplay.core.model.PendingConfirmation
 import com.raulshma.jellyplay.core.model.RemoteImageInfo
 import com.raulshma.jellyplay.core.ui.image.MediaImage
+import com.raulshma.jellyplay.core.ui.harness.harnessClickTarget
 import com.raulshma.jellyplay.feature.editor.EditorUiState
 import coil3.size.Size as CoilSize
 import com.raulshma.jellyplay.feature.editor.EditorFilePicker
@@ -161,7 +162,11 @@ fun ImagesTab(
                 .padding(16.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            FilledTonalButton(onClick = { showUploadSheet = true }) {
+            FilledTonalButton(
+                onClick = { showUploadSheet = true },
+                // e2e: click-reach target (harness-gated no-op) — see HarnessClickBridge.
+                modifier = Modifier.harnessClickTarget("editor-images-upload"),
+            ) {
                 Icon(Tabler.Outline.Plus, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(stringResource(Res.string.editor_images_upload))
@@ -472,7 +477,10 @@ private fun ImageUploadSheet(
                     }
                     FilledTonalButton(
                         onClick = { filePicker?.launch() },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            // e2e: click-reach target (harness-gated no-op).
+                            .harnessClickTarget("editor-images-select-file"),
                     ) {
                         Text(if (selectedFile != null) stringResource(Res.string.editor_images_change_file) else stringResource(Res.string.editor_images_select_image))
                     }
@@ -482,7 +490,10 @@ private fun ImageUploadSheet(
                                 onUploadFile(file, selectedImageType)
                             }
                         },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            // e2e: click-reach target (harness-gated no-op).
+                            .harnessClickTarget("editor-images-upload-confirm", enabled = selectedFile != null),
                         enabled = selectedFile != null,
                     ) { Text(stringResource(Res.string.editor_images_upload)) }
                 } else {

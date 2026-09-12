@@ -38,6 +38,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import com.raulshma.jellyplay.core.ui.components.PullToRefreshBox
+import com.raulshma.jellyplay.core.ui.harness.harnessClickTarget
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import androidx.compose.runtime.Composable
@@ -188,7 +189,11 @@ fun WatchProgressHeatmapScreen(
                 val shareFocusState = rememberTvFocusState()
                 IconButton(
                     onClick = { viewModel.onEvent(HeatmapEvent.RequestShare) },
-                    modifier = Modifier.then(shareFocusState.focusModifier).tvFocusIndicator(shareFocusState, CircleShape),
+                    // e2e: click-reach target (harness-gated no-op) — see HarnessClickBridge.
+                    modifier = Modifier
+                        .harnessClickTarget("insights-heatmap-share")
+                        .then(shareFocusState.focusModifier)
+                        .tvFocusIndicator(shareFocusState, CircleShape),
                 ) {
                     Icon(Tabler.Outline.Share, contentDescription = stringResource(Res.string.insights_cd_share))
                 }

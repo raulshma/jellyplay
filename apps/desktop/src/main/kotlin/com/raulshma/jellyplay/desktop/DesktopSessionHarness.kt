@@ -120,6 +120,13 @@ object DesktopSessionHarness {
         backStackProvider = provider
     }
 
+    /**
+     * The live back stack of the current top-level tab, or null before the
+     * scaffold composed. Shared by the session harness and the flows
+     * harness (DesktopFlowHarness) — both navigate by pushing routes.
+     */
+    fun currentBackStack(): MutableList<NavKey>? = backStackProvider?.invoke()
+
     /** Everything the harness needs from the app; keeps the object Koin-free. */
     class SessionHarnessDeps(
         val authRepository: AuthRepository,
