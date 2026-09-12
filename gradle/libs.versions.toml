@@ -261,6 +261,10 @@ datastore-preferences-core = { group = "androidx.datastore", name = "datastore-p
 okio = { group = "com.squareup.okio", name = "okio", version.ref = "okio" }
 java-keyring = { group = "com.github.javakeyring", name = "java-keyring", version.ref = "javakeyring" }
 androidx-sqlite-bundled = { group = "androidx.sqlite", name = "sqlite-bundled", version.ref = "androidxSqlite" }
+# WebWorkerSQLiteDriver (wasmJs): the Room 3 web driver — a SQLiteDriver that
+# proxies to a Web Worker implementing its documented message protocol (see
+# shared/core/database/webworker/ for the vendored worker implementation).
+androidx-sqlite-web = { group = "androidx.sqlite", name = "sqlite-web", version.ref = "androidxSqlite" }
 
 # Paging
 paging-common = { group = "androidx.paging", name = "paging-common", version.ref = "paging" }

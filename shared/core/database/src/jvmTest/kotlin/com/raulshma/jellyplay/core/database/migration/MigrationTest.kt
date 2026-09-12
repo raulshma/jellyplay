@@ -626,7 +626,7 @@ class MigrationTest {
      * Room generated for that historical version. Fixtures built this way fail
      * loudly when a hand-written assumption about an old shape goes stale.
      */
-    private fun execSchema(db: SQLiteConnection, version: Int) {
+    private suspend fun execSchema(db: SQLiteConnection, version: Int) {
         val path = "com.raulshma.jellyplay.core.database.JellyPlayDatabase/$version.json"
         val text = javaClass.classLoader.getResourceAsStream(path)?.bufferedReader()?.readText()
             ?: error("exported Room schema not found on test classpath: $path")
@@ -1085,7 +1085,7 @@ class MigrationTest {
 
             openRawDatabase(53) { db ->
                 execSchema(db, 53)
-                fun insertDownload(id: String, downloadPath: String, container: String?) {
+                suspend fun insertDownload(id: String, downloadPath: String, container: String?) {
                     db.execSQL(
                         "INSERT INTO downloads (id, mediaItemId, name, mediaType, downloadPath, downloadUrl, " +
                             "totalSizeBytes, downloadedBytes, status, container) " +
@@ -1161,7 +1161,7 @@ class MigrationTest {
         return db
     }
 
-    private fun createServersTable(db: SQLiteConnection) {
+    private suspend fun createServersTable(db: SQLiteConnection) {
         db.execSQL(
             """
             CREATE TABLE IF NOT EXISTS servers (
@@ -1176,7 +1176,7 @@ class MigrationTest {
         )
     }
 
-    private fun createDownloadsTableBase(db: SQLiteConnection) {
+    private suspend fun createDownloadsTableBase(db: SQLiteConnection) {
         db.execSQL(
             """
             CREATE TABLE IF NOT EXISTS downloads (
@@ -1200,12 +1200,12 @@ class MigrationTest {
         db.execSQL("CREATE INDEX IF NOT EXISTS index_downloads_status ON downloads(status)")
     }
 
-    private fun createDownloadsTableV5(db: SQLiteConnection) {
+    private suspend fun createDownloadsTableV5(db: SQLiteConnection) {
         createDownloadsTableBase(db)
         db.execSQL("ALTER TABLE downloads ADD COLUMN speedBytesPerSec INTEGER NOT NULL DEFAULT 0")
     }
 
-    private fun createDownloadsTableV11(db: SQLiteConnection) {
+    private suspend fun createDownloadsTableV11(db: SQLiteConnection) {
         createDownloadsTableV5(db)
         db.execSQL("ALTER TABLE downloads ADD COLUMN seriesId TEXT")
         db.execSQL("ALTER TABLE downloads ADD COLUMN seasonId TEXT")
@@ -1218,7 +1218,7 @@ class MigrationTest {
         db.execSQL("CREATE INDEX IF NOT EXISTS index_downloads_seasonId ON downloads(seasonId)")
     }
 
-    private fun createUsersTable(db: SQLiteConnection) {
+    private suspend fun createUsersTable(db: SQLiteConnection) {
         db.execSQL(
             """
             CREATE TABLE IF NOT EXISTS users (
@@ -1236,13 +1236,13 @@ class MigrationTest {
         db.execSQL("CREATE INDEX IF NOT EXISTS index_users_serverId ON users(serverId)")
     }
 
-    private fun createUsersTableV10(db: SQLiteConnection) {
+    private suspend fun createUsersTableV10(db: SQLiteConnection) {
         createUsersTable(db)
         db.execSQL("CREATE INDEX IF NOT EXISTS index_users_serverId_lastConnected ON users(serverId, lastConnected)")
         db.execSQL("ALTER TABLE users ADD COLUMN isAdmin INTEGER NOT NULL DEFAULT 0")
     }
 
-    private fun createLyricsCacheTable(db: SQLiteConnection) {
+    private suspend fun createLyricsCacheTable(db: SQLiteConnection) {
         db.execSQL(
             """
             CREATE TABLE IF NOT EXISTS lyrics_cache (
@@ -1261,7 +1261,7 @@ class MigrationTest {
         db.execSQL("CREATE INDEX IF NOT EXISTS index_lyrics_cache_fetchedAt ON lyrics_cache(fetchedAt)")
     }
 
-    private fun createOfflineMediaTable(db: SQLiteConnection) {
+    private suspend fun createOfflineMediaTable(db: SQLiteConnection) {
         db.execSQL(
             """
             CREATE TABLE IF NOT EXISTS offline_media (

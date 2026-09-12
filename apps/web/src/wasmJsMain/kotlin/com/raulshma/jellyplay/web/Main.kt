@@ -18,6 +18,7 @@ import coil3.request.SuccessResult
 import coil3.request.crossfade
 import com.raulshma.jellyplay.core.data.di.dataWasmModule
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
+import com.raulshma.jellyplay.core.database.di.webDatabaseModule
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
 import com.raulshma.jellyplay.core.datastore.SeerrSecureCredentialsStore
 import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
@@ -125,6 +126,16 @@ fun main() {
             // networkWasmModule's LibraryApiClient) — all resolve on web.
             detailsModule,
             webDetailsPlatformModule(),
+            // infrastructure registration: the OPFS-backed Room database
+            // (WebWorkerSQLiteDriver over the vendored worker — see
+            // shared/core/database's WebDatabaseModule KDoc). Nothing on web
+            // resolves JellyPlayDatabase or a DAO yet, so this changes no
+            // behavior — it exists so the DB single is part of the boot graph
+            // and any lazy resolution later finds it. (No
+            // KoinModuleRegistrationGuardTest change needed: the web-prefixed
+            // core modules are platform modules by its platformPrefixes rule,
+            // same as webDatastoreModule.)
+            webDatabaseModule(),
         )
     }
 

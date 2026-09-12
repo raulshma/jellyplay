@@ -57,14 +57,18 @@ kotlin {
                 // AuthApiClient/LibraryApiClient/PlaybackApiClient bindings).
                 // Deliberately absent: paging-compose ( §1 proves
                 // its 3.5.0 wasm klibs exist, but no consuming web module
-                // needs LazyPagingItems yet) and database (no Room on wasm
-                // v1 — core:data's wasm slice is the Room-free repository
-                // layer, wired below).
+                // needs LazyPagingItems yet). database joined in: web gets
+                // the real Room database (OPFS-backed via the vendored
+                // webworker/ npm package riding this module's wasmJsMain) and
+                // Main.kt registers webDatabaseModule alongside the rest of
+                // the DI stack — nothing on web consumes the DAOs yet; the
+                // edge exists so the wiring compiles and ships.
                 implementation(project(":shared:core:model"))
                 implementation(project(":shared:core:designsystem"))
                 implementation(project(":shared:core:ui"))
                 implementation(project(":shared:core:datastore"))
                 implementation(project(":shared:core:network"))
+                implementation(project(":shared:core:database"))
                 // dataWasmModule (the requests repo slice —
                 // SeerrRepository/ArrRepository over the wasm clients) is
                 // imported into Main.kt's startKoin, hence the direct edge.

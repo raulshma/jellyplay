@@ -3,6 +3,8 @@ package com.raulshma.jellyplay.core.database
 import androidx.room3.Database
 import androidx.room3.RoomDatabase
 import androidx.room3.ColumnTypeConverters
+import androidx.room3.ConstructedBy
+import androidx.room3.RoomDatabaseConstructor
 import com.raulshma.jellyplay.core.database.dao.OfflineMediaWithPlayback
 import com.raulshma.jellyplay.core.database.dao.AuditLogDao
 import com.raulshma.jellyplay.core.database.dao.AudioQueueDao
@@ -75,6 +77,7 @@ const val JELLY_PLAY_DATABASE_VERSION: Int = 54
     exportSchema = true,
     views = [OfflineMediaWithPlayback::class],
 )
+@ConstructedBy(JellyPlayDatabaseConstructor::class)
 @ColumnTypeConverters(Converters::class)
 abstract class JellyPlayDatabase : RoomDatabase() {
     abstract fun serverDao(): ServerDao
@@ -94,4 +97,16 @@ abstract class JellyPlayDatabase : RoomDatabase() {
     abstract fun itemPlaybackPreferenceDao(): ItemPlaybackPreferenceDao
     abstract fun playbackOutboxDao(): PlaybackOutboxDao
     abstract fun homeSectionCacheDao(): HomeSectionCacheDao
+}
+
+/**
+ * Room 3 KMP instantiation seam (required once the module targets non-Android
+ * platforms): the wasmJs/jvm Room builders construct the database through
+ * this expect — each target's KSP run generates the actual that instantiates
+ * the generated JellyPlayDatabase_Impl. Android keeps its Context-based
+ * builder path, but the annotation applies commonMain-wide and Room's android
+ * processing generates its actual identically.
+ */
+expect object JellyPlayDatabaseConstructor : RoomDatabaseConstructor<JellyPlayDatabase> {
+    override fun initialize(): JellyPlayDatabase
 }

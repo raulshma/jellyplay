@@ -420,7 +420,7 @@ class Migration24To25(
         encryptServerTokens(db)
     }
 
-    private fun encryptUserTokens(db: SQLiteConnection) {
+    private suspend fun encryptUserTokens(db: SQLiteConnection) {
         db.prepare("SELECT userId, accessToken FROM users").use { cursor ->
             while (cursor.step()) {
                 val userId = cursor.getText(0)
@@ -444,7 +444,7 @@ class Migration24To25(
         }
     }
 
-    private fun encryptServerTokens(db: SQLiteConnection) {
+    private suspend fun encryptServerTokens(db: SQLiteConnection) {
         db.prepare("SELECT id, accessToken FROM servers").use { cursor ->
             while (cursor.step()) {
                 val serverId = cursor.getText(0)

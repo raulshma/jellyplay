@@ -67,9 +67,12 @@ jobs:
         # The AGP KMP library plugin exposes no per-variant assembleDebug;
         # android target verifies via its single androidMain compilation.
         # wasmJs target exists on model/datastore/designsystem/ui/network/
-        # data/player-contract plus the calendar/requests/details feature
-        # modules and the apps:web shell —
-        # only database ships without it (no Room on wasm v1).
+        # data/player-contract/database plus the calendar/requests/details
+        # feature modules and the apps:web shell — database joined at:
+        # Room 3 over sqlite-web's WebWorkerSQLiteDriver (vendored OPFS
+        # worker, kspWasmJs codegen). Its wasmJsTest suite is compile-gated
+        # here the same way apps/web's is, while the runnable
+        # wasmJsBrowserTest lane stays local (see the apps/web note below).
         # data gained wasm when the Room-backed repositories moved to
         # its jvmShared source set (the lane line below caught up later —
         # the target existed but was never compiled here, so wasm-only
@@ -110,6 +113,8 @@ jobs:
           :shared:core:datastore:compileKotlinWasmJs
           :shared:core:datastore:compileAndroidMain
           :shared:core:database:jvmJar
+          :shared:core:database:compileKotlinWasmJs
+          :shared:core:database:compileTestKotlinWasmJs
           :shared:core:database:compileAndroidMain
           :shared:core:network:jvmJar
           :shared:core:network:compileKotlinWasmJs

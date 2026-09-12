@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.database.entity
 
+import com.raulshma.jellyplay.core.model.wallNowMillis
 import androidx.room3.ColumnInfo
 import androidx.room3.Entity
 import androidx.room3.Index
@@ -41,8 +42,8 @@ data class PlaybackOutboxEntity(
     @ColumnInfo(defaultValue = "0") val isPaused: Boolean = false,
     @ColumnInfo(defaultValue = "'DIRECT_PLAY'") val playMethod: String = "DIRECT_PLAY",
     val mediaSourceId: String? = null,
-    @ColumnInfo(defaultValue = "0") val recordedAt: Long = System.currentTimeMillis(),
-    @ColumnInfo(defaultValue = "0") val createdAt: Long = System.currentTimeMillis(),
+    @ColumnInfo(defaultValue = "0") val recordedAt: Long = wallNowMillis(),
+    @ColumnInfo(defaultValue = "0") val createdAt: Long = wallNowMillis(),
     /**
      * `true` once the row has exhausted its retry budget. Dead-lettered rows
      * are retained for auditability (and a future "retry sync" affordance) but

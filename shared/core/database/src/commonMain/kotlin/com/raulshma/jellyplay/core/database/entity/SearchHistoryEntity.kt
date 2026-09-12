@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.database.entity
 
+import com.raulshma.jellyplay.core.model.wallNowMillis
 import androidx.room3.ColumnInfo
 import androidx.room3.Entity
 import androidx.room3.Index
@@ -19,5 +20,5 @@ data class SearchHistoryEntity(
     val query: String,
     val userId: String,
     @ColumnInfo(defaultValue = "0")
-    val searchedAt: Long = System.currentTimeMillis(),
+    val searchedAt: Long = wallNowMillis(),
 )

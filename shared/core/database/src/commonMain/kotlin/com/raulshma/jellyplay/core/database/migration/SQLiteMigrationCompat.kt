@@ -9,12 +9,19 @@ import androidx.sqlite.SQLiteStatement
  * multiplatform `Migration.migrate` hands out an [androidx.sqlite.SQLiteConnection]
  * instead. These shims keep 141 `execSQL` call sites byte-identical instead of
  * rewriting migration SQL history.
+ *
+ * The shims are `suspend` because androidx.sqlite 2.7.x's web (js/wasmJs)
+ * actuals of [SQLiteConnection.prepare] / [SQLiteStatement.step] are suspend
+ * functions (the nonWeb android/jvm/native actuals are blocking — a suspend
+ * shim legally calls both, so one common declaration serves every target;
+ * every caller sits inside `Migration.migrate`, which is suspend under
+ * room3).
  */
-internal fun SQLiteConnection.execSQL(sql: String) {
+internal suspend fun SQLiteConnection.execSQL(sql: String) {
     prepare(sql).use { it.step() }
 }
 
-internal fun SQLiteConnection.execSQL(sql: String, bindArgs: Array<out Any?>) {
+internal suspend fun SQLiteConnection.execSQL(sql: String, bindArgs: Array<out Any?>) {
     prepare(sql).use { stmt ->
         bindArgs.forEachIndexed { index, arg -> stmt.bindAny(index + 1, arg) }
         stmt.step()
