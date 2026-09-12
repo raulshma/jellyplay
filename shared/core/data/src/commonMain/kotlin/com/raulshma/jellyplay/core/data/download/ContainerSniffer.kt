@@ -1,44 +1,50 @@
-package com.raulshma.jellyplay.feature.player.video.engine
-
-import java.io.File
-import java.io.InputStream
+package com.raulshma.jellyplay.core.data.download
 
 /**
- * Sniffs the real container format of a downloaded file by reading its magic
+ * Sniffs the real container format of a downloaded file from its magic
  * bytes, regardless of the on-disk file extension.
  *
  * Why: downloads created before the container-persistence migration carry a
  * hardcoded `.mp4` extension even when the underlying bytes are MKV/TS/FLV/AVI.
  * ExoPlayer picks its extractor from the URI extension and hangs silently on a
  * mismatch; the sniffer lets the offline playback path recover the real
- * container so the correct MIME type can be attached to the [androidx.media3.common.MediaItem].
+ * container so the correct MIME type can be attached to the MediaItem.
  *
- * Returns one of the container codes recognized by [ContainerMimeMapper]
- * (`"mkv"`, `"webm"`, `"mp4"`, `"ts"`, `"flv"`, `"avi"`), or `null` if no known
- * magic signature matches (or the file cannot be read).
+ * Byte-level and pure common on purpose: this module's commonMain also builds
+ * for wasmJs, so the API takes already-read header bytes and all file IO stays
+ * in caller-side glue (this module's jvmShared `sniffContainerFile` backs the
+ * database backfill probe; player-video's PlayerSessionManager has its own
+ * JVM glue for the playback fallback). Formerly lived in
+ * `feature.player.video.engine` as a File-taking object — the detection logic
+ * is byte-identical to that implementation.
  *
- * Pure-JVM (no Android deps) so it is unit-testable on the host JVM.
+ * Returns one of the container codes recognized by the playback layer's
+ * container→MIME mapping (`"mkv"`, `"webm"`, `"mp4"`, `"ts"`, `"flv"`,
+ * `"avi"`), or `null` if no known magic signature matches.
  */
-internal object ContainerSniffer {
+object ContainerSniffer {
 
-    private const val TS_PACKET_SIZE = 188
+    /** MPEG-TS packet size in bytes. */
+    const val TS_PACKET_SIZE = 188
 
-    fun sniff(file: File): String? {
-        if (!file.exists() || !file.canRead()) return null
-        // MPEG-TS sync-byte detection needs at least three packet boundaries
-        // (offsets 0, 188, 376) to be reliable; everything else fits in 16 bytes.
-        val buf = ByteArray(TS_PACKET_SIZE * 3)
-        return try {
-            file.inputStream().use { input ->
-                val read = readFully(input, buf)
-                if (read < 16) null else detect(buf, read)
-            }
-        } catch (_: Exception) {
-            null
-        }
-    }
+    /**
+     * Header window a caller must read: MPEG-TS sync-byte detection needs at
+     * least three packet boundaries (offsets 0, 188, 376) to be reliable;
+     * every other signature fits in 16 bytes.
+     */
+    const val SNIFF_HEADER_BYTES = TS_PACKET_SIZE * 3
 
-    private fun detect(buf: ByteArray, len: Int): String? {
+    /** Minimum header length that can carry a recognizable signature. */
+    const val MIN_SNIFF_BYTES = 16
+
+    /**
+     * Detects the container code from the first [length] bytes of a media
+     * file's header. Callers that read fewer than [MIN_SNIFF_BYTES] bytes
+     * should not call this (too short to match anything reliably).
+     */
+    fun sniff(header: ByteArray, length: Int): String? {
+        val buf = header
+        val len = length
         // EBML header (Matroska/WebM): 1A 45 DF A3.
         if (len >= 4 &&
             (buf[0].toInt() and 0xFF) == 0x1A &&
@@ -107,15 +113,5 @@ internal object ContainerSniffer {
             }
         }
         return "mkv"
-    }
-
-    private fun readFully(input: InputStream, buf: ByteArray): Int {
-        var total = 0
-        while (total < buf.size) {
-            val n = input.read(buf, total, buf.size - total)
-            if (n < 0) break
-            total += n
-        }
-        return total
     }
 }

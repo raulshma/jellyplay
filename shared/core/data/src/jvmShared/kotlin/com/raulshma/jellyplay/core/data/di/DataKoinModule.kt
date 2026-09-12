@@ -4,6 +4,7 @@ import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueImpl
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.download.MediaDownloadActions
+import com.raulshma.jellyplay.core.data.download.sniffContainerFile
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.data.network.OkHttpConfigProviderImpl
 import com.raulshma.jellyplay.core.data.network.ServerHealthMonitor
@@ -110,6 +111,7 @@ import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
 import com.raulshma.jellyplay.core.database.dao.OfflineMediaDao
 import com.raulshma.jellyplay.core.database.dao.SyncBaselineDao
+import com.raulshma.jellyplay.core.database.migration.ContainerProbe
 import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind
 import com.raulshma.jellyplay.core.network.config.OkHttpConfigProvider
@@ -182,6 +184,17 @@ import org.koin.dsl.module
  * [androidDataModule] / [desktopDataModule].
  */
 val dataJvmModule: Module = module {
+    // ContainerProbe for Migration53To54 (the v53→v54 one-time backfill of
+    // legacy-NULL `downloads.container` rows): combines this module's
+    // `sniffContainerFile` java.io glue with the pure byte-level
+    // ContainerSniffer from commonMain. Registered HERE because
+    // shared:core:database can see neither java.io in commonMain nor this
+    // module (core:data is downstream — its repositories consume the
+    // database DAOs); its platform database modules resolve the probe via
+    // Koin get() when assembling the migration chain (TokenCipher seam,
+    // inverted).
+    single<ContainerProbe> { ContainerProbe(::sniffContainerFile) }
+
     // Relocated from the app composition root's appNetworkConfigModule (C4
     // part 2, DI-finalize): networkJvmModule's base OkHttpClient resolves
     // this via cross-module get() — same ctor wiring the app module had.

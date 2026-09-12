@@ -849,7 +849,7 @@ class MigrationTest {
     @Test
     fun allMigrations_coversContiguousRange() {
         val tokenCipher = JvmTokenCipher.forTestingWithPersistentKey()
-        val migrations = allMigrations(tokenCipher)
+        val migrations = allMigrations(tokenCipher, testContainerProbe())
         // One migration per step from v1 up to the current schema version,
         // each handing off to the next with no gaps or duplicate starts.
         // androidx.room.Database has CLASS retention, so getAnnotation() returns
@@ -1058,10 +1058,103 @@ class MigrationTest {
         }
     }
 
+    /**
+     * Verifies the v53→v54 backfill: every `downloads` row whose `container`
+     * is NULL gets the container code resolved by the injected
+     * [ContainerProbe] (file header magic bytes) persisted, while rows whose
+     * file is missing stay NULL (no error — the runtime playback fallback
+     * keeps covering them) and rows that already carry a container are left
+     * untouched. The starting schema is executed from the exported `53.json`
+     * (see [execSchema]) so the fixture matches the real v53 shape. The probe
+     * is a real temp-file implementation because this module cannot see
+     * shared:core:data's ContainerSniffer (downstream module) — exactly the
+     * seam the migration itself runs against.
+     */
+    @Test
+    fun migrateV53_54_backfillsLegacyNullContainerRows() {
+        val backfillDir = createTempDirectory("jellyplay-container-backfill")
+        try {
+            // Legacy download shape: hardcoded .mp4 extension over MKV bytes
+            // (EBML header + DocType element), padded past the 16-byte
+            // minimum sniff window.
+            val misnamedFile = File(backfillDir.toFile(), "legacy-movie.mp4")
+            misnamedFile.writeBytes(
+                byteArrayOf(0x1A, 0x45, 0xDF.toByte(), 0xA3.toByte(), 0x42, 0x82.toByte(), 0x88.toByte(), 0x6D) + ByteArray(8)
+            )
+            val vanishedFile = File(backfillDir.toFile(), "deleted-episode.mp4")
+
+            openRawDatabase(53) { db ->
+                execSchema(db, 53)
+                fun insertDownload(id: String, downloadPath: String, container: String?) {
+                    db.execSQL(
+                        "INSERT INTO downloads (id, mediaItemId, name, mediaType, downloadPath, downloadUrl, " +
+                            "totalSizeBytes, downloadedBytes, status, container) " +
+                            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        arrayOf<Any?>(id, "item-$id", "Download $id", "MOVIE", downloadPath, "https://u", 1000L, 1000L, "COMPLETED", container),
+                    )
+                }
+                insertDownload("dl-known", "/downloads/already-set.mp4", "mp4")
+                insertDownload("dl-missing", vanishedFile.absolutePath, null)
+                insertDownload("dl-sniff", misnamedFile.absolutePath, null)
+
+                Migration53To54(testContainerProbe()).migrate(db)
+
+                db.prepare("SELECT id, container FROM downloads ORDER BY id").use { c ->
+                    // Already-set row is untouched.
+                    assertTrue(c.step())
+                    assertEquals("dl-known", c.getText(0))
+                    assertEquals("mp4", c.getText(1))
+                    // Missing file: stays NULL, migration did not fail.
+                    assertTrue(c.step())
+                    assertEquals("dl-missing", c.getText(0))
+                    assertTrue(c.isNull(1))
+                    // Sniffable file: backfilled from the magic bytes.
+                    assertTrue(c.step())
+                    assertEquals("dl-sniff", c.getText(0))
+                    assertEquals("mkv", c.getText(1))
+                    assertFalse(c.step())
+                }
+                db.close()
+            }
+        } finally {
+            backfillDir.toFile().deleteRecursively()
+        }
+    }
+
+    /**
+     * Real-filesystem probe for these tests: reads the file's first bytes and
+     * recognizes the Matroska EBML magic, returning null for anything else.
+     * Self-contained by necessity — :shared:core:database cannot depend on
+     * shared:core:data, where the production ContainerSniffer lives — which
+     * is the same inversion the [ContainerProbe] seam exists for.
+     */
+    private fun testContainerProbe(): ContainerProbe = ContainerProbe { downloadPath ->
+        val header = ByteArray(4)
+        val read = try {
+            java.io.File(downloadPath).inputStream().use { input ->
+                var total = 0
+                while (total < header.size) {
+                    val n = input.read(header, total, header.size - total)
+                    if (n < 0) break
+                    total += n
+                }
+                total
+            }
+        } catch (_: Exception) {
+            0
+        }
+        if (read >= 4 &&
+            (header[0].toInt() and 0xFF) == 0x1A &&
+            (header[1].toInt() and 0xFF) == 0x45 &&
+            (header[2].toInt() and 0xFF) == 0xDF &&
+            (header[3].toInt() and 0xFF) == 0xA3
+        ) "mkv" else null
+    }
+
     private fun openWithMigrations(): JellyPlayDatabase {
         val tokenCipher = JvmTokenCipher.forTestingWithPersistentKey()
         val db = Room.databaseBuilder<JellyPlayDatabase>(dbFile.absolutePath)
-            .addMigrations(*allMigrations(tokenCipher).toTypedArray())
+            .addMigrations(*allMigrations(tokenCipher, testContainerProbe()).toTypedArray())
             .setDriver(BundledSQLiteDriver())
             .build()
         database = db

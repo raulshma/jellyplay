@@ -1,4 +1,4 @@
-package com.raulshma.jellyplay.feature.player.video.engine
+package com.raulshma.jellyplay.core.data.download
 
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -19,39 +19,36 @@ class ContainerSnifferTest {
      * zeros so the fixture exercises the magic-byte logic rather than the
      * too-short-header early-return. Real media files are kilobytes minimum.
      */
-    private fun pad(header: ByteArray, minLen: Int = 16): ByteArray =
+    private fun pad(header: ByteArray, minLen: Int = ContainerSniffer.MIN_SNIFF_BYTES): ByteArray =
         if (header.size >= minLen) header else header + ByteArray(minLen - header.size)
+
+    private fun sniff(header: ByteArray): String? = ContainerSniffer.sniff(header, header.size)
 
     @Test
     fun matroskaEbmlHeader_detectedAsMkv() {
-        val file = writeBytes(pad(b(0x1A, 0x45, 0xDF, 0xA3, 0x42, 0x82, 0x88, 0x6D)))
-        assertEquals(ContainerSniffer.sniff(file), "mkv")
+        assertEquals("mkv", sniff(pad(b(0x1A, 0x45, 0xDF, 0xA3, 0x42, 0x82, 0x88, 0x6D))))
     }
 
     @Test
     fun webmEbmlHeader_detectedAsWebm() {
         // EBML header + DocType payload containing the literal "webm".
-        val file = writeBytes(pad(b(0x1A, 0x45, 0xDF, 0xA3, 0x42, 0x82, 0x84, 0x77, 0x65, 0x62, 0x6D)))
-        assertEquals(ContainerSniffer.sniff(file), "webm")
+        assertEquals("webm", sniff(pad(b(0x1A, 0x45, 0xDF, 0xA3, 0x42, 0x82, 0x84, 0x77, 0x65, 0x62, 0x6D))))
     }
 
     @Test
     fun mp4FtypBox_detectedAsMp4() {
         // 4-byte size + "ftyp" + major brand "isom"
-        val file = writeBytes(pad(b(0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6F, 0x6D)))
-        assertEquals(ContainerSniffer.sniff(file), "mp4")
+        assertEquals("mp4", sniff(pad(b(0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6F, 0x6D))))
     }
 
     @Test
     fun flvHeader_detectedAsFlv() {
-        val file = writeBytes(pad(b(0x46, 0x4C, 0x56, 0x01, 0x05, 0x00, 0x00, 0x00)))
-        assertEquals(ContainerSniffer.sniff(file), "flv")
+        assertEquals("flv", sniff(pad(b(0x46, 0x4C, 0x56, 0x01, 0x05, 0x00, 0x00, 0x00))))
     }
 
     @Test
     fun aviRiffHeader_detectedAsAvi() {
-        val file = writeBytes(pad(b(0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x41, 0x56, 0x49, 0x20)))
-        assertEquals(ContainerSniffer.sniff(file), "avi")
+        assertEquals("avi", sniff(pad(b(0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x41, 0x56, 0x49, 0x20))))
     }
 
     @Test
@@ -61,8 +58,7 @@ class ContainerSnifferTest {
         buf[0] = 0x47
         buf[188] = 0x47
         buf[376] = 0x47
-        val file = writeBytes(buf)
-        assertEquals(ContainerSniffer.sniff(file), "ts")
+        assertEquals("ts", sniff(buf))
     }
 
     @Test
@@ -71,27 +67,40 @@ class ContainerSnifferTest {
         buf[0] = 0x47
         buf[188] = 0x47
         // No sync byte at 376 → must not false-positive.
-        val file = writeBytes(buf)
-        assertNull(ContainerSniffer.sniff(file))
+        assertNull(sniff(buf))
     }
 
     @Test
     fun unknownBytes_returnNull() {
-        val file = writeBytes(ByteArray(64) { 0xFF.toByte() })
-        assertNull(ContainerSniffer.sniff(file))
+        assertNull(sniff(ByteArray(64) { 0xFF.toByte() }))
     }
 
     @Test
     fun tooFewBytes_returnNull() {
-        // Less than the 16-byte minimum header window.
-        val file = writeBytes(b(0x1A, 0x45, 0xDF, 0xA3))
-        assertNull(ContainerSniffer.sniff(file))
+        // Fewer bytes than the shortest signature (EBML needs 4): the
+        // byte-level API has no minimum-length policy of its own — the
+        // 16-byte floor is glue-owned (see fileGlue_tooShortFile_returnsNull).
+        assertNull(sniff(b(0x1A, 0x45, 0xDF)))
+    }
+
+    // ── jvmShared file glue (backs the database backfill probe) ───────────
+
+    @Test
+    fun fileGlue_readsHeaderAndDelegates() {
+        val file = writeBytes(pad(b(0x1A, 0x45, 0xDF, 0xA3, 0x42, 0x82, 0x88, 0x6D)))
+        assertEquals("mkv", sniffContainerFile(file.absolutePath))
     }
 
     @Test
-    fun missingFile_returnNull() {
+    fun fileGlue_tooShortFile_returnsNull() {
+        val file = writeBytes(b(0x1A, 0x45, 0xDF, 0xA3))
+        assertNull(sniffContainerFile(file.absolutePath))
+    }
+
+    @Test
+    fun fileGlue_missingFile_returnNull() {
         val ghost = File(tempFolder.root, "does-not-exist")
-        assertNull(ContainerSniffer.sniff(ghost))
+        assertNull(sniffContainerFile(ghost.absolutePath))
     }
 
     private fun writeBytes(data: ByteArray): File {

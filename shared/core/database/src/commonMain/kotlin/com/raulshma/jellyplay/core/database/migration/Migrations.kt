@@ -1059,14 +1059,66 @@ val MIGRATION_52_53 = object : Migration(52, 53) {
 }
 
 /**
- * The complete, correctly-ordered v1→v53 migration chain, with the
- * token-encrypting [Migration24To25] (which needs a [TokenCipher]) inserted at
- * its true position between v23→v24 and v25→v26. Room matches migrations by
- * start/end version regardless of list order, but keeping the chain in strict
- * ascending order here makes the source a reliable map of the upgrade path and
- * lets [MigrationTest] assert contiguity.
+ * One-time backfill of `downloads.container` for legacy rows. The column was
+ * added as nullable by [MIGRATION_31_32] because pre-existing rows had no
+ * value, and playback has carried a magic-byte sniffing fallback
+ * (PlayerSessionManager.loadOffline over the container sniffer, now in
+ * shared:core:data) for those rows ever since. This migration resolves that
+ * fallback once, at upgrade time: for every row whose `container` is still
+ * NULL, the injected [ContainerProbe] reads the row's `downloadPath` file
+ * header and the recognized code is persisted — so the runtime sniffer can
+ * eventually be retired.
+ *
+ * Rows whose file is missing, unreadable or unrecognized stay NULL (the
+ * playback-time fallback keeps covering them); a probe failure never aborts
+ * the upgrade. Schema-unchanged version bump: no DDL, the step exists so
+ * Room treats the backfilled database as current.
  */
-fun allMigrations(tokenCipher: TokenCipher): List<Migration> =
+class Migration53To54(
+    private val containerProbe: ContainerProbe,
+) : Migration(53, 54) {
+    override fun migrate(db: SQLiteConnection) {
+        // Collect the pending rows first, then UPDATE: the update writes the
+        // very column the SELECT filters on (container IS NULL), and SQLite
+        // may revisit or skip rows when a cursor's WHERE columns change
+        // mid-scan.
+        val pending = mutableListOf<Pair<String, String>>()
+        db.prepare(
+            "SELECT id, downloadPath FROM downloads WHERE container IS NULL"
+        ).use { cursor ->
+            while (cursor.step()) {
+                pending.add(cursor.getText(0) to cursor.getText(1))
+            }
+        }
+        for ((id, downloadPath) in pending) {
+            val container = try {
+                containerProbe.probe(downloadPath)
+            } catch (_: Exception) {
+                // Unreadable/failed probe — the row stays NULL and the
+                // migration proceeds.
+                null
+            } ?: continue
+            db.execSQL(
+                "UPDATE downloads SET container = ? WHERE id = ?",
+                arrayOf(container, id),
+            )
+        }
+    }
+}
+
+/**
+ * The complete, correctly-ordered v1→v54 migration chain, with the
+ * token-encrypting [Migration24To25] (which needs a [TokenCipher]) and the
+ * container-backfilling [Migration53To54] (which needs a [ContainerProbe])
+ * as constructor-injected steps at their true positions. Room matches
+ * migrations by start/end version regardless of list order, but keeping the
+ * chain in strict ascending order here makes the source a reliable map of
+ * the upgrade path and lets [MigrationTest] assert contiguity.
+ */
+fun allMigrations(
+    tokenCipher: TokenCipher,
+    containerProbe: ContainerProbe,
+): List<Migration> =
     listOf(
         MIGRATION_1_2,
         MIGRATION_2_3,
@@ -1120,4 +1172,5 @@ fun allMigrations(tokenCipher: TokenCipher): List<Migration> =
         MIGRATION_50_51,
         MIGRATION_51_52,
         MIGRATION_52_53,
+        Migration53To54(containerProbe),
     )

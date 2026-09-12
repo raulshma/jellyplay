@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.player.video
 
+import com.raulshma.jellyplay.core.data.download.ContainerSniffer
 import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
 import com.raulshma.jellyplay.core.data.playback.TranscodeReasonsRefresher
@@ -344,7 +345,7 @@ class PlayerSessionManager(
         // with no error dialog (only MPV plays, because libavformat sniffs content).
         val containerHint = download?.container
             ?: kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                com.raulshma.jellyplay.feature.player.video.engine.ContainerSniffer.sniff(localFile)
+                sniffDownloadedContainer(localFile)
             }
         val mimeHint = containerHint?.let { offlineMediaProbe.mapContainerToMime(it) }
 
@@ -1071,6 +1072,34 @@ class PlayerSessionManager(
                     id = offlineSubtitleTrackId(entry.index),
                 )
             )
+        }
+    }
+
+    /**
+     * Magic-byte container sniffing glue for the offline fallback path above:
+     * reads the first [ContainerSniffer.SNIFF_HEADER_BYTES] bytes of [file]
+     * and delegates to the pure byte-level [ContainerSniffer] (moved to
+     * shared:core:data commonMain). Behavior is byte-identical to the
+     * ContainerSniffer that used to live in this module's engine package:
+     * missing/unreadable/short/unrecognized files return null. The glue stays
+     * here because core:data's commonMain builds for wasmJs (no java.io) and
+     * this module's commonMain is JVM-only by design.
+     */
+    private fun sniffDownloadedContainer(file: java.io.File): String? {
+        if (!file.exists() || !file.canRead()) return null
+        val buf = ByteArray(ContainerSniffer.SNIFF_HEADER_BYTES)
+        return try {
+            file.inputStream().use { input ->
+                var total = 0
+                while (total < buf.size) {
+                    val n = input.read(buf, total, buf.size - total)
+                    if (n < 0) break
+                    total += n
+                }
+                if (total < ContainerSniffer.MIN_SNIFF_BYTES) null else ContainerSniffer.sniff(buf, total)
+            }
+        } catch (_: Exception) {
+            null
         }
     }
 
