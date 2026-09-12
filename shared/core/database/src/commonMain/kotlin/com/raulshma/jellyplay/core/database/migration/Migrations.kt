@@ -1,13 +1,13 @@
 package com.raulshma.jellyplay.core.database.migration
 
-import androidx.room.migration.Migration
+import androidx.room3.migration.Migration
 import androidx.sqlite.SQLiteConnection
 import com.raulshma.jellyplay.core.database.crypto.TokenCipher
 import com.raulshma.jellyplay.core.database.dao.OFFLINE_MEDIA_WITH_PLAYBACK_SQL
 import com.raulshma.jellyplay.core.database.dao.OFFLINE_MEDIA_WITH_PLAYBACK_VIEW_NAME
 
 val MIGRATION_1_2 = object : Migration(1, 2) {
-    override fun migrate(db: SQLiteConnection) {
+    override suspend fun migrate(db: SQLiteConnection) {
         db.execSQL(
             """
             CREATE TABLE IF NOT EXISTS downloads (
@@ -33,7 +33,7 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
 }
 
 val MIGRATION_2_3 = object : Migration(2, 3) {
-    override fun migrate(db: SQLiteConnection) {
+    override suspend fun migrate(db: SQLiteConnection) {
         db.execSQL(
             """
             CREATE TABLE IF NOT EXISTS users (
@@ -55,12 +55,12 @@ val MIGRATION_2_3 = object : Migration(2, 3) {
 // No-op: version bump to keep Room schema in sync after entity annotation
 // changes that did not require a SQL schema modification.
 val MIGRATION_3_4 = object : Migration(3, 4) {
-    override fun migrate(db: SQLiteConnection) {
+    override suspend fun migrate(db: SQLiteConnection) {
     }
 }
 
 val MIGRATION_4_5 = object : Migration(4, 5) {
-    override fun migrate(db: SQLiteConnection) {
+    override suspend fun migrate(db: SQLiteConnection) {
         db.execSQL("ALTER TABLE downloads ADD COLUMN speedBytesPerSec INTEGER NOT NULL DEFAULT 0")
     }
 }
@@ -71,17 +71,17 @@ val MIGRATION_4_5 = object : Migration(4, 5) {
 // the migration history.
 
 val MIGRATION_5_6 = object : Migration(5, 6) {
-    override fun migrate(db: SQLiteConnection) {
+    override suspend fun migrate(db: SQLiteConnection) {
     }
 }
 
 val MIGRATION_6_7 = object : Migration(6, 7) {
-    override fun migrate(db: SQLiteConnection) {
+    override suspend fun migrate(db: SQLiteConnection) {
     }
 }
 
 val MIGRATION_7_8 = object : Migration(7, 8) {
-    override fun migrate(db: SQLiteConnection) {
+    override suspend fun migrate(db: SQLiteConnection) {
         db.execSQL(
             """
             CREATE TABLE IF NOT EXISTS lyrics_cache (
@@ -102,20 +102,20 @@ val MIGRATION_7_8 = object : Migration(7, 8) {
 }
 
 val MIGRATION_8_9 = object : Migration(8, 9) {
-    override fun migrate(db: SQLiteConnection) {
+    override suspend fun migrate(db: SQLiteConnection) {
         db.execSQL("CREATE INDEX IF NOT EXISTS index_users_serverId_lastConnected ON users(serverId, lastConnected)")
         db.execSQL("CREATE INDEX IF NOT EXISTS index_downloads_createdAt ON downloads(createdAt)")
     }
 }
 
 val MIGRATION_9_10 = object : Migration(9, 10) {
-    override fun migrate(db: SQLiteConnection) {
+    override suspend fun migrate(db: SQLiteConnection) {
         db.execSQL("ALTER TABLE users ADD COLUMN isAdmin INTEGER NOT NULL DEFAULT 0")
     }
 }
 
 val MIGRATION_10_11 = object : Migration(10, 11) {
-    override fun migrate(db: SQLiteConnection) {
+    override suspend fun migrate(db: SQLiteConnection) {
         db.execSQL("ALTER TABLE downloads ADD COLUMN seriesId TEXT")
         db.execSQL("ALTER TABLE downloads ADD COLUMN seasonId TEXT")
         db.execSQL("ALTER TABLE downloads ADD COLUMN seriesName TEXT")
@@ -160,14 +160,14 @@ val MIGRATION_10_11 = object : Migration(10, 11) {
 }
 
 val MIGRATION_11_12 = object : Migration(11, 12) {
-    override fun migrate(db: SQLiteConnection) {
+    override suspend fun migrate(db: SQLiteConnection) {
         db.execSQL("CREATE INDEX IF NOT EXISTS index_downloads_seriesId ON downloads(seriesId)")
         db.execSQL("CREATE INDEX IF NOT EXISTS index_downloads_seasonId ON downloads(seasonId)")
     }
 }
 
 val MIGRATION_12_13 = object : Migration(12, 13) {
-    override fun migrate(db: SQLiteConnection) {
+    override suspend fun migrate(db: SQLiteConnection) {
         db.execSQL(
             """
             CREATE TABLE IF NOT EXISTS media_audit_log (
@@ -205,7 +205,7 @@ val MIGRATION_12_13 = object : Migration(12, 13) {
 }
 
 val MIGRATION_13_14 = object : Migration(13, 14) {
-    override fun migrate(db: SQLiteConnection) {
+    override suspend fun migrate(db: SQLiteConnection) {
         db.execSQL(
             """
             CREATE TABLE IF NOT EXISTS lyrics_cache_new (
@@ -231,7 +231,7 @@ val MIGRATION_13_14 = object : Migration(13, 14) {
 }
 
 val MIGRATION_14_15 = object : Migration(14, 15) {
-    override fun migrate(db: SQLiteConnection) {
+    override suspend fun migrate(db: SQLiteConnection) {
         db.execSQL(
             """
             CREATE TABLE IF NOT EXISTS smart_playlists (
@@ -282,7 +282,7 @@ val MIGRATION_14_15 = object : Migration(14, 15) {
 }
 
 val MIGRATION_15_16 = object : Migration(15, 16) {
-    override fun migrate(db: SQLiteConnection) {
+    override suspend fun migrate(db: SQLiteConnection) {
         db.execSQL(
             """
             CREATE TABLE IF NOT EXISTS audio_queue (
@@ -320,7 +320,7 @@ val MIGRATION_15_16 = object : Migration(15, 16) {
 }
 
 val MIGRATION_16_17 = object : Migration(16, 17) {
-    override fun migrate(db: SQLiteConnection) {
+    override suspend fun migrate(db: SQLiteConnection) {
         // No-op: the servers(address) unique index was already created by
         // MIGRATION_15_16. This migration object is retained so Room's
         // 16→17 step still resolves. (Previously it re-ran the same idempotent
@@ -329,7 +329,7 @@ val MIGRATION_16_17 = object : Migration(16, 17) {
 }
 
 val MIGRATION_17_18 = object : Migration(17, 18) {
-    override fun migrate(db: SQLiteConnection) {
+    override suspend fun migrate(db: SQLiteConnection) {
         db.execSQL(
             """
             CREATE TABLE IF NOT EXISTS search_history (
@@ -347,7 +347,7 @@ val MIGRATION_17_18 = object : Migration(17, 18) {
 }
 
 val MIGRATION_18_19 = object : Migration(18, 19) {
-    override fun migrate(db: SQLiteConnection) {
+    override suspend fun migrate(db: SQLiteConnection) {
         db.execSQL(
             """
             CREATE TABLE IF NOT EXISTS seen_media (
@@ -365,13 +365,13 @@ val MIGRATION_18_19 = object : Migration(18, 19) {
 }
 
 val MIGRATION_19_20 = object : Migration(19, 20) {
-    override fun migrate(db: SQLiteConnection) {
+    override suspend fun migrate(db: SQLiteConnection) {
         db.execSQL("CREATE INDEX IF NOT EXISTS index_downloads_mediaItemId_status ON downloads(mediaItemId, status)")
     }
 }
 
 val MIGRATION_20_21 = object : Migration(20, 21) {
-    override fun migrate(db: SQLiteConnection) {
+    override suspend fun migrate(db: SQLiteConnection) {
         db.execSQL("CREATE INDEX IF NOT EXISTS index_offline_media_seriesId_mediaType ON offline_media(seriesId, mediaType)")
         db.execSQL("CREATE INDEX IF NOT EXISTS index_offline_media_seasonId_mediaType ON offline_media(seasonId, mediaType)")
         db.execSQL("CREATE INDEX IF NOT EXISTS index_downloads_seriesId_status ON downloads(seriesId, status)")
@@ -380,19 +380,19 @@ val MIGRATION_20_21 = object : Migration(20, 21) {
 }
 
 val MIGRATION_21_22 = object : Migration(21, 22) {
-    override fun migrate(db: SQLiteConnection) {
+    override suspend fun migrate(db: SQLiteConnection) {
         db.execSQL("ALTER TABLE servers ADD COLUMN alternateAddresses TEXT")
     }
 }
 
 val MIGRATION_22_23 = object : Migration(22, 23) {
-    override fun migrate(db: SQLiteConnection) {
+    override suspend fun migrate(db: SQLiteConnection) {
         db.execSQL("ALTER TABLE downloads ADD COLUMN errorMessage TEXT")
     }
 }
 
 val MIGRATION_23_24 = object : Migration(23, 24) {
-    override fun migrate(db: SQLiteConnection) {
+    override suspend fun migrate(db: SQLiteConnection) {
         db.execSQL("ALTER TABLE downloads ADD COLUMN priority INTEGER NOT NULL DEFAULT 0")
     }
 }
@@ -415,7 +415,7 @@ val MIGRATION_23_24 = object : Migration(23, 24) {
 class Migration24To25(
     private val tokenCipher: TokenCipher,
 ) : Migration(24, 25) {
-    override fun migrate(db: SQLiteConnection) {
+    override suspend fun migrate(db: SQLiteConnection) {
         encryptUserTokens(db)
         encryptServerTokens(db)
     }
@@ -469,7 +469,7 @@ class Migration24To25(
 }
 
 val MIGRATION_25_26 = object : Migration(25, 26) {
-    override fun migrate(db: SQLiteConnection) {
+    override suspend fun migrate(db: SQLiteConnection) {
         db.execSQL("CREATE INDEX IF NOT EXISTS index_offline_media_mediaType_createdAt ON offline_media(mediaType, createdAt)")
         db.execSQL("CREATE INDEX IF NOT EXISTS index_downloads_status_priority_createdAt ON downloads(status, priority, createdAt)")
         db.execSQL("CREATE INDEX IF NOT EXISTS index_search_history_userId_searchedAt ON search_history(userId, searchedAt)")
@@ -481,7 +481,7 @@ val MIGRATION_25_26 = object : Migration(25, 26) {
 // The table mirrors ItemPlaybackPreferenceEntity exactly; the (scope, key)
 // pair is unique so OnConflictStrategy.REPLACE acts as an upsert.
 val MIGRATION_26_27 = object : Migration(26, 27) {
-    override fun migrate(db: SQLiteConnection) {
+    override suspend fun migrate(db: SQLiteConnection) {
         db.execSQL(
             """
             CREATE TABLE IF NOT EXISTS item_playback_preferences (
@@ -502,7 +502,7 @@ val MIGRATION_26_27 = object : Migration(26, 27) {
 // Per-item / per-series dialogue-boost strength.
 // Nullable column: NULL means "no per-item rule" (resolve to the effective default).
 val MIGRATION_27_28 = object : Migration(27, 28) {
-    override fun migrate(db: SQLiteConnection) {
+    override suspend fun migrate(db: SQLiteConnection) {
         db.execSQL("ALTER TABLE item_playback_preferences ADD COLUMN dialogueBoostStrength TEXT")
     }
 }
@@ -511,7 +511,7 @@ val MIGRATION_27_28 = object : Migration(27, 28) {
 // last-played date. Lets downloads render watched state and
 // resume positions while offline, seeded from server UserData at download time.
 val MIGRATION_28_29 = object : Migration(28, 29) {
-    override fun migrate(db: SQLiteConnection) {
+    override suspend fun migrate(db: SQLiteConnection) {
         db.execSQL("ALTER TABLE offline_media ADD COLUMN playbackPositionTicks INTEGER")
         db.execSQL("ALTER TABLE offline_media ADD COLUMN playedPercentage REAL NOT NULL DEFAULT 0.0")
         db.execSQL("ALTER TABLE offline_media ADD COLUMN isPlayed INTEGER NOT NULL DEFAULT 0")
@@ -525,7 +525,7 @@ val MIGRATION_28_29 = object : Migration(28, 29) {
 // detail screen. All columns are nullable so pre-existing rows degrade
 // gracefully until the item is re-downloaded.
 val MIGRATION_29_30 = object : Migration(29, 30) {
-    override fun migrate(db: SQLiteConnection) {
+    override suspend fun migrate(db: SQLiteConnection) {
         db.execSQL("ALTER TABLE offline_media ADD COLUMN originalTitle TEXT")
         db.execSQL("ALTER TABLE offline_media ADD COLUMN criticRating REAL")
         db.execSQL("ALTER TABLE offline_media ADD COLUMN studios TEXT")
@@ -540,7 +540,7 @@ val MIGRATION_29_30 = object : Migration(29, 30) {
 // and documents that the per-item lookup path is indexed. The composite unique
 // index is retained.
 val MIGRATION_30_31 = object : Migration(30, 31) {
-    override fun migrate(db: SQLiteConnection) {
+    override suspend fun migrate(db: SQLiteConnection) {
         db.execSQL("CREATE INDEX IF NOT EXISTS index_lyrics_cache_itemId ON lyrics_cache(itemId)")
     }
 }
@@ -551,7 +551,7 @@ val MIGRATION_30_31 = object : Migration(30, 31) {
 // the on-disk file uses a hardcoded `.mp4` extension. Nullable: pre-existing
 // rows degrade to extension-based inference (sniffer fallback at playback).
 val MIGRATION_31_32 = object : Migration(31, 32) {
-    override fun migrate(db: SQLiteConnection) {
+    override suspend fun migrate(db: SQLiteConnection) {
         db.execSQL("ALTER TABLE downloads ADD COLUMN container TEXT")
     }
 }
@@ -563,13 +563,13 @@ val MIGRATION_31_32 = object : Migration(31, 32) {
 // by a B-tree index, but the prefix/order-by branches now benefit. Behavior
 // is unchanged; this is purely a query-planner improvement.
 val MIGRATION_32_33 = object : Migration(32, 33) {
-    override fun migrate(db: SQLiteConnection) {
+    override suspend fun migrate(db: SQLiteConnection) {
         db.execSQL("CREATE INDEX IF NOT EXISTS index_offline_media_name ON offline_media(name)")
     }
 }
 
 val MIGRATION_33_34 = object : Migration(33, 34) {
-    override fun migrate(db: SQLiteConnection) {
+    override suspend fun migrate(db: SQLiteConnection) {
         db.execSQL("CREATE INDEX IF NOT EXISTS index_servers_userId ON servers(userId)")
     }
 }
@@ -581,7 +581,7 @@ val MIGRATION_33_34 = object : Migration(33, 34) {
 // the users table had no column for it — so every restart reset it to false
 // and the admin screens wrongly told admins they lacked permission.
 val MIGRATION_34_35 = object : Migration(34, 35) {
-    override fun migrate(db: SQLiteConnection) {
+    override suspend fun migrate(db: SQLiteConnection) {
         db.execSQL("ALTER TABLE users ADD COLUMN canDeleteContent INTEGER NOT NULL DEFAULT 0")
     }
 }
@@ -592,7 +592,7 @@ val MIGRATION_34_35 = object : Migration(34, 35) {
 // holds the local capture time used for latest-wins reconciliation against the
 // server's lastPlayedDate, and `createdAt` orders the drain queue.
 val MIGRATION_35_36 = object : Migration(35, 36) {
-    override fun migrate(db: SQLiteConnection) {
+    override suspend fun migrate(db: SQLiteConnection) {
         db.execSQL(
             """
             CREATE TABLE IF NOT EXISTS playback_outbox (
@@ -622,7 +622,7 @@ val MIGRATION_35_36 = object : Migration(35, 36) {
 // network blip after a 200) with no record. NOT NULL DEFAULT 0 matches the
 // entity's @ColumnInfo(defaultValue = "0").
 val MIGRATION_36_37 = object : Migration(36, 37) {
-    override fun migrate(db: SQLiteConnection) {
+    override suspend fun migrate(db: SQLiteConnection) {
         db.execSQL("ALTER TABLE playback_outbox ADD COLUMN deadLetter INTEGER NOT NULL DEFAULT 0")
     }
 }
@@ -637,7 +637,7 @@ val MIGRATION_36_37 = object : Migration(36, 37) {
 // MAX_AUTO_RETRY failures the row is left FAILED for a manual retry (dead-letter).
 // NOT NULL DEFAULT 0 on retryCount matches the entity's @ColumnInfo(defaultValue).
 val MIGRATION_37_38 = object : Migration(37, 38) {
-    override fun migrate(db: SQLiteConnection) {
+    override suspend fun migrate(db: SQLiteConnection) {
         db.execSQL("ALTER TABLE downloads ADD COLUMN pausedReason TEXT")
         db.execSQL("ALTER TABLE downloads ADD COLUMN retryCount INTEGER NOT NULL DEFAULT 0")
     }
@@ -649,7 +649,7 @@ val MIGRATION_37_38 = object : Migration(37, 38) {
 // NULL means "don't care" (preserves today's language-only behaviour for existing
 // rows), so this migration is non-destructive.
 val MIGRATION_38_39 = object : Migration(38, 39) {
-    override fun migrate(db: SQLiteConnection) {
+    override suspend fun migrate(db: SQLiteConnection) {
         db.execSQL("ALTER TABLE item_playback_preferences ADD COLUMN subtitleForced INTEGER")
         db.execSQL("ALTER TABLE item_playback_preferences ADD COLUMN subtitleHearingImpaired INTEGER")
     }
@@ -663,7 +663,7 @@ val MIGRATION_38_39 = object : Migration(38, 39) {
 // remembered", preserving today's language-only behaviour for existing rows, so
 // this migration is non-destructive.
 val MIGRATION_39_40 = object : Migration(39, 40) {
-    override fun migrate(db: SQLiteConnection) {
+    override suspend fun migrate(db: SQLiteConnection) {
         db.execSQL("ALTER TABLE item_playback_preferences ADD COLUMN rememberedAudioLabel TEXT")
         db.execSQL("ALTER TABLE item_playback_preferences ADD COLUMN rememberedAudioLanguage TEXT")
         db.execSQL("ALTER TABLE item_playback_preferences ADD COLUMN rememberedAudioIndex INTEGER")
@@ -680,7 +680,7 @@ val MIGRATION_39_40 = object : Migration(39, 40) {
 // runs in the background. Keyed by (serverId, userId, cacheKey) so a user
 // switch / logout never serves another user's payload.
 val MIGRATION_40_41 = object : Migration(40, 41) {
-    override fun migrate(db: SQLiteConnection) {
+    override suspend fun migrate(db: SQLiteConnection) {
         db.execSQL(
             """
             CREATE TABLE IF NOT EXISTS home_section_cache (
@@ -706,7 +706,7 @@ val MIGRATION_40_41 = object : Migration(40, 41) {
 // exclusive with subtitleLanguage — the repository keeps them consistent, but
 // the column itself has no DB-level constraint.
 val MIGRATION_41_42 = object : Migration(41, 42) {
-    override fun migrate(db: SQLiteConnection) {
+    override suspend fun migrate(db: SQLiteConnection) {
         db.execSQL("ALTER TABLE item_playback_preferences ADD COLUMN subtitleDisabled INTEGER")
     }
 }
@@ -718,7 +718,7 @@ val MIGRATION_41_42 = object : Migration(41, 42) {
 // columns are nullable or default to 0 so existing rows are unaffected until
 // their first check (or next download, which seeds the baseline).
 val MIGRATION_42_43 = object : Migration(42, 43) {
-    override fun migrate(db: SQLiteConnection) {
+    override suspend fun migrate(db: SQLiteConnection) {
         db.execSQL("ALTER TABLE offline_media ADD COLUMN syncedPosterTag TEXT")
         db.execSQL("ALTER TABLE offline_media ADD COLUMN syncedBackdropTag TEXT")
         db.execSQL("ALTER TABLE offline_media ADD COLUMN syncedMetadataSignature TEXT")
@@ -740,7 +740,7 @@ val MIGRATION_42_43 = object : Migration(42, 43) {
  * item is re-downloaded. Mirrors the `peopleJson` blob pattern from 29→30.
  */
 val MIGRATION_43_44 = object : Migration(43, 44) {
-    override fun migrate(db: SQLiteConnection) {
+    override suspend fun migrate(db: SQLiteConnection) {
         db.execSQL("ALTER TABLE offline_media ADD COLUMN providerIdsJson TEXT")
         db.execSQL("ALTER TABLE offline_media ADD COLUMN externalUrlsJson TEXT")
     }
@@ -751,7 +751,7 @@ val MIGRATION_43_44 = object : Migration(43, 44) {
 // column shape from migration 28→29 (NOT NULL DEFAULT 0 so existing rows
 // resolve to not-favorite until the user acts or the item is re-downloaded).
 val MIGRATION_44_45 = object : Migration(44, 45) {
-    override fun migrate(db: SQLiteConnection) {
+    override suspend fun migrate(db: SQLiteConnection) {
         db.execSQL("ALTER TABLE offline_media ADD COLUMN isFavorite INTEGER NOT NULL DEFAULT 0")
     }
 }
@@ -763,7 +763,7 @@ val MIGRATION_44_45 = object : Migration(44, 45) {
 // recorded" — the comparator treats an empty/null signature as a first-contact
 // axis that never flags a spurious change.
 val MIGRATION_45_46 = object : Migration(45, 46) {
-    override fun migrate(db: SQLiteConnection) {
+    override suspend fun migrate(db: SQLiteConnection) {
         db.execSQL("ALTER TABLE offline_media ADD COLUMN syncedSubtitleSignature TEXT")
         db.execSQL("ALTER TABLE offline_media ADD COLUMN syncedTrickplaySignature TEXT")
         db.execSQL("ALTER TABLE offline_media ADD COLUMN syncedSegmentsSignature TEXT")
@@ -793,7 +793,7 @@ val MIGRATION_45_46 = object : Migration(45, 46) {
 // derivation from the old coarse `syncUpdateAvailable` flag and default to 0;
 // they are populated accurately on the next freshness check.
 val MIGRATION_46_47 = object : Migration(46, 47) {
-    override fun migrate(db: SQLiteConnection) {
+    override suspend fun migrate(db: SQLiteConnection) {
         // ── playback_state: create + backfill from the live columns ──────────
         db.execSQL(
             """
@@ -945,7 +945,7 @@ val MIGRATION_46_47 = object : Migration(46, 47) {
 // baseline write (a batch check writes one row per item), which full-scanned
 // the table. Schema-additive only; no table data changes.
 val MIGRATION_47_48 = object : Migration(47, 48) {
-    override fun migrate(db: SQLiteConnection) {
+    override suspend fun migrate(db: SQLiteConnection) {
         db.execSQL("CREATE INDEX IF NOT EXISTS index_sync_baseline_syncUpdateAvailable ON sync_baseline(syncUpdateAvailable)")
         db.execSQL("CREATE INDEX IF NOT EXISTS index_sync_baseline_syncMediaChanged ON sync_baseline(syncMediaChanged)")
     }
@@ -964,7 +964,7 @@ val MIGRATION_47_48 = object : Migration(47, 48) {
 //    surviving rows on every re-emission.
 // Schema-additive only; no table data changes.
 val MIGRATION_48_49 = object : Migration(48, 49) {
-    override fun migrate(db: SQLiteConnection) {
+    override suspend fun migrate(db: SQLiteConnection) {
         db.execSQL("CREATE INDEX IF NOT EXISTS index_downloads_status_mediaType_createdAt ON downloads(status, mediaType, createdAt)")
         db.execSQL("CREATE INDEX IF NOT EXISTS index_playback_outbox_deadLetter_createdAt ON playback_outbox(deadLetter, createdAt)")
     }
@@ -977,7 +977,7 @@ val MIGRATION_48_49 = object : Migration(48, 49) {
 // migration, so no existing row carries the retired sentinel and 0 (not
 // pending) is the correct backfill for every pre-existing baseline.
 val MIGRATION_49_50 = object : Migration(49, 50) {
-    override fun migrate(db: SQLiteConnection) {
+    override suspend fun migrate(db: SQLiteConnection) {
         db.execSQL("ALTER TABLE sync_baseline ADD COLUMN syncSubtitlesPending INTEGER NOT NULL DEFAULT 0")
     }
 }
@@ -1004,7 +1004,7 @@ val MIGRATION_49_50 = object : Migration(49, 50) {
  * other-axis badges survive.
  */
 val MIGRATION_50_51 = object : Migration(50, 51) {
-    override fun migrate(db: SQLiteConnection) {
+    override suspend fun migrate(db: SQLiteConnection) {
         db.execSQL("ALTER TABLE offline_media ADD COLUMN chaptersJson TEXT")
         db.execSQL("UPDATE sync_baseline SET syncedMetadataSignature = NULL")
         db.execSQL(
@@ -1030,7 +1030,7 @@ val MIGRATION_50_51 = object : Migration(50, 51) {
 //    createdAt) for PlaybackOutboxDao.getForItemByType, which runs ~every 10 s
 //    during playback and filters + sorts by createdAt using only the itemId index.
 val MIGRATION_51_52 = object : Migration(51, 52) {
-    override fun migrate(db: SQLiteConnection) {
+    override suspend fun migrate(db: SQLiteConnection) {
         db.execSQL("DROP INDEX IF EXISTS index_offline_media_name")
         db.execSQL("CREATE INDEX IF NOT EXISTS index_playback_outbox_itemId_deadLetter_createdAt ON playback_outbox(itemId, deadLetter, createdAt)")
     }
@@ -1049,7 +1049,7 @@ val MIGRATION_51_52 = object : Migration(51, 52) {
 // columns — ordered, not covering) instead of sorting.
 // Schema-additive only; no table data changes.
 val MIGRATION_52_53 = object : Migration(52, 53) {
-    override fun migrate(db: SQLiteConnection) {
+    override suspend fun migrate(db: SQLiteConnection) {
         db.execSQL(
             "CREATE INDEX IF NOT EXISTS " +
                 "index_offline_media_mediaType_seriesId_seasonNumber_episodeNumber " +
@@ -1077,7 +1077,7 @@ val MIGRATION_52_53 = object : Migration(52, 53) {
 class Migration53To54(
     private val containerProbe: ContainerProbe,
 ) : Migration(53, 54) {
-    override fun migrate(db: SQLiteConnection) {
+    override suspend fun migrate(db: SQLiteConnection) {
         // Collect the pending rows first, then UPDATE: the update writes the
         // very column the SELECT filters on (container IS NULL), and SQLite
         // may revisit or skip rows when a cursor's WHERE columns change

@@ -1,8 +1,8 @@
 package com.raulshma.jellyplay.core.database
 
-import androidx.room.Database
-import androidx.room.RoomDatabase
-import androidx.room.TypeConverters
+import androidx.room3.Database
+import androidx.room3.RoomDatabase
+import androidx.room3.ColumnTypeConverters
 import com.raulshma.jellyplay.core.database.dao.OfflineMediaWithPlayback
 import com.raulshma.jellyplay.core.database.dao.AuditLogDao
 import com.raulshma.jellyplay.core.database.dao.AudioQueueDao
@@ -75,7 +75,7 @@ const val JELLY_PLAY_DATABASE_VERSION: Int = 54
     exportSchema = true,
     views = [OfflineMediaWithPlayback::class],
 )
-@TypeConverters(Converters::class)
+@ColumnTypeConverters(Converters::class)
 abstract class JellyPlayDatabase : RoomDatabase() {
     abstract fun serverDao(): ServerDao
     abstract fun userDao(): UserDao

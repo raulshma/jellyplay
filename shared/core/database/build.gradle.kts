@@ -43,7 +43,7 @@ kotlin {
 
         getByName("commonMain").dependencies {
             api(project(":shared:core:model"))
-            api(libs.room.runtime)
+            api(libs.room3.runtime)
             implementation(libs.kotlinx.serialization.json)
         }
         getByName("jvmMain").dependencies {
@@ -59,19 +59,24 @@ kotlin {
             // migration chain verification.
             implementation(libs.androidx.sqlite.bundled)
             implementation(libs.koin.test)
+            // room3-testing MigrationTestHelper (spike criterion c).
+            implementation(libs.room3.testing)
         }
         getByName("jvmTest").resources.srcDir("$projectDir/schemas")
 
     }
 }
 
-// Room KSP runs per target; schema JSONs continue accumulating in the
+// Room 3 KSP runs per target; schema JSONs continue accumulating in the
 // repo-tracked shared/core/database/schemas directory (identity of the
-// JellyPlayDatabase schema history is what MigrationTest verifies against;
-// moved from the deleted core/database shim in).
+// JellyPlayDatabase schema history is what MigrationTest verifies against).
+// room3 kept the room.schemaLocation KSP arg name (verified against
+// Context$ProcessorOptions in room3-compiler 3.0.3); the androidx.room3
+// Gradle plugin (marker exists at 3.0.3) is deliberately not applied —
+// the KSP-arg path is the minimal-diff route under this AGP-9 KMP setup.
 dependencies {
-    add("kspAndroid", libs.room.compiler)
-    add("kspJvm", libs.room.compiler)
+    add("kspAndroid", libs.room3.compiler)
+    add("kspJvm", libs.room3.compiler)
 }
 
 ksp {

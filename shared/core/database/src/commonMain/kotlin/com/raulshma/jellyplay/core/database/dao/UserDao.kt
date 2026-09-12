@@ -1,11 +1,11 @@
 package com.raulshma.jellyplay.core.database.dao
 
-import androidx.room.Dao
-import androidx.room.Delete
-import androidx.room.Insert
-import androidx.room.OnConflictStrategy
-import androidx.room.Query
-import androidx.room.Update
+import androidx.room3.Dao
+import androidx.room3.Delete
+import androidx.room3.Insert
+import androidx.room3.OnConflictStrategy
+import androidx.room3.Query
+import androidx.room3.Update
 import com.raulshma.jellyplay.core.database.entity.UserEntity
 import kotlinx.coroutines.flow.Flow
 
