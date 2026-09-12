@@ -1,6 +1,6 @@
 # JellyPlay → Kotlin Multiplatform Migration — Status Ledger
 
-Status: **In progress — Phase X (cutover & hardening) remains** · Living doc,
+Status: **In progress — Phase X cutover landed; web breadth, e2e tail and release engineering remain** · Living doc,
 re-anchored 2026-08-31.
 
 This file re-anchors the ~50 references across build scripts, KDocs and CI
@@ -54,12 +54,21 @@ ledger tracks *where the migration stands*.
 
 **Remaining before the migration is complete (Phase X):**
 
-1. **Cutover of the legacy tree**: `core:data` / `core:ui` are re-export
-   shims + Android-coupled halves; ~16 shared→legacy edges in `androidMain`
-   are marked "dies at Phase X". Each file that can move into `shared/`
-   moves; the truly Android-native remainder (cast, MediaSessionService,
-   workers, widgets, notification) is re-homed as plain `androidMain`
-   actuals and the shim modules dissolve.
+1. ~~**Cutover of the legacy tree**~~ **DONE (2026-09-12, branch
+   `chore/legacy-cutover`)**: `:core:ui`, `:core:data`, `:core:notification`
+   and `:core:testing` dissolved — every Android-coupled file moved into
+   `:shared:core:ui` / `:shared:core:data` `androidMain` under identical
+   packages; the Android-native remainder (cast, MediaSessionService,
+   workers, notification, remote controls, shortcuts, TV watch-next) lives
+   there as plain androidMain code; the Robolectric suites execute in the
+   new AGP-9 `androidHostTest` lanes (`withHostTest`, `forkEvery = 1` for
+   core:data); `:app` is the only Android-only module left. Residual (non-
+   blocking): collapse the strangler-fig seam adapters that bridged legacy
+   shapes (the messenger adapters, LocalNetworkAccessState, app interop
+   twins), scrub the stale "dies at Phase X" comments in feature build
+   files, and retire the sunset-gated back-compat islands (v0/v1 backup
+   import, typed-key prefs migration, PIN legacy hashes, container
+   sniffing).
 2. **Web breadth**: 3 routes → full app requires the wasm target roll-out
    above; Room-coupled repositories are the first blocker per module.
 3. **iOS**: no target work started (deliberate; commonMain purity is the only

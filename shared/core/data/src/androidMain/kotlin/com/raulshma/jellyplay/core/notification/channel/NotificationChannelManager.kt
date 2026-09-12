@@ -4,7 +4,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
 import android.os.Build
-import com.raulshma.jellyplay.core.notification.R
+import com.raulshma.jellyplay.shared.core.data.R
 import com.raulshma.jellyplay.core.model.NotificationPreferences
 
 class NotificationChannelManager(

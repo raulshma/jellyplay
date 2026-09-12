@@ -192,8 +192,6 @@ kotlin {
     }
 }
 
-}
-
 // ── cutover: the legacy :core:data Robolectric suites moved here
 // wholesale (70 files + the MediaSessionPlayerStubs helper + the
 // MainDispatcherRule from the dissolved :core:testing module). AGP 9.4's

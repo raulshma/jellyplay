@@ -359,11 +359,10 @@ dependencies {
     implementation(project(":shared:core:database"))
     implementation(project(":shared:core:datastore"))
     implementation(project(":shared:core:data"))
-    // Shared core:ui (core.ui.message bus seam) + compose-resources runtime
-    // for the shared UserMessageBus collector (UiText resolution on Android).
+    // Shared core:ui (core.ui.message bus seam + the cutover's
+    // moved Android halves) + compose-resources runtime for the shared
+    // UserMessageBus collector (UiText resolution on Android).
     implementation(project(":shared:core:ui"))
-    implementation(libs.jb.compose.resources)
-    implementation(project(":core:notification"))
     implementation(project(":shared:feature:auth"))
     implementation(project(":shared:feature:home"))
     implementation(project(":shared:feature:library"))

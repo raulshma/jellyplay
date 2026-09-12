@@ -281,20 +281,14 @@ jobs:
       - name: App unit tests (phone + tv debug)
         # Run in CI, not just as local gate runs (baseline:
         # 94 phone / 98 tv tests).
-        # :core:notification:testDebugUnitTest closes the dark lane that let
-        # its 8 Robolectric suites (67 tests) gate nothing — the exact
-        # no-CI-lane failure mode that stranded the legacy core/data suites
-        # (CONTEXT.md); notification is living code, not a husk.
-        # :shared:core:data:testAndroidHostTest closes the same dark lane for core:data
-        # (worker suites incl. the OfflineWatchSyncContractTest regression
-        # pin); the drain-policy bodies themselves run portable in
-        # :shared:core:data:jvmTest above.
-        # :shared:core:ui:testAndroidHostTest is the cutover home of
-        # the legacy :core:ui Robolectric suites (TvDrawerFocusWiringTest,
-        # the former instrumented-only sheet/scrim pairs now executed
-        # under Robolectric); RoutePredicatesTest moved to jvmTest.
-        # :core:notification/:core:data lanes remain until their waves.
-        run: ./gradlew :app:testPhoneDebugUnitTest :app:testTvDebugUnitTest :core:notification:testDebugUnitTest :shared:core:data:testAndroidHostTest :shared:core:ui:testAndroidHostTest --stacktrace
+        # :shared:core:{ui,data}:testAndroidHostTest are the cutover
+        # homes of every legacy core module's Robolectric suites — the legacy
+        # :core:ui/:core:data/:core:notification modules dissolved into the
+        # shared tree's androidHostTest lanes (worker suites incl. the
+        # OfflineWatchSyncContractTest regression pin; the drain-policy
+        # bodies run portable in :shared:core:data:jvmTest above; the former
+        # instrumented-only sheet/scrim pairs now execute under Robolectric).
+        run: ./gradlew :app:testPhoneDebugUnitTest :app:testTvDebugUnitTest :shared:core:data:testAndroidHostTest :shared:core:ui:testAndroidHostTest --stacktrace
 
       - name: Compose-resources APK guard
         # dependsOn assemblePhoneDebug — the guard opens the built APKs.

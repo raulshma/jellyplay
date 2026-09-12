@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.di
 
 import android.content.Context
-import com.raulshma.jellyplay.core.data.R
+import com.raulshma.jellyplay.shared.core.data.R
 import com.raulshma.jellyplay.core.data.repository.AdminStatisticsLabelProvider
 import org.koin.core.module.Module
 import org.koin.dsl.module

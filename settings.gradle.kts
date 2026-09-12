@@ -78,7 +78,6 @@ dependencyResolutionManagement {
 
 rootProject.name = "JellyPlay"
 include(":app")
-include(":core:notification")
 
 
 

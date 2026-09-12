@@ -12,7 +12,7 @@ import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.NotificationPreferences
 import com.raulshma.jellyplay.core.model.deeplink.DeepLinkGrammar
-import com.raulshma.jellyplay.core.notification.R
+import com.raulshma.jellyplay.shared.core.data.R
 import com.raulshma.jellyplay.core.notification.channel.NotificationChannelManager
 import com.raulshma.jellyplay.core.notification.receiver.NotificationActionReceiver
 
@@ -89,7 +89,7 @@ class NotificationDispatcher(
             requestCode = summaryId,
         )
         val summary = NotificationCompat.Builder(context, channelId)
-            .setSmallIcon(com.raulshma.jellyplay.core.notification.R.drawable.ic_notification_small)
+            .setSmallIcon(com.raulshma.jellyplay.shared.core.data.R.drawable.ic_notification_small)
             .setContentTitle(context.getString(R.string.notification_new_in_library_count, items.size, library.name))
             .setContentText(items.joinToString(", ") { it.name })
             .setStyle(
@@ -107,7 +107,7 @@ class NotificationDispatcher(
             .setGroup(groupId)
             .setGroupSummary(true)
             .addAction(
-                com.raulshma.jellyplay.core.notification.R.drawable.ic_notification_small,
+                com.raulshma.jellyplay.shared.core.data.R.drawable.ic_notification_small,
                 context.getString(R.string.notification_action_mark_all_seen),
                 markAllPendingIntent,
             )
@@ -140,7 +140,7 @@ class NotificationDispatcher(
             requestCode = NOTIFICATION_ID_GLOBAL,
         )
         val summary = NotificationCompat.Builder(context, NotificationChannelManager.CHANNEL_SUMMARY)
-            .setSmallIcon(com.raulshma.jellyplay.core.notification.R.drawable.ic_notification_small)
+            .setSmallIcon(com.raulshma.jellyplay.shared.core.data.R.drawable.ic_notification_small)
             .setContentTitle(context.getString(R.string.notification_new_items_added, totalItems))
             .setContentText(context.getString(R.string.notification_across_libraries, newItemsByLibrary.size))
             .setStyle(
@@ -154,7 +154,7 @@ class NotificationDispatcher(
             .setGroup(GROUP_GLOBAL)
             .setGroupSummary(true)
             .addAction(
-                com.raulshma.jellyplay.core.notification.R.drawable.ic_notification_small,
+                com.raulshma.jellyplay.shared.core.data.R.drawable.ic_notification_small,
                 context.getString(R.string.notification_action_mark_all_seen),
                 markAllPendingIntent,
             )
@@ -274,18 +274,18 @@ class NotificationDispatcher(
         }
 
         return NotificationCompat.Builder(context, channelId)
-            .setSmallIcon(com.raulshma.jellyplay.core.notification.R.drawable.ic_notification_small)
+            .setSmallIcon(com.raulshma.jellyplay.shared.core.data.R.drawable.ic_notification_small)
             .setContentTitle(item.name)
             .setContentText(subText)
             .setGroup(groupId)
             .setContentIntent(contentIntent)
             .addAction(
-                com.raulshma.jellyplay.core.notification.R.drawable.ic_notification_small,
+                com.raulshma.jellyplay.shared.core.data.R.drawable.ic_notification_small,
                 context.getString(R.string.notification_action_mark_seen),
                 markSeenPendingIntent,
             )
             .addAction(
-                com.raulshma.jellyplay.core.notification.R.drawable.ic_notification_small,
+                com.raulshma.jellyplay.shared.core.data.R.drawable.ic_notification_small,
                 context.getString(R.string.notification_action_open),
                 openPendingIntent,
             )
