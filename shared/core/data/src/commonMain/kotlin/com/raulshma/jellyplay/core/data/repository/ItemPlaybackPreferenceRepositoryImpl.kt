@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.core.data.repository
 
 import com.raulshma.jellyplay.core.data.repository.withTransaction
-import com.raulshma.jellyplay.core.data.util.TimeSource
+import com.raulshma.jellyplay.core.data.util.EpochMillisSource
 import com.raulshma.jellyplay.core.database.JellyPlayDatabase
 import com.raulshma.jellyplay.core.database.dao.ItemPlaybackPreferenceDao
 import com.raulshma.jellyplay.core.database.entity.ItemPlaybackPreferenceEntity
@@ -11,11 +11,16 @@ import com.raulshma.jellyplay.core.model.PlaybackPrefScope
 import com.raulshma.jellyplay.core.model.RememberedTrack
 import com.raulshma.jellyplay.core.model.TrackType
 
+/**
+ * promotion from jvmShared: the impl is DAO + Room transaction + clock
+ * only (all commonMain Room 3 since), crossing over with the clock edge
+ * narrowed to the common [EpochMillisSource] seam.
+ */
 class ItemPlaybackPreferenceRepositoryImpl constructor(
     private val dao: ItemPlaybackPreferenceDao,
     private val database: JellyPlayDatabase,
     /** Clock seam for the persisted `updatedAt` stamps (last-write-wins merge). */
-    private val timeSource: TimeSource,
+    private val timeSource: EpochMillisSource,
 ) : ItemPlaybackPreferenceRepository {
 
     override suspend fun get(scope: PlaybackPrefScope, key: String): ItemPlaybackPreference? =

@@ -87,6 +87,7 @@ import com.raulshma.jellyplay.core.data.repository.WatchHistoryRepositoryImpl
 import com.raulshma.jellyplay.core.data.search.MediaSearchEngine
 import com.raulshma.jellyplay.core.data.search.MediaSearchEngineImpl
 import com.raulshma.jellyplay.core.data.util.DownloadDelegate
+import com.raulshma.jellyplay.core.data.util.EpochMillisSource
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.data.session.HomeSession
 import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
@@ -299,6 +300,13 @@ val dataJvmModule: Module = module {
     // list as their ctor deps became Koin-resolvable.
 
     single<TimeSource> { SystemTimeSource() }
+
+    // the commonMain-promoted repository impls (SearchHistory /
+    // ItemPlaybackPreference / PlaybackOutbox / MoodPlaylist) take the
+    // commonMain EpochMillisSource clock seam — bind it to the SAME
+    // SystemTimeSource single above (one framework per clock; the fakes in
+    // jvmTest satisfy the seam through the TimeSource supertype).
+    single<EpochMillisSource> { get<TimeSource>() }
 
     single { HomeSession(get(), get(DatastoreQualifiers.applicationScope)) }
 

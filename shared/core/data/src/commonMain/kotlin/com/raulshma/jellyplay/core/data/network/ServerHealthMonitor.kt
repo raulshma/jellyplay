@@ -2,12 +2,13 @@ package com.raulshma.jellyplay.core.data.network
 
 import com.raulshma.jellyplay.core.concurrency.TaskBundle
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
-import com.raulshma.jellyplay.core.data.util.TimeSource
+import com.raulshma.jellyplay.core.data.util.EpochMillisSource
+import com.raulshma.jellyplay.core.data.util.ioDispatcher
 import com.raulshma.jellyplay.core.model.ServerHealth
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import kotlin.concurrent.Volatile
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
@@ -23,26 +24,36 @@ import kotlinx.coroutines.launch
  *
  * The monitor starts checking when a server is connected and stops when
  * disconnected. The check interval is [HEALTH_CHECK_INTERVAL_MS].
+ *
+ * promotion from jvmShared: the clock edge narrowed to the common
+ * [EpochMillisSource] seam (JVM [TimeSource] fakes in jvmTest still satisfy
+ * it through the supertype), the loop dispatcher moved to the module's
+ * [ioDispatcher] expect/actual (`Dispatchers.IO` on android/desktop — the
+ * identical production dispatcher; `Dispatchers.Default` on wasmJs, where
+ * kotlinx.coroutines has no IO pool), and `@Volatile` became the common
+ * kotlin.concurrent annotation. [JellyfinApiClient] is a commonMain
+ * interface, so the class crosses; its Koin single stays in dataJvmModule
+ * (nothing on web resolves it yet).
  */
 private const val MONITOR_LOOP = "ServerHealthMonitor.loop"
 
 class ServerHealthMonitor(
     private val apiClient: JellyfinApiClient,
     /** Clock seam for the per-check latency measurement (start/delta pair). */
-    private val timeSource: TimeSource,
+    private val timeSource: EpochMillisSource,
 ) {
-    // The monitor loop runs on [Dispatchers.IO] in production. Unit tests swap
+    // The monitor loop runs on [ioDispatcher] in production. Unit tests swap
     // this for their virtual-time test dispatcher (see [useDispatcherForTest])
     // so the loop advances on the test's clock — otherwise it races runTest's
     // scheduler and the "startMonitoring calls checkHealth" assertion flakes.
-    private var loopDispatcher: CoroutineDispatcher = Dispatchers.IO
+    private var loopDispatcher: CoroutineDispatcher = ioDispatcher
     private var scope: CoroutineScope = CoroutineScope(SupervisorJob() + loopDispatcher)
 
     /**
      * Test-only: run the monitoring loop on [dispatcher] (typically runTest's
      * [kotlinx.coroutines.test.StandardTestDispatcher]) so the loop advances on
      * the test's virtual clock instead of a real IO thread. Production code
-     * constructs this via Koin (dataJvmModule) and keeps [Dispatchers.IO].
+     * constructs this via Koin (dataJvmModule) and keeps [ioDispatcher].
      * Must be called before
      * [startMonitoring].
      */

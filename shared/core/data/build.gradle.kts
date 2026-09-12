@@ -56,11 +56,15 @@ kotlin {
 
     sourceSets {
         // JVM-semantics code shared verbatim by android + desktop — this is
-        // where Room touches live (the module's ONLY Room-coupled
-        // code — see the wasmJs note above), plus the java.io/java.time files
-        // and the file-system-touching repositories that have no wasm story.
-        // commonMain holds the common-safe seams + the promoted Seerr/Arr
-        // repositories (kotlinx-datetime instead of java.time).
+        // where the JVM-EDGE Room touches live ( moved the DAO-backed
+        // repository impls that are platform-neutral — SearchHistory /
+        // ItemPlaybackPreference / SeenMedia / PlaybackOutbox /
+        // Smart+MoodPlaylist / QueuePersistenceHelper / RoomTransactions — to
+        // commonMain; what remains here is the java.io/java.time files, the
+        // OkHttp transfer machinery and the repositories whose signatures leak
+        // File/URI/stream edges). commonMain holds the common-safe seams + the
+        // promoted Seerr/Arr repositories (kotlinx-datetime instead of
+        // java.time) + the promoted DAO-backed impls.
         val jvmShared = create("jvmShared")
         jvmShared.dependsOn(getByName("commonMain"))
         getByName("androidMain") { dependsOn(jvmShared) }
@@ -72,8 +76,25 @@ kotlin {
             // Cancellation-safe suspend wrappers + TaskBundle — the module's
             // own concurrency seam, not something borrowed from core:network.
             api(project(":shared:core:concurrency"))
-            // Room is consumed ONLY from jvmShared now (database has no wasm
-            // build; demoted from api()).
+            // promotion: the Room-backed repository impls
+            // (SearchHistory/ItemPlaybackPreference/SeenMedia/PlaybackOutbox/
+            // Smart+MoodPlaylist, QueuePersistenceHelper, RoomTransactions)
+            // moved from jvmShared to commonMain — the database module has a
+            // wasmJs target since (Room 3 + WebWorkerSQLiteDriver), so the
+            // Room edge is no longer JVM-only. Promoted from the old jvmShared
+            // api() edge (kept there too — dataJvmModule still wires the DAO
+            // consumers that remain JVM).
+            api(project(":shared:core:database"))
+            // promotion: the promoted impls' Koin definitions live in
+            // dataJvmModule (jvmShared) / dataWasmModule (wasmJs) — both need
+            // the Koin DSL, and koin-core 4.2.2 is multiplatform (wasmJs
+            // stable since 4.0.0).
+            api(libs.koin.core)
+            // Room is consumed from BOTH source sets now: the promoted
+            // commonMain impls use the commonMain API edge above, while the
+            // JVM-only stragglers (DownloadRepositoryImpl's OkHttp transfer
+            // machinery, OfflineSyncManager, AuthRepositoryImpl, ...) keep
+            // using the jvmShared edge below.
             api(project(":shared:core:datastore"))
             // ArrRepository(Impl)'s calendar windows — kotlinx-datetime 0.8.0
             // (ABI evidence in the catalog note: Kotlin 2.1.20-built klibs,

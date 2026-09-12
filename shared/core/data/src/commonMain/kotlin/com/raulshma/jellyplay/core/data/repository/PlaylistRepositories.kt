@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.core.data.repository
 
-import com.raulshma.jellyplay.core.data.util.TimeSource
+import com.raulshma.jellyplay.core.data.util.EpochMillisSource
 import com.raulshma.jellyplay.core.database.dao.MoodPlaylistDao
 import com.raulshma.jellyplay.core.database.dao.SmartPlaylistDao
 import com.raulshma.jellyplay.core.database.entity.MoodPlaylistEntity
@@ -70,7 +70,7 @@ class MoodPlaylistRepository constructor(
     private val moodPlaylistDao: MoodPlaylistDao,
     private val json: Json,
     /** Clock seam for the preference row's `lastPlayedAt`/`updatedAt` stamps. */
-    private val timeSource: TimeSource,
+    private val timeSource: EpochMillisSource,
 ) {
     fun observeMoodPlaylists(): Flow<List<MoodPlaylist>> =
         moodPlaylistDao.observeAll().map { list -> list.map { it.toDomain() } }

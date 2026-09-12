@@ -9,6 +9,12 @@ import com.raulshma.jellyplay.core.model.toMediaItem
 // core:data shim (same package/name); `@Singleton` / `@Inject` stripped
 // (one framework per type — Koin's dataJvmModule constructs this single; the
 // legacy DataModule bridges the remaining Hilt injectors via koin().get()).
+//
+// promotion from jvmShared: every ctor dep is a commonMain interface
+// (OfflineRepository / MediaRepository / OfflineModeManager / ImageUrlProvider),
+// so the impl crosses verbatim. Its Koin single stays in dataJvmModule — on
+// wasm no OfflineRepository/MediaRepository impl is bound yet, so
+// dataWasmModule does not wire it.
 class OfflineFirstItemResolverImpl(
     private val offlineRepository: OfflineRepository,
     private val mediaRepository: MediaRepository,

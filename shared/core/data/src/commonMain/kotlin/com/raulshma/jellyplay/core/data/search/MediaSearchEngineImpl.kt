@@ -31,6 +31,13 @@ import kotlinx.coroutines.flow.map
 // core:data shim (same package/name); `@Singleton` / `@Inject` stripped
 // (one framework per type — Koin's dataJvmModule constructs this single; the
 // legacy DataModule bridges the remaining Hilt injectors via koin().get()).
+//
+// promotion from jvmShared: every ctor dep is a commonMain interface/store
+// (MediaRepository / SeerrRepository / SearchHistoryRepository /
+// ServerIdentityStore / ExperimentalStore / OfflineModeManager /
+// OfflineRepository), so the impl crosses verbatim. Its Koin single stays in
+// dataJvmModule — on wasm MediaRepository/OfflineRepository have no binding
+// yet, so dataWasmModule does not wire it.
 @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
 class MediaSearchEngineImpl(
     private val mediaRepository: MediaRepository,

@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.playback
 
+import kotlin.concurrent.Volatile
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 

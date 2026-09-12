@@ -1,15 +1,21 @@
 package com.raulshma.jellyplay.core.data.repository
 
-import com.raulshma.jellyplay.core.data.util.TimeSource
+import com.raulshma.jellyplay.core.data.util.EpochMillisSource
 import com.raulshma.jellyplay.core.database.dao.SearchHistoryDao
 import com.raulshma.jellyplay.core.database.entity.SearchHistoryEntity
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
+/**
+ * promotion from jvmShared: the impl is DAO + clock only, so it crosses to
+ * commonMain once the clock edge narrows to the common
+ * [EpochMillisSource] seam (JVM [TimeSource] fakes in jvmTest still satisfy
+ * it through the supertype).
+ */
 class SearchHistoryRepositoryImpl constructor(
     private val dao: SearchHistoryDao,
     /** Clock seam for the persisted `searchedAt` stamp. */
-    private val timeSource: TimeSource,
+    private val timeSource: EpochMillisSource,
 ) : SearchHistoryRepository {
 
     override fun getRecent(userId: String, limit: Int): Flow<List<SearchHistoryItem>> =

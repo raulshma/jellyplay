@@ -8,6 +8,12 @@ import kotlinx.coroutines.delay
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.serializer
 
+/**
+ * promotion from jvmShared: the paginated-scan driver touches only
+ * commonMain Room 3 (ScanStateDao/ScanStateEntity) + core:model + kotlinx
+ * serialization, so the workers' scan choreography crosses verbatim. The
+ * workers themselves (WorkManager) stay androidMain.
+ */
 public object ScanWorkerHelper {
 
     private const val BATCH_SIZE = 200

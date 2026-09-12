@@ -58,6 +58,11 @@ kotlin {
         getByName("commonMain").dependencies {
             api(project(":shared:core:model"))
             api(libs.room3.runtime)
+            // databaseDaosModule moved from jvmShared to commonMain (all it
+            // touches — JellyPlayDatabase + the DAO getters — is commonMain
+            // Room 3), so the Koin DSL must resolve on every target. Koin
+            // 4.2.2 koin-core ships wasmJs klibs (wasmJs stable since 4.0.0).
+            api(libs.koin.core)
             implementation(libs.kotlinx.serialization.json)
         }
         getByName("jvmMain").dependencies {

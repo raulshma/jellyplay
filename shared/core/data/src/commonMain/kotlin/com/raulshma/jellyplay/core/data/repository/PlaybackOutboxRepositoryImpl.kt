@@ -1,29 +1,39 @@
 package com.raulshma.jellyplay.core.data.repository
 
-import com.raulshma.jellyplay.core.data.util.TimeSource
+import com.raulshma.jellyplay.core.data.util.EpochMillisSource
+import com.raulshma.jellyplay.core.data.util.ioDispatcher
 import com.raulshma.jellyplay.core.database.dao.PlaybackOutboxDao
 import com.raulshma.jellyplay.core.database.entity.PlaybackOutboxEntity
 import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.model.PlayMethod
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import java.util.UUID
+import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
 
+/**
+ * promotion from jvmShared: the impl is DAO + clock + dispatcher only, so
+ * it crosses to commonMain with two mechanical substitutions — the clock edge
+ * narrowed to the common [EpochMillisSource] seam (JVM [TimeSource] fakes in
+ * jvmTest still satisfy it through the supertype), and `java.util.UUID`
+ * replaced by the stdlib multiplatform `kotlin.uuid.Uuid` (also a v4 string;
+ * identical shape on android/desktop, so persisted rows are unchanged).
+ */
+@OptIn(ExperimentalUuidApi::class)
 class PlaybackOutboxRepositoryImpl constructor(
     private val dao: PlaybackOutboxDao,
     /** Clock seam for the outbox rows' `recordedAt`/`createdAt` stamps. */
-    private val timeSource: TimeSource,
+    private val timeSource: EpochMillisSource,
 ) : PlaybackOutboxRepository {
 
     // Serialises the read-modify-write coalescence so concurrent PROGRESS
     // reports from the reporter loop and a STOP from release do not interleave.
     private val mutex = Mutex()
 
-    // Every caller already runs inside `withContext(Dispatchers.IO)`; wrapping a
+    // Every caller already runs inside `withContext(ioDispatcher)`; wrapping a
     // non-blocking wall-clock read in its own dispatcher handoff was a redundant
     // reschedule on the playback-progress path (called every ~10s + on release).
     private fun nowMillis(): Long = timeSource.nowEpochMillis()
@@ -33,11 +43,11 @@ class PlaybackOutboxRepositoryImpl constructor(
         sessionId: String,
         playMethod: PlayMethod,
         startPositionTicks: Long?,
-    ) = withContext(Dispatchers.IO) {
+    ) = withContext(ioDispatcher) {
         val now = nowMillis()
         dao.upsert(
             PlaybackOutboxEntity(
-                id = UUID.randomUUID().toString(),
+                id = Uuid.random().toString(),
                 itemId = itemId,
                 eventType = PlaybackOutboxEventType.START.name,
                 sessionId = sessionId,
@@ -95,7 +105,7 @@ class PlaybackOutboxRepositoryImpl constructor(
         isPaused: Boolean,
         playMethod: PlayMethod,
         mediaSourceId: String?,
-    ) = withContext(Dispatchers.IO) {
+    ) = withContext(ioDispatcher) {
         mutex.withLock {
             val now = nowMillis()
             val existing = dao.getForItemByType(itemId, eventType.name)
@@ -109,7 +119,7 @@ class PlaybackOutboxRepositoryImpl constructor(
                     recordedAt = now,
                     createdAt = now,
                 ) ?: PlaybackOutboxEntity(
-                    id = UUID.randomUUID().toString(),
+                    id = Uuid.random().toString(),
                     itemId = itemId,
                     eventType = eventType.name,
                     sessionId = sessionId,
@@ -128,7 +138,7 @@ class PlaybackOutboxRepositoryImpl constructor(
         itemId: String,
         sessionId: String,
         positionTicks: Long,
-    ) = withContext(Dispatchers.IO) {
+    ) = withContext(ioDispatcher) {
         mutex.withLock {
             // A STOP carries the item's final position, so any pending
             // PROGRESS for the same item is superseded. Previously the STOP
@@ -145,7 +155,7 @@ class PlaybackOutboxRepositoryImpl constructor(
             val now = nowMillis()
             dao.upsert(
                 PlaybackOutboxEntity(
-                    id = UUID.randomUUID().toString(),
+                    id = Uuid.random().toString(),
                     itemId = itemId,
                     eventType = PlaybackOutboxEventType.STOP.name,
                     sessionId = sessionId,
@@ -164,7 +174,7 @@ class PlaybackOutboxRepositoryImpl constructor(
         }
     }
 
-    override suspend fun enqueuePlayedState(itemId: String, isPlayed: Boolean) = withContext(Dispatchers.IO) {
+    override suspend fun enqueuePlayedState(itemId: String, isPlayed: Boolean) = withContext(ioDispatcher) {
         // Deterministic id so a re-flip for the same item lands in place — the
         // latest user intent wins and there is never more than one row per
         // item for the played-state channel. `positionTicks`/`isPaused`/
@@ -190,7 +200,7 @@ class PlaybackOutboxRepositoryImpl constructor(
         )
     }
 
-    override suspend fun enqueueFavoriteState(itemId: String, isFavorite: Boolean) = withContext(Dispatchers.IO) {
+    override suspend fun enqueueFavoriteState(itemId: String, isFavorite: Boolean) = withContext(ioDispatcher) {
         // Deterministic id so a re-flip for the same item lands in place — the
         // latest user intent wins and there is never more than one row per
         // item for the favorite-state channel. `positionTicks`/`isPaused`/
@@ -223,42 +233,42 @@ class PlaybackOutboxRepositoryImpl constructor(
         fun favoriteStateId(itemId: String) = "favorite_state:$itemId"
     }
 
-    override suspend fun drain(): List<PlaybackOutboxEntry> = withContext(Dispatchers.IO) {
+    override suspend fun drain(): List<PlaybackOutboxEntry> = withContext(ioDispatcher) {
         dao.getAll().map { it.toDomain() }
     }
 
-    override suspend fun hasUnsyncedPlayedIntent(itemId: String): Boolean = withContext(Dispatchers.IO) {
+    override suspend fun hasUnsyncedPlayedIntent(itemId: String): Boolean = withContext(ioDispatcher) {
         dao.hasUnsyncedIntent(itemId, PlaybackOutboxEventType.PLAYED.name)
     }
 
-    override suspend fun hasUnsyncedUnplayedIntent(itemId: String): Boolean = withContext(Dispatchers.IO) {
+    override suspend fun hasUnsyncedUnplayedIntent(itemId: String): Boolean = withContext(ioDispatcher) {
         dao.hasUnsyncedIntent(itemId, PlaybackOutboxEventType.UNPLAYED.name)
     }
 
-    override suspend fun deletePlayedStateIntents(itemId: String) = withContext(Dispatchers.IO) {
+    override suspend fun deletePlayedStateIntents(itemId: String) = withContext(ioDispatcher) {
         dao.deleteByItemAndTypes(
             itemId,
             listOf(PlaybackOutboxEventType.PLAYED.name, PlaybackOutboxEventType.UNPLAYED.name),
         )
     }
 
-    override suspend fun delete(id: String) = withContext(Dispatchers.IO) {
+    override suspend fun delete(id: String) = withContext(ioDispatcher) {
         dao.deleteById(id)
     }
 
-    override suspend fun markDeadLetter(id: String) = withContext(Dispatchers.IO) {
+    override suspend fun markDeadLetter(id: String) = withContext(ioDispatcher) {
         dao.markDeadLetter(id)
     }
 
-    override suspend fun deleteForItem(itemId: String) = withContext(Dispatchers.IO) {
+    override suspend fun deleteForItem(itemId: String) = withContext(ioDispatcher) {
         dao.deleteForItem(itemId)
     }
 
-    override suspend fun deletePlaybackTelemetryForItem(itemId: String) = withContext(Dispatchers.IO) {
+    override suspend fun deletePlaybackTelemetryForItem(itemId: String) = withContext(ioDispatcher) {
         dao.deletePlaybackTelemetryForItem(itemId)
     }
 
-    override suspend fun count(): Int = withContext(Dispatchers.IO) { dao.count() }
+    override suspend fun count(): Int = withContext(ioDispatcher) { dao.count() }
 
     override fun countFlow(): Flow<Int> = dao.countFlow()
 

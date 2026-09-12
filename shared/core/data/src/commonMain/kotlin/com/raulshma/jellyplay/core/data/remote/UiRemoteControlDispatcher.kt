@@ -9,6 +9,10 @@ import com.raulshma.jellyplay.core.model.remote.PlaystateCommand
 /**
  * Cross-cutting dispatcher for remote commands that aren't tied to a specific
  * playback engine — currently limited to logging fall-throughs.
+ *
+ * promotion from jvmShared: its only dep is the commonMain
+ * [RemoteControlDispatcher] seam, so it crosses verbatim (its Koin single
+ * stays in dataJvmModule; nothing on web resolves it yet).
  */
 class UiRemoteControlDispatcher() : RemoteControlDispatcher {
 

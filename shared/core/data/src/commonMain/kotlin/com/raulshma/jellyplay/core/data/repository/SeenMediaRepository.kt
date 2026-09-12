@@ -1,5 +1,7 @@
 package com.raulshma.jellyplay.core.data.repository
 
+import com.raulshma.jellyplay.core.model.wallNowMillis
+
 /**
  * Tracks which media items the new-media-notification worker has already
  * surfaced, so the same item isn't notified twice.
@@ -9,6 +11,11 @@ package com.raulshma.jellyplay.core.data.repository
  * `core:database` no longer ripple into `core:notification`.
  *
  * Implementations are backed by [com.raulshma.jellyplay.core.database.dao.SeenMediaDao].
+ *
+ * promotion from jvmShared: the only JVM edge was the
+ * `System.currentTimeMillis()` default stamps, now routed through
+ * core:model's commonMain [wallNowMillis] seam (the identical
+ * `System.currentTimeMillis` read on android/desktop).
  */
 interface SeenMediaRepository {
     /** Total number of tracked items. Used to detect the first-ever scan. */
@@ -29,7 +36,7 @@ interface SeenMediaRepository {
         itemId: String,
         libraryId: String,
         mediaType: String,
-        seenAtEpochMs: Long = System.currentTimeMillis(),
+        seenAtEpochMs: Long = wallNowMillis(),
     )
 
     /** Convenience bulk variant of [markAsSeen]. */
@@ -66,5 +73,5 @@ data class SeenMediaRecord(
     val itemId: String,
     val libraryId: String,
     val mediaType: String,
-    val seenAtEpochMs: Long = System.currentTimeMillis(),
+    val seenAtEpochMs: Long = wallNowMillis(),
 )

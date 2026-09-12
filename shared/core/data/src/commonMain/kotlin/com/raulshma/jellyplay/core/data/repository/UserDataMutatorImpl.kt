@@ -13,6 +13,11 @@ import kotlinx.coroutines.sync.withLock
 //    dagger dependency; memoizing single-evaluation semantics preserved).
 //    dagger.Lazy's `.get()` call sites became `.value` (kotlin.Lazy's
 //    accessor) — the only body-level change, one-for-one mechanical.
+//
+// promotion from jvmShared: every ctor dep (MediaRepository,
+// MediaDetailProvider) is a commonMain interface, so the impl crosses with
+// zero body changes. Its Koin single stays in dataJvmModule — on wasm no
+// MediaRepository impl is bound yet, so dataWasmModule does not wire it.
 
 /**
  * Production adapter over [MediaRepository] (the write — including

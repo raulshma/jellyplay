@@ -22,6 +22,11 @@ import com.raulshma.jellyplay.core.model.StreamingQuality
  * true when capabilities are null — so `!isMetered.value` matches the legacy
  * semantics case for case. The desktop actual reports unmetered always
  * (no connectivity detection), which is the desktop assumption everywhere.
+ *
+ * promotion from jvmShared: every ctor dep is a commonMain seam
+ * ([NetworkMonitor] / datastore stores / core:model), so the manager crosses
+ * verbatim. Its Koin single stays in dataJvmModule — on wasm no
+ * NetworkMonitor binding exists yet, so dataWasmModule does not wire it.
  */
 class AdaptiveBitrateManager(
     private val networkMonitor: NetworkMonitor,

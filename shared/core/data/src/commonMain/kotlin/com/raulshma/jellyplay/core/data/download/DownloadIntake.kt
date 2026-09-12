@@ -25,6 +25,11 @@ import com.raulshma.jellyplay.core.model.MediaItem
  * **Depth**: the implementation absorbs the single-vs-batch-vs-browse routing
  * decision so callers don't branch on it. The bundle policy itself lives one
  * layer down in the download delegate.
+ *
+ * promotion from jvmShared: the interface's surface is core:model +
+ * DownloadResult only, so it crosses verbatim (its implementors stay
+ * platform-bound — AndroidCoreDataKoinModule's DownloadIntakeImpl /
+ * desktopDataModule's DesktopDownloadIntake).
  */
 interface DownloadIntake {
 
