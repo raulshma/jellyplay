@@ -9,7 +9,7 @@ import kotlin.test.assertEquals
 import org.junit.AssumptionViolatedException
 
 /**
- * Pins the shared `directorySizeBytes` walk (FileSize.kt, commonMain pure JVM)
+ * Pins the shared `directorySizeBytes` walk (FileSize.kt, jvmShared)
  * that backs BOTH [SettingsViewModel] cache-size and the
  * [StorageSettingsViewModel] storage breakdown — it used to be duplicated in
  * the two ViewModels, so a fix to one could silently diverge from the other.

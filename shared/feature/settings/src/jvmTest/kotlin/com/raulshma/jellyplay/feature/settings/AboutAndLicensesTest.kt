@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.feature.settings
 
-import com.raulshma.jellyplay.core.data.repository.AdminRepository
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalSlice
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
@@ -52,7 +51,7 @@ private suspend fun TestScope.awaitUntil(timeoutMs: Long = 5_000, condition: () 
  * Pins [AboutViewModel] (LibraryLayout jvmTest pattern: mockk collaborators +
  * real [MutableStateFlow]/Result stubs + inlined Main-dispatcher rule):
  * app info derives from the [AppMetaProvider] seam, server info joins
- * `authRepository.currentServer` with `adminRepository.getSystemInfo()`
+ * `authRepository.currentServer` with `serverAdminActions.getSystemInfo()`
  * (degrading, not throwing, on admin failure), the self-update toggles mirror
  * the experimental-store slice, and log collection clears its spinner even on
  * failure.
@@ -71,7 +70,7 @@ class AboutViewModelTest {
 
     private lateinit var appMetaProvider: AppMetaProvider
     private lateinit var logCollector: LogCollector
-    private lateinit var adminRepository: AdminRepository
+    private lateinit var serverAdminActions: ServerAdminActions
     private lateinit var authRepository: AuthRepository
     private lateinit var experimentalStore: ExperimentalStore
 
@@ -80,7 +79,7 @@ class AboutViewModelTest {
         Dispatchers.setMain(mainDispatcher)
         appMetaProvider = mockk(relaxed = true)
         logCollector = mockk(relaxed = true)
-        adminRepository = mockk(relaxed = true)
+        serverAdminActions = mockk<ServerAdminActions>(relaxed = true).apply { every { isSupported } returns true }
         authRepository = mockk(relaxed = true)
         experimentalStore = mockk(relaxed = true)
         every { appMetaProvider.versionName } returns "2.3.4"
@@ -99,7 +98,7 @@ class AboutViewModelTest {
     }
 
     private fun viewModel() = AboutViewModel(
-        appMetaProvider, logCollector, adminRepository, authRepository, experimentalStore,
+        appMetaProvider, logCollector, serverAdminActions, authRepository, experimentalStore,
     )
 
     @Test
@@ -114,7 +113,7 @@ class AboutViewModelTest {
 
     @Test
     fun `server info joins the auth and admin repositories`() = runTest {
-        coEvery { adminRepository.getSystemInfo() } returns
+        coEvery { serverAdminActions.getSystemInfo() } returns
             Result.success(SystemInfo(serverName = "Media Server", version = "10.10.0"))
         val viewModel = viewModel()
 
@@ -127,7 +126,7 @@ class AboutViewModelTest {
 
     @Test
     fun `admin failure degrades the server info instead of throwing`() = runTest {
-        coEvery { adminRepository.getSystemInfo() } returns
+        coEvery { serverAdminActions.getSystemInfo() } returns
             Result.failure(RuntimeException("boom"))
         val viewModel = viewModel()
 

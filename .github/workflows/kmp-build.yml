@@ -138,12 +138,14 @@ jobs:
           :shared:feature:music:compileAndroidMain
           :shared:feature:livetv:jvmJar
           :shared:feature:livetv:compileAndroidMain
+          :shared:feature:livetv:compileKotlinWasmJs
           :shared:feature:downloads:jvmJar
           :shared:feature:downloads:compileAndroidMain
           :shared:feature:syncplay:jvmJar
           :shared:feature:syncplay:compileAndroidMain
           :shared:feature:settings:jvmJar
           :shared:feature:settings:compileAndroidMain
+          :shared:feature:settings:compileKotlinWasmJs
           :shared:feature:admin:jvmJar
           :shared:feature:admin:compileAndroidMain
           :shared:feature:editor:jvmJar
@@ -163,6 +165,7 @@ jobs:
           :shared:feature:newsletter:compileKotlinWasmJs
           :shared:feature:insights:jvmJar
           :shared:feature:insights:compileAndroidMain
+          :shared:feature:insights:compileKotlinWasmJs
           :shared:feature:onboarding:jvmJar
           :shared:feature:onboarding:compileAndroidMain
           :shared:feature:onboarding:compileKotlinWasmJs
@@ -184,6 +187,7 @@ jobs:
           :shared:feature:player-live:compileAndroidMain
           :shared:feature:player-audio:jvmJar
           :shared:feature:player-audio:compileAndroidMain
+          :shared:feature:player-audio:compileKotlinWasmJs
           :shared:feature:player-video:jvmJar
           :shared:feature:player-video:compileAndroidMain
           :apps:web:compileKotlinWasmJs

@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.feature.settings
 
-import com.raulshma.jellyplay.core.data.repository.AdminRepository
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.datastore.BackupSliceKey
@@ -21,7 +20,6 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
-import java.io.ByteArrayOutputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
@@ -65,7 +63,7 @@ class SettingsViewModelBackupExportTest {
     private lateinit var projections: PreferenceProjections
     private lateinit var authRepository: AuthRepository
     private lateinit var seerrRepository: SeerrRepository
-    private lateinit var adminRepository: AdminRepository
+    private lateinit var serverAdminActions: ServerAdminActions
     private lateinit var editor: PreferencesEditor
     private lateinit var recentsStore: SettingsRecentsStore
 
@@ -84,7 +82,7 @@ class SettingsViewModelBackupExportTest {
         projections = mockk(relaxed = true)
         authRepository = mockk(relaxed = true)
         seerrRepository = mockk(relaxed = true)
-        adminRepository = mockk(relaxed = true)
+        serverAdminActions = mockk<ServerAdminActions>(relaxed = true).apply { every { isSupported } returns true }
         editor = mockk(relaxed = true)
         recentsStore = mockk(relaxed = true)
 
@@ -128,7 +126,7 @@ class SettingsViewModelBackupExportTest {
             projections = projections,
             authRepository = authRepository,
             seerrRepository = seerrRepository,
-            adminRepository = adminRepository,
+            serverAdminActions = serverAdminActions,
             editor = editor,
             recentsStore = recentsStore,
         )
@@ -162,8 +160,11 @@ class SettingsViewModelBackupExportTest {
             slices = mapOf(BackupSliceKey.APPEARANCE to JsonPrimitive("stub-slice")),
             extras = AppRuntimeState(favoriteChannels = setOf("chan-1")),
         )
-        val sink = ByteArrayOutputStream()
-        coEvery { settingsBackupIo.openExportSink("backup:out") } returns sink
+        var writtenPayload: String? = null
+        coEvery { settingsBackupIo.writeExportPayload("backup:out", any()) } answers {
+            writtenPayload = arg<String>(1)
+            true
+        }
         val vm = viewModel()
         advanceUntilIdle()
 
@@ -172,7 +173,7 @@ class SettingsViewModelBackupExportTest {
 
         val decoded = PreferencesJson.import.decodeFromString(
             SettingsBackup.serializer(),
-            sink.toString(),
+            writtenPayload.orEmpty(),
         )
         assertEquals(SettingsBackup.CURRENT_SCHEMA_VERSION, decoded.schemaVersion)
         assertEquals(JsonPrimitive("stub-slice"), decoded.slices[BackupSliceKey.APPEARANCE])
@@ -186,7 +187,7 @@ class SettingsViewModelBackupExportTest {
             slices = emptyMap(),
             extras = AppRuntimeState(),
         )
-        coEvery { settingsBackupIo.openExportSink("backup:dead") } returns null
+        coEvery { settingsBackupIo.writeExportPayload("backup:dead", any()) } returns false
         val vm = viewModel()
         advanceUntilIdle()
 
@@ -215,28 +216,28 @@ class SettingsViewModelBackupExportTest {
 
     @Test
     fun `session auto-refresh polls on the 30-second beat`() = vmTest {
-        coEvery { adminRepository.getSessions() } returns Result.success(emptyList())
+        coEvery { serverAdminActions.getSessions() } returns Result.success(emptyList())
         val vm = viewModel()
         advanceUntilIdle()
         currentUser.value = adminUser()
         advanceUntilIdle()
-        coVerify(exactly = 1) { adminRepository.getSessions() } // the init load
+        coVerify(exactly = 1) { serverAdminActions.getSessions() } // the init load
 
         // NOTE: no advanceUntilIdle from here on — the polling loop is a
         // self-rescheduling delay, which would spin the idle-advance forever.
         vm.startSessionAutoRefresh()
         advanceTimeBy(30_000)
         runCurrent()
-        coVerify(exactly = 2) { adminRepository.getSessions() }
+        coVerify(exactly = 2) { serverAdminActions.getSessions() }
 
         advanceTimeBy(30_000)
         runCurrent()
-        coVerify(exactly = 3) { adminRepository.getSessions() }
+        coVerify(exactly = 3) { serverAdminActions.getSessions() }
     }
 
     @Test
     fun `stopSessionAutoRefresh cancels the polling loop`() = vmTest {
-        coEvery { adminRepository.getSessions() } returns Result.success(emptyList())
+        coEvery { serverAdminActions.getSessions() } returns Result.success(emptyList())
         val vm = viewModel()
         advanceUntilIdle()
         currentUser.value = adminUser()
@@ -247,7 +248,7 @@ class SettingsViewModelBackupExportTest {
         advanceTimeBy(90_000)
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { adminRepository.getSessions() } // init load only — no beats
+        coVerify(exactly = 1) { serverAdminActions.getSessions() } // init load only — no beats
     }
 
     // ----------------------------------------------------- editor delegations

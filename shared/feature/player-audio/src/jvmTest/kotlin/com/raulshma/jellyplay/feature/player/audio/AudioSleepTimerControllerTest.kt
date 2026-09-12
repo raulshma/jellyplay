@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.feature.player.audio
 
-import com.raulshma.jellyplay.core.data.playback.SleepTimerManager
+import com.raulshma.jellyplay.core.data.playback.AudioSleepTimerManager
 import com.raulshma.jellyplay.core.datastore.audio.AudioStore
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -27,7 +27,7 @@ class AudioSleepTimerControllerTest {
 
     private val testScope = TestScope(UnconfinedTestDispatcher())
 
-    private lateinit var sleepTimerManager: SleepTimerManager
+    private lateinit var sleepTimerManager: AudioSleepTimerManager
     private lateinit var audioStore: AudioStore
     private lateinit var engine: AudioPlayerEngine
 
@@ -37,7 +37,7 @@ class AudioSleepTimerControllerTest {
 
     @BeforeTest
     fun setUp() {
-        sleepTimerManager = mockk(relaxed = true)
+        sleepTimerManager = mockk<AudioSleepTimerManager>(relaxed = true)
         audioStore = mockk(relaxed = true)
         engine = mockk(relaxed = true)
         slice = SleepTimerState()
@@ -56,7 +56,7 @@ class AudioSleepTimerControllerTest {
 
         coVerify { audioStore.setSleepTimerDurationMs(15 * 60 * 1000L) }
         coVerify { audioStore.setSleepTimerEndOfEpisode(false) }
-        verify { sleepTimerManager.start(15 * 60 * 1000L) }
+        verify { sleepTimerManager.startSleepTimer(15 * 60 * 1000L) }
         assertEquals(
             SleepTimerState(active = true, endOfEpisode = false, lastUsedDurationMs = 15 * 60 * 1000L),
             slice,
@@ -68,7 +68,7 @@ class AudioSleepTimerControllerTest {
         controller.startSleepTimerEndOfEpisode()
 
         coVerify { audioStore.setSleepTimerEndOfEpisode(true) }
-        verify { sleepTimerManager.startEndOfEpisode() }
+        verify { sleepTimerManager.startEndOfEpisodeTimer() }
         assertEquals(SleepTimerState(active = true, endOfEpisode = true), slice)
     }
 
@@ -99,7 +99,7 @@ class AudioSleepTimerControllerTest {
 
         controller.cancelSleepTimer()
 
-        verify { sleepTimerManager.cancel() }
+        verify { sleepTimerManager.cancelSleepTimer() }
         // Cancel clears active/endOfEpisode but PRESERVES the last-used
         // duration (the picker keeps offering it) — the pre-extraction
         // behaviour, now pinned.

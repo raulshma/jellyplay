@@ -148,7 +148,7 @@ class ArrSettingsViewModel(
         launch {
             val latest = secureCredentialsStore.getManualServers()
             val newServer = ArrServerConfig(
-                id = "manual-${kind.name.lowercase()}-${System.currentTimeMillis()}",
+                id = "manual-${kind.name.lowercase()}-${kotlin.time.Clock.System.now().toEpochMilliseconds()}",
                 baseUrl = baseUrl.trimEnd('/'),
                 apiKey = apiKey.trim(),
                 name = name.trim(),

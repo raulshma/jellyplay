@@ -1,13 +1,12 @@
 package com.raulshma.jellyplay.feature.livetv
 
-import com.raulshma.jellyplay.core.data.util.TimeSource
+import com.raulshma.jellyplay.core.data.util.EpochMillisSource
 import com.raulshma.jellyplay.core.model.LiveTvProgram
-import java.time.Instant
-import java.time.LocalDateTime
-import java.time.OffsetDateTime
-import java.time.ZoneOffset
-import java.time.format.DateTimeFormatter
-import java.time.format.DateTimeParseException
+import kotlin.time.Instant
+import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.UtcOffset
+import kotlinx.datetime.format.DateTimeComponents
+import kotlinx.datetime.toInstant
 
 /**
  * The Live-TV feature's ONE timestamp/airing vocabulary. Every screen and
@@ -20,18 +19,31 @@ import java.time.format.DateTimeParseException
  *    date-label outputs over one shared parse-then-format core.
  *  - [isAiringAt] — the single "is airing now" predicate.
  *  - [liveProgressFraction] — channel detail's live progress fold.
- *  - [LIVE_TV_STALENESS_INTERVAL_MS] + [TimeSource.nowInstant] — the shared
- *    clock reads: the 5-minute staleness cadence and the injected-clock
- *    Instant bridge (no direct `Instant.now()` in the ViewModels).
+ *  - [LIVE_TV_STALENESS_INTERVAL_MS] + [nowInstant] — the shared clock
+ *    reads: the 5-minute staleness cadence and the injected-clock Instant
+ *    bridge (no direct `Clock.System.now()` in the ViewModels).
+ *
+ * web breadth: this module is pure kotlinx-datetime so the wasmJs
+ * target can compile it (no java.time in commonMain). The parse ladder rides
+ * `DateTimeComponents.Formats.ISO_DATE_TIME_OFFSET` (the
+ * `DateTimeFormatter.ISO_OFFSET_DATE_TIME` counterpart), the EPG grid's
+ * `HH:mm` header is manual component derivation, and the two user-facing
+ * renderers are expect/actual (below).
+ * Locale behavior: the two user-facing renderers are
+ * expect/actual — the JVM actual formats through java.time with the default
+ * FORMAT locale, so desktop/android keep the localized AM/PM and month/day
+ * names the former java.time formatters produced; the wasm actual pins
+ * English (kotlinx has no CLDR data on wasm) — the same fixed-English
+ * degradation the newsletter's web actual took.
+ *  - [toInstantOrNull]'s offset leg versus the java `ISO_OFFSET_DATE_TIME`
+ *    it replaced, honestly: kotlinx requires SECONDS in the offset forms
+ *    java accepted without them ("2026-01-02T03:04+02:00" no longer parses
+ *    on the offset leg — it falls through to the naive-local UTC leg), and
+ *    the bare-hours offset java's lenient extra ("+02") now parses where
+ *    java rejected it. Jellyfin always emits ±HH:MM with seconds, so no
+ *    real payload moves legs; pinned by [LiveTvTimeFormatTest].
+ *  - The naive-local fallback quirk (below) is reproduced exactly.
  */
-internal val LIVE_TV_TIME_PARSER: DateTimeFormatter = DateTimeFormatter.ISO_OFFSET_DATE_TIME
-internal val LIVE_TV_TIME_FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern("h:mm a")
-
-/** "Mon, Jul 14"-style label the recording schedule groups its timers by. */
-internal val LIVE_TV_DATE_LABEL_FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern("EEE, MMM d")
-
-/** Formatter behind [toInstantOrNull] (ISO_DATE_TIME: offsets optional). */
-private val ISO_DATE_TIME_PARSER: DateTimeFormatter = DateTimeFormatter.ISO_DATE_TIME
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Canonical timestamp parse
@@ -42,22 +54,26 @@ private val ISO_DATE_TIME_PARSER: DateTimeFormatter = DateTimeFormatter.ISO_DATE
  * Returns `null` on parse failure — callers should treat missing timestamps as
  * "skip this program" rather than crash.
  */
-internal fun String.toInstantOrNull(): Instant? = try {
-    // ISO_DATE_TIME handles offsets and, when absent, falls back to UTC via
-    // LocalDateTime parsing. The Jellyfin SDK emits both forms depending on
-    // server version, so we try ISO first then fall back to LocalDateTime.
-    Instant.from(ISO_DATE_TIME_PARSER.parse(this))
-} catch (_: DateTimeParseException) {
-    null
-} catch (_: java.time.DateTimeException) {
-    // Instant.from() throws DateTimeException (not DateTimeParseException)
-    // when the parsed TemporalAccessor lacks zone/offset info — e.g. a bare
-    // LocalDateTime string. Fall back to assuming UTC.
-    try {
-        LocalDateTime.parse(this).toInstant(ZoneOffset.UTC)
-    } catch (_: DateTimeParseException) {
-        null
-    }
+internal fun String.toInstantOrNull(): Instant? {
+    // ISO offset parse first (ISO_OFFSET_DATE_TIME's counterpart — requires
+    // the offset, so an offset-less input skips this leg exactly like the
+    // former `Instant.from(ISO_DATE_TIME)` DateTimeException hop did).
+    offsetDateTimeOf(this)?.let { (local, offset) -> return local.toInstant(offset) }
+    // Offset-less input: strict ISO local (the 'T' separator is required),
+    // read as UTC — the C10 fallback the offset-less fixtures ride.
+    return runCatching { LocalDateTime.parse(this).toInstant(UtcOffset.ZERO) }.getOrNull()
+}
+
+/**
+ * The one ISO-offset parse behind [toInstantOrNull] and the wall-clock
+ * formatters: `null` unless the string carries BOTH a valid ISO date-time and
+ * an explicit offset ('Z' or ±HH:MM).
+ */
+private fun offsetDateTimeOf(iso: String): Pair<LocalDateTime, UtcOffset>? {
+    val parsed = runCatching { DateTimeComponents.Formats.ISO_DATE_TIME_OFFSET.parse(iso) }.getOrNull()
+        ?: return null
+    val offset = runCatching { parsed.toUtcOffset() }.getOrNull() ?: return null
+    return parsed.toLocalDateTime() to offset
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -75,7 +91,7 @@ internal fun String.toInstantOrNull(): Instant? = try {
  */
 internal fun formatLiveTvTime(iso: String?): String? {
     if (iso.isNullOrBlank()) return null
-    return formatOffsetOrNaiveLocal(iso, LIVE_TV_TIME_FORMATTER) ?: iso
+    return formatOffsetOrNaiveLocal(iso, ::formatWallClockTime) ?: iso
 }
 
 /**
@@ -84,27 +100,45 @@ internal fun formatLiveTvTime(iso: String?): String? {
  * neither parse handles the input — callers drop the row from its group.
  */
 internal fun formatLiveTvDateLabel(iso: String?): String? =
-    iso?.let { formatOffsetOrNaiveLocal(it, LIVE_TV_DATE_LABEL_FORMATTER) }
+    iso?.let { formatOffsetOrNaiveLocal(it, ::formatDateLabel) }
 
 /**
  * The one parse-then-format core behind the wall-clock/date-label outputs:
  * ISO-offset parse first, then the naive-local fallback, else null —
  * callers map the failure their own way (raw passthrough vs drop).
  */
-private fun formatOffsetOrNaiveLocal(iso: String, formatter: DateTimeFormatter): String? =
-    runCatching {
-        OffsetDateTime.parse(iso, LIVE_TV_TIME_PARSER).format(formatter)
-    }.recoverCatching {
-        naiveLocalDateTime(iso).format(formatter)
-    }.getOrNull()
+private fun formatOffsetOrNaiveLocal(iso: String, format: (LocalDateTime) -> String): String? =
+    runCatching { format(offsetWallClock(iso)) }
+        .recoverCatching { format(naiveLocalDateTime(iso)) }
+        .getOrNull()
+
+/** The offset-required wall-clock read behind the primary format leg. */
+private fun offsetWallClock(iso: String): LocalDateTime = offsetDateTimeOf(iso)
+    ?.first
+    ?: error("No UTC offset in $iso")
+
+/**
+ * "h:mm a" — unpadded 12-hour clock + space-padded AM/PM marker (java's
+ * single-'h'/'a' output, pinned "2:30 PM"/"12:05 AM" by [LiveTvTimeFormatTest]
+ * under the US FORMAT locale). Locale resolution is per-platform: JVM actual
+ * formats via java.time with the default FORMAT locale (localized markers);
+ * the wasm actual pins the English rendering (no CLDR on wasm).
+ */
+internal expect fun formatWallClockTime(local: LocalDateTime): String
+
+/** "EEE, MMM d" — unpadded day ("Mon, Jun 22"), locale-resolved per platform
+ * exactly like [formatWallClockTime] (JVM localized via java.time; wasm pins
+ * the fixed-English abbreviations). */
+internal expect fun formatDateLabel(local: LocalDateTime): String
 
 /**
  * The single copy of the string-munging naive-local fallback the wall-clock
  * and date-label formatters formerly carried as two verbatim duplicates.
  * Kept byte-identical — INCLUDING its JVM quirk: the T→space substitution
- * defeats `LocalDateTime.parse`, which requires the literal 'T' separator,
- * so offset-less timestamps fail BOTH parses. Pinned by
- * [LiveTvTimeFormatTest]; fix deliberately, not in passing.
+ * defeats `LocalDateTime.parse`, which requires the literal 'T' separator
+ * (kotlinx-datetime's strict ISO parse does the same), so offset-less
+ * timestamps fail BOTH parses. Pinned by [LiveTvTimeFormatTest]; fix
+ * deliberately, not in passing.
  */
 private fun naiveLocalDateTime(iso: String): LocalDateTime = LocalDateTime.parse(
     iso.replace("Z", "").replace("T", " ").substringBefore('+').trim()
@@ -143,7 +177,7 @@ internal fun isAiringAt(program: LiveTvProgram, now: Instant): Boolean = isAirin
  * (over raw ISO strings) share it.
  */
 internal fun isAiringAt(start: Instant?, end: Instant?, now: Instant): Boolean =
-    (start == null || !start.isAfter(now)) && (end == null || end.isAfter(now))
+    (start == null || start <= now) && (end == null || end > now)
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Live progress
@@ -163,14 +197,14 @@ internal fun liveProgressFraction(program: LiveTvProgram, now: Instant): Float? 
 }
 
 /**
- * Instant-level core: second granularity (`epochSecond`, as the former inline
+ * Instant-level core: second granularity (`epochSeconds`, as the former inline
  * math), before start → 0f, after end → 1f, null when the span is zero or
  * inverted.
  */
 internal fun liveProgressFraction(start: Instant, end: Instant, now: Instant): Float? {
-    val totalSeconds = end.epochSecond - start.epochSecond
+    val totalSeconds = end.epochSeconds - start.epochSeconds
     if (totalSeconds <= 0) return null
-    return ((now.epochSecond - start.epochSecond).toFloat() / totalSeconds).coerceIn(0f, 1f)
+    return ((now.epochSeconds - start.epochSeconds).toFloat() / totalSeconds).coerceIn(0f, 1f)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -187,8 +221,14 @@ internal fun liveProgressFraction(start: Instant, end: Instant, now: Instant): F
 internal const val LIVE_TV_STALENESS_INTERVAL_MS: Long = 5 * 60 * 1000L
 
 /**
- * Wall-clock "now" through the injected [TimeSource] seam (a
- * `SystemTimeSource` Koin single in production; fake-able in jvmTest) — the
- * Live-TV ViewModels' only Instant read, never a direct `Instant.now()`.
+ * Wall-clock "now" through the injected [EpochMillisSource] seam (the
+ * commonMain clock slice; the JVM graph binds it to the SystemTimeSource
+ * single, the web graph to the wall-clock binding — fake-able in jvmTest) —
+ * the Live-TV ViewModels' only Instant read, never a direct clock read.
+ *
+ * the receiver narrowed from the jvmShared `TimeSource` to its
+ * commonMain [EpochMillisSource] slice — the ViewModels only ever read
+ * `nowEpochMillis` (the `today(zone)`/monotonic surface was unused here), so
+ * no jvmShared core:data type crosses into the module's commonMain.
  */
-internal fun TimeSource.nowInstant(): Instant = Instant.ofEpochMilli(nowEpochMillis())
+internal fun EpochMillisSource.nowInstant(): Instant = Instant.fromEpochMilliseconds(nowEpochMillis())

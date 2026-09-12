@@ -450,7 +450,7 @@ fun AudioSettingsScreen(
                                 icon = Tabler.Outline.Adjustments,
                                 title = stringResource(Res.string.settings_replaygain_preamp),
                                 subtitle = stringResource(Res.string.settings_replaygain_preamp_subtitle),
-                                trailingText = "${if (preferences.replayGainPreAmpDb >= 0) "+" else ""}${String.format("%.1f", preferences.replayGainPreAmpDb)} dB",
+                                trailingText = "${if (preferences.replayGainPreAmpDb >= 0) "+" else ""}${formatOneDecimal(preferences.replayGainPreAmpDb.toDouble())} dB",
                                 highlighted = highlightSettingId == "replaygain_preamp",
                                 onClick = {
                                     activePicker = PickerState.Slider(
@@ -458,7 +458,7 @@ fun AudioSettingsScreen(
                                         value = preferences.replayGainPreAmpDb,
                                         valueRange = -15f..15f,
                                         steps = 59,
-                                        valueLabel = { "${if (it >= 0) "+" else ""}${String.format("%.1f", it)} dB" },
+                                        valueLabel = { "${if (it >= 0) "+" else ""}${formatOneDecimal(it.toDouble())} dB" },
                                         rangeStartLabel = "-15 dB",
                                         rangeEndLabel = "+15 dB",
                                         onConfirm = { viewModel.edit { scope -> scope.audio.setReplayGainPreAmpDb(it) } },
@@ -610,7 +610,7 @@ fun AudioSettingsScreen(
                         SettingToggleItem(
                             icon = Tabler.Outline.Speakerphone,
                             title = stringResource(Res.string.settings_volume_boost),
-                            subtitle = if (preferences.volumeBoostEnabled) "+${"%.1f".format(preferences.volumeBoostGain / 100.0)} $volumeBoostGainSuffix" else stringResource(Res.string.settings_off),
+                            subtitle = if (preferences.volumeBoostEnabled) "+${formatOneDecimal(preferences.volumeBoostGain / 100.0)} $volumeBoostGainSuffix" else stringResource(Res.string.settings_off),
                             checked = preferences.volumeBoostEnabled,
                             highlighted = highlightSettingId == "volume_boost",
                             onCheckedChange = { viewModel.edit { scope -> scope.audioEffects.setVolumeBoostEnabled(it) } },
@@ -621,7 +621,7 @@ fun AudioSettingsScreen(
                                 icon = Tabler.Outline.Speakerphone,
                                 title = stringResource(Res.string.settings_volume_boost_gain),
                                 subtitle = stringResource(Res.string.settings_volume_boost_gain_subtitle),
-                                trailingText = "+${"%.1f".format(preferences.volumeBoostGain / 100.0)} dB",
+                                trailingText = "+${formatOneDecimal(preferences.volumeBoostGain / 100.0)} dB",
                                 highlighted = highlightSettingId == "volume_boost_gain",
                                 onClick = {
                                     activePicker = PickerState.Slider(
@@ -698,7 +698,7 @@ fun AudioSettingsScreen(
                             icon = Tabler.Outline.Adjustments,
                             title = stringResource(Res.string.settings_lr_balance),
                             subtitle = if (preferences.lrBalance == 0f) balanceCenter else if (preferences.lrBalance < 0f) balanceLeft else balanceRight,
-                            trailingText = if (preferences.lrBalance == 0f) balanceCenter else String.format("%.2f", preferences.lrBalance),
+                            trailingText = if (preferences.lrBalance == 0f) balanceCenter else formatTwoDecimals(preferences.lrBalance.toDouble()),
                             highlighted = highlightSettingId == "lr_balance",
                             onClick = {
                                 activePicker = PickerState.Slider(

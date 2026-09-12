@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.feature.player.audio
 
-import com.raulshma.jellyplay.core.data.playback.SleepTimerManager
+import com.raulshma.jellyplay.core.data.playback.AudioSleepTimerManager
 import com.raulshma.jellyplay.core.datastore.audio.AudioStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -18,7 +18,7 @@ import kotlinx.coroutines.launch
  * must not — wrong direction), and video's variant carries video-only concerns
  * (pre-fade volume capture/restore, the mute-gated fade callback over its
  * [com.raulshma.jellyplay.feature.player.video.engine.MediaEngine]). Audio's
- * [SleepTimerManager] owns the countdown + fade ramp internally and the audio
+ * [AudioSleepTimerManager] owns the countdown + fade ramp internally and the audio
  * VM never swaps its engine, so this fold is deliberately smaller.
  *
  * The [SleepTimerState] slice stays ON the ViewModel's uiState (screens read
@@ -32,7 +32,7 @@ import kotlinx.coroutines.launch
  */
 internal class AudioSleepTimerController(
     private val scope: CoroutineScope,
-    private val sleepTimerManager: SleepTimerManager,
+    private val sleepTimerManager: AudioSleepTimerManager,
     private val audioStore: AudioStore,
     private val engine: AudioPlayerEngine,
     private val updateState: ((SleepTimerState) -> SleepTimerState) -> Unit,
@@ -48,7 +48,7 @@ internal class AudioSleepTimerController(
             audioStore.setSleepTimerEndOfEpisode(false)
         }
         armExpiryPause()
-        sleepTimerManager.start(durationMs)
+        sleepTimerManager.startSleepTimer(durationMs)
         updateState { it.copy(active = true, endOfEpisode = false, lastUsedDurationMs = durationMs) }
     }
 
@@ -61,12 +61,12 @@ internal class AudioSleepTimerController(
             audioStore.setSleepTimerEndOfEpisode(true)
         }
         armExpiryPause()
-        sleepTimerManager.startEndOfEpisode()
+        sleepTimerManager.startEndOfEpisodeTimer()
         updateState { it.copy(active = true, endOfEpisode = true) }
     }
 
     fun cancelSleepTimer() {
-        sleepTimerManager.cancel()
+        sleepTimerManager.cancelSleepTimer()
         updateState { it.copy(active = false, endOfEpisode = false) }
     }
 

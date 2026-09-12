@@ -6,11 +6,11 @@ import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.feature.livetv.toInstantOrNull
-import java.time.Instant
-import java.time.LocalDateTime
-import java.time.ZoneOffset
-import java.time.format.DateTimeFormatter
-import java.time.temporal.ChronoUnit
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Instant
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 
 /**
  * Visual layout constants for the EPG timeline grid. Values chosen so a
@@ -32,7 +32,7 @@ object EpgGridLayout {
 /**
  * Immutable snapshot of the EPG grid data after pre-processing. All time
  * values are normalised to [Instant] for arithmetic; UI strings are derived
- * from [LocalDateTime] in the system zone at render time.
+ * from the wall-clock local date-time in the system zone at render time.
  */
 @Immutable
 data class EpgGridData(
@@ -40,7 +40,7 @@ data class EpgGridData(
     val windowEnd: Instant,
     val rows: List<EpgChannelRow>,
 ) {
-    val totalMinutes: Long get() = ChronoUnit.MINUTES.between(windowStart, windowEnd)
+    val totalMinutes: Long get() = (windowEnd - windowStart).inWholeMinutes
     val totalWidthDp: Float get() = totalMinutes * EpgGridLayout.DP_PER_MINUTE
     val isEmpty: Boolean get() = rows.isEmpty()
 }
@@ -110,7 +110,7 @@ fun buildEpgGridData(
                 )
             }
             .filter { it.end > windowStart && it.start < windowEnd }
-            .sortedBy { it.start.toEpochMilli() }
+            .sortedBy { it.start.toEpochMilliseconds() }
         EpgChannelRow(
             channel = channel,
             timedPrograms = timed,
@@ -144,8 +144,8 @@ fun layoutChannelRow(
         val clampedStart = maxOf(timed.start, gridData.windowStart)
         val clampedEnd = minOf(timed.end, gridData.windowEnd)
         if (clampedEnd <= clampedStart) return@mapNotNull null
-        val startMinutes = ChronoUnit.MINUTES.between(gridData.windowStart, clampedStart).toFloat()
-        val durationMinutes = ChronoUnit.MINUTES.between(clampedStart, clampedEnd).toFloat()
+        val startMinutes = (clampedStart - gridData.windowStart).inWholeMinutes.toFloat()
+        val durationMinutes = (clampedEnd - clampedStart).inWholeMinutes.toFloat()
         ProgramLayout(
             program = timed.program,
             start = timed.start,
@@ -166,27 +166,26 @@ fun buildTimeMarkers(
     windowStart: Instant,
     windowEnd: Instant,
 ): List<Instant> {
-    val alignedStart = windowStart
-        .truncatedTo(ChronoUnit.HOURS)
-        .let { if (it < windowStart) it.plus(1, ChronoUnit.HOURS) else it }
+    // The former `truncatedTo(ChronoUnit.HOURS)`: epoch-seconds floored to the
+    // hour boundary (floorDiv matches java's floorMod-based truncation).
+    val truncated = Instant.fromEpochSeconds(windowStart.epochSeconds.floorDiv(3600) * 3600)
+    val alignedStart = if (truncated < windowStart) truncated.plus(1.hours) else truncated
     val markers = mutableListOf<Instant>()
     var cursor = alignedStart
     while (cursor < windowEnd) {
         markers.add(cursor)
-        cursor = cursor.plus(EpgGridLayout.TIME_SLOT_MINUTES, ChronoUnit.MINUTES)
+        cursor = cursor.plus(EpgGridLayout.TIME_SLOT_MINUTES.minutes)
     }
     return markers
 }
 
 /** X offset (in dp) for a timestamp within the current window. */
 fun Instant.offsetDp(windowStart: Instant): Float =
-    ChronoUnit.MINUTES.between(windowStart, this).toFloat() * EpgGridLayout.DP_PER_MINUTE
+    (this - windowStart).inWholeMinutes.toFloat() * EpgGridLayout.DP_PER_MINUTE
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Date parsing helpers
 // ─────────────────────────────────────────────────────────────────────────────
-
-private val TIME_HEADER_FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
 /**
  * Parse the loose ISO-8601 timestamp produced by `BaseItemDto.startDate.toString()`.
@@ -202,6 +201,6 @@ fun LiveTvProgram.endInstant(): Instant? =
 
 /** Format an [Instant] for the time-header (e.g. "14:30"). */
 fun Instant.formatTimeHeader(): String {
-    val local = LocalDateTime.ofInstant(this, ZoneOffset.systemDefault())
-    return local.format(TIME_HEADER_FORMATTER)
+    val local = toLocalDateTime(TimeZone.currentSystemDefault())
+    return "${local.hour.toString().padStart(2, '0')}:${local.minute.toString().padStart(2, '0')}"
 }

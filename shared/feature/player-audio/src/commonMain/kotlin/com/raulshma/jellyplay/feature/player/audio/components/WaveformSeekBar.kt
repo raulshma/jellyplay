@@ -55,7 +55,10 @@ private fun formatTime(ms: Long): String {
     val totalSeconds = ms / 1000
     val minutes = totalSeconds / 60
     val seconds = totalSeconds % 60
-    return "%d:%02d".format(minutes, seconds)
+    // Locale-free ASCII-digit rendering (the former java.util.Formatter used
+    // default-locale digits) — deliberate fixed-format degrade: a timecode
+    // with ar/hi/fa digit forms is undesirable in a scrubber.
+    return "$minutes:${seconds.toString().padStart(2, '0')}"
 }
 
 @Composable

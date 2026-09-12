@@ -680,7 +680,7 @@ fun PlaybackSettingsScreen(
                                 title = autoPlayCountdownTitle,
                                 items = options,
                                 label = { if (it == 0) offLabel else "${it}s" },
-                                subtitle = { if (it == 0) countdownImmediate else countdownSecondsFormat.format(it) },
+                                subtitle = { if (it == 0) countdownImmediate else formatIntPattern(countdownSecondsFormat, it) },
                                 isSelected = { it == preferences.autoPlayCountdownSec },
                                 onSelect = { viewModel.edit { scope -> scope.playback.setAutoPlayCountdownSec(it) } },
                             )
@@ -1875,8 +1875,8 @@ fun PlaybackSettingsScreen(
                             activePicker = PickerState.List(
                                 title = dvrPrePaddingTitle,
                                 items = options,
-                                label = { if (it == 0) noneLabel else xMinutesFormat.format(it) },
-                                subtitle = { if (it == 0) dvrStartOnTime else dvrStartEarlyFormat.format(it) },
+                                label = { if (it == 0) noneLabel else formatIntPattern(xMinutesFormat, it) },
+                                subtitle = { if (it == 0) dvrStartOnTime else formatIntPattern(dvrStartEarlyFormat, it) },
                                 isSelected = { it == preferences.dvrPrePaddingMinutes },
                                 onSelect = { viewModel.edit { scope -> scope.syncPlayCast.setDvrPrePaddingMinutes(it) } },
                             )
@@ -1898,8 +1898,8 @@ fun PlaybackSettingsScreen(
                             activePicker = PickerState.List(
                                 title = dvrPostPaddingTitle,
                                 items = options,
-                                label = { if (it == 0) noneLabel else xMinutesFormat.format(it) },
-                                subtitle = { if (it == 0) dvrStopOnTime else dvrStopLateFormat.format(it) },
+                                label = { if (it == 0) noneLabel else formatIntPattern(xMinutesFormat, it) },
+                                subtitle = { if (it == 0) dvrStopOnTime else formatIntPattern(dvrStopLateFormat, it) },
                                 isSelected = { it == preferences.dvrPostPaddingMinutes },
                                 onSelect = { viewModel.edit { scope -> scope.syncPlayCast.setDvrPostPaddingMinutes(it) } },
                             )

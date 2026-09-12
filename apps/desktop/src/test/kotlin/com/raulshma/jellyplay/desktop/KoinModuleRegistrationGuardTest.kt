@@ -228,17 +228,21 @@ class KoinModuleRegistrationGuardTest {
     )
 
     /**
-     * Every Koin Module declared in any shared feature's commonMain, mapped to
-     * its declaring file. subtitle-tester (androidMain-only) contributes
-     * nothing here and is naturally excluded.
+     * Every Koin Module declared in any shared feature's commonMain OR
+     * jvmShared, mapped to its declaring file. jvmShared counts since wave
+     * a feature whose whole module surface is JVM-only (insights moved
+     * its Kotlin there for the wasm split) is still legitimately registered
+     * by both shells this test guards. subtitle-tester (androidMain-only)
+     * contributes nothing here and is naturally excluded.
      */
     private fun discoverFeatureModules(root: File): Map<String, File> {
         val featuresDir = root.resolve("shared/feature")
         assertTrue(featuresDir.isDirectory, "missing $featuresDir — repo layout changed?")
+        val featureDirs = featuresDir.listFiles { f -> f.isDirectory }.orEmpty()
         return scanModuleDeclarations(
-            featuresDir.listFiles { f -> f.isDirectory }.orEmpty()
-                .map { it.resolve("src/commonMain") }
-                .filter { it.isDirectory },
+            featureDirs.flatMap { feature ->
+                listOf("commonMain", "jvmShared").map { feature.resolve("src/$it") }
+            }.filter { it.isDirectory },
         )
     }
 

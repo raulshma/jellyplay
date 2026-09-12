@@ -77,7 +77,7 @@ class SeerrSettingsViewModel(
             val prefs = seerrPreferencesStore.preferences.first()
             // EncryptedSharedPreferences / Keystore-backed reads are crypto +
             // disk work; push them off the Main dispatcher.
-            val (apiKey, password, sessionCookie) = withContext(Dispatchers.IO) {
+            val (apiKey, password, sessionCookie) = withContext(settingsIoDispatcher) {
                 Triple(
                     secureCredentialsStore.getApiKey(),
                     secureCredentialsStore.getPassword(),

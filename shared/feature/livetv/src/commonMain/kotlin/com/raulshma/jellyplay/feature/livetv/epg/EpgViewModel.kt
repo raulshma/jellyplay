@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.feature.livetv.epg
 
 import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
-import com.raulshma.jellyplay.core.data.util.TimeSource
+import com.raulshma.jellyplay.core.data.util.EpochMillisSource
 import com.raulshma.jellyplay.core.model.EpgGuide
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
@@ -11,6 +11,8 @@ import com.raulshma.jellyplay.feature.livetv.components.RecordActions
 import com.raulshma.jellyplay.feature.livetv.components.RecordDialogState
 import com.raulshma.jellyplay.feature.livetv.components.RecordOutcome
 import com.raulshma.jellyplay.feature.livetv.nowInstant
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Instant
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -22,8 +24,6 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import java.time.Instant
-import java.time.temporal.ChronoUnit
 
 private const val NOW_TICK_INTERVAL_MS: Long = 30 * 1000L
 /** How far back from "now" the guide window extends (keeps recently-ended shows visible). */
@@ -38,12 +38,12 @@ private const val GUIDE_WINDOW_HOURS: Long = 24L
  * span.
  */
 private fun guideWindow(now: Instant): Pair<Instant, Instant> =
-    now.minus(GUIDE_LOOKBACK_HOURS, ChronoUnit.HOURS) to
-        now.plus(GUIDE_WINDOW_HOURS - GUIDE_LOOKBACK_HOURS, ChronoUnit.HOURS)
+    now.minus(GUIDE_LOOKBACK_HOURS.hours) to
+        now.plus((GUIDE_WINDOW_HOURS - GUIDE_LOOKBACK_HOURS).hours)
 
 class EpgViewModel(
     private val mediaRepository: LiveTvRepository,
-    private val timeSource: TimeSource,
+    private val timeSource: EpochMillisSource,
     /** Off-Main dispatcher for the grid rebuild; injectable so jvmTest rides the test scheduler. */
     private val gridDispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) : JellyPlayViewModel() {

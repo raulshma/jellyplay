@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.feature.settings
 
-import com.raulshma.jellyplay.core.data.repository.AdminRepository
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
@@ -54,7 +53,7 @@ class SettingsViewModelTest {
     private lateinit var projections: PreferenceProjections
     private lateinit var authRepository: AuthRepository
     private lateinit var seerrRepository: SeerrRepository
-    private lateinit var adminRepository: AdminRepository
+    private lateinit var serverAdminActions: ServerAdminActions
     private lateinit var editor: PreferencesEditor
     private lateinit var recentsStore: SettingsRecentsStore
 
@@ -73,7 +72,7 @@ class SettingsViewModelTest {
         projections = mockk(relaxed = true)
         authRepository = mockk(relaxed = true)
         seerrRepository = mockk(relaxed = true)
-        adminRepository = mockk(relaxed = true)
+        serverAdminActions = mockk<ServerAdminActions>(relaxed = true).apply { every { isSupported } returns true }
         editor = mockk(relaxed = true)
         recentsStore = mockk(relaxed = true)
 
@@ -96,7 +95,7 @@ class SettingsViewModelTest {
         projections = projections,
         authRepository = authRepository,
         seerrRepository = seerrRepository,
-        adminRepository = adminRepository,
+        serverAdminActions = serverAdminActions,
         editor = editor,
         recentsStore = recentsStore,
     )
@@ -147,7 +146,7 @@ class SettingsViewModelTest {
         assertNull(vm.backupRestoreStatus)
         // The dead twin used to read + classify here; the surviving path owns
         // all of that — staging must not touch the file or any store.
-        coVerify(exactly = 0) { settingsBackupIo.openImportSource(any()) }
+        coVerify(exactly = 0) { settingsBackupIo.readImportPayload(any()) }
         coVerify(exactly = 0) { preferencesStore.restoreV2(any(), any()) }
         coVerify(exactly = 0) { preferencesStore.restoreV2(any(), any()) }
     }
@@ -182,13 +181,13 @@ class SettingsViewModelTest {
             nowPlayingItem = SessionNowPlayingItem(id = "item-1"),
             isActive = true,
         )
-        coEvery { adminRepository.getSessions() } returns Result.success(listOf(live, staleIdle, headless, inactive, staleButPlaying))
+        coEvery { serverAdminActions.getSessions() } returns Result.success(listOf(live, staleIdle, headless, inactive, staleButPlaying))
         val vm = viewModel()
         advanceUntilIdle()
         currentUser.value = UserInfo(id = "u1", name = "Admin", serverAddress = "http://x", accessToken = "t", isAdmin = true)
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { adminRepository.getSessions() }
+        coVerify(exactly = 1) { serverAdminActions.getSessions() }
         assertEquals(listOf("s1", "s5"), vm.activeSessions.map { it.id },
             "stale sessions drop out unless actively playing; headless/inactive entries never show")
         assertEquals(false, vm.isLoadingSessions)
@@ -201,7 +200,7 @@ class SettingsViewModelTest {
         currentUser.value = UserInfo(id = "u2", name = "User", serverAddress = "http://x", accessToken = "t", isAdmin = false)
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { adminRepository.getSessions() }
+        coVerify(exactly = 0) { serverAdminActions.getSessions() }
         assertTrue(vm.activeSessions.isEmpty())
     }
 
@@ -210,7 +209,7 @@ class SettingsViewModelTest {
         val vm = viewModel()
         advanceUntilIdle()
 
-        coEvery { adminRepository.sendMessageToSession("s1", "h", "hello") } returns Result.success(Unit)
+        coEvery { serverAdminActions.sendMessageToSession("s1", "h", "hello") } returns Result.success(Unit)
         vm.sendMessageToSession("s1", "h", "hello")
         advanceUntilIdle()
         assertEquals("Message sent successfully", vm.messageSentEvent)
@@ -218,7 +217,7 @@ class SettingsViewModelTest {
         vm.clearMessageEvent()
         assertNull(vm.messageSentEvent)
 
-        coEvery { adminRepository.sendMessageToSession("s2", "h", "hi") } returns Result.failure(RuntimeException("offline"))
+        coEvery { serverAdminActions.sendMessageToSession("s2", "h", "hi") } returns Result.failure(RuntimeException("offline"))
         vm.sendMessageToSession("s2", "h", "hi")
         advanceUntilIdle()
         assertEquals("Failed to send message", vm.messageSentEvent)

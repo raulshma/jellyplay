@@ -20,7 +20,9 @@ import org.koin.dsl.module
  *    the same way (app-side `androidAppInteropAdaptersModule` delegate
  *    adapters over the Koin-owned AudioPlaybackManager / CastManager —
  *    details DetailAudioPlayback precedent);
- *  - SleepTimerManager (shared core:data single), MediaRepository /
+ *  - AudioSleepTimerManager (dataJvmModule aliases the interface onto the
+ *    SleepTimerManager single; the wasm fragment binds the wall-clock impl),
+ *    MediaRepository /
  *    UserDataMutator / DownloadRepository / DownloadIntake (shared data
  *    cluster) and PreferenceProjections / AudioStore / AudioEffectsStore
  *    (shared datastore) resolve from the shared-module graph;
@@ -34,6 +36,8 @@ import org.koin.dsl.module
  *    opens the real now-playing screen.
  */
 val playerAudioModule: Module = module {
+    includes(platformPlayerAudioModule())
+
     viewModel {
         AudioPlayerViewModel(
             queueManager = get(),
@@ -46,7 +50,7 @@ val playerAudioModule: Module = module {
             mediaRepository = get(),
             playlistRepository = get(),
             userDataMutator = get(),
-            downloadRepository = get(),
+            downloads = get(),
             downloadIntake = get(),
             sleepTimerManager = get(),
         )

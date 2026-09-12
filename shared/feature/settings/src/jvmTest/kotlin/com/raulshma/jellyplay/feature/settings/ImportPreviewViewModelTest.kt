@@ -218,11 +218,9 @@ class ImportPreviewViewModelTest {
         ),
     )
 
-    /** Fresh stream per call — the VM re-reads the source on every import. */
+    /** Fresh payload per call — the VM re-reads the source on every import. */
     private fun stubImport(uri: String, json: String) {
-        coEvery { settingsBackupIo.openImportSource(uri) } answers {
-            ByteArrayInputStream(json.toByteArray())
-        }
+        coEvery { settingsBackupIo.readImportPayload(uri) } returns json
     }
 
     private fun viewModel(): ImportPreviewViewModel = ImportPreviewViewModel(
@@ -308,7 +306,7 @@ class ImportPreviewViewModelTest {
     @Test
     fun `unopenable backup file surfaces an error and clears loading`() = runTest(testDispatcher) {
         // A null stream is the dead-SAF-stream shape the seam documents.
-        coEvery { settingsBackupIo.openImportSource("backup:missing") } returns null
+        coEvery { settingsBackupIo.readImportPayload("backup:missing") } returns null
         val vm = viewModel()
         advanceUntilIdle()
         vm.loadBackup("backup:missing")
@@ -327,13 +325,13 @@ class ImportPreviewViewModelTest {
         vm.loadBackup("backup:a")
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { settingsBackupIo.openImportSource("backup:a") }
+        coVerify(exactly = 1) { settingsBackupIo.readImportPayload("backup:a") }
 
         stubImport("backup:b", appearanceBackupJson(ThemeMode.LIGHT))
         vm.loadBackup("backup:b")
         awaitUntil("the second file replaces the preview") { vm.incomingPrefs?.themeMode == ThemeMode.LIGHT }
 
-        coVerify(exactly = 1) { settingsBackupIo.openImportSource("backup:b") }
+        coVerify(exactly = 1) { settingsBackupIo.readImportPayload("backup:b") }
         assertEquals(2, vm.schemaVersion, "the second file replaces the preview")
     }
 

@@ -3,8 +3,8 @@ package com.raulshma.jellyplay.feature.player.audio
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.playback.AudioEffectsManager
 import com.raulshma.jellyplay.core.data.playback.AudioQueueManager
-import com.raulshma.jellyplay.core.data.playback.SleepTimerManager
-import com.raulshma.jellyplay.core.data.repository.DownloadRepository
+import com.raulshma.jellyplay.core.data.playback.AudioSleepTimerManager
+import com.raulshma.jellyplay.feature.player.audio.AudioTrackDownloads
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.datastore.audio.AudioSlice
@@ -78,9 +78,9 @@ class AudioPlayerViewModelGapsTest {
     private lateinit var mediaRepository: MediaRepository
     private lateinit var playlistRepository: PlaylistRepository
     private lateinit var userDataMutator: com.raulshma.jellyplay.core.data.repository.UserDataMutator
-    private lateinit var downloadRepository: DownloadRepository
+    private lateinit var downloads: AudioTrackDownloads
     private lateinit var downloadIntake: DownloadIntake
-    private lateinit var sleepTimerManager: SleepTimerManager
+    private lateinit var sleepTimerManager: AudioSleepTimerManager
     private lateinit var cast: AudioPlayerCast
 
     private lateinit var viewModel: AudioPlayerViewModel
@@ -126,9 +126,9 @@ class AudioPlayerViewModelGapsTest {
         mediaRepository = mockk(relaxed = true)
         playlistRepository = mockk(relaxed = true)
         userDataMutator = mockk(relaxed = true)
-        downloadRepository = mockk(relaxed = true)
+        downloads = mockk<AudioTrackDownloads>(relaxed = true).apply { every { isSupported } returns true }
         downloadIntake = mockk(relaxed = true)
-        sleepTimerManager = mockk(relaxed = true)
+        sleepTimerManager = mockk<AudioSleepTimerManager>(relaxed = true)
         cast = mockk(relaxed = true)
 
         every { projections.audioPlayerUiPreferences } returns MutableStateFlow(AudioPlayerUiPreferences())
@@ -164,7 +164,7 @@ class AudioPlayerViewModelGapsTest {
         every { engine.getImageUrl(any()) } returns "https://srv/Items/x/Images/Primary"
         every { engine.undoLastQueueOperation() } returns false
         every {
-            downloadRepository.getDownloadByMediaItemIdFlow(any())
+            downloads.trackStatus(any())
         } answers {
             downloadFlows.getOrPut(firstArg()) { MutableStateFlow(null) }
         }
@@ -179,7 +179,7 @@ class AudioPlayerViewModelGapsTest {
             mediaRepository = mediaRepository,
             playlistRepository = playlistRepository,
             userDataMutator = userDataMutator,
-            downloadRepository = downloadRepository,
+            downloads = downloads,
             downloadIntake = downloadIntake,
             sleepTimerManager = sleepTimerManager,
             cast = cast,
@@ -427,7 +427,7 @@ class AudioPlayerViewModelGapsTest {
 
         viewModel.downloadCurrentTrack()
 
-        coVerify(exactly = 1) { downloadRepository.deleteDownload("dl-1") }
+        coVerify(exactly = 1) { downloads.remove("dl-1") }
         coVerify(exactly = 0) { downloadIntake.start(any()) }
     }
 
@@ -441,7 +441,7 @@ class AudioPlayerViewModelGapsTest {
 
         viewModel.downloadCurrentTrack()
 
-        coVerify(exactly = 0) { downloadRepository.deleteDownload(any()) }
+        coVerify(exactly = 0) { downloads.remove(any()) }
         coVerify(exactly = 1) { downloadIntake.start(detail("track-1")) }
     }
 
@@ -462,7 +462,7 @@ class AudioPlayerViewModelGapsTest {
 
         viewModel.downloadCurrentTrack()
 
-        coVerify(exactly = 0) { downloadRepository.deleteDownload(any()) }
+        coVerify(exactly = 0) { downloads.remove(any()) }
         coVerify(exactly = 0) { downloadIntake.start(any()) }
     }
 

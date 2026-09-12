@@ -3,8 +3,8 @@ package com.raulshma.jellyplay.feature.player.audio
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.playback.AudioEffectsManager
 import com.raulshma.jellyplay.core.data.playback.AudioQueueManager
-import com.raulshma.jellyplay.core.data.playback.SleepTimerManager
-import com.raulshma.jellyplay.core.data.repository.DownloadRepository
+import com.raulshma.jellyplay.core.data.playback.AudioSleepTimerManager
+import com.raulshma.jellyplay.feature.player.audio.AudioTrackDownloads
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.datastore.audio.AudioSlice
@@ -50,9 +50,9 @@ class AudioPlayerViewModelTest {
     private lateinit var mediaRepository: MediaRepository
     private lateinit var playlistRepository: PlaylistRepository
     private lateinit var userDataMutator: com.raulshma.jellyplay.core.data.repository.UserDataMutator
-    private lateinit var downloadRepository: DownloadRepository
+    private lateinit var downloads: AudioTrackDownloads
     private lateinit var downloadIntake: DownloadIntake
-    private lateinit var sleepTimerManager: SleepTimerManager
+    private lateinit var sleepTimerManager: AudioSleepTimerManager
     private lateinit var cast: AudioPlayerCast
 
     private lateinit var viewModel: AudioPlayerViewModel
@@ -69,9 +69,9 @@ class AudioPlayerViewModelTest {
         mediaRepository = mockk(relaxed = true)
         playlistRepository = mockk(relaxed = true)
         userDataMutator = mockk(relaxed = true)
-        downloadRepository = mockk(relaxed = true)
+        downloads = mockk<AudioTrackDownloads>(relaxed = true).apply { every { isSupported } returns true }
         downloadIntake = mockk(relaxed = true)
-        sleepTimerManager = mockk(relaxed = true)
+        sleepTimerManager = mockk<AudioSleepTimerManager>(relaxed = true)
         cast = mockk(relaxed = true)
 
         every { projections.audioPlayerUiPreferences } returns MutableStateFlow(AudioPlayerUiPreferences())
@@ -91,7 +91,7 @@ class AudioPlayerViewModelTest {
             mediaRepository = mediaRepository,
             playlistRepository = playlistRepository,
             userDataMutator = userDataMutator,
-            downloadRepository = downloadRepository,
+            downloads = downloads,
             downloadIntake = downloadIntake,
             sleepTimerManager = sleepTimerManager,
             cast = cast,
@@ -388,7 +388,7 @@ class AudioPlayerViewModelTest {
             assertEquals(15 * 60 * 1000L, lastUsedDurationMs)
         }
         verify { sleepTimerManager.setOnTimerExpired(any()) }
-        verify { sleepTimerManager.start(15 * 60 * 1000L) }
+        verify { sleepTimerManager.startSleepTimer(15 * 60 * 1000L) }
         coVerify { audioStore.setSleepTimerDurationMs(15 * 60 * 1000L) }
         coVerify { audioStore.setSleepTimerEndOfEpisode(false) }
     }
@@ -402,7 +402,7 @@ class AudioPlayerViewModelTest {
             assertTrue(endOfEpisode)
         }
         verify { sleepTimerManager.setOnTimerExpired(any()) }
-        verify { sleepTimerManager.startEndOfEpisode() }
+        verify { sleepTimerManager.startEndOfEpisodeTimer() }
         coVerify { audioStore.setSleepTimerEndOfEpisode(true) }
     }
 
@@ -415,7 +415,7 @@ class AudioPlayerViewModelTest {
             assertFalse(active)
             assertFalse(endOfEpisode)
         }
-        verify { sleepTimerManager.cancel() }
+        verify { sleepTimerManager.cancelSleepTimer() }
     }
 
     @Test

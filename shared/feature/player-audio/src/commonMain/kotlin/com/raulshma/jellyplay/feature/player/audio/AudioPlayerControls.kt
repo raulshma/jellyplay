@@ -193,6 +193,7 @@ internal fun PixelSecondaryControls(
     downloadItem: com.raulshma.jellyplay.core.model.DownloadItem?,
     abLoopStartMs: Long?,
     abLoopEndMs: Long?,
+    showDownload: Boolean = true,
     onToggleShuffle: () -> Unit,
     onCycleRepeatMode: () -> Unit,
     onToggleFavorite: () -> Unit,
@@ -274,24 +275,29 @@ internal fun PixelSecondaryControls(
                 )
             },
         )
-        IconButtonWithPressAnimation(
-            onClick = onDownloadClick,
-            tint = if (downloadItem?.status == com.raulshma.jellyplay.core.model.DownloadStatus.COMPLETED) accentColor else MaterialTheme.colorScheme.onSurfaceVariant,
-            icon = {
-                if (downloadItem?.status == com.raulshma.jellyplay.core.model.DownloadStatus.DOWNLOADING || downloadItem?.status == com.raulshma.jellyplay.core.model.DownloadStatus.PENDING) {
-                    JellyPlayCircularProgressIndicator(
-                        modifier = Modifier.size(18.dp),
-                        color = accentColor
-                    )
-                } else {
-                    Icon(
-                        imageVector = if (downloadItem?.status == com.raulshma.jellyplay.core.model.DownloadStatus.COMPLETED) Tabler.Outline.Check else Tabler.Outline.Download,
-                        contentDescription = stringResource(Res.string.audio_controls_download),
-                        modifier = Modifier.size(22.dp)
-                    )
-                }
-            },
-        )
+        // gate: platforms without a download pipeline (web) hide the
+        // CTA structurally — the AudioTrackDownloads seam's isSupported false
+        // means a press could only ever fail.
+        if (showDownload) {
+            IconButtonWithPressAnimation(
+                onClick = onDownloadClick,
+                tint = if (downloadItem?.status == com.raulshma.jellyplay.core.model.DownloadStatus.COMPLETED) accentColor else MaterialTheme.colorScheme.onSurfaceVariant,
+                icon = {
+                    if (downloadItem?.status == com.raulshma.jellyplay.core.model.DownloadStatus.DOWNLOADING || downloadItem?.status == com.raulshma.jellyplay.core.model.DownloadStatus.PENDING) {
+                        JellyPlayCircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            color = accentColor
+                        )
+                    } else {
+                        Icon(
+                            imageVector = if (downloadItem?.status == com.raulshma.jellyplay.core.model.DownloadStatus.COMPLETED) Tabler.Outline.Check else Tabler.Outline.Download,
+                            contentDescription = stringResource(Res.string.audio_controls_download),
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                },
+            )
+        }
     }
 }
 

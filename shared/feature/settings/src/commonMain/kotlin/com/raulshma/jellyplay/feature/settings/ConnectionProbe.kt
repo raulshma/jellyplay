@@ -20,7 +20,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import org.jetbrains.compose.resources.StringResource
-import java.util.concurrent.ConcurrentHashMap
 
 /**
  * The ONE connection-probe module behind the three settings service
@@ -96,9 +95,11 @@ class ConnectionProbe<R : Any, K : Any, D>(
     /**
      * In-flight probe jobs by key; at most one per key (restart policy).
      * Concurrent because the [Job.invokeOnCompletion] reaper runs on the
-     * completing coroutine's thread, not the callers' dispatcher.
+     * completing coroutine's thread, not the callers' dispatcher. The map
+     * itself comes from the [newConcurrentJobMap] seam — the JVM-only
+     * ConcurrentHashMap cannot cross into the wasmJs compilation.
      */
-    private val jobs: MutableMap<K, Job> = ConcurrentHashMap()
+    private val jobs: MutableMap<K, Job> = newConcurrentJobMap()
 
     /** [status] entry for [key], or [Status.Idle] when never probed/reset. */
     fun statusOf(key: K): Status<D> = _status.value[key] ?: Status.Idle
@@ -153,9 +154,10 @@ class ConnectionProbe<R : Any, K : Any, D>(
         }
         jobs[key] = job
         job.start()
-        // Two-arg remove: only reap while this job is still the registered one
-        // (the map is concurrent; a superseding probe may already have replaced it).
-        job.invokeOnCompletion { jobs.remove(key, job) }
+        // Atomic value-checked remove (the JVM's Map.remove(key, value)): only
+        // reap while this job is still the registered one — a superseding probe
+        // may already have replaced it by completion time.
+        job.invokeOnCompletion { removeEntryIfCurrent(jobs, key, job) }
     }
 
     /**
@@ -285,3 +287,20 @@ class ConnectionProbe<R : Any, K : Any, D>(
         data class Failed(val failure: Failure) : Outcome<Nothing>
     }
 }
+
+/**
+ * seam: a thread-safe map for [ConnectionProbe]'s job table —
+ * `java.util.concurrent.ConcurrentHashMap` is JVM-only, so the JVM actual
+ * supplies it while wasm (single-threaded JS) gets a plain map, which is
+ * honest there: the reaper and the callers run on the same thread.
+ */
+internal expect fun <K : Any, V : Any> newConcurrentJobMap(): MutableMap<K, V>
+
+/**
+ * Atomic value-checked removal for [ConnectionProbe]'s job table — the JVM
+ * actual maps to `ConcurrentHashMap.remove(key, value)` (single atomic
+ * compare-and-remove); the wasm actual is a check-then-remove over the plain
+ * single-threaded map. Expect/actual because the common `MutableMap` has no
+ * two-arg remove.
+ */
+internal expect fun <K : Any, V : Any> removeEntryIfCurrent(map: MutableMap<K, V>, key: K, expected: V)

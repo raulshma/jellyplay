@@ -2,7 +2,6 @@ package com.raulshma.jellyplay.desktop
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import com.raulshma.jellyplay.core.data.repository.AdminRepository
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
@@ -503,7 +502,6 @@ internal fun DesktopNativeDialogHarnessHost() {
     val projections: PreferenceProjections = org.koin.compose.koinInject()
     val authRepository: AuthRepository = org.koin.compose.koinInject()
     val seerrRepository: SeerrRepository = org.koin.compose.koinInject()
-    val adminRepository: AdminRepository = org.koin.compose.koinInject()
     val editor: PreferencesEditor = org.koin.compose.koinInject()
     val recentsStore: SettingsRecentsStore = org.koin.compose.koinInject()
     val playbackStore: com.raulshma.jellyplay.core.datastore.playback.PlaybackStore = org.koin.compose.koinInject()
@@ -526,6 +524,7 @@ internal fun DesktopNativeDialogHarnessHost() {
     val experimentalStore: com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore = org.koin.compose.koinInject()
     val appRuntimeStateStore: com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore = org.koin.compose.koinInject()
     val pinRateLimiter: com.raulshma.jellyplay.core.datastore.security.PinRateLimiter = org.koin.compose.koinInject()
+    val serverAdminActions: com.raulshma.jellyplay.feature.settings.ServerAdminActions = org.koin.compose.koinInject()
     LaunchedEffect(Unit) {
         DesktopNativeDialogHarness.runIfRequested(
             DesktopNativeDialogHarness.DialogPassDeps(
@@ -535,7 +534,7 @@ internal fun DesktopNativeDialogHarnessHost() {
                     projections = projections,
                     authRepository = authRepository,
                     seerrRepository = seerrRepository,
-                    adminRepository = adminRepository,
+                    serverAdminActions = serverAdminActions,
                     editor = editor,
                     recentsStore = recentsStore,
                 ),

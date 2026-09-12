@@ -62,6 +62,8 @@ import org.koin.dsl.module
  * The desktop actuals of all four live in desktopSettingsPlatformModule.
  */
 val settingsModule: Module = module {
+    includes(platformSettingsModule())
+
     // The catalog object is the single SettingsSearchProvider implementation
     // (this module's own SettingsScreen uses direct object access; shared
     // consumers like feature/home resolve it from their own Koin module
@@ -90,7 +92,7 @@ val settingsModule: Module = module {
             projections = get(),
             authRepository = get(),
             seerrRepository = get(),
-            adminRepository = get(),
+            serverAdminActions = get(),
             editor = get(),
             recentsStore = get(),
         )
@@ -255,7 +257,7 @@ val settingsModule: Module = module {
         AboutViewModel(
             appMetaProvider = get(),
             logCollector = get(),
-            adminRepository = get(),
+            serverAdminActions = get(),
             authRepository = get(),
             experimentalStore = get(),
         )

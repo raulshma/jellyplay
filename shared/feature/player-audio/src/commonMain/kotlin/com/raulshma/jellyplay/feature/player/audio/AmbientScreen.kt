@@ -61,6 +61,7 @@ import com.raulshma.jellyplay.feature.player.audio.generated.resources.audio_con
 import com.raulshma.jellyplay.feature.player.audio.generated.resources.audio_controls_pause
 import com.raulshma.jellyplay.feature.player.audio.generated.resources.audio_controls_play
 import com.raulshma.jellyplay.feature.player.audio.generated.resources.audio_controls_previous
+import kotlin.math.PI
 
 @Composable
 fun AmbientScreen(
@@ -267,9 +268,9 @@ private fun AmbientBackground(colors: List<Color>) {
 
         blobStops.forEachIndexed { index, stops ->
             val progress = animatables[index].value
-            val x = width * (0.2f + 0.6f * kotlin.math.sin(progress * 2 * Math.PI + index).toFloat())
-            val y = height * (0.2f + 0.6f * kotlin.math.cos(progress * 2 * Math.PI + index * 1.5f).toFloat())
-            val radius = (width.coerceAtMost(height) * 0.4f) * (0.8f + 0.2f * kotlin.math.sin(progress * Math.PI).toFloat())
+            val x = width * (0.2f + 0.6f * kotlin.math.sin(progress * 2 * PI + index).toFloat())
+            val y = height * (0.2f + 0.6f * kotlin.math.cos(progress * 2 * PI + index * 1.5f).toFloat())
+            val radius = (width.coerceAtMost(height) * 0.4f) * (0.8f + 0.2f * kotlin.math.sin(progress * PI).toFloat())
 
             drawCircle(
                 brush = Brush.radialGradient(

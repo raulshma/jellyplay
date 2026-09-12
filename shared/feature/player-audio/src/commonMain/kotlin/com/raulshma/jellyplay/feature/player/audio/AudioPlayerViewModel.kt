@@ -5,7 +5,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import com.raulshma.jellyplay.core.data.playback.AudioEffectsManager
 import com.raulshma.jellyplay.core.data.playback.AudioQueueManager
-import com.raulshma.jellyplay.core.data.playback.SleepTimerManager
+import com.raulshma.jellyplay.core.data.playback.AudioSleepTimerManager
 import com.raulshma.jellyplay.core.datastore.audio.AudioStore
 import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
@@ -48,9 +48,9 @@ class AudioPlayerViewModel(
     private val mediaRepository: com.raulshma.jellyplay.core.data.repository.MediaRepository,
     private val playlistRepository: com.raulshma.jellyplay.core.data.repository.PlaylistRepository,
     private val userDataMutator: com.raulshma.jellyplay.core.data.repository.UserDataMutator,
-    private val downloadRepository: com.raulshma.jellyplay.core.data.repository.DownloadRepository,
+    private val downloads: AudioTrackDownloads,
     private val downloadIntake: com.raulshma.jellyplay.core.data.download.DownloadIntake,
-    private val sleepTimerManager: SleepTimerManager,
+    private val sleepTimerManager: AudioSleepTimerManager,
 ) : JellyPlayViewModel() {
 
     /** Exposed so the audio top bar can render a shared [com.raulshma.jellyplay.feature.player.audio.components.CastButton]. */
@@ -75,13 +75,13 @@ class AudioPlayerViewModel(
     val uiState: StateFlow<AudioPlayerUiState> = _uiState.asStateFlow()
 
     /**
-     * Sleep-timer countdown, sourced directly from SleepTimerManager. Kept OUT
+     * Sleep-timer countdown, sourced directly from the AudioSleepTimerManager. Kept OUT
      * of [uiState] (mirroring [currentPosition]) so a 5 s tick — or the 100 ms
      * fade-out burst — does not copy the whole [AudioPlayerUiState] and
      * re-invalidate the screen root. Collected only by the leaf composables
      * that render the countdown (top-bar label, AudioSleepTimerSheet).
      */
-    val sleepTimerRemainingMs: StateFlow<Long> = sleepTimerManager.remainingMs
+    val sleepTimerRemainingMs: StateFlow<Long> = sleepTimerManager.sleepTimerRemainingMs
 
     /**
      * High-frequency playback position, kept OUTSIDE [uiState] so the 250ms tick only
@@ -166,7 +166,7 @@ class AudioPlayerViewModel(
                 downloadJob?.cancel()
                 if (itemId != null) {
                     downloadJob = launch {
-                        downloadRepository.getDownloadByMediaItemIdFlow(itemId).collect { download ->
+                        downloads.trackStatus(itemId).collect { download ->
                             _currentDownloadItem.set(download)
                         }
                     }
@@ -339,7 +339,7 @@ class AudioPlayerViewModel(
         }
         launch {
             combine(
-                sleepTimerManager.isActive,
+                sleepTimerManager.isSleepTimerActive,
                 sleepTimerManager.isEndOfEpisodeMode,
             ) { active, endOfEpisode ->
                 _uiState.update { it.copy(sleepTimer = it.sleepTimer.copy(active = active, endOfEpisode = endOfEpisode)) }
@@ -639,12 +639,15 @@ class AudioPlayerViewModel(
 
     private fun keySentinel(id: String) = "§null§$id"
 
+    /** Whether this platform carries a download pipeline; gates the track CTA. */
+    val isDownloadSupported: Boolean get() = downloads.isSupported
+
     fun downloadCurrentTrack() {
         val itemId = currentPlayingItemId ?: return
         val existing = _currentDownloadItem.value
         if (existing != null && existing.status == com.raulshma.jellyplay.core.model.DownloadStatus.COMPLETED) {
             launch {
-                downloadRepository.deleteDownload(existing.id)
+                downloads.remove(existing.id)
             }
             return
         }

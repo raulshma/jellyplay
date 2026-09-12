@@ -32,7 +32,7 @@ class LicensesViewModel(
             isLoading = true
             error = null
             try {
-                val jsonText = withContext(Dispatchers.IO) { jsonSource.read() }
+                val jsonText = withContext(settingsIoDispatcher) { jsonSource.read() }
                 if (jsonText == null) {
                     libraries = emptyList()
                     error = getString(Res.string.settings_licenses_load_error)
@@ -41,7 +41,13 @@ class LicensesViewModel(
                     // JSON is ~167 KB, heavy enough to drop a frame on open.
                     libraries = withContext(Dispatchers.Default) {
                         val parsed = Libs.Builder().withJson(jsonText).build()
-                        parsed.libraries.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
+                        // per-char case fold mirrors java's
+                        // `String.CASE_INSENSITIVE_ORDER` (full-string
+                        // lowercase() would fold ß→ss / İ→i̇ and reorder);
+                        // locale-free, JVM-only type avoided.
+                        parsed.libraries.sortedWith(
+                            compareBy { lib -> lib.name.map { it.lowercaseChar() }.joinToString("") },
+                        )
                     }
                 }
             } catch (e: CancellationException) {

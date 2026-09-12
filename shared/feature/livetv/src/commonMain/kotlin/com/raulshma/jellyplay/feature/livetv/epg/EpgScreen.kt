@@ -182,7 +182,7 @@ private fun EpgGrid(
     // Held as a State (same idiom as KaraokeLyricsView's LongState) so the
     // 30s now-tick never recomposes this grid or its channel rows: only the
     // derived live-cell check and the now-line leaf below read it.
-    now: State<java.time.Instant>,
+    now: State<kotlin.time.Instant>,
     contentPadding: androidx.compose.ui.unit.Dp,
     bottomPadding: androidx.compose.ui.unit.Dp,
     onProgramClick: (LiveTvProgram) -> Unit,
@@ -285,9 +285,9 @@ private fun EpgGrid(
 
 @Composable
 private fun NowIndicatorLine(
-    now: State<java.time.Instant>,
-    windowStart: java.time.Instant,
-    windowEnd: java.time.Instant,
+    now: State<kotlin.time.Instant>,
+    windowStart: kotlin.time.Instant,
+    windowEnd: kotlin.time.Instant,
     totalWidthDp: Float,
     channelColumnWidth: androidx.compose.ui.unit.Dp,
     horizontalScrollState: androidx.compose.foundation.ScrollState,
@@ -325,8 +325,8 @@ private fun NowIndicatorLine(
 
 @Composable
 private fun TimeHeaderRow(
-    windowStart: java.time.Instant,
-    windowEnd: java.time.Instant,
+    windowStart: kotlin.time.Instant,
+    windowEnd: kotlin.time.Instant,
     totalWidthDp: Float,
     channelColumnWidth: androidx.compose.ui.unit.Dp,
     horizontalScrollState: androidx.compose.foundation.ScrollState,
@@ -376,8 +376,8 @@ private fun TimeHeaderRow(
 @Composable
 private fun ChannelProgramsRow(
     rowLayout: ChannelRowLayout,
-    windowStart: java.time.Instant,
-    now: State<java.time.Instant>,
+    windowStart: kotlin.time.Instant,
+    now: State<kotlin.time.Instant>,
     channelColumnWidth: androidx.compose.ui.unit.Dp,
     totalWidthDp: Float,
     horizontalScrollState: androidx.compose.foundation.ScrollState,

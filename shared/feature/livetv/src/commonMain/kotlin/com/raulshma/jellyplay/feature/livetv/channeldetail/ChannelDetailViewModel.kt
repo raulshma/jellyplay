@@ -1,8 +1,8 @@
 package com.raulshma.jellyplay.feature.livetv.channeldetail
 
 import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
+import com.raulshma.jellyplay.core.data.util.EpochMillisSource
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
-import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.feature.livetv.LiveTvLoad
@@ -12,18 +12,21 @@ import com.raulshma.jellyplay.feature.livetv.components.RecordOutcome
 import com.raulshma.jellyplay.feature.livetv.isAiringAt
 import com.raulshma.jellyplay.feature.livetv.nowInstant
 import com.raulshma.jellyplay.feature.livetv.toInstantOrNull
+import kotlin.time.Instant
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
-import java.time.OffsetDateTime
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
+import kotlinx.datetime.DateTimeUnit
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atStartOfDayIn
+import kotlinx.datetime.plus
+import kotlinx.datetime.toLocalDateTime
 
 class ChannelDetailViewModel(
     private val mediaRepository: LiveTvRepository,
     private val imageUrlProvider: ImageUrlProvider,
-    private val timeSource: TimeSource,
+    private val timeSource: EpochMillisSource,
 ) : JellyPlayViewModel() {
 
     private val _uiState = stateFlow(ChannelDetailUiState())
@@ -90,11 +93,14 @@ class ChannelDetailViewModel(
         // One injected-clock read drives both the request window and the
         // ended/airing verdicts below, so the list can never disagree with
         // the window it was fetched for.
-        val now = OffsetDateTime.ofInstant(timeSource.nowInstant(), ZoneId.systemDefault())
-        val endOfDay = now.toLocalDate().plusDays(1).atStartOfDay(ZoneId.systemDefault()).toOffsetDateTime()
-        val startIso = now.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
-        val endIso = endOfDay.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
-        val nowInstant = now.toInstant()
+        val zone = TimeZone.currentSystemDefault()
+        val now = timeSource.nowInstant()
+        val endOfDay = now.toLocalDateTime(zone).date.plus(1, DateTimeUnit.DAY).atStartOfDayIn(zone)
+        // Both bounds travel as ISO-8601 UTC instants (the former
+        // ISO_OFFSET_DATE_TIME formatting carried the system offset — the
+        // server reads either form as the same instants).
+        val startIso = now.toString()
+        val endIso = endOfDay.toString()
 
         mediaRepository.getLiveTvPrograms(channelId, startIso, endIso)
             .onSuccess { all ->
@@ -103,12 +109,12 @@ class ChannelDetailViewModel(
                 // — offset-less server strings parse here too, so the two
                 // verdicts can no longer disagree (the C10 declared fix).
                 val upcoming = all
-                    .filter { p -> p.endDate?.toInstantOrNull()?.isAfter(nowInstant) ?: true }
+                    .filter { p -> p.endDate?.toInstantOrNull()?.let { it > now } ?: true }
                     .sortedBy { p -> p.startDate ?: "" }
                 _uiState.update { it.copy(programs = upcoming, isLoading = false) }
                 // If the channel-meta currentProgram was null, resolve from the list.
                 if (_uiState.value.currentProgram == null) {
-                    val airing = upcoming.firstOrNull { p -> isAiringAt(p, nowInstant) }
+                    val airing = upcoming.firstOrNull { p -> isAiringAt(p, now) }
                     if (airing != null) _uiState.update { it.copy(currentProgram = airing) }
                 } else {
                     // Keep the hero in sync with the refreshed timer-state for the

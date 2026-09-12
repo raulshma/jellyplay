@@ -70,7 +70,7 @@ import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_channel_
 import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_channel_on_today
 import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_channel_watch_live
 import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_record_once
-import java.time.Instant
+import kotlin.time.Clock
 
 /**
  * The channel detail content: header + Watch Live, now-playing hero (with live
@@ -463,4 +463,4 @@ private fun ProgramTimelineRow(
  */
 @Composable
 private fun rememberLiveProgress(program: LiveTvProgram): Float =
-    liveProgressFraction(program, Instant.now()) ?: 0f
+    liveProgressFraction(program, Clock.System.now()) ?: 0f

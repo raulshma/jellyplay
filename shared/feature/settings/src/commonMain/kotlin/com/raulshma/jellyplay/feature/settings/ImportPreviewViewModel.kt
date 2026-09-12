@@ -32,7 +32,6 @@ import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerStore
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.legacy.UserPreferences
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 
@@ -191,10 +190,11 @@ class ImportPreviewViewModel(
         )
 
     private suspend fun loadIncoming(uriString: String) {
-        val jsonString = withContext(Dispatchers.IO) {
-            settingsBackupIo.openImportSource(uriString)?.use { stream -> stream.reader().readText() }
-                ?: throw IllegalStateException("Cannot open backup file")
-        }
+        // The payload read lives INSIDE the SettingsBackupIo actual (the
+        // stream→text seam narrowing) — each actual owns its own IO hop, so
+        // the former withContext(Dispatchers.IO) wrapper here is gone.
+        val jsonString = settingsBackupIo.readImportPayload(uriString)
+            ?: throw IllegalStateException("Cannot open backup file")
         when (val parsed = BackupParser.parse(jsonString)) {
             is BackupParser.Parsed.V2 -> {
                 rawBackup = parsed.backup

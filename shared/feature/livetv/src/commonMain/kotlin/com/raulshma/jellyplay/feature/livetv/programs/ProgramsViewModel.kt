@@ -3,7 +3,7 @@ package com.raulshma.jellyplay.feature.livetv.programs
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
-import com.raulshma.jellyplay.core.data.util.TimeSource
+import com.raulshma.jellyplay.core.data.util.EpochMillisSource
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.core.model.ProgramFilters
@@ -15,6 +15,7 @@ import com.raulshma.jellyplay.feature.livetv.components.RecordDialogState
 import com.raulshma.jellyplay.feature.livetv.components.RecordOutcome
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlin.concurrent.Volatile
 
 /** A titled horizontal row of programs (mirrors jellyfin-web `getProgramSections`). */
 @Immutable
@@ -45,7 +46,7 @@ data class ProgramsUiState(
 class ProgramsViewModel(
     private val mediaRepository: LiveTvRepository,
     private val imageUrlProvider: ImageUrlProvider,
-    private val timeSource: TimeSource,
+    private val timeSource: EpochMillisSource,
 ) : JellyPlayViewModel() {
 
     private val _uiState = stateFlow(ProgramsUiState())

@@ -27,9 +27,30 @@ kotlin {
         }
     }
 
-    // No wasmJs target: not in the web v1 slice (requests/calendar/details),
-    // and its ViewModels bind core:data seams (repositories, DownloadIntake,
-    // UserDataMutator) that resolve only from the android+jvm DI graph.
+    // web breadth: the target compiles. The ViewModel still binds the
+    // core:data store/repository cluster (queue/effects managers, repositories,
+    // DownloadIntake, UserDataMutator), which resolves only from the
+    // android+jvm DI graph — the web stack registers no player bindings, so
+    // web wiring stays with the orchestrator's shared-wiring pass (shortcuts
+    // precedent). Two seams carried the target:
+    //  - the ViewModel/controller narrowed their sleep-timer dep from
+    //    core:data's jvmShared SleepTimerManager class to its commonMain
+    //    AudioSleepTimerManager interface — the JVM graph already binds the
+    //    interface to that single, and the wasm fragment binds a wall-clock
+    //    impl (honest for a sleep timer);
+    //  - the jvmShared DownloadRepository went behind the feature-local
+    //    AudioTrackDownloads seam (QuickDownloadActions template): jvmShared
+    //    adapter over the real single, honest no-op on web with isSupported
+    //    gating the download CTA in the screen.
+    // The karma/Chrome browser run stays off like core:ui/core:network —
+    // jvmTest pins the semantics.
+    wasmJs {
+        browser {
+            testTask {
+                enabled = false
+            }
+        }
+    }
     jvm {
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_17)
@@ -39,6 +60,15 @@ kotlin {
     applyDefaultHierarchyTemplate()
 
     sourceSets {
+        // The JVM-side bindings (AudioSleepTimerManager → the SleepTimerManager
+        // single stays in dataJvmModule; the AudioTrackDownloads adapter over
+        // the DownloadRepository single) — the newsletter/requests jvmShared
+        // pattern.
+        val jvmShared = create("jvmShared")
+        jvmShared.dependsOn(getByName("commonMain"))
+        getByName("androidMain") { dependsOn(jvmShared) }
+        getByName("jvmMain") { dependsOn(jvmShared) }
+
         getByName("commonMain").dependencies {
             implementation(project(":shared:core:model"))
             implementation(project(":shared:core:designsystem"))
@@ -82,6 +112,24 @@ kotlin {
         // APP-side (HiltInteropModule) because constructing it here would be
         // a second framework per type (details DetailAudioPlayback
         // precedent; dies at ).
+    }
+}
+
+// google's androidx.navigation3:navigation3-ui publishes no web artifacts at
+// all (android AAR + jvm/linux stubs only), so every wasmJs configuration of
+// this module fails dependency resolution unless it points at JetBrains'
+// fork of the same release line — same package, ABI-stable surface. Scoped
+// to wasmJs-named configurations so android/jvm graphs keep resolving
+// google's published variants exactly as before ( S1/R2; the
+// identical block lives in shared/core/ui, shared/feature/requests and the
+// other web modules).
+configurations.configureEach {
+    if (name.lowercase().contains("wasmjs")) {
+        resolutionStrategy.dependencySubstitution {
+            substitute(module("androidx.navigation3:navigation3-ui"))
+                .using(module(libs.jb.navigation3.ui.get().toString()))
+                .because("google navigation3-ui has no web artifacts; JB fork publishes the wasm klib")
+        }
     }
 }
 
