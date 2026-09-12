@@ -64,29 +64,34 @@ ledger tracks *where the migration stands*.
    prefs migration, the PIN legacy-hash verify and the legacy-download
    container sniffer outlived the cutover and are tracked below as R1/R3.
 2. **Phase R — cutover residuals:**
-   - R1: legacy-download container-sniffer backfill migration
-     `Migration53To54` (lands v0.11) — the precondition for deleting the
-     sniffer.
-   - R2: docs truth pass (README structure/counts, root build exclusion
-     list, this ledger) — this change.
+   - R1: ~~legacy-download container-sniffer backfill migration
+     `Migration53To54`~~ **DONE (2026-09-12, 5a67802f3)** — lands v0.11;
+     the precondition for deleting the sniffer.
+   - R2: ~~docs truth pass (README structure/counts, root build exclusion
+     list, this ledger)~~ **DONE (2026-09-12, 01894fe54)**.
    - R3: v0.12 removal wave — typed-key prefs fallback, PIN legacy-hash
      verify, sniffer runtime fallback — only after R1 has shipped one
-     full release. Accepted consequences: pre-typed-key skip-upgraders
-     lose their legacy prefs; never-unlocked-since-PBKDF2 users
-     re-onboard.
+     full release (branch `chore/v0.12-legacy-removals` prepared).
+     Accepted consequences: pre-typed-key skip-upgraders lose their
+     legacy prefs; never-unlocked-since-PBKDF2 users re-onboard.
 3. **Phase D — Room 3 foundation** (unblocks real-DB repositories on
    wasmJs):
-   - D0: timeboxed spike on `spike/room3` — androidx.room3 3.0.3. Gates:
-     Kotlin 2.3.21 / KSP 2.3.10 compatibility, wasm klib availability,
-     schema-JSON identity for the tracked schemas 13–54, and
-     room3-testing's MigrationTestHelper. Fallback if the spike fails:
-     online-first web with in-memory repos.
-   - D1: core migration on android+jvm — package renames,
-     `@TypeConverter`→`@ColumnTypeConverter`, the room3 schema plugin,
-     SQLiteMigrationCompat retarget, builder flags.
-   - D2: `RoomTransactions.kt` port + its 10 call sites.
+   - D0: ~~timeboxed spike on `spike/room3`~~ **GO (2026-09-12)** — all
+     three gates passed: toolchain green (room3 3.0.3 on Kotlin
+     2.3.21/KSP 2.3.10), tracked schemas 13–54 byte-identical under
+     room3 validation, room3-testing MigrationTestHelper works in the
+     jvmTest lane. Deviations accepted: `migrate()` is suspend (all 53
+     overrides), `@TypeConverter(s)`→`@ColumnTypeConverter(s)`,
+     androidx.sqlite 2.6.2→2.7.1, room-ktx dropped.
+   - D1: ~~core migration on android+jvm~~ **DONE (2026-09-12, merge
+     e833745ec)** — spike promoted wholesale; KSP-arg schema flow kept
+     (room3 plugin not applied under AGP-9 KMP).
+   - D2: ~~`RoomTransactions.kt` port + its 10 call sites~~ **DONE
+     (same merge)** — room3 kept `Transactor`/`useWriterConnection`
+     verbatim, so the port was imports-only.
    - D3: wasmJs target on `:shared:core:database` via
-     WebWorkerSQLiteDriver (OPFS, single connection pool).
+     WebWorkerSQLiteDriver (OPFS, single connection pool) — in
+     progress.
    - D4: promote Room-coupled repositories from core:data jvmShared to
      commonMain; retire `WebMediaRepositoryNarrow`.
 4. **Phase W — web breadth** (3 routes → full app). Per-module checklist:
