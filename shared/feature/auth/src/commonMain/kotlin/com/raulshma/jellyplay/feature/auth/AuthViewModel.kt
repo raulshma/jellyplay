@@ -17,6 +17,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlin.time.TimeSource
 
 sealed class QuickConnectUiState {
     data object Idle : QuickConnectUiState()
@@ -81,12 +82,15 @@ class AuthViewModel(
         _serverHealth.set(servers.associate { it.address to ServerHealth.Checking })
         healthCheckJob = launch {
             servers.forEach { server ->
-                val startTime = System.currentTimeMillis()
+                // Monotonic elapsed read (stdlib) — the web target has no
+                // System.currentTimeMillis, and latency wants the wall-clock-
+                // independent measure anyway.
+                val probeClock = TimeSource.Monotonic.markNow()
                 val addresses = listOf(server.address) + server.alternateAddresses
                 val reachable = addresses.any { address ->
                     authRepository.probeServer(address).isSuccess
                 }
-                val latency = System.currentTimeMillis() - startTime
+                val latency = probeClock.elapsedNow().inWholeMilliseconds
                 val health = if (reachable) {
                     ServerHealth.Healthy(latencyMs = latency)
                 } else {

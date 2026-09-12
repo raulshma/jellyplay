@@ -409,13 +409,17 @@ private fun ServerCountRow(
                 )
                 Spacer(modifier = Modifier.width(10.dp))
             }
-            val serversFoundTemplate = if (isScanning) {
-                stringResource(if (serverCount == 1) Res.string.auth_server_one_found_scanning else Res.string.auth_servers_found_scanning)
+            // Compose-resources formatting with the arg inline — the JVM-only
+            // `String.format` extension has no wasm actual (admin module's
+            // stringResource(res, arg) shape); the %1$d placeholders resolve
+            // multiplatform inside stringResource.
+            val serversFoundRes = if (isScanning) {
+                if (serverCount == 1) Res.string.auth_server_one_found_scanning else Res.string.auth_servers_found_scanning
             } else {
-                stringResource(if (serverCount == 1) Res.string.auth_server_one_found else Res.string.auth_servers_found)
+                if (serverCount == 1) Res.string.auth_server_one_found else Res.string.auth_servers_found
             }
             Text(
-                text = serversFoundTemplate.format(serverCount),
+                text = stringResource(serversFoundRes, serverCount),
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onPrimaryContainer,
