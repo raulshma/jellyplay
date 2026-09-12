@@ -70,6 +70,7 @@ class RoutePredicatesTest {
         Route.PlayOnCompanion,
         Route.Ambient(),
         Route.LiveTvChannelPlayer(channelId = "channel-1", channelName = "Channel 1"),
+        Route.BookReader("item-1"),
         // settings (+ every highlight-carrying settings route)
         Route.Settings,
         Route.ServerManagement(),
