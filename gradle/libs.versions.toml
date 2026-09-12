@@ -53,9 +53,9 @@ coil = "3.4.0"
 # BOM to keep its bitmap→swatch behavior byte-identical to the release build
 # while shared JVM/wasm targets stay on 3.4.0.
 coilAndroid = "3.5.0"
-# 0.41.0 (wave 21D): the last mikepenz line whose wasm klibs are built with
+# 0.41.0: the last mikepenz line whose wasm klibs are built with
 # Kotlin 2.3.x — 0.42+ rebuilt them with Kotlin 2.4.0, and those klibs are
-# silently SKIPPED by the 2.3.21 klib loader (spike w-10C class C), which is
+# silently SKIPPED by the 2.3.21 klib loader, which is
 # why wasm used to carry a MiniMarkdownParser fallback while the dependency
 # stayed jvmShared-scoped. At 0.41.0 the klibs resolve on wasm too, so the
 # dependency lives in commonMain and every target renders GFM through the
@@ -74,7 +74,7 @@ kotlinxSerialization = "1.11.0"
 kotlinxCoroutines = "1.11.0"
 # kotlinx-datetime 0.8.0 is the newest release line and is ABI-safe for this
 # repo's Kotlin 2.3.21 pin: its Gradle module metadata (fetched 2026-08-27,
-# wave 15B) declares kotlin-stdlib 2.1.20 on the metadataApiElements variant —
+#) declares kotlin-stdlib 2.1.20 on the metadataApiElements variant —
 # i.e. the klibs were produced by the Kotlin 2.1.20 compiler, which our 2.3.21
 # klib loader reads (a 2.4-built klib would be silently skipped — the coil
 # 3.4.0/mikepenz precedent). The wasm klib artifact
@@ -142,7 +142,7 @@ compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = 
 jb-compose-runtime = { group = "org.jetbrains.compose.runtime", name = "runtime", version.ref = "composeMultiplatform" }
 jb-compose-ui = { group = "org.jetbrains.compose.ui", name = "ui", version.ref = "composeMultiplatform" }
 # Desktop-only compose ui surface (SwingPanel & friends) for shared modules'
-# jvmMain actuals (wave 9A player-video surface host). Same version family
+# jvmMain actuals. Same version family
 # as the jb-compose-* set; runtime resolves via apps/desktop currentOs.
 jb-compose-ui-desktop = { group = "org.jetbrains.compose.ui", name = "ui-desktop", version.ref = "composeMultiplatform" }
 jb-compose-foundation = { group = "org.jetbrains.compose.foundation", name = "foundation", version.ref = "composeMultiplatform" }
@@ -193,7 +193,7 @@ koin-compose-viewmodel = { group = "io.insert-koin", name = "koin-compose-viewmo
 
 # javax.inject — compile-only vestige of the pre-Koin Hilt graph: only the
 # @Singleton/@Inject annotations on a few shared classes remain (all Hilt
-# processing left with the wave-8 Hilt extinction; Koin ignores them).
+# processing left with the Hilt extinction; Koin ignores them).
 javax-inject = { group = "javax.inject", name = "javax.inject", version = "1" }
 
 # Jellyfin SDK

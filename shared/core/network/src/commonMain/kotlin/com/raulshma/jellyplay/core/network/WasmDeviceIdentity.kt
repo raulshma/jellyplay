@@ -2,7 +2,7 @@ package com.raulshma.jellyplay.core.network
 
 /**
  * localStorage key under which the wasm network stack persists the device id
- *: a PLAIN UUID v4 string, no encoding — unlike the Seerr creds
+ * a PLAIN UUID v4 string, no encoding — unlike the Seerr creds
  * store's Base64-of-UTF8 values, the only writer here is our own generator
  * (the wasm `randomUuidV4` in WasmIdentity.kt; ASCII hex + hyphens), so there
  * is nothing to decode and a foreign/corrupt entry is simply regenerated over

@@ -53,7 +53,7 @@ dependencies {
     implementation(project(":shared:feature:library"))
 
     // …music, third conveyor item — fully LIVE since the real-audio engine:
-    // browse since Wave wC, and play/enqueue/instant-mix drive real playback
+    // browse since, and play/enqueue/instant-mix drive real playback
     // through the DefaultAudioQueueFacade over DesktopAudioQueueManager.
     implementation(project(":shared:feature:music"))
 
@@ -71,7 +71,7 @@ dependencies {
 
     // …settings, seventh conveyor item — LIVE since the admin repositories'
     // Koin flip: nav v1+ renders settingsSection in the rail (with
-    // the desktop platform actuals; Desktop's update-check row since Wave xB).
+    // the desktop platform actuals; Desktop's update-check row since).
     implementation(project(":shared:feature:settings"))
     //  dialog pass: the harness names SettingsViewModel directly (the
     // shell's own screens only render settingsSection, so the ViewModel

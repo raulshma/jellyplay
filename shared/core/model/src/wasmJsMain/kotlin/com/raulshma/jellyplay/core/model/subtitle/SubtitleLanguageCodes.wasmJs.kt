@@ -22,7 +22,7 @@ package com.raulshma.jellyplay.core.model.subtitle
  *    subtag instead.
  *
  * Keep member semantics in sync when editing the jvmShared original; the
- * :shared:core:model:jvmTest suite pins the JVM side.
+ * shared:core:model:jvmTest suite pins the JVM side.
  */
 object SubtitleLanguageCodes {
 

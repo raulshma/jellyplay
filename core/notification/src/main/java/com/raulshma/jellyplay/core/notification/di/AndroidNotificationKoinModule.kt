@@ -10,7 +10,7 @@ import org.koin.core.module.Module
 import org.koin.dsl.module
 
 /**
- * Wave 8A core-side Hilt extinction: Koin owns the :core:notification
+ * core-side Hilt extinction: Koin owns the :core:notification
  * singletons. Ctor shapes are byte-identical to the old Hilt graph; the old
  * `@ApplicationScope CoroutineScope` edge (NotificationReconnectListener)
  * maps onto [DatastoreQualifiers.applicationScope]. The dead
@@ -18,7 +18,7 @@ import org.koin.dsl.module
  * injectors) died with the module instead of gaining a Koin def.
  *
  * The :app consumes these singles directly from its startKoin module
- * list (app Hilt went extinct with wave 8B).
+ * list (app Hilt went extinct with).
  */
 fun androidNotificationModule(context: Context): Module = module {
 

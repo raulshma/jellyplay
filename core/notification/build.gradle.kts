@@ -23,7 +23,7 @@ android {
 dependencies {
     implementation(project(":shared:core:model"))
     implementation(project(":shared:core:concurrency"))
-    implementation(project(":core:data"))
+    implementation(project(":shared:core:data"))
     // core:database intentionally NOT declared — the notification module
     // consumes SeenMediaRepository from core:data and must not reach into
     // Room DAOs/entities directly (schema changes in core:database shouldn't
@@ -31,7 +31,7 @@ dependencies {
     // the scheduler/worker read UserPreferencesStore.notificationPreferences.
     implementation(project(":shared:core:datastore"))
 
-    // Wave 8A: Hilt left this module — Koin owns the singletons
+    // Hilt left this module — Koin owns the singletons
     // (androidNotificationModule) and NotificationWorkerFactory builds
     // NewMediaCheckWorker for WorkManager.
     implementation(libs.koin.core)

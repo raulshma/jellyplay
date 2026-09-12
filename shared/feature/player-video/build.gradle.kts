@@ -148,8 +148,6 @@ kotlin {
             // (PlaybackSessionManager, CastManager,
             // JellyfinRemotePlayCastStrategy, ActivePlayerController) and
             // the legacy UserMessageBus. The jvm target NEVER sees this edge.
-            implementation(project(":core:data"))
-            implementation(project(":core:ui"))
             // media3 engine stack (ExoPlayer engine + cast + session +
             // cache + extractors + FFmpeg extension decoder).
             implementation(libs.media3.exoplayer)
@@ -200,7 +198,7 @@ kotlin {
 
 // `compose.resources` is a nested extension with no generated Kotlin-DSL
 // accessor; configure it explicitly. Same package as the legacy
-// :feature:player:video so migrated files keep their
+// feature:player:video so migrated files keep their
 // `com.raulshma.jellyplay.feature.player.video` imports; generated accessors
 // land in `...feature.player.video.generated.resources`.
 val composeResources = (compose as ExtensionAware).extensions.getByName("resources") as org.jetbrains.compose.resources.ResourcesExtension

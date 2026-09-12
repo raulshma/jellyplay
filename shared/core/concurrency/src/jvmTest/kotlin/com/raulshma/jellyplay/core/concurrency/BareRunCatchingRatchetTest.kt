@@ -21,7 +21,7 @@ import java.io.File
  * (catches a module mid-wiring before its settings include lands), each
  * mapped to its source root — the whole `src` tree for KMP modules,
  * `src/main` for legacy single-variant modules (app, the legacy core tree,
- * :baselineprofile, apps/desktop). The hand list this discovery replaced is
+ * baselineprofile, apps/desktop). The hand list this discovery replaced is
  * kept as [legacyHandMaintainedRoots]; a canary test pins that discovery
  * still covers all of its on-disk roots. (the guard has since gone
  * repo-complete; the formerly unguarded roots carried one live hazard —

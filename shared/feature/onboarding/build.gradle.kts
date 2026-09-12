@@ -88,7 +88,6 @@ kotlin {
         // biometric-availability actual wraps the legacy BiometricAuthHelper,
         // whose strong-authentication check has no shared counterpart yet.
         getByName("androidMain").dependencies {
-            implementation(project(":core:ui"))
         }
     }
 }

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tools/perf/desktop-baseline.sh — JellyPlay desktop Skia startup/memory
-# baseline harness (wave 12A). Measurement-only companion to the code marks in
+# baseline harness. Measurement-only companion to the code marks in
 # DesktopStartupPerf; see docs/perf/desktop-skia-baseline.md for methodology.
 #
 # What it does, per run:
@@ -122,7 +122,7 @@ run_one() { # $1 = run index label; results land in EMIT_* globals
     local data_dir_mixed
     data_dir_mixed="$(map_mixed "$data_dir_nix")"
     case "$data_dir_mixed" in
-        *" "*) echo "ERROR: data dir contains spaces ($data_dir_mixed); JAVA_TOOL_OPTIONS cannot carry it safely." >&2; exit 3 ;;
+        *" "*) echo "ERROR: data dir contains spaces ($data_dir_mixed); JAVA_TOOL_OPTIONS cannot carry it safely." >&2; exit 3;;
     esac
 
     # Concurrency guard: refuse while ANY JellyPlay.exe already lives, so our

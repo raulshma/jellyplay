@@ -67,7 +67,7 @@ interface SoftwareFrameVideoSurface {
 }
 
 /**
- * Desktop software-render video surface (the plan R1 fallback path):
+ * Desktop software-render video surface:
  * hosts the newest pulled mpv frame in a Compose [Canvas] — platform
  * independent, no GL context, no heavyweight child window.
  *

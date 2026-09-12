@@ -285,7 +285,7 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                 // ViewModels plus the Android-only plugin-config WebView
                 // ViewModel (Context ctor param). AdminRepository and
                 // AdminStatisticsRepository resolve from dataJvmModule
-                // (Koin-owned since the Wave wB admin flip).
+                // (Koin-owned since the admin flip).
                 adminModule,
                 androidAdminModule(this@JellyPlayApplication),
 
@@ -383,7 +383,7 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                 // non-blaming pick from the shared module's jvmMain.
                 authModule,
                 androidAuthModule(this@JellyPlayApplication),
-                // Details conveyor (cutover wave): the shared details
+                // Details conveyor (cutover): the shared details
                 // ViewModels + helpers. Data-layer deps are all Koin-native
                 // (dataJvmModule/datastoreCommonModule); the two media3
                 // playback seams (per-item audio play, ambient theme music)

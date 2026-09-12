@@ -98,13 +98,11 @@ kotlin {
             // TranscodeReasonsFormatter (renderer seam actual) still live in
             // the legacy Android-only :core:ui shim until its own conveyor
             // move — same transition-period relationship as the livetv
-            // conveyor's AndroidLiveTvMessenger, dies at .
-            implementation(project(":core:ui"))
+            // conveyor's AndroidLiveTvMessenger, dies at.
             // PlayerAudioLifecycle (audio-focus/becoming-noisy wrapper the
             // Media3LivePlayerAudio seam delegates to) still lives in the
             // legacy Android-only :core:data shim until its own conveyor
             // move.
-            implementation(project(":core:data"))
             // ExoLiveEngine + ExoLiveEngineFactory (streaming OkHttpClient).
             implementation(libs.media3.exoplayer)
             implementation(libs.media3.ui)
@@ -118,7 +116,7 @@ kotlin {
 
 // `compose.resources` is a nested extension with no generated Kotlin-DSL
 // accessor; configure it explicitly. Same package as the legacy
-// :feature:player:live so migrated files keep their
+// feature:player:live so migrated files keep their
 // `com.raulshma.jellyplay.feature.player.live` imports; generated accessors
 // land in `...feature.player.live.generated.resources`.
 val composeResources = (compose as ExtensionAware).extensions.getByName("resources") as org.jetbrains.compose.resources.ResourcesExtension

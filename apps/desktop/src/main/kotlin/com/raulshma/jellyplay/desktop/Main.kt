@@ -174,7 +174,7 @@ fun main() {
             // supplies the photo-export actual (unsupported=no-op).
             libraryModule,
             desktopPhotoExportModule(),
-            // …music, third conveyor item — LIVE since Wave wC (browse) and
+            // …music, third conveyor item — LIVE since (browse) and
             // fully playable since: desktopPlayerModule provides the
             // real desktop audio core (DesktopAudioQueueManager over an
             // audio-only MpvDesktopEngine + DefaultAudioQueueFacade), so
@@ -204,7 +204,7 @@ fun main() {
             // (SettingsViewModel/AboutViewModel's AdminRepository) resolve
             // from dataJvmModule, and nav v1+ renders settingsSection in the
             // rail (with the desktop platform actuals below). Desktop's
-            // update-check row went live with the AppUpdate split (Wave xB;
+            // update-check row went live with the AppUpdate split (;
             // AppUpdateRepository resolves from desktopDataModule), and the
             // storage actuals went REAL with (downloads + http-cache
             // walked/cleared, Coil's disk cache cleared through the
@@ -326,7 +326,7 @@ fun main() {
 
 
 
-            // …details, cutover wave (legacy :feature:details was the
+            // …details, cutover (legacy :feature:details was the
             // largest never-conveyor module): registration fully
             // live — every data-layer ctor dep is Koin-native
             // (dataJvmModule/datastoreCommonModule), AudioQueueFacade comes

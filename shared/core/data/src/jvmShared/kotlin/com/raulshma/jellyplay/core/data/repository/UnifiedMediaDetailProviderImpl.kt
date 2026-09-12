@@ -73,7 +73,7 @@ import java.util.concurrent.atomic.AtomicLong
  * `OfflineModeManager` keeps [OfflineMode.ONLINE] on a LAN.
  */
 //  MediaRepository cluster flip: moved verbatim from the legacy
-// :core:data shim (same package/name). Ctor-level transforms only — method
+// core:data shim (same package/name). Ctor-level transforms only — method
 // bodies are byte-identical:
 //  - `@Singleton` / `@Inject` stripped (one framework per type — Koin's
 //    dataJvmModule constructs this single; every consumer resolves it

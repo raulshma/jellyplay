@@ -25,7 +25,7 @@ object DesktopVideoSurfaceBridge {
 
     /**
      * Whether this JVM can drive the mpv render-API SOFTWARE surface
-     *: libmpv loads AND an offscreen "sw" render context smoke-pass.
+     * libmpv loads AND an offscreen "sw" render context smoke-pass.
      * The app layer registers the prober (apps/desktop's
      * MpvSoftwareSurfaceSupport — this module cannot see MpvLib); reads before
      * registration (and probe failures) degrade to false, restoring the

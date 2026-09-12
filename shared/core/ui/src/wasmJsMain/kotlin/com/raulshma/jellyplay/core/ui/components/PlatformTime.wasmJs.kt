@@ -22,7 +22,7 @@ private fun maxDayInMonth(year: Int, month: Int): Int = when (month) {
 
 internal actual fun formatOneDecimal(value: Double): String {
     // HALF_UP at the first decimal through integer math ("%.1f" replacement,
-    // mission note in spike w-10C class A), sign applied symmetrically so a
+    // mission note in class A), sign applied symmetrically so a
     // stray negative matches "%.1f"'s away-from-zero output instead of the
     // "-1.-5" an unguarded path would render. Ties inside binary-representation
     // noise can differ by one ulp from the JVM Formatter — invisible at UI

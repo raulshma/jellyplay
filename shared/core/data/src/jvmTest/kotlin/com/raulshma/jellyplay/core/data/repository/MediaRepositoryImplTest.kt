@@ -33,7 +33,7 @@ import kotlin.test.assertTrue
 /**
  * Port of the orphaned legacy `:core:data` suite of the same name (the legacy
  * module's test source set stopped compiling when MediaRepositoryImpl moved to
- * :shared:core:data with its 8-arg constructor and lyrics were extracted into
+ * shared:core:data with its 8-arg constructor and lyrics were extracted into
  * LyricsRepositoryImpl). The lyrics tests live in LyricsRepositoryImplTest now;
  * everything here targets the current MediaRepositoryImpl constructor wiring.
  */

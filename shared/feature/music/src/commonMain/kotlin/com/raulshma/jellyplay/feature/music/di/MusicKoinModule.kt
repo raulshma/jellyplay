@@ -20,7 +20,7 @@ import org.koin.dsl.module
 
 /**
  * Koin construction owner for the music feature (docs/kmp-migration-plan.md
- * , third conveyor item after search and library). The
+ *,  third conveyor item after search and library). The
  * HiltViewModel/@Inject annotations were stripped at the move — Koin is the
  * single constructor owner (one framework per type). Ctor deps split three
  * ways:

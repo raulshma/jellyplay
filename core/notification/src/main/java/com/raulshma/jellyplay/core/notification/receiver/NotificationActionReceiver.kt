@@ -15,7 +15,7 @@ import kotlinx.coroutines.launch
 
 class NotificationActionReceiver : BroadcastReceiver() {
 
-    // Wave 8A: Hilt left this module — the repository single resolves from
+    // Hilt left this module — the repository single resolves from
     // the Koin container on first use (the app composition root starts it
     // long before any broadcast can arrive).
     private val seenMediaRepository: SeenMediaRepository by lazy { koin().get() }

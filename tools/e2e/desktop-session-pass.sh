@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# tools/e2e/desktop-session-pass.sh — wave 13B real-server desktop session
+# tools/e2e/desktop-session-pass.sh — real-server desktop session
 # pass. Verifies IN-APP video playback against a real Jellyfin (the whole
 # shared pipeline: VideoPlayerScreen → VideoPlayerViewModel →
 # DesktopMpvPlayerEngineFactory → MpvDesktopEngine) plus the Esc-popup
-# ordering question wave 9 left open, inside the REAL windowed app.
+# ordering question left open, inside the REAL windowed app.
 #
 # What one run does:
 #   1. waits for the Jellyfin server (GET /System/Info/Public → 200);
@@ -114,12 +114,12 @@ case "$MPV_MIXED" in *" "*) fail "tools/mpv path contains spaces ($MPV_MIXED).";
 # JVM splits JAVA_TOOL_OPTIONS on whitespace: a space-bearing credential or
 # item name would truncate this -D value (and every prop after it).
 case "$USERNAME$PASSWORD$ITEM_ID" in
-    *" "*) fail "USERNAME / E2E_PASSWORD / resolved item id must not contain spaces."; ;;
+    *" "*) fail "USERNAME / E2E_PASSWORD / resolved item id must not contain spaces.";;;
 esac
 
 LOG_OUT="$PROFILE_NIX/app.out"; LOG_ERR="$PROFILE_NIX/app.err"
 echo "== launching $APP_NAME (profile: $PROFILE_NIX)"
-# HARNESS_EXTRA_PROPS (optional, wave 14E): extra jellyplay.harness.* -D props
+# HARNESS_EXTRA_PROPS (optional,): extra jellyplay.harness.* -D props
 # for targeted experiments (e.g. -Djellyplay.harness.noWindowToFront=true, the
 # focus-thief experiment knob). Never set in CI - default run is unmodified.
 export JAVA_TOOL_OPTIONS="-Djellyplay.harness.enabled=true -Djellyplay.harness.serverUrl=$SERVER_URL -Djellyplay.harness.username=$USERNAME -Djellyplay.harness.password=$PASSWORD -Djellyplay.harness.itemId=$ITEM_ID -Djellyplay.harness.autoExitSeconds=$AUTO_EXIT_SECONDS -Djellyplay.harness.screenshotDir=$PROFILE_MIXED/harness-shots -Djellyplay.perf.dataDir=$PROFILE_MIXED/profile -Djna.library.path=$MPV_MIXED ${HARNESS_EXTRA_PROPS:-}"

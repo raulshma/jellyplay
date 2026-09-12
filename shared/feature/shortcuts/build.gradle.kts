@@ -63,7 +63,7 @@ kotlin {
             // dropped: no shortcuts file imports it — the navigation entry
             // uses entry<Route> from the nav3 runtime/ui artifacts only,
             // syncplay/calendar precedent. The legacy build also carried
-            // :core:datastore + :core:model + coil + coil-okhttp; none of the
+            // core:datastore + :core:model + coil + coil-okhttp; none of the
             // three files import anything from them — the catalog has no
             // images, so even coil is unused.)
             implementation(libs.navigation3.runtime)

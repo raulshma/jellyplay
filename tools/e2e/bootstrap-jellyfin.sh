@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# Bootstrap a local Jellyfin E2E server for the wave-13 verification passes
+# Bootstrap a local Jellyfin E2E server for the verification passes
 # (desktop real-server session pass, web browser pass). This commits the
-# recipe that wave 12 used ad-hoc (plan: "Jellyfin in Docker + generated media
+# recipe that used ad-hoc (plan: "Jellyfin in Docker + generated media
 # + wizard/API bootstrap").
 #
 # Produces: http://localhost:8096 with user `harness` / password `harness-e2e-pass`
 # and one movie item "Harness Test Clip (2026)" (~12 s ffmpeg testsrc clip with
 # audio and a primary image). Prints the item id on success.
 #
-# Wave 20B adds N=8 "Cache Probe Clip <i> (2026)" movies, each with a DISTINCT
+# adds N=8 "Cache Probe Clip <i> (2026)" movies, each with a DISTINCT
 # LARGE poster (2560x1440 testsrc2 frame, hue-rotated per item). Sizing
 # arithmetic: a 2560x1440 bitmap decodes to 2560*1440*4 = 14,745,600 bytes, so
 # 8 posters = 117,964,800 decoded bytes > Coil's MEASURED wasm memory-cache cap
@@ -37,7 +37,7 @@ ITEM_FILE="$STATE_DIR/item-id.txt"
 
 # All logging to STDERR: wait_for_item PRINTS the item id on stdout for
 # command substitution, and a stdout log line would be captured into the id
-# (first wave-20B run: ITEM_ID became "<log line>\n<id>" and the follow-up
+# (first run: ITEM_ID became "<log line>\n<id>" and the follow-up
 # image upload died with curl exit 3, URL malformed).
 log() { printf '[bootstrap-jellyfin] %s\n' "$*" >&2; }
 
@@ -45,7 +45,7 @@ command -v docker >/dev/null || { log "FATAL: docker not on PATH"; exit 1; }
 command -v curl  >/dev/null || { log "FATAL: curl not on PATH"; exit 1; }
 command -v ffmpeg >/dev/null || { log "FATAL: ffmpeg not on PATH"; exit 1; }
 
-# Docker Desktop may be stopped (wave-12 process note: poll-and-restart is part of the recipe).
+# Docker Desktop may be stopped ( process note: poll-and-restart is part of the recipe).
 if ! docker info >/dev/null 2>&1; then
   log "docker daemon down - starting Docker Desktop and waiting..."
   DOCKER_DESKTOP="$(ls "/c/Program Files/Docker/Docker/Docker Desktop.exe" 2>/dev/null || true)"
@@ -76,7 +76,7 @@ if [ ! -f "$STATE_DIR/poster.jpg" ]; then
     "$STATE_DIR/poster.jpg"
 fi
 
-# --- wave 20B: cache-probe library (8 additional movies, LARGE posters) ------
+# ---: cache-probe library (8 additional movies, LARGE posters) ------
 # Posters are 2560x1440 single frames (14,745,600 decoded bytes each — see the
 # header arithmetic); hue rotation by i*40 degrees makes every poster's CONTENT
 # distinct (the probe URLs differ by item id regardless, but distinct pixels
@@ -149,7 +149,7 @@ for _ in $(seq 1 30); do
   sleep 2
 done
 if [ "$WIZARD_DONE" = "false" ]; then
-  # MEASURED (wave 20B, Jellyfin 10.11.11): a RE-CREATED container with a
+  # MEASURED: a RE-CREATED container with a
   # completed-wizard config still serves startupwizardcompleted=false for a
   # window while core services load the persisted state — acting on the
   # first false reading runs the wizard into 401s ("could not create first
@@ -210,11 +210,11 @@ fi
 # --- items: exact-Name id lookup + deterministic primary-image upload ---------
 # Id extraction is NAME-SCOPED (split the search response into per-object lines
 # and take the id from the object carrying the exact Name): a bare
-# first-id-in-response pick (the wave-13 shape, fine for a 1-item library)
+# first-id-in-response pick (the shape, fine for a 1-item library)
 # would race the scan and could grab a neighbor once 9 movies exist. NOTE the
 # names passed here are the DISPLAY names WITHOUT the year — Jellyfin's file
 # parser splits "Foo (2026).mp4" into Name="Foo" + ProductionYear=2026, so a
-# lookup keyed on the full filename stem never matches (first wave-20B run's
+# lookup keyed on the full filename stem never matches (first run's
 # lesson: the scan HAD produced every item; the lookup just could not see them).
 item_id_by_name() { # item_id_by_name <display name> -> echoes 32-hex id or empty
   curl -sf -m 10 -G -H "X-Emby-Token: $TOKEN" \
@@ -243,13 +243,13 @@ wait_for_item() { # wait_for_item <display name> -> echoes id; triggers one libr
 
 # Ensure the INTENDED poster is the item's primary image — not merely that A
 # primary exists: on 10.11 the library scan EXTRACTS a primary from the video
-# file's own pixels (first wave-20B run measured ImageTags.Primary present on
+# file's own pixels (first run measured ImageTags.Primary present on
 # freshly scanned items), and a "has any primary" check would skip the upload
 # and leave the fixture with ~0.2MB decoded thumbnails instead of the 14.7MB
 # posters the eviction arithmetic needs. Compare the SERVED byte size to the
 # intended file — equal means our poster is already in place (re-runs are
 # no-ops), anything else (smaller scan frame, 404) uploads.
-# MEASURED (wave 18A, Jellyfin 10.11.11 / jellyfin:latest): SetItemImage
+# MEASURED: SetItemImage
 # base64-DECODES the request body (FromBase64Transform inside ImageSaver), so
 # a raw JPEG body 500s with "One of the identified items was in an invalid
 # format"; the body must be the base64 text of the image. Raw is tried first
@@ -275,7 +275,7 @@ ITEM_ID="$(wait_for_item "$HARNESS_NAME")" \
 log "item id: $ITEM_ID"
 ensure_primary_image "$ITEM_ID" "$HARNESS_NAME" "$STATE_DIR/poster.jpg"
 
-# Wave 20B cache-probe items (idempotent per item: name lookup skips
+# cache-probe items (idempotent per item: name lookup skips
 # already-scanned items, ensure_primary_image byte-compares the served image
 # and only re-uploads when the intended poster is not in place).
 PROBE_IDS=""

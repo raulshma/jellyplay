@@ -102,7 +102,7 @@ kotlin {
 
 // `compose.resources` is a nested extension with no generated Kotlin-DSL
 // accessor; configure it explicitly. Same package as the legacy
-// :feature:insights so migrated files keep their
+// feature:insights so migrated files keep their
 // `com.raulshma.jellyplay.feature.insights` imports; generated accessors land
 // in `...feature.insights.generated.resources`.
 val composeResources = (compose as ExtensionAware).extensions.getByName("resources") as org.jetbrains.compose.resources.ResourcesExtension

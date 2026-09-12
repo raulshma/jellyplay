@@ -50,7 +50,7 @@ import java.time.format.DateTimeFormatter
 // the legacy Android shim (core/network/src/main/.../api/WsDtoMappers.kt):
 // their consumers — the realtime channels — inject the Hilt-qualified
 // @ApplicationScope CoroutineScope whose annotation lives in the legacy
-// :core:datastore shim, so the channels (and thus the org.json mappers)
+// core:datastore shim, so the channels (and thus the org.json mappers)
 // could not move into this module.
 
 internal fun BaseItemDto.toMediaItem() = MediaItem(

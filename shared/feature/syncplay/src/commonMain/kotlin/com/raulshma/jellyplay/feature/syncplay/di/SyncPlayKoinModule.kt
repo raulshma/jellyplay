@@ -7,7 +7,7 @@ import org.koin.dsl.module
 
 /**
  * Koin construction owner for the SyncPlay feature (docs/kmp-migration-plan.md
- * , sixth conveyor item after search, library, music, livetv and
+ *,  sixth conveyor item after search, library, music, livetv and
  * downloads). The HiltViewModel/@Inject/@ApplicationContext annotations were
  * stripped at the move — Koin is the single constructor owner (one framework
  * per type). Ctor deps split three ways:

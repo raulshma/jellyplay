@@ -77,7 +77,7 @@ class DownloadsViewModel(
     /**
      * One-shot delete feedback, screen-forward seam replacing the legacy
      * UserMessageBus ctor dep (the bus + UiText live in the Android-only
-     * :core:ui shim and are not visible from commonMain). Same one-shot
+     * core:ui shim and are not visible from commonMain). Same one-shot
      * semantics as the bus: buffered, single collector, never replayed —
      * [DownloadsScreen] resolves the resource text and forwards through the
      * DownloadsMessenger actual.

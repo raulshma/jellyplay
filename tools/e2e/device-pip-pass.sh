@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Device pass: LIVE-TV/VIDEO PiP entry + exit on a physical phone (wave-19C
-# residual "PiP entry/exit needs-device-pass", closed by the wave-21 device
+# Device pass: LIVE-TV/VIDEO PiP entry + exit on a physical phone (
+# residual "PiP entry/exit needs-device-pass", closed by the device
 # round together with two launch-crash fixes it surfaced — see
 # docs/e2e/device-pip-pass.md for the full account and the recorded verdict:
 # ENTRY is device-verified, EXPAND/DISMISS steps 8-9 have NOT yet run on a
-# device — the wave-21 round was cut short there by directive, so this
+# device — the round was cut short there by directive, so this
 # script's later steps remain unexercised until the next run).
 #
 # Drives the REAL app on a REAL device over adb + uiautomator:
@@ -156,7 +156,7 @@ if $ADB shell dumpsys window 2>/dev/null | grep -q "isKeyguardShowing=true"; the
   echo "[device-pip] FATAL: secure keyguard up - cannot automate UI"; exit 1
 fi
 # Google autofill re-fills saved credentials over typed ones (measured on the
-# first wave-21 run: app POSTed username "test" while the field showed
+# first run: app POSTed username "test" while the field showed
 # "harness") - kill it for the session.
 $ADB shell "settings put secure selected_autofill_service null"
 

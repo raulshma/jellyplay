@@ -81,7 +81,7 @@ import kotlinx.coroutines.launch
  * [extraOptions] with `vo=null`/`ao=null`.
  *
  * The former V2 cuts are closed (the "when the player feature
- * migrates" trigger fired waves ago): `EngineConfig.videoEffects` is applied
+ * migrates" trigger fired long ago): `EngineConfig.videoEffects` is applied
  * as a live mpv `vf` chain + `video-rotate` property ([DesktopVideoEffectChain]
  * builds the strings — see its shared→mpv parity table), screenshot capture
  * goes through mpv's `screenshot-to-file` ([captureVideoFrame], the desktop
@@ -841,7 +841,7 @@ open class MpvDesktopEngine(
     }
 
     /**
-     *: push the audio-effects config onto mpv — the `af` chain
+     * push the audio-effects config onto mpv — the `af` chain
      * ([DesktopAudioEffectChain.buildAfChain]), the channel-mix
      * `audio-channels` property, and the `pitch` property. All three are
      * runtime-settable; mpv rebuilds the audio chain on write — which is why
@@ -873,7 +873,7 @@ open class MpvDesktopEngine(
     }
 
     /**
-     *: push the video-effects config onto mpv — the `vf` chain
+     * push the video-effects config onto mpv — the `vf` chain
      * ([DesktopVideoEffectChain.buildVfChain]) and the rotation via the
      * separate `video-rotate` property (rotation is an output transform, not
      * a filter). Both are runtime-settable; mpv rebuilds the video pipeline
@@ -936,7 +936,7 @@ open class MpvDesktopEngine(
     // ── Screenshot capture ────────────────────────────────────────
 
     /**
-     *: captures the currently-displayed video frame (subtitles
+     * captures the currently-displayed video frame (subtitles
      * composited, like Android's PixelCopy path) via mpv's
      * `screenshot-to-file` into a temp PNG, decodes it into the platform
      * bitmap the desktop capture seam consumes, and deletes the temp file.

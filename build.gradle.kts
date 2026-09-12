@@ -146,7 +146,7 @@ if (enableCoverage.get()) {
     }
 }
 
-// KGP wasm tool-download repo suppression (wave 13C) — the second half of the
+// KGP wasm tool-download repo suppression — the second half of the
 // settings.gradle.kts node/yarn/binaryen governance note. KGP 2.3.21's setup
 // tasks add their ivy download repository to the PROJECT at task-graph time,
 // which FAIL_ON_PROJECT_REPOS must keep rejecting; per the documented EnvSpec

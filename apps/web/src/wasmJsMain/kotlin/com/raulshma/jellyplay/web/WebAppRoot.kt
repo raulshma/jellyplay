@@ -335,7 +335,7 @@ fun WebAppRoot(
             entry<Route.UpcomingCalendar> { _ ->
                 // The SECOND shared feature screen on web — the
                 // shared UpcomingCalendarScreen (koinViewModel() against
-                // calendarModule, registered in Main.kt this wave). The
+                // calendarModule, registered in Main.kt for now). The
                 // feature-disabled pane is the honest v1 state in the browser
                 // fixture: the DIRECT_ARR_INTEGRATION experimental flag boots
                 // off and no settings UI exists on web to flip it, so the E2E
@@ -377,7 +377,7 @@ fun WebAppRoot(
                 // - onNavigate is a NO-OP STUB by platform rule: the screen's
                 //   cross-links target Route.MediaDetail (and friends), and
                 //   the MediaDetail cluster has NO wasmJs target — it is
-                //   jvmShared/off-web this wave (Room-blocked; see
+                //   jvmShared/off-web for now (Room-blocked; see
                 //   shared/feature/details/build.gradle.kts). Nothing on web
                 //   can render it, so the callback deliberately does nothing
                 //   rather than pushing an unroutable key. (No snackbar — the

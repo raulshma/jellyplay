@@ -15,8 +15,8 @@ import java.io.File
  * the installed one and deletes it. This lets the user install (or re-download)
  * a previously-fetched update across app restarts.
  *
- * AppUpdate split (Wave xB): moved from the legacy `:core:data` shim to
- * :shared:core:data jvmShared, reshaped for platform DI — the device identity
+ * AppUpdate split: moved from the legacy `:core:data` shim to
+ * shared:core:data jvmShared, reshaped for platform DI — the device identity
  * the old `checkForUpdate(supportedAbis)` parameter carried (version / flavor
  * / ABIs) is now ctor-injected into [AppUpdateRepositoryImpl] by the Koin
  * platform modules, and the Android-only install intent became the

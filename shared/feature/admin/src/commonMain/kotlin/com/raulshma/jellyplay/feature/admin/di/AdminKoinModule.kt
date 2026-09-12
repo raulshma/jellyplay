@@ -21,10 +21,10 @@ import org.koin.dsl.module
 
 /**
  * Koin construction owner for the admin feature (docs/kmp-migration-plan.md
- * , admin conveyor — eighth feature). The HiltViewModel/@Inject
+ *,  admin conveyor — eighth feature). The HiltViewModel/@Inject
  * annotations were stripped at the move — Koin is the single constructor
  * owner (one framework per type). Ctor deps all resolve from the shared
- * :core:data Koin graph (dataJvmModule) on BOTH platforms since the admin
+ * core:data Koin graph (dataJvmModule) on BOTH platforms since the admin
  * repo flip:
  *  - AdminRepository + AdminStatisticsRepository are dataJvmModule singles
  *    (impls moved out of legacy :core:data; the app's DataModule only keeps

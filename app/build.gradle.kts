@@ -358,8 +358,7 @@ dependencies {
     implementation(project(":shared:core:network"))
     implementation(project(":shared:core:database"))
     implementation(project(":shared:core:datastore"))
-    implementation(project(":core:data"))
-    implementation(project(":core:ui"))
+    implementation(project(":shared:core:data"))
     // Shared core:ui (core.ui.message bus seam) + compose-resources runtime
     // for the shared UserMessageBus collector (UiText resolution on Android).
     implementation(project(":shared:core:ui"))
@@ -430,7 +429,7 @@ dependencies {
     implementation(libs.play.services.cast.framework)
 
     // Required by the media3-ffmpeg-decoder native extension (pulled in via
-    // :shared:feature:player-video). Must also be enabled at the app dex
+    // shared:feature:player-video). Must also be enabled at the app dex
     // entry point.
     coreLibraryDesugaring(libs.android.desugar.jdk)
 

@@ -91,7 +91,6 @@ kotlin {
         // (same-origin WebView request interception) which rides in through
         // the legacy :core:ui classpath edge.
         getByName("androidMain").dependencies {
-            implementation(project(":core:ui"))
             // WebView quartet: interceptAuthedRequest re-issues same-origin
             // GETs through the plugin WebView session's OkHttpClient.
             implementation(libs.okhttp)

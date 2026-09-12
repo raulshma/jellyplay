@@ -66,7 +66,7 @@ private const val DETAIL_CACHE_TTL_MS = 2 * 60 * 1000L
 private const val DETAIL_CACHE_MAX_ENTRIES = 30
 
 //  MediaRepository cluster flip: moved verbatim from the legacy
-// :core:data shim (same package/name). Ctor-level transforms only — method
+// core:data shim (same package/name). Ctor-level transforms only — method
 // bodies are byte-identical:
 //  - `@Singleton` / `@Inject` stripped (one framework per type — Koin's
 //    dataJvmModule constructs this single; every consumer resolves it

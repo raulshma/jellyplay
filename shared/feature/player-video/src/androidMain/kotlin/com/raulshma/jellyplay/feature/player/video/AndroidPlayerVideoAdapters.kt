@@ -91,7 +91,7 @@ internal class AndroidUserMessageBridge(
     override fun info(message: PlayerVideoMessage) {
         when (message) {
             PlayerVideoMessage.SmartDownloadDeleted -> delegate.info(
-                uiTextOf(com.raulshma.jellyplay.core.ui.R.string.msg_smart_download_deleted),
+                uiTextOf(com.raulshma.jellyplay.shared.core.ui.R.string.msg_smart_download_deleted),
             )
         }
     }

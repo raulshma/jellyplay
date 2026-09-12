@@ -19,7 +19,7 @@ import com.mikepenz.markdown.m3.markdownTypography
  *  collapsed the old expect/actual seam onto this ONE
  * implementation: while the catalog pin sat at 0.43.0 the mikepenz wasm
  * klibs were Kotlin-2.4-ABI (silently skipped by this repo's 2.3.21 klib
- * loader — spike w-10C class C), so wasm carried a home-grown
+ * loader — class C), so wasm carried a home-grown
  * MiniMarkdownParser pipeline and the dependency was confined to jvmShared.
  * The 0.41.0 pin publishes Kotlin-2.3-built wasm klibs, so every target
  * renders through the same code and the mini parser (+ its wasm actual and

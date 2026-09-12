@@ -2818,7 +2818,7 @@ probe/persist choreographies getting homes.
   lives once. Video's `SleepTimerController` is NOT reused (player-audio cannot
   depend on player-video; video's variant carries video-only fade concerns).
   The `AudioPreferencesReducer` double-apply timing is untouched (the recorded
-  `AudioPlaybackManager`-fold blocker stands; this wave is deliberately
+  `AudioPlaybackManager`-fold blocker stands; for now is deliberately
   VM-local). `AudioEffectsController.applyAndPersist` mirrors
   `VideoEffectsController`'s apply→mirror→persist shape (module direction
   blocks direct reuse) — a shared-core extraction (the `AutoDownloadCheck`
@@ -2872,7 +2872,7 @@ probe/persist choreographies getting homes.
   `SimpleCollectionGrid`. The screen's command/mutation errors are the
   resource-carrying `PlaylistCommandError` (`Reported` carries server text
   verbatim, `Declared` resolves at render) over the `music_playlist_*` set in
-  all 9 locales — the recorded deferred fold landed with this wave. Declared
+  all 9 locales — the recorded deferred fold landed with for now. Declared
   deltas: browse pages gain
   pull-to-refresh/status/footer, browse artists gains `DATE_PLAYED` (the
   standalone list is canonical), sort admission is data

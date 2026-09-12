@@ -28,7 +28,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 
 //  MediaRepository cluster flip: moved verbatim from the legacy
-// :core:data shim (same package/name); `@Singleton` / `@Inject` stripped
+// core:data shim (same package/name); `@Singleton` / `@Inject` stripped
 // (one framework per type — Koin's dataJvmModule constructs this single; the
 // legacy DataModule bridges the remaining Hilt injectors via koin().get()).
 @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)

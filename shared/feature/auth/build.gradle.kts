@@ -90,7 +90,6 @@ kotlin {
             // bridge the legacy LocalNetworkAccess object, which keeps the
             // Android 17 permission logic (and its MainActivity consumer) in
             // one place.
-            implementation(project(":core:ui"))
         }
     }
 }

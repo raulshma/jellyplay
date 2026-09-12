@@ -563,7 +563,7 @@ object DesktopSessionHarness {
         private fun currentBackStack(): MutableList<NavKey>? = backStackProvider?.invoke()
 
         /**
-         *: guarantee the video player route is the top of the current
+         * guarantee the video player route is the top of the current
          * tab's back stack, re-pushing Route.VideoPlayer when it is not. The
          * 12 s harness clip auto-pops the route at EOF (the screen's
          * closePlayer flow → onBack), so a step that runs late under machine
@@ -741,7 +741,7 @@ object DesktopSessionHarness {
     private const val REPORT_FILE_NAME = "session-harness.json"
 
     /**
-     *: how long each SPACE injection attempt waits for the sampled
+     * how long each SPACE injection attempt waits for the sampled
      * isPlaying flip. The recorder samples on a ~500 ms cadence, so a real
      * toggle clears within ~1 s; 3 s leaves margin for a busy UI thread while
      * keeping the whole retry ladder (up to [SPACE_MAX_INJECTION_ATTEMPTS]
@@ -753,7 +753,7 @@ object DesktopSessionHarness {
     private const val SPACE_TOGGLE_FREEZE_TOLERANCE_MS = 1_500L
 
     /**
-     *: maximum SPACE injection attempts per OVERLAY_SPACE step. A
+     * maximum SPACE injection attempts per OVERLAY_SPACE step. A
      * single unlucky focus flap must not fail the gate (the retry ladder);
      * a key that provably REACHED the handler still fails immediately.
      */

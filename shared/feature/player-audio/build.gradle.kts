@@ -87,7 +87,7 @@ kotlin {
 
 // `compose.resources` is a nested extension with no generated Kotlin-DSL
 // accessor; configure it explicitly. Same package as the legacy
-// :feature:player:audio so migrated files keep their
+// feature:player:audio so migrated files keep their
 // `com.raulshma.jellyplay.feature.player.audio` imports; generated accessors
 // land in `...feature.player.audio.generated.resources`.
 val composeResources = (compose as ExtensionAware).extensions.getByName("resources") as org.jetbrains.compose.resources.ResourcesExtension

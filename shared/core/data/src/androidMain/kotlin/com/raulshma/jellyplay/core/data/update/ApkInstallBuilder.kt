@@ -7,7 +7,7 @@ import java.io.File
 
 /**
  * Android seam left behind when [AppUpdateRepository] moved to
- * :shared:core:data jvmShared (Wave xB): the install intent needs
+ * shared:core:data jvmShared: the install intent needs
  * `android.content.Intent` + `FileProvider`, so it cannot live in the shared
  * interface. The shell's UpdateCoordinator injects this instead of calling the
  * old repository method. Impl body is byte-identical to the legacy

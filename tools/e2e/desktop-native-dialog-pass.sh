@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# tools/e2e/desktop-native-dialog-pass.sh — wave 22F audit-F9 native-dialog
+# tools/e2e/desktop-native-dialog-pass.sh — audit-F9 native-dialog
 # pass. Verifies the desktop AWT FileDialog flows INSIDE the real windowed
-# app with real native dialogs driven by java.awt.Robot (the wave-20
+# app with real native dialogs driven by java.awt.Robot (the
 # "manually-verified-only" cut, see DesktopNativeDialogHarness + docs/e2e/
 # desktop-native-dialogs.md). One run:
 #
