@@ -26,8 +26,21 @@ kotlin {
         }
     }
 
-    // No wasmJs target: books render via per-platform raster pipelines
-    // (android.graphics.pdf.PdfRenderer / PDFBox) with no web story in v1.
+    // web breadth: the target compiles — commonMain was already
+    // seam-clean (BookContentResolver/BookDocumentOpener bind in the platform
+    // modules), so only the four platform expects needed wasmJs actuals that
+    // degrade honestly (null decode, no-op window ops, error-reporting EPUB
+    // host). There is no BookDocumentOpener binding on web for now, so the
+    // reader stays off the browser at runtime until the orchestrator wires
+    // one. The karma/Chrome browser run stays off like core:ui/core:network/
+    // requests — jvmTest pins the semantics.
+    wasmJs {
+        browser {
+            testTask {
+                enabled = false
+            }
+        }
+    }
     jvm {
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_17)
@@ -114,3 +127,21 @@ kotlin {
 // `...feature.book.generated.resources`.
 val composeResources = (compose as ExtensionAware).extensions.getByName("resources") as org.jetbrains.compose.resources.ResourcesExtension
 composeResources.packageOfResClass = "com.raulshma.jellyplay.feature.book.generated.resources"
+
+// google's androidx.navigation3:navigation3-ui publishes no web artifacts at
+// all (android AAR + jvm/linux stubs only), so every wasmJs configuration of
+// this module fails dependency resolution unless it points at JetBrains'
+// fork of the same release line — same package, ABI-stable surface. Scoped
+// to wasmJs-named configurations so android/jvm graphs keep resolving
+// google's published variants exactly as before ( S1/R2; the
+// identical block lives in shared/core/ui, shared/feature/requests and the
+// other web modules).
+configurations.configureEach {
+    if (name.lowercase().contains("wasmjs")) {
+        resolutionStrategy.dependencySubstitution {
+            substitute(module("androidx.navigation3:navigation3-ui"))
+                .using(module(libs.jb.navigation3.ui.get().toString()))
+                .because("google navigation3-ui has no web artifacts; JB fork publishes the wasm klib")
+        }
+    }
+}

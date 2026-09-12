@@ -5,7 +5,6 @@ import androidx.paging.LoadStates
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import com.raulshma.jellyplay.core.data.download.DownloadRequestResult
-import com.raulshma.jellyplay.core.data.download.MediaDownloadActions
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
@@ -61,10 +60,10 @@ private data class PagedQueryKey(
     val refreshTrigger: Int,
 )
 
-class LibraryViewModel(
+internal class LibraryViewModel(
     private val mediaRepository: MediaRepository,
     private val offlineRepository: OfflineRepository,
-    private val mediaDownloadActions: MediaDownloadActions,
+    private val quickDownloadActions: QuickDownloadActions,
     private val offlineModeManager: OfflineModeManager,
     private val userMessageBus: UserMessageBus,
     private val userDataMutator: UserDataMutator,
@@ -106,7 +105,11 @@ class LibraryViewModel(
      * of it is downloaded). Re-exposes the shared quick-action delegate's
      * Eagerly-started flow — one collector serves every host surface.
      */
-    val downloadedIds = mediaDownloadActions.downloadedIds
+    // Whether this platform has a download pipeline — screens gate the
+    // download CTA on it (hidden rather than Failed-toasting on web).
+    val downloadSupported = quickDownloadActions.isSupported
+
+    val downloadedIds = quickDownloadActions.downloadedIds
 
     private val _photoFolderChildUrls = stateFlow<Map<String, List<String>>>(emptyMap())
     val photoFolderChildUrls = _photoFolderChildUrls.flow
@@ -170,7 +173,7 @@ class LibraryViewModel(
      */
     fun downloadItem(item: MediaItem, onOpenDetail: (itemId: String, openDownloadSheet: Boolean) -> Unit) {
         launch {
-            when (val result = mediaDownloadActions.download(item)) {
+            when (val result = quickDownloadActions.download(item)) {
                 DownloadRequestResult.Started ->
                     userMessageBus.info(
                         UiText.Resource(Res.string.data_download_started)
@@ -191,7 +194,7 @@ class LibraryViewModel(
      * series download, anything else the single item. Never touches the server.
      */
     fun removeItemDownload(item: MediaItem) {
-        mediaDownloadActions.removeDownload(item)
+        quickDownloadActions.removeDownload(item)
     }
 
     private val _refreshTrigger = stateFlow(0)

@@ -167,7 +167,7 @@ private fun NewsletterGridCard(
             }
             item.communityRating?.let { rating ->
                 Text(
-                    text = "★ ${"%.1f".format(rating)}",
+                    text = "★ ${formatOneDecimal(rating.toDouble())}",
                     style = MaterialTheme.typography.labelSmall,
                     color = RatingColors.star,
                 )

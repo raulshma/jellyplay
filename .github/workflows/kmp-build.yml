@@ -130,8 +130,10 @@ jobs:
           :shared:core:player-contract:compileAndroidMain
           :shared:feature:search:jvmJar
           :shared:feature:search:compileAndroidMain
+          :shared:feature:search:compileKotlinWasmJs
           :shared:feature:library:jvmJar
           :shared:feature:library:compileAndroidMain
+          :shared:feature:library:compileKotlinWasmJs
           :shared:feature:music:jvmJar
           :shared:feature:music:compileAndroidMain
           :shared:feature:livetv:jvmJar
@@ -146,6 +148,7 @@ jobs:
           :shared:feature:admin:compileAndroidMain
           :shared:feature:editor:jvmJar
           :shared:feature:editor:compileAndroidMain
+          :shared:feature:editor:compileKotlinWasmJs
           :shared:feature:calendar:jvmJar
           :shared:feature:calendar:compileAndroidMain
           :shared:feature:calendar:compileKotlinWasmJs
@@ -157,11 +160,13 @@ jobs:
           :shared:feature:shortcuts:compileKotlinWasmJs
           :shared:feature:newsletter:jvmJar
           :shared:feature:newsletter:compileAndroidMain
+          :shared:feature:newsletter:compileKotlinWasmJs
           :shared:feature:insights:jvmJar
           :shared:feature:insights:compileAndroidMain
           :shared:feature:onboarding:jvmJar
           :shared:feature:onboarding:compileAndroidMain
           :shared:feature:onboarding:compileKotlinWasmJs
+          :shared:feature:player-book:compileKotlinWasmJs
           :shared:feature:subtitle-tester:jvmJar
           :shared:feature:subtitle-tester:compileAndroidMain
           :shared:feature:arrqueue:jvmJar

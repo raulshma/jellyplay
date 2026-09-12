@@ -3,7 +3,6 @@ package com.raulshma.jellyplay.feature.editor
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.MetadataEditorRepository
 import com.raulshma.jellyplay.core.data.repository.MergedSubtitleSearch
-import com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStore
 import com.raulshma.jellyplay.core.data.repository.SubtitleProviderRepository
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -472,53 +471,29 @@ class EditorViewModelSubtitlesTest {
 }
 
 /**
- * No-op [StreamingSubtitleStore] that records the durable lifecycle calls the
+ * Recording [EditorSubtitleStore] that captures the durable lifecycle calls the
  * editor makes (save / purge on server delete / attribution after upload) so
- * the tests can assert on them.
+ * the tests can assert on them. The seam swap changed only the parameter
+ * shape: the save bundle arrives as one [ProviderSubtitleSave] instead of the
+ * StreamingSubtitleStore's flat arg list.
  */
-private class RecordingSubtitleStore : StreamingSubtitleStore {
+private class RecordingSubtitleStore : EditorSubtitleStore {
 
-    val savedSubtitles = mutableListOf<SavedSubtitle>()
+    val savedSubtitles = mutableListOf<ProviderSubtitleSave>()
     val attributedItemIds = mutableListOf<String>()
     /** (itemId, deleted stream index, captured deleted stream) per purge. */
     val purgedCopies = mutableListOf<Triple<String, Int, MediaStream?>>()
 
-    override suspend fun save(
-        itemId: String,
-        provider: SubtitleProviderKind,
-        providerSubtitleId: String,
-        fileName: String,
-        language: String?,
-        codec: String?,
-        isForced: Boolean,
-        isHearingImpaired: Boolean,
-        bytes: ByteArray,
-    ): SavedSubtitle {
-        val saved = SavedSubtitle(
-            provider, providerSubtitleId, fileName, language, codec, isForced, isHearingImpaired, fileName,
-        )
-        savedSubtitles.add(saved)
-        return saved
+    override suspend fun save(save: ProviderSubtitleSave) {
+        savedSubtitles.add(save)
     }
 
-    override suspend fun loadAll(itemId: String): List<SavedSubtitle> = emptyList()
-
-    override suspend fun fileFor(itemId: String, saved: SavedSubtitle): java.io.File =
-        java.io.File(saved.fileRelativePath)
-
-    override suspend fun delete(itemId: String, saved: SavedSubtitle) = Unit
-
-    override suspend fun markServerStreamIndex(itemId: String, saved: SavedSubtitle, index: Int) = Unit
-
-    override suspend fun clear(itemId: String) = Unit
-
-    override suspend fun attributeUploadedSubtitle(
-        itemId: String,
-        saved: SavedSubtitle,
+    override suspend fun attributeUploaded(
+        save: ProviderSubtitleSave,
         streamsAfterUpload: List<MediaStream>,
         preUploadExternalIndices: Set<Int>,
     ) {
-        attributedItemIds.add(itemId)
+        attributedItemIds.add(save.itemId)
     }
 
     override suspend fun purgeDeletedServerStreamCopies(itemId: String, index: Int, deletedStream: MediaStream?) {

@@ -161,7 +161,7 @@ val LocalConsumeSearchQuery = staticCompositionLocalOf<() -> Unit> { {} }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun SearchScreen(
+internal fun SearchScreen(
     onItemClick: (itemId: String, mediaType: com.raulshma.jellyplay.core.model.MediaType, parentId: String?, itemName: String) -> Unit,
     onNavigate: (Route) -> Unit = {},
     viewModel: SearchViewModel = koinViewModel(),
@@ -277,7 +277,7 @@ fun SearchScreen(
     // the slot to "Remove download".
     val quickActionIntake = rememberQuickActionIntake(
         scope = MediaQuickActionScope.LIBRARY,
-        includeDownload = true,
+        includeDownload = viewModel.downloadSupported,
         isDownloaded = remember(downloadedIds) {
             { item: MediaItem -> downloadedIds.contains(item.id) }
         },
@@ -987,7 +987,7 @@ fun SearchScreen(
                             if (pagedResults.loadState.append is LoadState.Error) {
                                 val appendError = pagedResults.loadState.append as LoadState.Error
                                 AppendErrorFooter(
-                                    message = appendError.error.localizedMessage
+                                    message = appendError.error.message
                                         ?: stringResource(Res.string.search_failed_to_load_more),
                                     onRetry = { pagedResults.retry() },
                                     modifier = Modifier
@@ -1014,7 +1014,7 @@ fun SearchScreen(
                                 }
                                 is LoadState.Error -> {
                                     ErrorScreen(
-                                        message = refreshState.error.localizedMessage
+                                        message = refreshState.error.message
                                             ?: stringResource(Res.string.search_failed),
                                         onRetry = { pagedResults.refresh() },
                                         modifier = Modifier.fillMaxSize(),

@@ -1,8 +1,9 @@
 package com.raulshma.jellyplay.feature.editor
 
+import com.raulshma.jellyplay.core.model.MediaStream
+
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.MetadataEditorRepository
-import com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStore
 import com.raulshma.jellyplay.core.data.repository.SubtitleProviderRepository
 import com.raulshma.jellyplay.core.model.EditableItemMetadata
 import com.raulshma.jellyplay.core.model.EditorPerson
@@ -164,28 +165,16 @@ class EditorViewModelMetadataTest {
             editorRepository,
             authRepository,
             subtitleProviderRepository,
-            // No-op streaming subtitle store — metadata tests never exercise the
+            // No-op subtitle store seam — metadata tests never exercise the
             // durable subtitle path (mirrors the upload suite's fake).
-            object : StreamingSubtitleStore {
-                override suspend fun save(
-                    itemId: String,
-                    provider: SubtitleProviderKind,
-                    providerSubtitleId: String,
-                    fileName: String,
-                    language: String?,
-                    codec: String?,
-                    isForced: Boolean,
-                    isHearingImpaired: Boolean,
-                    bytes: ByteArray,
-                ): SavedSubtitle = SavedSubtitle(
-                    provider, providerSubtitleId, fileName, language, codec, isForced, isHearingImpaired, fileName,
-                )
-                override suspend fun loadAll(itemId: String): List<SavedSubtitle> = emptyList()
-                override suspend fun fileFor(itemId: String, saved: SavedSubtitle): java.io.File =
-                    java.io.File(saved.fileRelativePath)
-                override suspend fun delete(itemId: String, saved: SavedSubtitle) = Unit
-                override suspend fun markServerStreamIndex(itemId: String, saved: SavedSubtitle, index: Int) = Unit
-                override suspend fun clear(itemId: String) = Unit
+            object : EditorSubtitleStore {
+                override suspend fun save(save: ProviderSubtitleSave) = Unit
+                override suspend fun attributeUploaded(
+                    save: ProviderSubtitleSave,
+                    streamsAfterUpload: List<MediaStream>,
+                    preUploadExternalIndices: Set<Int>,
+                ) = Unit
+                override suspend fun purgeDeletedServerStreamCopies(itemId: String, index: Int, deletedStream: MediaStream?) = Unit
             },
         )
     }

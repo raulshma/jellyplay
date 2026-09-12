@@ -4,7 +4,6 @@ import androidx.compose.runtime.getValue
 import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
-import com.raulshma.jellyplay.core.data.download.MediaDownloadActions
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.SearchHistoryItem
@@ -51,7 +50,7 @@ import com.raulshma.jellyplay.core.data.util.loadListWithRetry
 private const val OFFLINE_SEARCH_RESULT_LIMIT: Int = 10
 
 @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
-class SearchViewModel(
+internal class SearchViewModel(
     private val mediaRepository: MediaRepository,
     private val userDataMutator: com.raulshma.jellyplay.core.data.repository.UserDataMutator,
     private val imageUrlProvider: ImageUrlProvider,
@@ -60,7 +59,7 @@ class SearchViewModel(
     private val mediaSearchEngine: MediaSearchEngine,
     private val offlineRepository: OfflineRepository,
     private val searchFiltersStore: com.raulshma.jellyplay.core.datastore.search.SearchFiltersStore,
-    private val mediaDownloadActions: MediaDownloadActions,
+    private val quickDownloadActions: QuickDownloadActions,
 ) : JellyPlayViewModel() {
 
     private val _query = composeState("")
@@ -374,8 +373,12 @@ class SearchViewModel(
         }
     }
 
-    /** Ids whose quick actions flip to "Remove download" — see [MediaDownloadActions.downloadedIds]. */
-    val downloadedIds = mediaDownloadActions.downloadedIds
+    /** Ids whose quick actions flip to "Remove download" — see [QuickDownloadActions.downloadedIds]. */
+    // Whether this platform has a download pipeline — screens gate the
+    // download CTA on it (hidden rather than Failed-toasting on web).
+    val downloadSupported = quickDownloadActions.isSupported
+
+    val downloadedIds = quickDownloadActions.downloadedIds
 
     /**
      * Long-press Download from a search result card (#147): inline start for
@@ -384,12 +387,12 @@ class SearchViewModel(
      * sheet (unlike the library grid).
      */
     fun downloadItem(item: MediaItem, onOpenDetail: (itemId: String) -> Unit) {
-        launch { mediaDownloadActions.downloadAndReport(item, onOpenDetail) }
+        launch { quickDownloadActions.downloadAndReport(item, onOpenDetail) }
     }
 
     /** Long-press Remove download — deletes the local copy only. */
     fun removeItemDownload(item: MediaItem) {
-        mediaDownloadActions.removeDownload(item)
+        quickDownloadActions.removeDownload(item)
     }
 
     fun getSeerrPosterUrl(posterPath: String?): String? =

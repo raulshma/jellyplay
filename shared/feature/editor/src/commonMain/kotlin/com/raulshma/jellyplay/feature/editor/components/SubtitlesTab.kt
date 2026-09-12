@@ -59,6 +59,9 @@ import com.raulshma.jellyplay.core.ui.model.localizedDisplayName
 import com.raulshma.jellyplay.feature.editor.EditorPickedFile
 import com.raulshma.jellyplay.feature.editor.EditorUiState
 import com.raulshma.jellyplay.feature.editor.EditorViewModel
+import com.raulshma.jellyplay.feature.editor.formatIntPattern
+import com.raulshma.jellyplay.feature.editor.formatOneDecimal
+import com.raulshma.jellyplay.feature.editor.formatStringPattern
 import com.raulshma.jellyplay.feature.editor.rememberSubtitleFilePicker
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
@@ -94,7 +97,7 @@ import com.raulshma.jellyplay.feature.editor.generated.resources.editor_subtitle
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun SubtitlesTab(
+internal fun SubtitlesTab(
     viewModel: EditorViewModel,
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -740,9 +743,9 @@ private fun RemoteSubtitleCard(
                 val info = buildString {
                     subtitle.providerName?.let { append(it) }
                     subtitle.format?.let { append(" • $it") }
-                    if (subtitle.downloadCount > 0) append(" • ${downloadsFormat.format(subtitle.downloadCount)}")
-                    if (subtitle.frameRate != null) append(" • ${frameRateFormat.format(subtitle.frameRate)}")
-                    if (subtitle.communityRating != null) append(" • ★ ${"%.1f".format(subtitle.communityRating)}")
+                    if (subtitle.downloadCount > 0) append(" • ${formatIntPattern(downloadsFormat, subtitle.downloadCount)}")
+                    if (subtitle.frameRate != null) append(" • ${formatStringPattern(frameRateFormat, subtitle.frameRate.toString())}")
+                    if (subtitle.communityRating != null) append(" • ★ ${formatOneDecimal(subtitle.communityRating!!.toDouble())}")
                 }
                 if (info.isNotBlank()) Text(info, style = MaterialTheme.typography.bodySmall)
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {

@@ -54,7 +54,7 @@ import com.raulshma.jellyplay.feature.library.generated.resources.library_failed
 import com.raulshma.jellyplay.feature.library.generated.resources.library_no_items_found
 
 @Composable
-fun StudioDetailScreen(
+internal fun StudioDetailScreen(
     studioName: String,
     onItemClick: (String) -> Unit,
     onBack: () -> Unit,
@@ -85,7 +85,7 @@ fun StudioDetailScreen(
     // ride the same intake as the library grid (#147).
     val quickActionIntake = rememberQuickActionIntake(
         scope = MediaQuickActionScope.LIBRARY,
-        includeDownload = true,
+        includeDownload = viewModel.downloadSupported,
         isDownloaded = remember(downloadedIds) {
             { item: MediaItem -> downloadedIds.contains(item.id) }
         },
@@ -128,7 +128,7 @@ fun StudioDetailScreen(
                 }
                 is LoadState.Error -> {
                     ErrorScreen(
-                        message = refreshState.error.localizedMessage
+                        message = refreshState.error.message
                             ?: stringResource(Res.string.library_failed_to_load_items),
                         onRetry = { items.refresh() },
                     )
@@ -189,7 +189,7 @@ fun StudioDetailScreen(
                 }
                 is LoadState.Error -> {
                     Text(
-                        text = appendState.error.localizedMessage
+                        text = appendState.error.message
                             ?: stringResource(Res.string.library_failed_to_load_more),
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodySmall,

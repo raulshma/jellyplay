@@ -110,7 +110,7 @@ fun NewsletterMediaCard(
                         .padding(horizontal = 5.dp, vertical = 2.dp),
                 ) {
                     Text(
-                        text = "\u2605 ${"%.1f".format(item.communityRating)}",
+                        text = "\u2605 ${formatOneDecimal(item.communityRating!!.toDouble())}",
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
                         color = RatingColors.star,
                     )

@@ -3,7 +3,6 @@ package com.raulshma.jellyplay.feature.library
 import androidx.lifecycle.SavedStateHandle
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
-import com.raulshma.jellyplay.core.data.download.MediaDownloadActions
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
@@ -15,12 +14,12 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flatMapLatest
 
-class StudioDetailViewModel(
+internal class StudioDetailViewModel(
     savedStateHandle: SavedStateHandle,
     private val mediaRepository: MediaRepository,
     private val userDataMutator: UserDataMutator,
     private val imageUrlProvider: ImageUrlProvider,
-    private val mediaDownloadActions: MediaDownloadActions,
+    private val quickDownloadActions: QuickDownloadActions,
 ) : JellyPlayViewModel() {
 
     private val studioId: String = savedStateHandle[Route.StudioDetail::studioId.name] ?: ""
@@ -63,8 +62,12 @@ class StudioDetailViewModel(
         }
     }
 
-    /** Ids whose quick actions flip to "Remove download" — see [MediaDownloadActions.downloadedIds]. */
-    val downloadedIds = mediaDownloadActions.downloadedIds
+    /** Ids whose quick actions flip to "Remove download" — see [QuickDownloadActions.downloadedIds]. */
+    // Whether this platform has a download pipeline — screens gate the
+    // download CTA on it (hidden rather than Failed-toasting on web).
+    val downloadSupported = quickDownloadActions.isSupported
+
+    val downloadedIds = quickDownloadActions.downloadedIds
 
     /**
      * Long-press Download from a studio card (#147): inline start for
@@ -73,11 +76,11 @@ class StudioDetailViewModel(
      * sheet (unlike the library grid).
      */
     fun downloadItem(item: MediaItem, onOpenDetail: (itemId: String) -> Unit) {
-        launch { mediaDownloadActions.downloadAndReport(item, onOpenDetail) }
+        launch { quickDownloadActions.downloadAndReport(item, onOpenDetail) }
     }
 
     /** Long-press Remove download — deletes the local copy only. */
     fun removeItemDownload(item: MediaItem) {
-        mediaDownloadActions.removeDownload(item)
+        quickDownloadActions.removeDownload(item)
     }
 }

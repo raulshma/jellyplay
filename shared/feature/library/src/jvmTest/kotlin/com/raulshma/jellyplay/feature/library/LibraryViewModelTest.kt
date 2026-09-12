@@ -60,7 +60,7 @@ class LibraryViewModelTest {
 
     private lateinit var mediaRepository: MediaRepository
     private lateinit var offlineRepository: com.raulshma.jellyplay.core.data.repository.OfflineRepository
-    private lateinit var mediaDownloadActions: com.raulshma.jellyplay.core.data.download.MediaDownloadActions
+    private lateinit var quickDownloadActions: com.raulshma.jellyplay.feature.library.QuickDownloadActions
     private lateinit var offlineModeManager: com.raulshma.jellyplay.core.data.offline.OfflineModeManager
     private lateinit var userDataMutator: UserDataMutator
     private lateinit var imageUrlProvider: ImageUrlProvider
@@ -83,7 +83,7 @@ class LibraryViewModelTest {
         Dispatchers.setMain(mainDispatcher)
         mediaRepository = mockk(relaxed = true)
         offlineRepository = mockk(relaxed = true)
-        mediaDownloadActions = mockk(relaxed = true)
+        quickDownloadActions = mockk(relaxed = true)
         offlineModeManager = mockk(relaxed = true)
         userDataMutator = mockk(relaxed = true)
         imageUrlProvider = mockk(relaxed = true)
@@ -94,7 +94,7 @@ class LibraryViewModelTest {
         every { libraryStore.library } returns MutableStateFlow(LibrarySlice())
         every { offlineModeManager.offlineMode } returns offlineModeFlow
         // The VM re-exposes this for quick-action download gating.
-        every { mediaDownloadActions.downloadedIds } returns MutableStateFlow(emptySet())
+        every { quickDownloadActions.downloadedIds } returns MutableStateFlow(emptySet())
 
         // Stub the init-block repository calls with real Result/Flow values so
         // the relaxed mock's default Result mock doesn't ClassCast inside the
@@ -124,7 +124,7 @@ class LibraryViewModelTest {
     ): LibraryViewModel = LibraryViewModel(
         mediaRepository = mediaRepository,
         offlineRepository = offlineRepository,
-        mediaDownloadActions = mediaDownloadActions,
+        quickDownloadActions = quickDownloadActions,
         offlineModeManager = offlineModeManager,
         userMessageBus = userMessageBus,
         userDataMutator = userDataMutator,
@@ -636,7 +636,7 @@ class LibraryViewModelTest {
     @Test
     fun `downloadItem with Started posts the started info message and never routes`() = runTest {
         val item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE)
-        coEvery { mediaDownloadActions.download(item) } returns DownloadRequestResult.Started
+        coEvery { quickDownloadActions.download(item) } returns DownloadRequestResult.Started
         val bus = com.raulshma.jellyplay.core.ui.message.UserMessageBus()
         val received = collectBus(bus)
         val vm = createViewModel(userMessageBus = bus)
@@ -659,7 +659,7 @@ class LibraryViewModelTest {
     @Test
     fun `downloadItem for a series routes to the detail screen with the sheet pre-presented`() = runTest {
         val series = MediaItem(id = "s1", name = "Show", mediaType = MediaType.SERIES)
-        coEvery { mediaDownloadActions.download(series) } returns
+        coEvery { quickDownloadActions.download(series) } returns
             DownloadRequestResult.SeriesSelectionRequired(seriesId = "s1")
         val vm = createViewModel()
 
@@ -673,7 +673,7 @@ class LibraryViewModelTest {
     @Test
     fun `downloadItem needing the detail screen routes plainly without the sheet`() = runTest {
         val album = MediaItem(id = "al-1", name = "Album", mediaType = MediaType.MUSIC)
-        coEvery { mediaDownloadActions.download(album) } returns
+        coEvery { quickDownloadActions.download(album) } returns
             DownloadRequestResult.NeedsDetailScreen(itemId = "al-1")
         val vm = createViewModel()
 
@@ -687,7 +687,7 @@ class LibraryViewModelTest {
     @Test
     fun `downloadItem failure posts the failed error message and never routes`() = runTest {
         val item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE)
-        coEvery { mediaDownloadActions.download(item) } returns
+        coEvery { quickDownloadActions.download(item) } returns
             DownloadRequestResult.Failed(message = "no space")
         val bus = com.raulshma.jellyplay.core.ui.message.UserMessageBus()
         val received = collectBus(bus)
@@ -709,7 +709,7 @@ class LibraryViewModelTest {
 
         vm.removeItemDownload(item)
 
-        verify(exactly = 1) { mediaDownloadActions.removeDownload(item) }
+        verify(exactly = 1) { quickDownloadActions.removeDownload(item) }
     }
 
     // ── Reset-all confirmation dialog ────────────────────────────────────────

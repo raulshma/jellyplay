@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.feature.search
 
-import com.raulshma.jellyplay.core.data.download.MediaDownloadActions
+import com.raulshma.jellyplay.feature.search.QuickDownloadActions
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
@@ -53,9 +53,9 @@ import kotlin.test.assertEquals
  * 4. Quick actions delegate: [SearchViewModel.markItemPlayed] →
  *    [UserDataMutator.setPlayed] (silent-mode default — containers untouched),
  *    [SearchViewModel.downloadItem] →
- *    [MediaDownloadActions.downloadAndReport] with the host's open-detail
+ *    [QuickDownloadActions.downloadAndReport] with the host's open-detail
  *    callback, [SearchViewModel.removeItemDownload] →
- *    [MediaDownloadActions.removeDownload], and the `downloadedIds` exposure
+ *    [QuickDownloadActions.removeDownload], and the `downloadedIds` exposure
  *    is the actions' own flow.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -73,7 +73,7 @@ class SearchViewModelFilterPersistenceTest {
     private lateinit var mediaSearchEngine: MediaSearchEngine
     private lateinit var offlineRepository: OfflineRepository
     private lateinit var searchFiltersStore: SearchFiltersStore
-    private lateinit var mediaDownloadActions: MediaDownloadActions
+    private lateinit var quickDownloadActions: QuickDownloadActions
 
     /** Backs [SearchFiltersStore.searchFiltersJson]; reseated per test. */
     private val persistedJson = MutableStateFlow<String?>(null)
@@ -92,13 +92,13 @@ class SearchViewModelFilterPersistenceTest {
         mediaSearchEngine = mockk(relaxed = true)
         offlineRepository = mockk(relaxed = true)
         searchFiltersStore = mockk(relaxed = true)
-        mediaDownloadActions = mockk(relaxed = true)
+        quickDownloadActions = mockk(relaxed = true)
 
         every { mediaSearchEngine.debounceMs } returns 300L
         every { mediaSearchEngine.recentHistory() } returns flowOf(emptyList())
         coEvery { mediaSearchEngine.isSeerrSearchAvailable() } returns false
         every { searchFiltersStore.searchFiltersJson } returns persistedJson
-        every { mediaDownloadActions.downloadedIds } returns downloadedIds
+        every { quickDownloadActions.downloadedIds } returns downloadedIds
         every { seerrRepository.getPreferences() } returns flowOf(SeerrPreferences())
         coEvery { mediaRepository.getGenres(any()) } returns Result.success(emptyList())
         coEvery { mediaRepository.getTags(any(), any(), any()) } returns Result.success(emptyList())
@@ -124,7 +124,7 @@ class SearchViewModelFilterPersistenceTest {
         mediaSearchEngine,
         offlineRepository,
         searchFiltersStore,
-        mediaDownloadActions,
+        quickDownloadActions,
     )
 
     // ── Persisted-filter restoration ─────────────────────────────────────
@@ -266,14 +266,14 @@ class SearchViewModelFilterPersistenceTest {
             id = "series-9", name = "Show", mediaType = MediaType.SERIES,
         )
         var routedTo: String? = null
-        coEvery { mediaDownloadActions.downloadAndReport(any(), any()) } coAnswers {
+        coEvery { quickDownloadActions.downloadAndReport(any(), any()) } coAnswers {
             secondArg<(String) -> Unit>().invoke("series-9")
         }
 
         viewModel.downloadItem(item) { routedTo = it }
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { mediaDownloadActions.downloadAndReport(item, any()) }
+        coVerify(exactly = 1) { quickDownloadActions.downloadAndReport(item, any()) }
         assertEquals("series-9", routedTo)
     }
 
@@ -285,7 +285,7 @@ class SearchViewModelFilterPersistenceTest {
 
         viewModel.removeItemDownload(item)
 
-        io.mockk.verify(exactly = 1) { mediaDownloadActions.removeDownload(item) }
+        io.mockk.verify(exactly = 1) { quickDownloadActions.removeDownload(item) }
     }
 
     @Test

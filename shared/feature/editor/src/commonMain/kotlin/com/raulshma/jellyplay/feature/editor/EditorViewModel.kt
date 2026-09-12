@@ -15,7 +15,6 @@ import com.raulshma.jellyplay.core.data.repository.SubtitleProviderRepository
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderIds
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleSearchResult
-import com.raulshma.jellyplay.core.model.subtitle.externalSubtitleIndices
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -23,7 +22,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
-import java.util.Base64
+import kotlin.io.encoding.Base64
+import kotlin.io.encoding.ExperimentalEncodingApi
 
 @Immutable
 data class EditorUiState(
@@ -55,11 +55,11 @@ data class EditorUiState(
     val isDirty: Boolean get() = metadata.isDirty
 }
 
-class EditorViewModel(
+internal class EditorViewModel(
     private val editorRepository: MetadataEditorRepository,
     authRepository: AuthRepository,
     private val subtitleProviderRepository: SubtitleProviderRepository,
-    private val streamingSubtitleStore: com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStore,
+    private val subtitleStore: EditorSubtitleStore,
 ) : JellyPlayViewModel() {
 
     private val _uiState = stateFlow(EditorUiState())
@@ -211,7 +211,7 @@ class EditorViewModel(
     fun uploadSubtitle(fileBytes: ByteArray, fileName: String, language: String?, isForced: Boolean, isHearingImpaired: Boolean) {
         launch {
             val itemId = _uiState.value.mediaDetail?.item?.id ?: return@launch
-            val base64Data = Base64.getEncoder().encodeToString(fileBytes)
+            val base64Data = Base64.Default.encode(fileBytes)
             editorRepository.uploadSubtitle(itemId, base64Data, fileName, language, isForced, isHearingImpaired)
                 .onSuccess { loadEditorData(itemId) }
                 .onFailure { e -> _uiState.update { it.copy(error = e.message) } }
@@ -249,7 +249,7 @@ class EditorViewModel(
             val deletedStream = currentSubtitleStreams().firstOrNull { it.index == index }
             editorRepository.deleteSubtitle(itemId, index)
                 .onSuccess {
-                    streamingSubtitleStore.purgeDeletedServerStreamCopies(itemId, index, deletedStream)
+                    subtitleStore.purgeDeletedServerStreamCopies(itemId, index, deletedStream)
                     loadEditorData(itemId)
                 }
                 .onFailure { e -> _uiState.update { it.copy(error = e.message) } }
@@ -350,7 +350,7 @@ class EditorViewModel(
                         // even if the server upload fails (e.g. offline). Mirrors
                         // the player's SubtitleManager provider-download path.
                         val codec = file.format
-                        val saved = streamingSubtitleStore.save(
+                        val saved = ProviderSubtitleSave(
                             itemId = itemId,
                             provider = result.provider,
                             providerSubtitleId = result.id,
@@ -361,8 +361,11 @@ class EditorViewModel(
                             isHearingImpaired = result.isHearingImpaired,
                             bytes = file.bytes,
                         )
-                        val base64 = Base64.getEncoder().encodeToString(file.bytes)
-                        val preUploadExternalIndices = currentSubtitleStreams().externalSubtitleIndices()
+                        subtitleStore.save(saved)
+                        val base64 = Base64.Default.encode(file.bytes)
+                        val preUploadExternalIndices = currentSubtitleStreams()
+                            .filter { it.type == StreamType.SUBTITLE && it.isExternal }
+                            .mapTo(mutableSetOf()) { it.index }
                         editorRepository.uploadSubtitle(
                             itemId,
                             base64,
@@ -372,9 +375,8 @@ class EditorViewModel(
                             result.isHearingImpaired,
                         ).onSuccess {
                             loadEditorData(itemId)
-                            streamingSubtitleStore.attributeUploadedSubtitle(
-                                itemId = itemId,
-                                saved = saved,
+                            subtitleStore.attributeUploaded(
+                                save = saved,
                                 streamsAfterUpload = currentSubtitleStreams(),
                                 preUploadExternalIndices = preUploadExternalIndices,
                             )

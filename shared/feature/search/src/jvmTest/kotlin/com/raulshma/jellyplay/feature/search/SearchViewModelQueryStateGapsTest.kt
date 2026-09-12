@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.feature.search
 
-import com.raulshma.jellyplay.core.data.download.MediaDownloadActions
+import com.raulshma.jellyplay.feature.search.QuickDownloadActions
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
@@ -72,7 +72,7 @@ class SearchViewModelQueryStateGapsTest {
     private val mediaSearchEngine: MediaSearchEngine = mockk(relaxed = true)
     private val offlineRepository: OfflineRepository = mockk(relaxed = true)
     private val searchFiltersStore: SearchFiltersStore = mockk(relaxed = true)
-    private val mediaDownloadActions: MediaDownloadActions = mockk(relaxed = true)
+    private val quickDownloadActions: QuickDownloadActions = mockk(relaxed = true)
 
     private lateinit var viewModel: SearchViewModel
 
@@ -110,7 +110,7 @@ class SearchViewModelQueryStateGapsTest {
         mediaSearchEngine,
         offlineRepository,
         searchFiltersStore,
-        mediaDownloadActions,
+        quickDownloadActions,
     )
 
     @Test

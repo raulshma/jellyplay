@@ -202,7 +202,7 @@ import kotlinx.coroutines.launch
     androidx.compose.ui.ExperimentalComposeUiApi::class,
 )
 @Composable
-fun LibraryScreen(
+internal fun LibraryScreen(
     onItemClick: (itemId: String, mediaType: MediaType, parentId: String?, itemName: String) -> Unit,
     onSmartPlaylistsClick: () -> Unit = {},
     onMoodPlaylistsClick: () -> Unit = {},
@@ -363,7 +363,7 @@ fun LibraryScreen(
     // only its routing adapter over the shared effect fold.
     val quickActionIntake = rememberQuickActionIntake(
         scope = MediaQuickActionScope.LIBRARY,
-        includeDownload = true,
+        includeDownload = viewModel.downloadSupported,
         includeAddToPlaylist = true,
         // Downloaded items flip the download slot to "Remove download"
         // instead of offering both.
@@ -804,7 +804,7 @@ fun LibraryScreen(
                         pagedItems.loadState.refresh is LoadState.Error -> {
                             val refreshError = pagedItems.loadState.refresh as LoadState.Error
                             ErrorScreen(
-                                message = refreshError.error.localizedMessage
+                                message = refreshError.error.message
                                     ?: stringResource(Res.string.library_failed_to_load_items),
                                 onRetry = { pagedItems.refresh() },
                                 modifier = Modifier.fillMaxSize(),
@@ -1315,7 +1315,7 @@ fun LibraryScreen(
                     if (pagedItems.loadState.append is LoadState.Error) {
                         val appendError = pagedItems.loadState.append as LoadState.Error
                         AppendErrorFooter(
-                            message = appendError.error.localizedMessage
+                            message = appendError.error.message
                                 ?: stringResource(Res.string.library_failed_to_load_more_items),
                             onRetry = { pagedItems.retry() },
                             modifier = Modifier

@@ -13,9 +13,12 @@ import org.koin.dsl.module
  * legacy data shim (MediaRepository, UserDataMutator, MediaSearchEngine,
  * pending the DownloadRepository flip) reach Koin through the app
  * composition root's Hilt interop module; the rest resolve from the C4
- * shared-module graph.
+ * shared-module graph. The wasmJs target moved the MediaDownloadActions
+ * ctor dep behind the QuickDownloadActions seam; its per-platform binding
+ * rides the platformSearchModule() fragment included below.
  */
 val searchModule: Module = module {
+    includes(platformSearchModule())
     viewModel {
         SearchViewModel(
             mediaRepository = get(),
@@ -26,7 +29,7 @@ val searchModule: Module = module {
             mediaSearchEngine = get(),
             offlineRepository = get(),
             searchFiltersStore = get(),
-            mediaDownloadActions = get(),
+            quickDownloadActions = get(),
         )
     }
 }

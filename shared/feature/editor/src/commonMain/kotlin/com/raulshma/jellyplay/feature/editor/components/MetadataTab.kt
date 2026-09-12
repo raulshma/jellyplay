@@ -140,7 +140,7 @@ import com.raulshma.jellyplay.feature.editor.generated.resources.editor_status_u
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
-fun MetadataTab(
+internal fun MetadataTab(
     viewModel: EditorViewModel,
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -841,7 +841,7 @@ private fun PersonEditorDialog(
                 onClick = {
                     onConfirm(
                         com.raulshma.jellyplay.core.model.EditorPerson(
-                            id = person.id.ifBlank { java.util.UUID.randomUUID().toString() },
+                            id = person.id.ifBlank { @OptIn(kotlin.uuid.ExperimentalUuidApi::class) kotlin.uuid.Uuid.random().toString() },
                             name = name,
                             role = role.ifBlank { null },
                             type = type,

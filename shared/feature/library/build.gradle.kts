@@ -27,10 +27,20 @@ kotlin {
         }
     }
 
-    // No wasmJs target: not in the web v1 slice (requests/calendar/details),
-    // and its ViewModels bind core:data seams (MediaRepository,
-    // UserDataMutator) that resolve only from the android+jvm DI graph
-    // (impls jvmShared; the web stack registers no bindings).
+    // web breadth: the target compiles — the repository seams the
+    // ViewModels bind (MediaRepository, UserDataMutator) are commonMain since
+    //, and the one jvmShared type they consumed (MediaDownloadActions)
+    // moved behind the commonMain QuickDownloadActions seam (no-op actions on
+    // web; its per-platform Koin binding rides the platformLibraryModule()
+    // fragment). The karma/Chrome browser run stays off like
+    // core:ui/core:network/requests — jvmTest pins the semantics.
+    wasmJs {
+        browser {
+            testTask {
+                enabled = false
+            }
+        }
+    }
     jvm {
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_17)
@@ -40,6 +50,15 @@ kotlin {
     applyDefaultHierarchyTemplate()
 
     sourceSets {
+        // The jvmShared actual for the seams (QuickDownloadActions wrapper
+        // over core:data's jvmShared MediaDownloadActions single), shared
+        // verbatim by android + desktop like the newsletter/requests
+        // jvmShared source sets.
+        val jvmShared = create("jvmShared")
+        jvmShared.dependsOn(getByName("commonMain"))
+        getByName("androidMain") { dependsOn(jvmShared) }
+        getByName("jvmMain") { dependsOn(jvmShared) }
+
         getByName("commonMain").dependencies {
             implementation(project(":shared:core:model"))
             implementation(project(":shared:core:concurrency"))
@@ -106,3 +125,22 @@ kotlin {
 // generated accessors land in `...feature.library.generated.resources`.
 val composeResources = (compose as ExtensionAware).extensions.getByName("resources") as org.jetbrains.compose.resources.ResourcesExtension
 composeResources.packageOfResClass = "com.raulshma.jellyplay.feature.library.generated.resources"
+
+// google's androidx.navigation3:navigation3-ui publishes no web artifacts at
+// all (android AAR + jvm/linux stubs only), so every wasmJs configuration of
+// this module fails dependency resolution unless it points at JetBrains'
+// fork of the same release line — same package, ABI-stable surface. Scoped
+// to wasmJs-named configurations so android/jvm graphs keep resolving
+// google's published variants exactly as before ( S1/R2; the
+// identical block lives in shared/core/ui, shared/feature/requests and the
+// other web modules).
+configurations.configureEach {
+    if (name.lowercase().contains("wasmjs")) {
+        resolutionStrategy.dependencySubstitution {
+            substitute(module("androidx.navigation3:navigation3-ui"))
+                .using(module(libs.jb.navigation3.ui.get().toString()))
+                .because("google navigation3-ui has no web artifacts; JB fork publishes the wasm klib")
+        }
+    }
+}
+

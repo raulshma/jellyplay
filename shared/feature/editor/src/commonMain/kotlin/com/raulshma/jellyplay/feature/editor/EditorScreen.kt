@@ -70,7 +70,7 @@ import org.koin.compose.viewmodel.koinViewModel
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun EditorScreen(
+internal fun EditorScreen(
     itemId: String,
     onBack: () -> Unit,
     viewModel: EditorViewModel = koinViewModel(),

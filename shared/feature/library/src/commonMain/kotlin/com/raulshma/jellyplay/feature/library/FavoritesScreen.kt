@@ -75,7 +75,7 @@ import com.raulshma.jellyplay.feature.library.generated.resources.library_no_fav
 import com.raulshma.jellyplay.feature.library.generated.resources.library_no_favorites_description
 
 @Composable
-fun FavoritesScreen(
+internal fun FavoritesScreen(
     onItemClick: (itemId: String, mediaType: MediaType, parentId: String?, itemName: String) -> Unit,
     onBack: () -> Unit,
     viewModel: FavoritesViewModel = koinViewModel(),
@@ -107,7 +107,7 @@ fun FavoritesScreen(
     // flips the slot to "Remove download".
     val quickActionIntake = rememberQuickActionIntake(
         scope = MediaQuickActionScope.LIBRARY,
-        includeDownload = true,
+        includeDownload = viewModel.downloadSupported,
         isDownloaded = remember(downloadedIds) {
             { item: MediaItem -> downloadedIds.contains(item.id) }
         },

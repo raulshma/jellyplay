@@ -19,7 +19,10 @@ internal object EpubReaderHtml {
 
     private fun marker(of: String) = "<!--JELLYPLAY-INJECT:$of-->"
 
-    suspend fun build(): String = withContext(Dispatchers.IO) {
+    // Dispatchers.Default, not IO ( wasmJs: IO has no wasm dispatcher) —
+    // this is CPU-bound in-memory string work over already-read bytes, which
+    // is what the Default pool is for.
+    suspend fun build(): String = withContext(Dispatchers.Default) {
         val template = Res.readBytes(HTML_RESOURCE).decodeToString()
         template
             .replace(marker("jszip"), script(JSZIP_RESOURCE))

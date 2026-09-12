@@ -1,5 +1,7 @@
 package com.raulshma.jellyplay.feature.editor
 
+import com.raulshma.jellyplay.core.model.MediaStream
+
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.SubtitleProviderRepository
 import com.raulshma.jellyplay.core.model.MediaDetail
@@ -62,31 +64,16 @@ class EditorViewModelUploadTest {
             editorRepository,
             authRepository,
             subtitleProviderRepository,
-            // No-op streaming subtitle store — upload tests don't exercise the
+            // No-op subtitle store seam — upload tests don't exercise the
             // durable subtitle path. Mirrors the player's TestStreamingSubtitleStore.
-            object : com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStore {
-                override suspend fun save(
-                    itemId: String,
-                    provider: com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind,
-                    providerSubtitleId: String,
-                    fileName: String,
-                    language: String?,
-                    codec: String?,
-                    isForced: Boolean,
-                    isHearingImpaired: Boolean,
-                    bytes: ByteArray,
-                ) = com.raulshma.jellyplay.core.model.subtitle.SavedSubtitle(
-                    provider, providerSubtitleId, fileName, language, codec, isForced, isHearingImpaired, fileName,
-                )
-                override suspend fun loadAll(itemId: String) = emptyList<com.raulshma.jellyplay.core.model.subtitle.SavedSubtitle>()
-                override suspend fun fileFor(itemId: String, saved: com.raulshma.jellyplay.core.model.subtitle.SavedSubtitle) = java.io.File(saved.fileRelativePath)
-                override suspend fun delete(itemId: String, saved: com.raulshma.jellyplay.core.model.subtitle.SavedSubtitle) = Unit
-                override suspend fun markServerStreamIndex(
-                    itemId: String,
-                    saved: com.raulshma.jellyplay.core.model.subtitle.SavedSubtitle,
-                    index: Int,
+            object : EditorSubtitleStore {
+                override suspend fun save(save: ProviderSubtitleSave) = Unit
+                override suspend fun attributeUploaded(
+                    save: ProviderSubtitleSave,
+                    streamsAfterUpload: List<MediaStream>,
+                    preUploadExternalIndices: Set<Int>,
                 ) = Unit
-                override suspend fun clear(itemId: String) = Unit
+                override suspend fun purgeDeletedServerStreamCopies(itemId: String, index: Int, deletedStream: MediaStream?) = Unit
             },
         )
     }

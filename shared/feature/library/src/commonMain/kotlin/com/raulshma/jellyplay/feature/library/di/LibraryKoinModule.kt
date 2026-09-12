@@ -30,11 +30,12 @@ import org.koin.dsl.module
  * same extras source the Hilt factory consumed at HEAD).
  */
 val libraryModule: Module = module {
+    includes(platformLibraryModule())
     viewModel {
         LibraryViewModel(
             mediaRepository = get(),
             offlineRepository = get(),
-            mediaDownloadActions = get(),
+            quickDownloadActions = get(),
             offlineModeManager = get(),
             userMessageBus = get(),
             userDataMutator = get(),
@@ -48,7 +49,7 @@ val libraryModule: Module = module {
             mediaRepository = get(),
             userDataMutator = get(),
             imageUrlProvider = get(),
-            mediaDownloadActions = get(),
+            quickDownloadActions = get(),
         )
     }
     viewModel {
@@ -63,7 +64,7 @@ val libraryModule: Module = module {
             mediaRepository = get(),
             userDataMutator = get(),
             imageUrlProvider = get(),
-            mediaDownloadActions = get(),
+            quickDownloadActions = get(),
         )
     }
     viewModel {

@@ -130,7 +130,7 @@ private fun imageTypeLabelRes(type: String): StringResource = when (type) {
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun ImagesTab(
+internal fun ImagesTab(
     viewModel: EditorViewModel,
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()

@@ -681,7 +681,9 @@ private fun PhotoImage(
                     } while (changes.any { it.pressed })
 
                     if (!pastSlop && !isMultiTouch) {
-                        val now = System.currentTimeMillis()
+                        // wasmJs rewrite of System.currentTimeMillis() — the same epoch
+                        // millis off Clock.System; the double-tap window math is unchanged.
+                        val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
                         if (now - lastTapTime < 300) {
                             onDoubleTap(gestureScale)
                             lastTapTime = 0L
@@ -691,7 +693,7 @@ private fun PhotoImage(
                         }
                     } else if (!isMultiTouch && pastSlop && gestureScale <= 1f) {
                         val swipeThreshold = 150f // pixels
-                        if (Math.abs(dragDeltaX) > swipeThreshold && Math.abs(dragDeltaX) > Math.abs(dragDeltaY)) {
+                        if (kotlin.math.abs(dragDeltaX) > swipeThreshold && kotlin.math.abs(dragDeltaX) > kotlin.math.abs(dragDeltaY)) {
                             if (dragDeltaX > 0) {
                                 // Swipe right -> previous photo
                                 if (viewModel.hasPrevious()) {
