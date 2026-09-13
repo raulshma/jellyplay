@@ -17,7 +17,8 @@ import androidx.compose.ui.unit.dp
 
 /**
  * A long [text] capped at [collapsedMaxLines] lines with a "Read more"/"Show less"
- * toggle. Extracted so detail screens (MediaDetailBody, PersonDetailScreen) share
+ * toggle, shown only when the collapsed text actually overflows. Extracted so
+ * detail screens (MediaDetailBody, PersonDetailScreen) share
  * one implementation instead of repeating the expand toggle inline.
  *
  * @param text              the body content.
@@ -37,7 +38,11 @@ fun ExpandableText(
     toggleColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.primary,
     contentPadding: androidx.compose.foundation.layout.PaddingValues = androidx.compose.foundation.layout.PaddingValues(0.dp),
 ) {
-    var expanded by remember { mutableStateOf(false) }
+    var expanded by remember(text) { mutableStateOf(false) }
+    // Whether the collapsed layout actually clips the text. Decided from the
+    // collapsed pass's text layout; frozen while expanded (an expanded text
+    // always fits, so live updates would hide the "Show less" toggle).
+    var collapsedOverflows by remember(text) { mutableStateOf(false) }
     Column(modifier = modifier.padding(contentPadding)) {
         Text(
             text = text,
@@ -45,15 +50,20 @@ fun ExpandableText(
             color = color,
             maxLines = if (expanded) Int.MAX_VALUE else collapsedMaxLines,
             overflow = TextOverflow.Ellipsis,
+            onTextLayout = { result ->
+                if (!expanded) collapsedOverflows = result.hasVisualOverflow
+            },
         )
-        Text(
-            text = if (expanded) "Show less" else "Read more",
-            style = MaterialTheme.typography.labelMedium,
-            color = toggleColor,
-            modifier = Modifier
-                .focusIndicator()
-                .clickable { expanded = !expanded }
-                .padding(top = 4.dp),
-        )
+        if (collapsedOverflows || expanded) {
+            Text(
+                text = if (expanded) "Show less" else "Read more",
+                style = MaterialTheme.typography.labelMedium,
+                color = toggleColor,
+                modifier = Modifier
+                    .focusIndicator()
+                    .clickable { expanded = !expanded }
+                    .padding(top = 4.dp),
+            )
+        }
     }
 }

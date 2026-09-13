@@ -78,6 +78,7 @@ import com.raulshma.jellyplay.core.ui.components.EpisodeWatchedTag
 import com.raulshma.jellyplay.core.ui.components.ExpandableText
 import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.components.SeerrMediaCard
+import com.raulshma.jellyplay.core.ui.components.formatRuntimeLabelFromTicks
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableItemRow
@@ -362,10 +363,9 @@ internal fun DetailContentBody(
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                             )
                         }
-                        item.runTimeTicks?.let { ticks ->
-                            val minutes = ticks / 600_000_000
+                        formatRuntimeLabelFromTicks(item.runTimeTicks)?.let { runtime ->
                             Text(
-                                text = "${minutes}m",
+                                text = runtime,
                                 style = MaterialTheme.typography.titleMedium,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                             )

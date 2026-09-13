@@ -462,7 +462,7 @@ fun PosterCard(
                     }
                 val totalTime = remember(hasValidDuration, hasWatchProgress, item.runTimeTicks) {
                     if (hasValidDuration && !hasWatchProgress) {
-                        formatDurationFromTicks(item.runTimeTicks!!)
+                        formatRuntimeLabelFromTicks(item.runTimeTicks)
                     } else null
                 }
 

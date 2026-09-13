@@ -19,6 +19,16 @@ fun formatDurationFromTicks(ticks: Long): String {
     }
 }
 
+/**
+ * Runtime label for card/hero/detail meta rows, or null when the item has no
+ * meaningful runtime. Books and other non-playback items carry a null or
+ * sub-minute RunTimeTicks, which rendered as a spurious "0m" — anything below
+ * one full minute is treated as "no runtime" here. One shared threshold so
+ * every meta row agrees.
+ */
+fun formatRuntimeLabelFromTicks(ticks: Long?): String? =
+    ticks?.takeIf { it >= TICKS_PER_MINUTE }?.let(::formatDurationFromTicks)
+
 fun formatRemainingTimeFromTicks(runTimeTicks: Long, playbackPositionTicks: Long): String? {
     if (runTimeTicks <= 0) return null
 
