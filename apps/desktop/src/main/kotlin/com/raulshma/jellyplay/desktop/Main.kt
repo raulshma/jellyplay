@@ -86,6 +86,7 @@ import com.raulshma.jellyplay.feature.book.di.playerBookModule
 import com.raulshma.jellyplay.feature.onboarding.di.onboardingModule
 
 import com.raulshma.jellyplay.core.ui.di.coreUiMessageModule
+import com.raulshma.jellyplay.desktop.update.desktopAppUpdateModule
 import com.raulshma.jellyplay.feature.home.di.homeModule
 import com.raulshma.jellyplay.feature.arrqueue.di.arrqueueModule
 import com.raulshma.jellyplay.feature.auth.di.authModule
@@ -155,6 +156,14 @@ fun main() {
     startupPerf.scheduleMeasurementHooksIfRequested()
 
     val koinApp = startKoin {
+        // Koin 4 dropped the per-definition override flag; the global switch
+        // exists for exactly ONE deliberate replacement — the
+        // desktopAppUpdateModule at the END of this list REPLACES
+        // desktopDataModule's sentinel-bound AppUpdateRepository single with
+        // the real-version desktop auto-update actual
+        // (docs/adr/desktop-auto-update.md). Loaded last so it wins; the
+        // KoinModuleRegistrationGuardTest ratchets every other registration.
+        allowOverride(true)
         modules(
             datastoreCommonModule,
             desktopDatastoreModule(paths.dataDir),
@@ -369,6 +378,19 @@ fun main() {
             // audioPlayerSection and music track clicks navigate to
             // Route.AudioPlayer for real.
             playerAudioModule,
+
+            // ── Desktop auto-update (ADR desktop-auto-update) ────────────
+            // DELIBERATE OVERRIDE (the only one; see allowOverride above):
+            // replaces desktopDataModule's sentinel-bound
+            // AppUpdateRepository (`999999.0.0` — isUpdateAvailable could
+            // never fire) with the real-version desktop actual. The
+            // installed version comes from the generated
+            // desktop-build.properties (channel=release only on CI release
+            // lanes); dev builds stay "up to date" by construction, and an
+            // available update opens the release page in the user's browser
+            // (DesktopAppRoot's About row) — never a silent install. Last in
+            // the list so the later definition wins the mapping.
+            desktopAppUpdateModule(paths.dataDirNio),
 
             // …player-book, conveyor: the CBZ/PDF reader ViewModel over
             // Route.BookReader (the details Read button + offline downloads

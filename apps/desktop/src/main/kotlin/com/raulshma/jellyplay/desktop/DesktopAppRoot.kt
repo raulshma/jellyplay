@@ -98,12 +98,16 @@ import com.raulshma.jellyplay.feature.shell.navigation.ShellSectionRegistry
 import com.raulshma.jellyplay.feature.shell.navigation.shellEntryProvider
 import com.raulshma.jellyplay.desktop.player.DesktopAudioQueueManager
 import com.raulshma.jellyplay.desktop.player.MpvSoftwareSurfaceSupport
+import com.raulshma.jellyplay.desktop.update.DesktopUpdateBrowser
+import com.raulshma.jellyplay.desktop.update.DesktopUpdateLinks
 import kotlin.reflect.KClass
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.serializer
 import kotlinx.serialization.modules.SerializersModule
@@ -400,21 +404,32 @@ private fun DesktopNavScaffold(
     // and title bar observe; flows are read at click time, not collected).
     val audioQueueManager: DesktopAudioQueueManager = koinInject()
 
-    // AppUpdate split: the About screen's "Check for updates" row —
+    // AppUpdate split + desktop auto-update (ADR
+    // desktop-auto-update): the About screen's "Check for updates" row —
     // this shell's OWN update surface. The check→message MAPPING is shared
     // (ShellSessionController.updateCheckMessage, ADR 0001's split); only the
-    // wording below is desktop's. Desktop has no self-update (the
-    // desktopDataModule version sentinel makes isUpdateAvailable permanently
-    // false, so selectAsset can never offer an Android APK), so a successful
-    // check always reads "up to date" — same wording as the Android update
-    // sheet. The row itself is pref-gated by selfUpdateCheckEnabled (default
-    // on). Android never uses the shared mapping: its UpdateCoordinator maps
-    // the same repository result into the full update-sheet state machine.
+    // wording + browser handoff below are desktop's. The repository binding
+    // was REPLACED by desktopAppUpdateModule (Main.kt) with the real-version
+    // actual: a packaged release-lane build reports genuine newer releases
+    // from the GitHub feed, a dev build stays "up to date" by construction.
+    // Per the ADR's option 2 an available update OPENS THE RELEASE PAGE in
+    // the user's browser (AWT Desktop.browse, off the event thread) — the
+    // user downloads and runs the installer themselves (Windows: the MSI's
+    // fixed upgradeUuid major-upgrades in place); there is never a silent
+    // download or install on desktop. When no browser is reachable the
+    // snackbar names the releases page instead. The row itself is pref-gated
+    // by selfUpdateCheckEnabled (default on).
     val appUpdateRepository: AppUpdateRepository = koinInject()
     val onCheckForUpdates: () -> Unit = {
         scope.launch {
-            val message = ShellSessionController.updateCheckMessage(appUpdateRepository.checkForUpdate())
-            snackbarHostState.showSnackbar(message.desktopUpdateText())
+            val result = appUpdateRepository.checkForUpdate()
+            val message = ShellSessionController.updateCheckMessage(result)
+            val opened = message is UpdateCheckMessage.UpdateAvailable &&
+                withContext(Dispatchers.IO) {
+                    DesktopUpdateLinks.pick(result.getOrNull())
+                        ?.let(DesktopUpdateBrowser::openOrNull) == true
+                }
+            snackbarHostState.showSnackbar(message.desktopUpdateText(opened))
         }
     }
 
@@ -720,15 +735,21 @@ private fun DesktopNavScaffold(
 /**
  * Desktop rendering of the shared [UpdateCheckMessage] — ADR 0001's split:
  * the check→message mapping lives in ShellSessionController (commonMain),
- * the WORDING is this shell's own surface. A successful check always reads
- * "up to date" in practice (the desktopDataModule version sentinel keeps
- * `isUpdateAvailable` permanently false — desktop has no self-update), but
- * the available branch is kept honest so a future desktop update story only
- * swaps the sentinel.
+ * the WORDING is this shell's own surface. The available branch is now LIVE
+ * (ADR desktop-auto-update: desktopAppUpdateModule replaced the sentinel, so
+ * a release-lane build can genuinely report a newer release) and pairs the
+ * version announcement with the browser-handoff outcome: [openedReleasePage]
+ * means AWT already opened the release page, otherwise the message points at
+ * the releases page the user can visit manually. Dev builds are suppressed
+ * repository-side and always read "up to date".
  */
-private fun UpdateCheckMessage.desktopUpdateText(): String = when (this) {
+private fun UpdateCheckMessage.desktopUpdateText(openedReleasePage: Boolean = false): String = when (this) {
     is UpdateCheckMessage.UpdateAvailable ->
-        "Version $latestVersion is available; self-update is not supported on desktop yet."
+        if (openedReleasePage) {
+            "Version $latestVersion is available — opening the release page in your browser."
+        } else {
+            "Version $latestVersion is available — get the installer from ${DesktopUpdateLinks.RELEASES_PAGE_URL}"
+        }
     UpdateCheckMessage.UpToDate -> "You're up to date"
     is UpdateCheckMessage.Failed -> "Update check failed: ${reason ?: "unknown error"}"
 }
