@@ -138,8 +138,16 @@ internal actual fun rememberEpubReaderHost(
                 webViewRef.value?.evaluateJavascript(buildApplyAnnotationsScript(entries), null)
             }
 
+            override fun addAnnotation(entry: EpubAnnotationSpec) {
+                webViewRef.value?.evaluateJavascript(buildAddAnnotationScript(entry), null)
+            }
+
             override fun removeAnnotation(cfi: String) {
                 webViewRef.value?.evaluateJavascript(buildRemoveAnnotationScript(cfi), null)
+            }
+
+            override fun clearSelection() {
+                webViewRef.value?.evaluateJavascript(buildClearSelectionScript(), null)
             }
 
             override fun search(query: String, token: Int) {

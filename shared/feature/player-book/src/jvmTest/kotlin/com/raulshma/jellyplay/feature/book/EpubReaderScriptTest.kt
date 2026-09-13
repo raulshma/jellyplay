@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.feature.book.epub.EpubAnnotationStyle
 import com.raulshma.jellyplay.feature.book.epub.EpubAppearance
 import com.raulshma.jellyplay.feature.book.epub.buildAddAnnotationScript
 import com.raulshma.jellyplay.feature.book.epub.buildApplyAnnotationsScript
+import com.raulshma.jellyplay.feature.book.epub.buildClearSelectionScript
 import com.raulshma.jellyplay.feature.book.epub.buildGoToCfiScript
 import com.raulshma.jellyplay.feature.book.epub.buildLoadBookBeginScript
 import com.raulshma.jellyplay.feature.book.epub.buildLoadBookEndScript
@@ -112,6 +113,10 @@ class EpubReaderScriptTest {
         assertEquals(
             "window.jellyPlayReader.removeAnnotation(\"epubcfi(/6/4!/4/2:0..9)\")",
             buildRemoveAnnotationScript("epubcfi(/6/4!/4/2:0..9)"),
+        )
+        assertEquals(
+            "window.jellyPlayReader.clearSelection()",
+            buildClearSelectionScript(),
         )
     }
 

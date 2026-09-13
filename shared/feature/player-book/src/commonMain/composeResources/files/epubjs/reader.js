@@ -318,9 +318,11 @@
         reportPercent();
         var label = '';
         var remaining = null;
+        var cfi = null;
         try {
             if (loc && loc.start) {
                 label = chapterLabelFor(loc.start.href);
+                if (loc.start.cfi) cfi = String(loc.start.cfi);
                 var shown = loc.start.displayed;
                 if (shown && typeof shown.page === 'number' &&
                     typeof shown.total === 'number' && shown.total > 0) {
@@ -332,7 +334,10 @@
             type: 'relocated',
             percent: currentPercent(),
             chapterLabel: label,
-            remainingPages: remaining
+            remainingPages: remaining,
+            // The page-start CFI native needs for bookmarks + exact resume;
+            // null before locations exist or on books epub.js cannot anchor.
+            cfi: cfi
         });
     }
 
@@ -819,6 +824,22 @@
 
         removeAnnotation: function (cfi) {
             removeAnnotationCfi(String(cfi || ''));
+        },
+
+        // Drops the live DOM selection in every rendered content document and
+        // resets the tracking flag, so the native selection action row can
+        // dismiss itself after creating an annotation (selectionchange fires
+        // for the emptied selection, closing the loop).
+        clearSelection: function () {
+            hasSelection = false;
+            try {
+                (rendition.getContents() || []).forEach(function (contents) {
+                    var win = contents.window ||
+                        (contents.document && contents.document.defaultView);
+                    var sel = win && win.getSelection ? win.getSelection() : null;
+                    if (sel) sel.removeAllRanges();
+                });
+            } catch (ignored) {}
         },
 
         search: function (query, token) {

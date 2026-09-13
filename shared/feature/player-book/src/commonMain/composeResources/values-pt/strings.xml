@@ -6,6 +6,8 @@
     <string name="book_reader_direction_rtl">Direita para a esquerda</string>
     <string name="book_reader_error_cannot_open">Não foi possível abrir este livro</string>
     <string name="book_reader_error_unsupported">Formato de livro não suportado</string>
+    <string name="book_reader_error_unsupported_with_format">Formato de livro não suportado (%1$s) — somente download</string>
+    <string name="book_reader_error_no_path">O servidor não enviou o caminho do arquivo deste livro</string>
     <string name="book_reader_loading">Preparando seu livro…</string>
     <string name="book_reader_preparing_locations">Preparando posições de leitura…</string>
     <string name="book_reader_downloading_viewer">Baixando componentes do visualizador %1$d%%</string>
@@ -16,4 +18,22 @@
     <string name="book_reader_theme_light">Claro</string>
     <string name="book_reader_font_size">Tamanho da fonte</string>
     <string name="book_reader_toc">Índice</string>
+    <string name="book_reader_toc_empty">Sem índice</string>
+    <string name="book_reader_bookmarks">Marcadores</string>
+    <string name="book_reader_bookmarks_empty">Ainda sem marcadores</string>
+    <string name="book_reader_bookmark_page">Página %1$d</string>
+    <string name="book_reader_bookmark_percent">%1$d%%</string>
+    <string name="book_reader_search">Pesquisar no livro</string>
+    <string name="book_reader_search_hint">Pesquisar texto…</string>
+    <string name="book_reader_search_searching">A pesquisar…</string>
+    <string name="book_reader_search_no_results">Sem ocorrências</string>
+    <string name="book_reader_annotations">Realces e notas</string>
+    <string name="book_reader_annotations_empty">Ainda sem realces</string>
+    <string name="book_reader_note">Nota</string>
+    <string name="book_reader_note_hint">Adicionar nota…</string>
+    <string name="book_reader_dialog_save">Guardar</string>
+    <string name="book_reader_dialog_cancel">Cancelar</string>
+    <string name="book_reader_copied">Copiado para a área de transferência</string>
+    <string name="book_reader_export_markdown">Copiar como Markdown</string>
+    <string name="book_reader_export_json">Copiar como JSON</string>
 </resources>

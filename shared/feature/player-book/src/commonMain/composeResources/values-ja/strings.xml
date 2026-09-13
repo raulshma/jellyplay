@@ -6,6 +6,8 @@
     <string name="book_reader_direction_rtl">右から左</string>
     <string name="book_reader_error_cannot_open">この本を開けません</string>
     <string name="book_reader_error_unsupported">サポートされていない本の形式です</string>
+    <string name="book_reader_error_unsupported_with_format">サポートされていない書籍形式（%1$s）— ダウンロード専用</string>
+    <string name="book_reader_error_no_path">サーバーがこの書籍のファイルパスを送信しませんでした</string>
     <string name="book_reader_loading">本を準備しています…</string>
     <string name="book_reader_preparing_locations">読書位置を準備しています…</string>
     <string name="book_reader_downloading_viewer">ビューアー コンポーネントをダウンロード中 %1$d%%</string>
@@ -16,4 +18,22 @@
     <string name="book_reader_theme_light">ライト</string>
     <string name="book_reader_font_size">文字サイズ</string>
     <string name="book_reader_toc">目次</string>
+    <string name="book_reader_toc_empty">目次なし</string>
+    <string name="book_reader_bookmarks">ブックマーク</string>
+    <string name="book_reader_bookmarks_empty">ブックマークはまだありません</string>
+    <string name="book_reader_bookmark_page">%1$d ページ</string>
+    <string name="book_reader_bookmark_percent">%1$d%%</string>
+    <string name="book_reader_search">本内を検索</string>
+    <string name="book_reader_search_hint">テキストを検索…</string>
+    <string name="book_reader_search_searching">検索中…</string>
+    <string name="book_reader_search_no_results">一致なし</string>
+    <string name="book_reader_annotations">ハイライトとメモ</string>
+    <string name="book_reader_annotations_empty">ハイライトはまだありません</string>
+    <string name="book_reader_note">メモ</string>
+    <string name="book_reader_note_hint">メモを追加…</string>
+    <string name="book_reader_dialog_save">保存</string>
+    <string name="book_reader_dialog_cancel">キャンセル</string>
+    <string name="book_reader_copied">クリップボードにコピーしました</string>
+    <string name="book_reader_export_markdown">Markdown としてコピー</string>
+    <string name="book_reader_export_json">JSON としてコピー</string>
 </resources>

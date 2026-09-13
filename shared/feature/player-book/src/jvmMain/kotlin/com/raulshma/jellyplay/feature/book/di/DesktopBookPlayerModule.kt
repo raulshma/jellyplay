@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.feature.book.DesktopBookDocumentOpener
 import com.raulshma.jellyplay.feature.book.OkHttpBookContentResolver
 import com.raulshma.jellyplay.feature.book.OkHttpBookFetcher
 import com.raulshma.jellyplay.feature.book.OkHttpBookFormatProbe
+import com.raulshma.jellyplay.feature.book.PdfOutlineParser
 import com.raulshma.jellyplay.feature.book.epub.EpubDesktopEnv
 import com.raulshma.jellyplay.feature.book.epub.KcefRuntime
 import okhttp3.OkHttpClient
@@ -34,6 +35,7 @@ fun desktopBookPlayerModule(dataDir: okio.Path): Module = module {
         )
     }
     single<BookDocumentOpener> { DesktopBookDocumentOpener() }
+    single<PdfOutlineParser> { PdfOutlineParser() }
     single {
         EpubDesktopEnv(
             kcefDir = (dataDir / "kcef").toFile(),

@@ -6,6 +6,8 @@
     <string name="book_reader_direction_rtl">De droite à gauche</string>
     <string name="book_reader_error_cannot_open">Impossible d’ouvrir ce livre</string>
     <string name="book_reader_error_unsupported">Format de livre non pris en charge</string>
+    <string name="book_reader_error_unsupported_with_format">Format de livre non pris en charge (%1$s) — téléchargement uniquement</string>
+    <string name="book_reader_error_no_path">Le serveur n’a envoyé aucun chemin de fichier pour ce livre</string>
     <string name="book_reader_loading">Préparation de votre livre…</string>
     <string name="book_reader_preparing_locations">Préparation des positions de lecture…</string>
     <string name="book_reader_downloading_viewer">Téléchargement des composants du lecteur %1$d%%</string>
@@ -16,4 +18,22 @@
     <string name="book_reader_theme_light">Clair</string>
     <string name="book_reader_font_size">Taille de la police</string>
     <string name="book_reader_toc">Table des matières</string>
+    <string name="book_reader_toc_empty">Aucune table des matières</string>
+    <string name="book_reader_bookmarks">Signets</string>
+    <string name="book_reader_bookmarks_empty">Aucun signet pour le moment</string>
+    <string name="book_reader_bookmark_page">Page %1$d</string>
+    <string name="book_reader_bookmark_percent">%1$d%%</string>
+    <string name="book_reader_search">Rechercher dans le livre</string>
+    <string name="book_reader_search_hint">Rechercher du texte…</string>
+    <string name="book_reader_search_searching">Recherche…</string>
+    <string name="book_reader_search_no_results">Aucun résultat</string>
+    <string name="book_reader_annotations">Surlignages et notes</string>
+    <string name="book_reader_annotations_empty">Aucun surlignage pour le moment</string>
+    <string name="book_reader_note">Note</string>
+    <string name="book_reader_note_hint">Ajouter une note…</string>
+    <string name="book_reader_dialog_save">Enregistrer</string>
+    <string name="book_reader_dialog_cancel">Annuler</string>
+    <string name="book_reader_copied">Copié dans le presse-papiers</string>
+    <string name="book_reader_export_markdown">Copier en Markdown</string>
+    <string name="book_reader_export_json">Copier en JSON</string>
 </resources>

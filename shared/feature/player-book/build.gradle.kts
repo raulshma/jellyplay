@@ -110,6 +110,9 @@ kotlin {
             // WindowCompat / WindowInsetsControllerCompat for the immersive
             // reader window ops.
             implementation(libs.androidx.core.ktx)
+            // PDF outline (TOC) parsing — pages still raster through the
+            // platform PdfRenderer; pdfbox-android is only the outline walk.
+            implementation(libs.pdfbox.android)
         }
         getByName("jvmMain").dependencies {
             // Desktop PDF rendering. Android intentionally uses the platform

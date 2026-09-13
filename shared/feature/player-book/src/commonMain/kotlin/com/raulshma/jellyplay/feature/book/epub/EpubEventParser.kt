@@ -87,6 +87,7 @@ internal object EpubEventParser {
                     percent = (map["percent"] as? Number)?.toDouble()?.coerceIn(0.0, 1.0),
                     chapterLabel = (map["chapterLabel"] as? String).orEmpty(),
                     remainingPages = (map["remainingPages"] as? Number)?.toInt(),
+                    cfi = (map["cfi"] as? String)?.takeIf { it.isNotBlank() },
                 ),
             )
             "tap" -> (map["zone"] as? String)?.toEpubTapZone()?.let { EpubEvent.Tap(it) }

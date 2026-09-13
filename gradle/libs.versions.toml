@@ -138,9 +138,14 @@ benchmarkMacro = "1.5.0-alpha07"
 # same version.ref is used for both.
 baselineprofile = "1.5.0-alpha07"
 # Apache PDFBox — desktop PDF page rendering for the book reader
-# (shared/feature:player-book jvmMain only; Android uses the platform
-# android.graphics.pdf.PdfRenderer, no dependency there). Apache-2.0.
+# (shared/feature:player-book jvmMain only; Android renders pages through the
+# platform android.graphics.pdf.PdfRenderer). Apache-2.0.
 pdfbox = "3.0.5"
+# pdfbox-android — Android PDF outline parsing for the book reader's TOC
+# (pages still render through the platform PdfRenderer). Tom Roush's port of
+# the PDFBox 2.0.x line (same outline-walk API as desktop under the
+# com.tom_roush package); 2.0.27.0 is the latest stable 2.0.x. Apache-2.0.
+pdfboxAndroid = "2.0.27.0"
 junrar = "8.1.1"
 composeWebviewMultiplatform = "2.0.3"
 aboutLibraries = "15.0.4"
@@ -320,6 +325,8 @@ ass-kt = { group = "io.github.peerless2012", name = "ass-kt", version.ref = "ass
 truetype-parser = { group = "io.github.yubyf", name = "truetypeparser-light", version.ref = "truetypeParser" }
 # Desktop PDF page rendering (book reader jvmMain; see the pdfbox version note).
 pdfbox = { module = "org.apache.pdfbox:pdfbox", version.ref = "pdfbox" }
+# Android PDF outline parsing (book reader androidMain; see the pdfboxAndroid note).
+pdfbox-android = { group = "com.tom-roush", name = "pdfbox-android", version.ref = "pdfboxAndroid" }
 # CBR (RAR) extraction — UnRAR license: extraction-only use, never recreates RAR compression.
 junrar = { module = "com.github.junrar:junrar", version.ref = "junrar" }
 # Desktop EPUB host (KCEF/Chromium). Desktop pulls CEF binaries at first reader launch unless on a JBR.

@@ -6,6 +6,8 @@
     <string name="book_reader_direction_rtl">从右到左</string>
     <string name="book_reader_error_cannot_open">无法打开此图书</string>
     <string name="book_reader_error_unsupported">不支持的图书格式</string>
+    <string name="book_reader_error_unsupported_with_format">不支持的书籍格式（%1$s）— 仅限下载</string>
+    <string name="book_reader_error_no_path">服务器未发送此书的文件路径</string>
     <string name="book_reader_loading">正在准备图书…</string>
     <string name="book_reader_preparing_locations">正在准备阅读位置…</string>
     <string name="book_reader_downloading_viewer">正在下载查看器组件 %1$d%%</string>
@@ -16,4 +18,22 @@
     <string name="book_reader_theme_light">浅色</string>
     <string name="book_reader_font_size">字号</string>
     <string name="book_reader_toc">目录</string>
+    <string name="book_reader_toc_empty">无目录</string>
+    <string name="book_reader_bookmarks">书签</string>
+    <string name="book_reader_bookmarks_empty">暂无书签</string>
+    <string name="book_reader_bookmark_page">第 %1$d 页</string>
+    <string name="book_reader_bookmark_percent">%1$d%%</string>
+    <string name="book_reader_search">在书内搜索</string>
+    <string name="book_reader_search_hint">搜索文本…</string>
+    <string name="book_reader_search_searching">搜索中…</string>
+    <string name="book_reader_search_no_results">无匹配项</string>
+    <string name="book_reader_annotations">高亮与笔记</string>
+    <string name="book_reader_annotations_empty">暂无高亮</string>
+    <string name="book_reader_note">笔记</string>
+    <string name="book_reader_note_hint">添加笔记…</string>
+    <string name="book_reader_dialog_save">保存</string>
+    <string name="book_reader_dialog_cancel">取消</string>
+    <string name="book_reader_copied">已复制到剪贴板</string>
+    <string name="book_reader_export_markdown">复制为 Markdown</string>
+    <string name="book_reader_export_json">复制为 JSON</string>
 </resources>

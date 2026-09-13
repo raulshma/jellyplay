@@ -87,11 +87,17 @@ class EpubEventParserTest {
         assertEquals(
             listOf(
                 EpubEvent.Relocated(
-                    EpubRelocation(percent = 0.37, chapterLabel = "Chapter 4", remainingPages = 12),
+                    EpubRelocation(
+                        percent = 0.37,
+                        chapterLabel = "Chapter 4",
+                        remainingPages = 12,
+                        cfi = "epubcfi(/6/14!/4/2/1:0)",
+                    ),
                 ),
             ),
             EpubEventParser.parse(
-                """{"type":"relocated","percent":0.37,"chapterLabel":"Chapter 4","remainingPages":12}""",
+                """{"type":"relocated","percent":0.37,"chapterLabel":"Chapter 4",""" +
+                    """"remainingPages":12,"cfi":"epubcfi(/6/14!/4/2/1:0)"}""",
             ),
         )
     }
@@ -107,6 +113,24 @@ class EpubEventParserTest {
             listOf(EpubEvent.Relocated(EpubRelocation(0.5, "One", null))),
             EpubEventParser.parse(
                 """{"type":"relocated","percent":0.5,"chapterLabel":"One"}""",
+            ),
+        )
+    }
+
+    @Test
+    fun `relocated cfi is null when absent or blank`() {
+        // An older reader.js without the cfi field decodes with a null anchor.
+        assertEquals(
+            listOf(EpubEvent.Relocated(EpubRelocation(0.5, "One", 3, cfi = null))),
+            EpubEventParser.parse(
+                """{"type":"relocated","percent":0.5,"chapterLabel":"One","remainingPages":3}""",
+            ),
+        )
+        // A blank anchor folds to null — bookmarks must not persist "".
+        assertEquals(
+            listOf(EpubEvent.Relocated(EpubRelocation(0.5, "One", 3, cfi = null))),
+            EpubEventParser.parse(
+                """{"type":"relocated","percent":0.5,"chapterLabel":"One","remainingPages":3,"cfi":""}""",
             ),
         )
     }
@@ -329,7 +353,7 @@ class EpubEventParserTest {
 
         dispatchEpubEvents(
             """[
-               |{"type":"relocated","percent":0.5,"chapterLabel":"C","remainingPages":4},
+               |{"type":"relocated","percent":0.5,"chapterLabel":"C","remainingPages":4,"cfi":"epubcfi(/6/8!/4/2)"},
                |{"type":"tap","zone":"right"},
                |{"type":"selected","cfi":"epubcfi(/6/4)","text":"hi"},
                |{"type":"selectionCleared"},
@@ -350,7 +374,7 @@ class EpubEventParserTest {
             ),
         )
 
-        assertEquals(listOf(EpubRelocation(0.5, "C", 4)), relocations)
+        assertEquals(listOf(EpubRelocation(0.5, "C", 4, cfi = "epubcfi(/6/8!/4/2)")), relocations)
         assertEquals(listOf(EpubTapZone.RIGHT), taps)
         assertEquals(listOf("epubcfi(/6/4)" to "hi"), selections)
         assertEquals(1, selectionsCleared)

@@ -26,7 +26,9 @@ internal class WasmEpubReaderHandle : EpubReaderHandle {
     override fun goToCfi(cfi: String) {}
     override fun setFlow(scrolled: Boolean) {}
     override fun applyAnnotations(entries: List<EpubAnnotationSpec>) {}
+    override fun addAnnotation(entry: EpubAnnotationSpec) {}
     override fun removeAnnotation(cfi: String) {}
+    override fun clearSelection() {}
     override fun search(query: String, token: Int) {}
     override fun requestSpeechContext(cfi: String?) {}
     override fun setAutoScroll(enabled: Boolean, pxPerSec: Int) {}

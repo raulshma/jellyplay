@@ -59,6 +59,12 @@ internal data class EpubRelocation(
     val chapterLabel: String,
     /** `total - page` of the current chapter, or `null` when not reported. */
     val remainingPages: Int?,
+    /**
+     * The current page-start CFI (`epubcfi(…)`), or `null` before locations
+     * exist. This is what bookmarks and exact resume persist — the plain
+     * `percent` event carries no anchor at all.
+     */
+    val cfi: String? = null,
 )
 
 /** One full-text search hit (chapter scan in reader.js). */
@@ -116,7 +122,17 @@ internal interface EpubReaderHandle {
     /** Paint a full annotation set (replace semantics: clears whatever is painted). */
     fun applyAnnotations(entries: List<EpubAnnotationSpec>)
 
+    /**
+     * Paint ONE annotation. epub.js replaces an existing mark on the same CFI,
+     * so this is the incremental path — unlike [applyAnnotations] it never
+     * wipes unrelated marks (the search-result flash highlight relies on that).
+     */
+    fun addAnnotation(entry: EpubAnnotationSpec)
+
     fun removeAnnotation(cfi: String)
+
+    /** Drop the live DOM selection (dismisses the native selection action row). */
+    fun clearSelection()
 
     /**
      * Full-text search; [token] rides the result event — only the newest
@@ -254,6 +270,8 @@ internal fun buildAddAnnotationScript(entry: EpubAnnotationSpec): String =
 
 internal fun buildRemoveAnnotationScript(cfi: String): String =
     "window.jellyPlayReader.removeAnnotation(${cfi.toJsonStringLiteral()})"
+
+internal fun buildClearSelectionScript(): String = "window.jellyPlayReader.clearSelection()"
 
 internal fun buildSearchScript(query: String, token: Int): String =
     "window.jellyPlayReader.search(${query.toJsonStringLiteral()}, $token)"

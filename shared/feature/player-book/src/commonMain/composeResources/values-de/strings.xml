@@ -6,6 +6,8 @@
     <string name="book_reader_direction_rtl">Rechts nach links</string>
     <string name="book_reader_error_cannot_open">Dieses Buch kann nicht geöffnet werden</string>
     <string name="book_reader_error_unsupported">Nicht unterstütztes Buchformat</string>
+    <string name="book_reader_error_unsupported_with_format">Nicht unterstütztes Buchformat (%1$s) — nur Download</string>
+    <string name="book_reader_error_no_path">Der Server hat für dieses Buch keinen Dateipfad gesendet</string>
     <string name="book_reader_loading">Buch wird vorbereitet…</string>
     <string name="book_reader_preparing_locations">Lesepositionen werden vorbereitet…</string>
     <string name="book_reader_downloading_viewer">Anzeigekomponenten werden geladen %1$d%%</string>
@@ -16,4 +18,22 @@
     <string name="book_reader_theme_light">Hell</string>
     <string name="book_reader_font_size">Schriftgröße</string>
     <string name="book_reader_toc">Inhaltsverzeichnis</string>
+    <string name="book_reader_toc_empty">Kein Inhaltsverzeichnis</string>
+    <string name="book_reader_bookmarks">Lesezeichen</string>
+    <string name="book_reader_bookmarks_empty">Noch keine Lesezeichen</string>
+    <string name="book_reader_bookmark_page">Seite %1$d</string>
+    <string name="book_reader_bookmark_percent">%1$d%%</string>
+    <string name="book_reader_search">Im Buch suchen</string>
+    <string name="book_reader_search_hint">Text suchen…</string>
+    <string name="book_reader_search_searching">Suche…</string>
+    <string name="book_reader_search_no_results">Keine Treffer</string>
+    <string name="book_reader_annotations">Markierungen &amp; Notizen</string>
+    <string name="book_reader_annotations_empty">Noch keine Markierungen</string>
+    <string name="book_reader_note">Notiz</string>
+    <string name="book_reader_note_hint">Notiz hinzufügen…</string>
+    <string name="book_reader_dialog_save">Speichern</string>
+    <string name="book_reader_dialog_cancel">Abbrechen</string>
+    <string name="book_reader_copied">In die Zwischenablage kopiert</string>
+    <string name="book_reader_export_markdown">Als Markdown kopieren</string>
+    <string name="book_reader_export_json">Als JSON kopieren</string>
 </resources>

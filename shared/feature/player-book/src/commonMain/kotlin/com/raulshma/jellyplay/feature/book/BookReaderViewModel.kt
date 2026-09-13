@@ -3,6 +3,11 @@ package com.raulshma.jellyplay.feature.book
 import androidx.compose.ui.graphics.ImageBitmap
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.data.repository.ReaderAnnotationColor
+import com.raulshma.jellyplay.core.data.repository.ReaderAnnotationStyle
+import com.raulshma.jellyplay.core.data.repository.ReaderAnnotationsRepository
+import com.raulshma.jellyplay.core.data.repository.ReaderAnnotation
+import com.raulshma.jellyplay.core.data.repository.ReaderBookmark
 import com.raulshma.jellyplay.core.datastore.reader.ReadingDirection
 import com.raulshma.jellyplay.core.datastore.reader.ReaderStore
 import com.raulshma.jellyplay.core.datastore.reader.ReaderTheme
@@ -10,16 +15,22 @@ import com.raulshma.jellyplay.core.model.BookFormat
 import com.raulshma.jellyplay.core.model.BookProgressPolicy
 import com.raulshma.jellyplay.core.model.pathExtension
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import com.raulshma.jellyplay.feature.book.epub.EpubRelocation
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Koin-owned state owner for the book reader (video-player conventions:
@@ -35,13 +46,25 @@ import kotlinx.coroutines.launch
  * (~800 ms) per page change / relocated event and immediately on dispose.
  * Marking a book read stays a user action (see docs/book-reader.md): nothing
  * here auto-sets the played flag at the last page or a percent threshold.
+ *
+ * Reader marks (Wave 3) live in [ReaderAnnotationsRepository] and are exposed
+ * per loaded item through [bookmarks]/[annotations] (re-subscribed per load);
+ * the toggle/jump COORDINATION lives here while the EPUB host stays
+ * screen-owned — [jumpToBookmark] only resolves the paged path, the screen
+ * drives `host.goToCfi` for reflowable jumps (it owns the host). Exact
+ * reflowable resume rides the ReaderStore last-CFI map: [ReadyContent.Reflowable.resumeCfi]
+ * carries the stored anchor to the screen (which jumps once the host is
+ * READY), and every debounced progress flush re-persists the current anchor.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class BookReaderViewModel(
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
     private val readerStore: ReaderStore,
+    private val annotationsRepository: ReaderAnnotationsRepository,
     private val contentResolver: BookContentResolver,
     private val documentOpener: BookDocumentOpener,
+    private val pdfOutlineParser: PdfOutlineParser,
     /**
      * Download-header format probe for items whose `Path` yields nothing.
      * Default-neutral so platforms without a probe impl still compile.
@@ -71,6 +94,37 @@ class BookReaderViewModel(
         .map { it.readerFontSizePx }
         .stateIn(scope, SharingStarted.Eagerly, ReaderStore.DEFAULT_FONT_SIZE_PX)
 
+    /**
+     * The item whose marks are exposed — the key of the marks flows below. A
+     * load re-points it, so [bookmarks]/[annotations] re-subscribe to the new
+     * item's repository streams (flatMapLatest drops the stale subscription).
+     */
+    private val marksItemId = MutableStateFlow<String?>(null)
+
+    val bookmarks: StateFlow<List<ReaderBookmark>> = marksItemId
+        .flatMapLatest { id ->
+            if (id == null) flowOf(emptyList()) else annotationsRepository.observeBookmarks(id)
+        }
+        .stateIn(scope, SharingStarted.Eagerly, emptyList())
+
+    val annotations: StateFlow<List<ReaderAnnotation>> = marksItemId
+        .flatMapLatest { id ->
+            if (id == null) flowOf(emptyList()) else annotationsRepository.observeAnnotations(id)
+        }
+        .stateIn(scope, SharingStarted.Eagerly, emptyList())
+
+    /** The reflowable reader's folded position (null until the first relocation). */
+    private val _currentEpubLocation = MutableStateFlow<EpubLocation?>(null)
+    val currentEpubLocation: StateFlow<EpubLocation?> = _currentEpubLocation.asStateFlow()
+
+    /** The live text selection (null while nothing is selected). */
+    private val _selection = MutableStateFlow<ReaderSelection?>(null)
+    val selection: StateFlow<ReaderSelection?> = _selection.asStateFlow()
+
+    /** The paged book's outline (PDF only; empty until parsed / for CBZ+CBR). */
+    private val _pdfOutline = MutableStateFlow<List<PdfOutlineNode>>(emptyList())
+    val pdfOutline: StateFlow<List<PdfOutlineNode>> = _pdfOutline.asStateFlow()
+
     private var loadedItemId: String? = null
     private var document: BookDocument? = null
     private val pageCache = PageCache<ImageBitmap>()
@@ -78,6 +132,9 @@ class BookReaderViewModel(
 
     /** Latest relocated percent (reflowable only), 0.0..1.0. */
     private var currentPercent = 0.0
+
+    /** Latest relocated CFI (reflowable only) — the exact-resume / bookmark anchor. */
+    private var latestEpubCfi: String? = null
     private var finalReportFlushed = false
     private var debounceJob: Job? = null
     private var directionJob: Job? = null
@@ -95,6 +152,7 @@ class BookReaderViewModel(
     fun load(itemId: String) {
         if (loadedItemId == itemId && _uiState.value !is BookReaderUiState.Idle) return
         loadedItemId = itemId
+        marksItemId.value = itemId
         userDirectionPinned = false
         // One collector per item — a re-load must not stack a second one.
         directionJob?.cancel()
@@ -131,12 +189,17 @@ class BookReaderViewModel(
     private suspend fun openBook(itemId: String) {
         _uiState.value = BookReaderUiState.Loading()
         // A re-load (new book, same VM) must not leak the previous book's
-        // document or its cached page bitmaps into the new pager.
+        // document, cached page bitmaps or per-book position tracking into
+        // the new reader.
         document?.close()
         document = null
         pageCache.clear()
         currentPage = 0
         currentPercent = 0.0
+        latestEpubCfi = null
+        _currentEpubLocation.value = null
+        _selection.value = null
+        _pdfOutline.value = emptyList()
         val detail = mediaRepository.getMediaDetail(itemId).getOrNull()
         if (detail == null) {
             _uiState.value = BookReaderUiState.Error(BookReaderUiState.ErrorReason.CannotOpen)
@@ -187,7 +250,9 @@ class BookReaderViewModel(
         }
 
         // Reflowable books never enter the document/pager layer: the WebView
-        // host owns rendering, and the position math is percent-based.
+        // host owns rendering, and the position math is percent-based. The
+        // locally stored CFI (ADR 0003 point 4) outranks the server percent on
+        // this install — the screen jumps to it once the host is READY.
         if (format.isReflowable) {
             val resumePercent = BookProgressPolicy.ticksToPercent(detail.playbackPositionTicks)
             currentPercent = resumePercent
@@ -196,6 +261,7 @@ class BookReaderViewModel(
                 content = ReadyContent.Reflowable(
                     bookFile = resolved.path,
                     resumePercent = resumePercent,
+                    resumeCfi = readerStore.lastCfi(itemId),
                 ),
             )
             return
@@ -217,8 +283,28 @@ class BookReaderViewModel(
         doc.onPageChanged(resume)
         _uiState.value = BookReaderUiState.Ready(
             title = detail.item.name,
-            content = ReadyContent.Paged(pageCount = doc.pageCount, currentPage = resume),
+            content = ReadyContent.Paged(
+                pageCount = doc.pageCount,
+                currentPage = resume,
+                format = format,
+            ),
         )
+        if (format == BookFormat.PDF) {
+            parseOutline(resolved.path)
+        }
+    }
+
+    /**
+     * PDF outline extraction, off the main thread (PDFBox walks the document
+     * synchronously). Failures already fold to an empty list inside the
+     * parser — the TOC sheet simply shows its empty state.
+     */
+    private fun parseOutline(path: okio.Path) {
+        scope.launch {
+            _pdfOutline.value = withContext(Dispatchers.Default) {
+                runCatching { pdfOutlineParser.parse(path) }.getOrDefault(emptyList())
+            }
+        }
     }
 
     /** Render (or cache-hit) one page for the pager; null keeps the placeholder tile. */
@@ -253,12 +339,42 @@ class BookReaderViewModel(
         onPageChanged(currentPage - 1)
     }
 
-    /** WebView-host relocated event (reflowable) — debounced percent report. */
+    /** WebView-host percent event (reflowable) — debounced percent report. */
     fun onEpubPercentChanged(percent: Double) {
         val ready = _uiState.value as? BookReaderUiState.Ready ?: return
         if (ready.content !is ReadyContent.Reflowable) return
         currentPercent = percent.coerceIn(0.0, 1.0)
+        _currentEpubLocation.value = _currentEpubLocation.value?.copy(percent = currentPercent)
         scheduleProgressReport()
+    }
+
+    /**
+     * WebView-host relocation (reflowable): folds percent + chapter label +
+     * the page-start CFI into [currentEpubLocation] (the bookmark/annotation
+     * anchor source) and schedules the debounced report, which also
+     * re-persists the exact-resume CFI. Internal: [EpubRelocation] is the
+     * module-private host protocol type.
+     */
+    internal fun onEpubRelocated(relocation: EpubRelocation) {
+        val ready = _uiState.value as? BookReaderUiState.Ready ?: return
+        if (ready.content !is ReadyContent.Reflowable) return
+        relocation.percent?.let { currentPercent = it.coerceIn(0.0, 1.0) }
+        relocation.cfi?.let { latestEpubCfi = it }
+        _currentEpubLocation.value = EpubLocation(
+            percent = currentPercent,
+            chapterLabel = relocation.chapterLabel,
+            cfi = latestEpubCfi,
+        )
+        scheduleProgressReport()
+    }
+
+    /** Text selected inside the WebView host — drives the selection action row. */
+    fun onEpubSelection(cfi: String, text: String) {
+        _selection.value = ReaderSelection(cfi = cfi, text = text)
+    }
+
+    fun onEpubSelectionCleared() {
+        _selection.value = null
     }
 
     /**
@@ -310,6 +426,174 @@ class BookReaderViewModel(
         scope.launch { readerStore.setReadingDirection(itemId, direction) }
     }
 
+    // ---------------------------------------------------------------------
+    // Reader marks (bookmarks + annotations) — local-first per ADR 0003.
+    // ---------------------------------------------------------------------
+
+    /**
+     * The bookmark sitting at the current position, if any — the toggle
+     * target and the top-bar icon's filled state. Paged match = same encoded
+     * page; reflowable match = same CFI (page-start anchors are stable), or
+     * the null-CFI fallback comparing encoded percents (pre-Wave-3 rows).
+     */
+    private fun bookmarkAtCurrentPosition(): ReaderBookmark? {
+        val itemId = loadedItemId ?: return null
+        val ready = _uiState.value as? BookReaderUiState.Ready ?: return null
+        return when (ready.content) {
+            is ReadyContent.Paged -> {
+                val ticks = BookProgressPolicy.pageToTicks(currentPage)
+                bookmarks.value.firstOrNull { it.itemId == itemId && it.cfi == null && it.positionTicks == ticks }
+            }
+            is ReadyContent.Reflowable -> {
+                val location = _currentEpubLocation.value
+                bookmarks.value.firstOrNull { bookmark ->
+                    bookmark.itemId == itemId && when {
+                        bookmark.cfi != null -> bookmark.cfi == location?.cfi
+                        // Null-CFI rows can only match by encoded percent.
+                        else -> bookmark.positionTicks == BookProgressPolicy.percentToTicks(currentPercent)
+                    }
+                }
+            }
+        }
+    }
+
+    fun hasBookmarkAtCurrentPosition(): Boolean = bookmarkAtCurrentPosition() != null
+
+    /**
+     * Bookmark the current position, or remove the bookmark already sitting
+     * there (toggle semantics — one control, no separate delete in the chrome).
+     * Paged rows encode `pageToTicks(currentPage)` with a null CFI and empty
+     * label (paged books have no chapter concept in v1); reflowable rows
+     * encode the relocation percent plus the exact CFI + chapter label.
+     */
+    fun toggleBookmarkAtCurrentPosition() {
+        val itemId = loadedItemId ?: return
+        val ready = _uiState.value as? BookReaderUiState.Ready ?: return
+        val existing = bookmarkAtCurrentPosition()
+        scope.launch {
+            runCatching {
+                if (existing != null) {
+                    annotationsRepository.removeBookmark(existing.id)
+                } else {
+                    when (ready.content) {
+                        is ReadyContent.Paged -> annotationsRepository.addBookmark(
+                            itemId = itemId,
+                            positionTicks = BookProgressPolicy.pageToTicks(currentPage),
+                            cfi = null,
+                            chapterLabel = "",
+                        )
+                        is ReadyContent.Reflowable -> {
+                            val location = _currentEpubLocation.value
+                            annotationsRepository.addBookmark(
+                                itemId = itemId,
+                                positionTicks = BookProgressPolicy.percentToTicks(currentPercent),
+                                cfi = location?.cfi,
+                                chapterLabel = location?.chapterLabel.orEmpty(),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fun deleteBookmark(id: Long) {
+        scope.launch { runCatching { annotationsRepository.removeBookmark(id) } }
+    }
+
+    /**
+     * Jump to a bookmark. Paged books resolve through the pager ([onPageChanged]
+     * scrolls + reports); reflowable jumps are HOST-coordinated — the screen
+     * calls `host.goToCfi(bookmark.cfi)` itself, and a null-CFI reflowable row
+     * has no fallback (the host exposes no display-by-percent after boot), so
+     * there is deliberately nothing to do here for that case.
+     */
+    fun jumpToBookmark(bookmark: ReaderBookmark) {
+        val ready = _uiState.value as? BookReaderUiState.Ready ?: return
+        if (ready.content is ReadyContent.Paged) {
+            onPageChanged(BookProgressPolicy.ticksToPage(bookmark.positionTicks))
+        }
+    }
+
+    /**
+     * Turns the live selection into a persisted annotation (highlight or
+     * underline, with an optional note). The screen mirrors it onto the host
+     * (`addAnnotation`, never `applyAnnotations` — replace semantics would
+     * wipe unrelated marks) and clears the JS selection afterwards.
+     */
+    fun addSelectionAnnotation(
+        style: ReaderAnnotationStyle,
+        color: ReaderAnnotationColor,
+        note: String? = null,
+    ) {
+        val itemId = loadedItemId ?: return
+        val selection = _selection.value ?: return
+        val chapterLabel = _currentEpubLocation.value?.chapterLabel.orEmpty()
+        _selection.value = null
+        scope.launch {
+            runCatching {
+                annotationsRepository.addAnnotation(
+                    itemId = itemId,
+                    cfi = selection.cfi,
+                    style = style,
+                    color = color,
+                    anchorText = selection.text,
+                    note = note,
+                    chapterLabel = chapterLabel,
+                )
+            }
+        }
+    }
+
+    /**
+     * Partial annotation edit — null arguments leave the stored value
+     * unchanged; an empty-string note clears it (repository contract). The
+     * screen re-paints the changed mark through the incremental host path.
+     */
+    fun updateAnnotation(
+        id: Long,
+        note: String? = null,
+        color: ReaderAnnotationColor? = null,
+        style: ReaderAnnotationStyle? = null,
+    ) {
+        scope.launch {
+            runCatching { annotationsRepository.updateAnnotation(id, note, color, style) }
+        }
+    }
+
+    fun deleteAnnotation(id: Long) {
+        scope.launch { runCatching { annotationsRepository.deleteAnnotation(id) } }
+    }
+
+    /** The persisted annotation sitting on the live selection's CFI, if any (edit vs create row). */
+    fun annotationAtSelection(): ReaderAnnotation? {
+        val cfi = _selection.value?.cfi ?: return null
+        return annotations.value.firstOrNull { it.cfi == cfi }
+    }
+
+    /**
+     * Renders the item's marks through the repository's pure exporters. The
+     * screen owns clipboard + confirmation (presentation-only concerns).
+     */
+    fun exportAnnotations(asJson: Boolean): String {
+        val ready = _uiState.value as? BookReaderUiState.Ready
+        return if (asJson) {
+            annotationsRepository.exportJson(
+                itemId = loadedItemId,
+                title = ready?.title.orEmpty(),
+                bookmarks = bookmarks.value,
+                annotations = annotations.value,
+            )
+        } else {
+            annotationsRepository.exportMarkdown(
+                itemId = loadedItemId,
+                title = ready?.title.orEmpty(),
+                bookmarks = bookmarks.value,
+                annotations = annotations.value,
+            )
+        }
+    }
+
     /**
      * Flush of the current position. `final = true` marks the exit flush
      * (dispose / back / onCleared) — the repository then also purges the item's
@@ -336,9 +620,15 @@ class BookReaderViewModel(
             is ReadyContent.Reflowable -> BookProgressPolicy.percentToTicks(currentPercent)
         }
         // The exit flush rides the process-wide scope: viewModelScope is
-        // cancelled by onCleared() before a plain launch could run it.
+        // cancelled by onCleared() before a plain launch could run it. The
+        // last-CFI write rides along so the exact-resume anchor survives even
+        // when the reader closed within the debounce window.
+        val cfi = latestEpubCfi
         (if (final) flushScope else scope).launch {
             runCatching {
+                if (cfi != null && ready.content is ReadyContent.Reflowable) {
+                    readerStore.setLastCfi(itemId, cfi)
+                }
                 playbackRepository.reportBookProgress(itemId, ticks, final = final)
             }
         }

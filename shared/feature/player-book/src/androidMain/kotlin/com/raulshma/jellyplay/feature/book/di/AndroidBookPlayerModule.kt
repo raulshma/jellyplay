@@ -10,6 +10,7 @@ import com.raulshma.jellyplay.feature.book.BookHttpFetcher
 import com.raulshma.jellyplay.feature.book.OkHttpBookContentResolver
 import com.raulshma.jellyplay.feature.book.OkHttpBookFetcher
 import com.raulshma.jellyplay.feature.book.OkHttpBookFormatProbe
+import com.raulshma.jellyplay.feature.book.PdfOutlineParser
 import okhttp3.OkHttpClient
 import okio.Path.Companion.toPath
 import org.koin.core.module.Module
@@ -33,4 +34,7 @@ fun androidBookPlayerModule(context: Context): Module = module {
         )
     }
     single<BookDocumentOpener> { AndroidBookDocumentOpener() }
+    // pdfbox-android needs one PDFBoxResourceLoader.init(context) before its
+    // first call — the parser lazy-inits from this context (see its KDoc).
+    single<PdfOutlineParser> { PdfOutlineParser(context.applicationContext) }
 }

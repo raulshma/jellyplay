@@ -205,8 +205,16 @@ internal actual fun rememberEpubReaderHost(
                 navigatorRef.value?.evaluateJavaScript(buildApplyAnnotationsScript(entries), null)
             }
 
+            override fun addAnnotation(entry: EpubAnnotationSpec) {
+                navigatorRef.value?.evaluateJavaScript(buildAddAnnotationScript(entry), null)
+            }
+
             override fun removeAnnotation(cfi: String) {
                 navigatorRef.value?.evaluateJavaScript(buildRemoveAnnotationScript(cfi), null)
+            }
+
+            override fun clearSelection() {
+                navigatorRef.value?.evaluateJavaScript(buildClearSelectionScript(), null)
             }
 
             override fun search(query: String, token: Int) {

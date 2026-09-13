@@ -6,6 +6,8 @@
     <string name="book_reader_direction_rtl">오른쪽에서 왼쪽</string>
     <string name="book_reader_error_cannot_open">이 책을 열 수 없습니다</string>
     <string name="book_reader_error_unsupported">지원되지 않는 책 형식입니다</string>
+    <string name="book_reader_error_unsupported_with_format">지원되지 않는 책 형식(%1$s) — 다운로드 전용</string>
+    <string name="book_reader_error_no_path">서버가 이 책의 파일 경로를 보내지 않았습니다</string>
     <string name="book_reader_loading">책을 준비하는 중…</string>
     <string name="book_reader_preparing_locations">독서 위치를 준비하는 중…</string>
     <string name="book_reader_downloading_viewer">뷰어 구성 요소 다운로드 중 %1$d%%</string>
@@ -16,4 +18,22 @@
     <string name="book_reader_theme_light">라이트</string>
     <string name="book_reader_font_size">글자 크기</string>
     <string name="book_reader_toc">목차</string>
+    <string name="book_reader_toc_empty">목차 없음</string>
+    <string name="book_reader_bookmarks">북마크</string>
+    <string name="book_reader_bookmarks_empty">북마크가 없습니다</string>
+    <string name="book_reader_bookmark_page">%1$d페이지</string>
+    <string name="book_reader_bookmark_percent">%1$d%%</string>
+    <string name="book_reader_search">책에서 검색</string>
+    <string name="book_reader_search_hint">텍스트 검색…</string>
+    <string name="book_reader_search_searching">검색 중…</string>
+    <string name="book_reader_search_no_results">일치 항목 없음</string>
+    <string name="book_reader_annotations">하이라이트와 메모</string>
+    <string name="book_reader_annotations_empty">하이라이트가 없습니다</string>
+    <string name="book_reader_note">메모</string>
+    <string name="book_reader_note_hint">메모 추가…</string>
+    <string name="book_reader_dialog_save">저장</string>
+    <string name="book_reader_dialog_cancel">취소</string>
+    <string name="book_reader_copied">클립보드에 복사됨</string>
+    <string name="book_reader_export_markdown">Markdown으로 복사</string>
+    <string name="book_reader_export_json">JSON으로 복사</string>
 </resources>

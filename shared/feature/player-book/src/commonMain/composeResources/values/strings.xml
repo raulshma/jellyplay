@@ -19,4 +19,22 @@
     <string name="book_reader_theme_light">Light</string>
     <string name="book_reader_font_size">Font size</string>
     <string name="book_reader_toc">Table of contents</string>
+    <string name="book_reader_toc_empty">No table of contents</string>
+    <string name="book_reader_bookmarks">Bookmarks</string>
+    <string name="book_reader_bookmarks_empty">No bookmarks yet</string>
+    <string name="book_reader_bookmark_page">Page %1$d</string>
+    <string name="book_reader_bookmark_percent">%1$d%%</string>
+    <string name="book_reader_search">Search in book</string>
+    <string name="book_reader_search_hint">Search text…</string>
+    <string name="book_reader_search_searching">Searching…</string>
+    <string name="book_reader_search_no_results">No matches</string>
+    <string name="book_reader_annotations">Highlights &amp; notes</string>
+    <string name="book_reader_annotations_empty">No highlights yet</string>
+    <string name="book_reader_note">Note</string>
+    <string name="book_reader_note_hint">Add a note…</string>
+    <string name="book_reader_dialog_save">Save</string>
+    <string name="book_reader_dialog_cancel">Cancel</string>
+    <string name="book_reader_copied">Copied to clipboard</string>
+    <string name="book_reader_export_markdown">Copy as Markdown</string>
+    <string name="book_reader_export_json">Copy as JSON</string>
 </resources>
