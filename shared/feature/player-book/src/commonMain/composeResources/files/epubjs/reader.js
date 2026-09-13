@@ -24,7 +24,24 @@
     var rendition = null;
     var locationsReady = false;
     var readyShown = false;
-    var viewerEl = document.getElementById('viewer');
+
+    /*
+     * The scripts are inlined in <head> (see EpubReaderHtml), so #viewer does
+     * not exist yet while this IIFE runs — the element resolves lazily on
+     * first use. Every call site runs after the host sent the book (both
+     * hosts gate commands on page-finished), when the DOM is complete.
+     */
+    var viewerEl = null;
+
+    function ensureViewerEl() {
+        if (!viewerEl) {
+            viewerEl = document.getElementById('viewer');
+            if (viewerEl) {
+                viewerEl.addEventListener('touchstart', function () { stopAutoScroll(); }, { passive: true, capture: true });
+            }
+        }
+        return viewerEl;
+    }
 
     // Pending appearance: mutated by the set* commands and re-applied on every
     // rendition build, so every knob survives a flow rebuild. Fields the host
@@ -198,10 +215,11 @@
     }
 
     function applyMargins() {
-        if (!viewerEl) return;
+        var el = ensureViewerEl();
+        if (!el) return;
         var px = pending.margins;
         if (px === null || px === undefined || isNaN(px) || px < 0) px = 0;
-        viewerEl.style.padding = px + 'px';
+        el.style.padding = px + 'px';
         // The epub-container is sized from the padded viewer; make epub.js
         // re-measure its stage so the column layout adapts immediately.
         if (rendition) {
@@ -359,7 +377,7 @@
     function createRendition() {
         var options = { width: '100%', height: '100%', flow: pending.flow };
         if (pending.flow === 'scrolled') options.spread = 'none';
-        rendition = book.renderTo(viewerEl, options);
+        rendition = book.renderTo(ensureViewerEl(), options);
         wireRendition();
     }
 
@@ -614,9 +632,6 @@
 
     window.addEventListener('wheel', function () { stopAutoScroll(); }, { passive: true, capture: true });
     window.addEventListener('touchstart', function () { stopAutoScroll(); }, { passive: true, capture: true });
-    if (viewerEl) {
-        viewerEl.addEventListener('touchstart', function () { stopAutoScroll(); }, { passive: true, capture: true });
-    }
 
     /*
      * Annotations: epub.js paints highlight/underline marks into an SVG overlay
