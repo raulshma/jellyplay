@@ -1,7 +1,8 @@
 # JellyPlay → Kotlin Multiplatform Migration — Status Ledger
 
-Status: **In progress — completion plan (Phases R/D/W/E/X) in execution; Phase X cutover landed 2026-09-12** · Living doc,
-re-anchored 2026-09-12.
+Status: **COMPLETE (2026-09-13) — all approved phases landed; outstanding
+items are release-mechanics externals and the recorded web-gate scope** ·
+Living doc, re-anchored 2026-09-13.
 
 This file re-anchors the ~50 references across build scripts, KDocs and CI
 that point at `docs/kmp-migration-plan.md`. The original 385-line draft plan
@@ -121,24 +122,56 @@ ledger tracks *where the migration stands*.
      isSupported — hidden, not Failed-toasting on web), player-book
      honest-degradation actuals. Not routed on web yet (orchestrator
      integration pending).
-   - W3: data work — livetv, insights, settings, player-audio (the
-     first real-DB-on-web consumers).
-   - W4: hard — music, home, downloads, syncplay, admin, player-live
-     (some may ship web-gated).
-   - W5: last — player-video via HtmlVideoEngine best-effort and
-     subtitle-tester; shell optional while web keeps `WebAppRoot`.
+   - W3: ~~data work — livetv, insights, settings, player-audio~~
+     **DONE (2026-09-13, d989b64b8 + 8de9767fc)** — all four compile for
+     wasm (livetv's java.time cluster ported with locale-preserving
+     expect/actual formatters; insights' Kotlin surface moved to
+     jvmShared, commonMain = composeResources; settings gained the
+     SettingsBackupIo seam + a wasmJs-scoped aboutlibraries force;
+     player-audio gates downloads via the AudioTrackDownloads seam).
+     Routed on web: the ArrSettings slice (settings root needs a wasm
+     AuthRepository binding — recorded as the follow-up that would
+     unlock it); player-audio unrouted (four playback ctor seams lack
+     wasm bindings).
+   - W4: ~~hard — music, home, downloads, syncplay, admin, player-live~~
+     **DONE (2026-09-13, b198d356f)** — all six compile for wasm behind
+     honest fail-closed seams (wasm actuals never fabricate success);
+     admin = insights precedent (whole surface jvmShared; promotion
+     scope recorded in its build KDoc); player-live's media3 screen
+     stays Android-only, recorded in build KDoc.
+   - W5: ~~last — player-video, subtitle-tester, shell~~ **CLOSED
+     (2026-09-13, dcb93fd74)** — shell compiles for wasm (target only;
+     web keeps WebAppRoot). **player-video + subtitle-tester stay
+     jvm/android by recorded decision**: five core:data jvmShared types
+     are constructor-injected into the playback hubs
+     (PlaybackSession/PlayerSessionManager/VideoPlayerViewModel, pinned
+     by 87 jvmTest files), plus a ~39-ref java.io.File surface and ~25
+     expects — hub surgery, not bounded seams, and in-shell web playback
+     is excluded by the locked best-effort decision. Web playback
+     remains the verified `HtmlVideoEngine` diagnostics path; unlocking
+     the two modules is a scoped follow-up (seam the five hub
+     dependencies, split the File/trickplay surface, write ~25 wasm
+     actuals).
    - Follow-up (from wave E's production fix): setItemImage now always
      sends the base64 body Jellyfin 10.11 requires; servers older than
      10.11 whose ImageSaver predates base64 decoding will fail image
      upload. Deliberate cut (no server-version detection available at
      the call site) — revisit if pre-10.11 server support matters.
-5. **Phase E — e2e tail** (runs parallel with W): harness click-reach
-   fix, native-dialog flows 3–6, PiP expand/dismiss rerun, web smoke
-   lane.
-6. **Phase X — release engineering**: desktop auto-update per
-   `docs/adr/desktop-auto-update.md` (replacing the 999999.0.0 version
-   sentinel), macOS/Linux real-machine passes, signed installers
-   (Authenticode / notarization).
+5. ~~**Phase E — e2e tail**~~ **DONE (2026-09-13, c4b7739c4 +
+   5876f5ffe)** — harness click-reach solved (flow-pass harness + Robot
+   driver); native-dialog flows 3–6 PASS 2/2 with server-side
+   post-conditions; the lane found and fixed a real production bug
+   (MetadataApiClientImpl.setItemImage violated Jellyfin 10.11's wire
+   contract on every platform). PiP expand/dismiss stays OPEN — no
+   device attached this session (ledger notes it). Web route-smoke
+   extension scoped (one parseE2eBootRoute branch + one step block).
+6. ~~**Phase X — release engineering**~~ **DONE (2026-09-13, 5d6a43a7e)**
+   — auto-update ADR client implemented (channel flag replaces the
+   999999.0.0 sentinel; manual check + open release page; dev builds
+   suppressed). Outstanding EXTERNALS, documented in the ADR: signing
+   certs (Authenticode/notarization placeholders + exact commands),
+   macOS/Linux real-machine passes (checklist in ADR), attaching
+   desktop installers to stable releases (release.yml wiring).
 7. **iOS**: remains excluded (deliberate; commonMain purity is the only
    standing pre-investment).
 

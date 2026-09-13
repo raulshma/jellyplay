@@ -2,19 +2,25 @@
 
 Orientation for engineers (and coding agents) new to JellyPlay's codebase.
 User-facing feature docs live in `docs/`; this file is about how the code is
-shaped. The repo's KMP migration (docs/kmp-migration-plan.md) has completed its
- legacy-tree cutover: every feature lives in `shared/feature/*` (KMP,
+shaped. The repo's KMP migration (docs/kmp-migration-plan.md) is COMPLETE
+(2026-09-13): every feature lives in `shared/feature/*` (KMP,
 commonMain + platform actuals), the core stack in `shared/core/*` — including
 the former legacy modules' Android halves, now `androidMain` source sets of
 `:shared:core:ui` / `:shared:core:data` (identical packages; Robolectric
 suites in their `androidHostTest` lanes) — and the only Android-only module
-left is the `:app` shell, beside `apps/desktop` and `apps/web`.
+left is the `:app` shell, beside `apps/desktop` and `apps/web`. The
+persistence layer is Room 3 (`androidx.room3`) on android/jvm/wasmJs (web:
+WebWorkerSQLiteDriver over OPFS, single-tab); 23 of 25 feature modules
+compile for wasm behind honest fail-closed seams — only player-video and
+subtitle-tester stay jvm/android by recorded scope (see the ledger's
+entry).
 DI is Koin-only repo-wide. Player code lives in two shared modules:
 `shared/core/player-contract` (the engine-agnostic `MediaEngine` contract and
 engine-shared machinery) and `shared/feature/player-video` (the VOD player
 screen, ViewModel, and session collaborators). The two desktop-and-Android shells register their nav sections through one
 aggregator module, `shared/feature/shell` (`appSections` + `ShellHostHooks` +
-a registration ledger the desktop dead-end guard derives from). Paths below are relative to the
+a registration ledger the desktop dead-end guard derives from); the web shell
+keeps its own `WebAppRoot` nav. Paths below are relative to the
 repo root.
 
 ## Engine layer
