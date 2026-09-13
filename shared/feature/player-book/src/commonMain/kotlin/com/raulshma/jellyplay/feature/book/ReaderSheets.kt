@@ -183,65 +183,65 @@ internal fun PagedSettingsSheet(
         Column(
             modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
         ) {
-        SheetTitle(text = stringResource(Res.string.book_reader_settings))
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            FilterChip(
-                selected = direction == ReadingDirection.LTR,
-                onClick = { onSetDirection(ReadingDirection.LTR) },
-                label = { Text(stringResource(Res.string.book_reader_direction_ltr)) },
-            )
-            FilterChip(
-                selected = direction == ReadingDirection.RTL,
-                onClick = { onSetDirection(ReadingDirection.RTL) },
-                label = { Text(stringResource(Res.string.book_reader_direction_rtl)) },
-            )
-        }
-        SectionLabel(text = stringResource(Res.string.book_reader_fit_mode), topPadding = 8.dp)
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            FilterChip(
-                selected = fitMode == ReaderFitMode.FIT_WIDTH,
-                onClick = { onSetFitMode(ReaderFitMode.FIT_WIDTH) },
-                label = { Text(stringResource(Res.string.book_reader_fit_width)) },
-            )
-            FilterChip(
-                selected = fitMode == ReaderFitMode.FIT_PAGE,
-                onClick = { onSetFitMode(ReaderFitMode.FIT_PAGE) },
-                label = { Text(stringResource(Res.string.book_reader_fit_page)) },
-            )
-            FilterChip(
-                selected = fitMode == ReaderFitMode.ORIGINAL,
-                onClick = { onSetFitMode(ReaderFitMode.ORIGINAL) },
-                label = { Text(stringResource(Res.string.book_reader_fit_original)) },
-            )
-        }
-        SectionLabel(text = stringResource(Res.string.book_reader_behavior))
-        SettingsSwitchRow(
-            label = stringResource(Res.string.book_reader_volume_keys),
-            checked = behavior.volumeKeyPaging,
-            onChange = { onBehaviorChange(behavior.copy(volumeKeyPaging = it)) },
-        )
-        SettingsSwitchRow(
-            label = stringResource(Res.string.book_reader_animated_turns),
-            checked = behavior.animatedPageTurns,
-            onChange = { onBehaviorChange(behavior.copy(animatedPageTurns = it)) },
-        )
-        if (tocAvailable) {
-            TextButton(
-                onClick = onOpenToc,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            SheetTitle(text = stringResource(Res.string.book_reader_settings))
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Icon(imageVector = Tabler.Outline.List, contentDescription = null)
-                Spacer(modifier = Modifier.size(8.dp))
-                Text(stringResource(Res.string.book_reader_toc))
+                FilterChip(
+                    selected = direction == ReadingDirection.LTR,
+                    onClick = { onSetDirection(ReadingDirection.LTR) },
+                    label = { Text(stringResource(Res.string.book_reader_direction_ltr)) },
+                )
+                FilterChip(
+                    selected = direction == ReadingDirection.RTL,
+                    onClick = { onSetDirection(ReadingDirection.RTL) },
+                    label = { Text(stringResource(Res.string.book_reader_direction_rtl)) },
+                )
             }
-        }
-        Spacer(modifier = Modifier.height(24.dp))
+            SectionLabel(text = stringResource(Res.string.book_reader_fit_mode), topPadding = 8.dp)
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                FilterChip(
+                    selected = fitMode == ReaderFitMode.FIT_WIDTH,
+                    onClick = { onSetFitMode(ReaderFitMode.FIT_WIDTH) },
+                    label = { Text(stringResource(Res.string.book_reader_fit_width)) },
+                )
+                FilterChip(
+                    selected = fitMode == ReaderFitMode.FIT_PAGE,
+                    onClick = { onSetFitMode(ReaderFitMode.FIT_PAGE) },
+                    label = { Text(stringResource(Res.string.book_reader_fit_page)) },
+                )
+                FilterChip(
+                    selected = fitMode == ReaderFitMode.ORIGINAL,
+                    onClick = { onSetFitMode(ReaderFitMode.ORIGINAL) },
+                    label = { Text(stringResource(Res.string.book_reader_fit_original)) },
+                )
+            }
+            SectionLabel(text = stringResource(Res.string.book_reader_behavior))
+            SettingsSwitchRow(
+                label = stringResource(Res.string.book_reader_volume_keys),
+                checked = behavior.volumeKeyPaging,
+                onChange = { onBehaviorChange(behavior.copy(volumeKeyPaging = it)) },
+            )
+            SettingsSwitchRow(
+                label = stringResource(Res.string.book_reader_animated_turns),
+                checked = behavior.animatedPageTurns,
+                onChange = { onBehaviorChange(behavior.copy(animatedPageTurns = it)) },
+            )
+            if (tocAvailable) {
+                TextButton(
+                    onClick = onOpenToc,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                ) {
+                    Icon(imageVector = Tabler.Outline.List, contentDescription = null)
+                    Spacer(modifier = Modifier.size(8.dp))
+                    Text(stringResource(Res.string.book_reader_toc))
+                }
+            }
+            Spacer(modifier = Modifier.height(24.dp))
         }
     }
 }
@@ -285,129 +285,129 @@ internal fun ReflowableSettingsSheet(
         ) {
             SheetTitle(text = stringResource(Res.string.book_reader_settings))
             SectionLabel(text = stringResource(Res.string.book_reader_theme), topPadding = 0.dp)
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            FilterChip(
-                selected = theme == ReaderTheme.DARK,
-                onClick = { onSetTheme(ReaderTheme.DARK) },
-                label = { Text(stringResource(Res.string.book_reader_theme_dark)) },
-            )
-            FilterChip(
-                selected = theme == ReaderTheme.SEPIA,
-                onClick = { onSetTheme(ReaderTheme.SEPIA) },
-                label = { Text(stringResource(Res.string.book_reader_theme_sepia)) },
-            )
-            FilterChip(
-                selected = theme == ReaderTheme.LIGHT,
-                onClick = { onSetTheme(ReaderTheme.LIGHT) },
-                label = { Text(stringResource(Res.string.book_reader_theme_light)) },
-            )
-        }
-        SectionLabel(text = stringResource(Res.string.book_reader_font_size))
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 4.dp),
-        ) {
-            IconButton(onClick = { onAdjustFontSize(-1) }) {
-                Icon(imageVector = Tabler.Outline.Minus, contentDescription = null)
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                FilterChip(
+                    selected = theme == ReaderTheme.DARK,
+                    onClick = { onSetTheme(ReaderTheme.DARK) },
+                    label = { Text(stringResource(Res.string.book_reader_theme_dark)) },
+                )
+                FilterChip(
+                    selected = theme == ReaderTheme.SEPIA,
+                    onClick = { onSetTheme(ReaderTheme.SEPIA) },
+                    label = { Text(stringResource(Res.string.book_reader_theme_sepia)) },
+                )
+                FilterChip(
+                    selected = theme == ReaderTheme.LIGHT,
+                    onClick = { onSetTheme(ReaderTheme.LIGHT) },
+                    label = { Text(stringResource(Res.string.book_reader_theme_light)) },
+                )
             }
-            Text(
-                text = "$fontSizePx px",
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.padding(horizontal = 12.dp),
-            )
-            IconButton(onClick = { onAdjustFontSize(+1) }) {
-                Icon(imageVector = Tabler.Outline.Plus, contentDescription = null)
+            SectionLabel(text = stringResource(Res.string.book_reader_font_size))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 4.dp),
+            ) {
+                IconButton(onClick = { onAdjustFontSize(-1) }) {
+                    Icon(imageVector = Tabler.Outline.Minus, contentDescription = null)
+                }
+                Text(
+                    text = "$fontSizePx px",
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.padding(horizontal = 12.dp),
+                )
+                IconButton(onClick = { onAdjustFontSize(+1) }) {
+                    Icon(imageVector = Tabler.Outline.Plus, contentDescription = null)
+                }
             }
-        }
-        SettingsSwitchRow(
-            label = stringResource(Res.string.book_reader_per_book),
-            checked = perBook,
-            onChange = onSetPerBook,
-        )
+            SettingsSwitchRow(
+                label = stringResource(Res.string.book_reader_per_book),
+                checked = perBook,
+                onChange = onSetPerBook,
+            )
 
-        SectionLabel(text = stringResource(Res.string.book_reader_typography))
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            FilterChip(
-                selected = typography.fontFamily == ReaderFontFamily.SYSTEM,
-                onClick = { onTypographyChange(typography.copy(fontFamily = ReaderFontFamily.SYSTEM)) },
-                label = { Text(stringResource(Res.string.book_reader_font_system)) },
+            SectionLabel(text = stringResource(Res.string.book_reader_typography))
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                FilterChip(
+                    selected = typography.fontFamily == ReaderFontFamily.SYSTEM,
+                    onClick = { onTypographyChange(typography.copy(fontFamily = ReaderFontFamily.SYSTEM)) },
+                    label = { Text(stringResource(Res.string.book_reader_font_system)) },
+                )
+                FilterChip(
+                    selected = typography.fontFamily == ReaderFontFamily.SERIF,
+                    onClick = { onTypographyChange(typography.copy(fontFamily = ReaderFontFamily.SERIF)) },
+                    label = { Text(stringResource(Res.string.book_reader_font_serif)) },
+                )
+                FilterChip(
+                    selected = typography.fontFamily == ReaderFontFamily.SANS,
+                    onClick = { onTypographyChange(typography.copy(fontFamily = ReaderFontFamily.SANS)) },
+                    label = { Text(stringResource(Res.string.book_reader_font_sans)) },
+                )
+                FilterChip(
+                    selected = typography.fontFamily == ReaderFontFamily.MONO,
+                    onClick = { onTypographyChange(typography.copy(fontFamily = ReaderFontFamily.MONO)) },
+                    label = { Text(stringResource(Res.string.book_reader_font_mono)) },
+                )
+            }
+            LineHeightSlider(lineHeightPct = typography.lineHeightPct) {
+                onTypographyChange(typography.copy(lineHeightPct = it))
+            }
+            MarginSlider(marginPct = typography.marginPct) {
+                onTypographyChange(typography.copy(marginPct = it))
+            }
+            SettingsSwitchRow(
+                label = stringResource(Res.string.book_reader_justify),
+                checked = typography.justify,
+                onChange = { onTypographyChange(typography.copy(justify = it)) },
             )
-            FilterChip(
-                selected = typography.fontFamily == ReaderFontFamily.SERIF,
-                onClick = { onTypographyChange(typography.copy(fontFamily = ReaderFontFamily.SERIF)) },
-                label = { Text(stringResource(Res.string.book_reader_font_serif)) },
+            SettingsSwitchRow(
+                label = stringResource(Res.string.book_reader_scroll_mode),
+                checked = typography.scrollMode,
+                onChange = { onTypographyChange(typography.copy(scrollMode = it)) },
             )
-            FilterChip(
-                selected = typography.fontFamily == ReaderFontFamily.SANS,
-                onClick = { onTypographyChange(typography.copy(fontFamily = ReaderFontFamily.SANS)) },
-                label = { Text(stringResource(Res.string.book_reader_font_sans)) },
-            )
-            FilterChip(
-                selected = typography.fontFamily == ReaderFontFamily.MONO,
-                onClick = { onTypographyChange(typography.copy(fontFamily = ReaderFontFamily.MONO)) },
-                label = { Text(stringResource(Res.string.book_reader_font_mono)) },
-            )
-        }
-        LineHeightSlider(lineHeightPct = typography.lineHeightPct) {
-            onTypographyChange(typography.copy(lineHeightPct = it))
-        }
-        MarginSlider(marginPct = typography.marginPct) {
-            onTypographyChange(typography.copy(marginPct = it))
-        }
-        SettingsSwitchRow(
-            label = stringResource(Res.string.book_reader_justify),
-            checked = typography.justify,
-            onChange = { onTypographyChange(typography.copy(justify = it)) },
-        )
-        SettingsSwitchRow(
-            label = stringResource(Res.string.book_reader_scroll_mode),
-            checked = typography.scrollMode,
-            onChange = { onTypographyChange(typography.copy(scrollMode = it)) },
-        )
 
-        SectionLabel(text = stringResource(Res.string.book_reader_behavior))
-        SettingsSwitchRow(
-            label = stringResource(Res.string.book_reader_volume_keys),
-            checked = behavior.volumeKeyPaging,
-            onChange = { onBehaviorChange(behavior.copy(volumeKeyPaging = it)) },
-        )
-        ReadingSpeedStepper(wpm = behavior.readingSpeedWpm) {
-            onBehaviorChange(behavior.copy(readingSpeedWpm = it))
-        }
-        if (typography.scrollMode) {
-            AutoScrollSpeedSlider(speedPxPerSec = autoScrollSpeedPx, onCommit = onSetAutoScrollSpeed)
-        }
+            SectionLabel(text = stringResource(Res.string.book_reader_behavior))
+            SettingsSwitchRow(
+                label = stringResource(Res.string.book_reader_volume_keys),
+                checked = behavior.volumeKeyPaging,
+                onChange = { onBehaviorChange(behavior.copy(volumeKeyPaging = it)) },
+            )
+            ReadingSpeedStepper(wpm = behavior.readingSpeedWpm) {
+                onBehaviorChange(behavior.copy(readingSpeedWpm = it))
+            }
+            if (typography.scrollMode) {
+                AutoScrollSpeedSlider(speedPxPerSec = autoScrollSpeedPx, onCommit = onSetAutoScrollSpeed)
+            }
 
-        SectionLabel(text = stringResource(Res.string.book_reader_read_aloud))
-        if (!speechAvailable) {
-            SheetEmptyText(text = stringResource(Res.string.book_reader_speech_unavailable))
-        } else {
-            SpeechRateStepper(
-                label = stringResource(Res.string.book_reader_speech_rate),
-                pct = speechRate,
-                onCommit = onSetSpeechRate,
-            )
-            SpeechRateStepper(
-                label = stringResource(Res.string.book_reader_speech_pitch),
-                pct = speechPitch,
-                onCommit = onSetSpeechPitch,
-            )
-        }
-        TextButton(
-            onClick = onOpenToc,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-        ) {
-            Icon(imageVector = Tabler.Outline.List, contentDescription = null)
-            Spacer(modifier = Modifier.size(8.dp))
-            Text(stringResource(Res.string.book_reader_toc))
-        }
-        Spacer(modifier = Modifier.height(24.dp))
+            SectionLabel(text = stringResource(Res.string.book_reader_read_aloud))
+            if (!speechAvailable) {
+                SheetEmptyText(text = stringResource(Res.string.book_reader_speech_unavailable))
+            } else {
+                SpeechRateStepper(
+                    label = stringResource(Res.string.book_reader_speech_rate),
+                    pct = speechRate,
+                    onCommit = onSetSpeechRate,
+                )
+                SpeechRateStepper(
+                    label = stringResource(Res.string.book_reader_speech_pitch),
+                    pct = speechPitch,
+                    onCommit = onSetSpeechPitch,
+                )
+            }
+            TextButton(
+                onClick = onOpenToc,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            ) {
+                Icon(imageVector = Tabler.Outline.List, contentDescription = null)
+                Spacer(modifier = Modifier.size(8.dp))
+                Text(stringResource(Res.string.book_reader_toc))
+            }
+            Spacer(modifier = Modifier.height(24.dp))
         }
     }
 }
@@ -416,15 +416,14 @@ internal fun ReflowableSettingsSheet(
  * The shared label + slider + value-caption row behind every settings-sheet
  * slider: local drag state with commit-on-settle (the page-slider
  * convention) — [onCommit] receives the settled value coerced into
- * [coerceIn] exactly once per drag; [valueCaption] renders the live value
+ * [range] exactly once per drag; [valueCaption] renders the live value
  * (drag position while dragging, persisted value otherwise).
  */
 @Composable
 private fun CommitSliderRow(
     label: String,
     value: Int,
-    valueRange: ClosedFloatingPointRange<Float>,
-    coerceIn: IntRange,
+    range: IntRange,
     valueCaption: @Composable (Int) -> String,
     onCommit: (Int) -> Unit,
 ) {
@@ -440,9 +439,9 @@ private fun CommitSliderRow(
             onValueChange = { dragging = true; dragValue = it },
             onValueChangeFinished = {
                 dragging = false
-                onCommit(dragValue.roundToInt().coerceIn(coerceIn.first, coerceIn.last))
+                onCommit(dragValue.roundToInt().coerceIn(range.first, range.last))
             },
-            valueRange = valueRange,
+            valueRange = range.first.toFloat()..range.last.toFloat(),
         )
         Text(
             text = valueCaption((if (dragging) dragValue else value.toFloat()).roundToInt()),
@@ -460,15 +459,18 @@ private fun LineHeightSlider(lineHeightPct: Int, onCommit: (Int) -> Unit) {
     CommitSliderRow(
         label = stringResource(Res.string.book_reader_line_height),
         value = lineHeightPct,
-        valueRange = ReaderStore.MIN_LINE_HEIGHT_PCT.toFloat()..ReaderStore.MAX_LINE_HEIGHT_PCT.toFloat(),
-        coerceIn = ReaderStore.MIN_LINE_HEIGHT_PCT..ReaderStore.MAX_LINE_HEIGHT_PCT,
+        range = ReaderStore.MIN_LINE_HEIGHT_PCT..ReaderStore.MAX_LINE_HEIGHT_PCT,
         valueCaption = { stringResource(Res.string.book_reader_line_height_value, lineHeightLabel(it)) },
         onCommit = onCommit,
     )
 }
 
-/** 150 (percent of base) → "1.5" — the line-height × multiplier, one decimal. */
-internal fun lineHeightLabel(pct: Int): String = "${pct / 100}.${(pct % 100) / 10}"
+/** 150 (percent of base) → "1.5" — the line-height × multiplier rounded to
+ * one decimal (105 → "1.1", 199 → "2.0"), always one fractional digit. */
+internal fun lineHeightLabel(pct: Int): String {
+    val tenths = (pct / 10.0).roundToInt()
+    return "${tenths / 10}.${tenths % 10}"
+}
 
 /** Margin slider (0..100 %); commit-on-settle, plain "N %" value label. */
 @Composable
@@ -476,8 +478,7 @@ private fun MarginSlider(marginPct: Int, onCommit: (Int) -> Unit) {
     CommitSliderRow(
         label = stringResource(Res.string.book_reader_margins),
         value = marginPct,
-        valueRange = ReaderStore.MIN_MARGIN_PCT.toFloat()..ReaderStore.MAX_MARGIN_PCT.toFloat(),
-        coerceIn = ReaderStore.MIN_MARGIN_PCT..ReaderStore.MAX_MARGIN_PCT,
+        range = ReaderStore.MIN_MARGIN_PCT..ReaderStore.MAX_MARGIN_PCT,
         valueCaption = { "$it %" },
         onCommit = onCommit,
     )
@@ -545,9 +546,7 @@ private fun AutoScrollSpeedSlider(speedPxPerSec: Int, onCommit: (Int) -> Unit) {
     CommitSliderRow(
         label = stringResource(Res.string.book_reader_auto_scroll_speed),
         value = speedPxPerSec,
-        valueRange = ReaderStore.MIN_AUTO_SCROLL_SPEED_PX_PER_SEC.toFloat()..
-            ReaderStore.MAX_AUTO_SCROLL_SPEED_PX_PER_SEC.toFloat(),
-        coerceIn = ReaderStore.MIN_AUTO_SCROLL_SPEED_PX_PER_SEC..ReaderStore.MAX_AUTO_SCROLL_SPEED_PX_PER_SEC,
+        range = ReaderStore.MIN_AUTO_SCROLL_SPEED_PX_PER_SEC..ReaderStore.MAX_AUTO_SCROLL_SPEED_PX_PER_SEC,
         valueCaption = { "$it px/s" },
         onCommit = onCommit,
     )

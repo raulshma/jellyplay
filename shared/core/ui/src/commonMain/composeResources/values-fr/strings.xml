@@ -249,4 +249,6 @@
     <string name="core_remove_download_title">Supprimer le téléchargement ?</string>
     <string name="core_remove_download_message">Ceci supprime la copie téléchargée de « %1$s » de cet appareil. La copie sur le serveur n’est pas affectée.</string>
     <string name="core_remove_download_confirm">Supprimer</string>
+    <string name="core_ui_read_more">Lire plus</string>
+    <string name="core_ui_show_less">Afficher moins</string>
 </resources>

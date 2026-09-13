@@ -244,13 +244,7 @@ internal fun PagedBottomBar(
                 onBrightnessChange = onBrightnessChange,
                 leading = if (tocVisible) {
                     {
-                        IconButton(onClick = onOpenToc) {
-                            Icon(
-                                imageVector = Tabler.Outline.List,
-                                contentDescription = stringResource(Res.string.book_reader_toc),
-                                tint = Color.White,
-                            )
-                        }
+                        TocIconButton(onClick = onOpenToc)
                     }
                 } else {
                     null
@@ -316,13 +310,7 @@ private fun ReaderTransportRow(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
     ) {
-        IconButton(onClick = onOpenToc) {
-            Icon(
-                imageVector = Tabler.Outline.List,
-                contentDescription = stringResource(Res.string.book_reader_toc),
-                tint = Color.White,
-            )
-        }
+        TocIconButton(onClick = onOpenToc)
         if (speechAvailable) {
             Icon(
                 imageVector = Tabler.Outline.Volume2,
@@ -462,28 +450,38 @@ internal fun ReflowableBottomBar(
                 color = Color.White,
             )
             remainingPages?.let { pages ->
-                Text(
-                    text = stringResource(Res.string.book_reader_chapter_pages_left, pages),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = Color.White.copy(alpha = 0.7f),
-                )
+                ChromeStatLine(stringResource(Res.string.book_reader_chapter_pages_left, pages))
             }
             minutesLeftInChapter?.let { minutes ->
-                Text(
-                    text = stringResource(Res.string.book_reader_minutes_left_chapter, minutes),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = Color.White.copy(alpha = 0.7f),
-                )
+                ChromeStatLine(stringResource(Res.string.book_reader_minutes_left_chapter, minutes))
             }
             minutesLeftInBook?.let { minutes ->
-                Text(
-                    text = stringResource(Res.string.book_reader_minutes_left, minutes),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = Color.White.copy(alpha = 0.7f),
-                )
+                ChromeStatLine(stringResource(Res.string.book_reader_minutes_left, minutes))
             }
         }
     }
+}
+
+/** The chrome's table-of-contents entry (both bottom bars). */
+@Composable
+private fun TocIconButton(onClick: () -> Unit) {
+    IconButton(onClick = onClick) {
+        Icon(
+            imageVector = Tabler.Outline.List,
+            contentDescription = stringResource(Res.string.book_reader_toc),
+            tint = Color.White,
+        )
+    }
+}
+
+/** One dim stat line in the reflowable bottom chrome ("N pages left", "≈ N min left"). */
+@Composable
+private fun ChromeStatLine(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelMedium,
+        color = Color.White.copy(alpha = 0.7f),
+    )
 }
 
 /** Full-screen dark veil over the booting reader (spinner / download progress). */

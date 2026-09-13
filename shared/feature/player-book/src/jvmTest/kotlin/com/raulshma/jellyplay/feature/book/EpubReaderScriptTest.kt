@@ -274,8 +274,10 @@ class EpubReaderScriptTest {
         // The JS side reports RAW gesture facts only — tap x + viewport
         // width, swipe direction — never a zone. Native owns the mapping
         // (unit-tested there) so JS-side geometry drift can never turn a
-        // center tap into a page turn again.
-        kotlin.test.assertTrue(source.contains("width: window.innerWidth || 0"), "taps must carry the viewport width")
+        // center tap into a page turn again. A missing coordinate falls
+        // back to the horizontal center — the harmless toggle, never LEFT.
+        kotlin.test.assertTrue(source.contains("var width = window.innerWidth || 0"), "taps must carry the viewport width")
+        kotlin.test.assertTrue(source.contains("? x : width / 2"), "broken x must fall back to the center")
         kotlin.test.assertTrue(!source.contains("zoneFromX"), "zone judgment must not live in JS")
         kotlin.test.assertTrue(source.contains("'swipe', dir:"), "swipes must report physical direction")
     }

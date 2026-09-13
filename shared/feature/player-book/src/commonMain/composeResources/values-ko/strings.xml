@@ -10,8 +10,8 @@
     <string name="book_reader_error_no_path">서버가 이 책의 파일 경로를 보내지 않았습니다</string>
     <string name="book_reader_loading">책을 준비하는 중…</string>
     <string name="book_reader_preparing_locations">독서 위치를 준비하는 중…</string>
-    <string name="book_reader_downloading_viewer">뷰어 구성 요소 다운로드 중 %1$d%%</string>
-    <string name="book_reader_percent">%1$d%% 읽음</string>
+    <string name="book_reader_downloading_viewer">뷰어 구성 요소 다운로드 중 %1$d%</string>
+    <string name="book_reader_percent">%1$d% 읽음</string>
     <string name="book_reader_theme">테마</string>
     <string name="book_reader_theme_dark">다크</string>
     <string name="book_reader_theme_sepia">세피아</string>
@@ -22,7 +22,7 @@
     <string name="book_reader_bookmarks">북마크</string>
     <string name="book_reader_bookmarks_empty">북마크가 없습니다</string>
     <string name="book_reader_bookmark_page">%1$d페이지</string>
-    <string name="book_reader_bookmark_percent">%1$d%%</string>
+    <string name="book_reader_bookmark_percent">%1$d%</string>
     <string name="book_reader_search">책에서 검색</string>
     <string name="book_reader_search_hint">텍스트 검색…</string>
     <string name="book_reader_search_searching">검색 중…</string>
@@ -43,7 +43,7 @@
     <string name="book_reader_font_sans">산세리프</string>
     <string name="book_reader_font_mono">고정폭</string>
     <string name="book_reader_line_height">줄 간격</string>
-    <string name="book_reader_line_height_value">%1$.1f×</string>
+    <string name="book_reader_line_height_value">%1$s×</string>
     <string name="book_reader_margins">여백</string>
     <string name="book_reader_justify">양쪽 정렬</string>
     <string name="book_reader_scroll_mode">스크롤 모드</string>

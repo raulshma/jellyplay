@@ -249,4 +249,6 @@
     <string name="core_remove_download_title">Download löschen?</string>
     <string name="core_remove_download_message">Dies löscht die heruntergeladene Kopie von „%1$s“ von diesem Gerät. Die Kopie auf dem Server bleibt unverändert.</string>
     <string name="core_remove_download_confirm">Löschen</string>
+    <string name="core_ui_read_more">Mehr anzeigen</string>
+    <string name="core_ui_show_less">Weniger anzeigen</string>
 </resources>

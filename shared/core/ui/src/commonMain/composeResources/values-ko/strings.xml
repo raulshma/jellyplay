@@ -248,4 +248,6 @@
     <string name="core_remove_download_title">다운로드를 삭제할까?</string>
     <string name="core_remove_download_message">이 기기에서 “%1$s”의 다운로드된 사본을 삭제합니다. 서버의 사본은 영향을 받지 않습니다.</string>
     <string name="core_remove_download_confirm">삭제</string>
+    <string name="core_ui_read_more">더 보기</string>
+    <string name="core_ui_show_less">접기</string>
 </resources>

@@ -6,15 +6,15 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * The read-aloud loop's live state. `paragraphIndex` (the unit's paragraph)
- * is null while idle AND while between chapters (a session is live, awaiting
- * the next chapter's paragraphs); `active` covers the whole session —
- * started, playing OR paused — so the chrome keeps its controls through a
- * pause; `paused` is only meaningful while active (engine stopped, position
- * remembered).
+ * The read-aloud loop's live state. `spokenParagraphIndex` (the paragraph of
+ * the sentence being spoken) is null while idle AND while between chapters
+ * (a session is live, awaiting the next chapter's paragraphs); `active`
+ * covers the whole session — started, playing OR paused — so the chrome
+ * keeps its controls through a pause; `paused` is only meaningful while
+ * active (engine stopped, position remembered).
  */
 internal data class ReaderSpeechState(
-    val paragraphIndex: Int? = null,
+    val spokenParagraphIndex: Int? = null,
     val active: Boolean = false,
     val paused: Boolean = false,
 )
@@ -213,7 +213,7 @@ internal class ReaderSpeechController(
         val unit = units.getOrNull(index) ?: return
         generation++
         unitIndex = index
-        _state.value = ReaderSpeechState(paragraphIndex = unit.paragraphIndex, active = true)
+        _state.value = ReaderSpeechState(spokenParagraphIndex = unit.paragraphIndex, active = true)
         onSpeakParagraph(unit.paragraphIndex, unit.cfi)
         val spokenGeneration = generation
         engine.speak(unit.text) {

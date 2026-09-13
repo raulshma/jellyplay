@@ -10,8 +10,8 @@
     <string name="book_reader_error_no_path">Le serveur n’a envoyé aucun chemin de fichier pour ce livre</string>
     <string name="book_reader_loading">Préparation de votre livre…</string>
     <string name="book_reader_preparing_locations">Préparation des positions de lecture…</string>
-    <string name="book_reader_downloading_viewer">Téléchargement des composants du lecteur %1$d%%</string>
-    <string name="book_reader_percent">%1$d%% lu</string>
+    <string name="book_reader_downloading_viewer">Téléchargement des composants du lecteur %1$d%</string>
+    <string name="book_reader_percent">%1$d% lu</string>
     <string name="book_reader_theme">Thème</string>
     <string name="book_reader_theme_dark">Sombre</string>
     <string name="book_reader_theme_sepia">Sépia</string>
@@ -22,7 +22,7 @@
     <string name="book_reader_bookmarks">Signets</string>
     <string name="book_reader_bookmarks_empty">Aucun signet pour le moment</string>
     <string name="book_reader_bookmark_page">Page %1$d</string>
-    <string name="book_reader_bookmark_percent">%1$d%%</string>
+    <string name="book_reader_bookmark_percent">%1$d%</string>
     <string name="book_reader_search">Rechercher dans le livre</string>
     <string name="book_reader_search_hint">Rechercher du texte…</string>
     <string name="book_reader_search_searching">Recherche…</string>
@@ -43,7 +43,7 @@
     <string name="book_reader_font_sans">Sans serif</string>
     <string name="book_reader_font_mono">Monospace</string>
     <string name="book_reader_line_height">Interligne</string>
-    <string name="book_reader_line_height_value">%1$.1f×</string>
+    <string name="book_reader_line_height_value">%1$s×</string>
     <string name="book_reader_margins">Marges</string>
     <string name="book_reader_justify">Justifier le texte</string>
     <string name="book_reader_scroll_mode">Mode défilement</string>

@@ -191,7 +191,7 @@ class EpubEventParserTest {
 
     @Test
     fun `tap event degrades to center — never a page turn — on broken geometry`() {
-        // TheWebView geometry report failing (width 0/absent, x outside the
+        // The WebView geometry report failing (width 0/absent, x outside the
         // viewport) must yield the harmless chrome toggle, not a page turn.
         assertEquals(
             listOf(EpubEvent.Tap(EpubTapZone.CENTER)),

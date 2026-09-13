@@ -145,38 +145,40 @@ class BookReaderViewModel(
 
     /**
      * One reader-slice preference as a StateFlow — every global knob below is
-     * the same `map + stateIn` shape over [ReaderStore.reader], so the
-     * selector + initial pair is the only per-knob code left.
+     * the same `map + stateIn` shape over [ReaderStore.reader], and the
+     * initial value folds out of the same selector (the store slice's current
+     * entry, which already carries the band defaults), so the selector is the
+     * only per-knob code left.
      */
-    private fun <T> readerPref(initial: T, selector: (ReaderSlice) -> T): StateFlow<T> =
+    private fun <T> readerPref(selector: (ReaderSlice) -> T): StateFlow<T> =
         readerStore.reader
             .map(selector)
-            .stateIn(scope, SharingStarted.Eagerly, initial)
+            .stateIn(scope, SharingStarted.Eagerly, selector(readerStore.reader.value))
 
     /** Global reflowable typography slice (family / leading / margins / justify / flow). */
     val readerFontFamily: StateFlow<ReaderFontFamily> =
-        readerPref(ReaderFontFamily.SYSTEM) { it.fontFamily }
+        readerPref { it.fontFamily }
 
     val lineHeightPct: StateFlow<Int> =
-        readerPref(ReaderStore.DEFAULT_LINE_HEIGHT_PCT) { it.lineHeightPct }
+        readerPref { it.lineHeightPct }
 
     val marginPct: StateFlow<Int> =
-        readerPref(ReaderStore.DEFAULT_MARGIN_PCT) { it.marginPct }
+        readerPref { it.marginPct }
 
-    val justify: StateFlow<Boolean> = readerPref(false) { it.justify }
+    val justify: StateFlow<Boolean> = readerPref { it.justify }
 
-    val scrollMode: StateFlow<Boolean> = readerPref(false) { it.scrollMode }
+    val scrollMode: StateFlow<Boolean> = readerPref { it.scrollMode }
 
     /** Display + behavior slice: brightness veil, volume-key paging, animated turns, reading speed. */
     val brightnessPct: StateFlow<Int> =
-        readerPref(ReaderStore.DEFAULT_BRIGHTNESS_PCT) { it.brightnessPct }
+        readerPref { it.brightnessPct }
 
-    val volumeKeyPaging: StateFlow<Boolean> = readerPref(false) { it.volumeKeyPaging }
+    val volumeKeyPaging: StateFlow<Boolean> = readerPref { it.volumeKeyPaging }
 
-    val animatedPageTurns: StateFlow<Boolean> = readerPref(true) { it.animatedPageTurns }
+    val animatedPageTurns: StateFlow<Boolean> = readerPref { it.animatedPageTurns }
 
     val readingSpeedWpm: StateFlow<Int> =
-        readerPref(ReaderStore.DEFAULT_READING_SPEED_WPM) { it.readingSpeedWpm }
+        readerPref { it.readingSpeedWpm }
 
     // ---------------------------------------------------------------------
     // Read aloud (Wave 5) + sleep timer + auto-scroll coordination.
@@ -184,14 +186,14 @@ class BookReaderViewModel(
 
     /** Read-aloud voice knobs (percent bands live in the ReaderStore). */
     val speechRate: StateFlow<Int> =
-        readerPref(ReaderStore.DEFAULT_SPEECH_RATE) { it.speechRate }
+        readerPref { it.speechRate }
 
     val speechPitch: StateFlow<Int> =
-        readerPref(ReaderStore.DEFAULT_SPEECH_PITCH) { it.speechPitch }
+        readerPref { it.speechPitch }
 
     /** Scrolled-flow auto-scroll speed (px/s; the band lives in the ReaderStore). */
     val autoScrollSpeedPxPerSec: StateFlow<Int> =
-        readerPref(ReaderStore.DEFAULT_AUTO_SCROLL_SPEED_PX_PER_SEC) { it.autoScrollSpeedPxPerSec }
+        readerPref { it.autoScrollSpeedPxPerSec }
 
     /**
      * One-shot commands the SCREEN executes against its EPUB host (see

@@ -80,19 +80,19 @@ class ReaderSpeechControllerTest {
         controller.start(paragraphs("one", "two"))
         assertEquals(listOf("one"), engine.spoken)
         assertEquals(0 to "epubcfi(/6/4!/4/0)", spoke.single())
-        assertEquals(0, controller.state.value.paragraphIndex)
+        assertEquals(0, controller.state.value.spokenParagraphIndex)
         assertTrue(controller.state.value.active)
 
         engine.complete()
         assertEquals(listOf("one", "two"), engine.spoken)
-        assertEquals(1, controller.state.value.paragraphIndex)
+        assertEquals(1, controller.state.value.spokenParagraphIndex)
 
         engine.complete()
         // Paragraphs exhausted: chapter-end handoff, session stays live with
         // no paragraph index.
         assertEquals(1, chapterEnds)
         assertTrue(controller.state.value.active)
-        assertNull(controller.state.value.paragraphIndex)
+        assertNull(controller.state.value.spokenParagraphIndex)
     }
 
     @Test
@@ -127,10 +127,10 @@ class ReaderSpeechControllerTest {
         controller.skipForward() // utterance 0 superseded by utterance 1
 
         engine.completeStale(0) // late done of the replaced utterance
-        assertEquals(1, controller.state.value.paragraphIndex)
+        assertEquals(1, controller.state.value.spokenParagraphIndex)
 
         engine.complete() // the real completion of utterance 1
-        assertNull(controller.state.value.paragraphIndex) // chapter end reached exactly once
+        assertNull(controller.state.value.spokenParagraphIndex) // chapter end reached exactly once
     }
 
     @Test
@@ -148,7 +148,7 @@ class ReaderSpeechControllerTest {
         controller.pause()
         assertTrue(controller.state.value.active)
         assertTrue(controller.state.value.paused)
-        assertEquals(1, controller.state.value.paragraphIndex)
+        assertEquals(1, controller.state.value.spokenParagraphIndex)
         // pause silenced the engine (stop #1 came from start's own reset).
         val stopsAtPause = engine.stopCount
         assertTrue(stopsAtPause >= 1)
@@ -173,14 +173,14 @@ class ReaderSpeechControllerTest {
 
         controller.skipForward()
         assertEquals(listOf("one", "two"), engine.spoken)
-        assertEquals(1, controller.state.value.paragraphIndex)
+        assertEquals(1, controller.state.value.spokenParagraphIndex)
 
         controller.skipForward()
         assertEquals(listOf("one", "two", "three"), engine.spoken)
 
         controller.skipForward() // past the last → chapter end
         assertEquals(1, chapterEnds)
-        assertNull(controller.state.value.paragraphIndex)
+        assertNull(controller.state.value.spokenParagraphIndex)
     }
 
     @Test
@@ -197,7 +197,7 @@ class ReaderSpeechControllerTest {
 
         controller.skipBack()
         controller.skipBack() // below zero clamps at 0
-        assertEquals(0, controller.state.value.paragraphIndex)
+        assertEquals(0, controller.state.value.spokenParagraphIndex)
         assertEquals(listOf("one", "two", "one", "one"), engine.spoken)
     }
 
@@ -290,7 +290,7 @@ class ReaderSpeechControllerTest {
         )
         // Every sentence reports its own paragraph (index/CFI stay paragraph-scoped).
         assertEquals(List(3) { 0 to "epubcfi(/6/4!/4/0)" }, spoke)
-        assertEquals(0, controller.state.value.paragraphIndex)
+        assertEquals(0, controller.state.value.spokenParagraphIndex)
     }
 
     @Test
@@ -306,11 +306,11 @@ class ReaderSpeechControllerTest {
 
         controller.skipForward()
         assertEquals(listOf("First one.", "Second two."), engine.spoken)
-        assertEquals(0, controller.state.value.paragraphIndex)
+        assertEquals(0, controller.state.value.spokenParagraphIndex)
 
         controller.skipBack()
         assertEquals(listOf("First one.", "Second two.", "First one."), engine.spoken)
-        assertEquals(0, controller.state.value.paragraphIndex)
+        assertEquals(0, controller.state.value.spokenParagraphIndex)
     }
 
     @Test

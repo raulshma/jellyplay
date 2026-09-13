@@ -10,8 +10,8 @@
     <string name="book_reader_error_no_path">服务器未发送此书的文件路径</string>
     <string name="book_reader_loading">正在准备图书…</string>
     <string name="book_reader_preparing_locations">正在准备阅读位置…</string>
-    <string name="book_reader_downloading_viewer">正在下载查看器组件 %1$d%%</string>
-    <string name="book_reader_percent">已读 %1$d%%</string>
+    <string name="book_reader_downloading_viewer">正在下载查看器组件 %1$d%</string>
+    <string name="book_reader_percent">已读 %1$d%</string>
     <string name="book_reader_theme">主题</string>
     <string name="book_reader_theme_dark">深色</string>
     <string name="book_reader_theme_sepia">复古</string>
@@ -22,7 +22,7 @@
     <string name="book_reader_bookmarks">书签</string>
     <string name="book_reader_bookmarks_empty">暂无书签</string>
     <string name="book_reader_bookmark_page">第 %1$d 页</string>
-    <string name="book_reader_bookmark_percent">%1$d%%</string>
+    <string name="book_reader_bookmark_percent">%1$d%</string>
     <string name="book_reader_search">在书内搜索</string>
     <string name="book_reader_search_hint">搜索文本…</string>
     <string name="book_reader_search_searching">搜索中…</string>
@@ -43,7 +43,7 @@
     <string name="book_reader_font_sans">无衬线</string>
     <string name="book_reader_font_mono">等宽</string>
     <string name="book_reader_line_height">行高</string>
-    <string name="book_reader_line_height_value">%1$.1f×</string>
+    <string name="book_reader_line_height_value">%1$s×</string>
     <string name="book_reader_margins">页边距</string>
     <string name="book_reader_justify">两端对齐</string>
     <string name="book_reader_scroll_mode">滚动模式</string>

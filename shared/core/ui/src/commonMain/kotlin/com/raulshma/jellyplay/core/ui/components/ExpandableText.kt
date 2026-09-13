@@ -14,6 +14,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.core.ui.generated.resources.Res
+import com.raulshma.jellyplay.core.ui.generated.resources.core_ui_read_more
+import com.raulshma.jellyplay.core.ui.generated.resources.core_ui_show_less
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * A long [text] capped at [collapsedMaxLines] lines with a "Read more"/"Show less"
@@ -56,7 +60,8 @@ fun ExpandableText(
         )
         if (collapsedOverflows || expanded) {
             Text(
-                text = if (expanded) "Show less" else "Read more",
+                text = if (expanded) stringResource(Res.string.core_ui_show_less)
+                else stringResource(Res.string.core_ui_read_more),
                 style = MaterialTheme.typography.labelMedium,
                 color = toggleColor,
                 modifier = Modifier

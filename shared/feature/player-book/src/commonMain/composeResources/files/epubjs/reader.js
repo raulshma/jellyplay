@@ -136,7 +136,10 @@
                 var item = book.spine.get(loc.start.cfi) || (loc.start.href ? book.spine.get(loc.start.href) : null);
                 var count = book.spine.items ? book.spine.items.length : 0;
                 if (item && typeof item.index === 'number' && count > 0) {
-                    return item.index / count;
+                    // Spine indexes are 1-based; without the offset the first
+                    // chapter opens above 0% and the last reads 100% before
+                    // it is finished.
+                    return Math.min(Math.max((item.index - 1) / count, 0), 1);
                 }
             }
         } catch (ignored) {}
@@ -442,10 +445,14 @@
      * clicks) — native owns the mapping now.
      */
     function reportTap(x) {
+        var width = window.innerWidth || 0;
+        // A missing coordinate is a broken report, not a left-edge tap —
+        // default to the horizontal center so native's zone mapping sees
+        // the harmless center toggle, never a page turn.
         post({
             type: 'tap',
-            x: Math.round(typeof x === 'number' ? x : 0),
-            width: window.innerWidth || 0,
+            x: Math.round(typeof x === 'number' && isFinite(x) ? x : width / 2),
+            width: width,
         });
     }
 
@@ -471,7 +478,7 @@
             var dy = e.clientY - pointerDown.y;
             if (dx * dx + dy * dy > DRAG_SLOP_PX * DRAG_SLOP_PX) return; // swipe, not tap
         }
-        reportTap(typeof e.clientX === 'number' ? e.clientX : 0);
+        reportTap(e.clientX);
     }
 
     function onSelected(cfiRange, contents) {

@@ -271,4 +271,6 @@
     <string name="core_remove_download_title">Delete download?</string>
     <string name="core_remove_download_message">This deletes the downloaded copy of “%1$s” from this device. The server copy is not affected.</string>
     <string name="core_remove_download_confirm">Delete</string>
+    <string name="core_ui_read_more">Read more</string>
+    <string name="core_ui_show_less">Show less</string>
 </resources>

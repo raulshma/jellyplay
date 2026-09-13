@@ -79,7 +79,7 @@ All original code on top of the vendored epub.js public APIs.
 ### Wave 5 — Listening & accessibility
 
 - TTS read-aloud (Android voices first; desktop shows an honest "unavailable"
-  entry): paragraph-by-paragraph speech with live paragraph highlight, automatic
+  entry): sentence-by-sentence speech with live paragraph highlight, automatic
   page-follow and chapter advance, skip-sentence controls.
 - Sleep timer in the reader (5/15/30/60 min + end-of-chapter) pausing TTS and
   auto-scroll.
