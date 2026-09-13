@@ -17,10 +17,21 @@ kotlin {
         }
     }
 
-    // No wasmJs target: the two consumers are exactly the shells the web app
-    // does not use (apps/web wires its own section graph), and the graph's
-    // reach includes feature modules whose ViewModels bind only the
-    // android+jvm DI graph (music precedent).
+    // web breadth: the commonMain surface (AdminRefreshGate /
+    // OnboardingGate / ShellSessionController / UserMessageHost — the four
+    // policy/state files, java-free) now carries a wasmJs target. Scope is
+    // honest: the 21-feature aggregator (appSections + the per-feature
+    // Section builders) stays in jvmShared — it is the consuming shells'
+    // graph, and apps/web wires its own WebAppRoot section graph, so wasmJs
+    // compiles the commonMain policy surface only. The browser test task
+    // stays off like core:ui/core:network/music — jvmTest pins semantics.
+    wasmJs {
+        browser {
+            testTask {
+                enabled = false
+            }
+        }
+    }
     jvm {
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_17)
