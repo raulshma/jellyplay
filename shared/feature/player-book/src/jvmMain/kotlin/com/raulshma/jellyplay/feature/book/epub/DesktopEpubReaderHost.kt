@@ -15,7 +15,6 @@ import com.multiplatform.webview.web.WebView
 import com.multiplatform.webview.web.WebViewNavigator
 import com.multiplatform.webview.web.rememberWebViewNavigator
 import com.multiplatform.webview.web.rememberWebViewState
-import com.raulshma.jellyplay.core.datastore.reader.ReaderTheme
 import dev.datlag.kcef.KCEF
 import androidx.compose.runtime.State
 import androidx.compose.runtime.rememberCoroutineScope
@@ -97,8 +96,7 @@ internal class KcefRuntime(private val env: EpubDesktopEnv) {
 internal actual fun rememberEpubReaderHost(
     bookFile: Path,
     resumePercent: Double,
-    theme: ReaderTheme,
-    fontSizePx: Int,
+    appearance: EpubAppearance,
     callbacks: EpubReaderCallbacks,
 ): EpubReaderHandle {
     val env = koinInject<EpubDesktopEnv>()
@@ -157,13 +155,13 @@ internal actual fun rememberEpubReaderHost(
             val base64 = bookBase64 ?: return@LaunchedEffect
             if (bookSent || state.loadingState !is LoadingState.Finished) return@LaunchedEffect
             bookSent = true
-            sendBookChunks(base64, resumePercent, theme, fontSizePx) { navigator.evaluateJavaScript(it, null) }
+            sendBookChunks(base64, resumePercent, appearance) { navigator.evaluateJavaScript(it, null) }
         }
 
-        // Theme/font push for CHANGES after load — see pushAppearanceScripts.
-        LaunchedEffect(pageLoaded, bookSent, theme, fontSizePx) {
+        // Appearance push for CHANGES after load — see pushAppearanceScripts.
+        LaunchedEffect(pageLoaded, bookSent, appearance) {
             if (!pageLoaded || !bookSent) return@LaunchedEffect
-            pushAppearanceScripts(theme, fontSizePx) { navigator.evaluateJavaScript(it, null) }
+            pushAppearanceScripts(appearance) { navigator.evaluateJavaScript(it, null) }
         }
 
         // The event poll — see the class doc for why this is a pull. Gated on
@@ -193,6 +191,34 @@ internal actual fun rememberEpubReaderHost(
 
             override fun goTo(href: String) {
                 navigatorRef.value?.evaluateJavaScript(buildGoToScript(href), null)
+            }
+
+            override fun goToCfi(cfi: String) {
+                navigatorRef.value?.evaluateJavaScript(buildGoToCfiScript(cfi), null)
+            }
+
+            override fun setFlow(scrolled: Boolean) {
+                navigatorRef.value?.evaluateJavaScript(buildSetFlowScript(scrolled), null)
+            }
+
+            override fun applyAnnotations(entries: List<EpubAnnotationSpec>) {
+                navigatorRef.value?.evaluateJavaScript(buildApplyAnnotationsScript(entries), null)
+            }
+
+            override fun removeAnnotation(cfi: String) {
+                navigatorRef.value?.evaluateJavaScript(buildRemoveAnnotationScript(cfi), null)
+            }
+
+            override fun search(query: String, token: Int) {
+                navigatorRef.value?.evaluateJavaScript(buildSearchScript(query, token), null)
+            }
+
+            override fun requestSpeechContext(cfi: String?) {
+                navigatorRef.value?.evaluateJavaScript(buildSpeechContextScript(cfi), null)
+            }
+
+            override fun setAutoScroll(enabled: Boolean, pxPerSec: Int) {
+                navigatorRef.value?.evaluateJavaScript(buildSetAutoScrollScript(enabled, pxPerSec), null)
             }
         }
     }

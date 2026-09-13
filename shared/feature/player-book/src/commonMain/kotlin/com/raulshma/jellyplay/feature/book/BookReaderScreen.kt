@@ -68,6 +68,7 @@ import com.composables.icons.tabler.outline.Plus
 import com.composables.icons.tabler.outline.Settings
 import com.raulshma.jellyplay.core.datastore.reader.ReadingDirection
 import com.raulshma.jellyplay.core.datastore.reader.ReaderTheme
+import com.raulshma.jellyplay.feature.book.epub.EpubAppearance
 import com.raulshma.jellyplay.feature.book.epub.EpubReaderCallbacks
 import com.raulshma.jellyplay.feature.book.epub.EpubReaderStatus
 import com.raulshma.jellyplay.feature.book.epub.EpubTocItem
@@ -416,8 +417,7 @@ private fun ReflowableReaderContent(
     val host = rememberEpubReaderHost(
         bookFile = content.bookFile,
         resumePercent = content.resumePercent,
-        theme = theme,
-        fontSizePx = fontSizePx,
+        appearance = EpubAppearance(theme = theme, fontSizePx = fontSizePx),
         callbacks = callbacks,
     )
     // `host`'s composable call above emits the platform WebView directly into

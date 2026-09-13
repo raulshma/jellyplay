@@ -5,7 +5,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import com.raulshma.jellyplay.core.datastore.reader.ReaderTheme
 import okio.Path
 
 /**
@@ -14,8 +13,9 @@ import okio.Path
  * KCEF/Chromium), so the handle degrades honestly — it reports
  * [EpubReaderStatus.ERROR] through the callbacks immediately (the reader
  * screen hides its loading veil on ERROR and shows its own error affordances)
- * and every command ([EpubReaderHandle.next]/[prev]/[goTo]) is a no-op. The
- * CEF-download progress state stays permanently null.
+ * and every command ([EpubReaderHandle.next]/[prev]/[goTo] and the newer
+ * Wave 2 surface: goToCfi/setFlow/annotations/search/speech/auto-scroll) is a
+ * never-called no-op. The CEF-download progress state stays permanently null.
  */
 internal class WasmEpubReaderHandle : EpubReaderHandle {
     private val noProgress = mutableStateOf<Float?>(null)
@@ -23,14 +23,20 @@ internal class WasmEpubReaderHandle : EpubReaderHandle {
     override fun next() {}
     override fun prev() {}
     override fun goTo(href: String) {}
+    override fun goToCfi(cfi: String) {}
+    override fun setFlow(scrolled: Boolean) {}
+    override fun applyAnnotations(entries: List<EpubAnnotationSpec>) {}
+    override fun removeAnnotation(cfi: String) {}
+    override fun search(query: String, token: Int) {}
+    override fun requestSpeechContext(cfi: String?) {}
+    override fun setAutoScroll(enabled: Boolean, pxPerSec: Int) {}
 }
 
 @Composable
 internal actual fun rememberEpubReaderHost(
     bookFile: Path,
     resumePercent: Double,
-    theme: ReaderTheme,
-    fontSizePx: Int,
+    appearance: EpubAppearance,
     callbacks: EpubReaderCallbacks,
 ): EpubReaderHandle {
     val handle = remember { WasmEpubReaderHandle() }

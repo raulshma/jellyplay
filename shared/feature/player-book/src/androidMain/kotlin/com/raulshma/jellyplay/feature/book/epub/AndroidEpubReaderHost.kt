@@ -16,7 +16,6 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
-import com.raulshma.jellyplay.core.datastore.reader.ReaderTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okio.Path
@@ -24,16 +23,16 @@ import okio.Path
 /**
  * Android EPUB host: a stock `android.webkit.WebView` rendering the inlined
  * reader page over `https://jellyplay.local` (an HTTPS base URL avoids
- * file:// access entirely). JS → native rides `addJavascriptInterface`;
- * theme/font pushes and commands ride `evaluateJavascript`.
+ * file:// access entirely). JS → native rides `addJavascriptInterface`
+ * (routed through [dispatchEpubEvents] on the bridge thread); appearance
+ * pushes and commands ride `evaluateJavascript`.
  */
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 internal actual fun rememberEpubReaderHost(
     bookFile: Path,
     resumePercent: Double,
-    theme: ReaderTheme,
-    fontSizePx: Int,
+    appearance: EpubAppearance,
     callbacks: EpubReaderCallbacks,
 ): EpubReaderHandle {
     val webViewRef = remember { mutableStateOf<WebView?>(null) }
@@ -68,7 +67,7 @@ internal actual fun rememberEpubReaderHost(
         if (!pageLoaded || bookSent) return@LaunchedEffect
         bookSent = true
         webViewRef.value?.let { view ->
-            sendBookChunks(base64, resumePercent, theme, fontSizePx) { view.evaluateJavascript(it, null) }
+            sendBookChunks(base64, resumePercent, appearance) { view.evaluateJavascript(it, null) }
         }
     }
 
@@ -100,11 +99,11 @@ internal actual fun rememberEpubReaderHost(
         },
     )
 
-    // Theme/font push for CHANGES after load — see pushAppearanceScripts.
-    LaunchedEffect(pageLoaded, bookSent, theme, fontSizePx) {
+    // Appearance push for CHANGES after load — see pushAppearanceScripts.
+    LaunchedEffect(pageLoaded, bookSent, appearance) {
         if (!pageLoaded || !bookSent) return@LaunchedEffect
         webViewRef.value?.let { view ->
-            pushAppearanceScripts(theme, fontSizePx) { view.evaluateJavascript(it, null) }
+            pushAppearanceScripts(appearance) { view.evaluateJavascript(it, null) }
         }
     }
 
@@ -125,6 +124,34 @@ internal actual fun rememberEpubReaderHost(
 
             override fun goTo(href: String) {
                 webViewRef.value?.evaluateJavascript(buildGoToScript(href), null)
+            }
+
+            override fun goToCfi(cfi: String) {
+                webViewRef.value?.evaluateJavascript(buildGoToCfiScript(cfi), null)
+            }
+
+            override fun setFlow(scrolled: Boolean) {
+                webViewRef.value?.evaluateJavascript(buildSetFlowScript(scrolled), null)
+            }
+
+            override fun applyAnnotations(entries: List<EpubAnnotationSpec>) {
+                webViewRef.value?.evaluateJavascript(buildApplyAnnotationsScript(entries), null)
+            }
+
+            override fun removeAnnotation(cfi: String) {
+                webViewRef.value?.evaluateJavascript(buildRemoveAnnotationScript(cfi), null)
+            }
+
+            override fun search(query: String, token: Int) {
+                webViewRef.value?.evaluateJavascript(buildSearchScript(query, token), null)
+            }
+
+            override fun requestSpeechContext(cfi: String?) {
+                webViewRef.value?.evaluateJavascript(buildSpeechContextScript(cfi), null)
+            }
+
+            override fun setAutoScroll(enabled: Boolean, pxPerSec: Int) {
+                webViewRef.value?.evaluateJavascript(buildSetAutoScrollScript(enabled, pxPerSec), null)
             }
         }
     }

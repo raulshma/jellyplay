@@ -22,6 +22,30 @@ internal sealed interface EpubEvent {
 
     /** Flattened table of contents (JS side already flattened subitems). */
     data class Toc(val items: List<EpubTocItem>) : EpubEvent
+
+    /** Rich relocation: chapter label + remaining chapter pages (see [EpubRelocation]). */
+    data class Relocated(val relocation: EpubRelocation) : EpubEvent
+
+    /** Content tap zone. */
+    data class Tap(val zone: EpubTapZone) : EpubEvent
+
+    /** Text selection inside the content iframe. */
+    data class Selected(val cfi: String, val text: String) : EpubEvent
+
+    /** The previously reported selection went away. */
+    data object SelectionCleared : EpubEvent
+
+    /** Final event of one `search` call (token-matched). */
+    data class SearchResults(val token: Int, val results: List<EpubSearchResult>) : EpubEvent
+
+    /** The chapter's speakable paragraphs (answer to `getSpeechContext`). */
+    data class SpeechContext(val paragraphs: List<EpubSpeechParagraph>) : EpubEvent
+
+    /** rAF auto-scroll ended (user input, end of book, or turned off). */
+    data object AutoScrollStopped : EpubEvent
+
+    /** A `display(cfi)` failed (goToCfi / flow switch) — native falls back to percent. */
+    data class DisplayError(val cfi: String) : EpubEvent
 }
 
 internal data class EpubTocItem(val label: String, val href: String)
@@ -56,6 +80,27 @@ internal object EpubEventParser {
                 ?.takeIf { it.isNotBlank() }
                 ?.let { EpubEvent.Direction(it.toReadingDirection()) }
             "toc" -> EpubEvent.Toc(tocItems(map["value"]))
+            // Optional fields absent → nulls/"" (locations not ready, or an
+            // older reader.js that only posts the plain percent).
+            "relocated" -> EpubEvent.Relocated(
+                EpubRelocation(
+                    percent = (map["percent"] as? Number)?.toDouble()?.coerceIn(0.0, 1.0),
+                    chapterLabel = (map["chapterLabel"] as? String).orEmpty(),
+                    remainingPages = (map["remainingPages"] as? Number)?.toInt(),
+                ),
+            )
+            "tap" -> (map["zone"] as? String)?.toEpubTapZone()?.let { EpubEvent.Tap(it) }
+            "selected" -> (map["cfi"] as? String)
+                ?.takeIf { it.isNotBlank() }
+                ?.let { EpubEvent.Selected(cfi = it, text = (map["text"] as? String).orEmpty()) }
+            "selectionCleared" -> EpubEvent.SelectionCleared
+            "searchResults" -> {
+                val token = (map["token"] as? Number)?.toInt()
+                if (token == null) null else EpubEvent.SearchResults(token, searchResults(map["results"]))
+            }
+            "speechContext" -> EpubEvent.SpeechContext(speechParagraphs(map["paragraphs"]))
+            "autoScrollStopped" -> EpubEvent.AutoScrollStopped
+            "displayError" -> EpubEvent.DisplayError((map["cfi"] as? String).orEmpty())
             else -> null
         }
     }
@@ -65,6 +110,24 @@ internal object EpubEventParser {
             val map = item as? Map<*, *> ?: return@mapNotNull null
             val href = (map["href"] as? String)?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
             EpubTocItem(label = (map["label"] as? String).orEmpty(), href = href)
+        } ?: emptyList()
+
+    private fun searchResults(value: Any?): List<EpubSearchResult> =
+        (value as? List<*>)?.mapNotNull { item ->
+            val map = item as? Map<*, *> ?: return@mapNotNull null
+            val cfi = (map["cfi"] as? String)?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            EpubSearchResult(
+                cfi = cfi,
+                excerpt = (map["excerpt"] as? String).orEmpty(),
+                chapter = (map["chapter"] as? String).orEmpty(),
+            )
+        } ?: emptyList()
+
+    private fun speechParagraphs(value: Any?): List<EpubSpeechParagraph> =
+        (value as? List<*>)?.mapNotNull { item ->
+            val map = item as? Map<*, *> ?: return@mapNotNull null
+            val cfi = (map["cfi"] as? String)?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            EpubSpeechParagraph(cfi = cfi, text = (map["text"] as? String).orEmpty())
         } ?: emptyList()
 }
 
@@ -79,6 +142,14 @@ internal fun dispatchEpubEvents(raw: String?, callbacks: EpubReaderCallbacks) {
             is EpubEvent.Status -> callbacks.onStatusChanged(event.status)
             is EpubEvent.Direction -> callbacks.onDirectionReported(event.direction)
             is EpubEvent.Toc -> callbacks.onTocReady(event.items)
+            is EpubEvent.Relocated -> callbacks.onRelocated(event.relocation)
+            is EpubEvent.Tap -> callbacks.onTap(event.zone)
+            is EpubEvent.Selected -> callbacks.onSelection(event.cfi, event.text)
+            EpubEvent.SelectionCleared -> callbacks.onSelectionCleared()
+            is EpubEvent.SearchResults -> callbacks.onSearchResults(event.token, event.results)
+            is EpubEvent.SpeechContext -> callbacks.onSpeechContext(event.paragraphs)
+            EpubEvent.AutoScrollStopped -> callbacks.onAutoScrollStopped()
+            is EpubEvent.DisplayError -> callbacks.onDisplayError(event.cfi)
         }
     }
 }
@@ -95,6 +166,13 @@ private fun String.toEpubStatus(): EpubReaderStatus = when (this) {
 
 private fun String.toReadingDirection(): ReadingDirection =
     if (equals("rtl", ignoreCase = true)) ReadingDirection.RTL else ReadingDirection.LTR
+
+private fun String.toEpubTapZone(): EpubTapZone? = when (this) {
+    "left" -> EpubTapZone.LEFT
+    "right" -> EpubTapZone.RIGHT
+    "center" -> EpubTapZone.CENTER
+    else -> null // unknown zones are dropped, never guessed
+}
 
 /** Minimal strict JSON reader (objects/arrays/strings/numbers/booleans/null). */
 internal object MiniJson {
