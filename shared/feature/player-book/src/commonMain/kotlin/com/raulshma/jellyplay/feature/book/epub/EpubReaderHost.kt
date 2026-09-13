@@ -92,7 +92,10 @@ internal class EpubReaderCallbacks(
     val onTocReady: (List<EpubTocItem>) -> Unit = {},
     /** Fires on every relocation with the chapter label / remaining pages. */
     val onRelocated: (EpubRelocation) -> Unit = {},
+    /** Content tap, already resolved to a zone ([tapZoneFor]) from raw x + width. */
     val onTap: (EpubTapZone) -> Unit = {},
+    /** Horizontal swipe (`true` = physical left); mapped to a zone by the screen. */
+    val onSwipe: (toLeft: Boolean) -> Unit = {},
     val onSelection: (cfi: String, text: String) -> Unit = { _, _ -> },
     val onSelectionCleared: () -> Unit = {},
     /** One final event per `search` call — a newer token supersedes older ones. */

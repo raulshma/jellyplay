@@ -10,8 +10,8 @@
     <string name="book_reader_error_no_path">Der Server hat für dieses Buch keinen Dateipfad gesendet</string>
     <string name="book_reader_loading">Buch wird vorbereitet…</string>
     <string name="book_reader_preparing_locations">Lesepositionen werden vorbereitet…</string>
-    <string name="book_reader_downloading_viewer">Anzeigekomponenten werden geladen %1$d%%</string>
-    <string name="book_reader_percent">%1$d%% gelesen</string>
+    <string name="book_reader_downloading_viewer">Anzeigekomponenten werden geladen %1$d%</string>
+    <string name="book_reader_percent">%1$d% gelesen</string>
     <string name="book_reader_theme">Design</string>
     <string name="book_reader_theme_dark">Dunkel</string>
     <string name="book_reader_theme_sepia">Sepia</string>
@@ -22,7 +22,7 @@
     <string name="book_reader_bookmarks">Lesezeichen</string>
     <string name="book_reader_bookmarks_empty">Noch keine Lesezeichen</string>
     <string name="book_reader_bookmark_page">Seite %1$d</string>
-    <string name="book_reader_bookmark_percent">%1$d%%</string>
+    <string name="book_reader_bookmark_percent">%1$d%</string>
     <string name="book_reader_search">Im Buch suchen</string>
     <string name="book_reader_search_hint">Text suchen…</string>
     <string name="book_reader_search_searching">Suche…</string>
@@ -43,7 +43,7 @@
     <string name="book_reader_font_sans">Serifenlos</string>
     <string name="book_reader_font_mono">Monospace</string>
     <string name="book_reader_line_height">Zeilenhöhe</string>
-    <string name="book_reader_line_height_value">%1$.1f×</string>
+    <string name="book_reader_line_height_value">%1$s×</string>
     <string name="book_reader_margins">Ränder</string>
     <string name="book_reader_justify">Text im Blocksatz</string>
     <string name="book_reader_scroll_mode">Scrollmodus</string>

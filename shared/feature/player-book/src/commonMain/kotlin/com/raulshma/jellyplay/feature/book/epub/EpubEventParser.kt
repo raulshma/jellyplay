@@ -26,8 +26,11 @@ internal sealed interface EpubEvent {
     /** Rich relocation: chapter label + remaining chapter pages (see [EpubRelocation]). */
     data class Relocated(val relocation: EpubRelocation) : EpubEvent
 
-    /** Content tap zone. */
+    /** Content tap, resolved to a zone from the raw x + viewport width. */
     data class Tap(val zone: EpubTapZone) : EpubEvent
+
+    /** Horizontal content swipe; `toLeft` is the physical swipe direction. */
+    data class Swipe(val toLeft: Boolean) : EpubEvent
 
     /** Text selection inside the content iframe. */
     data class Selected(val cfi: String, val text: String) : EpubEvent
@@ -91,7 +94,14 @@ internal object EpubEventParser {
                     cfi = (map["cfi"] as? String)?.takeIf { it.isNotBlank() },
                 ),
             )
-            "tap" -> (map["zone"] as? String)?.toEpubTapZone()?.let { EpubEvent.Tap(it) }
+            "tap" -> EpubEvent.Tap(
+                tapZoneFor(
+                    x = (map["x"] as? Number)?.toDouble(),
+                    width = (map["width"] as? Number)?.toDouble(),
+                ),
+            )
+            "swipe" -> (map["dir"] as? String)?.takeIf { it == "left" || it == "right" }
+                ?.let { EpubEvent.Swipe(toLeft = it == "left") }
             "selected" -> (map["cfi"] as? String)
                 ?.takeIf { it.isNotBlank() }
                 ?.let { EpubEvent.Selected(cfi = it, text = (map["text"] as? String).orEmpty()) }
@@ -146,6 +156,7 @@ internal fun dispatchEpubEvents(raw: String?, callbacks: EpubReaderCallbacks) {
             is EpubEvent.Toc -> callbacks.onTocReady(event.items)
             is EpubEvent.Relocated -> callbacks.onRelocated(event.relocation)
             is EpubEvent.Tap -> callbacks.onTap(event.zone)
+            is EpubEvent.Swipe -> callbacks.onSwipe(event.toLeft)
             is EpubEvent.Selected -> callbacks.onSelection(event.cfi, event.text)
             EpubEvent.SelectionCleared -> callbacks.onSelectionCleared()
             is EpubEvent.SearchResults -> callbacks.onSearchResults(event.token, event.results)
@@ -153,6 +164,23 @@ internal fun dispatchEpubEvents(raw: String?, callbacks: EpubReaderCallbacks) {
             EpubEvent.AutoScrollStopped -> callbacks.onAutoScrollStopped()
             is EpubEvent.DisplayError -> callbacks.onDisplayError(event.cfi)
         }
+    }
+}
+
+/**
+ * Resolves a content tap's zone from the raw gesture coordinates the
+ * WebView reports (iframe-relative x against the host page width — the
+ * content iframe is a full-bleed stage, so the scales agree). The DECISION
+ * lives here, unit-tested, instead of in reader.js: a missing/garbage width
+ * degrades to CENTER (chrome toggle — never a page turn), so a broken
+ * geometry report can never turn every tap into forward paging.
+ */
+internal fun tapZoneFor(x: Double?, width: Double?): EpubTapZone {
+    if (x == null || width == null || width <= 0.0 || x < 0.0 || x > width) return EpubTapZone.CENTER
+    return when {
+        x < width / 3.0 -> EpubTapZone.LEFT
+        x > width * 2.0 / 3.0 -> EpubTapZone.RIGHT
+        else -> EpubTapZone.CENTER
     }
 }
 
@@ -168,13 +196,6 @@ private fun String.toEpubStatus(): EpubReaderStatus = when (this) {
 
 private fun String.toReadingDirection(): ReadingDirection =
     if (equals("rtl", ignoreCase = true)) ReadingDirection.RTL else ReadingDirection.LTR
-
-private fun String.toEpubTapZone(): EpubTapZone? = when (this) {
-    "left" -> EpubTapZone.LEFT
-    "right" -> EpubTapZone.RIGHT
-    "center" -> EpubTapZone.CENTER
-    else -> null // unknown zones are dropped, never guessed
-}
 
 /** Minimal strict JSON reader (objects/arrays/strings/numbers/booleans/null). */
 internal object MiniJson {

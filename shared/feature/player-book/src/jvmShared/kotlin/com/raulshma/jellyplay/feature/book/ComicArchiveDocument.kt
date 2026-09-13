@@ -44,7 +44,11 @@ class ComicArchiveDocument private constructor(
         if (pageIndex !in 0 until source.pageCount) return null
         cache[comicCacheKey(pageIndex)]?.let { return it }
         val bytes = withContext(Dispatchers.IO) { source.readBytes(pageIndex) } ?: return null
-        return decodeImageBytes(bytes)?.also { cache.put(comicCacheKey(pageIndex), it) }
+        // Decode off the caller: the pager's LaunchedEffects run on the UI
+        // dispatcher, and a full comic page (BitmapFactory/ImageIO) is a
+        // multi-hundred-ms main-thread freeze if decoded in place.
+        return withContext(Dispatchers.Default) { decodeImageBytes(bytes) }
+            ?.also { cache.put(comicCacheKey(pageIndex), it) }
     }
 
     override fun onPageChanged(page: Int) = cache.onPageChanged(page)

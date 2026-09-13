@@ -11,8 +11,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearWavyProgressIndicator
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -28,6 +30,7 @@ import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Book
 import com.raulshma.jellyplay.core.datastore.reader.ReadingDirection
 import com.raulshma.jellyplay.core.datastore.reader.ReaderTheme
+import com.raulshma.jellyplay.core.ui.components.JellyPlayBackHandler
 import com.raulshma.jellyplay.feature.book.generated.resources.Res
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_error_cannot_open
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_error_no_path
@@ -70,6 +73,14 @@ fun BookReaderScreen(
         }
     }
 
+    // The reader is a full-screen player-class route: the shell's global back
+    // handler is skipped while it is open (JellyPlayApp's isFullScreenRoute
+    // branch), so it must intercept the system back itself — without this the
+    // gesture/button falls through to the Activity and closes the app (the
+    // video player's precedent). Open ModalBottomSheets intercept back through
+    // their own windows first, so this only fires when the reader is exposed.
+    JellyPlayBackHandler(enabled = true, onBack = onBack)
+
     LaunchedEffect(itemId) {
         viewModel.load(itemId)
     }
@@ -101,17 +112,18 @@ fun BookReaderScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun LoadingVeil(state: BookReaderUiState.Loading) {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
             if (state.progress != null) {
-                LinearProgressIndicator(
+                LinearWavyProgressIndicator(
                     progress = { state.progress },
                     modifier = Modifier.fillMaxWidth(0.5f),
                 )
             } else {
-                CircularProgressIndicator(modifier = Modifier.size(48.dp))
+                LoadingIndicator(modifier = Modifier.size(48.dp))
             }
             Text(
                 text = stringResource(Res.string.book_reader_loading),

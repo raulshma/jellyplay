@@ -15,6 +15,9 @@
     var QUEUE_LIMIT = 256;
     var MAX_SEARCH_RESULTS = 500;
     var DRAG_SLOP_PX = 8;
+    var SWIPE_MIN_PX = 60;
+    var TAP_MAX_MS = 500;
+    var TOUCH_ECHO_MS = 700;
     var BLOCK_SELECTOR = 'p, h1, h2, h3, h4, h5, h6, li, blockquote, dd, dt, td, pre';
     var SPEECH_BLOCK_SELECTOR = 'p, h1, h2, h3, h4, h5, h6, li, blockquote';
     var EXCERPT_RADIUS = 40;
@@ -82,6 +85,8 @@
     var tocLabels = {};
     var hasSelection = false;
     var pointerDown = null;
+    var touchStart = null;
+    var lastTouchAt = -TOUCH_ECHO_MS;
     var autoScrollRaf = null;
     var autoScrollLastTs = 0;
     var autoScrollPxPerSec = 60;
@@ -115,11 +120,27 @@
     }
 
     function currentPercent() {
-        if (!book || !locationsReady || !book.locations) return null;
-        var loc = currentLocation();
-        if (!loc || !loc.start || !loc.start.cfi) return null;
-        var percent = book.locations.percentageFromCfi(loc.start.cfi);
-        return typeof percent === 'number' && !isNaN(percent) ? percent : null;
+        if (!rendition) return null;
+        try {
+            var loc = currentLocation();
+            if (!loc || !loc.start || !loc.start.cfi) return null;
+            if (book && locationsReady && book.locations) {
+                var percent = book.locations.percentageFromCfi(loc.start.cfi);
+                if (typeof percent === 'number' && !isNaN(percent)) return percent;
+            }
+            // Locations not generated (yet): fall back to the spine fraction
+            // so the percent readout and progress reports leave 0 immediately
+            // — generating locations on a large book can take minutes, and
+            // the relocated event used to report null percent the whole time.
+            if (book && book.spine) {
+                var item = book.spine.get(loc.start.cfi) || (loc.start.href ? book.spine.get(loc.start.href) : null);
+                var count = book.spine.items ? book.spine.items.length : 0;
+                if (item && typeof item.index === 'number' && count > 0) {
+                    return item.index / count;
+                }
+            }
+        } catch (ignored) {}
+        return null;
     }
 
     function reportPercent() {
@@ -264,22 +285,36 @@
             }
         });
 
-        // epub.js relays DOM events from the iframes to the rendition.
-        rendition.on('mousedown', function (e) {
-            pointerDown = e && typeof e.clientX === 'number'
-                ? { x: e.clientX, y: e.clientY }
-                : null;
-        });
-        rendition.on('click', onContentClick);
-        rendition.on('touchstart', function () {
-            stopAutoScroll();
-        });
+        // NOTE: epub.js 0.3.x emits the raw forwarded content events
+        // (click / mousedown / touchstart / touchend / …) on the per-chapter
+        // Contents emitter ONLY — they never bubble to the rendition, so a
+        // rendition-level click listener would silently never fire (that
+        // was exactly why the tap zones were dead). Those inputs are wired
+        // per document in wireContents. 'selected' is different: epub.js
+        // explicitly forwards selection to the rendition, so it stays here.
         rendition.on('selected', onSelected);
     }
 
     function wireContents(contents) {
         if (!contents || !contents.document || contents.__jellyPlayWired) return;
         contents.__jellyPlayWired = true;
+        try {
+            // Same double-tap-zoom kill as the host page: book chapters carry
+            // their own markup, so without this the WebView delays every tap
+            // inside the iframe ~300 ms and swallows quick second taps.
+            contents.document.documentElement.style.touchAction = 'manipulation';
+        } catch (ignored) {}
+        try {
+            // The input listeners (see the wireRendition note): taps, swipe
+            // tracking and swipe navigation ride the Contents emitter — the
+            // only surface epub.js 0.3.x relays raw content events on.
+            contents.on('mousedown', onPointerDown);
+            contents.on('click', onContentClick);
+            contents.on('touchstart', onContentsTouchStart);
+            contents.on('touchend', onContentsTouchEnd);
+        } catch (ignored) {
+            // Contents emitter unavailable — keyboard paging still works.
+        }
         try {
             contents.document.addEventListener('selectionchange', function () {
                 var selection = contents.window && contents.window.getSelection
@@ -296,8 +331,132 @@
         }
     }
 
+    /*
+     * A live selection blocks content taps (selecting, not tapping). The
+     * per-document selectionchange watchers die with their chapter iframes,
+     * so a selection made in a chapter that is then turned away from would
+     * keep `hasSelection` latched forever — native stays in the selection
+     * bar and every tap is dropped. Swept on each relocation: when no live
+     * frame still holds a non-collapsed selection, clear the latch.
+     */
+    function sweepStaleSelection() {
+        if (!hasSelection) return;
+        var live = (rendition.getContents() || []).some(function (c) {
+            try {
+                var selection = c.window && c.window.getSelection ? c.window.getSelection() : null;
+                return selection && !selection.isCollapsed && String(selection).length > 0;
+            } catch (ignored) {
+                return false;
+            }
+        });
+        if (!live) {
+            hasSelection = false;
+            post({ type: 'selectionCleared' });
+        }
+    }
+
+    function onPointerDown(e) {
+        pointerDown = e && typeof e.clientX === 'number'
+            ? { x: e.clientX, y: e.clientY }
+            : null;
+    }
+
+    /** A live non-collapsed selection under the event's document, if any. */
+    function activeSelection(e) {
+        try {
+            var doc = e.target && e.target.ownerDocument;
+            var win = doc && doc.defaultView;
+            var selection = win && win.getSelection ? win.getSelection() : null;
+            return selection && !selection.isCollapsed;
+        } catch (ignored) {
+            return false;
+        }
+    }
+
+    function onContentsTouchStart(e) {
+        stopAutoScroll();
+        if (e && typeof e.timeStamp === 'number') lastTouchAt = e.timeStamp;
+        // Track single-finger starts only — a second finger is a pinch,
+        // never a swipe.
+        if (e && e.touches && e.touches.length === 1 && typeof e.touches[0].clientX === 'number') {
+            touchStart = {
+                x: e.touches[0].clientX,
+                y: e.touches[0].clientY,
+                t: typeof e.timeStamp === 'number' ? e.timeStamp : 0,
+            };
+        } else {
+            touchStart = null;
+        }
+    }
+
+    /*
+     * Swipe → tap-zone event: a horizontal drag beyond [SWIPE_MIN_PX], and
+     * flatter than it is tall (so scrolled-flow scrolling never trips it),
+     * posts the zone a tap on the trailing/leading third would produce.
+     * Physical mapping: dx < 0 (swipe left) posts 'right' — FORWARD under
+     * LTR, BACKWARD under RTL — which is exactly how native maps a tap in
+     * that third, and it reuses the native direction logic (book metadata
+     * OR the user's per-book override) instead of re-deriving it here.
+     * Selection guards match onContentClick: selecting text is not swiping.
+     */
+    function onContentsTouchEnd(e) {
+        var start = touchStart;
+        touchStart = null;
+        if (e && typeof e.timeStamp === 'number') lastTouchAt = e.timeStamp;
+        if (!start || !e || !e.changedTouches || !e.changedTouches.length) return;
+        var endX = e.changedTouches[0].clientX;
+        var endY = e.changedTouches[0].clientY;
+        var dx = endX - start.x;
+        var dy = endY - start.y;
+        // Horizontal swipe → physical direction only (native maps it through
+        // the same direction-aware zone logic as taps). Must be flatter than
+        // it is tall, or scrolled-flow scrolling would turn pages.
+        if (Math.abs(dx) >= SWIPE_MIN_PX && Math.abs(dx) > Math.abs(dy)) {
+            if (hasSelection || activeSelection(e)) return;
+            post({ type: 'swipe', dir: dx < 0 ? 'left' : 'right' });
+            return;
+        }
+        // Tap: minimal movement, short press. Detected here — off the touch
+        // pair that provably fires — rather than the synthesized click, which
+        // the WebView may never produce (or produce late, after the renderer
+        // fell behind) inside the content iframe. Raw x + width go over the
+        // wire; native derives the zone.
+        if (Math.abs(dx) < DRAG_SLOP_PX && Math.abs(dy) < DRAG_SLOP_PX &&
+            (!start.t || !e.timeStamp || e.timeStamp - start.t < TAP_MAX_MS)) {
+            try {
+                var target = e.target;
+                if (target && target.closest && target.closest('a[href]')) return;
+            } catch (ignored) {}
+            if (hasSelection || activeSelection(e)) return;
+            reportTap(endX);
+        }
+    }
+
+    /*
+     * Raw gesture reporter — NO zone judgment here. Taps report the raw
+     * x + host viewport width and native derives the third (unit-testable,
+     * and a broken width degrades to the harmless center toggle instead of
+     * paging); swipes report only the physical direction. Every earlier
+     * attempt at classifying zones inside this file broke subtly once
+     * epub.js started turning pages (drifting iframe widths, late echo
+     * clicks) — native owns the mapping now.
+     */
+    function reportTap(x) {
+        post({
+            type: 'tap',
+            x: Math.round(typeof x === 'number' ? x : 0),
+            width: window.innerWidth || 0,
+        });
+    }
+
     function onContentClick(e) {
         if (!e) return;
+        // A click arriving shortly after a touch is the WebView's
+        // synthesized echo of a gesture the touch pair already handled.
+        // Echoes can land LATE once the renderer falls behind during page
+        // turns — timestamp-gated here, so the gate can never be re-armed
+        // by a newer gesture before the stale echo lands.
+        if (e.timeStamp && e.timeStamp - lastTouchAt < TOUCH_ECHO_MS) return;
         var target = e.target;
         try {
             // The book's own links (footnotes, cross-refs) belong to the book.
@@ -312,13 +471,7 @@
             var dy = e.clientY - pointerDown.y;
             if (dx * dx + dy * dy > DRAG_SLOP_PX * DRAG_SLOP_PX) return; // swipe, not tap
         }
-        var width = (win && win.innerWidth) || (viewerEl && viewerEl.clientWidth) || 1;
-        var x = typeof e.clientX === 'number' ? e.clientX : width / 2;
-        var zone;
-        if (x < width / 3) zone = 'left';
-        else if (x > width * 2 / 3) zone = 'right';
-        else zone = 'center';
-        post({ type: 'tap', zone: zone });
+        reportTap(typeof e.clientX === 'number' ? e.clientX : 0);
     }
 
     function onSelected(cfiRange, contents) {
@@ -333,6 +486,7 @@
     }
 
     function onRelocated(loc) {
+        sweepStaleSelection();
         reportPercent();
         var label = '';
         var remaining = null;

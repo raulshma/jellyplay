@@ -16,6 +16,11 @@
             height: 100%;
             background: #000;
             overflow: hidden;
+            /* No double-tap zoom: the WebView otherwise defers every tap
+               ~300 ms (waiting to see if it becomes a double tap) and eats
+               the second tap of a quick pair — the chrome toggle feels dead.
+               The content iframes get the same via wireContents. */
+            touch-action: manipulation;
         }
         #viewer { width: 100%; height: 100%; }
     </style>

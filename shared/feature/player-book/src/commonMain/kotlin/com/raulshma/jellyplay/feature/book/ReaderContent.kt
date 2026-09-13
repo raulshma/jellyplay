@@ -19,9 +19,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.LoadingIndicator
+import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -209,6 +210,8 @@ internal fun PagedReaderContent(
                 pageCount = content.pageCount,
                 brightnessPct = brightnessPct,
                 onBrightnessChange = viewModel::setBrightnessPct,
+                tocVisible = content.format == BookFormat.PDF,
+                onOpenToc = { showToc = true },
                 onSeekPage = { page ->
                     // Slider seeks only scroll the pager — the VM follows
                     // through the snapshotFlow (the original contract).
@@ -278,6 +281,7 @@ internal sealed interface NoteDialogTarget {
     data class Existing(val annotation: ReaderAnnotation) : NoteDialogTarget
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun ReflowableReaderContent(
     state: BookReaderUiState.Ready,
@@ -408,6 +412,12 @@ internal fun ReflowableReaderContent(
                 }
             },
             onTap = { zone -> handleJsTap(zone) },
+            onSwipe = { toLeft ->
+                // Physical swipe → the zone a tap on that side would produce
+                // (swipe left ≡ tap right), so navigation rides the exact
+                // same direction-aware mapping as taps.
+                handleJsTap(if (toLeft) EpubTapZone.RIGHT else EpubTapZone.LEFT)
+            },
             onSpeechContext = { paragraphs -> viewModel.onSpeechContext(paragraphs) },
             onAutoScrollStopped = { autoScrollActive = false },
         )
@@ -589,7 +599,7 @@ internal fun ReflowableReaderContent(
                     style = MaterialTheme.typography.bodyMedium,
                     color = Color.White.copy(alpha = 0.7f),
                 )
-                LinearProgressIndicator(
+                LinearWavyProgressIndicator(
                     progress = { progress },
                     modifier = Modifier.fillMaxWidth(0.5f).padding(top = 16.dp),
                 )
@@ -597,7 +607,7 @@ internal fun ReflowableReaderContent(
         } ?: run {
             if (epubStatus != EpubReaderStatus.READY && epubStatus != EpubReaderStatus.ERROR) {
                 ReaderVeil {
-                    CircularProgressIndicator(modifier = Modifier.size(48.dp))
+                    LoadingIndicator(modifier = Modifier.size(48.dp))
                     Text(
                         text = stringResource(Res.string.book_reader_preparing_locations),
                         style = MaterialTheme.typography.bodyMedium,
@@ -629,7 +639,9 @@ internal fun ReflowableReaderContent(
             modifier = Modifier.align(Alignment.BottomCenter),
         ) {
             ReflowableBottomBar(
-                percent = percent,
+                // The relocated event's percent (latest) wins once a location
+                // exists; the percent-event state is the boot fallback.
+                percent = epubLocation?.percent ?: percent,
                 remainingPages = epubLocation?.remainingPages,
                 minutesLeftInChapter = epubLocation?.remainingPages
                     ?.let { locationPagesMinutesRemaining(it, readingSpeedWpm) },
@@ -637,6 +649,7 @@ internal fun ReflowableReaderContent(
                     ?.let { locationPagesMinutesRemaining(it, readingSpeedWpm) },
                 brightnessPct = brightnessPct,
                 onBrightnessChange = viewModel::setBrightnessPct,
+                onOpenToc = { showToc = true },
                 speechAvailable = speechAvailable,
                 speechActive = speechState.active,
                 speechPaused = speechState.paused,
@@ -891,6 +904,7 @@ private class PageZoomState {
  * zoom never visually jumps. A page turn disposes the tile (the pager keeps
  * no off-screen pages), which snaps the next visit back to 1×.
  */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun PageTile(
     pageIndex: Int,
@@ -1000,7 +1014,10 @@ private fun PageTile(
                 tint = Color.White.copy(alpha = 0.4f),
                 modifier = Modifier.size(36.dp),
             )
-            else -> CircularProgressIndicator(modifier = Modifier.size(36.dp), color = Color.White.copy(alpha = 0.6f))
+            else -> LoadingIndicator(
+                modifier = Modifier.size(36.dp),
+                color = Color.White.copy(alpha = 0.6f),
+            )
         }
     }
 }

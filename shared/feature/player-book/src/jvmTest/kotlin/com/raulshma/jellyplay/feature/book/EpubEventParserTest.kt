@@ -174,21 +174,59 @@ class EpubEventParserTest {
     }
 
     @Test
-    fun `tap event decodes every zone and drops unknown zones`() {
+    fun `tap event resolves the zone from raw x and width`() {
         assertEquals(
             listOf(EpubEvent.Tap(EpubTapZone.LEFT)),
-            EpubEventParser.parse("""{"type":"tap","zone":"left"}"""),
+            EpubEventParser.parse("""{"type":"tap","x":40,"width":400}"""),
         )
         assertEquals(
             listOf(EpubEvent.Tap(EpubTapZone.CENTER)),
-            EpubEventParser.parse("""{"type":"tap","zone":"center"}"""),
+            EpubEventParser.parse("""{"type":"tap","x":200,"width":400}"""),
         )
         assertEquals(
             listOf(EpubEvent.Tap(EpubTapZone.RIGHT)),
-            EpubEventParser.parse("""{"type":"tap","zone":"right"}"""),
+            EpubEventParser.parse("""{"type":"tap","x":360,"width":400}"""),
         )
-        assertTrue(EpubEventParser.parse("""{"type":"tap","zone":"diagonal"}""").isEmpty())
-        assertTrue(EpubEventParser.parse("""{"type":"tap"}""").isEmpty())
+    }
+
+    @Test
+    fun `tap event degrades to center — never a page turn — on broken geometry`() {
+        // TheWebView geometry report failing (width 0/absent, x outside the
+        // viewport) must yield the harmless chrome toggle, not a page turn.
+        assertEquals(
+            listOf(EpubEvent.Tap(EpubTapZone.CENTER)),
+            EpubEventParser.parse("""{"type":"tap","x":40,"width":0}"""),
+        )
+        assertEquals(
+            listOf(EpubEvent.Tap(EpubTapZone.CENTER)),
+            EpubEventParser.parse("""{"type":"tap","x":40}"""),
+        )
+        assertEquals(
+            listOf(EpubEvent.Tap(EpubTapZone.CENTER)),
+            EpubEventParser.parse("""{"type":"tap"}"""),
+        )
+        assertEquals(
+            listOf(EpubEvent.Tap(EpubTapZone.CENTER)),
+            EpubEventParser.parse("""{"type":"tap","x":900,"width":400}"""),
+        )
+        assertEquals(
+            listOf(EpubEvent.Tap(EpubTapZone.CENTER)),
+            EpubEventParser.parse("""{"type":"tap","x":-5,"width":400}"""),
+        )
+    }
+
+    @Test
+    fun `swipe event decodes physical direction and drops unknown directions`() {
+        assertEquals(
+            listOf(EpubEvent.Swipe(toLeft = true)),
+            EpubEventParser.parse("""{"type":"swipe","dir":"left"}"""),
+        )
+        assertEquals(
+            listOf(EpubEvent.Swipe(toLeft = false)),
+            EpubEventParser.parse("""{"type":"swipe","dir":"right"}"""),
+        )
+        assertTrue(EpubEventParser.parse("""{"type":"swipe","dir":"up"}""").isEmpty())
+        assertTrue(EpubEventParser.parse("""{"type":"swipe"}""").isEmpty())
     }
 
     @Test
@@ -372,6 +410,7 @@ class EpubEventParserTest {
     fun `dispatcher routes the new event kinds into their callbacks`() {
         val relocations = mutableListOf<EpubRelocation>()
         val taps = mutableListOf<EpubTapZone>()
+        val swipes = mutableListOf<Boolean>()
         val selections = mutableListOf<Pair<String, String>>()
         var selectionsCleared = 0
         val searches = mutableListOf<Pair<Int, List<EpubSearchResult>>>()
@@ -382,7 +421,8 @@ class EpubEventParserTest {
         dispatchEpubEvents(
             """[
                |{"type":"relocated","percent":0.5,"chapterLabel":"C","remainingPages":4,"cfi":"epubcfi(/6/8!/4/2)"},
-               |{"type":"tap","zone":"right"},
+               |{"type":"tap","x":300,"width":400},
+               |{"type":"swipe","dir":"left"},
                |{"type":"selected","cfi":"epubcfi(/6/4)","text":"hi"},
                |{"type":"selectionCleared"},
                |{"type":"searchResults","token":9,"results":[{"cfi":"epubcfi(/6/4)","excerpt":"hi","chapter":"C"}]},
@@ -393,6 +433,7 @@ class EpubEventParserTest {
             EpubReaderCallbacks(
                 onRelocated = { relocations.add(it) },
                 onTap = { taps.add(it) },
+                onSwipe = { toLeft -> swipes.add(toLeft) },
                 onSelection = { cfi, text -> selections.add(cfi to text) },
                 onSelectionCleared = { selectionsCleared++ },
                 onSearchResults = { token, results -> searches.add(token to results) },
@@ -404,6 +445,7 @@ class EpubEventParserTest {
 
         assertEquals(listOf(EpubRelocation(0.5, "C", 4, cfi = "epubcfi(/6/8!/4/2)")), relocations)
         assertEquals(listOf(EpubTapZone.RIGHT), taps)
+        assertEquals(listOf(true), swipes)
         assertEquals(listOf("epubcfi(/6/4)" to "hi"), selections)
         assertEquals(1, selectionsCleared)
         assertEquals(listOf(9 to listOf(EpubSearchResult("epubcfi(/6/4)", "hi", "C"))), searches)

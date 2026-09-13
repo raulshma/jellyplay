@@ -249,4 +249,34 @@ class EpubReaderScriptTest {
             scripts,
         )
     }
+
+    /**
+     * Regresses the dead tap-zone wiring: epub.js 0.3.x emits the raw
+     * forwarded content events (click/mousedown/touchstart/touchend) on the
+     * per-chapter Contents emitter ONLY — they never bubble to the
+     * rendition, so a `rendition.on('click', …)` listener silently never
+     * fires and the reader's tap zones (chrome toggle + paging) stay dead.
+     */
+    @Test
+    fun `reader js wires content input on the contents emitter`() {
+        val source = java.io.File("src/commonMain/composeResources/files/epubjs/reader.js").readText()
+        kotlin.test.assertTrue(source.contains("contents.on('click', onContentClick)"), "click must ride contents")
+        kotlin.test.assertTrue(source.contains("contents.on('touchend', onContentsTouchEnd)"), "swipe must ride contents")
+        kotlin.test.assertTrue(!source.contains("rendition.on('click'"), "rendition-level click never fires")
+        // Touch taps are detected from the touch pair (touchstart/touchend),
+        // not the synthesized click — the WebView may never produce a click
+        // inside the content iframe, which left the chrome toggle dead.
+        kotlin.test.assertTrue(source.contains("reportTap(endX"), "touch taps must come from the touch pair")
+        // Late synthesized echo clicks (renderer falls behind during page
+        // turns) must be timestamp-gated, or a stale echo double-fires a
+        // different zone than the gesture's own tap.
+        kotlin.test.assertTrue(source.contains("e.timeStamp - lastTouchAt"), "echo clicks must be time-gated")
+        // The JS side reports RAW gesture facts only — tap x + viewport
+        // width, swipe direction — never a zone. Native owns the mapping
+        // (unit-tested there) so JS-side geometry drift can never turn a
+        // center tap into a page turn again.
+        kotlin.test.assertTrue(source.contains("width: window.innerWidth || 0"), "taps must carry the viewport width")
+        kotlin.test.assertTrue(!source.contains("zoneFromX"), "zone judgment must not live in JS")
+        kotlin.test.assertTrue(source.contains("'swipe', dir:"), "swipes must report physical direction")
+    }
 }

@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.book
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -8,6 +9,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.CircularProgressIndicator
@@ -177,6 +180,9 @@ internal fun PagedSettingsSheet(
     onDismissRequest: () -> Unit,
 ) {
     ModalBottomSheet(onDismissRequest = onDismissRequest) {
+        Column(
+            modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+        ) {
         SheetTitle(text = stringResource(Res.string.book_reader_settings))
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 8.dp),
@@ -236,6 +242,7 @@ internal fun PagedSettingsSheet(
             }
         }
         Spacer(modifier = Modifier.height(24.dp))
+        }
     }
 }
 
@@ -273,8 +280,11 @@ internal fun ReflowableSettingsSheet(
     onDismissRequest: () -> Unit,
 ) {
     ModalBottomSheet(onDismissRequest = onDismissRequest) {
-        SheetTitle(text = stringResource(Res.string.book_reader_settings))
-        SectionLabel(text = stringResource(Res.string.book_reader_theme), topPadding = 0.dp)
+        Column(
+            modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+        ) {
+            SheetTitle(text = stringResource(Res.string.book_reader_settings))
+            SectionLabel(text = stringResource(Res.string.book_reader_theme), topPadding = 0.dp)
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -398,6 +408,7 @@ internal fun ReflowableSettingsSheet(
             Text(stringResource(Res.string.book_reader_toc))
         }
         Spacer(modifier = Modifier.height(24.dp))
+        }
     }
 }
 
@@ -441,10 +452,9 @@ private fun CommitSliderRow(
     }
 }
 
-/**
- * Line-height slider (1.0×–2.0×, the store band / 100). Commit-on-settle per
- * the page-slider convention; the "1.6×" style value label rides along.
- */
+/** Line-height slider (1.0×–2.0×, the store band / 100). Commit-on-settle per
+ * the page-slider convention; the value label rides along (formatted in code —
+ * the resources pipeline does not handle `%1$.1f`-style conversions). */
 @Composable
 private fun LineHeightSlider(lineHeightPct: Int, onCommit: (Int) -> Unit) {
     CommitSliderRow(
@@ -452,10 +462,13 @@ private fun LineHeightSlider(lineHeightPct: Int, onCommit: (Int) -> Unit) {
         value = lineHeightPct,
         valueRange = ReaderStore.MIN_LINE_HEIGHT_PCT.toFloat()..ReaderStore.MAX_LINE_HEIGHT_PCT.toFloat(),
         coerceIn = ReaderStore.MIN_LINE_HEIGHT_PCT..ReaderStore.MAX_LINE_HEIGHT_PCT,
-        valueCaption = { stringResource(Res.string.book_reader_line_height_value, it / 100f) },
+        valueCaption = { stringResource(Res.string.book_reader_line_height_value, lineHeightLabel(it)) },
         onCommit = onCommit,
     )
 }
+
+/** 150 (percent of base) → "1.5" — the line-height × multiplier, one decimal. */
+internal fun lineHeightLabel(pct: Int): String = "${pct / 100}.${(pct % 100) / 10}"
 
 /** Margin slider (0..100 %); commit-on-settle, plain "N %" value label. */
 @Composable
@@ -730,7 +743,12 @@ internal fun BookmarksSheet(
                 items(bookmarks, key = { it.id }) { bookmark ->
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                        // The whole row jumps — the trailing icon is a
+                        // redundant affordance, not the only target.
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onJump(bookmark) }
+                            .padding(horizontal = 16.dp),
                     ) {
                         Column(
                             modifier = Modifier.weight(1f),

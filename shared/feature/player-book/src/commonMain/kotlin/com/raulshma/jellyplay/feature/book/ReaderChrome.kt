@@ -32,6 +32,7 @@ import com.composables.icons.tabler.outline.ArrowLeft
 import com.composables.icons.tabler.outline.Bookmark
 import com.composables.icons.tabler.outline.Bookmarks
 import com.composables.icons.tabler.outline.Highlight
+import com.composables.icons.tabler.outline.List
 import com.composables.icons.tabler.outline.MoonStars
 import com.composables.icons.tabler.outline.PlayerPause
 import com.composables.icons.tabler.outline.PlayerPlay
@@ -46,6 +47,7 @@ import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_auto_
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_auto_scroll_stop
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_brightness
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_chapter_pages_left
+import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_toc
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_minutes_left
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_minutes_left_chapter
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_page_indicator
@@ -184,12 +186,14 @@ internal fun BrightnessDimOverlay(
 /**
  * The compact sun-icon + slider brightness row embedded in the bottom bars.
  * Local drag state with commit-on-settle (the page-slider convention) — the
- * veil itself follows the persisted value once the drag finishes.
+ * veil itself follows the persisted value once the drag finishes. [leading]
+ * slots an optional action before the sun icon (the paged bar's TOC entry).
  */
 @Composable
 private fun BrightnessSliderRow(
     brightnessPct: Int,
     onBrightnessChange: (Int) -> Unit,
+    leading: (@Composable () -> Unit)? = null,
 ) {
     var dragging by remember { mutableStateOf(false) }
     var dragValue by remember { mutableStateOf(100f) }
@@ -197,6 +201,7 @@ private fun BrightnessSliderRow(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
     ) {
+        leading?.invoke()
         Icon(
             imageVector = Tabler.Outline.Sun,
             contentDescription = stringResource(Res.string.book_reader_brightness),
@@ -216,9 +221,10 @@ private fun BrightnessSliderRow(
 }
 
 /**
- * The paged reader's bottom bar: the brightness row, a page slider with a
- * live "Page N of M" + "N pages left" label. [onSeekPage] receives the 0-based
- * target once the drag settles — dragging must not page per frame.
+ * The paged reader's bottom bar: the brightness row (with the TOC entry when
+ * the format has an outline), a page slider with a live "Page N of M" +
+ * "N pages left" label. [onSeekPage] receives the 0-based target once the
+ * drag settles — dragging must not page per frame.
  */
 @Composable
 internal fun PagedBottomBar(
@@ -227,11 +233,29 @@ internal fun PagedBottomBar(
     brightnessPct: Int,
     onBrightnessChange: (Int) -> Unit,
     onSeekPage: (Int) -> Unit,
+    tocVisible: Boolean = false,
+    onOpenToc: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Surface(color = Color.Black.copy(alpha = 0.6f), modifier = modifier) {
         Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)) {
-            BrightnessSliderRow(brightnessPct = brightnessPct, onBrightnessChange = onBrightnessChange)
+            BrightnessSliderRow(
+                brightnessPct = brightnessPct,
+                onBrightnessChange = onBrightnessChange,
+                leading = if (tocVisible) {
+                    {
+                        IconButton(onClick = onOpenToc) {
+                            Icon(
+                                imageVector = Tabler.Outline.List,
+                                contentDescription = stringResource(Res.string.book_reader_toc),
+                                tint = Color.White,
+                            )
+                        }
+                    }
+                } else {
+                    null
+                },
+            )
             var dragging by remember { mutableStateOf(false) }
             var dragValue by remember { mutableStateOf(1f) }
             Slider(
@@ -266,14 +290,17 @@ internal fun PagedBottomBar(
 
 /**
  * The read-aloud action row embedded in the reflowable bottom chrome.
- * [speechAvailable] false (desktop/web) drops the whole speech cluster —
- * the caption in the settings sheet explains why; [speechActive] drives the
- * indicator tint and the skip/stop affordances (the play button doubles as
- * start when no session is live). The auto-scroll toggle joins the same row
- * right-aligned (scrolled flow only) — one compact transport strip.
+ * [onOpenToc] renders the always-visible TOC entry (leading — reachable on
+ * every book and platform without opening the settings sheet). [speechAvailable]
+ * false (desktop/web) drops the speech cluster — the caption in the settings
+ * sheet explains why; [speechActive] drives the indicator tint and the
+ * skip/stop affordances (the play button doubles as start when no session is
+ * live). The auto-scroll toggle joins the same row right-aligned (scrolled
+ * flow only) — one compact transport strip.
  */
 @Composable
 private fun ReaderTransportRow(
+    onOpenToc: () -> Unit,
     speechAvailable: Boolean,
     speechActive: Boolean,
     speechPaused: Boolean,
@@ -289,6 +316,13 @@ private fun ReaderTransportRow(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
     ) {
+        IconButton(onClick = onOpenToc) {
+            Icon(
+                imageVector = Tabler.Outline.List,
+                contentDescription = stringResource(Res.string.book_reader_toc),
+                tint = Color.White,
+            )
+        }
         if (speechAvailable) {
             Icon(
                 imageVector = Tabler.Outline.Volume2,
@@ -364,7 +398,8 @@ private fun ReaderTransportRow(
 
 /**
  * The reflowable reader's bottom bar: the read-aloud / auto-scroll transport
- * row (Android-only speech; auto-scroll in scrolled flow), the brightness
+ * row with the always-visible TOC entry (speech auto-scroll gated inside —
+ * the row itself stays so TOC is reachable on every book), the brightness
  * row, the read percent, the chapter-scoped pages the relocation event
  * reports, and the two "≈ N min left" estimates from
  * [locationPagesMinutesRemaining] — chapter-scoped (the relocated event's
@@ -379,6 +414,7 @@ internal fun ReflowableBottomBar(
     minutesLeftInBook: Int?,
     brightnessPct: Int,
     onBrightnessChange: (Int) -> Unit,
+    onOpenToc: () -> Unit = {},
     speechAvailable: Boolean = false,
     speechActive: Boolean = false,
     speechPaused: Boolean = false,
@@ -396,26 +432,25 @@ internal fun ReflowableBottomBar(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
         ) {
-            if (speechAvailable || autoScrollVisible) {
-                ReaderTransportRow(
-                    speechAvailable = speechAvailable,
-                    speechActive = speechActive,
-                    speechPaused = speechPaused,
-                    onSpeechToggle = onSpeechToggle,
-                    onSpeechSkipBack = onSpeechSkipBack,
-                    onSpeechSkipForward = onSpeechSkipForward,
-                    onSpeechStop = onSpeechStop,
-                    autoScrollVisible = autoScrollVisible,
-                    autoScrollActive = autoScrollActive,
-                    onAutoScrollToggle = onAutoScrollToggle,
+            ReaderTransportRow(
+                onOpenToc = onOpenToc,
+                speechAvailable = speechAvailable,
+                speechActive = speechActive,
+                speechPaused = speechPaused,
+                onSpeechToggle = onSpeechToggle,
+                onSpeechSkipBack = onSpeechSkipBack,
+                onSpeechSkipForward = onSpeechSkipForward,
+                onSpeechStop = onSpeechStop,
+                autoScrollVisible = autoScrollVisible,
+                autoScrollActive = autoScrollActive,
+                onAutoScrollToggle = onAutoScrollToggle,
+            )
+            if (speechActive) {
+                Text(
+                    text = stringResource(Res.string.book_reader_speech_active),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
                 )
-                if (speechActive) {
-                    Text(
-                        text = stringResource(Res.string.book_reader_speech_active),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                }
             }
             BrightnessSliderRow(brightnessPct = brightnessPct, onBrightnessChange = onBrightnessChange)
             Text(

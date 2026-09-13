@@ -24,7 +24,8 @@ import okio.Path
  * Android EPUB host: a stock `android.webkit.WebView` rendering the inlined
  * reader page over `https://jellyplay.local` (an HTTPS base URL avoids
  * file:// access entirely). JS → native rides `addJavascriptInterface`
- * (routed through [dispatchEpubEvents] on the bridge thread); appearance
+ * (re-posted onto the main thread before [dispatchEpubEvents] runs — the
+ * bridge thread must never touch the WebView or Compose state); appearance
  * pushes and commands ride `evaluateJavascript`.
  */
 @SuppressLint("SetJavaScriptEnabled")
@@ -37,8 +38,14 @@ internal actual fun rememberEpubReaderHost(
 ): EpubReaderHandle {
     val webViewRef = remember { mutableStateOf<WebView?>(null) }
     val callbacksRef = rememberUpdatedState(callbacks)
+    // Events re-posted onto the main thread: `addJavascriptInterface` methods
+    // run on the WebView's private JavaBridge thread, but the tap callbacks
+    // turn around and drive the host handle (evaluateJavascript — UI-thread
+    // only) and Compose screen state. Dispatching here keeps every callback
+    // on the thread the screen was written for.
     val bridge = remember {
-        EpubAndroidBridge { raw -> dispatchEpubEvents(raw, callbacksRef.value) }
+        val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
+        EpubAndroidBridge { raw -> mainHandler.post { dispatchEpubEvents(raw, callbacksRef.value) } }
     }
 
     var bookBase64 by remember { mutableStateOf<String?>(null) }
@@ -64,11 +71,12 @@ internal actual fun rememberEpubReaderHost(
     // protocol once the page's JS is reachable (see BOOK_CHUNK_CHARS).
     LaunchedEffect(pageLoaded, bookBase64) {
         val base64 = bookBase64 ?: return@LaunchedEffect
+        val view = webViewRef.value ?: return@LaunchedEffect
         if (!pageLoaded || bookSent) return@LaunchedEffect
+        // Flipped only once the view is in hand — marking it sent on a path
+        // that drops the send would strand the reader on the boot veil.
         bookSent = true
-        webViewRef.value?.let { view ->
-            sendBookChunks(base64, resumePercent, appearance) { view.evaluateJavascript(it, null) }
-        }
+        sendBookChunks(base64, resumePercent, appearance) { view.evaluateJavascript(it, null) }
     }
 
     AndroidView(
