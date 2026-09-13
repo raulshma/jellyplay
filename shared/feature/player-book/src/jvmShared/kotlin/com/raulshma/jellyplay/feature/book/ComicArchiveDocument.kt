@@ -23,7 +23,8 @@ import okio.Path
  * [decodeImageBytes] actual (Android BitmapFactory / desktop ImageIO) and
  * pass through a [PageCache] so a swipe never re-extracts the neighboring
  * page. Render sizing is ignored — archives carry no vector layer, so pages
- * decode at their native size.
+ * decode at their native size (pageSize stays null: the entry images are
+ * unknowable before extraction, and the cache key collapses to the page).
  */
 class ComicArchiveDocument private constructor(
     private val source: PageSource,
@@ -36,11 +37,14 @@ class ComicArchiveDocument private constructor(
     /** Entry names in page order — exposed (internal) for the natural-sort fixture test. */
     internal val pageEntryNames: List<String> get() = source.pageEntryNames
 
+    /** Archives ignore render width — one cache slot per page under a constant width. */
+    private fun comicCacheKey(pageIndex: Int): PageCacheKey = PageCacheKey(pageIndex, COMIC_CACHE_RENDER_WIDTH)
+
     override suspend fun renderPage(pageIndex: Int, widthPx: Int): ImageBitmap? {
         if (pageIndex !in 0 until source.pageCount) return null
-        cache[pageIndex]?.let { return it }
+        cache[comicCacheKey(pageIndex)]?.let { return it }
         val bytes = withContext(Dispatchers.IO) { source.readBytes(pageIndex) } ?: return null
-        return decodeImageBytes(bytes)?.also { cache.put(pageIndex, it) }
+        return decodeImageBytes(bytes)?.also { cache.put(comicCacheKey(pageIndex), it) }
     }
 
     override fun onPageChanged(page: Int) = cache.onPageChanged(page)
@@ -52,6 +56,9 @@ class ComicArchiveDocument private constructor(
 
     companion object {
         val IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "gif", "bmp", "webp")
+
+        /** Width component of the comic cache keys — sizing is ignored, so it is constant. */
+        private const val COMIC_CACHE_RENDER_WIDTH = 0
 
         /** Digit-aware natural order — "2" < "10"; digit runs compare numerically, the rest char-wise. */
         internal fun naturalCompare(a: String, b: String): Int {

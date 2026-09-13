@@ -7,8 +7,11 @@ import com.raulshma.jellyplay.core.data.repository.ReaderAnnotationColor
 import com.raulshma.jellyplay.core.data.repository.ReaderAnnotationStyle
 import com.raulshma.jellyplay.core.data.repository.ReaderAnnotationsRepository
 import com.raulshma.jellyplay.core.data.repository.ReaderBookmark
+import com.raulshma.jellyplay.core.datastore.reader.PerBookAppearance
+import com.raulshma.jellyplay.core.datastore.reader.ReaderFontFamily
 import com.raulshma.jellyplay.core.datastore.reader.ReaderSlice
 import com.raulshma.jellyplay.core.datastore.reader.ReaderStore
+import com.raulshma.jellyplay.core.datastore.reader.ReaderTheme
 import com.raulshma.jellyplay.core.model.BookFormat
 import com.raulshma.jellyplay.core.model.BookProgressPolicy
 import com.raulshma.jellyplay.core.model.MediaDetail
@@ -75,6 +78,20 @@ class BookReaderViewModelTest {
         every { readerStore.lastCfi(any()) } returns null
         coEvery { readerStore.setLastCfi(any(), any()) } returns Unit
         coEvery { playbackRepository.reportBookProgress(any(), any(), any()) } returns Result.success(Unit)
+        // Wave 4 preference setters (strict mockk needs the stubs up front).
+        coEvery { readerStore.setReaderTheme(any()) } returns Unit
+        coEvery { readerStore.setReaderFontSizePx(any()) } returns Unit
+        coEvery { readerStore.setPerBookAppearance(any(), any()) } returns Unit
+        coEvery { readerStore.setFontFamily(any()) } returns Unit
+        coEvery { readerStore.setLineHeightPct(any()) } returns Unit
+        coEvery { readerStore.setMarginPct(any()) } returns Unit
+        coEvery { readerStore.setJustify(any()) } returns Unit
+        coEvery { readerStore.setScrollMode(any()) } returns Unit
+        coEvery { readerStore.setBrightnessPct(any()) } returns Unit
+        coEvery { readerStore.setVolumeKeyPaging(any()) } returns Unit
+        coEvery { readerStore.setAnimatedPageTurns(any()) } returns Unit
+        coEvery { readerStore.setReadingSpeedWpm(any()) } returns Unit
+        every { readerStore.perBookAppearance(any()) } returns null
     }
 
     @AfterTest
@@ -345,6 +362,148 @@ class BookReaderViewModelTest {
         advanceUntilIdle()
 
         coVerify { readerStore.setLastCfi("item-1", "epubcfi(/6/20)") }
+    }
+
+    // ------------------------------------------------------------------
+    // Wave 4: typography + behavior setters, per-book appearance routing
+    // ------------------------------------------------------------------
+
+    @Test
+    fun `typography and behavior setters write clamped values through the store`() = runTest(mainDispatcher) {
+        stubDetail("novel.epub", positionTicks = 0L)
+        val vm = viewModel()
+        vm.load("item-1")
+        advanceUntilIdle()
+
+        vm.setFontFamily(ReaderFontFamily.SERIF)
+        vm.setLineHeightPct(150)
+        vm.setMarginPct(20)
+        vm.setJustify(true)
+        vm.setScrollMode(true)
+        vm.setBrightnessPct(40)
+        vm.setVolumeKeyPaging(true)
+        vm.setAnimatedPageTurns(false)
+        vm.setReadingSpeedWpm(300)
+        // Out-of-band inputs clamp into the store bands.
+        vm.setLineHeightPct(999)
+        vm.setMarginPct(-5)
+        vm.setBrightnessPct(120)
+        vm.setReadingSpeedWpm(5)
+        advanceUntilIdle()
+
+        coVerify { readerStore.setFontFamily(ReaderFontFamily.SERIF) }
+        coVerify { readerStore.setLineHeightPct(150) }
+        coVerify { readerStore.setLineHeightPct(200) }
+        coVerify { readerStore.setMarginPct(20) }
+        coVerify { readerStore.setMarginPct(0) }
+        coVerify { readerStore.setJustify(true) }
+        coVerify { readerStore.setScrollMode(true) }
+        coVerify { readerStore.setBrightnessPct(40) }
+        coVerify { readerStore.setBrightnessPct(100) }
+        coVerify { readerStore.setVolumeKeyPaging(true) }
+        coVerify { readerStore.setAnimatedPageTurns(false) }
+        coVerify { readerStore.setReadingSpeedWpm(300) }
+        coVerify { readerStore.setReadingSpeedWpm(100) }
+    }
+
+    @Test
+    fun `theme write routes into the override when one is active`() = runTest(mainDispatcher) {
+        stubDetail("novel.epub", positionTicks = 0L)
+        readerSlice.value = ReaderSlice(
+            readerTheme = ReaderTheme.DARK,
+            readerFontSizePx = 17,
+            perBookAppearance = mapOf("item-1" to PerBookAppearance(theme = ReaderTheme.DARK, fontSizePx = 19)),
+        )
+
+        val vm = viewModel()
+        vm.load("item-1")
+        advanceUntilIdle()
+
+        vm.setReaderTheme(ReaderTheme.SEPIA)
+        vm.adjustReaderFontSize(+2)
+        advanceUntilIdle()
+
+        // Per-book mode: both writes land in the override; the globals stay untouched.
+        coVerify {
+            readerStore.setPerBookAppearance("item-1", PerBookAppearance(theme = ReaderTheme.SEPIA, fontSizePx = 21))
+        }
+        coVerify(exactly = 0) { readerStore.setReaderTheme(any()) }
+        coVerify(exactly = 0) { readerStore.setReaderFontSizePx(any()) }
+    }
+
+    @Test
+    fun `theme write goes global without an override`() = runTest(mainDispatcher) {
+        stubDetail("novel.epub", positionTicks = 0L)
+
+        val vm = viewModel()
+        vm.load("item-1")
+        advanceUntilIdle()
+
+        vm.setReaderTheme(ReaderTheme.LIGHT)
+        vm.adjustReaderFontSize(+1)
+        advanceUntilIdle()
+
+        coVerify { readerStore.setReaderTheme(ReaderTheme.LIGHT) }
+        coVerify { readerStore.setReaderFontSizePx(18) }
+        coVerify(exactly = 0) { readerStore.setPerBookAppearance(any(), any()) }
+    }
+
+    @Test
+    fun `effective flows prefer the item override`() = runTest(mainDispatcher) {
+        stubDetail("novel.epub", positionTicks = 0L)
+        readerSlice.value = ReaderSlice(
+            readerTheme = ReaderTheme.DARK,
+            readerFontSizePx = 17,
+            perBookAppearance = mapOf("item-1" to PerBookAppearance(theme = ReaderTheme.SEPIA, fontSizePx = 22)),
+        )
+
+        val vm = viewModel()
+        vm.load("item-1")
+        advanceUntilIdle()
+
+        assertEquals(ReaderTheme.SEPIA, vm.effectiveReaderTheme.value)
+        assertEquals(22, vm.effectiveReaderFontSizePx.value)
+        assertEquals(PerBookAppearance(theme = ReaderTheme.SEPIA, fontSizePx = 22), vm.perBookAppearance.value)
+    }
+
+    @Test
+    fun `switching per-book off syncs the effective values into the globals then clears`() = runTest(mainDispatcher) {
+        stubDetail("novel.epub", positionTicks = 0L)
+        readerSlice.value = ReaderSlice(
+            readerTheme = ReaderTheme.DARK,
+            readerFontSizePx = 17,
+            perBookAppearance = mapOf("item-1" to PerBookAppearance(theme = ReaderTheme.SEPIA, fontSizePx = 22)),
+        )
+
+        val vm = viewModel()
+        vm.load("item-1")
+        advanceUntilIdle()
+
+        vm.setUsePerBookAppearance(false)
+        advanceUntilIdle()
+
+        // The in-session look survives the switch: effective → globals, then the override clears.
+        coVerify { readerStore.setReaderTheme(ReaderTheme.SEPIA) }
+        coVerify { readerStore.setReaderFontSizePx(22) }
+        coVerify { readerStore.setPerBookAppearance("item-1", null) }
+    }
+
+    @Test
+    fun `switching per-book on seeds the override with the effective values`() = runTest(mainDispatcher) {
+        stubDetail("novel.epub", positionTicks = 0L)
+        readerSlice.value = ReaderSlice(readerTheme = ReaderTheme.LIGHT, readerFontSizePx = 20)
+
+        val vm = viewModel()
+        vm.load("item-1")
+        advanceUntilIdle()
+
+        vm.setUsePerBookAppearance(true)
+        advanceUntilIdle()
+
+        coVerify {
+            readerStore.setPerBookAppearance("item-1", PerBookAppearance(theme = ReaderTheme.LIGHT, fontSizePx = 20))
+        }
+        coVerify(exactly = 0) { readerStore.setReaderTheme(any()) }
     }
 }
 

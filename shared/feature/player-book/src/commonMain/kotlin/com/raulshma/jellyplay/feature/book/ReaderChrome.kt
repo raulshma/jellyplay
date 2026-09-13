@@ -33,8 +33,13 @@ import com.composables.icons.tabler.outline.Bookmark
 import com.composables.icons.tabler.outline.Bookmarks
 import com.composables.icons.tabler.outline.Highlight
 import com.composables.icons.tabler.outline.Settings
+import com.composables.icons.tabler.outline.Sun
 import com.raulshma.jellyplay.feature.book.generated.resources.Res
+import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_brightness
+import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_chapter_pages_left
+import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_minutes_left_chapter
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_page_indicator
+import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_pages_left
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_percent
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_title_fallback
 import kotlin.math.roundToInt
@@ -43,10 +48,11 @@ import org.jetbrains.compose.resources.stringResource
 
 /**
  * The reader's shared, auto-hiding chrome: the top bar (title / back / mark
- * entries), the per-format bottom bar (page slider vs read percent), the
- * boot/error veils' container, the sheet title and the copy-confirmation
- * toast. Pure presentation — every action is a callback, the ViewModel owns
- * the state (video-player screen conventions).
+ * entries), the per-format bottom bar (page slider + pages left vs read
+ * percent + chapter time-left, both with the brightness row), the boot/error
+ * veils' container, the sheet title and the copy-confirmation toast. Pure
+ * presentation — every action is a callback, the ViewModel owns the state
+ * (video-player screen conventions).
  */
 
 /**
@@ -129,19 +135,75 @@ internal fun ReaderTopBar(
 }
 
 /**
- * The paged reader's bottom bar: a page slider with a live "Page N of M"
- * label. [onSeekPage] receives the 0-based target once the drag settles —
- * dragging must not page per frame.
+ * The brightness dim veil shared by BOTH content kinds: a plain background
+ * Box placed ABOVE the page/web content and BELOW the chrome + sheets, so
+ * the controls stay full-brightness. No `pointerInput` — it must never
+ * intercept taps meant for the content underneath. Nothing renders at 100 %.
+ */
+@Composable
+internal fun BrightnessDimOverlay(
+    brightnessPct: Int,
+    modifier: Modifier = Modifier,
+) {
+    if (brightnessPct >= 100) return
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = brightnessDimAlpha(brightnessPct))),
+    )
+}
+
+/**
+ * The compact sun-icon + slider brightness row embedded in the bottom bars.
+ * Local drag state with commit-on-settle (the page-slider convention) — the
+ * veil itself follows the persisted value once the drag finishes.
+ */
+@Composable
+private fun BrightnessSliderRow(
+    brightnessPct: Int,
+    onBrightnessChange: (Int) -> Unit,
+) {
+    var dragging by remember { mutableStateOf(false) }
+    var dragValue by remember { mutableStateOf(100f) }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+    ) {
+        Icon(
+            imageVector = Tabler.Outline.Sun,
+            contentDescription = stringResource(Res.string.book_reader_brightness),
+            tint = Color.White,
+        )
+        Slider(
+            value = if (dragging) dragValue else brightnessPct.toFloat(),
+            onValueChange = { dragging = true; dragValue = it },
+            onValueChangeFinished = {
+                dragging = false
+                onBrightnessChange(dragValue.roundToInt().coerceIn(0, 100))
+            },
+            valueRange = 0f..100f,
+            modifier = Modifier.weight(1f).padding(start = 12.dp),
+        )
+    }
+}
+
+/**
+ * The paged reader's bottom bar: the brightness row, a page slider with a
+ * live "Page N of M" + "N pages left" label. [onSeekPage] receives the 0-based
+ * target once the drag settles — dragging must not page per frame.
  */
 @Composable
 internal fun PagedBottomBar(
     currentPage: Int,
     pageCount: Int,
+    brightnessPct: Int,
+    onBrightnessChange: (Int) -> Unit,
     onSeekPage: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Surface(color = Color.Black.copy(alpha = 0.6f), modifier = modifier) {
         Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)) {
+            BrightnessSliderRow(brightnessPct = brightnessPct, onBrightnessChange = onBrightnessChange)
             var dragging by remember { mutableStateOf(false) }
             var dragValue by remember { mutableStateOf(1f) }
             Slider(
@@ -162,29 +224,62 @@ internal fun PagedBottomBar(
                 ),
                 style = MaterialTheme.typography.labelMedium,
                 color = Color.White,
+                modifier = Modifier.align(Alignment.CenterHorizontally),
+            )
+            Text(
+                text = stringResource(Res.string.book_reader_pages_left, pageCount - currentPage - 1),
+                style = MaterialTheme.typography.labelMedium,
+                color = Color.White.copy(alpha = 0.7f),
                 modifier = Modifier.align(Alignment.CenterHorizontally).padding(bottom = 8.dp),
             )
         }
     }
 }
 
-/** The reflowable reader's bottom bar: a plain read-percent label. */
+/**
+ * The reflowable reader's bottom bar: the brightness row plus the read
+ * percent, the chapter-scoped pages the relocation event reports, and the
+ * "≈ N min left in chapter" estimate from [chapterMinutesRemaining] (null
+ * rows simply drop — before locations exist there is nothing to report).
+ */
 @Composable
 internal fun ReflowableBottomBar(
     percent: Double,
+    remainingPages: Int?,
+    minutesLeftInChapter: Int?,
+    brightnessPct: Int,
+    onBrightnessChange: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Surface(color = Color.Black.copy(alpha = 0.6f), modifier = modifier) {
-        Text(
-            text = stringResource(
-                Res.string.book_reader_percent,
-                (percent * 100).roundToInt().coerceIn(0, 100),
-            ),
-            style = MaterialTheme.typography.labelMedium,
-            color = Color.White,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)
-                .padding(bottom = 8.dp),
-        )
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
+        ) {
+            BrightnessSliderRow(brightnessPct = brightnessPct, onBrightnessChange = onBrightnessChange)
+            Text(
+                text = stringResource(
+                    Res.string.book_reader_percent,
+                    (percent * 100).roundToInt().coerceIn(0, 100),
+                ),
+                style = MaterialTheme.typography.labelMedium,
+                color = Color.White,
+            )
+            remainingPages?.let { pages ->
+                Text(
+                    text = stringResource(Res.string.book_reader_chapter_pages_left, pages),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Color.White.copy(alpha = 0.7f),
+                )
+            }
+            minutesLeftInChapter?.let { minutes ->
+                Text(
+                    text = stringResource(Res.string.book_reader_minutes_left_chapter, minutes),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Color.White.copy(alpha = 0.7f),
+                )
+            }
+        }
     }
 }
 

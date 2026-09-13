@@ -311,13 +311,17 @@ internal fun sendBookChunks(
 /**
  * Appearance push for CHANGES after load (the initial values ride the
  * loadBook* protocol — a pre-load push would be a silent no-op, so the saved
- * values would be replaced by the reader defaults). Null optionals are not
- * pushed: they mean "leave the reader.js default in place".
+ * values would be replaced by the reader defaults). The font family is
+ * ALWAYS pushed: `null` (SYSTEM) pushes the empty stack, which reader.js
+ * maps to removeOverride — switching back to the system font must clear a
+ * previously applied stack. The remaining null optionals are not pushed:
+ * they mean "leave the reader.js default in place" (and their `false`/`0`
+ * script equivalents behave identically to the default anyway).
  */
 internal fun pushAppearanceScripts(appearance: EpubAppearance, eval: (String) -> Unit) {
     eval(buildSetThemeScript(appearance.theme))
     eval(buildSetFontSizeScript(appearance.fontSizePx))
-    appearance.fontFamilyCss?.let { eval(buildSetFontFamilyScript(it)) }
+    eval(buildSetFontFamilyScript(appearance.fontFamilyCss.orEmpty()))
     appearance.lineHeight?.let { eval(buildSetLineHeightScript(it)) }
     appearance.marginsPx?.let { eval(buildSetMarginsScript(it)) }
     appearance.justify?.let { eval(buildSetJustifyScript(it)) }

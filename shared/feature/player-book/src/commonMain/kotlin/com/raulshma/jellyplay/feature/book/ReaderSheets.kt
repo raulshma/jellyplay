@@ -18,6 +18,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -38,19 +40,39 @@ import com.composables.icons.tabler.outline.Plus
 import com.composables.icons.tabler.outline.Search
 import com.composables.icons.tabler.outline.Trash
 import com.raulshma.jellyplay.core.data.repository.ReaderBookmark
+import com.raulshma.jellyplay.core.datastore.reader.ReaderFontFamily
 import com.raulshma.jellyplay.core.datastore.reader.ReadingDirection
+import com.raulshma.jellyplay.core.datastore.reader.ReaderStore
 import com.raulshma.jellyplay.core.datastore.reader.ReaderTheme
 import com.raulshma.jellyplay.core.model.BookProgressPolicy
 import com.raulshma.jellyplay.feature.book.epub.EpubSearchResult
 import com.raulshma.jellyplay.feature.book.epub.EpubTocItem
 import com.raulshma.jellyplay.feature.book.generated.resources.Res
+import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_animated_turns
+import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_behavior
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_bookmark_page
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_bookmark_percent
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_bookmarks
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_bookmarks_empty
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_direction_ltr
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_direction_rtl
+import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_fit_mode
+import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_fit_original
+import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_fit_page
+import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_fit_width
+import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_font_family
+import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_font_mono
+import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_font_sans
+import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_font_serif
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_font_size
+import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_font_system
+import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_justify
+import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_line_height
+import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_line_height_value
+import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_margins
+import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_per_book
+import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_reading_speed
+import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_scroll_mode
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_search
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_search_hint
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_search_no_results
@@ -62,6 +84,8 @@ import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_theme
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_theme_sepia
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_toc
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_toc_empty
+import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_typography
+import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_volume_keys
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 import org.jetbrains.compose.resources.stringResource
@@ -75,16 +99,72 @@ import org.jetbrains.compose.resources.stringResource
  */
 
 /**
+ * The reflowable typography bundle the settings sheet edits as one copy-on-
+ * change value (chips/switches commit immediately; sliders commit on settle).
+ * The VM's individual setters stay the write surface — the caller diffs.
+ */
+internal data class ReaderTypographyState(
+    val fontFamily: ReaderFontFamily,
+    val lineHeightPct: Int,
+    val marginPct: Int,
+    val justify: Boolean,
+    val scrollMode: Boolean,
+)
+
+/**
+ * The behavior bundle (volume-key paging, animated page turns, reading
+ * speed) — same copy-on-change edit contract as [ReaderTypographyState].
+ */
+internal data class ReaderBehaviorState(
+    val volumeKeyPaging: Boolean,
+    val animatedPageTurns: Boolean,
+    val readingSpeedWpm: Int,
+)
+
+/** The section label the settings sheets repeat between groups. */
+@Composable
+private fun SectionLabel(text: String, topPadding: androidx.compose.ui.unit.Dp = 20.dp) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(horizontal = 24.dp).padding(top = topPadding),
+    )
+}
+
+/** A label + Switch row (justify / scroll mode / behavior toggles). */
+@Composable
+private fun SettingsSwitchRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 4.dp),
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.weight(1f),
+        )
+        Switch(checked = checked, onCheckedChange = onChange)
+    }
+}
+
+/**
  * The settings sheet for PAGED books: the per-book reading direction chips,
- * plus the TOC entry when the format has one (PDF outlines only — CBZ/CBR
- * books have no TOC story, so the row is absent rather than disabled).
+ * the per-session page-fit chips ([ReaderFitMode] is view state — deliberately
+ * not persisted), the behavior section, plus the TOC entry when the format
+ * has one (PDF outlines only — CBZ/CBR books have no TOC story, so the row is
+ * absent rather than disabled).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun PagedSettingsSheet(
     direction: ReadingDirection,
     tocAvailable: Boolean,
+    fitMode: ReaderFitMode,
+    behavior: ReaderBehaviorState,
     onSetDirection: (ReadingDirection) -> Unit,
+    onSetFitMode: (ReaderFitMode) -> Unit,
+    onBehaviorChange: (ReaderBehaviorState) -> Unit,
     onOpenToc: () -> Unit,
     onDismissRequest: () -> Unit,
 ) {
@@ -105,6 +185,38 @@ internal fun PagedSettingsSheet(
                 label = { Text(stringResource(Res.string.book_reader_direction_rtl)) },
             )
         }
+        SectionLabel(text = stringResource(Res.string.book_reader_fit_mode), topPadding = 8.dp)
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            FilterChip(
+                selected = fitMode == ReaderFitMode.FIT_WIDTH,
+                onClick = { onSetFitMode(ReaderFitMode.FIT_WIDTH) },
+                label = { Text(stringResource(Res.string.book_reader_fit_width)) },
+            )
+            FilterChip(
+                selected = fitMode == ReaderFitMode.FIT_PAGE,
+                onClick = { onSetFitMode(ReaderFitMode.FIT_PAGE) },
+                label = { Text(stringResource(Res.string.book_reader_fit_page)) },
+            )
+            FilterChip(
+                selected = fitMode == ReaderFitMode.ORIGINAL,
+                onClick = { onSetFitMode(ReaderFitMode.ORIGINAL) },
+                label = { Text(stringResource(Res.string.book_reader_fit_original)) },
+            )
+        }
+        SectionLabel(text = stringResource(Res.string.book_reader_behavior))
+        SettingsSwitchRow(
+            label = stringResource(Res.string.book_reader_volume_keys),
+            checked = behavior.volumeKeyPaging,
+            onChange = { onBehaviorChange(behavior.copy(volumeKeyPaging = it)) },
+        )
+        SettingsSwitchRow(
+            label = stringResource(Res.string.book_reader_animated_turns),
+            checked = behavior.animatedPageTurns,
+            onChange = { onBehaviorChange(behavior.copy(animatedPageTurns = it)) },
+        )
         if (tocAvailable) {
             TextButton(
                 onClick = onOpenToc,
@@ -120,28 +232,32 @@ internal fun PagedSettingsSheet(
 }
 
 /**
- * The settings sheet for REFLOWABLE books: theme, font size, and the TOC /
- * search entries. The TOC entry stays here (v1 behavior) — the search entry
- * rides the TOC sheet to keep the top bar uncluttered.
+ * The settings sheet for REFLOWABLE books: theme, font size, the per-book
+ * override switch, the typography section (family / line height / margins /
+ * justify / scroll mode), the behavior section with the reading-speed
+ * stepper, and the TOC / search entries. The TOC entry stays here (v1
+ * behavior) — the search entry rides the TOC sheet to keep the top bar
+ * uncluttered.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun ReflowableSettingsSheet(
     theme: ReaderTheme,
     fontSizePx: Int,
+    perBook: Boolean,
+    typography: ReaderTypographyState,
+    behavior: ReaderBehaviorState,
     onSetTheme: (ReaderTheme) -> Unit,
     onAdjustFontSize: (Int) -> Unit,
+    onSetPerBook: (Boolean) -> Unit,
+    onTypographyChange: (ReaderTypographyState) -> Unit,
+    onBehaviorChange: (ReaderBehaviorState) -> Unit,
     onOpenToc: () -> Unit,
     onDismissRequest: () -> Unit,
 ) {
     ModalBottomSheet(onDismissRequest = onDismissRequest) {
         SheetTitle(text = stringResource(Res.string.book_reader_settings))
-        Text(
-            text = stringResource(Res.string.book_reader_theme),
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 24.dp),
-        )
+        SectionLabel(text = stringResource(Res.string.book_reader_theme), topPadding = 0.dp)
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -162,12 +278,7 @@ internal fun ReflowableSettingsSheet(
                 label = { Text(stringResource(Res.string.book_reader_theme_light)) },
             )
         }
-        Text(
-            text = stringResource(Res.string.book_reader_font_size),
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 24.dp).padding(top = 20.dp),
-        )
+        SectionLabel(text = stringResource(Res.string.book_reader_font_size))
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 4.dp),
@@ -184,6 +295,64 @@ internal fun ReflowableSettingsSheet(
                 Icon(imageVector = Tabler.Outline.Plus, contentDescription = null)
             }
         }
+        SettingsSwitchRow(
+            label = stringResource(Res.string.book_reader_per_book),
+            checked = perBook,
+            onChange = onSetPerBook,
+        )
+
+        SectionLabel(text = stringResource(Res.string.book_reader_typography))
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            FilterChip(
+                selected = typography.fontFamily == ReaderFontFamily.SYSTEM,
+                onClick = { onTypographyChange(typography.copy(fontFamily = ReaderFontFamily.SYSTEM)) },
+                label = { Text(stringResource(Res.string.book_reader_font_system)) },
+            )
+            FilterChip(
+                selected = typography.fontFamily == ReaderFontFamily.SERIF,
+                onClick = { onTypographyChange(typography.copy(fontFamily = ReaderFontFamily.SERIF)) },
+                label = { Text(stringResource(Res.string.book_reader_font_serif)) },
+            )
+            FilterChip(
+                selected = typography.fontFamily == ReaderFontFamily.SANS,
+                onClick = { onTypographyChange(typography.copy(fontFamily = ReaderFontFamily.SANS)) },
+                label = { Text(stringResource(Res.string.book_reader_font_sans)) },
+            )
+            FilterChip(
+                selected = typography.fontFamily == ReaderFontFamily.MONO,
+                onClick = { onTypographyChange(typography.copy(fontFamily = ReaderFontFamily.MONO)) },
+                label = { Text(stringResource(Res.string.book_reader_font_mono)) },
+            )
+        }
+        LineHeightSlider(lineHeightPct = typography.lineHeightPct) {
+            onTypographyChange(typography.copy(lineHeightPct = it))
+        }
+        MarginSlider(marginPct = typography.marginPct) {
+            onTypographyChange(typography.copy(marginPct = it))
+        }
+        SettingsSwitchRow(
+            label = stringResource(Res.string.book_reader_justify),
+            checked = typography.justify,
+            onChange = { onTypographyChange(typography.copy(justify = it)) },
+        )
+        SettingsSwitchRow(
+            label = stringResource(Res.string.book_reader_scroll_mode),
+            checked = typography.scrollMode,
+            onChange = { onTypographyChange(typography.copy(scrollMode = it)) },
+        )
+
+        SectionLabel(text = stringResource(Res.string.book_reader_behavior))
+        SettingsSwitchRow(
+            label = stringResource(Res.string.book_reader_volume_keys),
+            checked = behavior.volumeKeyPaging,
+            onChange = { onBehaviorChange(behavior.copy(volumeKeyPaging = it)) },
+        )
+        ReadingSpeedStepper(wpm = behavior.readingSpeedWpm) {
+            onBehaviorChange(behavior.copy(readingSpeedWpm = it))
+        }
         TextButton(
             onClick = onOpenToc,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
@@ -193,6 +362,90 @@ internal fun ReflowableSettingsSheet(
             Text(stringResource(Res.string.book_reader_toc))
         }
         Spacer(modifier = Modifier.height(24.dp))
+    }
+}
+
+/**
+ * Line-height slider (1.0×–2.0×, the store band / 100). Commit-on-settle per
+ * the page-slider convention; the "1.6×" style value label rides along.
+ */
+@Composable
+private fun LineHeightSlider(lineHeightPct: Int, onCommit: (Int) -> Unit) {
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 8.dp)) {
+        Text(
+            text = stringResource(Res.string.book_reader_line_height),
+            style = MaterialTheme.typography.bodyLarge,
+        )
+        var dragging by remember { mutableStateOf(false) }
+        var dragValue by remember { mutableStateOf(160f) }
+        Slider(
+            value = if (dragging) dragValue else lineHeightPct.toFloat(),
+            onValueChange = { dragging = true; dragValue = it },
+            onValueChangeFinished = {
+                dragging = false
+                onCommit(dragValue.roundToInt().coerceIn(ReaderStore.MIN_LINE_HEIGHT_PCT, ReaderStore.MAX_LINE_HEIGHT_PCT))
+            },
+            valueRange = ReaderStore.MIN_LINE_HEIGHT_PCT.toFloat()..ReaderStore.MAX_LINE_HEIGHT_PCT.toFloat(),
+        )
+        Text(
+            text = stringResource(
+                Res.string.book_reader_line_height_value,
+                (if (dragging) dragValue else lineHeightPct.toFloat()) / 100f,
+            ),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/** Margin slider (0..100 %); commit-on-settle, plain "N %" value label. */
+@Composable
+private fun MarginSlider(marginPct: Int, onCommit: (Int) -> Unit) {
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 8.dp)) {
+        Text(
+            text = stringResource(Res.string.book_reader_margins),
+            style = MaterialTheme.typography.bodyLarge,
+        )
+        var dragging by remember { mutableStateOf(false) }
+        var dragValue by remember { mutableStateOf(8f) }
+        Slider(
+            value = if (dragging) dragValue else marginPct.toFloat(),
+            onValueChange = { dragging = true; dragValue = it },
+            onValueChangeFinished = {
+                dragging = false
+                onCommit(dragValue.roundToInt().coerceIn(ReaderStore.MIN_MARGIN_PCT, ReaderStore.MAX_MARGIN_PCT))
+            },
+            valueRange = ReaderStore.MIN_MARGIN_PCT.toFloat()..ReaderStore.MAX_MARGIN_PCT.toFloat(),
+        )
+        Text(
+            text = "${(if (dragging) dragValue else marginPct.toFloat()).roundToInt()} %",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/** Reading-speed stepper (100..1000 wpm, ±10 per tap) feeding the time-left estimate. */
+@Composable
+private fun ReadingSpeedStepper(wpm: Int, onCommit: (Int) -> Unit) {
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 4.dp)) {
+        Text(
+            text = stringResource(Res.string.book_reader_reading_speed),
+            style = MaterialTheme.typography.bodyLarge,
+        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = { onCommit(wpm - 10) }) {
+                Icon(imageVector = Tabler.Outline.Minus, contentDescription = null)
+            }
+            Text(
+                text = "$wpm",
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.padding(horizontal = 12.dp),
+            )
+            IconButton(onClick = { onCommit(wpm + 10) }) {
+                Icon(imageVector = Tabler.Outline.Plus, contentDescription = null)
+            }
+        }
     }
 }
 

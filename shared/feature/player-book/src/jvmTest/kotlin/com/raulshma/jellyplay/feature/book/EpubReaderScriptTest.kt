@@ -189,7 +189,7 @@ class EpubReaderScriptTest {
     }
 
     @Test
-    fun `appearance push skips null optionals`() {
+    fun `appearance push clears the font family for system`() {
         val scripts = mutableListOf<String>()
         pushAppearanceScripts(EpubAppearance(theme = ReaderTheme.LIGHT, fontSizePx = 20)) {
             scripts.add(it)
@@ -198,6 +198,7 @@ class EpubReaderScriptTest {
             listOf(
                 "window.jellyPlayReader.setTheme('light')",
                 "window.jellyPlayReader.setFontSize(20)",
+                "window.jellyPlayReader.setFontFamily(\"\")",
             ),
             scripts,
         )

@@ -39,13 +39,14 @@ import org.koin.compose.viewmodel.koinViewModel
 
 /**
  * The full-screen book reader: paged books render a pager over rasterized
- * pages; reflowable (EPUB) books render the platform WebView host. Both share
- * the auto-hiding chrome, direction-aware navigation and debounced progress
- * reporting (the VM owns the writes; the screen only feeds events). The
- * renderers live in ReaderContent.kt, the chrome in ReaderChrome.kt, input
- * in ReaderInput.kt and the sheets in ReaderSheets.kt / ReaderSelection.kt —
- * this file is the state router plus the boot/error veils.
- * Double-tap zoom is deliberately deferred (v1).
+ * pages (pinch/double-tap zoom, fit modes); reflowable (EPUB) books render
+ * the platform WebView host (full typography, live appearance pushes). Both
+ * share the auto-hiding chrome (with the brightness veil under it),
+ * direction-aware navigation and debounced progress reporting (the VM owns
+ * the writes; the screen only feeds events). The renderers live in
+ * ReaderContent.kt, the chrome in ReaderChrome.kt, input in ReaderInput.kt
+ * and the sheets in ReaderSheets.kt / ReaderSelection.kt — this file is the
+ * state router plus the boot/error veils.
  */
 @Composable
 fun BookReaderScreen(
@@ -55,8 +56,10 @@ fun BookReaderScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val direction by viewModel.readingDirection.collectAsStateWithLifecycle()
-    val theme by viewModel.readerTheme.collectAsStateWithLifecycle()
-    val fontSizePx by viewModel.readerFontSizePx.collectAsStateWithLifecycle()
+    // EFFECTIVE theme/font: the per-book override when one exists, else the
+    // global — the only values the reader renders with.
+    val theme by viewModel.effectiveReaderTheme.collectAsStateWithLifecycle()
+    val fontSizePx by viewModel.effectiveReaderFontSizePx.collectAsStateWithLifecycle()
 
     val windowOps = rememberReaderWindowOps()
     DisposableEffect(Unit) {

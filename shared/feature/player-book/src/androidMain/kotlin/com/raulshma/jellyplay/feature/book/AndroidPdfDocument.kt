@@ -6,6 +6,7 @@ import android.graphics.Color
 import android.graphics.Matrix
 import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import java.io.File
@@ -27,6 +28,16 @@ class AndroidPdfDocument private constructor(
     override val pageCount: Int = renderer.pageCount
 
     private val renderLock = Any()
+
+    /** Page box in PDF points (the raster unit [renderPage]'s scale divides by). */
+    override fun pageSize(pageIndex: Int): Size? {
+        if (pageIndex !in 0 until pageCount) return null
+        return synchronized(renderLock) {
+            runCatching {
+                renderer.openPage(pageIndex).use { page -> Size(page.width.toFloat(), page.height.toFloat()) }
+            }.getOrNull()
+        }
+    }
 
     override suspend fun renderPage(pageIndex: Int, widthPx: Int): ImageBitmap? =
         withContext(Dispatchers.IO) {

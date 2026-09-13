@@ -41,14 +41,50 @@ internal fun epubTapAction(zone: EpubTapZone, direction: ReadingDirection): Read
         EpubTapZone.CENTER -> ReaderTapAction.TOGGLE_CONTROLS
     }
 
+/**
+ * Volume-key paging mapping (physical, like PageUp/PageDown): VolumeDown
+ * pages FORWARD, VolumeUp BACKWARD — FORWARD/BACKWARD are the reader's
+ * direction-relative turns, so RTL books still page in their reading order.
+ * Any other key maps to null (not a volume-paging key). Pure — pinned by
+ * ReaderInputTest; wired only when the volumeKeyPaging preference is on
+ * (Android hardware; a harmless no-op where no volume keys exist).
+ */
+internal fun volumeKeyPagingAction(key: Key): ReaderTapAction? = when (key) {
+    Key.VolumeDown -> ReaderTapAction.FORWARD
+    Key.VolumeUp -> ReaderTapAction.BACKWARD
+    else -> null
+}
+
+/**
+ * The scroll style a programmatic page turn (keyboard / tap zone / slider /
+ * outline jump) uses: animated when the animatedPageTurns preference is on,
+ * snapped when off. User SWIPES always animate (the pager owns those). Pure —
+ * pinned by ReaderInputTest.
+ */
+internal enum class PageTurnScroll { ANIMATED, SNAP }
+
+internal fun pageTurnScroll(animatedPageTurns: Boolean): PageTurnScroll =
+    if (animatedPageTurns) PageTurnScroll.ANIMATED else PageTurnScroll.SNAP
+
 internal fun handleKeyEvent(
     event: KeyEvent,
     direction: ReadingDirection,
     onForward: () -> Unit,
     onBackward: () -> Unit,
     onBack: () -> Unit,
+    volumeKeyPaging: Boolean = false,
 ): Boolean {
     if (event.type != KeyEventType.KeyDown) return false
+    if (volumeKeyPaging) {
+        volumeKeyPagingAction(event.key)?.let { action ->
+            when (action) {
+                ReaderTapAction.FORWARD -> onForward()
+                ReaderTapAction.BACKWARD -> onBackward()
+                ReaderTapAction.TOGGLE_CONTROLS -> Unit // unreachable for volume keys
+            }
+            return true
+        }
+    }
     return when (event.key) {
         // Arrows follow the reading direction; PageUp/PageDown stay physical.
         Key.DirectionLeft -> {
@@ -98,23 +134,30 @@ internal fun Modifier.chromeToggleKey(onToggleControls: () -> Unit): Modifier =
  * Direction-aware tap zones: leading third = backward, trailing third =
  * forward, center = toggle chrome — with "leading" flipping under RTL.
  * [direction] keys the detector so a flip re-arms it with the new mapping.
+ * An [onDoubleTap] (paged reader zoom toggle) makes single taps wait the
+ * double-tap timeout — that is the cost of both gestures living on the same
+ * surface; the paged reader is the only caller that passes one.
  */
 internal fun Modifier.readerTapZones(
     direction: ReadingDirection,
     onForward: () -> Unit,
     onBackward: () -> Unit,
     onToggleControls: () -> Unit,
+    onDoubleTap: (() -> Unit)? = null,
 ): Modifier = pointerInput(direction) {
-    detectTapGestures { offset ->
-        val action = when {
-            offset.x < size.width / 3f ->
-                if (direction.isForwardFromLeft()) ReaderTapAction.FORWARD else ReaderTapAction.BACKWARD
-            offset.x > size.width * 2f / 3f ->
-                if (direction.isForwardFromLeft()) ReaderTapAction.BACKWARD else ReaderTapAction.FORWARD
-            else -> ReaderTapAction.TOGGLE_CONTROLS
-        }
-        action.dispatch(onForward, onBackward, onToggleControls)
-    }
+    detectTapGestures(
+        onTap = { offset ->
+            val action = when {
+                offset.x < size.width / 3f ->
+                    if (direction.isForwardFromLeft()) ReaderTapAction.FORWARD else ReaderTapAction.BACKWARD
+                offset.x > size.width * 2f / 3f ->
+                    if (direction.isForwardFromLeft()) ReaderTapAction.BACKWARD else ReaderTapAction.FORWARD
+                else -> ReaderTapAction.TOGGLE_CONTROLS
+            }
+            action.dispatch(onForward, onBackward, onToggleControls)
+        },
+        onDoubleTap = onDoubleTap?.let { handler -> { _ -> handler() } },
+    )
 }
 
 private fun ReaderTapAction.dispatch(
@@ -131,10 +174,11 @@ private fun ReaderTapAction.dispatch(
 
 /**
  * The paged reader's input surface: keyboard/DPAD events (arrows follow the
- * reading direction, PageUp/PageDown stay physical) plus the direction-aware
- * NATIVE tap zones. Only the pager may use this — a `pointerInput` overlay
- * swallows every touch, which is exactly what the reflowable WebView must
- * NOT do (text selection needs the raw web events).
+ * reading direction, PageUp/PageDown stay physical, VolumeUp/Down page when
+ * [volumeKeyPaging] is on) plus the direction-aware NATIVE tap zones and the
+ * optional double-tap zoom toggle. Only the pager may use this — a
+ * `pointerInput` overlay swallows every touch, which is exactly what the
+ * reflowable WebView must NOT do (text selection needs the raw web events).
  */
 internal fun Modifier.readerInput(
     direction: ReadingDirection,
@@ -142,6 +186,8 @@ internal fun Modifier.readerInput(
     onBackward: () -> Unit,
     onBack: () -> Unit,
     onToggleControls: () -> Unit,
+    volumeKeyPaging: Boolean = false,
+    onDoubleTap: (() -> Unit)? = null,
 ): Modifier = focusable()
     .onPreviewKeyEvent { event ->
         handleKeyEvent(
@@ -150,6 +196,7 @@ internal fun Modifier.readerInput(
             onForward = onForward,
             onBackward = onBackward,
             onBack = onBack,
+            volumeKeyPaging = volumeKeyPaging,
         )
     }
     .chromeToggleKey(onToggleControls)
@@ -158,6 +205,7 @@ internal fun Modifier.readerInput(
         onForward = onForward,
         onBackward = onBackward,
         onToggleControls = onToggleControls,
+        onDoubleTap = onDoubleTap,
     )
 
 /**
@@ -166,7 +214,8 @@ internal fun Modifier.readerInput(
  * selection, link taps) reach the WebView untouched — touch navigation rides
  * the JS-reported tap events instead (reader.js computes the thirds inside
  * the content iframe and skips taps that are really selection gestures).
- * TV/desktop keyboards keep the exact paged-reader behavior.
+ * TV/desktop keyboards keep the exact paged-reader behavior; volume keys page
+ * when [volumeKeyPaging] is on.
  */
 internal fun Modifier.readerKeys(
     direction: ReadingDirection,
@@ -174,6 +223,7 @@ internal fun Modifier.readerKeys(
     onBackward: () -> Unit,
     onBack: () -> Unit,
     onToggleControls: () -> Unit,
+    volumeKeyPaging: Boolean = false,
 ): Modifier = focusable()
     .onPreviewKeyEvent { event ->
         handleKeyEvent(
@@ -182,6 +232,7 @@ internal fun Modifier.readerKeys(
             onForward = onForward,
             onBackward = onBackward,
             onBack = onBack,
+            volumeKeyPaging = volumeKeyPaging,
         )
     }
     .chromeToggleKey(onToggleControls)

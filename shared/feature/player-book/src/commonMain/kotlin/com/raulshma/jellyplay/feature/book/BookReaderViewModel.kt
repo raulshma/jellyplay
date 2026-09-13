@@ -8,7 +8,10 @@ import com.raulshma.jellyplay.core.data.repository.ReaderAnnotationStyle
 import com.raulshma.jellyplay.core.data.repository.ReaderAnnotationsRepository
 import com.raulshma.jellyplay.core.data.repository.ReaderAnnotation
 import com.raulshma.jellyplay.core.data.repository.ReaderBookmark
+import com.raulshma.jellyplay.core.datastore.reader.PerBookAppearance
 import com.raulshma.jellyplay.core.datastore.reader.ReadingDirection
+import com.raulshma.jellyplay.core.datastore.reader.ReaderFontFamily
+import com.raulshma.jellyplay.core.datastore.reader.ReaderSlice
 import com.raulshma.jellyplay.core.datastore.reader.ReaderStore
 import com.raulshma.jellyplay.core.datastore.reader.ReaderTheme
 import com.raulshma.jellyplay.core.model.BookFormat
@@ -25,12 +28,15 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.math.roundToInt
 
 /**
  * Koin-owned state owner for the book reader (video-player conventions:
@@ -85,21 +91,78 @@ class BookReaderViewModel(
     private val _readingDirection = MutableStateFlow(ReadingDirection.LTR)
     val readingDirection: StateFlow<ReadingDirection> = _readingDirection.asStateFlow()
 
-    /** Global reader appearance (reflowable books): persisted in [ReaderStore]. */
-    val readerTheme: StateFlow<ReaderTheme> = readerStore.reader
-        .map { it.readerTheme }
-        .stateIn(scope, SharingStarted.Eagerly, ReaderTheme.DARK)
-
-    val readerFontSizePx: StateFlow<Int> = readerStore.reader
-        .map { it.readerFontSizePx }
-        .stateIn(scope, SharingStarted.Eagerly, ReaderStore.DEFAULT_FONT_SIZE_PX)
-
     /**
-     * The item whose marks are exposed — the key of the marks flows below. A
-     * load re-points it, so [bookmarks]/[annotations] re-subscribe to the new
-     * item's repository streams (flatMapLatest drops the stale subscription).
+     * The item whose marks + appearance override are exposed — the key of the
+     * per-item flows. A load re-points it, so [bookmarks]/[annotations] (and
+     * [perBookAppearance]) re-subscribe to the new item's streams
+     * (flatMapLatest drops the stale subscription).
      */
     private val marksItemId = MutableStateFlow<String?>(null)
+
+    /**
+     * The loaded item's per-book appearance override (null = the book inherits
+     * the global theme/font size). Re-subscribed per load, exactly like the
+     * marks flows — and the router the theme/font setters write through.
+     */
+    val perBookAppearance: StateFlow<PerBookAppearance?> = marksItemId
+        .flatMapLatest { id ->
+            if (id == null) flowOf(null) else readerStore.reader.map { it.perBookAppearance[id] }
+        }
+        .distinctUntilChanged()
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    /**
+     * What the reader RENDERS with: the per-book override's axis ?: the global
+     * one (pure fold in [effectiveAppearance]). Construction, live pushes and
+     * the settings sheet's selection states all read THESE, never the raw
+     * globals (the slice itself stays reachable through [readerStore]), so an
+     * override and its global stay visually coherent.
+     */
+    val effectiveReaderTheme: StateFlow<ReaderTheme> = combine(readerStore.reader, perBookAppearance) { slice, per ->
+        effectiveAppearance(slice, per).theme
+    }.stateIn(scope, SharingStarted.Eagerly, readerStore.reader.value.readerTheme)
+
+    val effectiveReaderFontSizePx: StateFlow<Int> = combine(readerStore.reader, perBookAppearance) { slice, per ->
+        effectiveAppearance(slice, per).fontSizePx
+    }.stateIn(scope, SharingStarted.Eagerly, readerStore.reader.value.readerFontSizePx)
+
+    /** Global reflowable typography slice (family / leading / margins / justify / flow). */
+    val readerFontFamily: StateFlow<ReaderFontFamily> = readerStore.reader
+        .map { it.fontFamily }
+        .stateIn(scope, SharingStarted.Eagerly, ReaderFontFamily.SYSTEM)
+
+    val lineHeightPct: StateFlow<Int> = readerStore.reader
+        .map { it.lineHeightPct }
+        .stateIn(scope, SharingStarted.Eagerly, ReaderStore.DEFAULT_LINE_HEIGHT_PCT)
+
+    val marginPct: StateFlow<Int> = readerStore.reader
+        .map { it.marginPct }
+        .stateIn(scope, SharingStarted.Eagerly, ReaderStore.DEFAULT_MARGIN_PCT)
+
+    val justify: StateFlow<Boolean> = readerStore.reader
+        .map { it.justify }
+        .stateIn(scope, SharingStarted.Eagerly, false)
+
+    val scrollMode: StateFlow<Boolean> = readerStore.reader
+        .map { it.scrollMode }
+        .stateIn(scope, SharingStarted.Eagerly, false)
+
+    /** Display + behavior slice: brightness veil, volume-key paging, animated turns, reading speed. */
+    val brightnessPct: StateFlow<Int> = readerStore.reader
+        .map { it.brightnessPct }
+        .stateIn(scope, SharingStarted.Eagerly, ReaderStore.DEFAULT_BRIGHTNESS_PCT)
+
+    val volumeKeyPaging: StateFlow<Boolean> = readerStore.reader
+        .map { it.volumeKeyPaging }
+        .stateIn(scope, SharingStarted.Eagerly, false)
+
+    val animatedPageTurns: StateFlow<Boolean> = readerStore.reader
+        .map { it.animatedPageTurns }
+        .stateIn(scope, SharingStarted.Eagerly, true)
+
+    val readingSpeedWpm: StateFlow<Int> = readerStore.reader
+        .map { it.readingSpeedWpm }
+        .stateIn(scope, SharingStarted.Eagerly, ReaderStore.DEFAULT_READING_SPEED_WPM)
 
     val bookmarks: StateFlow<List<ReaderBookmark>> = marksItemId
         .flatMapLatest { id ->
@@ -139,6 +202,18 @@ class BookReaderViewModel(
     private var debounceJob: Job? = null
     private var directionJob: Job? = null
     private var pendingFontSizePx: Int? = null
+
+    /**
+     * Last override WRITE (theme/font into [PerBookAppearance]) — the
+     * perBookAppearance StateFlow lags the DataStore round trip exactly like
+     * [pendingFontSizePx] does, so back-to-back override writes must fold
+     * onto this, not onto the stale flow value (or the second write would
+     * drop the first). Cleared per load and by the per-book toggle.
+     */
+    private var pendingPerBook: PerBookAppearance? = null
+
+    /** The override a theme/font write should route through (null = global). */
+    private fun routingOverride(): PerBookAppearance? = pendingPerBook ?: perBookAppearance.value
     private var loadJob: Job? = null
 
     /**
@@ -194,6 +269,7 @@ class BookReaderViewModel(
         document?.close()
         document = null
         pageCache.clear()
+        pendingPerBook = null
         currentPage = 0
         currentPercent = 0.0
         latestEpubCfi = null
@@ -310,11 +386,38 @@ class BookReaderViewModel(
     /** Render (or cache-hit) one page for the pager; null keeps the placeholder tile. */
     suspend fun requestPage(pageIndex: Int, widthPx: Int): ImageBitmap? {
         val doc = document ?: return null
-        pageCache[pageIndex]?.let { return it }
+        pageCache[PageCacheKey(pageIndex, widthPx)]?.let { return it }
         // Back-ends hop to Dispatchers.IO themselves; the bitmap lands in the
         // cache on the caller's context (StateFlow-safe either way).
         val bitmap = doc.renderPage(pageIndex, widthPx)
-        return bitmap?.also { pageCache.put(pageIndex, it) }
+        return bitmap?.also { pageCache.put(PageCacheKey(pageIndex, widthPx), it) }
+    }
+
+    /**
+     * Fit-aware render: resolves the page's native size ([BookDocument.pageSize]),
+     * folds it through [computeRenderWidth] for [fitMode], multiplies by the
+     * live [zoom] (raster-capped at [MAX_PAGE_RASTER_SCALE] — above the cap the
+     * caller keeps graphicsLayer-scaling the existing bitmap) and delegates to
+     * the width-keyed [requestPage]. The pair-keyed [PageCache] keeps the base
+     * and re-rastered entries distinct.
+     */
+    suspend fun requestPage(
+        pageIndex: Int,
+        widthPx: Int,
+        heightPx: Int,
+        fitMode: ReaderFitMode,
+        zoom: Float = 1f,
+    ): ImageBitmap? {
+        val size = document?.pageSize(pageIndex)
+        val base = computeRenderWidth(
+            fitMode = fitMode,
+            surfaceW = widthPx,
+            surfaceH = heightPx,
+            pageW = size?.width ?: 0f,
+            pageH = size?.height ?: 0f,
+        )
+        val renderWidth = (base * zoom.coerceIn(1f, MAX_PAGE_RASTER_SCALE)).roundToInt().coerceAtLeast(1)
+        return requestPage(pageIndex, renderWidth)
     }
 
     /** Pager page settled — mirrors state, re-anchors both caches, schedules the debounced report. */
@@ -350,7 +453,8 @@ class BookReaderViewModel(
 
     /**
      * WebView-host relocation (reflowable): folds percent + chapter label +
-     * the page-start CFI into [currentEpubLocation] (the bookmark/annotation
+     * the chapter-scoped pages remaining (the time-left label's source) + the
+     * page-start CFI into [currentEpubLocation] (the bookmark/annotation
      * anchor source) and schedules the debounced report, which also
      * re-persists the exact-resume CFI. Internal: [EpubRelocation] is the
      * module-private host protocol type.
@@ -364,6 +468,7 @@ class BookReaderViewModel(
             percent = currentPercent,
             chapterLabel = relocation.chapterLabel,
             cfi = latestEpubCfi,
+            remainingPages = relocation.remainingPages ?: _currentEpubLocation.value?.remainingPages,
         )
         scheduleProgressReport()
     }
@@ -387,21 +492,126 @@ class BookReaderViewModel(
         _readingDirection.value = direction
     }
 
+    /**
+     * Theme write. Routes per [routingOverride]: with an override active
+     * ("use for this book only"), the change lands in the item's override (the
+     * global stays untouched); without one it writes the global. The rendered
+     * look is identical either way — the reader consumes [effectiveReaderTheme].
+     */
     fun setReaderTheme(theme: ReaderTheme) {
-        scope.launch { runCatching { readerStore.setReaderTheme(theme) } }
+        val itemId = loadedItemId
+        val override = routingOverride()
+        val nextOverride = override?.copy(theme = theme)?.also { pendingPerBook = it }
+        scope.launch {
+            runCatching {
+                if (itemId != null && nextOverride != null) {
+                    readerStore.setPerBookAppearance(itemId, nextOverride)
+                } else {
+                    readerStore.setReaderTheme(theme)
+                }
+            }
+        }
     }
 
-    /** Font-size stepper; the store clamps the result into its 12..32 px band. */
+    /**
+     * Font-size stepper; the store clamps the result into its 12..32 px band.
+     * Steps into the item's [PerBookAppearance] override when one is active
+     * (see [setReaderTheme] for the routing contract).
+     */
     fun adjustReaderFontSize(delta: Int) {
         // Step from the last stepped value — the store's StateFlow lags the
         // DataStore write, so reading it per tap drops rapid increments.
-        val base = pendingFontSizePx ?: readerFontSizePx.value
+        val base = pendingFontSizePx ?: effectiveReaderFontSizePx.value
         val next = (base + delta)
             .coerceIn(ReaderStore.MIN_FONT_SIZE_PX, ReaderStore.MAX_FONT_SIZE_PX)
         pendingFontSizePx = next
+        val itemId = loadedItemId
+        val override = routingOverride()
+        val nextOverride = override?.copy(fontSizePx = next)?.also { pendingPerBook = it }
         scope.launch {
-            runCatching { readerStore.setReaderFontSizePx(next) }
+            runCatching {
+                if (itemId != null && nextOverride != null) {
+                    readerStore.setPerBookAppearance(itemId, nextOverride)
+                } else {
+                    readerStore.setReaderFontSizePx(next)
+                }
+            }
         }
+    }
+
+    /**
+     * The "use for this book only" switch. ON seeds the item's override with
+     * the CURRENT effective values (the in-session look does not move); OFF
+     * copies the effective values back into the globals and clears the
+     * override — again visually seamless, and the next global change flows
+     * normally. Direction stays per-book-only by design (its own map).
+     */
+    fun setUsePerBookAppearance(enabled: Boolean) {
+        val itemId = loadedItemId ?: return
+        val current = effectiveAppearance(readerStore.reader.value, routingOverride())
+        if (enabled) {
+            pendingPerBook = PerBookAppearance(theme = current.theme, fontSizePx = current.fontSizePx)
+        } else {
+            pendingPerBook = null
+        }
+        // Re-sync the stepper base: a pending step must not leak across the
+        // routing switch (the effective font size is the new base either way).
+        pendingFontSizePx = current.fontSizePx
+        scope.launch {
+            runCatching {
+                if (enabled) {
+                    readerStore.setPerBookAppearance(itemId, pendingPerBook)
+                } else {
+                    readerStore.setReaderTheme(current.theme)
+                    readerStore.setReaderFontSizePx(current.fontSizePx)
+                    readerStore.setPerBookAppearance(itemId, null)
+                }
+            }
+        }
+    }
+
+    /** Global reflowable typography writes — each clamps into its store band. */
+    fun setFontFamily(fontFamily: ReaderFontFamily) {
+        scope.launch { runCatching { readerStore.setFontFamily(fontFamily) } }
+    }
+
+    fun setLineHeightPct(pct: Int) {
+        val clamped = pct.coerceIn(ReaderStore.MIN_LINE_HEIGHT_PCT, ReaderStore.MAX_LINE_HEIGHT_PCT)
+        scope.launch { runCatching { readerStore.setLineHeightPct(clamped) } }
+    }
+
+    fun setMarginPct(pct: Int) {
+        val clamped = pct.coerceIn(ReaderStore.MIN_MARGIN_PCT, ReaderStore.MAX_MARGIN_PCT)
+        scope.launch { runCatching { readerStore.setMarginPct(clamped) } }
+    }
+
+    fun setJustify(justify: Boolean) {
+        scope.launch { runCatching { readerStore.setJustify(justify) } }
+    }
+
+    fun setScrollMode(scrollMode: Boolean) {
+        scope.launch { runCatching { readerStore.setScrollMode(scrollMode) } }
+    }
+
+    /** Brightness veil write (0..100, 100 = no veil); clamped into the store band. */
+    fun setBrightnessPct(pct: Int) {
+        val clamped = pct.coerceIn(ReaderStore.MIN_BRIGHTNESS_PCT, ReaderStore.MAX_BRIGHTNESS_PCT)
+        scope.launch { runCatching { readerStore.setBrightnessPct(clamped) } }
+    }
+
+    /** Behavior writes: volume-key paging (Android hardware; no-op elsewhere) + animated page turns. */
+    fun setVolumeKeyPaging(enabled: Boolean) {
+        scope.launch { runCatching { readerStore.setVolumeKeyPaging(enabled) } }
+    }
+
+    fun setAnimatedPageTurns(enabled: Boolean) {
+        scope.launch { runCatching { readerStore.setAnimatedPageTurns(enabled) } }
+    }
+
+    /** Reading-speed write for the time-left estimate; clamped into its 100..1000 band. */
+    fun setReadingSpeedWpm(wpm: Int) {
+        val clamped = wpm.coerceIn(ReaderStore.MIN_READING_SPEED_WPM, ReaderStore.MAX_READING_SPEED_WPM)
+        scope.launch { runCatching { readerStore.setReadingSpeedWpm(clamped) } }
     }
 
     fun toggleControls() {

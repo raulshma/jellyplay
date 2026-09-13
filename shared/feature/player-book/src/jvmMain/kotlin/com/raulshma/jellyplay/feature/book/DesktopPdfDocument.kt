@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.book
 
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.ImageBitmap
 import java.io.File
 import kotlinx.coroutines.Dispatchers
@@ -26,6 +27,15 @@ class DesktopPdfDocument private constructor(
 
     private val renderer = PDFRenderer(document)
     private val renderLock = Any()
+
+    /** Page box in PDF points (the raster unit [renderPage]'s scale divides by). */
+    override fun pageSize(pageIndex: Int): Size? {
+        if (pageIndex !in 0 until pageCount) return null
+        return runCatching {
+            val box = document.getPage(pageIndex).mediaBox
+            Size(box.width, box.height)
+        }.getOrNull()
+    }
 
     override suspend fun renderPage(pageIndex: Int, widthPx: Int): ImageBitmap? =
         withContext(Dispatchers.IO) {
