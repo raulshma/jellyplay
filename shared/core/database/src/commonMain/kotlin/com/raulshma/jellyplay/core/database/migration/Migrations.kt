@@ -1106,8 +1106,49 @@ class Migration53To54(
     }
 }
 
+// Reader marks (docs/adr/0003-local-first-reader-marks.md): the local-first
+// bookmark + highlight/underline tables. Both keyed by itemId (indexed — the
+// reader sheet observes per item) with the same auto-increment Long id the
+// other append-only tables (seen_media, search_history) use. Fresh-table
+// migration: nothing to backfill, and `positionTicks`/`cfi` semantics are
+// owned entirely by the feature that ships alongside this schema step.
+val MIGRATION_54_55 = object : Migration(54, 55) {
+    override suspend fun migrate(db: SQLiteConnection) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS book_bookmarks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                itemId TEXT NOT NULL,
+                positionTicks INTEGER NOT NULL,
+                cfi TEXT,
+                chapterLabel TEXT NOT NULL,
+                createdAt INTEGER NOT NULL
+            )
+            """.trimIndent()
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_book_bookmarks_itemId ON book_bookmarks(itemId)")
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS book_annotations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                itemId TEXT NOT NULL,
+                cfi TEXT NOT NULL,
+                style TEXT NOT NULL,
+                color TEXT NOT NULL,
+                anchorText TEXT NOT NULL,
+                note TEXT,
+                chapterLabel TEXT NOT NULL,
+                createdAt INTEGER NOT NULL,
+                updatedAt INTEGER NOT NULL
+            )
+            """.trimIndent()
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_book_annotations_itemId ON book_annotations(itemId)")
+    }
+}
+
 /**
- * The complete, correctly-ordered v1→v54 migration chain, with the
+ * The complete, correctly-ordered v1→v55 migration chain, with the
  * token-encrypting [Migration24To25] (which needs a [TokenCipher]) and the
  * container-backfilling [Migration53To54] (which needs a [ContainerProbe])
  * as constructor-injected steps at their true positions. Room matches
@@ -1173,4 +1214,5 @@ fun allMigrations(
         MIGRATION_51_52,
         MIGRATION_52_53,
         Migration53To54(containerProbe),
+        MIGRATION_54_55,
     )

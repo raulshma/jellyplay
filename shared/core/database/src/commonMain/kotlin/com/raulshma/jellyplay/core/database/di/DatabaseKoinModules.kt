@@ -53,4 +53,8 @@ val databaseDaosModule = module {
     single { get<JellyPlayDatabase>().playbackOutboxDao() }
 
     single { get<JellyPlayDatabase>().homeSectionCacheDao() }
+
+    single { get<JellyPlayDatabase>().bookBookmarkDao() }
+
+    single { get<JellyPlayDatabase>().bookAnnotationDao() }
 }

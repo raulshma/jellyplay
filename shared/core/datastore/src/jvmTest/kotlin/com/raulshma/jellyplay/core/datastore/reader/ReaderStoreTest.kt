@@ -20,8 +20,9 @@ import kotlin.test.assertTrue
 /**
  * Exercises the reader preference store against the shared `"user_prefs"` test
  * DataStore: the LTR default for unvisited books, the per-book RTL override
- * round-trip, multi-book map coexistence, corrupt-blob degradation, and
- * [ReaderStore.clearAll].
+ * round-trip, multi-book map coexistence, corrupt-blob degradation, the
+ * Wave-1 appearance / pacing scalars (defaults, clamping, enum degradation)
+ * and both new per-book JSON maps, and [ReaderStore.clearAll].
  *
  * Value assertions go through the pure [ReaderStore.read] projection over a
  * directly-read snapshot (deterministic), mirroring the HomeDiscoveryStoreTest
@@ -62,6 +63,21 @@ class ReaderStoreTest {
         assertEquals(ReadingDirection.LTR, store.readingDirection("book-1"))
         assertEquals(ReaderTheme.DARK, slice().readerTheme)
         assertEquals(ReaderStore.DEFAULT_FONT_SIZE_PX, slice().readerFontSizePx)
+        assertEquals(ReaderFontFamily.SYSTEM, slice().fontFamily)
+        assertEquals(ReaderStore.DEFAULT_LINE_HEIGHT_PCT, slice().lineHeightPct)
+        assertEquals(ReaderStore.DEFAULT_MARGIN_PCT, slice().marginPct)
+        assertEquals(false, slice().justify)
+        assertEquals(false, slice().scrollMode)
+        assertEquals(ReaderStore.DEFAULT_BRIGHTNESS_PCT, slice().brightnessPct)
+        assertEquals(false, slice().volumeKeyPaging)
+        assertEquals(true, slice().animatedPageTurns)
+        assertEquals(ReaderStore.DEFAULT_SPEECH_RATE, slice().speechRate)
+        assertEquals(ReaderStore.DEFAULT_SPEECH_PITCH, slice().speechPitch)
+        assertEquals(ReaderStore.DEFAULT_READING_SPEED_WPM, slice().readingSpeedWpm)
+        assertTrue(slice().perBookAppearance.isEmpty())
+        assertTrue(slice().lastCfis.isEmpty())
+        assertEquals(null, store.lastCfi("book-1"))
+        assertEquals(null, store.perBookAppearance("book-1"))
     }
 
     @Test
@@ -89,6 +105,96 @@ class ReaderStoreTest {
 
         store.setReaderFontSizePx(ReaderStore.MAX_FONT_SIZE_PX + 5)
         assertEquals(ReaderStore.MAX_FONT_SIZE_PX, slice().readerFontSizePx)
+    }
+
+    @Test
+    fun `font family round-trips and a corrupt value degrades to system`() = runTest {
+        store.setFontFamily(ReaderFontFamily.SERIF)
+        assertEquals(ReaderFontFamily.SERIF, slice().fontFamily)
+
+        dataStore.edit { it[ReaderStore.Keys.READER_FONT_FAMILY] = "not-a-family" }
+        assertEquals(ReaderFontFamily.SYSTEM, slice().fontFamily)
+    }
+
+    @Test
+    fun `pct and wpm scalars round-trip and clamp into their bands`() = runTest {
+        store.setLineHeightPct(180)
+        assertEquals(180, slice().lineHeightPct)
+        store.setLineHeightPct(ReaderStore.MIN_LINE_HEIGHT_PCT - 1)
+        assertEquals(ReaderStore.MIN_LINE_HEIGHT_PCT, slice().lineHeightPct)
+        store.setLineHeightPct(ReaderStore.MAX_LINE_HEIGHT_PCT + 1)
+        assertEquals(ReaderStore.MAX_LINE_HEIGHT_PCT, slice().lineHeightPct)
+
+        store.setMarginPct(20)
+        assertEquals(20, slice().marginPct)
+        store.setMarginPct(-1)
+        assertEquals(0, slice().marginPct)
+        store.setMarginPct(101)
+        assertEquals(100, slice().marginPct)
+
+        store.setBrightnessPct(30)
+        assertEquals(30, slice().brightnessPct)
+        store.setBrightnessPct(-1)
+        assertEquals(0, slice().brightnessPct)
+        store.setBrightnessPct(101)
+        assertEquals(100, slice().brightnessPct)
+
+        store.setSpeechRate(150)
+        assertEquals(150, slice().speechRate)
+        store.setSpeechRate(ReaderStore.MIN_SPEECH_RATE - 1)
+        assertEquals(ReaderStore.MIN_SPEECH_RATE, slice().speechRate)
+        store.setSpeechRate(ReaderStore.MAX_SPEECH_RATE + 1)
+        assertEquals(ReaderStore.MAX_SPEECH_RATE, slice().speechRate)
+
+        store.setSpeechPitch(75)
+        assertEquals(75, slice().speechPitch)
+        store.setSpeechPitch(ReaderStore.MIN_SPEECH_PITCH - 1)
+        assertEquals(ReaderStore.MIN_SPEECH_PITCH, slice().speechPitch)
+        store.setSpeechPitch(ReaderStore.MAX_SPEECH_PITCH + 1)
+        assertEquals(ReaderStore.MAX_SPEECH_PITCH, slice().speechPitch)
+
+        store.setReadingSpeedWpm(300)
+        assertEquals(300, slice().readingSpeedWpm)
+        store.setReadingSpeedWpm(ReaderStore.MIN_READING_SPEED_WPM - 1)
+        assertEquals(ReaderStore.MIN_READING_SPEED_WPM, slice().readingSpeedWpm)
+        store.setReadingSpeedWpm(ReaderStore.MAX_READING_SPEED_WPM + 1)
+        assertEquals(ReaderStore.MAX_READING_SPEED_WPM, slice().readingSpeedWpm)
+    }
+
+    @Test
+    fun `stored out-of-band ints are clamped on decode`() = runTest {
+        // Hand-edited / legacy rows: the decode path defends independently of
+        // the setters, so a raw write outside the band reads back clamped.
+        dataStore.edit {
+            it[ReaderStore.Keys.READER_LINE_HEIGHT_PCT] = 40
+            it[ReaderStore.Keys.READER_MARGIN_PCT] = 500
+            it[ReaderStore.Keys.READER_BRIGHTNESS_PCT] = -20
+            it[ReaderStore.Keys.READER_SPEECH_RATE] = 999
+            it[ReaderStore.Keys.READER_SPEECH_PITCH] = 1
+            it[ReaderStore.Keys.READER_READING_SPEED_WPM] = 10_000
+        }
+
+        val slice = slice()
+        assertEquals(ReaderStore.MIN_LINE_HEIGHT_PCT, slice.lineHeightPct)
+        assertEquals(ReaderStore.MAX_MARGIN_PCT, slice.marginPct)
+        assertEquals(0, slice.brightnessPct)
+        assertEquals(ReaderStore.MAX_SPEECH_RATE, slice.speechRate)
+        assertEquals(ReaderStore.MIN_SPEECH_PITCH, slice.speechPitch)
+        assertEquals(ReaderStore.MAX_READING_SPEED_WPM, slice.readingSpeedWpm)
+    }
+
+    @Test
+    fun `boolean toggles round-trip`() = runTest {
+        store.setJustify(true)
+        store.setScrollMode(true)
+        store.setVolumeKeyPaging(true)
+        store.setAnimatedPageTurns(false)
+
+        val slice = slice()
+        assertEquals(true, slice.justify)
+        assertEquals(true, slice.scrollMode)
+        assertEquals(true, slice.volumeKeyPaging)
+        assertEquals(false, slice.animatedPageTurns)
     }
 
     @Test
@@ -136,19 +242,116 @@ class ReaderStoreTest {
     }
 
     @Test
+    fun `per-book appearance round-trips, clamps font size and coexists across books`() = runTest {
+        store.setPerBookAppearance("book-1", PerBookAppearance(theme = ReaderTheme.SEPIA, fontSizePx = 24))
+        store.setPerBookAppearance("book-2", PerBookAppearance(theme = ReaderTheme.LIGHT))
+
+        val appearances = slice().perBookAppearance
+        assertEquals(PerBookAppearance(theme = ReaderTheme.SEPIA, fontSizePx = 24), appearances["book-1"])
+        assertEquals(PerBookAppearance(theme = ReaderTheme.LIGHT), appearances["book-2"])
+        assertEquals(PerBookAppearance(theme = ReaderTheme.SEPIA, fontSizePx = 24), store.perBookAppearance("book-1"))
+
+        // A raw out-of-band font size is clamped into the global band on write.
+        store.setPerBookAppearance("book-3", PerBookAppearance(fontSizePx = 500))
+        assertEquals(ReaderStore.MAX_FONT_SIZE_PX, slice().perBookAppearance["book-3"]!!.fontSizePx)
+
+        // Clearing one book drops only its entry.
+        store.setPerBookAppearance("book-1", null)
+        assertTrue(!slice().perBookAppearance.containsKey("book-1"))
+        assertEquals(ReaderTheme.LIGHT, slice().perBookAppearance["book-2"]!!.theme)
+    }
+
+    @Test
+    fun `corrupt per-book appearance blob degrades to empty instead of throwing`() = runTest {
+        dataStore.edit { it[ReaderStore.Keys.READER_PER_BOOK_APPEARANCE] = "not json {" }
+
+        assertTrue(slice().perBookAppearance.isEmpty())
+        assertEquals(null, store.perBookAppearance("book-1"))
+    }
+
+    @Test
+    fun `lastCfi round-trips per item and clearLastCfi drops only that item`() = runTest {
+        store.setLastCfi("book-1", "epubcfi(/6/4!/4/10,/1:20,/1:40)")
+        store.setLastCfi("book-2", "epubcfi(/6/4!/4/14,/2:0,/2:8)")
+
+        val cfis = slice().lastCfis
+        assertEquals("epubcfi(/6/4!/4/10,/1:20,/1:40)", cfis["book-1"])
+        assertEquals("epubcfi(/6/4!/4/10,/1:20,/1:40)", store.lastCfi("book-1"))
+        assertEquals("epubcfi(/6/4!/4/14,/2:0,/2:8)", cfis["book-2"])
+
+        store.clearLastCfi("book-1")
+
+        assertTrue(!slice().lastCfis.containsKey("book-1"))
+        assertEquals("epubcfi(/6/4!/4/14,/2:0,/2:8)", store.lastCfi("book-2"))
+        assertEquals(null, store.lastCfi("book-1"))
+    }
+
+    @Test
+    fun `corrupt lastCfi blob degrades to empty instead of throwing`() = runTest {
+        dataStore.edit { it[ReaderStore.Keys.READER_LAST_CFIS] = "not json {" }
+
+        assertTrue(slice().lastCfis.isEmpty())
+        assertEquals(null, store.lastCfi("book-1"))
+    }
+
+    @Test
     fun `clearAll removes every preference`() = runTest {
         store.setReadingDirection("book-1", ReadingDirection.RTL)
         store.setReadingDirection("book-2", ReadingDirection.RTL)
         store.setReaderTheme(ReaderTheme.LIGHT)
         store.setReaderFontSizePx(28)
+        store.setFontFamily(ReaderFontFamily.MONO)
+        store.setLineHeightPct(140)
+        store.setMarginPct(12)
+        store.setJustify(true)
+        store.setScrollMode(true)
+        store.setBrightnessPct(40)
+        store.setVolumeKeyPaging(true)
+        store.setAnimatedPageTurns(false)
+        store.setSpeechRate(120)
+        store.setSpeechPitch(90)
+        store.setReadingSpeedWpm(320)
+        store.setPerBookAppearance("book-1", PerBookAppearance(theme = ReaderTheme.SEPIA))
+        store.setLastCfi("book-1", "epubcfi(...)")
 
         store.clearAll()
 
-        assertTrue(slice().readingDirections.isEmpty())
-        assertEquals(ReaderTheme.DARK, slice().readerTheme)
-        assertEquals(ReaderStore.DEFAULT_FONT_SIZE_PX, slice().readerFontSizePx)
+        val slice = slice()
+        assertTrue(slice.readingDirections.isEmpty())
+        assertEquals(ReaderTheme.DARK, slice.readerTheme)
+        assertEquals(ReaderStore.DEFAULT_FONT_SIZE_PX, slice.readerFontSizePx)
+        assertEquals(ReaderFontFamily.SYSTEM, slice.fontFamily)
+        assertEquals(ReaderStore.DEFAULT_LINE_HEIGHT_PCT, slice.lineHeightPct)
+        assertEquals(ReaderStore.DEFAULT_MARGIN_PCT, slice.marginPct)
+        assertEquals(false, slice.justify)
+        assertEquals(false, slice.scrollMode)
+        assertEquals(ReaderStore.DEFAULT_BRIGHTNESS_PCT, slice.brightnessPct)
+        assertEquals(false, slice.volumeKeyPaging)
+        assertEquals(true, slice.animatedPageTurns)
+        assertEquals(ReaderStore.DEFAULT_SPEECH_RATE, slice.speechRate)
+        assertEquals(ReaderStore.DEFAULT_SPEECH_PITCH, slice.speechPitch)
+        assertEquals(ReaderStore.DEFAULT_READING_SPEED_WPM, slice.readingSpeedWpm)
+        assertTrue(slice.perBookAppearance.isEmpty())
+        assertTrue(slice.lastCfis.isEmpty())
         assertEquals(
-            listOf("reader_reading_directions", "reader_theme", "reader_font_size_px"),
+            listOf(
+                "reader_reading_directions",
+                "reader_theme",
+                "reader_font_size_px",
+                "reader_font_family",
+                "reader_line_height_pct",
+                "reader_margin_pct",
+                "reader_justify",
+                "reader_scroll_mode",
+                "reader_brightness_pct",
+                "reader_volume_key_paging",
+                "reader_animated_page_turns",
+                "reader_speech_rate",
+                "reader_speech_pitch",
+                "reader_reading_speed_wpm",
+                "reader_per_book_appearance",
+                "reader_last_cfis",
+            ),
             store.resetKeys.map { it.name },
         )
     }

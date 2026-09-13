@@ -14,6 +14,8 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import com.raulshma.jellyplay.core.database.JellyPlayDatabase
+import com.raulshma.jellyplay.core.database.entity.BookAnnotationEntity
+import com.raulshma.jellyplay.core.database.entity.BookBookmarkEntity
 import com.raulshma.jellyplay.core.database.entity.HomeSectionCacheEntity
 import com.raulshma.jellyplay.core.database.entity.SyncBaselineEntity
 import com.raulshma.jellyplay.core.database.migration.allMigrations
@@ -843,6 +845,73 @@ class MigrationTest {
         assertEquals(0.0, playback!!.playedPercentage, 0.0)
         assertEquals(false, playback.isPlayed)
         assertEquals(false, playback.isFavorite)
+        db.close()
+    }
+
+    /**
+     * Verifies the v54→v55 migration creates the local-first reader-marks
+     * tables (`book_bookmarks` + `book_annotations`, each with its itemId
+     * index) exactly in the shape Room expects: the starting schema is
+     * executed from the exported `54.json` (see [execSchema]), then the full
+     * chain re-opens the file — Room validates the post-migration schema
+     * against the v55 entities before handing back the database, so a drift
+     * between [MIGRATION_54_55]'s DDL and the entity declarations fails
+     * loudly here instead of only on device. DAO round-trips then prove both
+     * tables are live through their generated mappings.
+     */
+    @Test
+    fun migrateV54_55_addsReaderMarksTables() = runTest {
+        createDatabase(54) { db ->
+            execSchema(db, 54)
+        }
+
+        val db = openWithMigrations()
+        // Bookmark round-trip: paged (cfi null) + EPUB (cfi set) rows.
+        db.bookBookmarkDao().upsert(
+            BookBookmarkEntity(
+                itemId = "book-1",
+                positionTicks = 20_000L,
+                cfi = null,
+                chapterLabel = "Page 3",
+                createdAt = 1L,
+            )
+        )
+        db.bookBookmarkDao().upsert(
+            BookBookmarkEntity(
+                itemId = "book-1",
+                positionTicks = 4_200_000L,
+                cfi = "epubcfi(/6/4!/4/10,/1:20,/1:40)",
+                chapterLabel = "Chapter 2",
+                createdAt = 2L,
+            )
+        )
+        val bookmarks = db.bookBookmarkDao().observeByItemId("book-1").first()
+        assertEquals(2, bookmarks.size)
+        assertEquals(20_000L, bookmarks[0].positionTicks)
+        assertEquals(null, bookmarks[0].cfi)
+        assertEquals("epubcfi(/6/4!/4/10,/1:20,/1:40)", bookmarks[1].cfi)
+        // Annotation round-trip including the nullable note.
+        db.bookAnnotationDao().upsert(
+            BookAnnotationEntity(
+                itemId = "book-1",
+                cfi = "epubcfi(/6/4!/4/10,/1:20,/1:40)",
+                style = "HIGHLIGHT",
+                color = "YELLOW",
+                anchorText = "anchor excerpt",
+                note = null,
+                chapterLabel = "Chapter 2",
+                createdAt = 1L,
+                updatedAt = 1L,
+            )
+        )
+        val annotations = db.bookAnnotationDao().observeByItemId("book-1").first()
+        assertEquals(1, annotations.size)
+        assertEquals(null, annotations[0].note)
+        // The per-item clear reaches both tables.
+        db.bookBookmarkDao().deleteByItemId("book-1")
+        db.bookAnnotationDao().deleteByItemId("book-1")
+        assertEquals(0, db.bookBookmarkDao().countByItemId("book-1"))
+        assertEquals(0, db.bookAnnotationDao().countByItemId("book-1"))
         db.close()
     }
 

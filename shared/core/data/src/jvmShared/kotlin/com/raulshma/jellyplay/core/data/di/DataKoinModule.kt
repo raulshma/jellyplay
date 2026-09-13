@@ -65,6 +65,8 @@ import com.raulshma.jellyplay.core.data.repository.PlaybackRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.PlayedStateSync
 import com.raulshma.jellyplay.core.data.repository.PlayedStateSyncImpl
 import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
+import com.raulshma.jellyplay.core.data.repository.ReaderAnnotationsRepository
+import com.raulshma.jellyplay.core.data.repository.ReaderAnnotationsRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.RealtimeConnection
 import com.raulshma.jellyplay.core.data.repository.SearchHistoryRepository
 import com.raulshma.jellyplay.core.data.repository.SearchHistoryRepositoryImpl
@@ -266,6 +268,15 @@ val dataJvmModule: Module = module {
 
     single { SeenMediaRepositoryImpl(get()) }
     single<SeenMediaRepository> { get<SeenMediaRepositoryImpl>() }
+
+    single {
+        ReaderAnnotationsRepositoryImpl(
+            bookmarkDao = get(),
+            annotationDao = get(),
+            timeSource = get(),
+        )
+    }
+    single<ReaderAnnotationsRepository> { get<ReaderAnnotationsRepositoryImpl>() }
 
     single { WatchHistoryRepositoryImpl(get()) }
     single<WatchHistoryRepository> { get<WatchHistoryRepositoryImpl>() }

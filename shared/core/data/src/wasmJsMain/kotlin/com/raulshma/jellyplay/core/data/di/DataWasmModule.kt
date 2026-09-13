@@ -8,6 +8,8 @@ import com.raulshma.jellyplay.core.data.repository.MoodPlaylistRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxRepositoryImpl
 import com.raulshma.jellyplay.core.data.playback.QueuePersistenceHelper
+import com.raulshma.jellyplay.core.data.repository.ReaderAnnotationsRepository
+import com.raulshma.jellyplay.core.data.repository.ReaderAnnotationsRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.SeenMediaRepository
 import com.raulshma.jellyplay.core.data.repository.SeenMediaRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.SearchHistoryRepository
@@ -57,8 +59,9 @@ import org.koin.dsl.module
  * ROOM-ON-WEB SLICE: the promoted commonMain repository impls
  * (SearchHistoryRepositoryImpl, ItemPlaybackPreferenceRepositoryImpl,
  * SeenMediaRepositoryImpl, PlaybackOutboxRepositoryImpl,
- * SmartPlaylistRepository, MoodPlaylistRepository, QueuePersistenceHelper)
- * are wired here over the OPFS Room database — `webDatabaseModule()` (also
+ * SmartPlaylistRepository, MoodPlaylistRepository, QueuePersistenceHelper,
+ * ReaderAnnotationsRepositoryImpl) are wired here over the OPFS Room
+ * database — `webDatabaseModule()` (also
  * in the web startKoin list) provides the JellyPlayDatabase single and
  * `databaseDaosModule` (database commonMain since, also in the web
  * startKoin list) the DAO bindings. The clock seam is [EpochMillisSource]
@@ -121,6 +124,15 @@ val dataWasmModule: Module = module {
 
     single { SeenMediaRepositoryImpl(seenMediaDao = get()) }
     single<SeenMediaRepository> { get<SeenMediaRepositoryImpl>() }
+
+    single {
+        ReaderAnnotationsRepositoryImpl(
+            bookmarkDao = get(),
+            annotationDao = get(),
+            timeSource = get(),
+        )
+    }
+    single<ReaderAnnotationsRepository> { get<ReaderAnnotationsRepositoryImpl>() }
 
     single {
         PlaybackOutboxRepositoryImpl(
