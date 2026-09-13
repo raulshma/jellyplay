@@ -16,14 +16,15 @@ import kotlinx.coroutines.flow.asStateFlow
 enum class BookSpeechAvailability { AVAILABLE, UNAVAILABLE, INITIALIZING }
 
 /**
- * Paragraph-level read-aloud engine. Android speaks; desktop/web report
- * unavailable. One utterance at a time: [speak] replaces any in-flight
- * utterance, and [onDone] fires when THIS utterance completes — the reader
- * speech loop drives paragraph advancement off it. Implementations must be
- * safe to call from any thread (they confine internally) and must post
- * [onDone] to the main thread (system TTS delivers progress callbacks on a
- * binder thread). The engine is created lazily — platforms that bind heavy
- * services (Android TextToSpeech) must not connect until the first [speak].
+ * Read-aloud engine: one utterance at a time — the controller decides
+ * granularity (sentences), the engine just speaks text. Android speaks;
+ * desktop/web report unavailable. [speak] replaces any in-flight utterance,
+ * and [onDone] fires when THIS utterance completes — the reader speech loop
+ * drives advancement off it. Implementations must be safe to call from any
+ * thread (they confine internally) and must post [onDone] to the main
+ * thread (system TTS delivers progress callbacks on a binder thread). The
+ * engine is created lazily — platforms that bind heavy services (Android
+ * TextToSpeech) must not connect until the first [speak].
  */
 interface BookSpeechEngine {
     val availability: StateFlow<BookSpeechAvailability>

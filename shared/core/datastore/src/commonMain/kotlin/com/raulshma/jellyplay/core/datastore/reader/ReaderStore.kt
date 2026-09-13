@@ -78,7 +78,8 @@ data class PerBookAppearance(
  * the global reflowable appearance ([ReaderTheme], font family/size, line
  * height, margins, justify, scroll), display behavior (brightness,
  * volume-key paging, animated page turns) and reading/speech pacing
- * (speech rate + pitch percents, words-per-minute estimate). Defaults to
+ * (speech rate + pitch percents, words-per-minute estimate, auto-scroll
+ * speed). Defaults to
  * [ReadingDirection.LTR] for any book without an explicit choice; RTL is
  * the manga reader's per-title override.
  *
@@ -113,6 +114,7 @@ class ReaderStore constructor(
         val READER_SPEECH_RATE = intPreferencesKey("reader_speech_rate")
         val READER_SPEECH_PITCH = intPreferencesKey("reader_speech_pitch")
         val READER_READING_SPEED_WPM = intPreferencesKey("reader_reading_speed_wpm")
+        val READER_AUTO_SCROLL_SPEED_PX = intPreferencesKey("reader_auto_scroll_speed_px")
         val READER_PER_BOOK_APPEARANCE = stringPreferencesKey("reader_per_book_appearance")
         val READER_LAST_CFIS = stringPreferencesKey("reader_last_cfis")
     }
@@ -139,6 +141,9 @@ class ReaderStore constructor(
         const val DEFAULT_READING_SPEED_WPM = 238
         const val MIN_READING_SPEED_WPM = 100
         const val MAX_READING_SPEED_WPM = 1000
+        const val DEFAULT_AUTO_SCROLL_SPEED_PX_PER_SEC = 40
+        const val MIN_AUTO_SCROLL_SPEED_PX_PER_SEC = 20
+        const val MAX_AUTO_SCROLL_SPEED_PX_PER_SEC = 120
     }
 
     private val sharedPrefs: Flow<Preferences> = dataStore.data
@@ -173,6 +178,7 @@ class ReaderStore constructor(
         speechRate = decodeClampedInt(prefs[Keys.READER_SPEECH_RATE], MIN_SPEECH_RATE, MAX_SPEECH_RATE, DEFAULT_SPEECH_RATE),
         speechPitch = decodeClampedInt(prefs[Keys.READER_SPEECH_PITCH], MIN_SPEECH_PITCH, MAX_SPEECH_PITCH, DEFAULT_SPEECH_PITCH),
         readingSpeedWpm = decodeClampedInt(prefs[Keys.READER_READING_SPEED_WPM], MIN_READING_SPEED_WPM, MAX_READING_SPEED_WPM, DEFAULT_READING_SPEED_WPM),
+        autoScrollSpeedPxPerSec = decodeClampedInt(prefs[Keys.READER_AUTO_SCROLL_SPEED_PX], MIN_AUTO_SCROLL_SPEED_PX_PER_SEC, MAX_AUTO_SCROLL_SPEED_PX_PER_SEC, DEFAULT_AUTO_SCROLL_SPEED_PX_PER_SEC),
         perBookAppearance = decodePerBookAppearance(prefs[Keys.READER_PER_BOOK_APPEARANCE]),
         lastCfis = decodeLastCfis(prefs[Keys.READER_LAST_CFIS]),
     )
@@ -280,6 +286,14 @@ class ReaderStore constructor(
         }
     }
 
+    /** Auto-scroll speed for scrolled-flow EPUBs; clamped into its 20..120 px/s band. */
+    suspend fun setAutoScrollSpeedPxPerSec(pxPerSec: Int) {
+        dataStore.edit { prefs ->
+            prefs[Keys.READER_AUTO_SCROLL_SPEED_PX] =
+                pxPerSec.coerceIn(MIN_AUTO_SCROLL_SPEED_PX_PER_SEC, MAX_AUTO_SCROLL_SPEED_PX_PER_SEC)
+        }
+    }
+
     /**
      * The appearance override for [itemId], or null when the book inherits
      * the global theme/font size.
@@ -360,6 +374,7 @@ class ReaderStore constructor(
             prefs.remove(Keys.READER_SPEECH_RATE)
             prefs.remove(Keys.READER_SPEECH_PITCH)
             prefs.remove(Keys.READER_READING_SPEED_WPM)
+            prefs.remove(Keys.READER_AUTO_SCROLL_SPEED_PX)
             prefs.remove(Keys.READER_PER_BOOK_APPEARANCE)
             prefs.remove(Keys.READER_LAST_CFIS)
         }
@@ -384,6 +399,7 @@ class ReaderStore constructor(
         Keys.READER_SPEECH_RATE,
         Keys.READER_SPEECH_PITCH,
         Keys.READER_READING_SPEED_WPM,
+        Keys.READER_AUTO_SCROLL_SPEED_PX,
         Keys.READER_PER_BOOK_APPEARANCE,
         Keys.READER_LAST_CFIS,
     )
@@ -407,6 +423,7 @@ data class ReaderSlice(
     val speechRate: Int = ReaderStore.DEFAULT_SPEECH_RATE,
     val speechPitch: Int = ReaderStore.DEFAULT_SPEECH_PITCH,
     val readingSpeedWpm: Int = ReaderStore.DEFAULT_READING_SPEED_WPM,
+    val autoScrollSpeedPxPerSec: Int = ReaderStore.DEFAULT_AUTO_SCROLL_SPEED_PX_PER_SEC,
     val perBookAppearance: Map<String, PerBookAppearance> = emptyMap(),
     val lastCfis: Map<String, String> = emptyMap(),
 )

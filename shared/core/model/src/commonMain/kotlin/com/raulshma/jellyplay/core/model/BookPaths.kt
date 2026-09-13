@@ -56,8 +56,19 @@ fun parseContentDispositionFileName(header: String?): String? {
     return legacy.takeIf { it.isNotEmpty() }
 }
 
-/** RFC 3986 percent-decoding over ASCII escapes ('+' passes through untouched). */
+/**
+ * RFC 3986 percent-decoding ('+' passes through untouched). Contiguous `%XX`
+ * escapes collect into a byte buffer flushed through UTF-8 decoding, so a
+ * `filename*=UTF-8''…` header's multi-byte sequences (e.g. `%C3%A9` → é)
+ * survive instead of collapsing to Latin-1 mojibake.
+ */
 private fun percentDecode(value: String): String = buildString {
+    val bytes = ArrayList<Byte>()
+    fun flushBytes() {
+        if (bytes.isEmpty()) return
+        append(ByteArray(bytes.size) { bytes[it] }.decodeToString())
+        bytes.clear()
+    }
     var i = 0
     while (i < value.length) {
         val ch = value[i]
@@ -65,12 +76,14 @@ private fun percentDecode(value: String): String = buildString {
             val hi = value[i + 1].digitToIntOrNull(16)
             val lo = value[i + 2].digitToIntOrNull(16)
             if (hi != null && lo != null) {
-                append(((hi shl 4) or lo).toChar())
+                bytes.add(((hi shl 4) or lo).toByte())
                 i += 3
                 continue
             }
         }
+        flushBytes()
         append(ch)
         i++
     }
+    flushBytes()
 }

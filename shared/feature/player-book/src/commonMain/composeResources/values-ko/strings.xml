@@ -60,6 +60,7 @@
     <string name="book_reader_pages_left">%1$d페이지 남음</string>
     <string name="book_reader_chapter_pages_left">이 장에 %1$d페이지 남음</string>
     <string name="book_reader_minutes_left_chapter">이 장 약 %1$d분 남음</string>
+    <string name="book_reader_minutes_left">약 %1$d분 남음</string>
     <string name="book_reader_read_aloud">소리 내어 읽기</string>
     <string name="book_reader_speech_rate">읽기 속도</string>
     <string name="book_reader_speech_pitch">음성 높이</string>
@@ -69,8 +70,8 @@
     <string name="book_reader_speech_pause">소리 내어 읽기 일시정지</string>
     <string name="book_reader_speech_resume">소리 내어 읽기 재개</string>
     <string name="book_reader_speech_stop">소리 내어 읽기 중지</string>
-    <string name="book_reader_speech_next_paragraph">다음 단락</string>
-    <string name="book_reader_speech_previous_paragraph">이전 단락</string>
+    <string name="book_reader_speech_next_sentence">다음 문장</string>
+    <string name="book_reader_speech_previous_sentence">이전 문장</string>
     <string name="book_reader_sleep_timer">수면 타이머</string>
     <string name="book_reader_sleep_timer_end_of_chapter">장이 끝날 때</string>
     <string name="book_reader_auto_scroll_speed">자동 스크롤 속도</string>

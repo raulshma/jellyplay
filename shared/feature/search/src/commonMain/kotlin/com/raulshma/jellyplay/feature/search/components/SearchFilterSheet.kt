@@ -50,6 +50,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.LocalIsLightTheme
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.filterableMediaTypes
 import com.raulshma.jellyplay.core.model.PlayedStatus
 import com.raulshma.jellyplay.core.model.SortOption
 import com.raulshma.jellyplay.core.model.formatFixed
@@ -235,8 +236,7 @@ private fun ColumnScope.SearchFilterSheetBody(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                // FOLDER is a container, not a content type — never offered as a filter.
-                MediaType.entries.filter { it != MediaType.UNKNOWN && it != MediaType.FOLDER }.forEach { mediaType ->
+                filterableMediaTypes.forEach { mediaType ->
                     GlassFilterChip(
                         label = mediaType.mediaTypeDisplayNamePlural(),
                         selected = mediaType in selectedMediaTypes,

@@ -99,7 +99,7 @@ internal class AndroidBookSpeechEngine(
         val params = Bundle().apply {
             putString(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, id)
         }
-        // QUEUE_FLUSH: a new paragraph replaces the in-flight one (skips and
+        // QUEUE_FLUSH: a new utterance replaces the in-flight one (skips and
         // stops must not queue behind a long utterance).
         tts.speak(text, TextToSpeech.QUEUE_FLUSH, params, id)
     }

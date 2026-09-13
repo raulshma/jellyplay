@@ -318,6 +318,7 @@
         reportPercent();
         var label = '';
         var remaining = null;
+        var bookRemaining = null;
         var cfi = null;
         try {
             if (loc && loc.start) {
@@ -330,11 +331,25 @@
                 }
             }
         } catch (ignored) {}
+        try {
+            // Book-scope remaining: epub.js locations span the whole book, so
+            // total − current approximates the whole-book time left (native
+            // turns it into minutes at the user's words-per-minute).
+            if (book && locationsReady && book.locations && cfi) {
+                var total = book.locations.length();
+                var current = book.locations.locationFromCfi(cfi);
+                if (typeof total === 'number' && total > 0 &&
+                    typeof current === 'number' && current >= 0) {
+                    bookRemaining = Math.max(0, total - current);
+                }
+            }
+        } catch (ignored) {}
         post({
             type: 'relocated',
             percent: currentPercent(),
             chapterLabel: label,
             remainingPages: remaining,
+            remainingLocations: bookRemaining,
             // The page-start CFI native needs for bookmarks + exact resume;
             // null before locations exist or on books epub.js cannot anchor.
             cfi: cfi

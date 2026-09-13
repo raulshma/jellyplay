@@ -2940,11 +2940,12 @@ authoritative overview. Shape notes for engineers:
   convention) keeps back-to-back writes from racing the DataStore round
   trip. Read-aloud rate/pitch use the same memo pattern.
 - **Speech + sleep are Compose-free controllers**: `ReaderSpeechController`
-  drives paragraph-by-paragraph utterances (engine seam `BookSpeechEngine`
-  — Android `TextToSpeech`, desktop/web honestly UNAVAILABLE, Noop fallback
-  via the `BookFormatProbe` Koin pattern) with chapter advance detected by
-  context identity, not timing; `ReaderSleepTimer` ticks countdown or
-  end-of-chapter. Both jvmTest-pinned with value fakes.
+  drives sentence-by-sentence utterances (paragraphs split by the
+  controller's sentence heuristic; the engine seam `BookSpeechEngine` stays
+  text-agnostic — Android `TextToSpeech`, desktop/web honestly UNAVAILABLE,
+  Noop fallback via the `BookFormatProbe` Koin pattern) with chapter advance
+  detected by context identity, not timing; `ReaderSleepTimer` ticks
+  countdown or end-of-chapter. Both jvmTest-pinned with value fakes.
 - **Paged zoom re-rasters**: `PageCache` keys on `(page, renderWidth)` and
   keeps exactly one width per page (zoom re-renders replace, never stack),
   `BookDocument.pageSize()` feeds the pure fit-mode width math

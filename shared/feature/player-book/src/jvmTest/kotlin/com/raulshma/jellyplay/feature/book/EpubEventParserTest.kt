@@ -103,6 +103,34 @@ class EpubEventParserTest {
     }
 
     @Test
+    fun `relocated book scope remaining locations decode and default to null`() {
+        assertEquals(
+            listOf(
+                EpubEvent.Relocated(
+                    EpubRelocation(
+                        percent = 0.37,
+                        chapterLabel = "Chapter 4",
+                        remainingPages = 12,
+                        remainingLocations = 340,
+                        cfi = "epubcfi(/6/14!/4/2/1:0)",
+                    ),
+                ),
+            ),
+            EpubEventParser.parse(
+                """{"type":"relocated","percent":0.37,"chapterLabel":"Chapter 4",""" +
+                    """"remainingPages":12,"remainingLocations":340,"cfi":"epubcfi(/6/14!/4/2/1:0)"}""",
+            ),
+        )
+        // Absent field (pre-locations, or an older reader.js) stays null.
+        assertEquals(
+            listOf(EpubEvent.Relocated(EpubRelocation(0.5, "One", 3, remainingLocations = null))),
+            EpubEventParser.parse(
+                """{"type":"relocated","percent":0.5,"chapterLabel":"One","remainingPages":3}""",
+            ),
+        )
+    }
+
+    @Test
     fun `relocated event tolerates missing optional fields`() {
         // Pre-locations boot relocation: percent may be null; label/pages absent.
         assertEquals(

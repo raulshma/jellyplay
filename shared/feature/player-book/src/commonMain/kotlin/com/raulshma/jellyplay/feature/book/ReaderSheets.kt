@@ -402,63 +402,72 @@ internal fun ReflowableSettingsSheet(
 }
 
 /**
- * Line-height slider (1.0×–2.0×, the store band / 100). Commit-on-settle per
- * the page-slider convention; the "1.6×" style value label rides along.
+ * The shared label + slider + value-caption row behind every settings-sheet
+ * slider: local drag state with commit-on-settle (the page-slider
+ * convention) — [onCommit] receives the settled value coerced into
+ * [coerceIn] exactly once per drag; [valueCaption] renders the live value
+ * (drag position while dragging, persisted value otherwise).
  */
 @Composable
-private fun LineHeightSlider(lineHeightPct: Int, onCommit: (Int) -> Unit) {
+private fun CommitSliderRow(
+    label: String,
+    value: Int,
+    valueRange: ClosedFloatingPointRange<Float>,
+    coerceIn: IntRange,
+    valueCaption: @Composable (Int) -> String,
+    onCommit: (Int) -> Unit,
+) {
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 8.dp)) {
         Text(
-            text = stringResource(Res.string.book_reader_line_height),
+            text = label,
             style = MaterialTheme.typography.bodyLarge,
         )
         var dragging by remember { mutableStateOf(false) }
-        var dragValue by remember { mutableStateOf(160f) }
+        var dragValue by remember { mutableStateOf(value.toFloat()) }
         Slider(
-            value = if (dragging) dragValue else lineHeightPct.toFloat(),
+            value = if (dragging) dragValue else value.toFloat(),
             onValueChange = { dragging = true; dragValue = it },
             onValueChangeFinished = {
                 dragging = false
-                onCommit(dragValue.roundToInt().coerceIn(ReaderStore.MIN_LINE_HEIGHT_PCT, ReaderStore.MAX_LINE_HEIGHT_PCT))
+                onCommit(dragValue.roundToInt().coerceIn(coerceIn.first, coerceIn.last))
             },
-            valueRange = ReaderStore.MIN_LINE_HEIGHT_PCT.toFloat()..ReaderStore.MAX_LINE_HEIGHT_PCT.toFloat(),
+            valueRange = valueRange,
         )
         Text(
-            text = stringResource(
-                Res.string.book_reader_line_height_value,
-                (if (dragging) dragValue else lineHeightPct.toFloat()) / 100f,
-            ),
+            text = valueCaption((if (dragging) dragValue else value.toFloat()).roundToInt()),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
 
+/**
+ * Line-height slider (1.0×–2.0×, the store band / 100). Commit-on-settle per
+ * the page-slider convention; the "1.6×" style value label rides along.
+ */
+@Composable
+private fun LineHeightSlider(lineHeightPct: Int, onCommit: (Int) -> Unit) {
+    CommitSliderRow(
+        label = stringResource(Res.string.book_reader_line_height),
+        value = lineHeightPct,
+        valueRange = ReaderStore.MIN_LINE_HEIGHT_PCT.toFloat()..ReaderStore.MAX_LINE_HEIGHT_PCT.toFloat(),
+        coerceIn = ReaderStore.MIN_LINE_HEIGHT_PCT..ReaderStore.MAX_LINE_HEIGHT_PCT,
+        valueCaption = { stringResource(Res.string.book_reader_line_height_value, it / 100f) },
+        onCommit = onCommit,
+    )
+}
+
 /** Margin slider (0..100 %); commit-on-settle, plain "N %" value label. */
 @Composable
 private fun MarginSlider(marginPct: Int, onCommit: (Int) -> Unit) {
-    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 8.dp)) {
-        Text(
-            text = stringResource(Res.string.book_reader_margins),
-            style = MaterialTheme.typography.bodyLarge,
-        )
-        var dragging by remember { mutableStateOf(false) }
-        var dragValue by remember { mutableStateOf(8f) }
-        Slider(
-            value = if (dragging) dragValue else marginPct.toFloat(),
-            onValueChange = { dragging = true; dragValue = it },
-            onValueChangeFinished = {
-                dragging = false
-                onCommit(dragValue.roundToInt().coerceIn(ReaderStore.MIN_MARGIN_PCT, ReaderStore.MAX_MARGIN_PCT))
-            },
-            valueRange = ReaderStore.MIN_MARGIN_PCT.toFloat()..ReaderStore.MAX_MARGIN_PCT.toFloat(),
-        )
-        Text(
-            text = "${(if (dragging) dragValue else marginPct.toFloat()).roundToInt()} %",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
+    CommitSliderRow(
+        label = stringResource(Res.string.book_reader_margins),
+        value = marginPct,
+        valueRange = ReaderStore.MIN_MARGIN_PCT.toFloat()..ReaderStore.MAX_MARGIN_PCT.toFloat(),
+        coerceIn = ReaderStore.MIN_MARGIN_PCT..ReaderStore.MAX_MARGIN_PCT,
+        valueCaption = { "$it %" },
+        onCommit = onCommit,
+    )
 }
 
 /** Reading-speed stepper (100..1000 wpm, ±10 per tap) feeding the time-left estimate. */
@@ -514,36 +523,21 @@ private fun SpeechRateStepper(label: String, pct: Int, onCommit: (Int) -> Unit) 
 }
 
 /**
- * Auto-scroll speed slider (px/s, [MIN_AUTO_SCROLL_PX_PER_SEC]..
- * [MAX_AUTO_SCROLL_PX_PER_SEC]); commit-on-settle per the page-slider
- * convention. Deliberately NO store key: the speed is a per-session view
- * knob (like the paged fit mode) — every session restarts at
- * [DEFAULT_AUTO_SCROLL_PX_PER_SEC].
+ * Auto-scroll speed slider (px/s, the ReaderStore's 20..120 band);
+ * commit-on-settle per the page-slider convention onto the persisted
+ * preference (ReaderStore key — sessions reopen at the chosen speed).
  */
 @Composable
 private fun AutoScrollSpeedSlider(speedPxPerSec: Int, onCommit: (Int) -> Unit) {
-    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 8.dp)) {
-        Text(
-            text = stringResource(Res.string.book_reader_auto_scroll_speed),
-            style = MaterialTheme.typography.bodyLarge,
-        )
-        var dragging by remember { mutableStateOf(false) }
-        var dragValue by remember { mutableStateOf(DEFAULT_AUTO_SCROLL_PX_PER_SEC.toFloat()) }
-        Slider(
-            value = if (dragging) dragValue else speedPxPerSec.toFloat(),
-            onValueChange = { dragging = true; dragValue = it },
-            onValueChangeFinished = {
-                dragging = false
-                onCommit(dragValue.roundToInt().coerceIn(MIN_AUTO_SCROLL_PX_PER_SEC, MAX_AUTO_SCROLL_PX_PER_SEC))
-            },
-            valueRange = MIN_AUTO_SCROLL_PX_PER_SEC.toFloat()..MAX_AUTO_SCROLL_PX_PER_SEC.toFloat(),
-        )
-        Text(
-            text = "${(if (dragging) dragValue else speedPxPerSec.toFloat()).roundToInt()} px/s",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
+    CommitSliderRow(
+        label = stringResource(Res.string.book_reader_auto_scroll_speed),
+        value = speedPxPerSec,
+        valueRange = ReaderStore.MIN_AUTO_SCROLL_SPEED_PX_PER_SEC.toFloat()..
+            ReaderStore.MAX_AUTO_SCROLL_SPEED_PX_PER_SEC.toFloat(),
+        coerceIn = ReaderStore.MIN_AUTO_SCROLL_SPEED_PX_PER_SEC..ReaderStore.MAX_AUTO_SCROLL_SPEED_PX_PER_SEC,
+        valueCaption = { "$it px/s" },
+        onCommit = onCommit,
+    )
 }
 
 /**
@@ -898,8 +892,3 @@ internal val SEARCH_DEBOUNCE_MS = 400L
 
 /** Sleep-timer minute presets (reader-scaled; the audio player's run 15..90). */
 internal val SLEEP_TIMER_PRESET_MINUTES = listOf(5, 15, 30, 60)
-
-/** Auto-scroll speed band + session default (px/s) — deliberately no store key. */
-internal val MIN_AUTO_SCROLL_PX_PER_SEC = 20
-internal val MAX_AUTO_SCROLL_PX_PER_SEC = 120
-internal val DEFAULT_AUTO_SCROLL_PX_PER_SEC = 40

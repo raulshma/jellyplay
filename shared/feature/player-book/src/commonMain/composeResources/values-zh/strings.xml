@@ -60,6 +60,7 @@
     <string name="book_reader_pages_left">剩余 %1$d 页</string>
     <string name="book_reader_chapter_pages_left">本章剩余 %1$d 页</string>
     <string name="book_reader_minutes_left_chapter">本章剩余约 %1$d 分钟</string>
+    <string name="book_reader_minutes_left">剩余约 %1$d 分钟</string>
     <string name="book_reader_read_aloud">朗读</string>
     <string name="book_reader_speech_rate">朗读语速</string>
     <string name="book_reader_speech_pitch">语音音调</string>
@@ -69,8 +70,8 @@
     <string name="book_reader_speech_pause">暂停朗读</string>
     <string name="book_reader_speech_resume">继续朗读</string>
     <string name="book_reader_speech_stop">停止朗读</string>
-    <string name="book_reader_speech_next_paragraph">下一段</string>
-    <string name="book_reader_speech_previous_paragraph">上一段</string>
+    <string name="book_reader_speech_next_sentence">下一句</string>
+    <string name="book_reader_speech_previous_sentence">上一句</string>
     <string name="book_reader_sleep_timer">睡眠定时器</string>
     <string name="book_reader_sleep_timer_end_of_chapter">本章结束时</string>
     <string name="book_reader_auto_scroll_speed">自动滚动速度</string>

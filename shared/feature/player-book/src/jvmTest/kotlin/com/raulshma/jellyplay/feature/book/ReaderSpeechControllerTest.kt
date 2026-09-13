@@ -8,11 +8,12 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Pins [ReaderSpeechController]'s paragraph loop: sequential utterances,
- * stop/pause/resume semantics (pause remembers the index, resume re-speaks),
- * skip ±1 with the chapter-end handoff past the last paragraph, finish vs
- * stop, and the stale-utterance guard (a late onDone from a replaced
- * utterance can never advance the loop). Value-fake engine, no mockk.
+ * Pins [ReaderSpeechController]'s sentence loop: sequential utterances,
+ * stop/pause/resume semantics (pause remembers the position, resume
+ * re-speaks), skip ±1 sentence (within and across paragraphs) with the
+ * chapter-end handoff past the last sentence, finish vs stop, and the
+ * stale-utterance guard (a late onDone from a replaced utterance can never
+ * advance the loop). Value-fake engine, no mockk.
  */
 class ReaderSpeechControllerTest {
 
@@ -267,5 +268,64 @@ class ReaderSpeechControllerTest {
         controller.awaitContext()
         assertEquals(ReaderSpeechState(active = true), controller.state.value)
         assertTrue(engine.spoken.isEmpty())
+    }
+
+    @Test
+    fun `multi sentence paragraph speaks sentence by sentence`() {
+        val engine = FakeSpeechEngine()
+        var spoke = mutableListOf<Pair<Int, String>>()
+        val controller = ReaderSpeechController(
+            engine = engine,
+            onSpeakParagraph = { index, cfi -> spoke.add(index to cfi) },
+            onChapterEnd = {},
+            onFinished = {},
+        )
+        controller.start(paragraphs("First one. Second two! Third three?"))
+
+        engine.complete()
+        engine.complete()
+        assertEquals(
+            listOf("First one.", "Second two!", "Third three?"),
+            engine.spoken,
+        )
+        // Every sentence reports its own paragraph (index/CFI stay paragraph-scoped).
+        assertEquals(List(3) { 0 to "epubcfi(/6/4!/4/0)" }, spoke)
+        assertEquals(0, controller.state.value.paragraphIndex)
+    }
+
+    @Test
+    fun `skip moves one sentence staying inside the same paragraph`() {
+        val engine = FakeSpeechEngine()
+        val controller = ReaderSpeechController(
+            engine = engine,
+            onSpeakParagraph = { _, _ -> },
+            onChapterEnd = {},
+            onFinished = {},
+        )
+        controller.start(paragraphs("First one. Second two. Third three."))
+
+        controller.skipForward()
+        assertEquals(listOf("First one.", "Second two."), engine.spoken)
+        assertEquals(0, controller.state.value.paragraphIndex)
+
+        controller.skipBack()
+        assertEquals(listOf("First one.", "Second two.", "First one."), engine.spoken)
+        assertEquals(0, controller.state.value.paragraphIndex)
+    }
+
+    @Test
+    fun `split sentences keeps decimals and trailing quotes attached`() {
+        assertEquals(
+            listOf("It costs 3.14 dollars.", "He said \"go.\"", "No final mark"),
+            splitSentences("It costs 3.14 dollars. He said \"go.\" No final mark"),
+        )
+        // Documented heuristic limit: an abbreviation period followed by a
+        // space looks like a boundary, so it splits — coarser skip granularity
+        // only; the units concatenate back to the paragraph.
+        assertEquals(
+            listOf("Mr.", "Brown arrived."),
+            splitSentences("Mr. Brown arrived."),
+        )
+        assertEquals(emptyList(), splitSentences("   "))
     }
 }

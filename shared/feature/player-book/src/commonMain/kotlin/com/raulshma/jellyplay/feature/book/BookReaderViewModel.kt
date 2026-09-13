@@ -143,56 +143,55 @@ class BookReaderViewModel(
         effectiveAppearance(slice, per).fontSizePx
     }.stateIn(scope, SharingStarted.Eagerly, readerStore.reader.value.readerFontSizePx)
 
+    /**
+     * One reader-slice preference as a StateFlow — every global knob below is
+     * the same `map + stateIn` shape over [ReaderStore.reader], so the
+     * selector + initial pair is the only per-knob code left.
+     */
+    private fun <T> readerPref(initial: T, selector: (ReaderSlice) -> T): StateFlow<T> =
+        readerStore.reader
+            .map(selector)
+            .stateIn(scope, SharingStarted.Eagerly, initial)
+
     /** Global reflowable typography slice (family / leading / margins / justify / flow). */
-    val readerFontFamily: StateFlow<ReaderFontFamily> = readerStore.reader
-        .map { it.fontFamily }
-        .stateIn(scope, SharingStarted.Eagerly, ReaderFontFamily.SYSTEM)
+    val readerFontFamily: StateFlow<ReaderFontFamily> =
+        readerPref(ReaderFontFamily.SYSTEM) { it.fontFamily }
 
-    val lineHeightPct: StateFlow<Int> = readerStore.reader
-        .map { it.lineHeightPct }
-        .stateIn(scope, SharingStarted.Eagerly, ReaderStore.DEFAULT_LINE_HEIGHT_PCT)
+    val lineHeightPct: StateFlow<Int> =
+        readerPref(ReaderStore.DEFAULT_LINE_HEIGHT_PCT) { it.lineHeightPct }
 
-    val marginPct: StateFlow<Int> = readerStore.reader
-        .map { it.marginPct }
-        .stateIn(scope, SharingStarted.Eagerly, ReaderStore.DEFAULT_MARGIN_PCT)
+    val marginPct: StateFlow<Int> =
+        readerPref(ReaderStore.DEFAULT_MARGIN_PCT) { it.marginPct }
 
-    val justify: StateFlow<Boolean> = readerStore.reader
-        .map { it.justify }
-        .stateIn(scope, SharingStarted.Eagerly, false)
+    val justify: StateFlow<Boolean> = readerPref(false) { it.justify }
 
-    val scrollMode: StateFlow<Boolean> = readerStore.reader
-        .map { it.scrollMode }
-        .stateIn(scope, SharingStarted.Eagerly, false)
+    val scrollMode: StateFlow<Boolean> = readerPref(false) { it.scrollMode }
 
     /** Display + behavior slice: brightness veil, volume-key paging, animated turns, reading speed. */
-    val brightnessPct: StateFlow<Int> = readerStore.reader
-        .map { it.brightnessPct }
-        .stateIn(scope, SharingStarted.Eagerly, ReaderStore.DEFAULT_BRIGHTNESS_PCT)
+    val brightnessPct: StateFlow<Int> =
+        readerPref(ReaderStore.DEFAULT_BRIGHTNESS_PCT) { it.brightnessPct }
 
-    val volumeKeyPaging: StateFlow<Boolean> = readerStore.reader
-        .map { it.volumeKeyPaging }
-        .stateIn(scope, SharingStarted.Eagerly, false)
+    val volumeKeyPaging: StateFlow<Boolean> = readerPref(false) { it.volumeKeyPaging }
 
-    val animatedPageTurns: StateFlow<Boolean> = readerStore.reader
-        .map { it.animatedPageTurns }
-        .stateIn(scope, SharingStarted.Eagerly, true)
+    val animatedPageTurns: StateFlow<Boolean> = readerPref(true) { it.animatedPageTurns }
 
-    val readingSpeedWpm: StateFlow<Int> = readerStore.reader
-        .map { it.readingSpeedWpm }
-        .stateIn(scope, SharingStarted.Eagerly, ReaderStore.DEFAULT_READING_SPEED_WPM)
+    val readingSpeedWpm: StateFlow<Int> =
+        readerPref(ReaderStore.DEFAULT_READING_SPEED_WPM) { it.readingSpeedWpm }
 
     // ---------------------------------------------------------------------
     // Read aloud (Wave 5) + sleep timer + auto-scroll coordination.
     // ---------------------------------------------------------------------
 
     /** Read-aloud voice knobs (percent bands live in the ReaderStore). */
-    val speechRate: StateFlow<Int> = readerStore.reader
-        .map { it.speechRate }
-        .stateIn(scope, SharingStarted.Eagerly, ReaderStore.DEFAULT_SPEECH_RATE)
+    val speechRate: StateFlow<Int> =
+        readerPref(ReaderStore.DEFAULT_SPEECH_RATE) { it.speechRate }
 
-    val speechPitch: StateFlow<Int> = readerStore.reader
-        .map { it.speechPitch }
-        .stateIn(scope, SharingStarted.Eagerly, ReaderStore.DEFAULT_SPEECH_PITCH)
+    val speechPitch: StateFlow<Int> =
+        readerPref(ReaderStore.DEFAULT_SPEECH_PITCH) { it.speechPitch }
+
+    /** Scrolled-flow auto-scroll speed (px/s; the band lives in the ReaderStore). */
+    val autoScrollSpeedPxPerSec: StateFlow<Int> =
+        readerPref(ReaderStore.DEFAULT_AUTO_SCROLL_SPEED_PX_PER_SEC) { it.autoScrollSpeedPxPerSec }
 
     /**
      * One-shot commands the SCREEN executes against its EPUB host (see
@@ -205,7 +204,7 @@ class BookReaderViewModel(
     internal val hostCommands: SharedFlow<ReaderHostCommand> = _hostCommands.asSharedFlow()
 
     /**
-     * The read-aloud loop driver (paragraph sequencing, pause/skip). Chapter
+     * The read-aloud loop driver (sentence sequencing, pause/skip). Chapter
      * continuation: the speech context covers the CURRENT chapter only, so
      * on chapter end the loop asks [advanceSpeechChapter], which turns the
      * page (`AdvanceSpeechChapter`) and re-requests the context once the
@@ -598,6 +597,7 @@ class BookReaderViewModel(
             chapterLabel = relocation.chapterLabel,
             cfi = latestEpubCfi,
             remainingPages = relocation.remainingPages ?: _currentEpubLocation.value?.remainingPages,
+            remainingLocations = relocation.remainingLocations ?: _currentEpubLocation.value?.remainingLocations,
         )
         // Speech chapter turn landed: the context request waits for exactly
         // this relocation (requesting earlier could resolve the OLD chapter).
@@ -750,6 +750,12 @@ class BookReaderViewModel(
     fun setReadingSpeedWpm(wpm: Int) {
         val clamped = wpm.coerceIn(ReaderStore.MIN_READING_SPEED_WPM, ReaderStore.MAX_READING_SPEED_WPM)
         scope.launch { runCatching { readerStore.setReadingSpeedWpm(clamped) } }
+    }
+
+    /** Auto-scroll speed write (px/s); clamped into its 20..120 band. */
+    fun setAutoScrollSpeedPxPerSec(pxPerSec: Int) {
+        val clamped = pxPerSec.coerceIn(ReaderStore.MIN_AUTO_SCROLL_SPEED_PX_PER_SEC, ReaderStore.MAX_AUTO_SCROLL_SPEED_PX_PER_SEC)
+        scope.launch { runCatching { readerStore.setAutoScrollSpeedPxPerSec(clamped) } }
     }
 
     // ---------------------------------------------------------------------

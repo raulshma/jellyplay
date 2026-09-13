@@ -60,6 +60,12 @@ internal data class EpubRelocation(
     /** `total - page` of the current chapter, or `null` when not reported. */
     val remainingPages: Int?,
     /**
+     * Book-scope remaining epub.js location pages (`total - current` of the
+     * whole-book location list), or `null` before locations exist — the
+     * whole-book time-left estimate's source (see [EpubLocation]).
+     */
+    val remainingLocations: Int? = null,
+    /**
      * The current page-start CFI (`epubcfi(…)`), or `null` before locations
      * exist. This is what bookmarks and exact resume persist — the plain
      * `percent` event carries no anchor at all.

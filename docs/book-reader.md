@@ -31,8 +31,12 @@ back to the server so you can pick up on any device.
 - 🎨 **EPUB typography** — reflowable books offer light/sepia/dark themes
   (sepia is a true paper tone), adjustable type size, font family
   (system/serif/sans/mono), line height, page margins, justification, and
-  a continuous-scroll mode — global or per book ("use for this book
-  only"), all applied live.
+  a continuous-scroll mode, all applied live. Theme and type size can be
+  set per book ("use for this book only"); the other typography axes are
+  global.
+- ⏱️ **Time remaining** — the reflowable bottom chrome estimates minutes
+  left (whole book and current chapter) from your reading-speed
+  preference; paged books show pages left.
 - 🔍 **Paged zoom & fit** — PDF and comic pages pinch-zoom with pan,
   double-tap to toggle zoom, and a fit mode (fit width / fit page /
   original); zoomed pages re-raster sharply (up to 3×).
@@ -40,11 +44,12 @@ back to the server so you can pick up on any device.
   both readers.
 - 🔊 **Read aloud (Android)** — EPUBs can be spoken with the system TTS
   voice: the current paragraph is highlighted, pages follow along, and
-  chapters advance automatically. Speed and pitch are adjustable. Desktop
-  reports the feature as unavailable (roadmap: future).
+  chapters advance automatically, with sentence-level skip forward/back.
+  Speed and pitch are adjustable. Desktop reports the feature as
+  unavailable (roadmap: future).
 - 🌙 **Sleep timer & auto-scroll** — stop read-aloud/auto-scroll after
   5–60 minutes or at the end of the chapter; scroll-mode EPUBs gain
-  auto-scroll with a speed slider and tap-to-pause.
+  auto-scroll with a persisted speed slider and tap-to-pause.
 - 📚 **Offline reading** — books download like any other media and open
   from the offline library with no network; positions made offline are
   queued and synced to the server on reconnect.

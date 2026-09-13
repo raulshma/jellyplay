@@ -159,6 +159,13 @@ class ReaderStoreTest {
         assertEquals(ReaderStore.MIN_READING_SPEED_WPM, slice().readingSpeedWpm)
         store.setReadingSpeedWpm(ReaderStore.MAX_READING_SPEED_WPM + 1)
         assertEquals(ReaderStore.MAX_READING_SPEED_WPM, slice().readingSpeedWpm)
+
+        store.setAutoScrollSpeedPxPerSec(60)
+        assertEquals(60, slice().autoScrollSpeedPxPerSec)
+        store.setAutoScrollSpeedPxPerSec(ReaderStore.MIN_AUTO_SCROLL_SPEED_PX_PER_SEC - 1)
+        assertEquals(ReaderStore.MIN_AUTO_SCROLL_SPEED_PX_PER_SEC, slice().autoScrollSpeedPxPerSec)
+        store.setAutoScrollSpeedPxPerSec(ReaderStore.MAX_AUTO_SCROLL_SPEED_PX_PER_SEC + 1)
+        assertEquals(ReaderStore.MAX_AUTO_SCROLL_SPEED_PX_PER_SEC, slice().autoScrollSpeedPxPerSec)
     }
 
     @Test
@@ -172,6 +179,7 @@ class ReaderStoreTest {
             it[ReaderStore.Keys.READER_SPEECH_RATE] = 999
             it[ReaderStore.Keys.READER_SPEECH_PITCH] = 1
             it[ReaderStore.Keys.READER_READING_SPEED_WPM] = 10_000
+            it[ReaderStore.Keys.READER_AUTO_SCROLL_SPEED_PX] = 5_000
         }
 
         val slice = slice()
@@ -181,6 +189,7 @@ class ReaderStoreTest {
         assertEquals(ReaderStore.MAX_SPEECH_RATE, slice.speechRate)
         assertEquals(ReaderStore.MIN_SPEECH_PITCH, slice.speechPitch)
         assertEquals(ReaderStore.MAX_READING_SPEED_WPM, slice.readingSpeedWpm)
+        assertEquals(ReaderStore.MAX_AUTO_SCROLL_SPEED_PX_PER_SEC, slice.autoScrollSpeedPxPerSec)
     }
 
     @Test
@@ -331,6 +340,7 @@ class ReaderStoreTest {
         assertEquals(ReaderStore.DEFAULT_SPEECH_RATE, slice.speechRate)
         assertEquals(ReaderStore.DEFAULT_SPEECH_PITCH, slice.speechPitch)
         assertEquals(ReaderStore.DEFAULT_READING_SPEED_WPM, slice.readingSpeedWpm)
+        assertEquals(ReaderStore.DEFAULT_AUTO_SCROLL_SPEED_PX_PER_SEC, slice.autoScrollSpeedPxPerSec)
         assertTrue(slice.perBookAppearance.isEmpty())
         assertTrue(slice.lastCfis.isEmpty())
         assertEquals(
@@ -349,6 +359,7 @@ class ReaderStoreTest {
                 "reader_speech_rate",
                 "reader_speech_pitch",
                 "reader_reading_speed_wpm",
+                "reader_auto_scroll_speed_px",
                 "reader_per_book_appearance",
                 "reader_last_cfis",
             ),

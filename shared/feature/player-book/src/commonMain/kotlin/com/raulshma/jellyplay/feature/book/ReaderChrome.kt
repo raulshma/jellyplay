@@ -46,14 +46,15 @@ import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_auto_
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_auto_scroll_stop
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_brightness
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_chapter_pages_left
+import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_minutes_left
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_minutes_left_chapter
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_page_indicator
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_pages_left
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_percent
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_speech_active
-import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_speech_next_paragraph
+import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_speech_next_sentence
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_speech_pause
-import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_speech_previous_paragraph
+import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_speech_previous_sentence
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_speech_resume
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_speech_start
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_speech_stop
@@ -298,7 +299,7 @@ private fun ReaderTransportRow(
                 IconButton(onClick = onSpeechSkipBack) {
                     Icon(
                         imageVector = Tabler.Outline.PlayerSkipBack,
-                        contentDescription = stringResource(Res.string.book_reader_speech_previous_paragraph),
+                        contentDescription = stringResource(Res.string.book_reader_speech_previous_sentence),
                         tint = Color.White,
                     )
                 }
@@ -324,7 +325,7 @@ private fun ReaderTransportRow(
                 IconButton(onClick = onSpeechSkipForward) {
                     Icon(
                         imageVector = Tabler.Outline.PlayerSkipForward,
-                        contentDescription = stringResource(Res.string.book_reader_speech_next_paragraph),
+                        contentDescription = stringResource(Res.string.book_reader_speech_next_sentence),
                         tint = Color.White,
                     )
                 }
@@ -365,15 +366,17 @@ private fun ReaderTransportRow(
  * The reflowable reader's bottom bar: the read-aloud / auto-scroll transport
  * row (Android-only speech; auto-scroll in scrolled flow), the brightness
  * row, the read percent, the chapter-scoped pages the relocation event
- * reports, and the "≈ N min left in chapter" estimate from
- * [chapterMinutesRemaining] (null rows simply drop — before locations exist
- * there is nothing to report).
+ * reports, and the two "≈ N min left" estimates from
+ * [locationPagesMinutesRemaining] — chapter-scoped (the relocated event's
+ * chapter pages) and book-scoped (the whole-book location list) (null rows
+ * simply drop — before locations exist there is nothing to report).
  */
 @Composable
 internal fun ReflowableBottomBar(
     percent: Double,
     remainingPages: Int?,
     minutesLeftInChapter: Int?,
+    minutesLeftInBook: Int?,
     brightnessPct: Int,
     onBrightnessChange: (Int) -> Unit,
     speechAvailable: Boolean = false,
@@ -433,6 +436,13 @@ internal fun ReflowableBottomBar(
             minutesLeftInChapter?.let { minutes ->
                 Text(
                     text = stringResource(Res.string.book_reader_minutes_left_chapter, minutes),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Color.White.copy(alpha = 0.7f),
+                )
+            }
+            minutesLeftInBook?.let { minutes ->
+                Text(
+                    text = stringResource(Res.string.book_reader_minutes_left, minutes),
                     style = MaterialTheme.typography.labelMedium,
                     color = Color.White.copy(alpha = 0.7f),
                 )

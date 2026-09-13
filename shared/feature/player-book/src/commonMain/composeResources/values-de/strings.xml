@@ -60,6 +60,7 @@
     <string name="book_reader_pages_left">%1$d Seiten übrig</string>
     <string name="book_reader_chapter_pages_left">%1$d Seiten übrig im Kapitel</string>
     <string name="book_reader_minutes_left_chapter">≈ %1$d Min. übrig im Kapitel</string>
+    <string name="book_reader_minutes_left">≈ %1$d Min. übrig</string>
     <string name="book_reader_read_aloud">Vorlesen</string>
     <string name="book_reader_speech_rate">Sprechgeschwindigkeit</string>
     <string name="book_reader_speech_pitch">Tonhöhe</string>
@@ -69,8 +70,8 @@
     <string name="book_reader_speech_pause">Vorlesen pausieren</string>
     <string name="book_reader_speech_resume">Vorlesen fortsetzen</string>
     <string name="book_reader_speech_stop">Vorlesen beenden</string>
-    <string name="book_reader_speech_next_paragraph">Nächster Absatz</string>
-    <string name="book_reader_speech_previous_paragraph">Vorheriger Absatz</string>
+    <string name="book_reader_speech_next_sentence">Nächster Satz</string>
+    <string name="book_reader_speech_previous_sentence">Vorheriger Satz</string>
     <string name="book_reader_sleep_timer">Einschlaftimer</string>
     <string name="book_reader_sleep_timer_end_of_chapter">Ende des Kapitels</string>
     <string name="book_reader_auto_scroll_speed">Auto-Scroll-Geschwindigkeit</string>

@@ -316,8 +316,8 @@ internal fun ReflowableReaderContent(
     val readingSpeedWpm by viewModel.readingSpeedWpm.collectAsStateWithLifecycle()
 
     // Read aloud + sleep timer + auto-scroll (Wave 5). Speech/auto-scroll
-    // STATE lives in the VM/screen as noted; the AUTO-SCROLL speed is
-    // session-local view state (no store key — see AutoScrollSpeedSlider).
+    // STATE lives in the VM/screen as noted; the AUTO-SCROLL speed is the
+    // persisted ReaderStore preference (sessions reopen at the chosen speed).
     val speechState by viewModel.speechState.collectAsStateWithLifecycle()
     // != UNAVAILABLE (not == AVAILABLE): the Android engine is lazy — its
     // INITIALIZING window lasts until the first speak, so keying the play
@@ -329,7 +329,7 @@ internal fun ReflowableReaderContent(
     val speechPitch by viewModel.speechPitch.collectAsStateWithLifecycle()
     val sleepTimerState by viewModel.sleepTimerState.collectAsStateWithLifecycle()
     var autoScrollActive by remember { mutableStateOf(false) }
-    var autoScrollSpeedPx by remember { mutableStateOf(DEFAULT_AUTO_SCROLL_PX_PER_SEC) }
+    val autoScrollSpeedPx by viewModel.autoScrollSpeedPxPerSec.collectAsStateWithLifecycle()
 
     /** The ephemeral speech-highlight CFI (null = nothing painted). */
     var speechHighlightCfi by remember { mutableStateOf<String?>(null) }
@@ -632,7 +632,9 @@ internal fun ReflowableReaderContent(
                 percent = percent,
                 remainingPages = epubLocation?.remainingPages,
                 minutesLeftInChapter = epubLocation?.remainingPages
-                    ?.let { chapterMinutesRemaining(it, readingSpeedWpm) },
+                    ?.let { locationPagesMinutesRemaining(it, readingSpeedWpm) },
+                minutesLeftInBook = epubLocation?.remainingLocations
+                    ?.let { locationPagesMinutesRemaining(it, readingSpeedWpm) },
                 brightnessPct = brightnessPct,
                 onBrightnessChange = viewModel::setBrightnessPct,
                 speechAvailable = speechAvailable,
@@ -735,7 +737,7 @@ internal fun ReflowableReaderContent(
                 onSetSpeechRate = viewModel::setSpeechRate,
                 onSetSpeechPitch = viewModel::setSpeechPitch,
                 onSetAutoScrollSpeed = { speed ->
-                    autoScrollSpeedPx = speed
+                    viewModel.setAutoScrollSpeedPxPerSec(speed)
                     // Live re-target: an active rAF loop picks the new speed.
                     if (autoScrollActive) host.setAutoScroll(true, speed)
                 },

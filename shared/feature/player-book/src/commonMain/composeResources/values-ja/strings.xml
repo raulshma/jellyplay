@@ -60,6 +60,7 @@
     <string name="book_reader_pages_left">残り %1$d ページ</string>
     <string name="book_reader_chapter_pages_left">この章の残り %1$d ページ</string>
     <string name="book_reader_minutes_left_chapter">この章の残り約 %1$d 分</string>
+    <string name="book_reader_minutes_left">残り約 %1$d 分</string>
     <string name="book_reader_read_aloud">読み上げ</string>
     <string name="book_reader_speech_rate">読み上げ速度</string>
     <string name="book_reader_speech_pitch">声の高さ</string>
@@ -69,8 +70,8 @@
     <string name="book_reader_speech_pause">読み上げを一時停止</string>
     <string name="book_reader_speech_resume">読み上げを再開</string>
     <string name="book_reader_speech_stop">読み上げを停止</string>
-    <string name="book_reader_speech_next_paragraph">次の段落</string>
-    <string name="book_reader_speech_previous_paragraph">前の段落</string>
+    <string name="book_reader_speech_next_sentence">次の文</string>
+    <string name="book_reader_speech_previous_sentence">前の文</string>
     <string name="book_reader_sleep_timer">スリープタイマー</string>
     <string name="book_reader_sleep_timer_end_of_chapter">章の終わりまで</string>
     <string name="book_reader_auto_scroll_speed">自動スクロール速度</string>

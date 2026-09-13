@@ -75,15 +75,17 @@ sealed interface ReadyContent {
 /**
  * The reflowable reader's current position, folded from `relocated` events:
  * the debounced-report percent plus the last page-start CFI and chapter label
- * (both null/empty until the first relocation that carries them), and the
- * chapter-scoped pages the event reports (null when absent — before locations
- * exist); the percent event keeps the last known value.
+ * (both null/empty until the first relocation that carries them), the
+ * chapter-scoped pages the event reports, and the book-scope remaining
+ * location pages (both null when absent — before locations exist); the
+ * percent event keeps the last known value.
  */
 data class EpubLocation(
     val percent: Double,
     val chapterLabel: String,
     val cfi: String?,
     val remainingPages: Int? = null,
+    val remainingLocations: Int? = null,
 )
 
 /** A live text selection inside the reflowable reader (CFI + selected text). */
