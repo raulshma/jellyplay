@@ -132,7 +132,7 @@ composeResources.packageOfResClass = "com.raulshma.jellyplay.feature.livetv.gene
 // this module fails dependency resolution unless it points at JetBrains'
 // fork of the same release line — same package, ABI-stable surface. Scoped
 // to wasmJs-named configurations so android/jvm graphs keep resolving
-// google's published variants exactly as before ( S1/R2; the
+// google's published variants exactly as before (the
 // identical block lives in shared/core/ui, shared/feature/requests and the
 // other web modules).
 configurations.configureEach {

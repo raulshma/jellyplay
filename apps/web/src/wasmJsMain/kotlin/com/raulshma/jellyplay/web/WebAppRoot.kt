@@ -350,7 +350,7 @@ fun WebAppRoot(
                 // lane asserts the disabled pane (see web-verify.mjs).
                 //
                 // ARR-SETTINGS, LIVE SINCE: onOpenArrSettings now pushes
-                // the REAL shared route — the wave gave feature/settings a
+                // the REAL shared route — feature/settings gained a
                 // wasmJs target, so the documented cut ("it becomes
                 // addEntry(Route.ArrSettings()) when settings gains the web
                 // target") is fulfilled. Reachability is unchanged from

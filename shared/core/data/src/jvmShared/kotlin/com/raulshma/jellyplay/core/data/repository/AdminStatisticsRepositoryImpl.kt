@@ -300,10 +300,10 @@ class AdminStatisticsRepositoryImpl constructor(
             ),
         ).filter { it.value > 0 }
 
-        // Breakdowns and the enhanced wave launch together: none of the
+        // Breakdowns and the enhanced batch launch together: none of the
         // enhanced calls depends on breakdown results (only the local math
         // after the awaits does), so overlapping removes a full sequential
-        // round-trip wave from the detail-page load.
+        // round-trip batch from the detail-page load.
         val breakdowns: BreakdownResults
         val enhancedDeferreds: EnhancedDeferreds?
         coroutineScope {
@@ -366,7 +366,7 @@ class AdminStatisticsRepositoryImpl constructor(
             totalWatchTimeSec = watchTimeBreakdown.totalSeconds
         }
 
-        // enhancedDeferreds is non-null exactly when the plugin wave launched
+        // enhancedDeferreds is non-null exactly when the plugin batch launched
         // (same pluginAvailable gate), so the null check is the plugin gate.
         val enhancedData = buildEnhancedStatistics(
             userId = userId,
@@ -825,7 +825,7 @@ class AdminStatisticsRepositoryImpl constructor(
     )
 
     /**
-     * Enhanced-wave deferreds, launched alongside the breakdowns wave so both
+     * Enhanced-batch deferreds, launched alongside the breakdowns batch so both
      * fan-outs overlap (none of these calls depends on breakdown results).
      */
     private data class EnhancedDeferreds(
@@ -850,7 +850,7 @@ class AdminStatisticsRepositoryImpl constructor(
 
     /**
      * The enhanced half of [getUserDetailStatistics], built once for both
-     * gates: [deferreds] non-null is the plugin wave (its awaits feed the
+     * gates: [deferreds] non-null is the plugin batch (its awaits feed the
      * weekly/streak/music figures), null is the no-plugin fallback — the same
      * builder with the plugin inputs absent. The watch-time fallbacks, the
      * average-daily and the month-comparison math were duplicated across the

@@ -55,9 +55,9 @@ kotlin {
                 // (networkWasmModule — .1 chunk 3: AtomicSessionState
                 // + WasmClientIdentity + the three Ktor wasm clients +
                 // AuthApiClient/LibraryApiClient/PlaybackApiClient bindings).
-                // Deliberately absent: paging-compose ( §1 proves
+                // Deliberately absent: paging-compose (§1 proves
                 // its 3.5.0 wasm klibs exist, but no consuming web module
-                // needs LazyPagingItems yet). database joined in: web gets
+                // needs LazyPagingItems yet). the database target joined: web gets
                 // the real Room database (OPFS-backed via the vendored
                 // webworker/ npm package riding this module's wasmJsMain) and
                 // Main.kt registers webDatabaseModule alongside the rest of
@@ -96,7 +96,7 @@ kotlin {
                 // ArrRepository binding already lives in dataWasmModule) and
                 // `entry<Route.Onboarding>` (onboardingModule; datastore
                 // stores resolve from datastoreCommonModule/webDatastoreModule).
-                // shortcuts + auth also gained wasmJs targets in but stay
+                // shortcuts + auth also gained wasmJs targets but stay
                 // unrouted/unregistered on web for now (no wasm
                 // AuthRepository binding; the grid's targets are mostly
                 // non-wasm; web drives sign-in via KtorWasmAuthApiClient).
@@ -111,11 +111,11 @@ kotlin {
                 // The settings ROOT (Route.Settings) stays unrouted on web:
                 // SettingsViewModel's AuthRepository ctor dep has no wasm
                 // binding (AuthRepositoryImpl is jvmShared — Room + WebSocket
-                // + TokenCipher; the same reason auth stayed target-only in
+                // + TokenCipher — the same reason auth stayed target-only),
                 //), so every AuthRepository/MediaRepository-backed VM def
                 // settingsModule registers stays latent exactly like
                 // detailsModule's MediaDetail cluster. player-audio also
-                // gained a wasmJs target in but gets NO edge here (nothing
+                // gained a wasmJs target but gets NO edge here (nothing
                 // on web consumes it): all four playback/cast ctor seams of
                 // AudioPlayerViewModel (AudioQueueManager/AudioEffectsManager/
                 // AudioPlayerEngine/AudioPlayerCast) lack wasm bindings — the
@@ -216,7 +216,7 @@ kotlin {
 // google's androidx.navigation3:navigation3-ui ships NO web targets at all
 // (android AAR + jvm/linux stubs only — §1), so every wasmJs
 // configuration of this module — including ones that only pull
-// shared:core:ui and its transitive google -ui leaf — fails dependency
+// :shared:core:ui and its transitive google -ui leaf — fails dependency
 // resolution unless it points at JetBrains' fork of the same release line:
 // same package, ABI-stable surface, real wasm klibs at the pinned 1.1.1.
 // The fork's POM depends on google's runtime artifact, so only -ui is
@@ -237,7 +237,7 @@ configurations.all {
 // stdlib during the whole-program klib link ("Built-in class kotlin.Any is
 // not found" — caught by wasmJsBrowserDistribution's productionExecutable
 // link; the development compile lane only WARNS on the ABI mismatch, so CI's
-// apps:web:compileKotlinWasmJs stayed green through it). shared/feature/
+// :apps:web:compileKotlinWasmJs stayed green through it). shared/feature/
 // settings already forces 14.2.1 on its own wasmJs configurations (same
 // rationale, verbatim), but a resolutionStrategy force does NOT travel
 // through project-variant metadata — apps/web resolves the consumption graph

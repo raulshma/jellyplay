@@ -96,7 +96,7 @@ object HarnessClickBridge {
 @Composable
 fun Modifier.harnessClickTarget(id: String, enabled: Boolean = true): Modifier {
     if (!HarnessClickBridge.enabled) return this
-    // KNOWN CONSTRAINT ( review): `enabled` state reaches the bridge
+    // KNOWN CONSTRAINT (review): `enabled` state reaches the bridge
     // only on a LAYOUT PASS (onGloballyPositioned), so a disabled→enabled
     // flip that triggers no size/position change can leave Target.enabled
     // stale until some sheet reflow happens. All current call sites flip

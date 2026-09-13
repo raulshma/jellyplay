@@ -86,7 +86,7 @@ import org.koin.core.context.stopKoin
  * here — MediaRepository(+ its PlayedStateSync / cache-invalidation /
  * LyricsRepository views), UserDataMutator, MediaSearchEngine,
  * OfflineFirstItemResolver and OfflinePlaybackFacade all resolve on desktop.
- * MediaDetailProvider was the one holdout until the playback-flips wave moved
+ * MediaDetailProvider was the one holdout until the playback flips moved
  * PlaybackSourceResolverImpl into this module Uri-free (`File.toURI()`), so
  * the provider and its concrete impl resolve on desktop too.
  *
@@ -199,7 +199,7 @@ class DataKoinModulesTest {
             // ──  MediaRepository cluster flip ─────────────────────────
             // The last Hilt-owned data cluster, now Koin-owned on BOTH
             // platforms. MediaDetailProvider and its concrete impl resolve
-            // since the playback-flips wave moved PlaybackSourceResolverImpl
+            // since the playback flips moved PlaybackSourceResolverImpl
             // into dataJvmModule (Uri-free) — no longer latent on desktop.
             val mediaRepository = koin.get<MediaRepository>()
             assertTrue(

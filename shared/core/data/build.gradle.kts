@@ -56,7 +56,7 @@ kotlin {
 
     sourceSets {
         // JVM-semantics code shared verbatim by android + desktop — this is
-        // where the JVM-EDGE Room touches live ( moved the DAO-backed
+        // where the JVM-EDGE Room touches live (the promotion moved the DAO-backed
         // repository impls that are platform-neutral — SearchHistory /
         // ItemPlaybackPreference / SeenMedia / PlaybackOutbox /
         // Smart+MoodPlaylist / QueuePersistenceHelper / RoomTransactions — to
@@ -123,9 +123,9 @@ kotlin {
         }
         getByName("jvmShared").dependencies {
             // Module/qualifier types appear in the public di signatures
-            // ( Koin construction owner). Never visible to wasmJs.
+            // (Koin construction owner). Never visible to wasmJs.
             api(libs.koin.core)
-            // Room DAOs/entities: confined to jvmShared since (the
+            // Room DAOs/entities: confined to jvmShared (the
             // moved Room-backed repositories above) — never visible to wasmJs.
             api(project(":shared:core:database"))
             // (No javax.inject dependency: the @Inject/@Singleton decorations

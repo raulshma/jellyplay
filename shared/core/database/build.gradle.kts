@@ -51,7 +51,7 @@ kotlin {
 
         getByName("jvmShared").dependencies {
             // Module/qualifier types appear in the public di signatures
-            // ( Koin construction owner).
+            // (Koin construction owner).
             api(libs.koin.core)
         }
 

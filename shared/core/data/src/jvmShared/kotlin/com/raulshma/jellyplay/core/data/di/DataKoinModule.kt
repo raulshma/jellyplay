@@ -143,7 +143,7 @@ import org.koin.dsl.module
  * `OfflinePlaybackFacade` (see the definitions below). The legacy DataModule
  * constructs nothing from the cluster anymore (the whole legacy DataModule
  * left with the Hilt extinction); Koin builds the cluster natively. `PlaybackSourceResolver` left
- * that latent-on-desktop state with the playback-flips wave: its impl moved
+ * that latent-on-desktop state with the playback flips: its impl moved
  * here Uri-free (`File.toURI()` instead of `android.net.Uri.fromFile`), so
  * UnifiedMediaDetailProviderImpl's ctor dep resolves from this module on
  * BOTH platforms and MediaDetailProvider is live on desktop too. The app's
@@ -296,7 +296,7 @@ val dataJvmModule: Module = module {
     // (AudioPlaybackManager + the media3 audio graph, owned by
     // androidCoreDataModule there) are deliberately NOT defined here:
     // DefaultAudioQueueFacade only. OfflineSyncManager, AudioLyricsManager and
-    // (playback-flips wave) PlaybackSourceResolverImpl all moved off that
+    // (playback flips) PlaybackSourceResolverImpl all moved off that
     // list as their ctor deps became Koin-resolvable.
 
     single<TimeSource> { SystemTimeSource() }
@@ -340,7 +340,7 @@ val dataJvmModule: Module = module {
 
     single { QueuePersistenceHelper(get()) }
 
-    // Playback-flips wave: SleepTimerManager moved from the legacy :core:data
+    // Playback flips: SleepTimerManager moved from the legacy :core:data
     // shim — SystemClock.elapsedRealtime became the TimeSource seam above
     // (the Android actual IS SystemClock.elapsedRealtime, so the countdown is
     // unchanged). The audio/live player VMs resolve this single through Koin
@@ -351,7 +351,7 @@ val dataJvmModule: Module = module {
     single { SleepTimerManager(get()) }
     single<AudioSleepTimerManager> { get<SleepTimerManager>() }
 
-    // Playback-flips wave: AdaptiveBitrateManager moved from the legacy
+    // Playback flips: AdaptiveBitrateManager moved from the legacy
     // core:data shim — ConnectivityManager became the NetworkMonitor seam
     // (null-network/metered parity documented on the class). Its consumers
     // (feature:details DownloadLifecycleActions, feature:player:video
@@ -500,7 +500,7 @@ val dataJvmModule: Module = module {
     }
     single<MediaSearchEngine> { get<MediaSearchEngineImpl>() }
 
-    // Playback-flips wave: PlaybackSourceResolverImpl moved from the legacy
+    // Playback flips: PlaybackSourceResolverImpl moved from the legacy
     // core:data shim (Uri.fromFile → File.toURI, see the impl's URI-shape
     // note) — UnifiedMediaDetailProviderImpl's ctor dep below now resolves
     // from this module on BOTH platforms, and the app's HiltInterop reverse
@@ -544,7 +544,7 @@ val dataJvmModule: Module = module {
     }
     single<OfflineFirstItemResolver> { get<OfflineFirstItemResolverImpl>() }
 
-    // Concrete class (no interface). Playback-flips wave: its one former
+    // Concrete class (no interface). Playback flips: its one former
     // Hilt injector (PlaybackSourceResolverImpl) moved into this module too,
     // so construction AND consumption are all-Koin here.
     single { OfflinePlaybackFacade(get(), get()) }

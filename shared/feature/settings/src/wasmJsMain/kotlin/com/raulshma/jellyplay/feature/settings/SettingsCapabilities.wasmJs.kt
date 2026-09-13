@@ -14,7 +14,7 @@ internal actual val settingsCapabilities: SettingsCapabilities = SettingsCapabil
     supportsScreenOrientation = false,
     // Conservative, matching desktop: the gesture surface (double-tap seek)
     // rides the native player engines; the web engine story is not this
-    // wave's scope, so the row stays hidden rather than over-promise.
+    // batch's scope, so the row stays hidden rather than over-promise.
     supportsTouchGestures = false,
     supportsBiometric = false,
     supportsSystemNotificationSettings = false,

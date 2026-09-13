@@ -7,7 +7,7 @@ import com.raulshma.jellyplay.core.model.MeteredNetworkBehavior
 import com.raulshma.jellyplay.core.model.StreamingQuality
 
 /**
- * Moved from the legacy `:core:data` shim (playback-flips wave): the
+ * Moved from the legacy `:core:data` shim (playback flips): the
  * `ConnectivityManager` ctor dep became the common [NetworkMonitor] seam, so
  * the manager is platform-free and Koin-owned
  * ([dataJvmModule][com.raulshma.jellyplay.core.data.di.dataJvmModule]

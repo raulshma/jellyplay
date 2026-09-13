@@ -13,7 +13,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /**
- * Moved from the legacy `:core:data` shim (playback-flips wave): the sole
+ * Moved from the legacy `:core:data` shim (playback flips): the sole
  * Android coupling (`android.os.SystemClock.elapsedRealtime`) now goes through
  * the injected [TimeSource] seam — on Android [SystemTimeSource][com.raulshma.jellyplay.core.data.util.SystemTimeSource]
  * delegates to `SystemClock.elapsedRealtime` (the exact legacy source, via the

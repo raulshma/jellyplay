@@ -32,11 +32,11 @@ kotlin {
     // WatchHistoryRepository (+ DailyWatchActivity/HeatmapFilter/StreakInfo),
     // and the promote-or-gate verdict was (b) GATE: the repository is
     // orchestrator-owned (core:data, network-backed via JellyfinApiClientImpl
-    // which is itself jvmShared), so for now cannot promote it, and a
+    // which is itself jvmShared), so it cannot be promoted yet, and a
     // wasm stub seam would fake an empty heatmap while the real impl is one
     // HTTP client away. The web graph therefore compiles an (intentionally)
     // empty commonMain — the orchestrator has nothing to route on web until a
-    // data-promotion wave moves WatchHistoryRepository (and the api client
+    // data promotion moves WatchHistoryRepository (and the api client
     // impl) to commonMain; the android/desktop graphs keep everything.
     // The karma/Chrome browser run stays off like core:ui/core:network.
     wasmJs {
@@ -135,7 +135,7 @@ composeResources.packageOfResClass = "com.raulshma.jellyplay.feature.insights.ge
 // this module fails dependency resolution unless it points at JetBrains'
 // fork of the same release line — same package, ABI-stable surface. Scoped
 // to wasmJs-named configurations so android/jvm graphs keep resolving
-// google's published variants exactly as before ( S1/R2; the
+// google's published variants exactly as before (the
 // identical block lives in shared/core/ui, shared/feature/requests and the
 // other web modules). The deps live on commonMain, which feeds the
 // (empty) wasmJsMain compilation too — so the substitution is required even

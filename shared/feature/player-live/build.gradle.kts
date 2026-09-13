@@ -27,7 +27,7 @@ kotlin {
     }
 
     // web breadth: the target compiles — uniformity with the other
-    // W-wave modules — but the live player itself stays Android-only. The
+    // web modules — but the live player itself stays Android-only. The
     // commonMain surface (ViewModel, engine seams, UI-state, navigation
     // vocabulary) now compiles for wasm: its only java.time cluster
     // (Instant/DateTimeFormatter.ISO_INSTANT in the program-window fetch)
@@ -41,7 +41,7 @@ kotlin {
     // Route.LiveTvChannelPlayer stays unrouted on web AND latent on desktop
     // (the documented desktop dead-end). The web graph therefore compiles a
     // module whose only live surface is the shared player logic; wiring a
-    // web live player needs an engine wave first. The karma/Chrome browser
+    // web live player needs an engine seam first. The karma/Chrome browser
     // run stays off like core:ui/core:network — jvmTest pins the semantics.
     wasmJs {
         browser {
@@ -142,7 +142,7 @@ composeResources.packageOfResClass = "com.raulshma.jellyplay.feature.player.live
 // this module fails dependency resolution unless it points at JetBrains'
 // fork of the same release line — same package, ABI-stable surface. Scoped
 // to wasmJs-named configurations so android/jvm graphs keep resolving
-// google's published variants exactly as before ( S1/R2; the
+// google's published variants exactly as before (the
 // identical block lives in shared/core/ui, shared/feature/requests and the
 // other web modules).
 configurations.configureEach {

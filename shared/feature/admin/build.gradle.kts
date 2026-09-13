@@ -34,12 +34,12 @@ kotlin {
     // jvmShared AdminRepository/AdminStatisticsRepository. The
     // promote-or-gate verdict is GATE: the repositories are
     // orchestrator-owned (core:data; the impls are OkHttp/network-backed,
-    // the statistics one Room-backed, with no wasm client), for now may
+    // the statistics one Room-backed, with no wasm client), so it may
     // not change core:data, and a wasm stub seam would fake an empty admin
     // dashboard/empty user list — fake server data, the exact thing the
     // insights review rejected ("a fake empty heatmap"). The web graph
     // therefore compiles an (intentionally) empty commonMain — the
-    // orchestrator has nothing to route on web until the repository promotion promotes
+    // orchestrator has nothing to route on web until the repository promotion lands
     // the admin repositories (interfaces + impls) — while the
     // android/desktop graphs keep everything, byte-identical. Promotion
     // scope for that future pass: AdminRepository + AdminStatisticsRepository
@@ -142,7 +142,7 @@ composeResources.packageOfResClass = "com.raulshma.jellyplay.feature.admin.gener
 // this module fails dependency resolution unless it points at JetBrains'
 // fork of the same release line — same package, ABI-stable surface. Scoped
 // to wasmJs-named configurations so android/jvm graphs keep resolving
-// google's published variants exactly as before ( S1/R2; the
+// google's published variants exactly as before (the
 // identical block lives in shared/core/ui, shared/feature/requests and the
 // other web modules).
 configurations.configureEach {

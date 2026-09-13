@@ -622,7 +622,7 @@ The codebase is Kotlin Multiplatform: features and core live in the `shared/` KM
 ```
 apps/
   desktop/                Windows desktop shell (Compose Multiplatform; libmpv engine via JNA) — preview
-  web/                    Experimental wasmJs browser shell (Coil artwork + HtmlVideoEngine + requests/calendar/SeerrDetail feature screens + Seerr credentials pane verified in-browser against a live server, waves 13-16)
+  web/                    Experimental wasmJs browser shell (Coil artwork + HtmlVideoEngine + requests/calendar/SeerrDetail feature screens + Seerr credentials pane verified in-browser against a live server)
 app/                      Android application module (deep links, widgets, Cast, PiP host activity, shortcuts, TV)
 shared/
   core/

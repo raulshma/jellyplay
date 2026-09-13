@@ -61,7 +61,7 @@ class PlaybackRepositoryImpl(
     // Single-flight dedup for the segments read (the MediaRepositoryImpl
     // detail-cache pattern): a player surface that opens the same item from
     // two entry points near-simultaneously previously fired two full
-    // getMediaSegments + intro/credit fallback waves, because TtlCache's
+    // getMediaSegments + intro/credit fallback batches, because TtlCache's
     // get-check-put is not atomic. The epoch is shared with
     // [invalidateSegmentsCache] so a per-item invalidation mid-flight also
     // vetoes the racing fetch's write-back.

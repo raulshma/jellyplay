@@ -55,7 +55,7 @@ import java.util.UUID
 import kotlin.math.pow
 
 // C4 part 2: AudioQueueItem moved verbatim to
-// shared:core:data commonMain playback/AudioQueueItem.kt (same package).
+// :shared:core:data commonMain playback/AudioQueueItem.kt (same package).
 
 @Stable
 class AudioPlaybackManager(

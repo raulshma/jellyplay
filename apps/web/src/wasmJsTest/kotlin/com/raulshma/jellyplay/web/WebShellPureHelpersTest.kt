@@ -7,7 +7,7 @@ import kotlin.test.assertNotNull
 import org.koin.dsl.koinApplication
 
 /**
- * The web module's first wasmJs test source-set canary (wave: first
+ * The web module's first wasmJs test source-set canary (the first
  * `wasmJsTest` run). Deliberately MINIMAL: pure-logic helpers only, executed
  * on the Kotlin-provided Node runner — no browser, no CDP lane (that remains
  * tools/e2e/web-verify.mjs's job).
@@ -34,7 +34,7 @@ class WebShellPureHelpersTest {
     @AfterTest
     fun resetCoilStats() {
         // The counters are process-global plain Ints; leave them pristine for
-        // any later test wave sharing this object.
+        // any later test sharing this object.
         CoilStats.requests = 0
         CoilStats.hits = 0
         CoilStats.misses = 0
@@ -67,7 +67,7 @@ class WebShellPureHelpersTest {
 
     private fun assertNullCache() {
         // CoilStats.cache has an internal setter; a fresh test process never
-        // built it, but assert-and-normalize in case a prior wave seeds one.
+        // built it, but assert-and-normalize in case a prior run seeds one.
         CoilStats.cache = null
     }
 

@@ -42,7 +42,7 @@ import kotlinx.coroutines.withContext
  * ([HarnessClickBridge]) stays disarmed (Main.kt arms it only under this
  * same property) so the annotated production rows keep zero cost.
  *
- * What makes this lane possible where stopped — the click-reach fix:
+ * What makes this lane possible where the earlier attempt stopped — the click-reach fix:
  *
  *  - NAVIGATION: the flows' screens are FIRST-CLASS routes
  *    (Route.MetadataEditor / Route.WatchProgressHeatmap / Route.VideoPlayer),
@@ -368,7 +368,7 @@ object DesktopFlowHarness {
             writeReportAndExit()
         }
 
-        // ── navigation ( primitive, shared provider) ─────────────────
+        // ── navigation (back-stack push primitive, shared provider) ─────────────────
 
         private fun backStack(): MutableList<NavKey>? = DesktopSessionHarness.currentBackStack()
 

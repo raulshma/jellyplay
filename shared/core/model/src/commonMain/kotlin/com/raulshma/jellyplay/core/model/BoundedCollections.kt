@@ -16,7 +16,7 @@ package com.raulshma.jellyplay.core.model
  *    `java.util.LinkedHashMap(16, 0.75f, accessOrder = true)` with
  *    `removeEldestEntry`, byte-identical behavior.
  *  - wasmJs: `kotlin.collections.LinkedHashMap` has no access-order mode, so
- *    the actual is INSERTION-ORDER with eldest-insert eviction ( DOCUMENTED
+ *    the actual is INSERTION-ORDER with eldest-insert eviction (DOCUMENTED
  *    DEGRADE — a read no longer refreshes recency, so the cache keeps the
  *    first-inserted rather than the least-recently-read entries when at cap).
  *    Bounded display caches only; the eviction cap semantics are identical.

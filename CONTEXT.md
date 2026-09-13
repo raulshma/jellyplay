@@ -1270,7 +1270,7 @@ put-only-on-non-empty, null-width bypass, 512-entry bound) bound by both the
 Android and desktop DI modules — the `android.util.LruCache` and desktop
 `LinkedHashMap` twins are gone, pinned by `ImageUrlProviderImplTest`.
 
-The 2026-09-05 review wave deepened four more repository internals (public
+The 2026-09-05 review batch deepened four more repository internals (public
 interfaces unchanged): **`SeerrRepositoryImpl`** folds its 27 hand-copied
 url+credentials guard ladders into one `withSeerrSession` seam with ONE
 canonical unconfigured failure (the drifted "Server URL is required" /
@@ -1294,11 +1294,11 @@ is gone; the detail path deliberately takes `isActive = false`: no session
 source there and nothing on it renders the flag) and one `whenPlugin` fold
 for the six plugin-gated list fetches (caller-captured `_pluginStatus`
 read — a page's gates see one status even if an admin refresh lands
-mid-load; the enhanced wave's group gate stays open-coded because its
+mid-load; the enhanced batch's group gate stays open-coded because its
 non-null deferred bundle IS the downstream gate in
 `buildEnhancedStatistics`). **`PlaybackRepositoryImpl.getMediaSegments`** rides
 `SingleFlightFetcher(segmentsCache, segmentsEpoch)` like the detail cache
-(the intro/credit fallback wave is the fetch lambda; a failed API fetch
+(the intro/credit fallback batch is the fetch lambda; a failed API fetch
 bumps the epoch to veto the write-back, preserving the empty-vs-failed
 caching policy; `invalidateSegmentsCache` removes + bumps). The legacy
 sync workers reach the wholesale cache drop through the one-member
@@ -1316,7 +1316,7 @@ strategy member); behaviour-pinned by the legacy Robolectric suites
 (CastManagerTest/JellyfinRemotePlayCastStrategyTest/DlnaCastStrategyTest),
 which run in CI via the :core:data:testDebugUnitTest lane.
 
-The 2026-09-07 review wave deepened the auth establishment path and the
+The 2026-09-07 review batch deepened the auth establishment path and the
 server-address vocabulary. **`AuthRepositoryImpl`** folds the
 `switchServer`/`switchUser` session-establishment choreography into one
 private `adoptPersistedSession(serverEntity, userEntity, caller,
@@ -1336,7 +1336,7 @@ private twins are gone. Trim-only sites (`switchServerAddress`,
 `NetworkOfflineStore`, `ServerAddressRouter`, `SocketUrl`) are a different
 policy and stay local.
 
-The 2026-09-07 second wave deepened the paged reads and the telemetry
+The 2026-09-07 second batch deepened the paged reads and the telemetry
 capture side. **`JellyfinPagingSource`** (`shared/core/data` commonMain
 `paging/`) is the ONE paged source: the refresh-key and next/prev page math
 that `MediaPagingSource`/`FavoritesPagingSource`/`SearchPagingSource` used to
@@ -1518,7 +1518,7 @@ declared parity, no per-platform twin. Non-suspend bodies (JSON/enum parses
 in mappers) keep stdlib `runCatching`. **`BareRunCatchingRatchetTest`**
 (module `jvmTest`) is the source ratchet: bare `runCatching` inside
 `suspend fun` bodies never increases — the guard is repo-complete since
-the 2026-09-08 third wave, and its guarded-root set is DISCOVERED, not
+the 2026-09-08 third batch, and its guarded-root set is DISCOVERED, not
 hand-listed (since 2026-09-09): the test parses every `include(...)` in
 `settings.gradle.kts` and walks `shared/` + `apps/` for
 `build.gradle.kts` dirs (pruning build output), unioning both — a new
@@ -1531,7 +1531,7 @@ PluginConfigViewModel's asset read); `AddToTargetActions
 .resolveTargetItemIds` — the one live hazard the widened sweep found — is
 converted (a cancelled canonicalEpisodeIds fetch used to settle as the
 couldn't-add message path). The heuristic can't see bare `runCatching`
-inside suspend LAMBDAS; the wave's review pass converted the two found
+inside suspend LAMBDAS; the batch's review pass converted the two found
 that way (AdminDashboardViewModel's and LogsViewModel's `AdminLoad` fetch
 variants — recorded in the test KDoc too). Lower the baseline when another site
 converts, never raise it; prefer extracting a legitimate parse out of
@@ -1597,7 +1597,7 @@ per-method wire-shape equality, with declared-divergence exception slots
 (currently empty; one documented placeholder alias: wasm's `entryId`
 names the SDK's `{itemId}` segment in `movePlaylistItem`). The same
 machinery covers the user-client pair (`KtorWasmUserApiClient` ↔
-`UserApiClientImpl`) and — since the 2026-09-11 second wave — the auth
+`UserApiClientImpl`) and — since the 2026-09-11 second batch — the auth
 pair (`KtorWasmAuthApiClient` ↔ `AuthApiClientImpl`) and the playback
 pair (`KtorWasmPlaybackApiClient` ↔ `PlaybackApiClientImpl`); the
 ARR/Seerr/Tmdb wasm mirrors still use a different URL-builder idiom on
@@ -1631,7 +1631,7 @@ primary, stale after failover) and were rescued only by the failover
 interceptor's absolute-URL promise. Pinned by
 `JellyfinRawRequesterTest` (MockWebServer, the `SeerrApiClientTest`
 setup) plus the first-ever `PluginApiClientImplTest` through the seam.
-The wave also landed the small folds around it:
+The batch also landed the small folds around it:
 `ItemCountsDto`→`toItemCounts()` lives in `JellyfinDtoMappers` (the
 byte-identical Admin/MediaInfo pair is gone), the parental
 filter+map tail is the top-level
@@ -1871,7 +1871,7 @@ notifications and Exo/VLC engine-config lists are asserted absent) plus
 Known residue, deliberate: the TV / advanced / admin search
 dimensions are not yet derived from the catalog declaration; TV-only items
 stay tagged ANDROID (they are a runtime-axis problem). The scroll-group
-side is DONE — the 2026-09-07 wave finished the catalog-derivation
+side is DONE — the 2026-09-07 batch finished the catalog-derivation
 migration the playback screen started: the `language` group is split
 `language.general`/`language.subtitles` and `system` into
 `system.core`/`system.screensaver` at the aggregation (the LiveTv
@@ -2057,7 +2057,7 @@ twins and double `enqueuePeriodic` build collapsed onto one private
 `Flavour` table; public member names unchanged and
 `WidgetWorkSchedulerTest` passes unmodified.
 
-The 2026-09-07 architecture wave completed three more deepenings. The
+The 2026-09-07 architecture batch completed three more deepenings. The
 **widget version/updatedAt protocol is deleted**: `persistItems` is
 id-dedup + write + notify-on-changed-ids only, and `WidgetDataStore`
 lost the `*WidgetVersion`/`*UpdatedAtMs`/`widgetLastRefreshMs` flows,
@@ -2104,7 +2104,7 @@ exit resets the window. `JellyPlayApp` and `TvNavigationDrawer` keep only the
   `moveTaskToBack` + Toast effects. Pinned by `BackExitConfirmationTest`
   (1999/2000 ms boundaries, window reset).
 
-## The 2026-09-07 evening wave (13 deepenings)
+## The 2026-09-07 evening batch (13 deepenings)
 
 Landed autonomously with per-module pinning tests; consolidated gradle pass
 green across every touched module.
@@ -2127,7 +2127,7 @@ green across every touched module.
   `DownloadRepositoryImpl.cleanupDownloadFiles` (former 4 hand-copies):
   artifacts-before-DB delete → capture-before-transaction → 4-table cascade
   → memo evict → cast prune → orphan prune; series-artwork cleanup is a
-  series-scope-only hook. The download-cleanup caller carries the wave's one
+  series-scope-only hook. The download-cleanup caller carries the batch's one
   declared deletion delta: its former inline body pruned orphans inside its
   single transaction and never pruned cast images; through the core it
   adopts the majority post-transaction prune and the reference-scanned cast
@@ -2245,7 +2245,7 @@ green across every touched module.
   signed-out auth shell, factory-reset field enumeration, settings row-twin
   rendering, `ss_*`/`settings_*` string merge.
 
-## The 2026-09-08 wave (11 deepenings)
+## The 2026-09-08 batch (11 deepenings)
 
 Landed autonomously via parallel workstreams, each with pinned tests; the
 exploration pass that selected them is summarized in the run's temp report.
@@ -2374,7 +2374,7 @@ sync drain leaving the CI-dark legacy lane.
   settle arms. The regression test (two rapid calls → exactly one fetch,
   one appended page) was verified to fail against the old semantics.
 
-## The 2026-09-08 second wave (8 deepenings)
+## The 2026-09-08 second batch (8 deepenings)
 
 Landed autonomously via parallel workstreams (one repair pass after a
 usage-limit kill mid-batch), each pinned; the exploration pass that
@@ -2638,7 +2638,7 @@ crossing modules, and the last dark test lanes opening.
   depends on core/concurrency); the two deliberate sites are named in the
   test KDoc. See the Concurrency section.
 
-## The 2026-09-10 perf-audit wave (STA-8..12 + review pass)
+## The 2026-09-10 perf-audit batch (STA-8..12 + review pass)
 
 Staged batch against the startup/tick hot paths; each item carries its
 STA tag in the code KDoc. Declared deltas the earlier sections now
@@ -2685,12 +2685,12 @@ reference:
   `pendingRequestCount`, idles at 15 min otherwise, and skips polls
   offline.
 - **Offline deletion cast-prune**: per-candidate EXISTS reference scan —
-  see the OfflineDeletionCore entry in the 2026-09-07 wave.
+  see the OfflineDeletionCore entry in the 2026-09-07 batch.
 - **Review pass amendments**: `DownloadProgress.status` deleted
   (speculative — no caller), the heatmap day-sheet aggregation is one
   `rememberedDayItemAggregates` (touch + TV variants), CI gains the
   baseline-profile generation and startup-benchmark lanes.
-- **Review-pass sweep, same batch** (no STA tag — each rides the wave's
+- **Review-pass sweep, same batch** (no STA tag — each rides the batch's
   hot-path theme): DB schema 52→53 gains the covering index
   `offline_media(mediaType, seriesId, seasonNumber, episodeNumber)` for
   `getDownloadedEpisodes`'s WHERE + ORDER BY (SQLite was sorting up to
@@ -2775,7 +2775,7 @@ confirm; the call site owns any clear) and points here for the
 typed-payload machine. DevicesViewModel's dead `selectDevice` (zero
 callers, inexpressible against the machine pair) died in the migration.
 
-## The 2026-09-11 second wave (7 deepenings)
+## The 2026-09-11 second batch (7 deepenings)
 
 Landed autonomously via parallel workstreams (one rate-limit restart), each with
 pinned tests; a consolidated gradle pass green across every touched module. The
@@ -2850,10 +2850,10 @@ probe/persist choreographies getting homes.
   Error instead of killing the scope; a refusal supersedes an in-flight probe
   (Seerr's old in-flight result could overwrite a fresh validation error);
   Subtitle double-tap restarts instead of racing; and Arr's `testAllServers`
-  lost its batch-level cancellation frame — a second wave supersedes a
-  still-running prior wave key by key under the board's RESTART policy
+  lost its batch-level cancellation frame — a second batch supersedes a
+  still-running prior batch key by key under the board's RESTART policy
   (leaving-set probes are reaped by `retain`), instead of cancelling the
-  prior wave wholesale.
+  prior batch wholesale.
 - **Music collection chassis** (the deferred music load-ladder fold's landing
   vehicle): `MusicCollectionKind` is the pure decision table (sort admission,
   media-type binding, layout, empty/error presentation) for the five
@@ -3007,8 +3007,8 @@ re-derives the designs nor lands them casually.
   gaining session state). Design: promote the `AuthRepository`
   interface into core:data commonMain with the Room/identity edges as
   injected seams (or a thin wasmImpl over `AtomicSessionState` + the
-  `user_prefs` DataStore — core:data has had a wasm target since wave
-  15B); `WebConnectController` deletes down to construction plus its
+  `user_prefs` DataStore — core:data has had a wasm target since the early web batches)
+  `WebConnectController` deletes down to construction plus its
   capability-note flow. Deferred: cross-module persistence-edge design
   deserves the grilling loop, not an autonomous batch.
 - **Feature-VM load-ladder fold**: the `isLoading = true, error = null`
@@ -3054,8 +3054,8 @@ re-derives the designs nor lands them casually.
   first.
 - **`ExternalPlayerHost`** (`app`): LANDED — see
   `navigation/playbackhost/ExternalPlayerHost.kt`; the shell-churn trigger
-  had fired (two waves since the record).
-- **`PendingConfirmation<T>`**: LANDED (2026-09-11) — see the 2026-09-11 wave.
+  had fired (two batches since the record).
+- **`PendingConfirmation<T>`**: LANDED (2026-09-11) — see the 2026-09-11 batch.
 - **Settings/Library section hosts**: `SettingsScreen`'s root composable
   holds ~1150 lines (every section inline; the leaves are already
   extracted); `LibraryScreen` similar (~1270-line body). Design: a
@@ -3066,7 +3066,7 @@ re-derives the designs nor lands them casually.
 - **`PageAppender`**: three append-page ladders with drifted re-entrancy
   vocabularies (Requests guards on `isLoading`, StatsDetail on
   `!isLoadingMore && hasMoreItems`; the Logs defect is FIXED —
-  2026-09-08 wave). Design: one small appender owning the in-flight guard,
+  2026-09-08 batch). Design: one small appender owning the in-flight guard,
   `hasMore`, and index math. Deferred: each site's interleaving semantics
   deserve their own pinned interleaved-completion tests.
 - **SelectionActionBar unification**: three per-screen bars
@@ -3081,8 +3081,8 @@ re-derives the designs nor lands them casually.
   product decision (the livetv cold-load spinner is probably wrong, but
   that's a call, not a fold).
 - **Widget worker refresh chassis / grid bind-tail**: LANDED (2026-09-08
-  third wave) — `RecommendationWorkerSkeleton` + the `WidgetGridFactory`
-  bind-tail; see that wave.
+  third batch) — `RecommendationWorkerSkeleton` + the `WidgetGridFactory`
+  bind-tail; see that batch.
 - **PiP action apparatus** (`:app` `PlayerActivity.kt` ~661–747): LANDED as `PipActionSet` beside `PipLifecyclePolicy` —
   the PiP-churn trigger had fired (`PipLifecyclePolicy` itself landed in
   `541cdabee`).
@@ -3118,7 +3118,7 @@ re-derives the designs nor lands them casually.
   per-screen SnackbarHostState sites and two direct legacy-bus leaks
   (PluginConfigScreen, LivePlayerScreen). The shared bus's
   `UiText.Resource(args)` already covers every seal's shape. The deletion
-  test passes harder than anything in the third wave, BUT presentation is
+  test passes harder than anything in the third batch, BUT presentation is
   the blocker: web has no message surface (several trios' wasm actuals
   already no-op), several screens own their SnackbarHostState (SyncPlay,
   Newsletter, UserDetail, ManageSeries, both players), and moving VM

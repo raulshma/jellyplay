@@ -233,7 +233,7 @@ class KoinModuleRegistrationGuardTest {
 
     /**
      * Every Koin Module declared in any shared feature's commonMain OR
-     * jvmShared, mapped to its declaring file. jvmShared counts since wave
+     * jvmShared, mapped to its declaring file. jvmShared counts too —
      * a feature whose whole module surface is JVM-only (insights moved
      * its Kotlin there for the wasm split) is still legitimately registered
      * by both shells this test guards. subtitle-tester (androidMain-only)

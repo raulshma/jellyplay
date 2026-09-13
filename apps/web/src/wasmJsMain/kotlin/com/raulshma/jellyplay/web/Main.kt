@@ -497,7 +497,7 @@ internal object CoilStatsEventListener : EventListener() {
  * ImageLoader.Builder.build() uses when no cache is supplied — so eviction
  * bounds, weak-reference behavior, and cache keys are all unchanged; only the
  * lookup outcome is observed. initialMaxSize is @ExperimentalCoilApi in the
- * interface (the one opt-in for now needs; a decorator must implement it).
+ * interface (the one opt-in it needs; a decorator must implement it).
  */
 @OptIn(ExperimentalCoilApi::class)
 internal class CountingMemoryCache(private val delegate: MemoryCache) : MemoryCache by delegate {

@@ -69,7 +69,7 @@ import org.koin.dsl.module
  * so the promoted playlist repositories resolve it from this module).
  * Nothing else on web resolves these yet — the bindings make the Room-backed
  * graph available to the web modules; unresolved-consumer parity with the JVM
- * graph grows with each wave.
+ * graph grows with each module.
  */
 val dataWasmModule: Module = module {
 

@@ -8,7 +8,7 @@ import org.koin.dsl.module
 
 /**
  * App-authored Koin definitions for the Android actuals of the admin
- * statistics seams ( admin flip — the AndroidDownloadSeamsModule
+ * statistics seams (admin flip — the AndroidDownloadSeamsModule
  * precedent: legacy-side resources the shared module cannot see get their
  * Koin defs in the composition root that sees both).
  *

@@ -116,7 +116,7 @@ import org.koin.compose.koinInject
 import java.util.concurrent.atomic.AtomicReference
 
 /**
- * Desktop nav root ( "desktop nav v1"): session-gated shell over the
+ * Desktop nav root ("desktop nav v1"): session-gated shell over the
  * shared feature conveyor. Signed-out users get [DesktopSignedOutAuthHost]
  * (the shared auth section; retired the legacy DesktopSignInPane
  * with its cut-list); a live session renders the NavigationRail + NavDisplay
@@ -164,8 +164,8 @@ import java.util.concurrent.atomic.AtomicReference
  * add-server discovery included) — here the section only serves signed-in
  * server management.
  *
- * Settings + admin went live with the admin repositories' Koin flip (Wave
- * wB): AdminRepository/AdminStatisticsRepository are Koin singles in
+ * Settings + admin went live with the admin repositories' Koin flip:
+ * AdminRepository/AdminStatisticsRepository are Koin singles in
  * dataJvmModule on both platforms, so [settingsSection] and [adminSection]
  * render below (the settings drill-ins SeerrSettings/ArrSettings included —
  * their Seerr/Arr/datastore ctor deps are all Koin-native).
@@ -178,7 +178,7 @@ import java.util.concurrent.atomic.AtomicReference
  * playlists cluster AND play/enqueue/instant-mix actions drive real playback.
  * Track clicks navigate to the live Route.AudioPlayer (registered by
  * [audioPlayerSection] above). Since the music error-feedback seam
- * has a host here too, and since the shared UserMessageHost wave that host
+ * has a host here too, and since the shared UserMessageHost landed, that host
  * is the seam itself: the shell snackbar serves BOTH the DesktopMusicMessageBus
  * relay and the shared UserMessageBus (whose messages desktop previously
  * dropped) through one collector — one surface shared with the dead-end guard

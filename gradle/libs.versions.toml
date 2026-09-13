@@ -21,7 +21,7 @@ composeMultiplatform = "1.11.1"
 # alpha (latest release overall is 1.9.0), so pin the newest of the matching
 # 1.11 line to keep expressive APIs available on desktop/wasm.
 composeMultiplatformMaterial3 = "1.11.0-alpha07"
-# Koin: shared-module DI (plan §Phase C4). 4.2.x publishes android/jvm/wasmJs
+# Koin: shared-module DI. 4.2.x publishes android/jvm/wasmJs
 # (wasmJs stable since 4.0.0). Hand-written DSL modules — koin-annotations
 # deferred until its KSP line settles (kspWasmJs unverified).
 koin = "4.2.2"
@@ -65,7 +65,7 @@ multiplatformMarkdownRenderer = "0.41.0"
 # Room 3 (spike/room3): androidx.room3 package, KSP-only, coroutine DB ops.
 # 3.0.3 is the latest stable (2026-09-09). Its POM pins androidx.sqlite 2.7.1
 # (sqlite + sqlite-async) — matched below. wasmJs klib variants confirmed in
-# room3-runtime-3.0.3.module (wasmJsRuntimeElements-published) for.
+# room3-runtime-3.0.3.module (wasmJsRuntimeElements-published) for the web target.
 room3 = "3.0.3"
 datastore = "1.2.1"
 okio = "3.9.0"
@@ -82,8 +82,8 @@ workManager = "2.11.2"
 kotlinxSerialization = "1.11.0"
 kotlinxCoroutines = "1.11.0"
 # kotlinx-datetime 0.8.0 is the newest release line and is ABI-safe for this
-# repo's Kotlin 2.3.21 pin: its Gradle module metadata (fetched 2026-08-27,
-#) declares kotlin-stdlib 2.1.20 on the metadataApiElements variant —
+# repo's Kotlin 2.3.21 pin: its Gradle module metadata, fetched 2026-08-27,
+# declares kotlin-stdlib 2.1.20 on the metadataApiElements variant —
 # i.e. the klibs were produced by the Kotlin 2.1.20 compiler, which our 2.3.21
 # klib loader reads (a 2.4-built klib would be silently skipped — the coil
 # 3.4.0/mikepenz precedent). The wasm klib artifact
@@ -121,7 +121,7 @@ libvlc = "3.7.5"
 assMedia = "0.5.0"
 truetypeParser = "2.1.4"
 okhttp = "5.4.0"
-# Ktor: wasmJs HTTP/WebSocket client (plan §Phase W). Desktop/Android keep
+# Ktor: wasmJs HTTP/WebSocket client. Desktop/Android keep
 # OkHttp; Ktor exists for the wasm target of shared/core/network + apps/web.
 ktor = "3.5.2"
 tvMaterial = "1.1.0"
@@ -233,7 +233,7 @@ android-desugar-jdk = { group = "com.android.tools", name = "desugar_jdk_libs", 
 coil-bom-android = { group = "io.coil-kt.coil3", name = "coil-bom", version.ref = "coilAndroid" }
 coil-compose = { group = "io.coil-kt.coil3", name = "coil-compose", version.ref = "coil" }
 coil-network-okhttp = { group = "io.coil-kt.coil3", name = "coil-network-okhttp", version.ref = "coil" }
-# Ktor-backed network fetcher for wasmJs (apps/web; Phase W.4). NOTE: the
+# Ktor-backed network fetcher for wasmJs (apps/web). NOTE: the
 # artifact is named coil-network-ktor3 — upstream split the old
 # coil-network-ktor (last published 3.0.0-alpha08) into -ktor2/-ktor3
 # flavors by Ktor major before 3.0.0 stable. Same coil version pin; the
@@ -335,7 +335,7 @@ okhttp-mockwebserver = { group = "com.squareup.okhttp3", name = "mockwebserver",
 okhttp-tls = { group = "com.squareup.okhttp3", name = "okhttp-tls", version.ref = "okhttp" }
 org-json = { group = "org.json", name = "json", version.ref = "orgJson" }
 
-# Ktor (wasmJs transport, Phase W) — engine for wasmJs comes from ktor-client-js
+# Ktor (wasmJs transport) — engine for wasmJs comes from ktor-client-js
 # (ships js+wasmJs variants); desktop/Android HTTP stays on OkHttp.
 ktor-client-core = { group = "io.ktor", name = "ktor-client-core", version.ref = "ktor" }
 ktor-client-js = { group = "io.ktor", name = "ktor-client-js", version.ref = "ktor" }
@@ -372,7 +372,7 @@ kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "ko
 # CMP distribution plugin: required for compose-resources config (`compose.resources {}`).
 compose-multiplatform = { id = "org.jetbrains.compose", version.ref = "composeMultiplatform" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
-# Kotlin Multiplatform (docs/kmp-migration-plan.md §Phase 0): the shared/ tree.
+# Kotlin Multiplatform: the shared/ tree.
 # AGP 9 forbids combining org.jetbrains.kotlin.multiplatform with
 # com.android.library, so every KMP module's Android target uses AGP's
 # dedicated KMP library plugin below instead.
