@@ -31,10 +31,12 @@ import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
@@ -91,6 +93,8 @@ class BookReaderViewModelTest {
         coEvery { readerStore.setVolumeKeyPaging(any()) } returns Unit
         coEvery { readerStore.setAnimatedPageTurns(any()) } returns Unit
         coEvery { readerStore.setReadingSpeedWpm(any()) } returns Unit
+        coEvery { readerStore.setSpeechRate(any()) } returns Unit
+        coEvery { readerStore.setSpeechPitch(any()) } returns Unit
         every { readerStore.perBookAppearance(any()) } returns null
     }
 
@@ -101,6 +105,7 @@ class BookReaderViewModelTest {
 
     private fun viewModel(
         documentOpener: BookDocumentOpener = FakeBookDocumentOpener(pageCount = 3),
+        speechEngine: BookSpeechEngine = NoopBookSpeechEngine,
     ): BookReaderViewModel = BookReaderViewModel(
         mediaRepository = mediaRepository,
         playbackRepository = playbackRepository,
@@ -109,6 +114,7 @@ class BookReaderViewModelTest {
         contentResolver = contentResolver,
         documentOpener = documentOpener,
         pdfOutlineParser = PdfOutlineParser(),
+        speechEngine = speechEngine,
         flushScope = CoroutineScope(UnconfinedTestDispatcher(mainDispatcher.scheduler)),
     )
 
@@ -505,6 +511,173 @@ class BookReaderViewModelTest {
         }
         coVerify(exactly = 0) { readerStore.setReaderTheme(any()) }
     }
+
+    // ------------------------------------------------------------------
+    // Wave 5: read aloud (context requests, chapter continuation, book end)
+    // ------------------------------------------------------------------
+
+    @Test
+    fun `read aloud requests the context, speaks, advances chapters and finishes at book end`() =
+        runTest(mainDispatcher) {
+            stubDetail("novel.epub", positionTicks = 0L)
+            val engine = FakeBookSpeechEngine()
+            val vm = viewModel(speechEngine = engine)
+            val commands = mutableListOf<ReaderHostCommand>()
+            val commandsJob = launch(start = CoroutineStart.UNDISPATCHED) { vm.hostCommands.collect { commands.add(it) } }
+            vm.load("item-1")
+            advanceUntilIdle()
+            vm.onEpubRelocated(
+                com.raulshma.jellyplay.feature.book.epub.EpubRelocation(
+                    0.1, "One", null, cfi = "epubcfi(/6/4!/4/2)",
+                ),
+            )
+            advanceUntilIdle()
+
+            vm.startReadAloud()
+            advanceUntilIdle()
+            // Engine configured from the persisted defaults; the context
+            // request anchors at the relocated CFI.
+            assertEquals(100, engine.configuredRate)
+            assertEquals(100, engine.configuredPitch)
+            val request = commands.filterIsInstance<ReaderHostCommand.RequestSpeechContext>().single()
+            assertEquals("epubcfi(/6/4!/4/2)", request.cfi)
+            assertTrue(commands.none { it is ReaderHostCommand.FollowSpeech })
+
+            val chapterOne = listOf(
+                com.raulshma.jellyplay.feature.book.epub.EpubSpeechParagraph("epubcfi(/6/4!/4/10)", "first"),
+                com.raulshma.jellyplay.feature.book.epub.EpubSpeechParagraph("epubcfi(/6/4!/4/11)", "second"),
+            )
+            vm.onSpeechContext(chapterOne)
+            advanceUntilIdle()
+            assertEquals(listOf("first"), engine.spoken)
+            assertEquals(
+                "epubcfi(/6/4!/4/10)",
+                commands.filterIsInstance<ReaderHostCommand.FollowSpeech>().last().cfi,
+            )
+
+            engine.complete()
+            assertEquals(listOf("first", "second"), engine.spoken)
+            engine.complete()
+            advanceUntilIdle()
+            // Chapter end: page turn command, then the context re-request
+            // rides the turn's relocation (null = current chapter).
+            assertTrue(commands.any { it is ReaderHostCommand.AdvanceSpeechChapter })
+            vm.onEpubRelocated(
+                com.raulshma.jellyplay.feature.book.epub.EpubRelocation(0.2, "Two", null, cfi = "epubcfi(/6/6)"),
+            )
+            advanceUntilIdle()
+            assertNull(commands.filterIsInstance<ReaderHostCommand.RequestSpeechContext>().last().cfi)
+
+            vm.onSpeechContext(
+                listOf(com.raulshma.jellyplay.feature.book.epub.EpubSpeechParagraph("epubcfi(/6/6!/4/1)", "next chapter")),
+            )
+            advanceUntilIdle()
+            assertEquals(listOf("first", "second", "next chapter"), engine.spoken)
+
+            // Book end: the last chapter's paragraphs exhaust, the turn never
+            // relocates, the timeout re-requests and the SAME chapter comes
+            // back — identity guard finishes the session.
+            engine.complete()
+            advanceUntilIdle()
+            advanceTimeBy(2_000)
+            advanceUntilIdle()
+            vm.onSpeechContext(
+                listOf(com.raulshma.jellyplay.feature.book.epub.EpubSpeechParagraph("epubcfi(/6/6!/4/1)", "next chapter")),
+            )
+            advanceUntilIdle()
+            assertFalse(vm.speechState.value.active)
+            commandsJob.cancel()
+        }
+
+    @Test
+    fun `start read aloud is a no-op without an engine`() = runTest(mainDispatcher) {
+        stubDetail("novel.epub", positionTicks = 0L)
+        val vm = viewModel() // Noop engine: UNAVAILABLE
+        val commands = mutableListOf<ReaderHostCommand>()
+        val commandsJob = launch(start = CoroutineStart.UNDISPATCHED) { vm.hostCommands.collect { commands.add(it) } }
+        vm.load("item-1")
+        advanceUntilIdle()
+
+        vm.startReadAloud()
+        advanceUntilIdle()
+        assertFalse(vm.speechState.value.active)
+        assertTrue(commands.isEmpty())
+        commandsJob.cancel()
+    }
+
+    @Test
+    fun `speech rate and pitch writes clamp and configure the engine`() = runTest(mainDispatcher) {
+        stubDetail("novel.epub", positionTicks = 0L)
+        val engine = FakeBookSpeechEngine()
+        val vm = viewModel(speechEngine = engine)
+        vm.load("item-1")
+        advanceUntilIdle()
+
+        vm.setSpeechRate(500)
+        vm.setSpeechPitch(5)
+        advanceUntilIdle()
+
+        assertEquals(200, engine.configuredRate)
+        assertEquals(50, engine.configuredPitch)
+        coVerify { readerStore.setSpeechRate(200) }
+        coVerify { readerStore.setSpeechPitch(50) }
+    }
+
+    // ------------------------------------------------------------------
+    // Wave 5: sleep timer
+    // ------------------------------------------------------------------
+
+    @Test
+    fun `end of chapter sleep timer stops read aloud and announces the stop`() = runTest(mainDispatcher) {
+        stubDetail("novel.epub", positionTicks = 0L)
+        val engine = FakeBookSpeechEngine()
+        val vm = viewModel(speechEngine = engine)
+        val commands = mutableListOf<ReaderHostCommand>()
+        val commandsJob = launch(start = CoroutineStart.UNDISPATCHED) { vm.hostCommands.collect { commands.add(it) } }
+        vm.load("item-1")
+        advanceUntilIdle()
+        vm.onEpubRelocated(
+            com.raulshma.jellyplay.feature.book.epub.EpubRelocation(0.1, "One", null, cfi = "epubcfi(/6/4)"),
+        )
+        vm.startReadAloud()
+        advanceUntilIdle()
+        vm.onSpeechContext(
+            listOf(com.raulshma.jellyplay.feature.book.epub.EpubSpeechParagraph("epubcfi(/6/4!/4/1)", "para")),
+        )
+        advanceUntilIdle()
+        assertEquals(listOf("para"), engine.spoken)
+
+        vm.startSleepTimer(ReaderSleepOption.EndOfChapter)
+        assertTrue(vm.sleepTimerState.value.running)
+
+        vm.onEpubRelocated(
+            com.raulshma.jellyplay.feature.book.epub.EpubRelocation(0.2, "Two", null, cfi = "epubcfi(/6/6)"),
+        )
+        advanceUntilIdle()
+        assertFalse(vm.sleepTimerState.value.running)
+        assertFalse(vm.speechState.value.active)
+        assertTrue(commands.any { it is ReaderHostCommand.SleepTimerFired })
+        assertTrue(engine.stopCount > 0)
+        commandsJob.cancel()
+    }
+
+    @Test
+    fun `timed sleep timer fires after the countdown`() = runTest(mainDispatcher) {
+        stubDetail("novel.epub", positionTicks = 0L)
+        val vm = viewModel()
+        val commands = mutableListOf<ReaderHostCommand>()
+        val commandsJob = launch(start = CoroutineStart.UNDISPATCHED) { vm.hostCommands.collect { commands.add(it) } }
+        vm.load("item-1")
+        advanceUntilIdle()
+
+        vm.startSleepTimer(ReaderSleepOption.Timed(minutes = 5))
+        assertTrue(vm.sleepTimerState.value.running)
+        advanceTimeBy(5 * 60_000 + 1_000)
+        advanceUntilIdle()
+        assertFalse(vm.sleepTimerState.value.running)
+        assertTrue(commands.any { it is ReaderHostCommand.SleepTimerFired })
+        commandsJob.cancel()
+    }
 }
 
 /** Value fake of the marks repository: StateFlow-backed lists + a write log. */
@@ -618,5 +791,38 @@ private class FakeBookDocumentOpener(private val pageCount: Int) : BookDocumentO
         override val pageCount: Int = this@FakeBookDocumentOpener.pageCount
         override suspend fun renderPage(pageIndex: Int, widthPx: Int): ImageBitmap? = null
         override fun close() {}
+    }
+}
+
+/** Available-by-default speech engine value fake: records speaks/configs, manual completion. */
+private class FakeBookSpeechEngine : BookSpeechEngine {
+    override val availability = MutableStateFlow(BookSpeechAvailability.AVAILABLE)
+    val spoken = mutableListOf<String>()
+    var configuredRate = 100
+    var configuredPitch = 100
+    var stopCount = 0
+    private var pendingDone: (() -> Unit)? = null
+
+    override fun configure(ratePercent: Int, pitchPercent: Int) {
+        configuredRate = ratePercent
+        configuredPitch = pitchPercent
+    }
+
+    override fun speak(text: String, onDone: () -> Unit) {
+        spoken.add(text)
+        pendingDone = onDone
+    }
+
+    override fun stop() {
+        stopCount++
+        pendingDone = null
+    }
+
+    override fun shutdown() {}
+
+    fun complete() {
+        val done = pendingDone
+        pendingDone = null
+        done?.invoke()
     }
 }

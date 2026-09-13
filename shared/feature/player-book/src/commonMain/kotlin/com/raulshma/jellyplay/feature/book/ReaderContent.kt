@@ -295,6 +295,7 @@ internal fun ReflowableReaderContent(
     var showBookmarks by remember { mutableStateOf(false) }
     var showAnnotations by remember { mutableStateOf(false) }
     var showSearch by remember { mutableStateOf(false) }
+    var showSleepTimer by remember { mutableStateOf(false) }
     var noteTarget by remember { mutableStateOf<NoteDialogTarget?>(null) }
     var resumedFromCfi by remember { mutableStateOf(false) }
     val bookmarks by viewModel.bookmarks.collectAsStateWithLifecycle()
@@ -313,6 +314,30 @@ internal fun ReflowableReaderContent(
     val brightnessPct by viewModel.brightnessPct.collectAsStateWithLifecycle()
     val volumeKeyPaging by viewModel.volumeKeyPaging.collectAsStateWithLifecycle()
     val readingSpeedWpm by viewModel.readingSpeedWpm.collectAsStateWithLifecycle()
+
+    // Read aloud + sleep timer + auto-scroll (Wave 5). Speech/auto-scroll
+    // STATE lives in the VM/screen as noted; the AUTO-SCROLL speed is
+    // session-local view state (no store key — see AutoScrollSpeedSlider).
+    val speechState by viewModel.speechState.collectAsStateWithLifecycle()
+    // != UNAVAILABLE (not == AVAILABLE): the Android engine is lazy — its
+    // INITIALIZING window lasts until the first speak, so keying the play
+    // button on AVAILABLE would hide it behind its own starting condition.
+    // Platforms without an engine report UNAVAILABLE and hide the controls.
+    val speechAvailable =
+        viewModel.speechAvailability.collectAsStateWithLifecycle().value != BookSpeechAvailability.UNAVAILABLE
+    val speechRate by viewModel.speechRate.collectAsStateWithLifecycle()
+    val speechPitch by viewModel.speechPitch.collectAsStateWithLifecycle()
+    val sleepTimerState by viewModel.sleepTimerState.collectAsStateWithLifecycle()
+    var autoScrollActive by remember { mutableStateOf(false) }
+    var autoScrollSpeedPx by remember { mutableStateOf(DEFAULT_AUTO_SCROLL_PX_PER_SEC) }
+
+    /** The ephemeral speech-highlight CFI (null = nothing painted). */
+    var speechHighlightCfi by remember { mutableStateOf<String?>(null) }
+    // The highlight paint checks the live persisted marks (a paragraph whose
+    // CFI a saved annotation occupies is never painted — removeAnnotation is
+    // CFI-keyed and would later wipe the real mark), so it reads the CURRENT
+    // list, not the composition-time capture.
+    val currentAnnotations by rememberUpdatedState(annotations)
 
     // The "pending mark" snapshot the selection bar previews and the note
     // dialog saves with — also the last-used style/color memory.
@@ -383,6 +408,8 @@ internal fun ReflowableReaderContent(
                 }
             },
             onTap = { zone -> handleJsTap(zone) },
+            onSpeechContext = { paragraphs -> viewModel.onSpeechContext(paragraphs) },
+            onAutoScrollStopped = { autoScrollActive = false },
         )
     }
     // The full appearance bundle: rides the chunked load protocol on boot
@@ -413,6 +440,66 @@ internal fun ReflowableReaderContent(
     // to land; reader.js no-ops when the flow already matches `pending`.
     LaunchedEffect(scrollMode, epubStatus) {
         host.setFlow(scrollMode)
+        // Leaving scrolled flow kills auto-scroll (its scroller is gone);
+        // mirror the state so the chrome toggle resets with it.
+        if (!scrollMode && autoScrollActive) {
+            autoScrollActive = false
+            host.setAutoScroll(false, autoScrollSpeedPx)
+        }
+    }
+
+    /**
+     * Auto-scroll toggle for scrolled flow: host rAF loop at the session
+     * speed. Any web input (reader.js stops on wheel/touchstart) reports
+     * `onAutoScrollStopped`, which resets [autoScrollActive] above so this
+     * icon re-arms cleanly after every manual interruption.
+     */
+    fun toggleAutoScroll() {
+        autoScrollActive = !autoScrollActive
+        host.setAutoScroll(autoScrollActive, autoScrollSpeedPx)
+    }
+
+    /** Drops the ephemeral speech highlight (session end). */
+    fun removeSpeechHighlight() {
+        speechHighlightCfi?.let { cfi -> hostRef.value?.removeAnnotation(cfi) }
+        speechHighlightCfi = null
+    }
+
+    // The VM's one-shot host commands: speech context requests, chapter
+    // turns, paragraph follows and the sleep timer's auto-scroll stop. The
+    // VM owns the loop, this is the only place the host gets touched for it.
+    LaunchedEffect(Unit) {
+        viewModel.hostCommands.collect { command ->
+            when (command) {
+                is ReaderHostCommand.RequestSpeechContext ->
+                    hostRef.value?.requestSpeechContext(command.cfi)
+                ReaderHostCommand.AdvanceSpeechChapter -> hostRef.value?.next()
+                is ReaderHostCommand.FollowSpeech -> {
+                    // Follow: repaint the ephemeral paragraph highlight (a
+                    // persisted mark on the same CFI is never overwritten —
+                    // removal is CFI-keyed and would later wipe it) and
+                    // goToCfi (epub.js no-ops when already visible).
+                    removeSpeechHighlight()
+                    if (currentAnnotations.none { it.cfi == command.cfi }) {
+                        hostRef.value?.addAnnotation(
+                            EpubAnnotationSpec(command.cfi, EpubAnnotationStyle.HIGHLIGHT, EpubAnnotationColor.YELLOW),
+                        )
+                        speechHighlightCfi = command.cfi
+                    }
+                    hostRef.value?.goToCfi(command.cfi)
+                }
+                ReaderHostCommand.SleepTimerFired -> {
+                    if (autoScrollActive) {
+                        autoScrollActive = false
+                        hostRef.value?.setAutoScroll(false, autoScrollSpeedPx)
+                    }
+                }
+            }
+        }
+    }
+    // Session end (stop/finish/engine loss) drops the painted highlight.
+    LaunchedEffect(speechState.active) {
+        if (!speechState.active) removeSpeechHighlight()
     }
     // `host`'s composable call above emits the platform WebView directly into
     // the parent Box (this composable declares no root container), so the
@@ -471,6 +558,7 @@ internal fun ReflowableReaderContent(
         showBookmarks,
         showAnnotations,
         showSearch,
+        showSleepTimer,
         onTimeout = viewModel::toggleControls,
     )
 
@@ -528,6 +616,8 @@ internal fun ReflowableReaderContent(
             onOpenAnnotations = { showAnnotations = true },
             onOpenSettings = viewModel::openSettings,
             onBack = onBack,
+            sleepTimerActive = sleepTimerState.running,
+            onOpenSleepTimer = { showSleepTimer = true },
             modifier = Modifier.align(Alignment.TopCenter),
         )
         // The bottom chrome hides while the selection bar is up — two
@@ -545,6 +635,16 @@ internal fun ReflowableReaderContent(
                     ?.let { chapterMinutesRemaining(it, readingSpeedWpm) },
                 brightnessPct = brightnessPct,
                 onBrightnessChange = viewModel::setBrightnessPct,
+                speechAvailable = speechAvailable,
+                speechActive = speechState.active,
+                speechPaused = speechState.paused,
+                onSpeechToggle = viewModel::toggleReadAloud,
+                onSpeechSkipBack = viewModel::skipSpeechBack,
+                onSpeechSkipForward = viewModel::skipSpeechForward,
+                onSpeechStop = viewModel::stopReadAloud,
+                autoScrollVisible = scrollMode,
+                autoScrollActive = autoScrollActive,
+                onAutoScrollToggle = ::toggleAutoScroll,
             )
         }
         selection?.let { sel ->
@@ -610,6 +710,10 @@ internal fun ReflowableReaderContent(
                     animatedPageTurns = viewModel.animatedPageTurns.value,
                     readingSpeedWpm = readingSpeedWpm,
                 ),
+                speechRate = speechRate,
+                speechPitch = speechPitch,
+                speechAvailable = speechAvailable,
+                autoScrollSpeedPx = autoScrollSpeedPx,
                 onSetTheme = viewModel::setReaderTheme,
                 onAdjustFontSize = viewModel::adjustReaderFontSize,
                 onSetPerBook = viewModel::setUsePerBookAppearance,
@@ -628,8 +732,23 @@ internal fun ReflowableReaderContent(
                         viewModel.setReadingSpeedWpm(next.readingSpeedWpm)
                     }
                 },
+                onSetSpeechRate = viewModel::setSpeechRate,
+                onSetSpeechPitch = viewModel::setSpeechPitch,
+                onSetAutoScrollSpeed = { speed ->
+                    autoScrollSpeedPx = speed
+                    // Live re-target: an active rAF loop picks the new speed.
+                    if (autoScrollActive) host.setAutoScroll(true, speed)
+                },
                 onOpenToc = { viewModel.dismissSettings(); showToc = true },
                 onDismissRequest = viewModel::dismissSettings,
+            )
+        }
+        if (showSleepTimer) {
+            SleepTimerSheet(
+                state = sleepTimerState,
+                onSelect = viewModel::startSleepTimer,
+                onCancel = viewModel::cancelSleepTimer,
+                onDismissRequest = { showSleepTimer = false },
             )
         }
         if (showToc) {

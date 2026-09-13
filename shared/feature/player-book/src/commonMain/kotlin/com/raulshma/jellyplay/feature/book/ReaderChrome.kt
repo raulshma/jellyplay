@@ -32,15 +32,31 @@ import com.composables.icons.tabler.outline.ArrowLeft
 import com.composables.icons.tabler.outline.Bookmark
 import com.composables.icons.tabler.outline.Bookmarks
 import com.composables.icons.tabler.outline.Highlight
+import com.composables.icons.tabler.outline.MoonStars
+import com.composables.icons.tabler.outline.PlayerPause
+import com.composables.icons.tabler.outline.PlayerPlay
+import com.composables.icons.tabler.outline.PlayerSkipBack
+import com.composables.icons.tabler.outline.PlayerSkipForward
+import com.composables.icons.tabler.outline.PlayerStop
 import com.composables.icons.tabler.outline.Settings
 import com.composables.icons.tabler.outline.Sun
+import com.composables.icons.tabler.outline.Volume2
 import com.raulshma.jellyplay.feature.book.generated.resources.Res
+import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_auto_scroll_start
+import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_auto_scroll_stop
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_brightness
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_chapter_pages_left
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_minutes_left_chapter
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_page_indicator
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_pages_left
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_percent
+import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_speech_active
+import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_speech_next_paragraph
+import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_speech_pause
+import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_speech_previous_paragraph
+import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_speech_resume
+import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_speech_start
+import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_speech_stop
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_title_fallback
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
@@ -59,7 +75,9 @@ import org.jetbrains.compose.resources.stringResource
  * The auto-hiding top bar: back, title, and the reader's mark entries —
  * [onToggleBookmark] (filled when a bookmark sits at the current position),
  * the bookmarks sheet entry, and (reflowable only) the annotations sheet
- * entry. The settings gear stays the rightmost action on every format.
+ * entry plus the sleep-timer entry (moon icon, primary-tinted while a timer
+ * runs — it stops read-aloud/auto-scroll, both reflowable concerns). The
+ * settings gear stays the rightmost action on every format.
  */
 @Composable
 internal fun ReaderTopBar(
@@ -70,6 +88,8 @@ internal fun ReaderTopBar(
     onOpenAnnotations: () -> Unit,
     onOpenSettings: () -> Unit,
     onBack: () -> Unit,
+    sleepTimerActive: Boolean = false,
+    onOpenSleepTimer: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     AnimatedVisibility(
@@ -119,6 +139,13 @@ internal fun ReaderTopBar(
                             imageVector = Tabler.Outline.Highlight,
                             contentDescription = null,
                             tint = Color.White,
+                        )
+                    }
+                    IconButton(onClick = onOpenSleepTimer) {
+                        Icon(
+                            imageVector = Tabler.Outline.MoonStars,
+                            contentDescription = null,
+                            tint = if (sleepTimerActive) MaterialTheme.colorScheme.primary else Color.White,
                         )
                     }
                 }
@@ -237,10 +264,110 @@ internal fun PagedBottomBar(
 }
 
 /**
- * The reflowable reader's bottom bar: the brightness row plus the read
- * percent, the chapter-scoped pages the relocation event reports, and the
- * "≈ N min left in chapter" estimate from [chapterMinutesRemaining] (null
- * rows simply drop — before locations exist there is nothing to report).
+ * The read-aloud action row embedded in the reflowable bottom chrome.
+ * [speechAvailable] false (desktop/web) drops the whole speech cluster —
+ * the caption in the settings sheet explains why; [speechActive] drives the
+ * indicator tint and the skip/stop affordances (the play button doubles as
+ * start when no session is live). The auto-scroll toggle joins the same row
+ * right-aligned (scrolled flow only) — one compact transport strip.
+ */
+@Composable
+private fun ReaderTransportRow(
+    speechAvailable: Boolean,
+    speechActive: Boolean,
+    speechPaused: Boolean,
+    onSpeechToggle: () -> Unit,
+    onSpeechSkipBack: () -> Unit,
+    onSpeechSkipForward: () -> Unit,
+    onSpeechStop: () -> Unit,
+    autoScrollVisible: Boolean,
+    autoScrollActive: Boolean,
+    onAutoScrollToggle: () -> Unit,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+    ) {
+        if (speechAvailable) {
+            Icon(
+                imageVector = Tabler.Outline.Volume2,
+                contentDescription = stringResource(Res.string.book_reader_speech_active),
+                tint = if (speechActive) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.7f),
+            )
+            if (speechActive) {
+                IconButton(onClick = onSpeechSkipBack) {
+                    Icon(
+                        imageVector = Tabler.Outline.PlayerSkipBack,
+                        contentDescription = stringResource(Res.string.book_reader_speech_previous_paragraph),
+                        tint = Color.White,
+                    )
+                }
+            }
+            IconButton(onClick = onSpeechToggle) {
+                Icon(
+                    imageVector = if (speechActive && !speechPaused) {
+                        Tabler.Outline.PlayerPause
+                    } else {
+                        Tabler.Outline.PlayerPlay
+                    },
+                    contentDescription = stringResource(
+                        when {
+                            !speechActive -> Res.string.book_reader_speech_start
+                            speechPaused -> Res.string.book_reader_speech_resume
+                            else -> Res.string.book_reader_speech_pause
+                        },
+                    ),
+                    tint = Color.White,
+                )
+            }
+            if (speechActive) {
+                IconButton(onClick = onSpeechSkipForward) {
+                    Icon(
+                        imageVector = Tabler.Outline.PlayerSkipForward,
+                        contentDescription = stringResource(Res.string.book_reader_speech_next_paragraph),
+                        tint = Color.White,
+                    )
+                }
+                IconButton(onClick = onSpeechStop) {
+                    Icon(
+                        imageVector = Tabler.Outline.PlayerStop,
+                        contentDescription = stringResource(Res.string.book_reader_speech_stop),
+                        tint = Color.White,
+                    )
+                }
+            }
+        }
+        if (autoScrollVisible) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                IconButton(onClick = onAutoScrollToggle) {
+                    Icon(
+                        imageVector = if (autoScrollActive) Tabler.Outline.PlayerPause else Tabler.Outline.PlayerPlay,
+                        contentDescription = stringResource(
+                            if (autoScrollActive) {
+                                Res.string.book_reader_auto_scroll_stop
+                            } else {
+                                Res.string.book_reader_auto_scroll_start
+                            },
+                        ),
+                        tint = if (autoScrollActive) MaterialTheme.colorScheme.primary else Color.White,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The reflowable reader's bottom bar: the read-aloud / auto-scroll transport
+ * row (Android-only speech; auto-scroll in scrolled flow), the brightness
+ * row, the read percent, the chapter-scoped pages the relocation event
+ * reports, and the "≈ N min left in chapter" estimate from
+ * [chapterMinutesRemaining] (null rows simply drop — before locations exist
+ * there is nothing to report).
  */
 @Composable
 internal fun ReflowableBottomBar(
@@ -249,6 +376,16 @@ internal fun ReflowableBottomBar(
     minutesLeftInChapter: Int?,
     brightnessPct: Int,
     onBrightnessChange: (Int) -> Unit,
+    speechAvailable: Boolean = false,
+    speechActive: Boolean = false,
+    speechPaused: Boolean = false,
+    onSpeechToggle: () -> Unit = {},
+    onSpeechSkipBack: () -> Unit = {},
+    onSpeechSkipForward: () -> Unit = {},
+    onSpeechStop: () -> Unit = {},
+    autoScrollVisible: Boolean = false,
+    autoScrollActive: Boolean = false,
+    onAutoScrollToggle: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Surface(color = Color.Black.copy(alpha = 0.6f), modifier = modifier) {
@@ -256,6 +393,27 @@ internal fun ReflowableBottomBar(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
         ) {
+            if (speechAvailable || autoScrollVisible) {
+                ReaderTransportRow(
+                    speechAvailable = speechAvailable,
+                    speechActive = speechActive,
+                    speechPaused = speechPaused,
+                    onSpeechToggle = onSpeechToggle,
+                    onSpeechSkipBack = onSpeechSkipBack,
+                    onSpeechSkipForward = onSpeechSkipForward,
+                    onSpeechStop = onSpeechStop,
+                    autoScrollVisible = autoScrollVisible,
+                    autoScrollActive = autoScrollActive,
+                    onAutoScrollToggle = onAutoScrollToggle,
+                )
+                if (speechActive) {
+                    Text(
+                        text = stringResource(Res.string.book_reader_speech_active),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
             BrightnessSliderRow(brightnessPct = brightnessPct, onBrightnessChange = onBrightnessChange)
             Text(
                 text = stringResource(

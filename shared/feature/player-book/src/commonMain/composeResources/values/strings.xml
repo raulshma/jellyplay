@@ -61,4 +61,20 @@
     <string name="book_reader_pages_left">%1$d pages left</string>
     <string name="book_reader_chapter_pages_left">%1$d pages left in chapter</string>
     <string name="book_reader_minutes_left_chapter">≈ %1$d min left in chapter</string>
+    <string name="book_reader_read_aloud">Read aloud</string>
+    <string name="book_reader_speech_rate">Speech speed</string>
+    <string name="book_reader_speech_pitch">Speech pitch</string>
+    <string name="book_reader_speech_unavailable">Read aloud is not available on this device</string>
+    <string name="book_reader_speech_active">Reading aloud</string>
+    <string name="book_reader_speech_start">Start reading aloud</string>
+    <string name="book_reader_speech_pause">Pause reading aloud</string>
+    <string name="book_reader_speech_resume">Resume reading aloud</string>
+    <string name="book_reader_speech_stop">Stop reading aloud</string>
+    <string name="book_reader_speech_next_paragraph">Next paragraph</string>
+    <string name="book_reader_speech_previous_paragraph">Previous paragraph</string>
+    <string name="book_reader_sleep_timer">Sleep timer</string>
+    <string name="book_reader_sleep_timer_end_of_chapter">End of chapter</string>
+    <string name="book_reader_auto_scroll_speed">Auto-scroll speed</string>
+    <string name="book_reader_auto_scroll_start">Start auto-scroll</string>
+    <string name="book_reader_auto_scroll_stop">Stop auto-scroll</string>
 </resources>

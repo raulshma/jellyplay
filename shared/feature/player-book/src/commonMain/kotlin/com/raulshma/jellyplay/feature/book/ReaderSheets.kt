@@ -49,11 +49,13 @@ import com.raulshma.jellyplay.feature.book.epub.EpubSearchResult
 import com.raulshma.jellyplay.feature.book.epub.EpubTocItem
 import com.raulshma.jellyplay.feature.book.generated.resources.Res
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_animated_turns
+import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_auto_scroll_speed
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_behavior
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_bookmark_page
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_bookmark_percent
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_bookmarks
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_bookmarks_empty
+import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_dialog_cancel
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_direction_ltr
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_direction_rtl
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_fit_mode
@@ -71,6 +73,7 @@ import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_line_
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_line_height_value
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_margins
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_per_book
+import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_read_aloud
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_reading_speed
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_scroll_mode
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_search
@@ -78,6 +81,11 @@ import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_searc
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_search_no_results
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_search_searching
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_settings
+import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_sleep_timer
+import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_sleep_timer_end_of_chapter
+import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_speech_pitch
+import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_speech_rate
+import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_speech_unavailable
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_theme
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_theme_dark
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_theme_light
@@ -235,9 +243,11 @@ internal fun PagedSettingsSheet(
  * The settings sheet for REFLOWABLE books: theme, font size, the per-book
  * override switch, the typography section (family / line height / margins /
  * justify / scroll mode), the behavior section with the reading-speed
- * stepper, and the TOC / search entries. The TOC entry stays here (v1
- * behavior) — the search entry rides the TOC sheet to keep the top bar
- * uncluttered.
+ * stepper and (scrolled flow only) the auto-scroll speed slider, the
+ * read-aloud section (rate/pitch steppers; an availability caption replaces
+ * them where the platform has no engine), and the TOC / search entries. The
+ * TOC entry stays here (v1 behavior) — the search entry rides the TOC sheet
+ * to keep the top bar uncluttered.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -247,11 +257,18 @@ internal fun ReflowableSettingsSheet(
     perBook: Boolean,
     typography: ReaderTypographyState,
     behavior: ReaderBehaviorState,
+    speechRate: Int,
+    speechPitch: Int,
+    speechAvailable: Boolean,
+    autoScrollSpeedPx: Int,
     onSetTheme: (ReaderTheme) -> Unit,
     onAdjustFontSize: (Int) -> Unit,
     onSetPerBook: (Boolean) -> Unit,
     onTypographyChange: (ReaderTypographyState) -> Unit,
     onBehaviorChange: (ReaderBehaviorState) -> Unit,
+    onSetSpeechRate: (Int) -> Unit,
+    onSetSpeechPitch: (Int) -> Unit,
+    onSetAutoScrollSpeed: (Int) -> Unit,
     onOpenToc: () -> Unit,
     onDismissRequest: () -> Unit,
 ) {
@@ -353,6 +370,25 @@ internal fun ReflowableSettingsSheet(
         ReadingSpeedStepper(wpm = behavior.readingSpeedWpm) {
             onBehaviorChange(behavior.copy(readingSpeedWpm = it))
         }
+        if (typography.scrollMode) {
+            AutoScrollSpeedSlider(speedPxPerSec = autoScrollSpeedPx, onCommit = onSetAutoScrollSpeed)
+        }
+
+        SectionLabel(text = stringResource(Res.string.book_reader_read_aloud))
+        if (!speechAvailable) {
+            SheetEmptyText(text = stringResource(Res.string.book_reader_speech_unavailable))
+        } else {
+            SpeechRateStepper(
+                label = stringResource(Res.string.book_reader_speech_rate),
+                pct = speechRate,
+                onCommit = onSetSpeechRate,
+            )
+            SpeechRateStepper(
+                label = stringResource(Res.string.book_reader_speech_pitch),
+                pct = speechPitch,
+                onCommit = onSetSpeechPitch,
+            )
+        }
         TextButton(
             onClick = onOpenToc,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
@@ -447,6 +483,141 @@ private fun ReadingSpeedStepper(wpm: Int, onCommit: (Int) -> Unit) {
             }
         }
     }
+}
+
+/**
+ * Read-aloud voice stepper (rate or pitch — both share the store's 50..200 %
+ * band, ±10 per tap). The caller clamps through the store setter; the sheet
+ * steps within the band directly so the label cannot render out-of-range.
+ */
+@Composable
+private fun SpeechRateStepper(label: String, pct: Int, onCommit: (Int) -> Unit) {
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 4.dp)) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyLarge,
+        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = { onCommit(pct - 10) }) {
+                Icon(imageVector = Tabler.Outline.Minus, contentDescription = null)
+            }
+            Text(
+                text = "$pct %",
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.padding(horizontal = 12.dp),
+            )
+            IconButton(onClick = { onCommit(pct + 10) }) {
+                Icon(imageVector = Tabler.Outline.Plus, contentDescription = null)
+            }
+        }
+    }
+}
+
+/**
+ * Auto-scroll speed slider (px/s, [MIN_AUTO_SCROLL_PX_PER_SEC]..
+ * [MAX_AUTO_SCROLL_PX_PER_SEC]); commit-on-settle per the page-slider
+ * convention. Deliberately NO store key: the speed is a per-session view
+ * knob (like the paged fit mode) — every session restarts at
+ * [DEFAULT_AUTO_SCROLL_PX_PER_SEC].
+ */
+@Composable
+private fun AutoScrollSpeedSlider(speedPxPerSec: Int, onCommit: (Int) -> Unit) {
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 8.dp)) {
+        Text(
+            text = stringResource(Res.string.book_reader_auto_scroll_speed),
+            style = MaterialTheme.typography.bodyLarge,
+        )
+        var dragging by remember { mutableStateOf(false) }
+        var dragValue by remember { mutableStateOf(DEFAULT_AUTO_SCROLL_PX_PER_SEC.toFloat()) }
+        Slider(
+            value = if (dragging) dragValue else speedPxPerSec.toFloat(),
+            onValueChange = { dragging = true; dragValue = it },
+            onValueChangeFinished = {
+                dragging = false
+                onCommit(dragValue.roundToInt().coerceIn(MIN_AUTO_SCROLL_PX_PER_SEC, MAX_AUTO_SCROLL_PX_PER_SEC))
+            },
+            valueRange = MIN_AUTO_SCROLL_PX_PER_SEC.toFloat()..MAX_AUTO_SCROLL_PX_PER_SEC.toFloat(),
+        )
+        Text(
+            text = "${(if (dragging) dragValue else speedPxPerSec.toFloat()).roundToInt()} px/s",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/**
+ * The sleep-timer sheet (reflowable reader): minute presets as FilterChips
+ * plus the end-of-chapter arm, a running countdown row with cancel — the
+ * audio player's sleep sheet UX mirrored at reader scale (option labels
+ * match its language; books get 5/15/30/60 rather than the player's
+ * 15..90 because reading sessions run shorter).
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun SleepTimerSheet(
+    state: ReaderSleepTimerState,
+    onSelect: (ReaderSleepOption) -> Unit,
+    onCancel: () -> Unit,
+    onDismissRequest: () -> Unit,
+) {
+    ModalBottomSheet(onDismissRequest = onDismissRequest) {
+        SheetTitle(text = stringResource(Res.string.book_reader_sleep_timer))
+        if (state.running) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp),
+            ) {
+                Text(
+                    text = when (val option = state.option) {
+                        is ReaderSleepOption.EndOfChapter ->
+                            stringResource(Res.string.book_reader_sleep_timer_end_of_chapter)
+                        is ReaderSleepOption.Timed, null ->
+                            formatSleepCountdown(state.remainingMillis ?: 0L)
+                    },
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                TextButton(onClick = onCancel) {
+                    Text(
+                        text = stringResource(Res.string.book_reader_dialog_cancel),
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            SLEEP_TIMER_PRESET_MINUTES.forEach { minutes ->
+                FilterChip(
+                    selected = state.running && state.option == ReaderSleepOption.Timed(minutes),
+                    onClick = { onSelect(ReaderSleepOption.Timed(minutes)) },
+                    label = { Text("${minutes}m") },
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+        FilterChip(
+            selected = state.running && state.option == ReaderSleepOption.EndOfChapter,
+            onClick = { onSelect(ReaderSleepOption.EndOfChapter) },
+            label = { Text(stringResource(Res.string.book_reader_sleep_timer_end_of_chapter)) },
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 12.dp),
+        )
+        Spacer(modifier = Modifier.height(24.dp))
+    }
+}
+
+/** Countdown label `m:ss` / `h:mm:ss`; ceil-rounded so 0:00 only shows at fire. */
+internal fun formatSleepCountdown(millis: Long): String {
+    val totalSeconds = ((millis.coerceAtLeast(0L)) + 999L) / 1000L
+    val hours = totalSeconds / 3600L
+    val minutes = (totalSeconds % 3600L) / 60L
+    val seconds = totalSeconds % 60L
+    val two = { value: Long -> if (value < 10L) "0$value" else "$value" }
+    return if (hours > 0L) "$hours:${two(minutes)}:${two(seconds)}" else "$minutes:${two(seconds)}"
 }
 
 /**
@@ -724,3 +895,11 @@ private fun SheetEmptyText(text: String) {
 }
 
 internal val SEARCH_DEBOUNCE_MS = 400L
+
+/** Sleep-timer minute presets (reader-scaled; the audio player's run 15..90). */
+internal val SLEEP_TIMER_PRESET_MINUTES = listOf(5, 15, 30, 60)
+
+/** Auto-scroll speed band + session default (px/s) — deliberately no store key. */
+internal val MIN_AUTO_SCROLL_PX_PER_SEC = 20
+internal val MAX_AUTO_SCROLL_PX_PER_SEC = 120
+internal val DEFAULT_AUTO_SCROLL_PX_PER_SEC = 40

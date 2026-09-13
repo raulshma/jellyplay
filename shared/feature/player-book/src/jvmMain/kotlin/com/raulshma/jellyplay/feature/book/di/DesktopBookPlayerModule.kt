@@ -5,7 +5,9 @@ import com.raulshma.jellyplay.feature.book.BookContentResolver
 import com.raulshma.jellyplay.feature.book.BookDocumentOpener
 import com.raulshma.jellyplay.feature.book.BookFormatProbe
 import com.raulshma.jellyplay.feature.book.BookHttpFetcher
+import com.raulshma.jellyplay.feature.book.BookSpeechEngine
 import com.raulshma.jellyplay.feature.book.DesktopBookDocumentOpener
+import com.raulshma.jellyplay.feature.book.DesktopBookSpeechEngine
 import com.raulshma.jellyplay.feature.book.OkHttpBookContentResolver
 import com.raulshma.jellyplay.feature.book.OkHttpBookFetcher
 import com.raulshma.jellyplay.feature.book.OkHttpBookFormatProbe
@@ -35,6 +37,9 @@ fun desktopBookPlayerModule(dataDir: okio.Path): Module = module {
         )
     }
     single<BookDocumentOpener> { DesktopBookDocumentOpener() }
+    // Read-aloud: desktop has no TTS binding yet — the engine reports
+    // UNAVAILABLE and the reader degrades (caption + hidden controls).
+    single<BookSpeechEngine> { DesktopBookSpeechEngine() }
     single<PdfOutlineParser> { PdfOutlineParser() }
     single {
         EpubDesktopEnv(

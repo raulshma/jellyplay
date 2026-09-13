@@ -3,10 +3,12 @@ package com.raulshma.jellyplay.feature.book.di
 import android.content.Context
 import com.raulshma.jellyplay.core.network.di.NetworkQualifiers
 import com.raulshma.jellyplay.feature.book.AndroidBookDocumentOpener
+import com.raulshma.jellyplay.feature.book.AndroidBookSpeechEngine
 import com.raulshma.jellyplay.feature.book.BookContentResolver
 import com.raulshma.jellyplay.feature.book.BookDocumentOpener
 import com.raulshma.jellyplay.feature.book.BookFormatProbe
 import com.raulshma.jellyplay.feature.book.BookHttpFetcher
+import com.raulshma.jellyplay.feature.book.BookSpeechEngine
 import com.raulshma.jellyplay.feature.book.OkHttpBookContentResolver
 import com.raulshma.jellyplay.feature.book.OkHttpBookFetcher
 import com.raulshma.jellyplay.feature.book.OkHttpBookFormatProbe
@@ -34,6 +36,9 @@ fun androidBookPlayerModule(context: Context): Module = module {
         )
     }
     single<BookDocumentOpener> { AndroidBookDocumentOpener() }
+    // Read-aloud TTS — the engine connects its service lazily on first
+    // speak, so this binding stays cheap until the reader actually speaks.
+    single<BookSpeechEngine> { AndroidBookSpeechEngine(context.applicationContext) }
     // pdfbox-android needs one PDFBoxResourceLoader.init(context) before its
     // first call — the parser lazy-inits from this context (see its KDoc).
     single<PdfOutlineParser> { PdfOutlineParser(context.applicationContext) }

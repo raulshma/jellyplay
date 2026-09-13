@@ -19,15 +19,19 @@ import com.raulshma.jellyplay.core.model.BookProgressPolicy
 import com.raulshma.jellyplay.core.model.pathExtension
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.feature.book.epub.EpubRelocation
+import com.raulshma.jellyplay.feature.book.epub.EpubSpeechParagraph
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
@@ -61,6 +65,13 @@ import kotlin.math.roundToInt
  * reflowable resume rides the ReaderStore last-CFI map: [ReadyContent.Reflowable.resumeCfi]
  * carries the stored anchor to the screen (which jumps once the host is
  * READY), and every debounced progress flush re-persists the current anchor.
+ *
+ * Read aloud + sleep timer (Wave 5) follow the same split: the speech LOOP
+ * ([ReaderSpeechController]) and the timer ([ReaderSleepTimer]) live here
+ * over the [BookSpeechEngine] seam, while every host touch
+ * (`requestSpeechContext` / `next` / paragraph follow / auto-scroll stop)
+ * rides [hostCommands] — one-shot events the screen executes because only
+ * it holds the EPUB host.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class BookReaderViewModel(
@@ -76,6 +87,12 @@ class BookReaderViewModel(
      * Default-neutral so platforms without a probe impl still compile.
      */
     private val formatProbe: BookFormatProbe = NoopBookFormatProbe,
+    /**
+     * Paragraph read-aloud engine (Android TTS; desktop/web degrade to the
+     * neutral [NoopBookSpeechEngine] and the reader hides its speech UI).
+     * Defaulted so tests and non-DI constructions compile unchanged.
+     */
+    private val speechEngine: BookSpeechEngine = NoopBookSpeechEngine,
     /**
      * Process-wide scope for the exit flush: [reportNow] with `final = true`
      * runs from `onDispose`, and viewModelScope is already cancelled by the
@@ -163,6 +180,115 @@ class BookReaderViewModel(
     val readingSpeedWpm: StateFlow<Int> = readerStore.reader
         .map { it.readingSpeedWpm }
         .stateIn(scope, SharingStarted.Eagerly, ReaderStore.DEFAULT_READING_SPEED_WPM)
+
+    // ---------------------------------------------------------------------
+    // Read aloud (Wave 5) + sleep timer + auto-scroll coordination.
+    // ---------------------------------------------------------------------
+
+    /** Read-aloud voice knobs (percent bands live in the ReaderStore). */
+    val speechRate: StateFlow<Int> = readerStore.reader
+        .map { it.speechRate }
+        .stateIn(scope, SharingStarted.Eagerly, ReaderStore.DEFAULT_SPEECH_RATE)
+
+    val speechPitch: StateFlow<Int> = readerStore.reader
+        .map { it.speechPitch }
+        .stateIn(scope, SharingStarted.Eagerly, ReaderStore.DEFAULT_SPEECH_PITCH)
+
+    /**
+     * One-shot commands the SCREEN executes against its EPUB host (see
+     * [ReaderHostCommand] — the host is screen-owned, so the speech loop's
+     * context requests, chapter turns, paragraph follows and the sleep
+     * timer's auto-scroll stop all ride this channel). Buffered: a command
+     * must never drop to a slow collector mid-utterance.
+     */
+    private val _hostCommands = MutableSharedFlow<ReaderHostCommand>(extraBufferCapacity = 32)
+    internal val hostCommands: SharedFlow<ReaderHostCommand> = _hostCommands.asSharedFlow()
+
+    /**
+     * The read-aloud loop driver (paragraph sequencing, pause/skip). Chapter
+     * continuation: the speech context covers the CURRENT chapter only, so
+     * on chapter end the loop asks [advanceSpeechChapter], which turns the
+     * page (`AdvanceSpeechChapter`) and re-requests the context once the
+     * relocation lands (or the [SPEECH_CHAPTER_ADVANCE_TIMEOUT_MS] timeout
+     * fires — a book-end `next()` never relocates). Book end is detected by
+     * identity, not timing: a context whose first paragraph matches the
+     * chapter being spoken means `next()` did not move — finish.
+     */
+    private val speechController = ReaderSpeechController(
+        engine = speechEngine,
+        onSpeakParagraph = { _, cfi ->
+            _hostCommands.tryEmit(ReaderHostCommand.FollowSpeech(cfi))
+        },
+        onChapterEnd = { advanceSpeechChapter() },
+        onFinished = { clearSpeechSession() },
+        onError = { clearSpeechSession() },
+    )
+
+    internal val speechState: StateFlow<ReaderSpeechState> = speechController.state
+
+    /**
+     * Engine capability straight through. The chrome treats anything but
+     * UNAVAILABLE as capable — the Android engine's INITIALIZING window
+     * lasts until its first speak (lazy creation), so keying on AVAILABLE
+     * would hide the play button behind its own starting condition.
+     */
+    val speechAvailability: StateFlow<BookSpeechAvailability> get() = speechEngine.availability
+
+    /**
+     * The sleep timer. Firing stops read-aloud HERE (the VM owns it) and
+     * emits [ReaderHostCommand.SleepTimerFired] so the screen stops its
+     * screen-owned auto-scroll.
+     */
+    private val sleepTimer = ReaderSleepTimer(scope) {
+        stopReadAloud()
+        _hostCommands.tryEmit(ReaderHostCommand.SleepTimerFired)
+    }
+
+    internal val sleepTimerState: StateFlow<ReaderSleepTimerState> = sleepTimer.state
+
+    /** Paragraphs of the chapter being spoken (fed by `onSpeechContext`). */
+    private var speechParagraphs: List<EpubSpeechParagraph> = emptyList()
+
+    /** First-paragraph CFI of the chapter being spoken — the book-end identity guard. */
+    private var speechChapterKey: String? = null
+
+    /** True between "chapter end" and "context re-requested" (relocation wait window). */
+    private var speechAdvancing = false
+
+    /** Percent snapshot at the chapter turn — the empty-chapter continuation guard. */
+    private var speechPercentAtAdvance = 0.0
+
+    private var speechAdvanceTimeout: Job? = null
+
+    /**
+     * Last rate/pitch PUSHED to the engine. The setters fold onto these,
+     * never onto the ReaderStore flow (which lags its own write — reading it
+     * per tap would erase the other axis with a stale value), exactly like
+     * [pendingFontSizePx].
+     */
+    private var appliedSpeechRate: Int? = null
+    private var appliedSpeechPitch: Int? = null
+
+    private fun configureSpeechEngine(rate: Int? = null, pitch: Int? = null) {
+        val nextRate = rate ?: appliedSpeechRate ?: readerStore.reader.value.speechRate
+        val nextPitch = pitch ?: appliedSpeechPitch ?: readerStore.reader.value.speechPitch
+        appliedSpeechRate = nextRate
+        appliedSpeechPitch = nextPitch
+        speechEngine.configure(nextRate, nextPitch)
+    }
+
+    init {
+        // Honest degradation mid-session: if the engine reports UNAVAILABLE
+        // while the loop is live (service died, language vanished), end the
+        // session instead of hanging on an utterance that never completes.
+        scope.launch {
+            speechEngine.availability.collect { availability ->
+                if (availability == BookSpeechAvailability.UNAVAILABLE && speechState.value.active) {
+                    speechController.engineLost()
+                }
+            }
+        }
+    }
 
     val bookmarks: StateFlow<List<ReaderBookmark>> = marksItemId
         .flatMapLatest { id ->
@@ -276,6 +402,9 @@ class BookReaderViewModel(
         _currentEpubLocation.value = null
         _selection.value = null
         _pdfOutline.value = emptyList()
+        // Read-aloud + sleep timer belong to the previous book's session.
+        stopReadAloud()
+        sleepTimer.cancel()
         val detail = mediaRepository.getMediaDetail(itemId).getOrNull()
         if (detail == null) {
             _uiState.value = BookReaderUiState.Error(BookReaderUiState.ErrorReason.CannotOpen)
@@ -470,6 +599,15 @@ class BookReaderViewModel(
             cfi = latestEpubCfi,
             remainingPages = relocation.remainingPages ?: _currentEpubLocation.value?.remainingPages,
         )
+        // Speech chapter turn landed: the context request waits for exactly
+        // this relocation (requesting earlier could resolve the OLD chapter).
+        if (speechAdvancing) {
+            speechAdvanceTimeout?.cancel()
+            speechAdvanceTimeout = null
+            requestContextAfterAdvance()
+        }
+        // Sleep timer's END_OF_CHAPTER arm keys on the chapter label.
+        sleepTimer.onChapterLabel(relocation.chapterLabel)
         scheduleProgressReport()
     }
 
@@ -613,6 +751,135 @@ class BookReaderViewModel(
         val clamped = wpm.coerceIn(ReaderStore.MIN_READING_SPEED_WPM, ReaderStore.MAX_READING_SPEED_WPM)
         scope.launch { runCatching { readerStore.setReadingSpeedWpm(clamped) } }
     }
+
+    // ---------------------------------------------------------------------
+    // Read aloud (reflowable only — the speech context is an EPUB concept).
+    // ---------------------------------------------------------------------
+
+    /** Speech-rate write; clamped into its 50..200 band and applied to the engine live. */
+    fun setSpeechRate(pct: Int) {
+        val clamped = pct.coerceIn(ReaderStore.MIN_SPEECH_RATE, ReaderStore.MAX_SPEECH_RATE)
+        configureSpeechEngine(rate = clamped)
+        scope.launch { runCatching { readerStore.setSpeechRate(clamped) } }
+    }
+
+    /** Speech-pitch write; clamped into its 50..200 band and applied to the engine live. */
+    fun setSpeechPitch(pct: Int) {
+        val clamped = pct.coerceIn(ReaderStore.MIN_SPEECH_PITCH, ReaderStore.MAX_SPEECH_PITCH)
+        configureSpeechEngine(pitch = clamped)
+        scope.launch { runCatching { readerStore.setSpeechPitch(clamped) } }
+    }
+
+    /**
+     * Starts read-aloud at the current position: configures the engine with
+     * the persisted rate/pitch, marks the session live and asks the host for
+     * the current chapter's paragraphs (the answer lands in
+     * [onSpeechContext]). Unavailable engines (desktop/web) and paged books
+     * are a silent no-op — their UI never offers the button.
+     */
+    fun startReadAloud() {
+        val ready = _uiState.value as? BookReaderUiState.Ready ?: return
+        if (ready.content !is ReadyContent.Reflowable) return
+        if (speechEngine.availability.value == BookSpeechAvailability.UNAVAILABLE) return
+        configureSpeechEngine()
+        clearSpeechSession()
+        speechController.awaitContext()
+        _hostCommands.tryEmit(ReaderHostCommand.RequestSpeechContext(latestEpubCfi))
+    }
+
+    /** The chrome's single play/pause button: start → pause → resume. */
+    fun toggleReadAloud() {
+        val state = speechState.value
+        when {
+            !state.active -> startReadAloud()
+            state.paused -> speechController.resume()
+            else -> speechController.pause()
+        }
+    }
+
+    fun pauseReadAloud() = speechController.pause()
+
+    fun resumeReadAloud() = speechController.resume()
+
+    fun skipSpeechForward() = speechController.skipForward()
+
+    fun skipSpeechBack() = speechController.skipBack()
+
+    /** Ends the session (user stop, screen dispose, sleep timer, engine loss). */
+    fun stopReadAloud() {
+        clearSpeechSession()
+        speechController.stop()
+    }
+
+    /**
+     * Host answer to a speech-context request (screen-forwarded
+     * `onSpeechContext`). Continuation protocol: a context whose first
+     * paragraph repeats the chapter being spoken means the chapter turn did
+     * not relocate (book end) → finish; an empty context mid-book means a
+     * chapter with nothing speakable → keep advancing (the percent snapshot
+     * taken at the turn breaks the loop once the position stops moving);
+     * anything else starts the loop on the new chapter.
+     */
+    internal fun onSpeechContext(paragraphs: List<EpubSpeechParagraph>) {
+        if (!speechState.value.active) return // late answer to a stopped session
+        speechParagraphs = paragraphs
+        val firstCfi = paragraphs.firstOrNull()?.cfi
+        if (firstCfi != null && firstCfi == speechChapterKey) {
+            // next() did not relocate — the same chapter came back. Book end.
+            speechController.finish()
+            return
+        }
+        if (paragraphs.isEmpty() && currentPercent == speechPercentAtAdvance) {
+            // Nothing speakable AND the position never moved: advancing again
+            // cannot help (book end, or a static rendition) — finish instead
+            // of looping.
+            speechController.finish()
+            return
+        }
+        speechChapterKey = firstCfi
+        speechController.start(paragraphs)
+    }
+
+    /**
+     * Chapter-end continuation: remember the chapter identity + percent,
+     * turn the page, then re-request the context once the turn's relocation
+     * arrives ([onEpubRelocated] releases the wait) or the timeout fires
+     * (a book-end turn never relocates — the identity guard finishes there).
+     */
+    private fun advanceSpeechChapter() {
+        speechChapterKey = speechParagraphs.firstOrNull()?.cfi
+        speechPercentAtAdvance = currentPercent
+        speechAdvancing = true
+        _hostCommands.tryEmit(ReaderHostCommand.AdvanceSpeechChapter)
+        speechAdvanceTimeout?.cancel()
+        speechAdvanceTimeout = scope.launch {
+            delay(SPEECH_CHAPTER_ADVANCE_TIMEOUT_MS)
+            requestContextAfterAdvance()
+        }
+    }
+
+    private fun requestContextAfterAdvance() {
+        if (!speechAdvancing) return
+        speechAdvancing = false
+        _hostCommands.tryEmit(ReaderHostCommand.RequestSpeechContext(null))
+    }
+
+    /** Clears the bookkeeping (NOT the controller state — callers drive that). */
+    private fun clearSpeechSession() {
+        speechParagraphs = emptyList()
+        speechChapterKey = null
+        speechAdvancing = false
+        speechAdvanceTimeout?.cancel()
+        speechAdvanceTimeout = null
+    }
+
+    // ---------------------------------------------------------------------
+    // Sleep timer
+    // ---------------------------------------------------------------------
+
+    internal fun startSleepTimer(option: ReaderSleepOption) = sleepTimer.start(option)
+
+    fun cancelSleepTimer() = sleepTimer.cancel()
 
     fun toggleControls() {
         val ready = _uiState.value as? BookReaderUiState.Ready ?: return
@@ -860,11 +1127,24 @@ class BookReaderViewModel(
         // The authoritative exit flush — onDispose already fired it if the
         // screen tore down first; reportNow's idempotence collapses the two.
         reportNow(final = true)
+        // Read-aloud teardown: silence any live utterance and release the
+        // engine's platform resources (it lazily re-creates on the next
+        // speak, so a config-change recreation is unaffected).
+        stopReadAloud()
+        sleepTimer.cancel()
+        speechEngine.shutdown()
         document?.close()
         document = null
     }
 
     companion object {
         private const val PROGRESS_DEBOUNCE_MS = 800L
+
+        /**
+         * How long the speech loop waits for the chapter turn's relocation
+         * before re-requesting the context anyway — a book-end `next()` never
+         * relocates, and the same-chapter identity guard finishes there.
+         */
+        private const val SPEECH_CHAPTER_ADVANCE_TIMEOUT_MS = 1_500L
     }
 }

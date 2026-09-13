@@ -60,4 +60,20 @@
     <string name="book_reader_pages_left">%1$d pages restantes</string>
     <string name="book_reader_chapter_pages_left">%1$d pages restantes dans le chapitre</string>
     <string name="book_reader_minutes_left_chapter">≈ %1$d min restantes dans le chapitre</string>
+    <string name="book_reader_read_aloud">Lecture à voix haute</string>
+    <string name="book_reader_speech_rate">Vitesse de lecture</string>
+    <string name="book_reader_speech_pitch">Hauteur de la voix</string>
+    <string name="book_reader_speech_unavailable">La lecture à voix haute n\'est pas disponible sur cet appareil</string>
+    <string name="book_reader_speech_active">Lecture en cours</string>
+    <string name="book_reader_speech_start">Commencer la lecture à voix haute</string>
+    <string name="book_reader_speech_pause">Mettre la lecture en pause</string>
+    <string name="book_reader_speech_resume">Reprendre la lecture</string>
+    <string name="book_reader_speech_stop">Arrêter la lecture</string>
+    <string name="book_reader_speech_next_paragraph">Paragraphe suivant</string>
+    <string name="book_reader_speech_previous_paragraph">Paragraphe précédent</string>
+    <string name="book_reader_sleep_timer">Minuterie de sommeil</string>
+    <string name="book_reader_sleep_timer_end_of_chapter">À la fin du chapitre</string>
+    <string name="book_reader_auto_scroll_speed">Vitesse du défilement automatique</string>
+    <string name="book_reader_auto_scroll_start">Démarrer le défilement automatique</string>
+    <string name="book_reader_auto_scroll_stop">Arrêter le défilement automatique</string>
 </resources>

@@ -8,7 +8,9 @@ import com.raulshma.jellyplay.core.datastore.reader.ReaderStore
 import com.raulshma.jellyplay.feature.book.BookContentResolver
 import com.raulshma.jellyplay.feature.book.BookDocumentOpener
 import com.raulshma.jellyplay.feature.book.BookReaderViewModel
+import com.raulshma.jellyplay.feature.book.BookSpeechEngine
 import com.raulshma.jellyplay.feature.book.NoopBookFormatProbe
+import com.raulshma.jellyplay.feature.book.NoopBookSpeechEngine
 import com.raulshma.jellyplay.feature.book.PdfOutlineParser
 import org.koin.compose.viewmodel.dsl.viewModel
 import org.koin.core.module.Module
@@ -20,9 +22,10 @@ import org.koin.dsl.module
  * in the platform modules (androidBookPlayerModule / desktopBookPlayerModule);
  * every repository (including the marks-owner [ReaderAnnotationsRepository]),
  * the ReaderStore and the application scope resolve from the shared core
- * graph. The format probe binds where an HTTP stack exists (jvmShared
- * platforms); elsewhere `getOrNull()` degrades to the neutral
- * [NoopBookFormatProbe].
+ * graph. The format probe and the speech engine bind where their platform
+ * exists (jvmShared / android / desktop); elsewhere `getOrNull()` degrades to
+ * the neutral [NoopBookFormatProbe] / [NoopBookSpeechEngine] (web compiles
+ * and runs the reader with read-aloud reporting unavailable).
  */
 val playerBookModule: Module = module {
     viewModel {
@@ -35,6 +38,7 @@ val playerBookModule: Module = module {
             documentOpener = get(),
             pdfOutlineParser = get(),
             formatProbe = getOrNull() ?: NoopBookFormatProbe,
+            speechEngine = getOrNull() ?: NoopBookSpeechEngine,
             flushScope = get(DatastoreQualifiers.applicationScope),
         )
     }
