@@ -28,13 +28,20 @@ sealed interface BookReaderUiState {
         val showSettings: Boolean = false,
     ) : BookReaderUiState
 
-    data class Error(val reason: ErrorReason) : BookReaderUiState
+    /**
+     * @param detail for [ErrorReason.UnsupportedFormat]: either the file
+     *   extension the item's path actually carried (".mobi" — known but not
+     *   readable in-app) or null when the server reported no path at all. The
+     *   veil renders a different line per case so a broken book setup is
+     *   diagnosable from the screen instead of a bare "unsupported".
+     */
+    data class Error(val reason: ErrorReason, val detail: String? = null) : BookReaderUiState
 
     enum class ErrorReason {
         /** Corrupt archive, password-protected PDF, missing local file, network failure. */
         CannotOpen,
 
-        /** The item's path carries no known book extension. */
+        /** The item's path carries no known book extension ([Error.detail] says which). */
         UnsupportedFormat,
     }
 }

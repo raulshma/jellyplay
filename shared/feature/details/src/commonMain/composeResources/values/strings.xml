@@ -30,6 +30,10 @@
     <string name="detail_play_play">Play</string>
     <string name="detail_play_resume">Resume</string>
     <string name="detail_read">Read</string>
+    <!-- Shown in place of the hidden Read button when a book's format cannot
+         be opened in-app (e.g. .mobi/.azw3) — makes the missing button a
+         stated limitation instead of a mystery. -->
+    <string name="detail_book_download_only">Download only</string>
     <!-- Positional arg: %1$d = resume page number. -->
     <string name="detail_continue_page">Continue — page %1$d</string>
     <!-- Positional arg: %1$d = resume percent (0-100). EPUB reflowable books. -->

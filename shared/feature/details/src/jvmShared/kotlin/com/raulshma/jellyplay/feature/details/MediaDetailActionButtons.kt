@@ -66,6 +66,7 @@ import com.raulshma.jellyplay.feature.details.generated.resources.detail_play_pl
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_play_resume
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_continue_percent
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_continue_page
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_book_download_only
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_read
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_skip_available_both
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_skip_available_credits
@@ -101,9 +102,18 @@ internal fun DetailActionButtons(
     // Books fork before the audio/video playability ladder: a readable format
     // (CBZ/CBR/PDF/EPUB) gets a Read button; anything else is download-only —
     // the primary button is hidden and never dispatches Route.VideoPlayer.
+    // Exception: a book whose path is BLANK (server withheld it — measured on
+    // misconfigured/path-substituted servers) gets an optimistic Read button;
+    // the reader resolves the real format from the download response and
+    // reports a precise error if the file is genuinely unreadable.
+    // Folders (library container folders) are not playable either — normally
+    // they drill into a section before reaching detail, but a deep link can
+    // still land here, so the ladder must never offer Play on one.
     val isBook = item.mediaType == MediaType.BOOK
+    val isFolder = item.mediaType == MediaType.FOLDER
     val bookFormat = if (isBook) BookFormat.fromPath(detail.path) else null
     val isReadableBook = bookFormat != null
+    val isFormatUnknownBook = isBook && !isReadableBook && detail.path.isNullOrBlank()
     // Resume decode by format through BookProgressPolicy (the single owner of
     // the ticks↔page/percent encodings): paged books (CBZ/CBR/PDF) store
     // 0-based page-position ticks → 1-based label; EPUB (reflowable) stores
@@ -131,8 +141,14 @@ internal fun DetailActionButtons(
     val hasNoEpisodes = isSeries && allSeasonsFetched && (allEpisodesEmpty || state.episodes.isEmpty())
     // A series with no episodes has no valid play target — never let the primary button
     // dispatch play on the series root item. The button already dims when this is false.
-    // A book is playable only when its format is readable in-app (else download-only).
-    val canPlayPrimary = if (isBook) isReadableBook else (isAudio || !isSeries || target != null)
+    // A book is playable when its format is readable in-app OR unknown-but-unprobed
+    // (blank path — the reader probes the download response); a known-but-unsupported
+    // extension (e.g. .mobi) is download-only. A folder is never playable (container).
+    val canPlayPrimary = when {
+        isFolder -> false
+        isBook -> isReadableBook || isFormatUnknownBook
+        else -> isAudio || !isSeries || target != null
+    }
     val progress = if (target != null) {
         // Smart-play resume math: the position is the resolver's
         // startPositionTicks, not the episode's saved playbackPositionTicks.
@@ -144,7 +160,7 @@ internal fun DetailActionButtons(
     val playLabel = when {
         isReadableBook && bookPage != null -> stringResource(Res.string.detail_continue_page, bookPage)
         isReadableBook && bookPercent != null -> stringResource(Res.string.detail_continue_percent, bookPercent)
-        isReadableBook -> stringResource(Res.string.detail_read)
+        isReadableBook || isFormatUnknownBook -> stringResource(Res.string.detail_read)
         target != null -> target.label
         isResolvingSeriesTarget -> stringResource(Res.string.detail_play_finding_episode)
         hasNoEpisodes -> stringResource(Res.string.detail_play_no_episodes_available)
@@ -205,7 +221,7 @@ internal fun DetailActionButtons(
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             FadingItem {
-                if (!isBook || isReadableBook) {
+                if (!isFolder && (isReadableBook || isFormatUnknownBook || !isBook)) {
                     PlayButton(
                         style = PlayButtonStyle.Vertical,
                         label = playLabel,
@@ -217,6 +233,10 @@ internal fun DetailActionButtons(
                         contentFocusRequester = contentFocusRequester,
                         onClick = onPlay,
                     )
+                } else if (isBook) {
+                    // Readable-format gate kept the Read button hidden — state
+                    // the limitation instead of leaving an unexplained gap.
+                    DownloadOnlyBadge(style = PlayButtonStyle.Vertical)
                 }
             }
             Row(
@@ -260,7 +280,7 @@ internal fun DetailActionButtons(
             val favoriteHFocusState = rememberTvFocusState(focusedScale = 1.08f)
 
             FadingItem {
-                if (!isBook || isReadableBook) {
+                if (!isFolder && (isReadableBook || isFormatUnknownBook || !isBook)) {
                     PlayButton(
                         style = PlayButtonStyle.Horizontal,
                         label = playLabel,
@@ -272,6 +292,8 @@ internal fun DetailActionButtons(
                         contentFocusRequester = contentFocusRequester,
                         onClick = onPlay,
                     )
+                } else if (isBook) {
+                    DownloadOnlyBadge(style = PlayButtonStyle.Horizontal)
                 }
             }
 
@@ -302,6 +324,44 @@ internal fun DetailActionButtons(
 
 /** Distinguishes the vertical (full-width, 52dp) from horizontal (fixed 200×56dp) play button. */
 private enum class PlayButtonStyle { Vertical, Horizontal }
+
+/**
+ * Non-clickable informational pill occupying the Read button's slot when a
+ * book's format cannot be opened in-app (download-only) — keeps the row's
+ * geometry stable and states why there is no Read action.
+ */
+@Composable
+private fun DownloadOnlyBadge(style: PlayButtonStyle) {
+    val shape = if (style == PlayButtonStyle.Vertical) ShapeCache.smooth14 else ShapeCache.smooth16
+    val iconSize = if (style == PlayButtonStyle.Vertical) 22.dp else 24.dp
+    val spacerSize = if (style == PlayButtonStyle.Vertical) 6.dp else 8.dp
+    val baseModifier = if (style == PlayButtonStyle.Vertical) {
+        Modifier.fillMaxWidth().height(52.dp)
+    } else {
+        Modifier.height(56.dp).width(200.dp)
+    }
+    Box(
+        modifier = baseModifier
+            .clip(shape)
+            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                Tabler.Outline.Book,
+                contentDescription = null,
+                modifier = Modifier.size(iconSize),
+                tint = MaterialTheme.colorScheme.onPrimary,
+            )
+            Spacer(Modifier.size(spacerSize))
+            Text(
+                text = stringResource(Res.string.detail_book_download_only),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onPrimary,
+            )
+        }
+    }
+}
 
 /** Distinguishes vertical (weight 1f, 48dp) from horizontal (56×56dp) icon buttons. */
 private enum class IconButtonStyle { Vertical, Horizontal }

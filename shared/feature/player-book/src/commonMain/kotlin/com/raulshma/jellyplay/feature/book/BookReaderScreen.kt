@@ -77,7 +77,8 @@ import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_direc
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_direction_rtl
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_downloading_viewer
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_error_cannot_open
-import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_error_unsupported
+import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_error_no_path
+import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_error_unsupported_with_format
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_font_size
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_loading
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_page_indicator
@@ -234,8 +235,12 @@ private fun ErrorVeil(state: BookReaderUiState.Error, onBack: () -> Unit) {
     val message = when (state.reason) {
         BookReaderUiState.ErrorReason.CannotOpen ->
             stringResource(Res.string.book_reader_error_cannot_open)
-        BookReaderUiState.ErrorReason.UnsupportedFormat ->
-            stringResource(Res.string.book_reader_error_unsupported)
+        BookReaderUiState.ErrorReason.UnsupportedFormat -> when {
+            state.detail != null ->
+                stringResource(Res.string.book_reader_error_unsupported_with_format, state.detail)
+            else ->
+                stringResource(Res.string.book_reader_error_no_path)
+        }
     }
     // Player-style transient error: show the reason briefly, then pop back.
     LaunchedEffect(Unit) {

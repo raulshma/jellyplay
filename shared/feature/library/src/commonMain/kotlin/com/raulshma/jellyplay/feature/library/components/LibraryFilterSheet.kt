@@ -211,7 +211,8 @@ fun LibraryFilterSheet(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                MediaType.entries.filter { it != MediaType.UNKNOWN }.forEach { mediaType ->
+                // FOLDER is a container, not a content type — never offered as a filter.
+                MediaType.entries.filter { it != MediaType.UNKNOWN && it != MediaType.FOLDER }.forEach { mediaType ->
                     GlassFilterChip(
                         label = mediaType.mediaTypeDisplayNamePlural(),
                         selected = mediaType in selectedMediaTypes,

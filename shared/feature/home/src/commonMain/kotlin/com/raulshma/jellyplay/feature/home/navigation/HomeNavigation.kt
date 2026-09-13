@@ -50,6 +50,10 @@ fun EntryProviderScope<NavKey>.homeSection(
                         // playback), not the generic video player. Mirrors the
                         // dedicated LiveTvScreen's onChannelClick routing.
                         navigator.navigate(Route.LiveTvChannelPlayer(itemId, itemName))
+                    } else if (mediaType == MediaType.BOOK) {
+                        // Books ride the reader, never the video player — the
+                        // same fork the downloads screen's play button makes.
+                        navigator.navigate(Route.BookReader(itemId))
                     } else {
                         navigator.navigate(Route.VideoPlayer(itemId, mediaSourceId, startPosition))
                     }

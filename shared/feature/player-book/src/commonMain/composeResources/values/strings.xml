@@ -7,6 +7,8 @@
     <string name="book_reader_direction_rtl">Right to left</string>
     <string name="book_reader_error_cannot_open">Cannot open this book</string>
     <string name="book_reader_error_unsupported">Unsupported book format</string>
+    <string name="book_reader_error_unsupported_with_format">Unsupported book format (%1$s) — download only</string>
+    <string name="book_reader_error_no_path">Server sent no file path for this book</string>
     <string name="book_reader_loading">Preparing your book…</string>
     <string name="book_reader_preparing_locations">Preparing reading locations…</string>
     <string name="book_reader_downloading_viewer">Downloading viewer components %1$d%%</string>

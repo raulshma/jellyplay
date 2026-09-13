@@ -47,11 +47,17 @@ data class BookDownloadProgress(val bytesDownloaded: Long, val totalBytes: Long?
  * desktop); re-download after eviction is transparent.
  */
 interface BookContentResolver {
+    /**
+     * [accessToken] rides the `Authorization: MediaBrowser` header on the
+     * streaming fetch — Jellyfin 12 rejects the legacy `?api_key=` query
+     * param on `/Items/{id}/Download` with 401.
+     */
     suspend fun resolve(
         itemId: String,
         fileName: String?,
         format: BookFormat,
         downloadUrl: String,
+        accessToken: String?,
         onProgress: (BookDownloadProgress) -> Unit,
     ): ResolvedBook
 }

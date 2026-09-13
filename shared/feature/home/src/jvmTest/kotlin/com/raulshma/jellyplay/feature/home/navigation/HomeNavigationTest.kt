@@ -57,6 +57,18 @@ class HomeNavigationTest {
     }
 
     @Test
+    fun onPlayClick_book_navigatesToBookReader_neverVideoPlayer() {
+        // A book surfaced on a home rail (Latest Books etc.) must open the
+        // reader — the generic else-branch would have shipped it to the video
+        // player.
+        val callbacks = buildTestCallbacks(navigator)
+        callbacks.onPlayClick("bk-1", null, 0L, MediaType.BOOK, null, "Dune")
+
+        verify { navigator.navigate(Route.BookReader("bk-1")) }
+        verify(exactly = 0) { navigator.navigate(any<Route.VideoPlayer>()) }
+    }
+
+    @Test
     fun onSeerrItemClick_navigatesToSeerrDetail() {
         val callbacks = buildTestCallbacks(navigator)
         callbacks.onSeerrItemClick(12345, "movie")
@@ -101,6 +113,9 @@ class HomeNavigationTest {
                     // production homeSection routing (HomePlayOnRedirect seam).
                 } else if (mediaType == MediaType.CHANNEL || mediaType == MediaType.LIVE_TV) {
                     navigator.navigate(Route.LiveTvChannelPlayer(itemId, itemName))
+                } else if (mediaType == MediaType.BOOK) {
+                    // Books ride the reader, never the video player.
+                    navigator.navigate(Route.BookReader(itemId))
                 } else {
                     navigator.navigate(Route.VideoPlayer(itemId, mediaSourceId, startPosition))
                 }

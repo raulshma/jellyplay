@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.core.datastore.reader.ReaderStore
 import com.raulshma.jellyplay.core.datastore.reader.ReaderTheme
 import com.raulshma.jellyplay.core.model.BookFormat
 import com.raulshma.jellyplay.core.model.BookProgressPolicy
+import com.raulshma.jellyplay.core.model.pathExtension
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -41,6 +42,11 @@ class BookReaderViewModel(
     private val readerStore: ReaderStore,
     private val contentResolver: BookContentResolver,
     private val documentOpener: BookDocumentOpener,
+    /**
+     * Download-header format probe for items whose `Path` yields nothing.
+     * Default-neutral so platforms without a probe impl still compile.
+     */
+    private val formatProbe: BookFormatProbe = NoopBookFormatProbe,
     /**
      * Process-wide scope for the exit flush: [reportNow] with `final = true`
      * runs from `onDispose`, and viewModelScope is already cancelled by the
@@ -110,6 +116,18 @@ class BookReaderViewModel(
         loadJob = scope.launch { openBook(itemId) }
     }
 
+    /**
+     * Format fallback when the item's `Path` carried no known extension:
+     * one cheap ranged GET against the download URL reads Content-Type +
+     * Content-Disposition filename (both served for every book, 10.9–12).
+     * A probe failure (or an unrecognized metadata pair — mobi/azw3) maps to
+     * null and the caller reports the precise unsupported-format error.
+     */
+    private suspend fun probeDownloadFormat(downloadUrl: String, accessToken: String?): BookFormat? {
+        val metadata = runCatching { formatProbe.probe(downloadUrl, accessToken) }.getOrNull() ?: return null
+        return BookFormat.fromDownloadMetadata(metadata.contentType, metadata.fileName)
+    }
+
     private suspend fun openBook(itemId: String) {
         _uiState.value = BookReaderUiState.Loading()
         // A re-load (new book, same VM) must not leak the previous book's
@@ -124,9 +142,26 @@ class BookReaderViewModel(
             _uiState.value = BookReaderUiState.Error(BookReaderUiState.ErrorReason.CannotOpen)
             return
         }
-        val format = BookFormat.fromPath(detail.path)
+        val downloadUrl = playbackRepository.getBookDownloadUrl(itemId)
+        // Header auth for the probe + streaming fetch: Jellyfin 12 401s the
+        // legacy ?api_key= query param on data endpoints, so the token must
+        // ride `Authorization: MediaBrowser` (the URL keeps api_key for ≤11).
+        val accessToken = playbackRepository.getAccessToken()
+        val format = BookFormat.fromPath(detail.path) ?: probeDownloadFormat(downloadUrl, accessToken)
         if (format == null) {
-            _uiState.value = BookReaderUiState.Error(BookReaderUiState.ErrorReason.UnsupportedFormat)
+            // Distinguish "the item's path names a file the reader can't open"
+            // (e.g. .mobi — download-only) from "no format was knowable at all"
+            // (path blank AND the download probe failed) so the error veil can
+            // name the cause instead of a bare "unsupported format".
+            val extension = detail.path
+                ?.takeIf { it.isNotBlank() }
+                ?.pathExtension()
+                ?.takeIf { it.isNotEmpty() }
+                ?.let { ".$it" }
+            _uiState.value = BookReaderUiState.Error(
+                reason = BookReaderUiState.ErrorReason.UnsupportedFormat,
+                detail = extension,
+            )
             return
         }
 
@@ -137,7 +172,8 @@ class BookReaderViewModel(
                 // item path through; it lands as the cache file's base name.
                 fileName = detail.path,
                 format = format,
-                downloadUrl = playbackRepository.getBookDownloadUrl(itemId),
+                downloadUrl = downloadUrl,
+                accessToken = accessToken,
                 onProgress = { progress ->
                     (_uiState.value as? BookReaderUiState.Loading)?.let {
                         _uiState.value = it.copy(progress = progress.fraction)

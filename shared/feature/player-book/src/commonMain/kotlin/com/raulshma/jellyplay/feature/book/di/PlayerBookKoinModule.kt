@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.datastore.reader.ReaderStore
 import com.raulshma.jellyplay.feature.book.BookContentResolver
 import com.raulshma.jellyplay.feature.book.BookDocumentOpener
 import com.raulshma.jellyplay.feature.book.BookReaderViewModel
+import com.raulshma.jellyplay.feature.book.NoopBookFormatProbe
 import org.koin.compose.viewmodel.dsl.viewModel
 import org.koin.core.module.Module
 import org.koin.dsl.module
@@ -16,7 +17,9 @@ import org.koin.dsl.module
  * deps ([BookContentResolver], [BookDocumentOpener]) bind in the platform
  * modules (androidBookPlayerModule / desktopBookPlayerModule); every
  * repository, the ReaderStore and the application scope resolve from the
- * shared core graph.
+ * shared core graph. The format probe binds where an HTTP stack exists
+ * (jvmShared platforms); elsewhere `getOrNull()` degrades to the neutral
+ * [NoopBookFormatProbe].
  */
 val playerBookModule: Module = module {
     viewModel {
@@ -26,6 +29,7 @@ val playerBookModule: Module = module {
             readerStore = get(),
             contentResolver = get(),
             documentOpener = get(),
+            formatProbe = getOrNull() ?: NoopBookFormatProbe,
             flushScope = get(DatastoreQualifiers.applicationScope),
         )
     }

@@ -41,6 +41,7 @@ class OkHttpBookContentResolver(
         fileName: String?,
         format: BookFormat,
         downloadUrl: String,
+        accessToken: String?,
         onProgress: (BookDownloadProgress) -> Unit,
     ): ResolvedBook {
         // 1. A completed on-disk download wins (the players' predicate — also
@@ -63,7 +64,7 @@ class OkHttpBookContentResolver(
         // would permanently poison the book with a truncated download.
         val part = parent / "${target.name}.part"
         try {
-            fetcher.downloadToFile(downloadUrl, part, onProgress)
+            fetcher.downloadToFile(downloadUrl, accessToken, part, onProgress)
             fileSystem.atomicMove(part, target)
         } catch (t: Throwable) {
             runCatching { fileSystem.delete(part) }
@@ -97,6 +98,7 @@ class OkHttpBookContentResolver(
 fun interface BookHttpFetcher {
     suspend fun downloadToFile(
         url: String,
+        accessToken: String?,
         destination: Path,
         onProgress: (BookDownloadProgress) -> Unit,
     )
@@ -107,11 +109,19 @@ class OkHttpBookFetcher(private val client: OkHttpClient) : BookHttpFetcher {
 
     override suspend fun downloadToFile(
         url: String,
+        accessToken: String?,
         destination: Path,
         onProgress: (BookDownloadProgress) -> Unit,
     ) {
         withContext(Dispatchers.IO) {
-            val call = client.newCall(Request.Builder().url(url).build())
+            // Header auth (Jellyfin 12 dropped ?api_key= on data endpoints);
+            // the URL keeps its api_key for pre-12 servers.
+            val request = Request.Builder().url(url).apply {
+                if (!accessToken.isNullOrBlank()) {
+                    header("Authorization", OkHttpBookFormatProbe.mediaBrowserAuth(accessToken))
+                }
+            }.build()
+            val call = client.newCall(request)
             // The call must not outlive the reader: cancellation (user backs
             // out mid-download) aborts the call — unblocking both the body
             // read loop and a stalled connect — and each chunk re-checks

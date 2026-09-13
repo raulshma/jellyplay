@@ -120,6 +120,9 @@ internal fun BaseItemKind.toMediaType(): MediaType = when (this) {
     BaseItemKind.PHOTO -> MediaType.PHOTO
     BaseItemKind.PHOTO_ALBUM -> MediaType.PHOTO_FOLDER
     BaseItemKind.BOOK -> MediaType.BOOK
+    // Container folders inside a library (books-library volume folders etc.);
+    // the server has no book-specific folder kind — they serialize as "Folder".
+    BaseItemKind.FOLDER -> MediaType.FOLDER
     // Audiobooks are audio files — they ride the audio player.
     BaseItemKind.AUDIO_BOOK -> MediaType.AUDIO
     BaseItemKind.LIVE_TV_CHANNEL, BaseItemKind.TV_CHANNEL -> MediaType.CHANNEL
@@ -140,6 +143,7 @@ internal fun MediaType.toBaseItemKind(): BaseItemKind? = when (this) {
     MediaType.PHOTO -> BaseItemKind.PHOTO
     MediaType.PHOTO_FOLDER -> BaseItemKind.PHOTO_ALBUM
     MediaType.BOOK -> BaseItemKind.BOOK
+    MediaType.FOLDER -> BaseItemKind.FOLDER
     MediaType.CHANNEL -> BaseItemKind.LIVE_TV_CHANNEL
     MediaType.LIVE_TV -> BaseItemKind.LIVE_TV_PROGRAM
     MediaType.MUSIC -> BaseItemKind.AUDIO

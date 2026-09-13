@@ -21,6 +21,11 @@ enum class MediaType {
     LIVE_TV,
     CHANNEL,
     BOOK,
+    // Generic wire "Folder" — a container folder inside a library (e.g. a
+    // series/volume folder in a books library; the server has no BookFolder
+    // kind, plain folders serialize as "Folder"). Not playable itself: item
+    // clicks drill into its children (resolveItemDestination).
+    FOLDER,
     UNKNOWN,
 }
 

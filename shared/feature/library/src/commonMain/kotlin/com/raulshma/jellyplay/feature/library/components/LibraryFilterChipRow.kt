@@ -241,7 +241,8 @@ fun MediaTypeFilterSheet(
 ) {
     MultiSelectFilterSheet(
         title = stringResource(Res.string.library_media_type),
-        options = MediaType.entries.filter { it != MediaType.UNKNOWN },
+        // FOLDER is a container, not a content type — never offered as a filter.
+        options = MediaType.entries.filter { it != MediaType.UNKNOWN && it != MediaType.FOLDER },
         selected = current,
         label = { it.mediaTypeDisplayNamePlural() },
         onToggle = onToggle,

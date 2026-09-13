@@ -5,9 +5,11 @@ import com.raulshma.jellyplay.core.network.di.NetworkQualifiers
 import com.raulshma.jellyplay.feature.book.AndroidBookDocumentOpener
 import com.raulshma.jellyplay.feature.book.BookContentResolver
 import com.raulshma.jellyplay.feature.book.BookDocumentOpener
+import com.raulshma.jellyplay.feature.book.BookFormatProbe
 import com.raulshma.jellyplay.feature.book.BookHttpFetcher
 import com.raulshma.jellyplay.feature.book.OkHttpBookContentResolver
 import com.raulshma.jellyplay.feature.book.OkHttpBookFetcher
+import com.raulshma.jellyplay.feature.book.OkHttpBookFormatProbe
 import okhttp3.OkHttpClient
 import okio.Path.Companion.toPath
 import org.koin.core.module.Module
@@ -22,6 +24,7 @@ import org.koin.dsl.module
  */
 fun androidBookPlayerModule(context: Context): Module = module {
     single<BookHttpFetcher> { OkHttpBookFetcher(get(NetworkQualifiers.streamingHttpClient)) }
+    single<BookFormatProbe> { OkHttpBookFormatProbe(get(NetworkQualifiers.streamingHttpClient)) }
     single<BookContentResolver> {
         OkHttpBookContentResolver(
             playbackSourceResolver = get(),

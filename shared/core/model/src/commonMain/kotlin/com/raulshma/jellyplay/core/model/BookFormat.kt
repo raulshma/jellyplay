@@ -34,5 +34,29 @@ enum class BookFormat(val extension: String, val isReflowable: Boolean) {
             if (extension.isEmpty() || '/' in extension || '\\' in extension) return null
             return entries.firstOrNull { it.extension == extension }
         }
+
+        /**
+         * Fallback when the item's `Path` yielded nothing (server withheld or
+         * blanked it — measured on misconfigured/path-substituted servers):
+         * the book DOWNLOAD response's Content-Type and Content-Disposition
+         * filename (Jellyfin serves both for every book, verified 10.9–12).
+         * The filename wins when present — it is the server's own file name —
+         * then the MIME table covers the filename-less case. Null when
+         * neither maps to a [BookFormat] (mobi/azw3 land here: known names,
+         * deliberately unsupported).
+         */
+        fun fromDownloadMetadata(contentType: String?, fileName: String?): BookFormat? {
+            fromPath(fileName)?.let { return it }
+            val mime = contentType?.substringBefore(';')?.trim()?.lowercase() ?: return null
+            return when (mime) {
+                "application/epub+zip" -> EPUB
+                "application/pdf" -> PDF
+                "application/vnd.comicbook+zip", "application/x-cbz", "application/cbz" -> CBZ
+                "application/vnd.comicbook-rar", "application/x-cbr",
+                "application/vnd.rar", "application/x-rar-compressed",
+                -> CBR
+                else -> null
+            }
+        }
     }
 }

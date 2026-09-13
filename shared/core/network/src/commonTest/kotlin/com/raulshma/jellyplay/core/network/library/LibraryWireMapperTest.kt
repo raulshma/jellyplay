@@ -132,6 +132,11 @@ class LibraryWireMapperTest {
         assertEquals(MediaType.BOOK, "Book".toMediaType())
         assertEquals("Book", MediaType.BOOK.toWireItemKind())
         assertEquals(MediaType.AUDIO, "AudioBook".toMediaType(), "audiobooks ride the audio player")
+        // Container folders inside a library (books-library volume folders) map
+        // to FOLDER so item clicks drill into a section instead of the detail
+        // play ladder.
+        assertEquals(MediaType.FOLDER, "Folder".toMediaType())
+        assertEquals("Folder", MediaType.FOLDER.toWireItemKind())
     }
 
     @Test

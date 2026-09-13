@@ -3,10 +3,12 @@ package com.raulshma.jellyplay.feature.book.di
 import com.raulshma.jellyplay.core.network.di.NetworkQualifiers
 import com.raulshma.jellyplay.feature.book.BookContentResolver
 import com.raulshma.jellyplay.feature.book.BookDocumentOpener
+import com.raulshma.jellyplay.feature.book.BookFormatProbe
 import com.raulshma.jellyplay.feature.book.BookHttpFetcher
 import com.raulshma.jellyplay.feature.book.DesktopBookDocumentOpener
 import com.raulshma.jellyplay.feature.book.OkHttpBookContentResolver
 import com.raulshma.jellyplay.feature.book.OkHttpBookFetcher
+import com.raulshma.jellyplay.feature.book.OkHttpBookFormatProbe
 import com.raulshma.jellyplay.feature.book.epub.EpubDesktopEnv
 import com.raulshma.jellyplay.feature.book.epub.KcefRuntime
 import okhttp3.OkHttpClient
@@ -23,6 +25,7 @@ import org.koin.dsl.module
  */
 fun desktopBookPlayerModule(dataDir: okio.Path): Module = module {
     single<BookHttpFetcher> { OkHttpBookFetcher(get(NetworkQualifiers.streamingHttpClient)) }
+    single<BookFormatProbe> { OkHttpBookFormatProbe(get(NetworkQualifiers.streamingHttpClient)) }
     single<BookContentResolver> {
         OkHttpBookContentResolver(
             playbackSourceResolver = get(),
