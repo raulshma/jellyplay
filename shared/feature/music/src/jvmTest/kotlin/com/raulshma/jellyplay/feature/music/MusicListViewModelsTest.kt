@@ -1,8 +1,6 @@
 package com.raulshma.jellyplay.feature.music
 
 import androidx.paging.PagingData
-import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
-import com.raulshma.jellyplay.core.data.playback.AudioQueueOutcome
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider

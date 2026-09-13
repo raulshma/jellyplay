@@ -3,20 +3,20 @@ package com.raulshma.jellyplay.feature.music.genres
 import androidx.lifecycle.SavedStateHandle
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
-import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import com.raulshma.jellyplay.feature.music.MusicQueuePlayer
 import kotlinx.coroutines.flow.Flow
 
 class GenreDetailViewModel(
     savedStateHandle: SavedStateHandle,
     private val mediaRepository: MediaRepository,
     private val imageUrlProvider: ImageUrlProvider,
-    private val audioQueueFacade: AudioQueueFacade,
+    private val audioQueueFacade: MusicQueuePlayer,
 ) : JellyPlayViewModel() {
 
     private val genreId: String = savedStateHandle[Route.GenreDetail::genreId.name] ?: ""

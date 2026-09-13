@@ -7,7 +7,6 @@ import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.usecase.OrderHomeSectionsUseCase
-import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.data.widget.ContinueWatchingBroadcaster
 import com.raulshma.jellyplay.core.data.widget.LibrarySyncHook
 import com.raulshma.jellyplay.core.data.worker.TvWatchNextScheduler
@@ -42,8 +41,8 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withTimeoutOrNull
-import kotlinx.datetime.toKotlinLocalDate
-import java.time.ZoneOffset
+import kotlinx.datetime.DateTimeUnit
+import kotlinx.datetime.plus
 
 /**
  * Deep module: the Home screen's entire refresh policy behind one small
@@ -93,7 +92,7 @@ import java.time.ZoneOffset
 internal class HomeRefresher(
     /** The VM's scope: refresh jobs must die with the VM. */
     private val scope: CoroutineScope,
-    private val timeSource: TimeSource,
+    private val clock: HomeClock,
     private val mediaRepository: MediaRepository,
     private val seerrRepository: SeerrRepository,
     private val arrRepository: ArrRepository,
@@ -247,11 +246,11 @@ internal class HomeRefresher(
                 // Failed/offline attempts still count as fresh: the loop and
                 // the onStart staleness check must not hammer the network
                 // every tick while offline.
-                lastRefreshTime = timeSource.nowEpochMillis()
+                lastRefreshTime = clock.nowEpochMillis()
                 return
             }
 
-            lastRefreshTime = timeSource.nowEpochMillis()
+            lastRefreshTime = clock.nowEpochMillis()
             val sectionPrefs = sectionPrefsProvider()
 
             // Stale-while-revalidate: on a cold open (sections still empty),
@@ -614,7 +613,7 @@ internal class HomeRefresher(
         isAppInForeground = true
         replaceRefreshJob {
             offlineModeManager.checkNetworkAndAutoDetect()
-            val now = timeSource.nowEpochMillis()
+            val now = clock.nowEpochMillis()
             if (now - lastRefreshTime >= HomeFreshness.REFRESH_INTERVAL_FOREGROUND_MS) {
                 fetchOnce()
             }
@@ -821,7 +820,7 @@ internal class HomeRefresher(
      */
     private fun refreshAfterUserDataChange() {
         pendingUserDataRefresh = true
-        val sinceLastRefresh = timeSource.nowEpochMillis() - lastRefreshTime
+        val sinceLastRefresh = clock.nowEpochMillis() - lastRefreshTime
         if (!lastFetchRacedPendingSync &&
             sinceLastRefresh < HomeFreshness.USER_DATA_REFRESH_MIN_INTERVAL_MS
         ) {
@@ -936,7 +935,7 @@ internal class HomeRefresher(
             // churn and the lastRefreshTime bookkeeping.
             if (offlineModeManager.isOffline) continue
 
-            val now = timeSource.nowEpochMillis()
+            val now = clock.nowEpochMillis()
             if (now - lastRefreshTime < HomeFreshness.MIN_REFRESH_INTERVAL_MS) continue
 
             // fetchOnce owns the single lastRefreshTime clock and stamps it on
@@ -972,13 +971,12 @@ internal class HomeRefresher(
      * errors.
      */
     private suspend fun fetchRecentlyGrabbed() {
-        val now = timeSource.today(ZoneOffset.systemDefault())
-        val end = now.plusDays(30)
-        // ArrRepository takes kotlinx.datetime.LocalDate now; the
-        // home pipeline keeps java.time (TimeSource seam) and converts at the
-        // boundary.
-        arrRepository.refreshCalendar(now.toKotlinLocalDate(), end.toKotlinLocalDate())
-        val items = arrRepository.calendar(now.toKotlinLocalDate(), end.toKotlinLocalDate()).first()
+        val now = clock.today()
+        val end = now.plus(30, DateTimeUnit.DAY)
+        // ArrRepository takes kotlinx.datetime.LocalDate — the refresher's
+        // HomeClock seam now speaks kotlinx LocalDate natively.
+        arrRepository.refreshCalendar(now, end)
+        val items = arrRepository.calendar(now, end).first()
         _state.update { it.copy(recentlyGrabbed = items.map { it.toSeerrSearchItem() }) }
     }
 
@@ -990,10 +988,10 @@ internal class HomeRefresher(
         // out up to 5 Seerr round-trips per minute (periodic refresh + per
         // pref change). A user-initiated refresh (swipe-to-refresh) bypasses
         // this gate via [invalidateDiscoverCache].
-        val now = timeSource.nowEpochMillis()
+        val now = clock.nowEpochMillis()
         if (!discoverCache.shouldFetch(now)) return
 
-        val today = timeSource.today(ZoneOffset.systemDefault()).toString()
+        val today = clock.today().toString()
 
         // coroutineScope, not the outer VM scope: the Seerr fan-out must be a
         // child of the calling refresh job (or the tracked fetchDiscover job),
@@ -1028,7 +1026,7 @@ internal class HomeRefresher(
             sections
         }
 
-        discoverCache.markFetched(timeSource.nowEpochMillis())
+        discoverCache.markFetched(clock.nowEpochMillis())
         _state.update { it.copy(discoverSections = newSections) }
     }
 }

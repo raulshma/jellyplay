@@ -43,8 +43,8 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
-import java.time.Instant
-import java.time.format.DateTimeFormatter
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.hours
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -354,10 +354,10 @@ class LiveTvPlayerViewModelGapsTest {
 
     /** ISO instant ~1 h before now, for a program window that is airing. */
     private fun hourBeforeNow(): String =
-        DateTimeFormatter.ISO_INSTANT.format(Instant.now().minusSeconds(3_600))
+        (Clock.System.now() - 1.hours).toString()
 
     private fun hourAfterNow(): String =
-        DateTimeFormatter.ISO_INSTANT.format(Instant.now().plusSeconds(3_600))
+        (Clock.System.now() + 1.hours).toString()
 
     private fun airingProgram(
         id: String = "prog-1",

@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.feature.music.moodplaylist
 
-import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.MoodPlaylistRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
@@ -10,13 +9,16 @@ import com.raulshma.jellyplay.core.model.MoodPlaylist
 import com.raulshma.jellyplay.core.model.MoodPlaylistSort
 import com.raulshma.jellyplay.core.model.MoodPlaylistsPreset
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
+import com.raulshma.jellyplay.feature.music.MusicQueuePlayer
 import kotlinx.coroutines.flow.collectLatest
-import java.util.UUID
 
+@OptIn(ExperimentalUuidApi::class)
 class MoodPlaylistsViewModel(
     private val mediaRepository: MediaRepository,
     private val imageUrlProvider: ImageUrlProvider,
-    private val audioQueueFacade: AudioQueueFacade,
+    private val audioQueueFacade: MusicQueuePlayer,
     private val moodPlaylistRepository: MoodPlaylistRepository,
 ) : JellyPlayViewModel() {
 
@@ -78,7 +80,7 @@ class MoodPlaylistsViewModel(
         launch {
             _error.value = null
             val playlist = MoodPlaylist(
-                id = "custom-${UUID.randomUUID()}",
+                id = "custom-${Uuid.random()}",
                 name = name.trim(),
                 emoji = emoji.ifBlank { "🎵" },
                 description = description.trim(),

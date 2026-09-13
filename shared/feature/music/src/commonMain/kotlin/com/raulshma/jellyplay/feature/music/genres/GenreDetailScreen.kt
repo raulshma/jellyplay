@@ -85,7 +85,7 @@ fun GenreDetailScreen(
                 }
                 is LoadState.Error -> {
                     ErrorScreen(
-                        message = refreshState.error.localizedMessage ?: stringResource(Res.string.music_failed_load_tracks),
+                        message = refreshState.error.message ?: stringResource(Res.string.music_failed_load_tracks),
                         onRetry = { tracks.refresh() },
                     )
                 }
@@ -157,7 +157,7 @@ fun GenreDetailScreen(
                 }
                 is LoadState.Error -> {
                     AppendErrorFooter(
-                        message = appendState.error.localizedMessage
+                        message = appendState.error.message
                             ?: stringResource(Res.string.music_failed_load_more),
                         onRetry = { tracks.retry() },
                         modifier = Modifier

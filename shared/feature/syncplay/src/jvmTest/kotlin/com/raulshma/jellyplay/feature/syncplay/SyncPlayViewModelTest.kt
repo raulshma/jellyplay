@@ -1,8 +1,6 @@
 package com.raulshma.jellyplay.feature.syncplay
 
 import com.raulshma.jellyplay.core.data.repository.SyncPlayRepository
-import com.raulshma.jellyplay.core.data.syncplay.SyncPlayEvent
-import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
 import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastSlice
 import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore
 import com.raulshma.jellyplay.core.model.SyncPlayGroup
@@ -56,11 +54,11 @@ class SyncPlayViewModelTest {
     private val mainDispatcher = StandardTestDispatcher()
 
     private lateinit var mediaRepository: SyncPlayRepository
-    private lateinit var syncPlayManager: SyncPlayManager
+    private lateinit var syncPlaySession: SyncPlaySession
     private lateinit var syncPlayCastStore: SyncPlayCastStore
 
-    /** Backing flow behind SyncPlayManager.events so tests can push events. */
-    private lateinit var eventsFlow: MutableSharedFlow<SyncPlayEvent>
+    /** Backing flow behind SyncPlaySession.events so tests can push events. */
+    private lateinit var eventsFlow: MutableSharedFlow<SyncPlaySessionEvent>
 
     /** Backing flow behind SyncPlayCastStore.syncPlayCast. */
     private lateinit var castPrefs: MutableStateFlow<SyncPlayCastSlice>
@@ -69,14 +67,14 @@ class SyncPlayViewModelTest {
     fun setUp() {
         Dispatchers.setMain(mainDispatcher)
         mediaRepository = mockk()
-        syncPlayManager = mockk()
+        syncPlaySession = mockk()
         syncPlayCastStore = mockk()
         eventsFlow = MutableSharedFlow(extraBufferCapacity = 64)
         castPrefs = MutableStateFlow(SyncPlayCastSlice())
-        every { syncPlayManager.events } returns eventsFlow
+        every { syncPlaySession.events } returns eventsFlow
         // Non-suspend val reads → `every`, not `coEvery`.
-        every { syncPlayManager.activeGroupId } returns null
-        every { syncPlayManager.lastReconnectMs } returns 0L
+        every { syncPlaySession.activeGroupId } returns null
+        every { syncPlaySession.lastReconnectMs } returns 0L
         every { syncPlayCastStore.syncPlayCast } returns castPrefs
         coEvery { mediaRepository.getSyncPlayGroups() } returns Result.success(emptyList())
     }
@@ -88,7 +86,7 @@ class SyncPlayViewModelTest {
 
     private fun newViewModel() = SyncPlayViewModel(
         syncPlayRepository = mediaRepository,
-        syncPlayManager = syncPlayManager,
+        syncPlaySession = syncPlaySession,
         syncPlayCastStore = syncPlayCastStore,
     )
 
@@ -98,8 +96,8 @@ class SyncPlayViewModelTest {
         groupName: String = "Party",
         isPlaying: Boolean = false,
     ) {
-        every { syncPlayManager.activeGroupId } returns groupId
-        coEvery { syncPlayManager.joinGroup(groupId) } returns Result.success(Unit)
+        every { syncPlaySession.activeGroupId } returns groupId
+        coEvery { syncPlaySession.joinGroup(groupId) } returns Result.success(Unit)
         coEvery { mediaRepository.getSyncPlayInfo(groupId) } returns Result.success(
             SyncPlayGroupInfo(groupId = groupId, groupName = groupName, isPlaying = isPlaying),
         )
@@ -181,7 +179,7 @@ class SyncPlayViewModelTest {
 
         assertTrue(viewModel.uiState.value.isInGroup)
         assertEquals("g1", viewModel.uiState.value.currentGroup?.groupId)
-        coVerify(exactly = 1) { syncPlayManager.joinGroup("g1") }
+        coVerify(exactly = 1) { syncPlaySession.joinGroup("g1") }
     }
 
     @Test
@@ -192,7 +190,7 @@ class SyncPlayViewModelTest {
         advanceUntilIdle()
 
         assertFalse(viewModel.uiState.value.isInGroup)
-        coVerify(exactly = 0) { syncPlayManager.joinGroup(any()) }
+        coVerify(exactly = 0) { syncPlaySession.joinGroup(any()) }
     }
 
     @Test
@@ -205,7 +203,7 @@ class SyncPlayViewModelTest {
         viewModel.requestJoin(group("g1"))
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { syncPlayManager.joinGroup("g1") }
+        coVerify(exactly = 1) { syncPlaySession.joinGroup("g1") }
         assertNull(viewModel.uiState.value.pendingJoin)
     }
 
@@ -218,7 +216,7 @@ class SyncPlayViewModelTest {
         viewModel.requestJoin(group("g1", "Party"))
 
         assertEquals("g1", viewModel.uiState.value.pendingJoin?.groupId)
-        coVerify(exactly = 0) { syncPlayManager.joinGroup(any()) }
+        coVerify(exactly = 0) { syncPlaySession.joinGroup(any()) }
     }
 
     @Test
@@ -238,7 +236,7 @@ class SyncPlayViewModelTest {
             listOf<SyncPlayMessage>(SyncPlayMessage.Resource(Res.string.syncplay_join_disabled)),
             received,
         )
-        coVerify(exactly = 0) { syncPlayManager.joinGroup(any()) }
+        coVerify(exactly = 0) { syncPlaySession.joinGroup(any()) }
     }
 
     @Test
@@ -254,7 +252,7 @@ class SyncPlayViewModelTest {
 
         assertNull(viewModel.uiState.value.pendingJoin)
         assertTrue(viewModel.uiState.value.isInGroup)
-        coVerify(exactly = 1) { syncPlayManager.joinGroup("g1") }
+        coVerify(exactly = 1) { syncPlaySession.joinGroup("g1") }
     }
 
     @Test
@@ -267,7 +265,7 @@ class SyncPlayViewModelTest {
         viewModel.cancelJoin()
 
         assertNull(viewModel.uiState.value.pendingJoin)
-        coVerify(exactly = 0) { syncPlayManager.joinGroup(any()) }
+        coVerify(exactly = 0) { syncPlaySession.joinGroup(any()) }
     }
 
     // ── join / leave flows ────────────────────────────────────────────────
@@ -291,8 +289,8 @@ class SyncPlayViewModelTest {
     fun joinGroup_failure_falls_back_to_resource_and_raw_message() = runTest(mainDispatcher) {
         val viewModel = newViewModel()
         advanceUntilIdle()
-        coEvery { syncPlayManager.joinGroup("g1") } returns Result.failure(RuntimeException(null as String?))
-        coEvery { syncPlayManager.joinGroup("g2") } returns Result.failure(RuntimeException("nope"))
+        coEvery { syncPlaySession.joinGroup("g1") } returns Result.failure(RuntimeException(null as String?))
+        coEvery { syncPlaySession.joinGroup("g2") } returns Result.failure(RuntimeException("nope"))
 
         viewModel.joinGroup("g1")
         advanceUntilIdle()
@@ -315,7 +313,7 @@ class SyncPlayViewModelTest {
         viewModel.joinGroup("g1")
         advanceUntilIdle()
         assertTrue(viewModel.uiState.value.isInGroup)
-        coEvery { syncPlayManager.leaveGroup() } returns Result.success(Unit)
+        coEvery { syncPlaySession.leaveGroup() } returns Result.success(Unit)
 
         viewModel.leaveGroup()
         advanceUntilIdle()
@@ -331,7 +329,7 @@ class SyncPlayViewModelTest {
     fun leaveGroup_failure_maps_error() = runTest(mainDispatcher) {
         val viewModel = newViewModel()
         advanceUntilIdle()
-        coEvery { syncPlayManager.leaveGroup() } returns Result.failure(RuntimeException(null as String?))
+        coEvery { syncPlaySession.leaveGroup() } returns Result.failure(RuntimeException(null as String?))
 
         viewModel.leaveGroup()
         advanceUntilIdle()
@@ -373,7 +371,7 @@ class SyncPlayViewModelTest {
 
         assertFalse(viewModel.uiState.value.showCreateDialog)
         assertFalse(viewModel.uiState.value.isInGroup)
-        coVerify(exactly = 0) { syncPlayManager.joinGroup(any()) }
+        coVerify(exactly = 0) { syncPlaySession.joinGroup(any()) }
     }
 
     @Test
@@ -406,7 +404,7 @@ class SyncPlayViewModelTest {
         advanceUntilIdle()
         assertNull(viewModel.uiState.value.currentGroup)
 
-        eventsFlow.tryEmit(SyncPlayEvent.PlayQueueUpdate(queueUpdate()))
+        eventsFlow.tryEmit(SyncPlaySessionEvent.PlayQueueUpdate(queueUpdate()))
         advanceUntilIdle()
 
         assertEquals(
@@ -424,7 +422,7 @@ class SyncPlayViewModelTest {
         advanceUntilIdle()
         assertFalse(viewModel.uiState.value.currentGroup!!.isPlaying)
 
-        eventsFlow.tryEmit(SyncPlayEvent.StateUpdate(isPlaying = true, state = "Playing", reason = ""))
+        eventsFlow.tryEmit(SyncPlaySessionEvent.StateUpdate(isPlaying = true, state = "Playing", reason = ""))
         advanceUntilIdle()
 
         assertTrue(viewModel.uiState.value.currentGroup!!.isPlaying)
@@ -438,7 +436,7 @@ class SyncPlayViewModelTest {
         viewModel.joinGroup("g1")
         advanceUntilIdle()
 
-        eventsFlow.tryEmit(SyncPlayEvent.GroupUpdate(groupName = "Party", participantCount = 3))
+        eventsFlow.tryEmit(SyncPlaySessionEvent.GroupUpdate(groupName = "Party", participantCount = 3))
         advanceUntilIdle()
 
         assertEquals("g1", viewModel.uiState.value.currentGroup?.groupId)
@@ -454,7 +452,7 @@ class SyncPlayViewModelTest {
         advanceUntilIdle()
         assertTrue(viewModel.uiState.value.isInGroup)
 
-        eventsFlow.tryEmit(SyncPlayEvent.GroupUpdate(groupName = "", participantCount = 0))
+        eventsFlow.tryEmit(SyncPlaySessionEvent.GroupUpdate(groupName = "", participantCount = 0))
         advanceUntilIdle()
 
         assertFalse(viewModel.uiState.value.isInGroup)
@@ -470,9 +468,9 @@ class SyncPlayViewModelTest {
         advanceUntilIdle()
         assertTrue(viewModel.uiState.value.isInGroup)
         // Reconnect "just happened": inside the 5 s grace window.
-        every { syncPlayManager.lastReconnectMs } returns System.currentTimeMillis() - 1_000
+        every { syncPlaySession.lastReconnectMs } returns System.currentTimeMillis() - 1_000
 
-        eventsFlow.tryEmit(SyncPlayEvent.GroupUpdate(groupName = "", participantCount = 0))
+        eventsFlow.tryEmit(SyncPlaySessionEvent.GroupUpdate(groupName = "", participantCount = 0))
         advanceUntilIdle()
 
         assertTrue(viewModel.uiState.value.isInGroup)
@@ -491,7 +489,7 @@ class SyncPlayViewModelTest {
             viewModel.notifications.collect { received += it }
         }
 
-        eventsFlow.tryEmit(SyncPlayEvent.Notification(message = "server says hi"))
+        eventsFlow.tryEmit(SyncPlaySessionEvent.Notification(message = "server says hi"))
         advanceUntilIdle()
 
         assertEquals(listOf<SyncPlayMessage>(SyncPlayMessage.Raw("server says hi")), received)
@@ -514,7 +512,7 @@ class SyncPlayViewModelTest {
         coVerify(exactly = 1) { mediaRepository.syncPlayPause() }
         coVerify(exactly = 0) { mediaRepository.syncPlayUnpause() }
 
-        eventsFlow.tryEmit(SyncPlayEvent.StateUpdate(isPlaying = false, state = "Paused", reason = ""))
+        eventsFlow.tryEmit(SyncPlaySessionEvent.StateUpdate(isPlaying = false, state = "Paused", reason = ""))
         advanceUntilIdle()
         viewModel.togglePlayback()
         advanceUntilIdle()

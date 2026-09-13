@@ -1,10 +1,10 @@
 package com.raulshma.jellyplay.feature.music.musichome
 
+import com.raulshma.jellyplay.feature.music.MusicQueueOutcome
+import com.raulshma.jellyplay.feature.music.MusicQueuePlayer
+import com.raulshma.jellyplay.feature.music.MusicTrackDownloads
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
-import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
-import com.raulshma.jellyplay.core.data.playback.AudioQueueOutcome
-import com.raulshma.jellyplay.core.data.playback.TrackWithAlbumFallback
-import com.raulshma.jellyplay.core.data.repository.DownloadRepository
+import com.raulshma.jellyplay.feature.music.MusicTrackWithAlbumFallback
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoverySlice
@@ -51,7 +51,7 @@ import kotlin.test.assertTrue
  * (non-ONLINE clears sections and blocks loads), the failure split (cold error
  * state with nothing cached vs transient bus toast with cached sections), and
  * the play/shuffle delegation overloads — the multi-album batch path travels
- * as [TrackWithAlbumFallback] pairs with per-album fallbacks (plan 04 risk 2).
+ * as [MusicTrackWithAlbumFallback] pairs with per-album fallbacks (plan 04 risk 2).
  *
  * viewModelScope runs on `Dispatchers.Main.immediate`, which under the test
  * Main dispatcher executes launches INLINE — so every stub is recorded BEFORE
@@ -67,8 +67,8 @@ class MusicHomeViewModelTest {
 
     private val mediaRepository: MediaRepository = mockk()
     private val imageUrlProvider: ImageUrlProvider = mockk(relaxed = true)
-    private val audioQueueFacade: AudioQueueFacade = mockk()
-    private val downloadRepository: DownloadRepository = mockk()
+    private val audioQueueFacade: MusicQueuePlayer = mockk()
+    private val trackDownloads: MusicTrackDownloads = mockk()
     private val homeDiscoveryStore: HomeDiscoveryStore = mockk()
     private val offlineModeManager: OfflineModeManager = mockk()
     private val userMessageBus: MusicMessageBus = mockk()
@@ -86,7 +86,7 @@ class MusicHomeViewModelTest {
         Dispatchers.setMain(mainDispatcher)
         every { homeDiscoveryStore.homeDiscovery } returns homeModeFlow
         every { offlineModeManager.offlineMode } returns offlineModeFlow
-        every { downloadRepository.getActiveDownloadCount() } returns flowOf(0)
+        every { trackDownloads.activeDownloadCount() } returns flowOf(0)
         every { userMessageBus.error(any()) } just Runs
         every { offlineModeManager.toggleManualOffline() } just Runs
         // The deferred refresher collects this for the whole VM lifetime.
@@ -122,7 +122,7 @@ class MusicHomeViewModelTest {
             mediaRepository = mediaRepository,
             imageUrlProvider = imageUrlProvider,
             audioQueueFacade = audioQueueFacade,
-            downloadRepository = downloadRepository,
+            trackDownloads = trackDownloads,
             homeDiscoveryStore = homeDiscoveryStore,
             offlineModeManager = offlineModeManager,
             userMessageBus = userMessageBus,
@@ -559,7 +559,7 @@ class MusicHomeViewModelTest {
     fun playAll_delegatesWithDefaultsAndStartIndex() = runTest(mainDispatcher) {
         stubHomeQueries()
         coEvery { audioQueueFacade.playTracks(any(), any(), any(), any(), any()) } returns
-            AudioQueueOutcome.Started(emptyList(), 0)
+            MusicQueueOutcome.Started(emptyList(), 0)
         createViewModel()
         val tracks = listOf(item("t1"))
 
@@ -575,7 +575,7 @@ class MusicHomeViewModelTest {
     fun shufflePlay_delegatesWithShuffledFlag() = runTest(mainDispatcher) {
         stubHomeQueries()
         coEvery { audioQueueFacade.playTracks(any(), any(), any(), any(), any()) } returns
-            AudioQueueOutcome.Started(emptyList(), 0)
+            MusicQueueOutcome.Started(emptyList(), 0)
         createViewModel()
         val tracks = listOf(item("t1"))
 
@@ -593,7 +593,7 @@ class MusicHomeViewModelTest {
         val tracks = listOf(item("t1"))
         coEvery { mediaRepository.getAlbumTracks("al1") } returns Result.success(tracks)
         coEvery { audioQueueFacade.playTracks(any(), any(), any(), any(), any()) } returns
-            AudioQueueOutcome.Started(emptyList(), 0)
+            MusicQueueOutcome.Started(emptyList(), 0)
         createViewModel()
 
         viewModel.playAlbum("al1")
@@ -611,8 +611,8 @@ class MusicHomeViewModelTest {
         val albumB = MediaItem(id = "a2", name = "Album B", mediaType = MediaType.ALBUM)
         coEvery { mediaRepository.getAlbumTracks("a1") } returns Result.success(listOf(item("t1")))
         coEvery { mediaRepository.getAlbumTracks("a2") } returns Result.success(listOf(item("t2")))
-        coEvery { audioQueueFacade.playTracks(any<List<TrackWithAlbumFallback>>(), any(), any(), any()) } returns
-            AudioQueueOutcome.Started(emptyList(), 0)
+        coEvery { audioQueueFacade.playTracks(any<List<MusicTrackWithAlbumFallback>>(), any(), any(), any()) } returns
+            MusicQueueOutcome.Started(emptyList(), 0)
         createViewModel()
 
         viewModel.playAlbums(listOf(albumA, albumB))
@@ -621,8 +621,8 @@ class MusicHomeViewModelTest {
         coVerify(exactly = 1) {
             audioQueueFacade.playTracks(
                 listOf(
-                    TrackWithAlbumFallback(item("t1"), "Album A"),
-                    TrackWithAlbumFallback(item("t2"), "Album B"),
+                    MusicTrackWithAlbumFallback(item("t1"), "Album A"),
+                    MusicTrackWithAlbumFallback(item("t2"), "Album B"),
                 ),
                 0,
                 false,
@@ -637,8 +637,8 @@ class MusicHomeViewModelTest {
         val albumA = MediaItem(id = "a1", name = "Album A", mediaType = MediaType.ALBUM)
         coEvery { mediaRepository.getArtistAlbums("ar1") } returns Result.success(listOf(albumA))
         coEvery { mediaRepository.getAlbumTracks("a1") } returns Result.success(listOf(item("t1")))
-        coEvery { audioQueueFacade.playTracks(any<List<TrackWithAlbumFallback>>(), any(), any(), any()) } returns
-            AudioQueueOutcome.Started(emptyList(), 0)
+        coEvery { audioQueueFacade.playTracks(any<List<MusicTrackWithAlbumFallback>>(), any(), any(), any()) } returns
+            MusicQueueOutcome.Started(emptyList(), 0)
         createViewModel()
 
         viewModel.playArtist("ar1")
@@ -646,7 +646,7 @@ class MusicHomeViewModelTest {
 
         coVerify(exactly = 1) {
             audioQueueFacade.playTracks(
-                listOf(TrackWithAlbumFallback(item("t1"), "Album A")),
+                listOf(MusicTrackWithAlbumFallback(item("t1"), "Album A")),
                 0,
                 false,
                 ImageUrlProvider.DEFAULT_MAX_WIDTH,

@@ -23,7 +23,7 @@ class CloverShape : Shape {
 
         // Create 4 petals in a clover pattern
         for (i in 0 until 4) {
-            val angle = Math.toRadians((i * 90.0) - 90.0)
+            val angle = ((i * 90.0) - 90.0) * (kotlin.math.PI / 180.0)
             val petalCenterX = centerX + (petalOffset * cos(angle)).toFloat()
             val petalCenterY = centerY + (petalOffset * sin(angle)).toFloat()
 

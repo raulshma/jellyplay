@@ -385,7 +385,7 @@ private fun <T : Any> PagedLadder(
             when (pagedCollectionRung(refreshPhase, items.itemCount)) {
                 PagedCollectionRung.InitialLoading -> ScreenLoadingState()
                 PagedCollectionRung.RefreshError -> ErrorScreen(
-                    message = (items.loadState.refresh as LoadState.Error).error.localizedMessage
+                    message = (items.loadState.refresh as LoadState.Error).error.message
                         ?: errorFallbackMessage,
                     onRetry = { items.refresh() },
                 )
@@ -403,7 +403,7 @@ private fun <T : Any> PagedLadder(
                         .padding(16.dp),
                 )
                 PagedAppendRung.Retry -> AppendErrorFooter(
-                    message = (items.loadState.append as LoadState.Error).error.localizedMessage
+                    message = (items.loadState.append as LoadState.Error).error.message
                         ?: stringResource(Res.string.music_failed_load_more),
                     onRetry = { items.retry() },
                     modifier = Modifier

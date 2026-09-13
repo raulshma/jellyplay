@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.feature.music
 
 import androidx.compose.runtime.Composable
-import com.raulshma.jellyplay.core.data.playback.AudioQueueOutcome
 import com.raulshma.jellyplay.core.data.playback.InstantMixError
 import com.raulshma.jellyplay.feature.music.generated.resources.Res
 import com.raulshma.jellyplay.feature.music.generated.resources.music_mix_unavailable
@@ -12,8 +11,8 @@ import org.jetbrains.compose.resources.stringResource
  * Shared instant-mix outcome → message mapping for the music detail screens
  * (album / artist). Both screens resolve the outcome identically — the
  * localized empty-mix string and the cause-message fallback — so the mapping
- * lives here once. Returns null for [AudioQueueOutcome.Started] (implicit:
- * playback started) and [AudioQueueOutcome.Suppressed] (guard veto, silent by
+ * lives here once. Returns null for [MusicQueueOutcome.Started] (implicit:
+ * playback started) and [MusicQueueOutcome.Suppressed] (guard veto, silent by
  * design) — the caller treats null as "no error".
  *
  * The message stays unresolved until render time (the commonMain VM seam has
@@ -26,9 +25,9 @@ sealed interface MixErrorMessage {
     data class Raw(val message: String) : MixErrorMessage
 }
 
-fun AudioQueueOutcome.toMixErrorMessage(): MixErrorMessage? = when (this) {
-    AudioQueueOutcome.Empty -> MixErrorMessage.Resource(Res.string.music_mix_unavailable)
-    is AudioQueueOutcome.Failed -> MixErrorMessage.Raw(cause.message ?: FAILED_TO_START_MIX)
+fun MusicQueueOutcome.toMixErrorMessage(): MixErrorMessage? = when (this) {
+    MusicQueueOutcome.Empty -> MixErrorMessage.Resource(Res.string.music_mix_unavailable)
+    is MusicQueueOutcome.Failed -> MixErrorMessage.Raw(cause.message ?: FAILED_TO_START_MIX)
     else -> null
 }
 

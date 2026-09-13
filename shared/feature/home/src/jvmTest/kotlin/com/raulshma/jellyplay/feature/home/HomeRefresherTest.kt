@@ -6,7 +6,6 @@ import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.sync.SyncStatusStateHolder
 import com.raulshma.jellyplay.core.data.usecase.OrderHomeSectionsUseCase
-import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.data.widget.ContinueWatchingBroadcaster
 import com.raulshma.jellyplay.core.data.widget.LibrarySyncHook
 import com.raulshma.jellyplay.core.data.worker.TvWatchNextScheduler
@@ -162,7 +161,7 @@ class HomeRefresherTest {
         refresherScope = scope
         return HomeRefresher(
             scope = scope,
-            timeSource = fakeTimeSource,
+            clock = fakeTimeSource,
             mediaRepository = mediaRepository,
             seerrRepository = seerrRepository,
             arrRepository = arrRepository,
@@ -893,9 +892,10 @@ class HomeRefresherTest {
      * periodic-refresh and TTL gates stay on one side of their thresholds;
      * tests move [nowMs] to deliberately cross one.
      */
-    private class FakeTimeSource(var nowMs: Long = 1_000L) : TimeSource {
+    // HomeClock seam fake: the epoch-millis read drives the
+        // throttle/TTL math, `today()` pins the calendar day (2026-01-01).
+        private class FakeTimeSource(var nowMs: Long = 1_000L) : HomeClock {
         override fun nowEpochMillis(): Long = nowMs
-        override fun nowElapsedRealtimeMillis(): Long = nowMs
-        override fun today(zone: ZoneId): LocalDate = LocalDate.of(2026, 1, 1)
+        override fun today(): kotlinx.datetime.LocalDate = kotlinx.datetime.LocalDate(2026, 1, 1)
     }
 }

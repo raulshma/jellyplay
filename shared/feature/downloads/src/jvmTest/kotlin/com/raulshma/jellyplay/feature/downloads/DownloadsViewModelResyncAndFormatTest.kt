@@ -1,8 +1,6 @@
 package com.raulshma.jellyplay.feature.downloads
 
-import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
-import com.raulshma.jellyplay.core.data.sync.OfflineSyncManager
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.MediaType
@@ -47,9 +45,9 @@ class DownloadsViewModelResyncAndFormatTest {
     // has no access to that module (DownloadsViewModelTest pattern).
     private val mainDispatcher = StandardTestDispatcher()
 
-    private lateinit var downloadRepository: DownloadRepository
+    private lateinit var downloadRepository: DownloadQueue
     private lateinit var offlineRepository: OfflineRepository
-    private lateinit var syncManager: OfflineSyncManager
+    private lateinit var syncManager: OfflineResync
     private lateinit var viewModel: DownloadsViewModel
 
     private lateinit var downloadsFlow: MutableStateFlow<List<DownloadItem>>
@@ -59,13 +57,13 @@ class DownloadsViewModelResyncAndFormatTest {
     @BeforeTest
     fun setUp() {
         Dispatchers.setMain(mainDispatcher)
-        downloadRepository = mockk(relaxed = true)
+        downloadRepository = mockk<DownloadQueue>(relaxed = true)
         offlineRepository = mockk(relaxed = true)
-        syncManager = mockk(relaxed = true)
+        syncManager = mockk<OfflineResync>(relaxed = true)
         downloadsFlow = MutableStateFlow(emptyList())
-        every { downloadRepository.getAllDownloads() } returns downloadsFlow
-        every { downloadRepository.getActiveDownloadProgress() } returns MutableStateFlow(emptyMap())
-        coEvery { downloadRepository.getAllDownloadsSnapshot() } answers { downloadsFlow.value }
+        every { downloadRepository.allDownloads() } returns downloadsFlow
+        every { downloadRepository.activeDownloadProgress() } returns MutableStateFlow(emptyMap())
+        coEvery { downloadRepository.allDownloadsSnapshot() } answers { downloadsFlow.value }
         every { syncManager.batchProgress } returns MutableStateFlow(ResyncBatchProgress())
         every { offlineRepository.getUpdatesCount() } returns updatesCount
         every { offlineRepository.getItemsWithUpdates() } returns updateRows
@@ -125,7 +123,7 @@ class DownloadsViewModelResyncAndFormatTest {
         // The snapshot read is uncapped; a UI list that hasn't emitted (or an
         // empty one) must not hide downloaded items from the picker.
         downloadsFlow.value = emptyList()
-        coEvery { downloadRepository.getAllDownloadsSnapshot() } returns listOf(
+        coEvery { downloadRepository.allDownloadsSnapshot() } returns listOf(
             item("snap", status = DownloadStatus.COMPLETED),
         )
         advanceUntilIdle()

@@ -1,19 +1,19 @@
 package com.raulshma.jellyplay.feature.music.playlists
 
-import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.model.PlaylistItem
 import com.raulshma.jellyplay.core.ui.components.UndoableAction
 import com.raulshma.jellyplay.core.ui.components.undoActionChannel
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import com.raulshma.jellyplay.feature.music.MusicQueuePlayer
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.receiveAsFlow
 
 class PlaylistDetailViewModel(
     private val mediaRepository: MediaRepository,
     private val playlistRepository: PlaylistRepository,
-    private val audioQueueFacade: AudioQueueFacade,
+    private val audioQueueFacade: MusicQueuePlayer,
 ) : JellyPlayViewModel() {
 
     private val _items = composeState<List<PlaylistItem>>(emptyList())

@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.feature.music.moodplaylist
 
-import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
-import com.raulshma.jellyplay.core.data.playback.AudioQueueOutcome
+import com.raulshma.jellyplay.feature.music.MusicQueueOutcome
+import com.raulshma.jellyplay.feature.music.MusicQueuePlayer
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.MoodPlaylistRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
@@ -52,7 +52,7 @@ class MoodPlaylistsViewModelTest {
 
     private val mediaRepository: MediaRepository = mockk()
     private val imageUrlProvider: ImageUrlProvider = mockk(relaxed = true)
-    private val audioQueueFacade: AudioQueueFacade = mockk()
+    private val audioQueueFacade: MusicQueuePlayer = mockk()
     private val moodPlaylistRepository: MoodPlaylistRepository = mockk()
 
     private val customFlow = MutableStateFlow(emptyList<MoodPlaylist>())
@@ -210,7 +210,7 @@ class MoodPlaylistsViewModelTest {
         coEvery { mediaRepository.getMediaItems(any(), any(), any(), any(), any(), any()) } returns
             Result.success(SearchResult(listOf(kept), 1, 0))
         coEvery { audioQueueFacade.playTracks(any(), any(), any(), any(), any()) } returns
-            AudioQueueOutcome.Started(emptyList(), 0)
+            MusicQueueOutcome.Started(emptyList(), 0)
         viewModel.generatePlaylist(moodPlaylist())
         awaitGenerated { viewModel.generatedItems.isNotEmpty() }
 

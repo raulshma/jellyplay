@@ -49,8 +49,9 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
-import java.time.Instant
-import java.time.format.DateTimeFormatter
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Instant
 
 private const val TAG = "LiveTvPlayerViewModel"
 
@@ -834,13 +835,15 @@ class LiveTvPlayerViewModel(
     }
 
     private suspend fun loadPrograms(channelId: String) {
-        val now = Instant.now()
-        val end = now.plusSeconds(PROGRAM_LOOKAHEAD_HOURS * 3600)
-        val fmt = DateTimeFormatter.ISO_INSTANT
+        val now = Clock.System.now()
+        val end = now + PROGRAM_LOOKAHEAD_HOURS.hours
         val programs = liveTvRepository.getLiveTvPrograms(
             channelId = channelId,
-            startDateUtc = fmt.format(now),
-            endDateUtc = fmt.format(end),
+            // kotlin.time.Instant.toString() renders the same ISO-8601 UTC
+            // instant the former DateTimeFormatter.ISO_INSTANT produced
+            // (seconds always, fraction only when non-zero).
+            startDateUtc = now.toString(),
+            endDateUtc = end.toString(),
         ).getOrNull().orEmpty()
         val parsed = programs.map { p ->
             Triple(
@@ -850,10 +853,10 @@ class LiveTvPlayerViewModel(
             )
         }
         val current = parsed.firstOrNull { (_, start, finish) ->
-            start != null && finish != null && !now.isBefore(start) && now.isBefore(finish)
+            start != null && finish != null && start <= now && now < finish
         }?.first
         val next = parsed.firstOrNull { (p, start, _) ->
-            start != null && start.isAfter(now) && p.id != current?.id
+            start != null && start > now && p.id != current?.id
         }?.first
         _state.value = _state.value.copy(currentProgram = current, nextProgram = next)
     }

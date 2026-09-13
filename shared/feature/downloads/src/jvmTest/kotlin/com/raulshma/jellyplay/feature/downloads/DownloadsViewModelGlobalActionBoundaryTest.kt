@@ -1,8 +1,6 @@
 package com.raulshma.jellyplay.feature.downloads
 
-import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
-import com.raulshma.jellyplay.core.data.sync.OfflineSyncManager
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.MediaType
@@ -50,9 +48,9 @@ class DownloadsViewModelGlobalActionBoundaryTest {
     // has no access to that module (DownloadsViewModelTest pattern).
     private val mainDispatcher = StandardTestDispatcher()
 
-    private lateinit var downloadRepository: DownloadRepository
+    private lateinit var downloadRepository: DownloadQueue
     private lateinit var offlineRepository: OfflineRepository
-    private lateinit var syncManager: OfflineSyncManager
+    private lateinit var syncManager: OfflineResync
     private lateinit var viewModel: DownloadsViewModel
 
     private lateinit var downloadsFlow: MutableStateFlow<List<DownloadItem>>
@@ -60,13 +58,13 @@ class DownloadsViewModelGlobalActionBoundaryTest {
     @BeforeTest
     fun setUp() {
         Dispatchers.setMain(mainDispatcher)
-        downloadRepository = mockk(relaxed = true)
+        downloadRepository = mockk<DownloadQueue>(relaxed = true)
         offlineRepository = mockk(relaxed = true)
-        syncManager = mockk(relaxed = true)
+        syncManager = mockk<OfflineResync>(relaxed = true)
         downloadsFlow = MutableStateFlow(emptyList())
-        every { downloadRepository.getAllDownloads() } returns downloadsFlow
-        every { downloadRepository.getActiveDownloadProgress() } returns MutableStateFlow(emptyMap())
-        coEvery { downloadRepository.getAllDownloadsSnapshot() } answers { downloadsFlow.value }
+        every { downloadRepository.allDownloads() } returns downloadsFlow
+        every { downloadRepository.activeDownloadProgress() } returns MutableStateFlow(emptyMap())
+        coEvery { downloadRepository.allDownloadsSnapshot() } answers { downloadsFlow.value }
         every { syncManager.batchProgress } returns MutableStateFlow(ResyncBatchProgress())
         every { offlineRepository.getUpdatesCount() } returns MutableStateFlow(0)
         every { offlineRepository.getItemsWithUpdates() } returns MutableStateFlow(emptyList())
@@ -106,7 +104,7 @@ class DownloadsViewModelGlobalActionBoundaryTest {
         viewModel.applyBulkAction(DownloadBulkAction.PAUSE, DownloadActionScope.All)
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { downloadRepository.pauseDownload(any()) }
+        coVerify(exactly = 0) { downloadRepository.pause(any()) }
     }
 
     @Test
@@ -117,8 +115,8 @@ class DownloadsViewModelGlobalActionBoundaryTest {
         viewModel.applyBulkAction(DownloadBulkAction.RETRY_FAILED, DownloadActionScope.All)
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { downloadRepository.retryDownload(any()) }
-        verify(exactly = 0) { downloadRepository.enqueueDownload(any()) }
+        coVerify(exactly = 0) { downloadRepository.retry(any()) }
+        verify(exactly = 0) { downloadRepository.enqueue(any()) }
     }
 
     @Test
@@ -129,7 +127,7 @@ class DownloadsViewModelGlobalActionBoundaryTest {
         viewModel.moveToFront(item("solo"))
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { downloadRepository.setDownloadPriority("solo", 1) }
+        coVerify(exactly = 1) { downloadRepository.setPriority("solo", 1) }
     }
 
     @Test
@@ -140,7 +138,7 @@ class DownloadsViewModelGlobalActionBoundaryTest {
         viewModel.lowerPriority(item("solo"))
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { downloadRepository.setDownloadPriority("solo", -1) }
+        coVerify(exactly = 1) { downloadRepository.setPriority("solo", -1) }
     }
 
     @Test
@@ -166,7 +164,7 @@ class DownloadsViewModelGlobalActionBoundaryTest {
         viewModel.applyBulkAction(DownloadBulkAction.DELETE, DownloadActionScope.Selected)
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { downloadRepository.deleteDownload(any()) }
+        coVerify(exactly = 0) { downloadRepository.delete(any()) }
         // The stale selection is kept (only a successful bulk delete clears it).
         assertEquals(setOf("vanished"), viewModel.uiState.value.selectedIds)
     }

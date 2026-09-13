@@ -2,7 +2,6 @@ package com.raulshma.jellyplay.feature.home
 
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
-import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.ui.message.UiText
 import com.raulshma.jellyplay.feature.home.generated.resources.Res
@@ -41,7 +40,7 @@ internal class SeriesDownloadStateHolder(
     /** The VM's scope: sheet loads and queueing must die with the VM. */
     private val scope: CoroutineScope,
     private val episodeCatalogue: EpisodeCatalogue,
-    private val downloadRepository: DownloadRepository,
+    private val seriesDownloads: SeriesEpisodeDownloads,
     private val downloadIntake: DownloadIntake,
     private val userMessageBus: UserMessageBus,
 ) {
@@ -76,7 +75,7 @@ internal class SeriesDownloadStateHolder(
         loadJob = scope.launch {
             try {
                 val snapshot = episodeCatalogue.loadSeriesEpisodes(series.id).getOrThrow()
-                val downloadedIds = downloadRepository.getDownloadedEpisodeIdsForSeries(series.id)
+                val downloadedIds = seriesDownloads.downloadedEpisodeIds(series.id)
                 if (_state.value?.seriesId != series.id) return@launch
                 _state.value = HomeSeriesDownloadState(
                     seriesId = series.id,

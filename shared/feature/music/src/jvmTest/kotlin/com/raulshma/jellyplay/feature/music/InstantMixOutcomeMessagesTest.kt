@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.feature.music
 
-import com.raulshma.jellyplay.core.data.playback.AudioQueueOutcome
+import com.raulshma.jellyplay.feature.music.MusicQueueOutcome
 import com.raulshma.jellyplay.feature.music.generated.resources.Res
 import com.raulshma.jellyplay.feature.music.generated.resources.music_mix_unavailable
 import kotlin.test.Test
@@ -18,32 +18,32 @@ class InstantMixOutcomeMessagesTest {
 
     @Test
     fun empty_mapsToSharedUnavailableResource() {
-        val message = AudioQueueOutcome.Empty.toMixErrorMessage()
+        val message = MusicQueueOutcome.Empty.toMixErrorMessage()
 
         assertSame(Res.string.music_mix_unavailable, (message as MixErrorMessage.Resource).res)
     }
 
     @Test
     fun failed_mapsCauseMessage() {
-        val message = AudioQueueOutcome.Failed(RuntimeException("boom")).toMixErrorMessage()
+        val message = MusicQueueOutcome.Failed(RuntimeException("boom")).toMixErrorMessage()
 
         assertEquals("boom", (message as MixErrorMessage.Raw).message)
     }
 
     @Test
     fun failed_nullCauseMessage_mapsFallback() {
-        val message = AudioQueueOutcome.Failed(RuntimeException()).toMixErrorMessage()
+        val message = MusicQueueOutcome.Failed(RuntimeException()).toMixErrorMessage()
 
         assertEquals("Failed to start Instant Mix", (message as MixErrorMessage.Raw).message)
     }
 
     @Test
     fun started_mapsToNull() {
-        assertNull(AudioQueueOutcome.Started(emptyList(), 0).toMixErrorMessage())
+        assertNull(MusicQueueOutcome.Started(emptyList(), 0).toMixErrorMessage())
     }
 
     @Test
     fun suppressed_mapsToNull() {
-        assertNull(AudioQueueOutcome.Suppressed.toMixErrorMessage())
+        assertNull(MusicQueueOutcome.Suppressed.toMixErrorMessage())
     }
 }

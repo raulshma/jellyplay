@@ -9,12 +9,9 @@ import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEntry
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
-import com.raulshma.jellyplay.core.data.newsletter.NewsletterTriggerManager
 import com.raulshma.jellyplay.core.data.repository.SearchHistoryItem
-import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.download.DownloadRequestResult
-import com.raulshma.jellyplay.core.data.download.MediaDownloadActions
 import com.raulshma.jellyplay.core.ui.message.UiText
 import com.raulshma.jellyplay.feature.home.generated.resources.Res
 import com.raulshma.jellyplay.feature.home.generated.resources.home_download_started
@@ -24,10 +21,8 @@ import com.raulshma.jellyplay.core.ui.message.UserMessageBus
 import com.raulshma.jellyplay.core.data.search.MediaSearchEngine
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestStateHolder
-import com.raulshma.jellyplay.core.data.session.HomeSession
 import com.raulshma.jellyplay.core.data.session.HomeSessionTransition
-import com.raulshma.jellyplay.core.data.sync.SyncStatusStateHolder
-import com.raulshma.jellyplay.core.data.sync.SyncStatusStateHolderFactory
+import com.raulshma.jellyplay.core.data.session.SessionIdentityProvider
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.data.util.PhotoFolderPrefetcher
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
@@ -60,7 +55,6 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onSubscription
 import kotlinx.coroutines.flow.onStart
-import java.time.LocalDate
 
 internal class HomeViewModel(
     private val episodeCatalogue: EpisodeCatalogue,
@@ -70,12 +64,12 @@ internal class HomeViewModel(
     private val mediaRepository: MediaRepository,
     private val imageUrlProvider: ImageUrlProvider,
     private val photoFolderPrefetcher: PhotoFolderPrefetcher,
-    private val downloadRepository: DownloadRepository,
+    private val seriesDownloads: SeriesEpisodeDownloads,
     private val downloadIntake: DownloadIntake,
-    private val mediaDownloadActions: MediaDownloadActions,
+    private val mediaDownloadActions: HomeDownloadActions,
     private val offlineRepository: OfflineRepository,
     private val offlineModeManager: OfflineModeManager,
-    private val newsletterTriggerManager: NewsletterTriggerManager,
+    private val newsletterTriggerManager: HomeNewsletterGate,
     /** The four datastore stores bundled at construction — see [HomeStores]. */
     private val prefs: HomeStores,
     private val preferencesEditor: PreferencesEditor,
@@ -88,7 +82,7 @@ internal class HomeViewModel(
      * init; `authRepository.currentUser` is still collected separately below
      * purely as the uiState.currentUser mirror.
      */
-    private val homeSession: HomeSession,
+    private val homeSession: SessionIdentityProvider,
     private val userMessageBus: UserMessageBus,
     /**
      * The settings-search catalog, injected through the core/ui seam. The
@@ -104,7 +98,7 @@ internal class HomeViewModel(
      * widen THIS interface by one parameter, and the test harness with it).
      */
     private val homeRefresherFactory: HomeRefresherFactory,
-    private val syncStatusStateHolderFactory: SyncStatusStateHolderFactory,
+    private val syncStatusStateHolderFactory: HomeSyncStatusFactory,
 ) : JellyPlayViewModel() {
 
     private val _uiState = stateFlow(HomeUiState())
@@ -309,7 +303,7 @@ internal class HomeViewModel(
     private val seriesDownloadStateHolder = SeriesDownloadStateHolder(
         scope = scope,
         episodeCatalogue = episodeCatalogue,
-        downloadRepository = downloadRepository,
+        seriesDownloads = seriesDownloads,
         downloadIntake = downloadIntake,
         userMessageBus = userMessageBus,
     )

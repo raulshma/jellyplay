@@ -1,8 +1,6 @@
 package com.raulshma.jellyplay.feature.syncplay
 
 import com.raulshma.jellyplay.core.data.repository.SyncPlayRepository
-import com.raulshma.jellyplay.core.data.syncplay.SyncPlayEvent
-import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
 import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastSlice
 import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore
 import com.raulshma.jellyplay.core.model.SyncPlayGroup
@@ -39,7 +37,7 @@ import kotlin.test.assertTrue
  *    failures WITH an exception message map to [SyncPlayMessage.Raw] (the two
  *    suites only pin the null-message → localized-resource fallbacks).
  * 2. [SyncPlayViewModel.joinGroup] success while
- *    [SyncPlayManager.activeGroupId] is still null: `isInGroup` flips true but
+ *    [SyncPlaySession.activeGroupId] is still null: `isInGroup` flips true but
  *    [SyncPlayViewModel.loadCurrentGroup]'s early return keeps `currentGroup`
  *    null (and the event listener is live — a subsequent PlayQueueUpdate still
  *    synthesizes the header).
@@ -54,22 +52,22 @@ class SyncPlayViewModelMessageFallbacksTest {
     private val mainDispatcher = StandardTestDispatcher()
 
     private lateinit var mediaRepository: SyncPlayRepository
-    private lateinit var syncPlayManager: SyncPlayManager
+    private lateinit var syncPlaySession: SyncPlaySession
     private lateinit var syncPlayCastStore: SyncPlayCastStore
-    private lateinit var eventsFlow: MutableSharedFlow<SyncPlayEvent>
+    private lateinit var eventsFlow: MutableSharedFlow<SyncPlaySessionEvent>
     private lateinit var castPrefs: MutableStateFlow<SyncPlayCastSlice>
 
     @BeforeTest
     fun setUp() {
         Dispatchers.setMain(mainDispatcher)
         mediaRepository = mockk()
-        syncPlayManager = mockk()
+        syncPlaySession = mockk()
         syncPlayCastStore = mockk()
         eventsFlow = MutableSharedFlow(extraBufferCapacity = 64)
         castPrefs = MutableStateFlow(SyncPlayCastSlice())
-        every { syncPlayManager.events } returns eventsFlow
-        every { syncPlayManager.activeGroupId } returns null
-        every { syncPlayManager.lastReconnectMs } returns 0L
+        every { syncPlaySession.events } returns eventsFlow
+        every { syncPlaySession.activeGroupId } returns null
+        every { syncPlaySession.lastReconnectMs } returns 0L
         every { syncPlayCastStore.syncPlayCast } returns castPrefs
         coEvery { mediaRepository.getSyncPlayGroups() } returns Result.success(emptyList())
     }
@@ -81,7 +79,7 @@ class SyncPlayViewModelMessageFallbacksTest {
 
     private fun newViewModel() = SyncPlayViewModel(
         syncPlayRepository = mediaRepository,
-        syncPlayManager = syncPlayManager,
+        syncPlaySession = syncPlaySession,
         syncPlayCastStore = syncPlayCastStore,
     )
 
@@ -105,12 +103,12 @@ class SyncPlayViewModelMessageFallbacksTest {
 
     @Test
     fun leaveGroup_failureWithMessage_mapsToRaw_andKeepsMembershipState() = runTest(mainDispatcher) {
-        every { syncPlayManager.activeGroupId } returns "g1"
-        coEvery { syncPlayManager.joinGroup("g1") } returns Result.success(Unit)
+        every { syncPlaySession.activeGroupId } returns "g1"
+        coEvery { syncPlaySession.joinGroup("g1") } returns Result.success(Unit)
         coEvery { mediaRepository.getSyncPlayInfo("g1") } returns Result.success(
             SyncPlayGroupInfo(groupId = "g1", groupName = "Party"),
         )
-        coEvery { syncPlayManager.leaveGroup() } returns Result.failure(RuntimeException("server busy"))
+        coEvery { syncPlaySession.leaveGroup() } returns Result.failure(RuntimeException("server busy"))
         val viewModel = newViewModel()
         advanceUntilIdle()
         viewModel.joinGroup("g1")
@@ -136,8 +134,8 @@ class SyncPlayViewModelMessageFallbacksTest {
             // The manager accepted the join but hasn't asserted the active group
             // yet: the info fetch is skipped (early return), the header stays
             // blank until the first WebSocket event.
-            coEvery { syncPlayManager.joinGroup("g1") } returns Result.success(Unit)
-            every { syncPlayManager.activeGroupId } returns null
+            coEvery { syncPlaySession.joinGroup("g1") } returns Result.success(Unit)
+            every { syncPlaySession.activeGroupId } returns null
             val viewModel = newViewModel()
             advanceUntilIdle()
 
@@ -151,7 +149,7 @@ class SyncPlayViewModelMessageFallbacksTest {
             // The event listener is live: the first PlayQueueUpdate synthesizes
             // the placeholder header.
             eventsFlow.tryEmit(
-                SyncPlayEvent.PlayQueueUpdate(
+                SyncPlaySessionEvent.PlayQueueUpdate(
                     com.raulshma.jellyplay.core.model.SyncPlayQueueUpdateData(
                         playlistItemIds = emptyList(),
                         itemIds = emptyList(),

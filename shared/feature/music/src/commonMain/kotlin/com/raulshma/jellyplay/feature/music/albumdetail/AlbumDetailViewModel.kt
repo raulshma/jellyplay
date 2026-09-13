@@ -1,11 +1,8 @@
 package com.raulshma.jellyplay.feature.music.albumdetail
 
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
-import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
-import com.raulshma.jellyplay.core.data.playback.toInstantMixOutcome
 import com.raulshma.jellyplay.core.data.playback.InstantMixState
 import com.raulshma.jellyplay.core.data.playback.InstantMixStateHolder
-import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.DownloadItem
@@ -16,6 +13,9 @@ import com.raulshma.jellyplay.core.ui.viewmodel.DeferredFetchCoordinator
 import com.raulshma.jellyplay.core.ui.viewmodel.DeferredUserDataRefresher
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.feature.music.MixErrorMessage
+import com.raulshma.jellyplay.feature.music.MusicQueuePlayer
+import com.raulshma.jellyplay.feature.music.MusicTrackDownloads
+import com.raulshma.jellyplay.feature.music.toInstantMixOutcome
 import com.raulshma.jellyplay.feature.music.toMixErrorMessage
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
@@ -36,8 +36,8 @@ private data class AlbumContent(
 class AlbumDetailViewModel(
     private val mediaRepository: MediaRepository,
     private val imageUrlProvider: ImageUrlProvider,
-    private val audioQueueFacade: AudioQueueFacade,
-    private val downloadRepository: DownloadRepository,
+    private val audioQueueFacade: MusicQueuePlayer,
+    private val musicTrackDownloads: MusicTrackDownloads,
     private val downloadIntake: DownloadIntake,
 ) : JellyPlayViewModel() {
 
@@ -188,7 +188,7 @@ class AlbumDetailViewModel(
             if (tracks.isEmpty()) {
                 flowOf(emptyMap())
             } else {
-                downloadRepository.getDownloadsByMediaItemIdsFlow(tracks.map { it.id })
+                musicTrackDownloads.downloadsForIds(tracks.map { it.id })
                     .map { downloads -> downloads.associateBy { it.mediaItemId } }
             }
         }
@@ -199,7 +199,7 @@ class AlbumDetailViewModel(
         val existing = currentDownloads[track.id]
         if (existing != null && existing.status == DownloadStatus.COMPLETED) {
             launch {
-                downloadRepository.deleteDownload(existing.id)
+                musicTrackDownloads.remove(existing.id)
             }
             return
         }
@@ -249,7 +249,7 @@ class AlbumDetailViewModel(
                 val existing = currentDownloads[track.id]
                 if (existing != null) {
                     launch {
-                        downloadRepository.deleteDownload(existing.id)
+                        musicTrackDownloads.remove(existing.id)
                     }
                 }
             }

@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.home
 
 import androidx.compose.animation.core.animateFloatAsState
+import kotlin.math.roundToLong
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
@@ -470,7 +471,12 @@ internal fun seerrResultSubtitle(
     item.voteAverage?.let { rating ->
         if (rating > 0) {
             append(" · ★ ")
-            append(String.format("%.1f", rating))
+            // Manual HALF-UP one-decimal render — java.lang.String.format
+            // has no wasm surface.
+            // roundToLong, not toLong: the truncating variant rendered
+            // 7.26 as "7.2" where "%.1f" gave "7.3".
+            val scaled = (rating * 10).roundToLong()
+            append("${scaled / 10}.${scaled % 10}")
         }
     }
 }

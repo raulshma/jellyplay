@@ -136,18 +136,22 @@ jobs:
           :shared:feature:library:compileKotlinWasmJs
           :shared:feature:music:jvmJar
           :shared:feature:music:compileAndroidMain
+          :shared:feature:music:compileKotlinWasmJs
           :shared:feature:livetv:jvmJar
           :shared:feature:livetv:compileAndroidMain
           :shared:feature:livetv:compileKotlinWasmJs
           :shared:feature:downloads:jvmJar
           :shared:feature:downloads:compileAndroidMain
+          :shared:feature:downloads:compileKotlinWasmJs
           :shared:feature:syncplay:jvmJar
           :shared:feature:syncplay:compileAndroidMain
+          :shared:feature:syncplay:compileKotlinWasmJs
           :shared:feature:settings:jvmJar
           :shared:feature:settings:compileAndroidMain
           :shared:feature:settings:compileKotlinWasmJs
           :shared:feature:admin:jvmJar
           :shared:feature:admin:compileAndroidMain
+          :shared:feature:admin:compileKotlinWasmJs
           :shared:feature:editor:jvmJar
           :shared:feature:editor:compileAndroidMain
           :shared:feature:editor:compileKotlinWasmJs
@@ -183,8 +187,10 @@ jobs:
           :shared:feature:details:compileKotlinWasmJs
           :shared:feature:home:jvmJar
           :shared:feature:home:compileAndroidMain
+          :shared:feature:home:compileKotlinWasmJs
           :shared:feature:player-live:jvmJar
           :shared:feature:player-live:compileAndroidMain
+          :shared:feature:player-live:compileKotlinWasmJs
           :shared:feature:player-audio:jvmJar
           :shared:feature:player-audio:compileAndroidMain
           :shared:feature:player-audio:compileKotlinWasmJs

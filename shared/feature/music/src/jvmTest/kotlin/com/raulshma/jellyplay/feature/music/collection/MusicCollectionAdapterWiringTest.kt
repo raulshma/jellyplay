@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.feature.music.collection
 
+import com.raulshma.jellyplay.feature.music.MusicQueuePlayer
 import androidx.paging.PagingData
-import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.LibraryFilters
@@ -44,7 +44,7 @@ class MusicCollectionAdapterWiringTest {
 
     private val mediaRepository: MediaRepository = mockk()
     private val imageUrlProvider: ImageUrlProvider = mockk(relaxed = true)
-    private val audioQueueFacade: AudioQueueFacade = mockk(relaxed = true)
+    private val audioQueueFacade: MusicQueuePlayer = mockk(relaxed = true)
 
     @BeforeTest
     fun setUp() {

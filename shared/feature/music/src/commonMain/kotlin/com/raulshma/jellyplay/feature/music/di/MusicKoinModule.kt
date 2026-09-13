@@ -24,9 +24,13 @@ import org.koin.dsl.module
  * HiltViewModel/@Inject annotations were stripped at the move — Koin is the
  * single constructor owner (one framework per type). Ctor deps split three
  * ways:
- *  - MediaRepository / DownloadRepository / DownloadIntake / AudioQueueFacade
- *    are still Hilt-owned in the legacy data shim and reach Koin through the
- *    app composition root's Hilt interop module (dies at );
+ *  - MediaRepository / DownloadIntake are still Hilt-owned in the legacy
+ *    data shim and reach Koin through the app composition root's Hilt
+ *    interop module (dies at ); the web seams
+ *    MusicQueuePlayer/MusicTrackDownloads resolve from
+ *    [platformMusicModule] (jvmShared: adapters over the process-wide
+ *    AudioQueueFacade/DownloadRepository singles; wasmJs: honest
+ *    unsupported no-ops);
  *  - ImageUrlProvider / MoodPlaylistRepository / SmartPlaylistRepository
  *    (shared data), HomeDiscoveryStore (shared datastore) and
  *    OfflineModeManager resolve from the C4 shared-module graph;
@@ -42,12 +46,14 @@ import org.koin.dsl.module
  * same extras source the Hilt factory consumed at HEAD).
  */
 val musicModule: Module = module {
+    includes(platformMusicModule())
+
     viewModel {
         MusicHomeViewModel(
             mediaRepository = get(),
             imageUrlProvider = get(),
             audioQueueFacade = get(),
-            downloadRepository = get(),
+            trackDownloads = get(),
             homeDiscoveryStore = get(),
             offlineModeManager = get(),
             userMessageBus = get(),
@@ -125,7 +131,7 @@ val musicModule: Module = module {
             mediaRepository = get(),
             imageUrlProvider = get(),
             audioQueueFacade = get(),
-            downloadRepository = get(),
+            musicTrackDownloads = get(),
             downloadIntake = get(),
         )
     }

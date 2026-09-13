@@ -12,9 +12,13 @@ import org.koin.dsl.module
  * HiltViewModel/@Inject annotations were stripped at the move — Koin is the
  * single constructor owner (one framework per type). Ctor deps split three
  * ways:
- *  - DownloadRepository is still Hilt-owned in the legacy data shim
- *    (WorkManager-coupled) and reaches Koin through the app composition root's
- *    Hilt interop module (dies at );
+ *  - DownloadQueue / OfflineResync resolve from
+ *    [platformDownloadsModule]: the jvmShared fragment delegates to the
+ *    process-wide DownloadRepository / OfflineSyncManager singles (the
+ *    repository is still Hilt-owned in the legacy data shim,
+ *    WorkManager-coupled, reaching Koin through the app composition root's
+ *    Hilt interop module); the wasmJs fragment binds the honest empty
+ *    queue/idle resync.
  *  - OfflineRepository resolves from dataJvmModule and UserDataMutator from
  *    the Hilt interop bridge (the C4 shared-module graph);
  *  - OfflineSyncManager was flipped to a Koin single in dataJvmModule by this
@@ -28,11 +32,13 @@ import org.koin.dsl.module
  * same shape as the livetv conveyor's LiveTvMessenger).
  */
 val downloadsModule: Module = module {
+    includes(platformDownloadsModule())
+
     viewModel {
         DownloadsViewModel(
-            downloadRepository = get(),
+            queue = get(),
             offlineRepository = get(),
-            syncManager = get(),
+            resync = get(),
         )
     }
     viewModel {

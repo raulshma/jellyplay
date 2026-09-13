@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.feature.home.di
 
-import com.raulshma.jellyplay.core.data.sync.SyncStatusStateHolderFactory
 import com.raulshma.jellyplay.feature.home.HomeStores
 import com.raulshma.jellyplay.feature.home.HomeRefresherFactory
 import com.raulshma.jellyplay.feature.home.HomeViewModel
@@ -18,8 +17,12 @@ import org.koin.dsl.module
  *    dataJvmModule/datastoreCommonModule modules (incl. the cluster-flipped
  *    MediaRepository/UserDataMutator/MediaSearchEngine) plus the platform
  *    data modules (ImageUrlProvider, OfflineModeManager) and the settings
- *    feature's SettingsSearchProvider single.
- *  - the refresher's pure-DI collaborators and the sync holder's factory
+ *    feature's SettingsSearchProvider single;
+ *  - the web seams (HomeClock, HomeDownloadActions, SeriesEpisodeDownloads,
+ *    HomeSyncStatusFactory, HomeNewsletterGate) resolve from
+ *    [platformHomeModule] — jvmShared adapters over the core:data jvmShared
+ *    singles, honest web actuals on wasmJs;
+ *  - the refresher's pure-DI collaborators
  *    (PlaybackSyncScheduler — WorkManager worker; ContinueWatchingBroadcaster,
  *    LibrarySyncHook — app widget broadcast receivers) are Android-shaped:
  *    Koin singles in androidCoreDataModule / the app module on Android,
@@ -28,9 +31,11 @@ import org.koin.dsl.module
  *     desktop wiring).
  */
 val homeModule: Module = module {
+    includes(platformHomeModule())
+
     single {
         HomeRefresherFactory(
-            timeSource = get(),
+            clock = get(),
             mediaRepository = get(),
             seerrRepository = get(),
             arrRepository = get(),
@@ -41,13 +46,6 @@ val homeModule: Module = module {
             librarySyncHook = get(),
         )
     }
-    single {
-        SyncStatusStateHolderFactory(
-            playbackOutboxRepository = get(),
-            playbackSyncScheduler = get(),
-            offlineFirstItemResolver = get(),
-        )
-    }
     viewModel {
         HomeViewModel(
             episodeCatalogue = get(),
@@ -56,7 +54,7 @@ val homeModule: Module = module {
             mediaRepository = get(),
             imageUrlProvider = get(),
             photoFolderPrefetcher = get(),
-            downloadRepository = get(),
+            seriesDownloads = get(),
             downloadIntake = get(),
             mediaDownloadActions = get(),
             offlineRepository = get(),

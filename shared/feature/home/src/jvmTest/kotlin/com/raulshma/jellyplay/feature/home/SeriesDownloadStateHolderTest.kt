@@ -41,7 +41,7 @@ import kotlin.test.Test
 class SeriesDownloadStateHolderTest {
 
     private lateinit var episodeCatalogue: EpisodeCatalogue
-    private lateinit var downloadRepository: DownloadRepository
+    private lateinit var seriesDownloads: SeriesEpisodeDownloads
     private lateinit var downloadIntake: DownloadIntake
     private lateinit var userMessageBus: UserMessageBus
     private var holderScope: CoroutineScope? = null
@@ -49,7 +49,7 @@ class SeriesDownloadStateHolderTest {
     @BeforeTest
     fun setUp() {
         episodeCatalogue = mockk(relaxed = true)
-        downloadRepository = mockk(relaxed = true)
+        seriesDownloads = mockk(relaxed = true)
         downloadIntake = mockk(relaxed = true)
         userMessageBus = mockk(relaxed = true)
     }
@@ -65,7 +65,7 @@ class SeriesDownloadStateHolderTest {
         return SeriesDownloadStateHolder(
             scope = scope,
             episodeCatalogue = episodeCatalogue,
-            downloadRepository = downloadRepository,
+            seriesDownloads = seriesDownloads,
             downloadIntake = downloadIntake,
             userMessageBus = userMessageBus,
         )
@@ -94,7 +94,7 @@ class SeriesDownloadStateHolderTest {
     @Test
     fun requestSeriesDownload_raisesLoadingSentinel_thenPublishesSnapshotAndDownloadedIds() = runTest {
         val holder = buildHolder()
-        coEvery { downloadRepository.getDownloadedEpisodeIdsForSeries("s1") } returns setOf("e1", "e2")
+        coEvery { seriesDownloads.downloadedEpisodeIds("s1") } returns setOf("e1", "e2")
         // Load resolves only after runCurrent — the sentinel window is real.
         val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
         coEvery { episodeCatalogue.loadSeriesEpisodes("s1") } coAnswers {

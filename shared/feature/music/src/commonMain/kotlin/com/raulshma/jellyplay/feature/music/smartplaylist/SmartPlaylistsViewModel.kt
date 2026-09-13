@@ -3,7 +3,6 @@ package com.raulshma.jellyplay.feature.music.smartplaylist
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.SmartPlaylistRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
@@ -15,14 +14,17 @@ import com.raulshma.jellyplay.core.model.SmartPlaylist
 import com.raulshma.jellyplay.core.model.SmartPlaylistSort
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.core.ui.viewmodel.MutableComposeState
+import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
+import com.raulshma.jellyplay.feature.music.MusicQueuePlayer
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
-import java.util.UUID
 
+@OptIn(ExperimentalUuidApi::class)
 class SmartPlaylistsViewModel(
     private val mediaRepository: MediaRepository,
     private val imageUrlProvider: ImageUrlProvider,
-    private val audioQueueFacade: AudioQueueFacade,
+    private val audioQueueFacade: MusicQueuePlayer,
     private val smartPlaylistRepository: SmartPlaylistRepository,
 ) : JellyPlayViewModel() {
 
@@ -56,7 +58,7 @@ class SmartPlaylistsViewModel(
         launch {
             _error.value = null
             val playlist = SmartPlaylist(
-                id = "custom-${UUID.randomUUID()}",
+                id = "custom-${Uuid.random()}",
                 name = name.trim(),
                 criteria = criteria,
                 maxItems = maxItems,

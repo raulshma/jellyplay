@@ -21,7 +21,13 @@ import com.raulshma.jellyplay.core.model.isFinishedOffline
 import com.raulshma.jellyplay.core.model.sortedWithCachedKey
 import com.raulshma.jellyplay.core.model.toMediaItem
 import com.raulshma.jellyplay.core.model.typeGroup
-import java.util.PriorityQueue
+import com.raulshma.jellyplay.core.model.wallNowMillis
+import kotlinx.datetime.format.DateTimeComponents
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atStartOfDayIn
+import kotlinx.datetime.toInstant
 
 /**
  * Everything the offline home renders, derived in one place. The screen
@@ -228,12 +234,15 @@ internal fun buildOfflineHomeSections(
     if (library.isEmpty() && episodes.isEmpty()) return emptyList()
 
     // Single pass over the library: partition by type and track the newest
-    // RECENT_LIMIT items via a bounded min-heap (O(n log k) instead of a full
-    // sort on every offline-library emission).
+    // RECENT_LIMIT items via a bounded keeper — the wasm port of the
+    // former java.util.PriorityQueue min-heap (same top-k selection: an
+    // item enters only if it beats the current oldest; O(n·k) with k =
+    // RECENT_LIMIT, a handful — the heap's tie-breaking at equal createdAt
+    // was arbitrary either way).
     val movies = ArrayList<OfflineMediaItem>()
     val series = ArrayList<OfflineMediaItem>()
     val music = ArrayList<OfflineMediaItem>()
-    val recentHeap = PriorityQueue<OfflineMediaItem>(compareBy { it.createdAt })
+    val recentKept = ArrayList<OfflineMediaItem>(RECENT_LIMIT)
     for (item in library) {
         when (item.mediaType) {
             MediaType.MOVIE -> movies += item
@@ -242,17 +251,23 @@ internal fun buildOfflineHomeSections(
             // Other types (PHOTO, PHOTO_FOLDER, …) have no home row here.
             else -> Unit
         }
-        if (recentHeap.size < RECENT_LIMIT) {
-            recentHeap.add(item)
+        if (recentKept.size < RECENT_LIMIT) {
+            recentKept.add(item)
         } else {
-            val oldest = recentHeap.peek()
-            if (oldest != null && item.createdAt > oldest.createdAt) {
-                recentHeap.poll()
-                recentHeap.add(item)
+            var oldestIndex = 0
+            var oldestCreatedAt = Long.MAX_VALUE
+            for ((index, kept) in recentKept.withIndex()) {
+                if (kept.createdAt < oldestCreatedAt) {
+                    oldestCreatedAt = kept.createdAt
+                    oldestIndex = index
+                }
+            }
+            if (item.createdAt > oldestCreatedAt) {
+                recentKept[oldestIndex] = item
             }
         }
     }
-    val recent = recentHeap.sortedByDescending { it.createdAt }
+    val recent = recentKept.sortedByDescending { it.createdAt }
 
     // Continue Watching mirrors the server's resume query
     // (ItemsController.GetResumeItems → IsResumable): non-folder items with a
@@ -574,7 +589,7 @@ private fun computeOfflineNextUp(
 
     // Same cutoff the online fetch sends as `nextUpDateCutoff`: now - maxDays.
     val cutoffMillis = prefs.nextUpMaxDays.takeIf { it > 0 }
-        ?.let { System.currentTimeMillis() - it.toLong() * MILLIS_PER_DAY }
+        ?.let { wallNowMillis() - it.toLong() * MILLIS_PER_DAY }
 
     val entries = ArrayList<NextUpEntry>(bySeries.size)
     for ((seriesId, group) in bySeries) {
@@ -649,22 +664,34 @@ private const val MILLIS_PER_DAY = 86_400_000L
  * fraction), local `OffsetDateTime.now().toString()` writes (host-zone
  * offset, variable precision) and bare local dates. Null when blank or
  * unparseable — callers treat null as "no activity".
+ *
+ * wasm port: kotlinx-datetime replaces the java.time trio. Honest
+ * deltas vs `OffsetDateTime.parse` (ISO_OFFSET_DATE_TIME): kotlinx's
+ * ISO_DATE_TIME_OFFSET requires SECONDS in the offset where java accepted
+ * their absence, and accepts bare-hours offsets ("+02") where java
+ * rejected them — the offline store's writes always carry full ±HH:MM
+ * offsets, so no real payload moves legs (the livetv LiveTvTimeFormat
+ * precedent, same documented deltas).
  */
 private fun isoEpochMillis(value: String?): Long? {
     if (value.isNullOrBlank()) return null
-    val zone = java.time.ZoneId.systemDefault()
-    return try {
+    val zone = TimeZone.currentSystemDefault()
+    // The swallow is parse-scoped by construction: all three legs can only
+    // throw on malformed input (IllegalArgumentException family). A null
+    // return renders as "no activity" for that day — the pre-port behavior
+    // for DateTimeParseException.
+    return runCatching {
         when {
             value.length == 10 -> // bare local date (`2026-01-05`)
-                java.time.LocalDate.parse(value).atStartOfDay(zone).toInstant().toEpochMilli()
-            ISO_OFFSET_SUFFIX.containsMatchIn(value) ->
-                java.time.OffsetDateTime.parse(value).toInstant().toEpochMilli()
+                LocalDate.parse(value).atStartOfDayIn(zone).toEpochMilliseconds()
+            ISO_OFFSET_SUFFIX.containsMatchIn(value) -> {
+                val parsed = DateTimeComponents.Formats.ISO_DATE_TIME_OFFSET.parse(value)
+                parsed.toLocalDateTime().toInstant(parsed.toUtcOffset()).toEpochMilliseconds()
+            }
             else -> // bare local date-time, no offset
-                java.time.LocalDateTime.parse(value).atZone(zone).toInstant().toEpochMilli()
+                LocalDateTime.parse(value).toInstant(zone).toEpochMilliseconds()
         }
-    } catch (_: java.time.format.DateTimeParseException) {
-        null
-    }
+    }.getOrNull()
 }
 
 /** Trailing `Z` / `±HH:mm` offset on a stored ISO timestamp. */
