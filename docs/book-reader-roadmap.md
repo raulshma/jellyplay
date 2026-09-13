@@ -1,6 +1,6 @@
 # Book Reader Roadmap — Reading Experience 2.0
 
-Status: **active** (started 2026-09-13, on `feat/reader-advanced`)
+Status: **waves 0–5 implemented** (2026-09-13, `feat/reader-advanced`); "Future" remains open
 
 The v0.10.9 reader (`docs/book-reader.md`) established the core: EPUB (epub.js 0.3.93
 in a WebView/KCEF host), CBZ/CBR and PDF paged reading, reading-direction control,
@@ -19,7 +19,7 @@ Ground rules that hold across every wave:
 - Every wave keeps all targets compiling (Android, desktop, wasmJs with honest
   degradation) and ships strings in all 9 locales with jvmTest coverage.
 
-## Waves (this cycle)
+## Waves (implemented)
 
 ### Wave 0 — Groundwork
 

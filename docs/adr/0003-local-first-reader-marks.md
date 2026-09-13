@@ -1,6 +1,6 @@
 # 0003 — Reader bookmarks and annotations are local-first, CFI-anchored
 
-- **Status:** accepted (2026-09-13)
+- **Status:** implemented (accepted 2026-09-13, shipped on `feat/reader-advanced`)
 - **Date:** 2026-09-13
 - **Scope:** `shared/core/database`, `shared/core/data`, `shared/feature/player-book`
 

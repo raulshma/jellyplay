@@ -5,8 +5,9 @@ in-app: comic archives, PDFs, and EPUBs, with your reading position synced
 back to the server so you can pick up on any device.
 
 > This document covers what JellyPlay reads and how resume, offline, and
-> sync behave. The design history lives in
-> [docs/spikes/book-reading.md](./spikes/book-reading.md).
+> sync behave. The enhancement roadmap lives in
+> [docs/book-reader-roadmap.md](./book-reader-roadmap.md); the marks-storage
+> decision is [ADR 0003](./adr/0003-local-first-reader-marks.md).
 
 ## Feature overview
 
@@ -15,25 +16,42 @@ back to the server so you can pick up on any device.
 - ⏸️ **Download-only formats** — `azw`, `azw3`, `mobi`, `cb7`, and `cbt`
   items have no in-app reader today; the detail screen offers the download
   action instead of Read.
-- 📊 **Resume that survives devices** — position is stored in Jellyfin's
-  standard `UserData` playback-position field and encoded exactly like
-  jellyfin-web's players, so a book part-read in jellyfin-web resumes at the
-  same spot in JellyPlay and vice versa:
-  - Comics (CBZ/CBR) and PDF use **page** positions
-    (`pageIndex × 10,000` ticks, 0-based pages).
-  - EPUB uses a **percent** position (`percent × 10,000,000` ticks), since
-    reflowable text has no fixed pages.
+- 🔖 **Bookmarks** — save any position (page or exact EPUB spot) from the
+  top bar; the bookmarks sheet lists and jumps to them. Stored locally,
+  per install (see ADR 0003).
+- 🖍️ **Highlights & notes** — select text in an EPUB to highlight in four
+  colors (or underline) and attach a note; the annotations sheet lists,
+  edits, and jumps, and exports everything to Markdown or JSON via the
+  clipboard.
+- 🔎 **Search in book** — EPUBs are full-text searchable with jump-to-hit
+  and a flash highlight; PDFs expose their outline (table of contents)
+  with page jumps.
 - 🎛️ **Reading direction toggle** — comic pages can be flipped
   left-to-right or right-to-left (manga) per book.
-- 🎨 **EPUB themes & font size** — reflowable books offer light/sepia/dark
-  themes and adjustable type size, with a table of contents.
+- 🎨 **EPUB typography** — reflowable books offer light/sepia/dark themes
+  (sepia is a true paper tone), adjustable type size, font family
+  (system/serif/sans/mono), line height, page margins, justification, and
+  a continuous-scroll mode — global or per book ("use for this book
+  only"), all applied live.
+- 🔍 **Paged zoom & fit** — PDF and comic pages pinch-zoom with pan,
+  double-tap to toggle zoom, and a fit mode (fit width / fit page /
+  original); zoomed pages re-raster sharply (up to 3×).
+- ☀️ **Brightness** — an in-reader dim slider lives in the bottom chrome of
+  both readers.
+- 🔊 **Read aloud (Android)** — EPUBs can be spoken with the system TTS
+  voice: the current paragraph is highlighted, pages follow along, and
+  chapters advance automatically. Speed and pitch are adjustable. Desktop
+  reports the feature as unavailable (roadmap: future).
+- 🌙 **Sleep timer & auto-scroll** — stop read-aloud/auto-scroll after
+  5–60 minutes or at the end of the chapter; scroll-mode EPUBs gain
+  auto-scroll with a speed slider and tap-to-pause.
 - 📚 **Offline reading** — books download like any other media and open
   from the offline library with no network; positions made offline are
   queued and synced to the server on reconnect.
 - 🖥️ **TV & desktop** — the reader ships on Android/Android TV and desktop
   (see [Limitations](#limitations) for web). TV remotes page with the D-pad
   arrows; D-pad center (or Enter/Menu) toggles the reader chrome, whose
-  settings gear opens the direction toggle, EPUB themes, and TOC.
+  settings gear opens direction, typography, behavior, and TOC.
 
 ## How resume works
 
@@ -46,6 +64,11 @@ jellyfin-web:
 |---|---|---|
 | CBZ / CBR / PDF | `pageIndex × 10,000` (0-based) | 12th page (index 11) → 110,000 |
 | EPUB | `percent × 10,000,000` | 34% (0.34) → 3,400,000 |
+
+On the same install, EPUB resume is exact: the reader also stores the
+last position's CFI (character-fragment identifier) locally and prefers it
+over the percent; the percent still syncs to the server so other clients
+stay compatible. Bookmarks use the same encoding plus the CFI.
 
 Marking a book as read is always a user action — the server never
 auto-completes a book from progress.
@@ -74,6 +97,12 @@ does not need it.
 - **No web reading yet** — JellyPlay's detail screens (and therefore the
   reader entry points) have no wasm target today; book reading on web rides
   the detail-cluster web roadmap.
+- **Read aloud is Android-only** — desktop has no bundled TTS engine; the
+  controls report the feature as unavailable there instead of failing
+  mid-book.
+- **Marks stay on the device** — bookmarks, highlights, and notes are
+  local-only (Jellyfin has no fields for them); use the Markdown/JSON
+  export from the annotations sheet to move them.
 - **No CB7/CBT/mobi/azw/azw3 rendering** — those containers are
   download-only.
 - **CBR is extraction-only** — RAR decoding uses junrar, which is licensed
@@ -81,4 +110,5 @@ does not need it.
   *create* RAR archives. No code from RAR source is used.
 - **Vendored web assets** — the EPUB reader embeds epub.js **0.3.93**
   (BSD-2-Clause) and JSZip **3.10.1** (MIT); both licenses are permissive
-  and credited here.
+  and credited here. The reader engine script (`reader.js`) is original
+  JellyPlay code driving epub.js through its public APIs.

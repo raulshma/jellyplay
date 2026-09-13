@@ -2896,6 +2896,61 @@ probe/persist choreographies getting homes.
   pins — title + loading progress — deleted, one new chassis pin added:
   `loading_hidesList`). Zero `SubtitleManagerSheet` references remain.
 
+## The 2026-09-13 batch (reading experience 2.0)
+
+The book reader (`shared/feature/player-book`, landed earlier the same day
+with CBZ/CBR/PDF/EPUB reading) grew the advanced-reading surface of
+docs/book-reader-roadmap.md; the module map of that roadmap is the
+authoritative overview. Shape notes for engineers:
+
+- **Marks are a data-layer feature, not a reader feature**: Room schema 55
+  adds `book_bookmarks` + `book_annotations` (indexed by itemId), exposed
+  through `ReaderAnnotationsRepository` in `shared/core/data` (domain
+  models + Markdown/JSON export). The reader only consumes the flows; any
+  future surface (web reader, stats) gets them for free. Position encodings
+  reuse `BookProgressPolicy` ticks verbatim; EPUB rows additionally carry an
+  opaque `cfi` the native side never parses beyond equality (ADR 0003).
+- **`reader.js` is the EPUB engine, `EpubReaderHost` its only protocol**:
+  every capability (typography, flow, CFI jumps, annotations paint, spine
+  search, speech context, auto-scroll, JS tap zones) is a
+  `window.jellyPlayReader` command or a posted JSON event, shaped once in
+  `EpubReaderHost.kt` so the Android WebView bridge and the desktop CEF
+  poll cannot drift. The initial appearance bundle rides the chunked
+  `loadBookBegin` frame; later changes push command scripts. Post-boot
+  `displayError` events degrade (stay on page) rather than veil the reader
+  — stale CFIs must not kill a session.
+- **Selection owns the pointer on reflowable content**: the Compose
+  overlay over the WebView is keyboard-only (`readerKeys` — focusable +
+  preview keys, zero `pointerInput`); tap navigation arrives as JS `tap`
+  events mapped through the same direction logic as the arrow keys
+  (`epubTapAction`, unit-pinned). Paged content keeps the native tap zones
+  (`readerInput`) — there is no web content to select. This split is why
+  TV remotes and desktop keyboards behave identically pre/post 2.0.
+- **The screen decomposed before it doubled**: `BookReaderScreen` is a
+  ~160-line router; chrome (`ReaderChrome`), content (`ReaderContent`),
+  sheets (`ReaderSheets`), selection row (`ReaderSelection`) and input
+  mapping (`ReaderInput`) are separate files. VM additions are parallel
+  StateFlows (bookmarks, annotations, `currentEpubLocation`, speech,
+  sleep) — the sealed `Ready` state carries only what defines the content
+  kind, per the state-slices convention.
+- **Effective appearance is a pure fold**: `effectiveAppearance(global,
+  perBook)` resolves the per-book theme/font override over the global
+  slice; the settings sheet routes writes to global or override based on
+  the "this book only" switch, and a pending-latch (the `pendingFontSizePx`
+  convention) keeps back-to-back writes from racing the DataStore round
+  trip. Read-aloud rate/pitch use the same memo pattern.
+- **Speech + sleep are Compose-free controllers**: `ReaderSpeechController`
+  drives paragraph-by-paragraph utterances (engine seam `BookSpeechEngine`
+  — Android `TextToSpeech`, desktop/web honestly UNAVAILABLE, Noop fallback
+  via the `BookFormatProbe` Koin pattern) with chapter advance detected by
+  context identity, not timing; `ReaderSleepTimer` ticks countdown or
+  end-of-chapter. Both jvmTest-pinned with value fakes.
+- **Paged zoom re-rasters**: `PageCache` keys on `(page, renderWidth)` and
+  keeps exactly one width per page (zoom re-renders replace, never stack),
+  `BookDocument.pageSize()` feeds the pure fit-mode width math
+  (`ReaderFitMathTest`), and the tile's `graphicsLayer` zoom snaps back to
+  1× when the sharper bitmap lands — no visual jump, bounded memory.
+
 ## Rejected designs
 
 Recorded with evidence so future reviews don't re-suggest them.
