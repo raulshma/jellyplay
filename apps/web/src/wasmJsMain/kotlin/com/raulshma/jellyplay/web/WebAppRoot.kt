@@ -47,6 +47,7 @@ import com.raulshma.jellyplay.feature.calendar.UpcomingCalendarScreen
 import com.raulshma.jellyplay.feature.details.SeerrDetailScreen
 import com.raulshma.jellyplay.feature.onboarding.OnboardingScreen
 import com.raulshma.jellyplay.feature.requests.RequestsScreen
+import com.raulshma.jellyplay.feature.settings.ArrSettingsScreen
 import kotlinx.browser.window
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.w3c.dom.events.Event
@@ -343,17 +344,20 @@ fun WebAppRoot(
                 // calendarModule, registered in Main.kt for now). The
                 // feature-disabled pane is the honest v1 state in the browser
                 // fixture: the DIRECT_ARR_INTEGRATION experimental flag boots
-                // off and no settings UI exists on web to flip it, so the E2E
+                // off and no web surface can flip it (the experimental
+                // drill-in needs the settings root, which stays unrouted —
+                // see the Route.ArrSettings entry below), so the E2E
                 // lane asserts the disabled pane (see web-verify.mjs).
                 //
-                // ARR-SETTINGS CUT (documented at the only site that could
-                // navigate there): onOpenArrSettings would push Route
-                // .ArrSettings — feature/settings has no wasmJs target
-                // (documented), so the callback is a NO-OP stub. Reachability
-                // of the stub: the Open-*arr-Settings button renders only in
-                // the disabled pane; until a settings target lands the button
-                // is inert on web. It becomes addEntry(Route.ArrSettings())
-                // when settings gains the web target.
+                // ARR-SETTINGS, LIVE SINCE: onOpenArrSettings now pushes
+                // the REAL shared route — the wave gave feature/settings a
+                // wasmJs target, so the documented cut ("it becomes
+                // addEntry(Route.ArrSettings()) when settings gains the web
+                // target") is fulfilled. Reachability is unchanged from
+                // desktop: the Open-*arr-Settings button renders only in the
+                // feature-disabled pane, and the ArrSettings screen resolves
+                // fully on web (see Main.kt's settingsModule note). Same
+                // pass-through shape as every other wired callback here.
                 //
                 // onItemClick is REAL since Route.SeerrDetail landed
                 // on web (coordinator merge): calendar rows forward
@@ -365,10 +369,7 @@ fun WebAppRoot(
                 // (requestPop: root-refusing list trim + history.back()).
                 UpcomingCalendarScreen(
                     onBack = ::requestPop,
-                    onOpenArrSettings = {
-                        // No-op — settings has no wasm target (see the cut
-                        // note above); nothing navigates.
-                    },
+                    onOpenArrSettings = { addEntry(Route.ArrSettings()) },
                     onItemClick = { tmdbId, mediaType ->
                         addEntry(Route.SeerrDetail(tmdbId, mediaType))
                     },
@@ -377,17 +378,36 @@ fun WebAppRoot(
             entry<Route.ArrQueue> { _ ->
                 // The THIRD shared feature screen on web — the ARR
                 // download queue, bare composition + shell-provided owners
-                // like every shared entry. onOpenArrSettings is a NO-OP
-                // stub by the calendar-precedent rule: feature/settings has
-                // no wasmJs target (yet), so nothing can render
-                // Route.ArrSettings on web.
+                // like every shared entry. onOpenArrSettings is LIVE since
+                // (the settings wasmJs target landed): it pushes the real
+                // Route.ArrSettings, same wiring as the calendar entry —
+                // the button renders in the feature-disabled pane, matching
+                // desktop reachability.
                 ArrQueueScreen(
                     onBack = ::requestPop,
-                    onOpenArrSettings = {
-                        // No-op — settings has no wasm target (calendar
-                        // entry documents the identical cut).
-                    },
+                    onOpenArrSettings = { addEntry(Route.ArrSettings()) },
                 )
+            }
+            entry<Route.ArrSettings> { _ ->
+                // The FIFTH shared feature screen on web — the direct
+                // *arr integration settings, the FIRST settings-family route
+                // with a fully wasm-resolvable dependency closure
+                // (ArrRepository + ArrPreferencesStore +
+                // ArrSecureCredentialsStore — see Main.kt's settingsModule
+                // note for everything that stays latent on web). Reachability
+                // matches desktop: the Open-*arr-Settings buttons in the
+                // calendar/arrqueue feature-disabled panes (both wired
+                // above), NOT a settings-root row — web has no settings root
+                // (Route.Settings needs AuthRepository, which has no wasm
+                // binding), so this entry is reached by pushing the real key,
+                // not through any web-native mirror. Bare composition +
+                // shell-provided owners like every shared entry; onBack rides
+                // the SAME guarded pop path as every other pane (requestPop:
+                // root-refusing list trim + history.back()). The screen
+                // assumes the DIRECT_ARR_INTEGRATION gate ran at the caller —
+                // both caller panes render only while the flag is off, which
+                // is exactly the desktop affordance.
+                ArrSettingsScreen(onBack = ::requestPop)
             }
             entry<Route.Onboarding> { _ ->
                 // The FOURTH shared feature screen on web — the

@@ -36,6 +36,7 @@ import com.raulshma.jellyplay.feature.calendar.di.calendarModule
 import com.raulshma.jellyplay.feature.details.detailsModule
 import com.raulshma.jellyplay.feature.onboarding.di.onboardingModule
 import com.raulshma.jellyplay.feature.requests.di.requestsModule
+import com.raulshma.jellyplay.feature.settings.di.settingsModule
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.js.Js
 import kotlinx.browser.document
@@ -136,6 +137,39 @@ fun main() {
             // entry<Route.Onboarding>). All four VM deps resolve from
             // datastoreCommonModule + webDatastoreModule.
             onboardingModule,
+            // the settings feature, registered for its first
+            // wasm-resolvable slice — entry<Route.ArrSettings> (the direct
+            // *arr integration settings; WebAppRoot wires the two documented
+            // calendar/arrqueue no-op stubs to it). ArrSettingsViewModel's
+            // whole closure resolves on web: ArrRepository (dataWasmModule),
+            // ArrPreferencesStore (datastoreCommonModule over
+            // webDatastoreModule's arr_prefs DataStore) and
+            // ArrSecureCredentialsStore (webDatastoreModule's session-memory
+            // WasmSecureKeyValueStorage — the same process-lifetime cut every
+            // non-Seerr web credential store keeps). SeerrSettingsViewModel's
+            // closure resolves too, but no web surface pushes
+            // Route.SeerrSettings (the shell's own WebSeerrPane covers the
+            // credentials function), so it stays latent like the rest of the
+            // module's defs — the detailsModule precedent: registration is
+            // graph-shaped, routing is per-screen. LATENT ON WEB (never
+            // resolved in the browser): SettingsViewModel/ServerManagement
+            // ViewModel/SecuritySettingsViewModel/AboutViewModel all take the
+            // jvmShared AuthRepository, whose impl needs Room + the WebSocket
+            // client + TokenCipher — there is deliberately no wasm
+            // AuthRepository binding (the rule that kept feature/auth
+            // target-only); SubtitleProviderSettingsViewModel needs
+            // networkJvmModule's Map<SubtitleProviderKind, SubtitleProvider>;
+            // LibraryLayout/NotificationSettingsViewModel need the real
+            // Room-backed MediaRepository/PlaylistRepository cluster (the web
+            // MediaRepository is WebMediaRepositoryNarrow — the SeerrDetail
+            // cross-link that loudly throws on every other member). The
+            // module's two eager defs are boot-safe here:
+            // SettingsSearchCatalogPrewarmer(createdAtStart) needs only the
+            // application scope and swallows its own failures; the platform
+            // fragment is the wasm actual (honest no-op seams + the all
+            // false SettingsCapabilities). KoinModuleRegistrationGuardTest's
+            // web allowlist pins this registration in the same change.
+            settingsModule,
             webDetailsPlatformModule(),
             // infrastructure registration: the OPFS-backed Room database
             // (WebWorkerSQLiteDriver over the vendored worker — see

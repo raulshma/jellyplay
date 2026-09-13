@@ -102,6 +102,28 @@ kotlin {
                 // non-wasm; web drives sign-in via KtorWasmAuthApiClient).
                 implementation(project(":shared:feature:arrqueue"))
                 implementation(project(":shared:feature:onboarding"))
+                // the settings feature's first web-routed slice —
+                // WebAppRoot's entry<Route.ArrSettings> composes the shared
+                // ArrSettingsScreen and Main.kt registers settingsModule (the
+                // ArrSettingsViewModel closure — ArrRepository/ArrPreferences
+                // Store/ArrSecureCredentialsStore — resolves from
+                // dataWasmModule + datastoreCommonModule/webDatastoreModule).
+                // The settings ROOT (Route.Settings) stays unrouted on web:
+                // SettingsViewModel's AuthRepository ctor dep has no wasm
+                // binding (AuthRepositoryImpl is jvmShared — Room + WebSocket
+                // + TokenCipher; the same reason auth stayed target-only in
+                //), so every AuthRepository/MediaRepository-backed VM def
+                // settingsModule registers stays latent exactly like
+                // detailsModule's MediaDetail cluster. player-audio also
+                // gained a wasmJs target in but gets NO edge here (nothing
+                // on web consumes it): all four playback/cast ctor seams of
+                // AudioPlayerViewModel (AudioQueueManager/AudioEffectsManager/
+                // AudioPlayerEngine/AudioPlayerCast) lack wasm bindings — the
+                // only impls are the Android media3 graph and the desktop
+                // mpv app-layer manager — so a web route would need a real
+                // wasm audio engine first (shortcuts/auth precedent:
+                // target-only stays undepended-on).
+                implementation(project(":shared:feature:settings"))
                 // (HtmlVideoEngine): the wasm-visible MediaEngine
                 // contract + EnginePositionTicker/WebPlaybackMappings the
                 // web video engine implements. The engine class is landed and
@@ -206,6 +228,30 @@ configurations.all {
         substitute(module("androidx.navigation3:navigation3-ui"))
             .using(module(libs.jb.navigation3.ui.get().toString()))
             .because("google navigation3-ui has no web artifacts; JB fork publishes the wasm klib")
+    }
+}
+
+// (settings on web): aboutlibraries-core 15.0.4's wasm klib is a Kotlin
+// 2.4.0 build (ABI 2.4.0) that this repo's 2.3.21 compiler cannot load, and
+// it drags kotlin-stdlib-wasm-js:2.4.0 in whose rejection blanks the whole
+// stdlib during the whole-program klib link ("Built-in class kotlin.Any is
+// not found" — caught by wasmJsBrowserDistribution's productionExecutable
+// link; the development compile lane only WARNS on the ABI mismatch, so CI's
+// apps:web:compileKotlinWasmJs stayed green through it). shared/feature/
+// settings already forces 14.2.1 on its own wasmJs configurations (same
+// rationale, verbatim), but a resolutionStrategy force does NOT travel
+// through project-variant metadata — apps/web resolves the consumption graph
+// itself, so the force is duplicated consumer-side (exactly the shape of the
+// navigation3-ui substitution above, which core/ui also carries its own copy
+// of). 14.2.1's wasm klib is a Kotlin 2.3.20 build (ABI 2.3.0, consumable);
+// the Library/License entity API the Licenses path reads is unchanged
+// between the two lines. Scoped to wasmJs-named configurations so any future
+// non-wasm configuration keeps the repo-wide 15.0.4 pin.
+configurations.configureEach {
+    if (name.lowercase().contains("wasmjs")) {
+        resolutionStrategy {
+            force("com.mikepenz:aboutlibraries-core:14.2.1")
+        }
     }
 }
 
