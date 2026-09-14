@@ -230,8 +230,8 @@ class DesktopDownloadManager(
 
             val activeUserId = serverIdentityStore.activeUserId.firstOrNull()
             val accessToken = activeUserId?.let { uid ->
-                // Tokens are stored encrypted in Room. Decrypt before use as a Bearer-style
-                // `X-Emby-Token` header value.
+                // Tokens are stored encrypted in Room. Decrypt before use as the
+                // `Authorization: MediaBrowser` header value.
                 tokenCipher.decrypt(userDao.getUserById(uid)?.accessToken)
             }
 

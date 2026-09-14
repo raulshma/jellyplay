@@ -282,7 +282,7 @@ class KtorWasmPlaybackApiClient(
         apiResultWithRetry {
             val server = requireConnectedServer()
             val user = requireCurrentUser()
-            val body = getBodyTextWithEmbyToken(
+            val body = getBodyText(
                 url = apiUrl(server.address, "/Items/$itemId/RemoteSearch/Subtitles"),
                 accessToken = user.accessToken,
             ) ?: return@apiResultWithRetry emptyList<RemoteSubtitleInfo>()
@@ -304,7 +304,7 @@ class KtorWasmPlaybackApiClient(
         apiResultWithRetry {
             val server = requireConnectedServer()
             val user = requireCurrentUser()
-            val body = getBodyTextWithEmbyToken(
+            val body = getBodyText(
                 url = apiUrl(server.address, "/Items/$itemId/IntroSkipTimestamps"),
                 accessToken = user.accessToken,
             ) ?: return@apiResultWithRetry IntroTimestamps(itemId)
@@ -315,7 +315,7 @@ class KtorWasmPlaybackApiClient(
         apiResultWithRetry {
             val server = requireConnectedServer()
             val user = requireCurrentUser()
-            val body = getBodyTextWithEmbyToken(
+            val body = getBodyText(
                 url = apiUrl(server.address, "/Items/$itemId/CreditTimestamps"),
                 accessToken = user.accessToken,
             ) ?: return@apiResultWithRetry CreditTimestamps(itemId)

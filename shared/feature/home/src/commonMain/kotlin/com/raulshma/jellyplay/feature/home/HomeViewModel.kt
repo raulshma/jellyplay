@@ -6,6 +6,8 @@ import com.raulshma.jellyplay.core.data.repository.ResolvedMediaRef
 import com.raulshma.jellyplay.core.data.repository.UserDataContainer
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
+import com.raulshma.jellyplay.core.data.repository.BookTocCacheRepository
+import com.raulshma.jellyplay.core.data.repository.NoopBookTocCacheRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEntry
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
@@ -68,6 +70,12 @@ internal class HomeViewModel(
     private val downloadIntake: DownloadIntake,
     private val mediaDownloadActions: HomeDownloadActions,
     private val offlineRepository: OfflineRepository,
+    /**
+     * Local TOC cache — passed straight through to [offlineHomeGate] for the
+     * offline Continue Reading row's page-exact progress bars (the online
+     * row's twin lives on the refresher via [homeRefresherFactory]).
+     */
+    private val bookTocCacheRepository: BookTocCacheRepository = NoopBookTocCacheRepository(),
     private val offlineModeManager: OfflineModeManager,
     private val newsletterTriggerManager: HomeNewsletterGate,
     /** The four datastore stores bundled at construction — see [HomeStores]. */
@@ -215,6 +223,7 @@ internal class HomeViewModel(
             runCatching { mediaRepository.getOfflineHomeLayout()?.sections.orEmpty() }
                 .getOrDefault(emptyList())
         },
+        bookTocCacheRepository = bookTocCacheRepository,
     )
 
     /**
@@ -448,6 +457,7 @@ internal class HomeViewModel(
                     ),
                     offlineSectionPrefs = OfflineHomeSectionPrefs(
                         continueWatchingEnabled = HomeSectionType.CONTINUE_WATCHING in prefs.home.enabledHomeSectionTypes,
+                        continueReadingEnabled = HomeSectionType.CONTINUE_READING in prefs.home.enabledHomeSectionTypes,
                         nextUpEnabled = HomeSectionType.NEXT_UP in prefs.home.enabledHomeSectionTypes,
                         enabledSectionTypes = prefs.home.enabledHomeSectionTypes,
                         libraryOverrides = prefs.home.libraryHomeSectionOverrides,
@@ -492,6 +502,7 @@ internal class HomeViewModel(
                         offlineLibrary = offline.offlineLibrary,
                         offlineEpisodes = offline.offlineEpisodes,
                         offlineLayoutSections = offline.cachedLayout,
+                        offlineBookProgressFractions = offline.bookProgressFractions,
                     )
                 }
             }
@@ -565,6 +576,7 @@ internal class HomeViewModel(
                 _uiState.update {
                     it.copy(
                         sections = refresh.sections,
+                        bookProgressFractions = refresh.bookProgressFractions,
                         isLoading = refresh.isLoading,
                         isRefreshing = refresh.isRefreshing,
                         error = refresh.error,

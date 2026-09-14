@@ -41,12 +41,16 @@ class HomeSurfaceTest {
         sections: List<HomeSection> = emptyList(),
         homeMode: HomeMode = HomeMode.VIDEO,
         isGoingOnline: Boolean = false,
+        bookProgressFractions: Map<String, Float> = emptyMap(),
+        offlineBookProgressFractions: Map<String, Float> = emptyMap(),
     ) = HomeUiState(
         renderSource = renderSource,
         error = error,
         sections = sections,
         homeMode = homeMode,
         isGoingOnline = isGoingOnline,
+        bookProgressFractions = bookProgressFractions,
+        offlineBookProgressFractions = offlineBookProgressFractions,
     )
 
     // ── HardError ────────────────────────────────────────────────────────────
@@ -191,5 +195,44 @@ class HomeSurfaceTest {
         )
         val content = surface as HomeSurface.Content
         assertEquals(HomeRenderSource.Offline.Implicit, content.renderSource)
+    }
+
+    // ── Content CR fractions pick ────────────────────────────────────────────
+
+    @Test
+    fun `online content carries the refresher's online fractions`() {
+        val content = homeSurface(
+            state(bookProgressFractions = mapOf("b1" to 0.5f)),
+            emptyOffline,
+        ) as HomeSurface.Content
+        assertEquals(mapOf("b1" to 0.5f), content.bookProgressFractions)
+    }
+
+    @Test
+    fun `explicit offline content carries the gate's offline fractions`() {
+        val content = homeSurface(
+            state(
+                renderSource = HomeRenderSource.Offline.Explicit,
+                offlineBookProgressFractions = mapOf("b1" to 0.25f),
+            ),
+            populatedOffline,
+        ) as HomeSurface.Content
+        assertEquals(mapOf("b1" to 0.25f), content.bookProgressFractions)
+    }
+
+    @Test
+    fun `FallbackPending content carries the offline fractions its feed renders`() {
+        // The corner the former screen-side pick missed: FallbackPending is
+        // NOT an Offline render source, but its feed IS the offline one —
+        // the fractions pick keys on the feed, not the source.
+        val content = homeSurface(
+            state(
+                renderSource = HomeRenderSource.FallbackPending,
+                bookProgressFractions = mapOf("b1" to 0.5f),
+                offlineBookProgressFractions = mapOf("b1" to 0.25f),
+            ),
+            populatedOffline,
+        ) as HomeSurface.Content
+        assertEquals(mapOf("b1" to 0.25f), content.bookProgressFractions)
     }
 }

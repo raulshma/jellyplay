@@ -91,34 +91,34 @@ class PlayerEngineStore constructor(
      */
     internal fun read(prefs: Preferences): PlayerEngineSlice {
         val mpvConfigRaw = prefs[Keys.MPV_CONFIG]
-        val mpvConfig = if (mpvConfigRaw != cachedMpvConfig.raw) {
+        val mpvConfig = if (mpvConfigRaw != cachedMpvConfig.key) {
             try {
                 mpvConfigRaw?.let { json.decodeFromString<MpvEngineConfig>(it) } ?: MpvEngineConfig()
             } catch (_: Exception) { MpvEngineConfig() }.also { cachedMpvConfig = ParsedCache(mpvConfigRaw, it) }
         } else cachedMpvConfig.value
 
         val libVlcConfigRaw = prefs[Keys.LIBVLC_CONFIG]
-        val libVlcConfig = if (libVlcConfigRaw != cachedLibVlcConfig.raw) {
+        val libVlcConfig = if (libVlcConfigRaw != cachedLibVlcConfig.key) {
             try {
                 libVlcConfigRaw?.let { json.decodeFromString<LibVlcEngineConfig>(it) } ?: LibVlcEngineConfig()
             } catch (_: Exception) { LibVlcEngineConfig() }.also { cachedLibVlcConfig = ParsedCache(libVlcConfigRaw, it) }
         } else cachedLibVlcConfig.value
 
         val exoPlayerConfigRaw = prefs[Keys.EXO_CONFIG]
-        val exoPlayerConfig = if (exoPlayerConfigRaw != cachedExoPlayerConfig.raw) {
+        val exoPlayerConfig = if (exoPlayerConfigRaw != cachedExoPlayerConfig.key) {
             try {
                 exoPlayerConfigRaw?.let { json.decodeFromString<ExoPlayerEngineConfig>(it) } ?: ExoPlayerEngineConfig()
             } catch (_: Exception) { ExoPlayerEngineConfig() }.also { cachedExoPlayerConfig = ParsedCache(exoPlayerConfigRaw, it) }
         } else cachedExoPlayerConfig.value
 
         val mediaStreamSelectionsRaw = prefs[Keys.MEDIA_STREAM_SELECTIONS]
-        val mediaStreamSelections = if (mediaStreamSelectionsRaw != cachedMediaStreamSelections.raw) {
+        val mediaStreamSelections = if (mediaStreamSelectionsRaw != cachedMediaStreamSelections.key) {
             readMediaStreamSelections(prefs)
                 .also { cachedMediaStreamSelections = ParsedCache(mediaStreamSelectionsRaw, it) }
         } else cachedMediaStreamSelections.value
 
         val videoEffectsByItemRaw = prefs[Keys.VIDEO_EFFECTS_SELECTIONS]
-        val videoEffectsByItem = if (videoEffectsByItemRaw != cachedVideoEffectsByItem.raw) {
+        val videoEffectsByItem = if (videoEffectsByItemRaw != cachedVideoEffectsByItem.key) {
             readVideoEffectsByItem(prefs)
                 .also { cachedVideoEffectsByItem = ParsedCache(videoEffectsByItemRaw, it) }
         } else cachedVideoEffectsByItem.value

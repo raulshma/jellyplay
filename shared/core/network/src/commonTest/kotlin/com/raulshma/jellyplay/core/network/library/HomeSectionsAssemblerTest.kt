@@ -40,6 +40,7 @@ class HomeSectionsAssemblerTest {
             HomeSectionsAssemblyInputs(
                 query = query,
                 continueWatchingResult = Result.success(listOf(item("cw1"), item("cw2"))),
+                continueReadingResult = Result.success(listOf(item("book1").copy(mediaType = MediaType.BOOK))),
                 nextUpResult = Result.success(listOf(item("nu1", seriesId = "s1"), item("cw1"))),
                 foldersResult = Result.success(listOf(folder("f1", "Movies"), folder("f2", "TV"))),
                 latestPerFolder = listOf(
@@ -63,6 +64,7 @@ class HomeSectionsAssemblerTest {
         assertEquals(
             listOf(
                 HomeSectionType.CONTINUE_WATCHING,
+                HomeSectionType.CONTINUE_READING,
                 HomeSectionType.NEXT_UP,
                 HomeSectionType.LATEST_MEDIA,
                 HomeSectionType.LATEST_MEDIA,
@@ -76,20 +78,59 @@ class HomeSectionsAssemblerTest {
         assertTrue(output.result.failedSectionTypes.isEmpty())
 
         // Next Up drops the Continue Watching duplicate but keeps the rest.
-        assertEquals(listOf("nu1"), sections[1].items.map { it.id })
+        assertEquals(listOf("nu1"), sections[2].items.map { it.id })
+        assertEquals(listOf("book1"), sections[1].items.map { it.id })
 
         // One Latest row per library, id/title from the descriptor templates.
-        assertEquals("latest_f1", sections[2].id)
-        assertEquals("Latest Movies", sections[2].title)
-        assertEquals("f1", sections[2].libraryId)
-        assertEquals("latest_f2", sections[3].id)
+        assertEquals("latest_f1", sections[3].id)
+        assertEquals("Latest Movies", sections[3].title)
+        assertEquals("f1", sections[3].libraryId)
+        assertEquals("latest_f2", sections[4].id)
 
         // Recently Added dedupes across folders and drops CW overlaps.
-        assertEquals(listOf("a", "b"), sections[4].items.map { it.id })
+        assertEquals(listOf("a", "b"), sections[5].items.map { it.id })
         assertEquals("continue_watching", sections[0].id)
-        assertEquals("r1", sections[5].items.single().id)
-        assertEquals("cw1", sections[5].seedItem?.id)
-        assertEquals("p1", sections[6].items.single().id)
+        assertEquals("r1", sections[6].items.single().id)
+        assertEquals("cw1", sections[6].seedItem?.id)
+        assertEquals("p1", sections[7].items.single().id)
+    }
+
+    @Test
+    fun `continue reading emits between continue watching and next up and honors hidden cw ids`() {
+        val output = assembleHomeSections(
+            HomeSectionsAssemblyInputs(
+                query = HomeSectionQuery(
+                    enabledSections = setOf(
+                        HomeSectionType.CONTINUE_WATCHING,
+                        HomeSectionType.CONTINUE_READING,
+                        HomeSectionType.NEXT_UP,
+                    ),
+                    hiddenCwItemIds = setOf("book-hidden"),
+                ),
+                continueWatchingResult = Result.success(listOf(item("cw1"))),
+                continueReadingResult = Result.success(
+                    listOf(
+                        item("book1").copy(mediaType = MediaType.BOOK),
+                        item("book-hidden").copy(mediaType = MediaType.BOOK),
+                    ),
+                ),
+                nextUpResult = Result.success(listOf(item("nu1", seriesId = "s1"))),
+            ),
+        )
+
+        val sections = output.result.sections
+        assertEquals(
+            listOf(
+                HomeSectionType.CONTINUE_WATCHING,
+                HomeSectionType.CONTINUE_READING,
+                HomeSectionType.NEXT_UP,
+            ),
+            sections.map { it.type },
+        )
+        assertEquals("continue_reading", sections[1].id)
+        assertEquals("Continue Reading", sections[1].title)
+        // The same hiddenCwItemIds set covers both resume rows.
+        assertEquals(listOf("book1"), sections[1].items.map { it.id })
     }
 
     @Test

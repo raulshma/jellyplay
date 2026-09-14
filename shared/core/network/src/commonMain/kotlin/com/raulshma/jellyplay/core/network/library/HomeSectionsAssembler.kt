@@ -16,12 +16,12 @@ import com.raulshma.jellyplay.core.model.descriptor
  * the exact ordering logic and commonTest can pin it without a server.
  *
  * Emission order (verbatim from the JVM impl):
- * Continue Watching → Next Up → one Latest Media row per library (folder
- * order) → Recently Added (inserted right after the LAST Latest Media row) →
- * Recommendations (or the suggestions fallback when it comes back empty) →
- * user-pinned sections appended last. Section *types* that errored are
- * collected in `failedSectionTypes`; a section that legitimately returned
- * zero items is NOT a failure.
+ * Continue Watching → Continue Reading → Next Up → one Latest Media row per
+ * library (folder order) → Recently Added (inserted right after the LAST
+ * Latest Media row) → Recommendations (or the suggestions fallback when it
+ * comes back empty) → user-pinned sections appended last. Section *types* that
+ * errored are collected in `failedSectionTypes`; a section that legitimately
+ * returned zero items is NOT a failure.
  *
  * The fetch-side pieces (concurrency, the TTL sub-call caches, the music
  * folder filter, the pinned-section item resolution) stay in the client —
@@ -30,6 +30,7 @@ import com.raulshma.jellyplay.core.model.descriptor
 internal class HomeSectionsAssemblyInputs(
     val query: HomeSectionQuery,
     val continueWatchingResult: Result<List<MediaItem>> = Result.success(emptyList()),
+    val continueReadingResult: Result<List<MediaItem>> = Result.success(emptyList()),
     val nextUpResult: Result<List<MediaItem>> = Result.success(emptyList()),
     val foldersResult: Result<List<LibraryFolder>> = Result.success(emptyList()),
     /** Latest-media sub-results in folder order (music folders already filtered out by the caller). */
@@ -72,6 +73,23 @@ internal fun assembleHomeSections(input: HomeSectionsAssemblyInputs): HomeSectio
             .onFailure {
                 if (firstError == null) firstError = it
                 failedTypes.add(HomeSectionType.CONTINUE_WATCHING)
+            }
+    }
+
+    if (HomeSectionType.CONTINUE_READING in enabledSections) {
+        input.continueReadingResult
+            .onSuccess { list ->
+                // Books ride the same per-item "hide from resume rows"
+                // affordance as Continue Watching — one hiddenCwItemIds set
+                // covers both rows.
+                val filtered = list.filter { it.id !in query.hiddenCwItemIds }
+                if (filtered.isNotEmpty()) {
+                    sections.add(HomeSectionType.CONTINUE_READING.descriptor.section(filtered))
+                }
+            }
+            .onFailure {
+                if (firstError == null) firstError = it
+                failedTypes.add(HomeSectionType.CONTINUE_READING)
             }
     }
 

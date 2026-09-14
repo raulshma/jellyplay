@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.network.api
 
+import com.raulshma.jellyplay.core.network.auth.tokenAuthHeader
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -17,11 +18,18 @@ internal data class RawSession(val base: String, val token: String)
  * One seam for the jvmShared clients' hand-built raw-OkHttp requests (the
  * plugin catalogue, the newsletter / playback-reporting plugin endpoints, the
  * intro/credit timestamp probes): session guard → failover-correct base URL →
- * `X-Emby-Token` header → `newCall().execute().use` → status check, with the
+ * `Authorization` header → `newCall().execute().use` → status check, with the
  * per-endpoint failure text. The JVM twin of the wasm stack's WasmApiSupport
- * helpers (`getJson` / `postStatusOnly` / `deleteStatusOnly`) — one fold of the
- * choreography PluginApiClientImpl, MediaInfoApiClientImpl and
+ * helpers (`getJson` / `postStatusOnly` / `deleteStatusOnly`) — one fold of
+ * the choreography PluginApiClientImpl, MediaInfoApiClientImpl and
  * PlaybackApiClientImpl used to copy per endpoint.
+ *
+ * Auth is the SDK's scheme (`Authorization: MediaBrowser Token="…"`), NOT the
+ * legacy `X-Emby-Token` header this seam was born with: Jellyfin 12 gates
+ * `X-Emby-Token` behind the server's `EnableLegacyAuthorization` flag (off by
+ * default), so raw requests 401'd against 12.x — every book-progress report
+ * dead-lettered and the server never saw a PlaybackPositionTicks for books.
+ * The `Authorization` scheme works on all server versions.
  *
  * Base-address rule (the failover fix this seam exists to enforce): every
  * member derives the base from [JellyfinApiEngine.activeServerAddress] — the
@@ -81,21 +89,22 @@ internal class JellyfinRawRequester(
     }
 
     /**
-     * GET + `X-Emby-Token`; [decode] receives the success body (stream- or
-     * text-decoding stays at the call site — the plugin catalogue streams, the
-     * playback-reporting plugin decodes strings, a few endpoints return the
-     * raw text). Non-2xx throws `Exception("<failureMessage>: <code>")` — the
-     * per-endpoint texts the folded call sites pinned.
+     * GET + `Authorization` (see the class KDoc's auth note); [decode]
+     * receives the success body (stream- or text-decoding stays at the call
+     * site — the plugin catalogue streams, the playback-reporting plugin
+     * decodes strings, a few endpoints return the raw text). Non-2xx throws
+     * `Exception("<failureMessage>: <code>")` — the per-endpoint texts the
+     * folded call sites pinned.
      */
     fun <T> getJson(
         path: String,
         failureMessage: String,
         decode: (ResponseBody?) -> T,
     ): T {
-        val (base, token) = requireSession()
+        val session = requireSession()
         val request = Request.Builder()
-            .url(base + path)
-            .header("X-Emby-Token", token)
+            .url(session.base + path)
+            .tokenAuthHeader(session.token)
             .get()
             .build()
         return engine.okHttpClient.newCall(request).execute().use { response ->
@@ -114,10 +123,10 @@ internal class JellyfinRawRequester(
         failureMessage: String,
         bodyText: String = "",
     ) {
-        val (base, token) = requireSession()
+        val session = requireSession()
         val request = Request.Builder()
-            .url(base + path)
-            .header("X-Emby-Token", token)
+            .url(session.base + path)
+            .tokenAuthHeader(session.token)
             .post(bodyText.toRequestBody("application/json".toMediaType()))
             .build()
         engine.okHttpClient.newCall(request).execute().use { response ->
@@ -127,10 +136,10 @@ internal class JellyfinRawRequester(
 
     /** DELETE whose success depends only on the status code; non-2xx throws like [getJson]. */
     fun deleteStatusOnly(path: String, failureMessage: String) {
-        val (base, token) = requireSession()
+        val session = requireSession()
         val request = Request.Builder()
-            .url(base + path)
-            .header("X-Emby-Token", token)
+            .url(session.base + path)
+            .tokenAuthHeader(session.token)
             .delete()
             .build()
         engine.okHttpClient.newCall(request).execute().use { response ->
@@ -139,12 +148,12 @@ internal class JellyfinRawRequester(
     }
 
     /**
-     * GET + `X-Emby-Token` whose BODY TEXT the caller needs, null on non-2xx —
-     * failure is "no data", never an error (intro/credit timestamps,
-     * remote-subtitle search, the playback-reporting availability probe). The
-     * JVM twin of the wasm support's `getBodyTextWithEmbyToken`; [session]
-     * defaults to [requireSession], and the playback client passes its
-     * [requirePlaybackSession] flavour so its historic guard texts survive.
+     * GET whose BODY TEXT the caller needs, null on non-2xx — failure is "no
+     * data", never an error (intro/credit timestamps, remote-subtitle search,
+     * the playback-reporting availability probe). The JVM twin of the wasm
+     * support's `getBodyText`; [session] defaults to [requireSession], and the
+     * playback client passes its [requirePlaybackSession] flavour so its
+     * historic guard texts survive.
      */
     fun getBodyText(
         path: String,
@@ -152,7 +161,7 @@ internal class JellyfinRawRequester(
     ): String? {
         val request = Request.Builder()
             .url(session.base + path)
-            .header("X-Emby-Token", session.token)
+            .tokenAuthHeader(session.token)
             .get()
             .build()
         return engine.okHttpClient.newCall(request).execute().use { response ->

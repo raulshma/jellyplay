@@ -179,7 +179,7 @@ class AppRuntimeStateStore constructor(
 
     private fun readFavoriteChannels(prefs: Preferences): Set<String> {
         val raw = prefs[Keys.FAVORITE_CHANNELS]
-        if (raw == cachedFavoriteChannels.raw) return cachedFavoriteChannels.value
+        if (raw == cachedFavoriteChannels.key) return cachedFavoriteChannels.value
         val value = raw?.let {
             try { json.decodeFromString<Set<String>>(it) } catch (_: Exception) { null }
         } ?: emptySet()
@@ -189,7 +189,7 @@ class AppRuntimeStateStore constructor(
 
     private fun readRecentDlnaDevices(prefs: Preferences): List<DlnaDeviceRef> {
         val raw = prefs[Keys.RECENT_DLNA_DEVICES]
-        if (raw == cachedRecentDlnaDevices.raw) return cachedRecentDlnaDevices.value
+        if (raw == cachedRecentDlnaDevices.key) return cachedRecentDlnaDevices.value
         val value = raw?.let {
             try { json.decodeFromString<List<DlnaDeviceRef>>(it) } catch (_: Exception) { null }
         } ?: emptyList()

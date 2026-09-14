@@ -372,9 +372,11 @@ class PlaybackRepositoryImpl(
         val base = if (transcodeUrl.startsWith("http")) transcodeUrl else "$server$transcodeUrl"
         val token = apiClient.getAccessToken()
         if (token.isNullOrBlank()) return base
-        // Avoid duplicating an api_key query param if the server already
-        // embedded one in the transcoding URL.
-        return if ("api_key=" in base) base else "$base${if ('?' in base) "&" else "?"}api_key=$token"
+        // Avoid duplicating a token query param if the server already
+        // embedded one in the transcoding URL (either spelling — pre-12
+        // servers bake the legacy lowercase alias).
+        val hasTokenParam = "api_key=" in base || "ApiKey=" in base
+        return if (hasTokenParam) base else "$base${if ('?' in base) "&" else "?"}ApiKey=$token"
     }
 
     override fun getStreamUrl(

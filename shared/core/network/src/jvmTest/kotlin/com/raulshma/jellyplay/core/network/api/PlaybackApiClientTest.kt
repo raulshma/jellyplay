@@ -71,7 +71,7 @@ class PlaybackApiClientImplTest {
     fun `getStreamUrl constructs correct URL`() {
         val url = playbackClient.getStreamUrl("item-1", "source-1", 5000L)
         assertEquals(
-            "$baseUrl/Videos/item-1/stream?static=true&mediaSourceId=source-1&startTimeTicks=5000&api_key=token-123",
+            "$baseUrl/Videos/item-1/stream?static=true&mediaSourceId=source-1&startTimeTicks=5000&ApiKey=token-123",
             url,
         )
     }
@@ -81,7 +81,7 @@ class PlaybackApiClientImplTest {
         val url = playbackClient.getStreamUrl("channel-1", "source-1", 0L, liveStreamId = "live-abc")
         // static=true would break a non-seekable live tuner stream
         assertEquals(
-            "$baseUrl/Videos/channel-1/stream?mediaSourceId=source-1&startTimeTicks=0&LiveStreamId=live-abc&api_key=token-123",
+            "$baseUrl/Videos/channel-1/stream?mediaSourceId=source-1&startTimeTicks=0&LiveStreamId=live-abc&ApiKey=token-123",
             url,
         )
     }
@@ -96,19 +96,19 @@ class PlaybackApiClientImplTest {
     @Test
     fun `getSubtitleDeliveryUrl appends api key`() {
         val url = playbackClient.getSubtitleDeliveryUrl("/Videos/item/Subtitles/0")
-        assertEquals("$baseUrl/Videos/item/Subtitles/0?api_key=token-123", url)
+        assertEquals("$baseUrl/Videos/item/Subtitles/0?ApiKey=token-123", url)
     }
 
     @Test
     fun `getSubtitleDeliveryUrl handles query params in delivery URL`() {
         val url = playbackClient.getSubtitleDeliveryUrl("/Videos/item/Subtitles/0?format=srt")
-        assertEquals("$baseUrl/Videos/item/Subtitles/0?format=srt&api_key=token-123", url)
+        assertEquals("$baseUrl/Videos/item/Subtitles/0?format=srt&ApiKey=token-123", url)
     }
 
     @Test
     fun `getSubtitleDeliveryUrl handles full URL`() {
         val url = playbackClient.getSubtitleDeliveryUrl("https://other.server/video.srt")
-        assertEquals("https://other.server/video.srt?api_key=token-123", url)
+        assertEquals("https://other.server/video.srt?ApiKey=token-123", url)
     }
 
     @Test
@@ -121,19 +121,19 @@ class PlaybackApiClientImplTest {
     @Test
     fun `buildSubtitleDeliveryUrl with srt codec`() {
         val url = playbackClient.buildSubtitleDeliveryUrl("item-1", "source-1", 0, "srt")
-        assertEquals("$baseUrl/Videos/item-1/source-1/Subtitles/0/Stream.srt?api_key=token-123", url)
+        assertEquals("$baseUrl/Videos/item-1/source-1/Subtitles/0/Stream.srt?ApiKey=token-123", url)
     }
 
     @Test
     fun `buildSubtitleDeliveryUrl with subrip codec converts to srt`() {
         val url = playbackClient.buildSubtitleDeliveryUrl("item-1", "source-1", 0, "subrip")
-        assertEquals("$baseUrl/Videos/item-1/source-1/Subtitles/0/Stream.srt?api_key=token-123", url)
+        assertEquals("$baseUrl/Videos/item-1/source-1/Subtitles/0/Stream.srt?ApiKey=token-123", url)
     }
 
     @Test
     fun `buildSubtitleDeliveryUrl with null codec defaults to srt`() {
         val url = playbackClient.buildSubtitleDeliveryUrl("item-1", "source-1", 0, null)
-        assertEquals("$baseUrl/Videos/item-1/source-1/Subtitles/0/Stream.srt?api_key=token-123", url)
+        assertEquals("$baseUrl/Videos/item-1/source-1/Subtitles/0/Stream.srt?ApiKey=token-123", url)
     }
 
     @Test
@@ -168,7 +168,7 @@ class PlaybackApiClientImplTest {
     @Test
     fun `buildSubtitleDeliveryUrl still serves ASS text codec`() {
         val url = playbackClient.buildSubtitleDeliveryUrl("item-1", "source-1", 0, "ass")
-        assertEquals("$baseUrl/Videos/item-1/source-1/Subtitles/0/Stream.ass?api_key=token-123", url)
+        assertEquals("$baseUrl/Videos/item-1/source-1/Subtitles/0/Stream.ass?ApiKey=token-123", url)
     }
 
     @Test

@@ -487,7 +487,7 @@ class PlaybackRepositoryImplTest {
 
         assertEquals(PlayMethod.TRANSCODE, resolved?.playMethod)
         assertTrue(resolved?.streamUrl?.startsWith("https://test.example.com/Videos/item-1/master.m3u8") == true)
-        assertTrue(resolved?.streamUrl?.contains("api_key=token-123") == true)
+        assertTrue(resolved?.streamUrl?.contains("ApiKey=token-123") == true)
         assertEquals(3_000_000L, resolved?.maxStreamingBitrate)
     }
 
@@ -942,7 +942,7 @@ class PlaybackRepositoryImplTest {
 
         assertTrue(url.startsWith("http://server:8096"))
         assertTrue(url.contains("item-1"))
-        assertTrue(url.contains("api_key=tok"))
+        assertTrue(url.contains("ApiKey=tok"))
     }
 
     @Test

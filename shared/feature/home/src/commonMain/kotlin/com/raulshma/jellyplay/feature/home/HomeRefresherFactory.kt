@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.home
 
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
+import com.raulshma.jellyplay.core.data.repository.BookTocCacheRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.usecase.OrderHomeSectionsUseCase
@@ -40,6 +41,8 @@ internal class HomeRefresherFactory constructor(
     private val continueWatchingBroadcaster: ContinueWatchingBroadcaster,
     private val tvWatchNextScheduler: TvWatchNextScheduler,
     private val librarySyncHook: LibrarySyncHook,
+    /** Local TOC cache — the Continue Reading row's page-count source. */
+    private val bookTocCacheRepository: BookTocCacheRepository,
 ) {
     fun create(
         scope: CoroutineScope,
@@ -61,6 +64,7 @@ internal class HomeRefresherFactory constructor(
         continueWatchingBroadcaster = continueWatchingBroadcaster,
         tvWatchNextScheduler = tvWatchNextScheduler,
         librarySyncHook = librarySyncHook,
+        bookTocCacheRepository = bookTocCacheRepository,
         offlineModeManager = offlineModeManager,
         awaitOutboxDrained = awaitOutboxDrained,
         sectionPrefsProvider = sectionPrefsProvider,

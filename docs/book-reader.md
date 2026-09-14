@@ -5,9 +5,10 @@ in-app: comic archives, PDFs, and EPUBs, with your reading position synced
 back to the server so you can pick up on any device.
 
 > This document covers what JellyPlay reads and how resume, offline, and
-> sync behave. The enhancement roadmap lives in
-> [docs/book-reader-roadmap.md](./book-reader-roadmap.md); the marks-storage
-> decision is [ADR 0003](./adr/0003-local-first-reader-marks.md).
+> sync behave. The reading-experience 2.0 waves (navigation,
+> study tools, comfort, listening) and their wave log were
+> retired with completion; the marks-storage decision is
+> [ADR 0003](./adr/0003-local-first-reader-marks.md).
 
 ## Feature overview
 

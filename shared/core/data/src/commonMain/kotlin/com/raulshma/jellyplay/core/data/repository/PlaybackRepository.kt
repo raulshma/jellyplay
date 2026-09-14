@@ -125,7 +125,7 @@ interface PlaybackRepository {
     fun getSubtitleDeliveryUrl(deliveryUrl: String): String
 
     /**
-     * Direct-download URL for a book item (`/Items/{id}/Download` + api_key) —
+     * Direct-download URL for a book item (`/Items/{id}/Download` + ApiKey) —
      * the transfer URL for the reader's offline download. Books have no
      * [getStreamUrl] media source, so the download conveyor fetches the
      * original container byte-for-byte. Empty string when no active session,

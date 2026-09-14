@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.model.trimToSize
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.network.api.JellyfinApiEngine
 import com.raulshma.jellyplay.core.network.api.toActivityLogEntry
+import com.raulshma.jellyplay.core.network.auth.tokenAuthHeader
 import com.raulshma.jellyplay.core.network.websocket.buildSocketUrl
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.awaitClose
@@ -29,10 +30,12 @@ import java.util.concurrent.atomic.AtomicInteger
  * polling jobs survive cancellation — they all live in the collector's scope.
  *
  * Resilience mirrors the previous in-ViewModel implementation: the access
- * token travels in the `X-Emby-Token` header (never a query param), the
- * device id is the app's stable id, [onFailure] retries with exponential
- * backoff, and after [MAX_RECONNECT_ATTEMPTS] failures the channel falls
- * back to REST polling of the activity-log endpoint.
+ * token travels in the `Authorization` header (never a query param; the
+ * legacy `X-Emby-Token` header 401s against Jellyfin 12 servers, which gate
+ * it behind `EnableLegacyAuthorization`), the device id is the app's stable
+ * id, [onFailure] retries with exponential backoff, and after
+ * [MAX_RECONNECT_ATTEMPTS] failures the channel falls back to REST polling
+ * of the activity-log endpoint.
  *
  * [knownIds] seeds dedupe for the polling fallback so the first poll does not
  * replay entries the caller already shows.
@@ -71,8 +74,9 @@ class ActivityLogRealtimeChannel(
             val request = Request.Builder()
                 .url(wsUrl)
                 // Header (not query param) so the token never appears in URLs/logs.
-                // This is the same header Jellyfin's auth interceptor uses for REST.
-                .header("X-Emby-Token", token)
+                // The SDK's scheme — the one auth form every server version accepts
+                // (token-only is sufficient; the server reads just the Token param).
+                .tokenAuthHeader(token)
                 .build()
             webSocket?.cancel()
             webSocket = engine.okHttpClient.newWebSocket(request, object : WebSocketListener() {

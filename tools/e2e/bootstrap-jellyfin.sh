@@ -198,12 +198,13 @@ for _ in $(seq 1 10); do
   sleep 2
 done
 [ -n "$TOKEN" ] || { log "FATAL: AuthenticateByName returned no token - wipe $CONFIG_DIR and re-run"; exit 1; }
+AUTH="Authorization: MediaBrowser Token=\"$TOKEN\"" # Jellyfin 12 rejects the legacy X-Emby-Token header
 log "authenticated as $USERNAME"
 
 # --- library + item ---------------------------------------------------------------
-if ! curl -sf -m 10 -H "X-Emby-Token: $TOKEN" "$BASE/Library/VirtualFolders" | grep -q 'E2E Media'; then
+if ! curl -sf -m 10 -H "$AUTH" "$BASE/Library/VirtualFolders" | grep -q 'E2E Media'; then
   log "adding library 'E2E Media' -> /media"
-  curl -sf -m 30 -X POST -H "X-Emby-Token: $TOKEN" \
+  curl -sf -m 30 -X POST -H "$AUTH" \
     "$BASE/Library/VirtualFolders?name=E2E%20Media&collectionType=movies&paths=/media&refreshLibrary=true" >/dev/null
 fi
 
@@ -217,7 +218,7 @@ fi
 # lookup keyed on the full filename stem never matches (first run's
 # lesson: the scan HAD produced every item; the lookup just could not see them).
 item_id_by_name() { # item_id_by_name <display name> -> echoes 32-hex id or empty
-  curl -sf -m 10 -G -H "X-Emby-Token: $TOKEN" \
+  curl -sf -m 10 -G -H "$AUTH" \
     --data-urlencode "searchTerm=$1" \
     --data-urlencode "Recursive=true" \
     --data-urlencode "IncludeItemTypes=Movie" \
@@ -233,7 +234,7 @@ wait_for_item() { # wait_for_item <display name> -> echoes id; triggers one libr
     if [ -n "$id" ]; then printf '%s' "$id"; return 0; fi
     if [ "$refreshed" -eq 0 ]; then
       log "item '$1' not scanned yet - requesting library refresh"
-      curl -sf -m 15 -X POST -H "X-Emby-Token: $TOKEN" "$BASE/Library/Refresh" >/dev/null || true
+      curl -sf -m 15 -X POST -H "$AUTH" "$BASE/Library/Refresh" >/dev/null || true
       refreshed=1
     fi
     sleep 2
@@ -257,14 +258,14 @@ wait_for_item() { # wait_for_item <display name> -> echoes id; triggers one libr
 ensure_primary_image() { # ensure_primary_image <item id> <name> <poster file>
   local want_size have_size
   want_size="$(wc -c < "$3" | tr -d ' ')"
-  have_size="$(curl -sf -m 20 -H "X-Emby-Token: $TOKEN" -o /dev/null \
+  have_size="$(curl -sf -m 20 -H "$AUTH" -o /dev/null \
     -w '%{size_download}' "$BASE/Items/$1/Images/Primary" || echo 0)"
   if [ "$have_size" = "$want_size" ]; then return 0; fi
   log "primary on '$2' is ${have_size}B, want ${want_size}B - uploading $(basename "$3")"
-  curl -sf -m 60 -X POST -H "X-Emby-Token: $TOKEN" -H 'Content-Type: image/jpeg' \
+  curl -sf -m 60 -X POST -H "$AUTH" -H 'Content-Type: image/jpeg' \
     --data-binary "@$3" "$BASE/Items/$1/Images/Primary" >/dev/null \
   || { base64 -w0 "$3" > "$3.b64"
-       curl -sf -m 60 -X POST -H "X-Emby-Token: $TOKEN" -H 'Content-Type: image/jpeg' \
+       curl -sf -m 60 -X POST -H "$AUTH" -H 'Content-Type: image/jpeg' \
          --data-binary "@$3.b64" "$BASE/Items/$1/Images/Primary" >/dev/null
        rm -f "$3.b64"; }
 }

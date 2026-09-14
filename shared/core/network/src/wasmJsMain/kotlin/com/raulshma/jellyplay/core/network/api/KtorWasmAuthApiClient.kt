@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.model.QuickConnectState
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.model.normalizeServerAddress
+import com.raulshma.jellyplay.core.model.stripLegacyRoutePrefix
 import com.raulshma.jellyplay.core.network.NetworkLog
 import com.raulshma.jellyplay.core.network.RetryPolicy
 import com.raulshma.jellyplay.core.network.auth.AtomicSessionState
@@ -132,19 +133,40 @@ class KtorWasmAuthApiClient(
      * `AuthApiClientImpl.probeServerInfo`: unreachable → throw the transport
      * error (retryable via the wasm classifier; a synthetic retryable
      * ApiException when there is no cause), reachable → [ServerInfo] with the
-     * public id/name or their fallbacks.
+     * public id/name or their fallbacks. A legacy `/emby` (or
+     * `/mediabrowser`) address that answers only without its prefix is
+     * adopted in the resolved form — the wasm mirror of
+     * `ServerAddressRouter.probe`'s strip-retry.
      */
     private suspend fun probeServerInfo(address: String): ServerInfo {
         val probe = probeHttp(address)
+        if (probe.reachable && probe.serverId != null) {
+            return infoFrom(probe, address)
+        }
+        // Jellyfin 12 removed the legacy route prefixes: a 10.x server
+        // upgraded in place 404s them (any HTTP response still counts
+        // "reachable", hence the identity check). Adopt the bare address
+        // only when a real server identity answers; reverse proxies that
+        // consume the prefix answer with one on the original address and
+        // never reach here.
+        stripLegacyRoutePrefix(address)?.let { stripped ->
+            val retried = probeHttp(stripped)
+            if (retried.reachable && retried.serverId != null) {
+                return infoFrom(retried, stripped)
+            }
+        }
         if (!probe.reachable) {
             throw probe.error ?: ApiException(
                 isRetryable = true,
                 message = "Server at $address is unreachable",
             )
         }
-        return PublicSystemInfoDto(id = probe.serverId, serverName = probe.serverName)
-            .toServerInfo(address = address, fallbackServerId = randomUuidV4())
+        return infoFrom(probe, address)
     }
+
+    private fun infoFrom(probe: ProbeResult, address: String): ServerInfo =
+        PublicSystemInfoDto(id = probe.serverId, serverName = probe.serverName)
+            .toServerInfo(address = address, fallbackServerId = randomUuidV4())
 
     override suspend fun connectToServer(address: String): Result<ServerInfo> {
         val normalizedAddress = normalizeServerAddress(address)

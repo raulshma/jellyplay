@@ -47,8 +47,8 @@ import java.io.File
  *   baseline rolls its subtitle axis back instead of wiping working subs;
  * - an error page arriving as HTTP 200 HTML/JSON is rejected instead of being
  *   persisted as an unparseable sidecar;
- * - the fetch carries the `X-Emby-Token` header fallback alongside the
- *   baked-in api_key query param;
+ * - the fetch carries the `Authorization: MediaBrowser` header fallback
+ *   alongside the baked-in ApiKey query param;
  * - [DownloadRepositoryImpl.markSubtitlesPending] delegates to the DAO's
  *   atomic mark (the flag-raising SQL itself lives in SyncBaselineDaoTest).
  *
@@ -216,14 +216,14 @@ class DownloadRepositoryImplSubtitlesTest {
     }
 
     @Test
-    fun `subtitle fetch carries the X-Emby-Token header fallback`() = runTest {
+    fun `subtitle fetch carries the Authorization MediaBrowser header fallback`() = runTest {
         withServedSubtitle(
             contentType = "application/x-subrip",
             body = "1\n00:00:01,000 --> 00:00:02,000\nhi\n",
             accessToken = "token-123",
         ) { ok, recorded ->
             assertTrue(ok)
-            assertEquals("token-123", recorded.getHeader("X-Emby-Token"))
+            assertEquals("""MediaBrowser Token="token-123"""", recorded.getHeader("Authorization"))
             // The sidecar landed with manifest + file.
             val dir = subtitlesDir()
             assertTrue(File(dir, "0.srt").exists())

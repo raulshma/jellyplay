@@ -7,8 +7,8 @@ import kotlin.test.assertFalse
 /**
  * Pins the `/socket` URL assembly of [buildSocketUrl]: scheme swap
  * (http(s) → ws(s)), trailing-slash trimming, and the device-identification
- * query params. Both the app-lifetime socket (`api_key` in the URL) and the
- * activity-log channel (token in the `X-Emby-Token` header instead) build
+ * query params. Both the app-lifetime socket (`ApiKey` in the URL) and the
+ * activity-log channel (token in the `Authorization` header instead) build
  * their endpoint through this helper, so the no-apiKey variant must never
  * leak a token param.
  */
@@ -45,9 +45,9 @@ class SocketUrlTest {
     }
 
     @Test
-    fun `apiKey travels as the first api_key query param`() {
+    fun `apiKey travels as the first ApiKey query param`() {
         assertEquals(
-            "wss://example.com/socket?api_key=tok-123&deviceId=dev-1",
+            "wss://example.com/socket?ApiKey=tok-123&deviceId=dev-1",
             buildSocketUrl("https://example.com", deviceId = "dev-1", apiKey = "tok-123"),
         )
     }
@@ -55,7 +55,7 @@ class SocketUrlTest {
     @Test
     fun `deviceId is always present`() {
         val url = buildSocketUrl("https://example.com", deviceId = "dev-1")
-        assertFalse(url.contains("api_key"), "no api_key without an explicit token")
+        assertFalse(url.contains("ApiKey"), "no ApiKey without an explicit token")
         assertEquals("dev-1", url.substringAfter("deviceId="))
     }
 
@@ -95,7 +95,7 @@ class SocketUrlTest {
         // because it is what the server logs and what the realtime channels
         // assert against.
         assertEquals(
-            "wss://example.com/socket?api_key=tok-123&deviceId=dev-1&deviceName=Desk&client=JellyPlay",
+            "wss://example.com/socket?ApiKey=tok-123&deviceId=dev-1&deviceName=Desk&client=JellyPlay",
             buildSocketUrl(
                 "https://example.com",
                 deviceId = "dev-1",

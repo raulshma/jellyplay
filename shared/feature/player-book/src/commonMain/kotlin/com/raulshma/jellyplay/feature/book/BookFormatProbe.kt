@@ -18,8 +18,8 @@ data class BookDownloadMetadata(
  * download URL (ranged GET / HEAD) and report the metadata headers; they must
  * not download the body. [accessToken] rides the `Authorization: MediaBrowser`
  * header — Jellyfin 12 rejects the legacy `?api_key=` query param on data
- * endpoints with 401 (images still accept it), so the header is the only
- * reliable carrier. Null = probe failed (offline, non-2xx) — callers fall
+ * endpoints with 401, so the header is the only reliable carrier. Null =
+ * probe failed (offline, non-2xx) — callers fall
  * through to their path-based error.
  */
 fun interface BookFormatProbe {

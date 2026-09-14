@@ -14,6 +14,7 @@ class HomeSectionDescriptorTest {
         // header is the displayName; the old separate `title` field once
         // drifted to "NextUp" while every other surface showed "Next Up").
         assertEquals("continue_watching" to "Continue Watching", staticIdentity(HomeSectionType.CONTINUE_WATCHING))
+        assertEquals("continue_reading" to "Continue Reading", staticIdentity(HomeSectionType.CONTINUE_READING))
         assertEquals("next_up" to "Next Up", staticIdentity(HomeSectionType.NEXT_UP))
         assertEquals("recently_added" to "Recently Added", staticIdentity(HomeSectionType.RECENTLY_ADDED))
         assertEquals("recommendations" to "Recommended For You", staticIdentity(HomeSectionType.RECOMMENDATIONS))
@@ -87,6 +88,7 @@ descriptor.idFor("COLLECTION_7"),
         assertEquals(
             listOf(
                 HomeSectionType.CONTINUE_WATCHING,
+                HomeSectionType.CONTINUE_READING,
                 HomeSectionType.NEXT_UP,
                 HomeSectionType.LATEST_MEDIA,
                 HomeSectionType.RECENTLY_ADDED,

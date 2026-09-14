@@ -251,4 +251,47 @@ class ServerAddressRouterTest {
 
         assertTrue(result.reachable)
     }
+
+    @Test
+    fun `probe adopts the bare address when a legacy emby suffix stops answering`() = runTest {
+        // Jellyfin 12 removed the /emby route prefix: the suffixed probe
+        // 404s — any HTTP response still counts "reachable", but no server
+        // identity comes back.
+        router.prober = { address ->
+            if (address == "https://outside.example.com/emby") {
+                AddressProbeResult(reachable = true)
+            } else {
+                AddressProbeResult(reachable = true, serverId = "server-1", serverName = "Test")
+            }
+        }
+
+        val result = router.probe("https://outside.example.com/emby")
+
+        assertTrue(result.reachable)
+        assertEquals("server-1", result.serverId)
+        assertEquals("https://outside.example.com", result.resolvedAddress)
+    }
+
+    @Test
+    fun `probe keeps a legacy suffix address that still answers with an identity`() = runTest {
+        // Reverse-proxy /emby deployments keep working — no rewrite.
+        router.prober = { AddressProbeResult(reachable = true, serverId = "server-1", serverName = "Test") }
+
+        val result = router.probe("https://outside.example.com/emby")
+
+        assertTrue(result.reachable)
+        assertNull(result.resolvedAddress)
+    }
+
+    @Test
+    fun `probe leaves a legacy suffix address alone when the bare address is dead too`() = runTest {
+        router.prober = { _ ->
+            AddressProbeResult(reachable = false, error = java.io.IOException("down"))
+        }
+
+        val result = router.probe("https://outside.example.com/emby")
+
+        assertFalse(result.reachable)
+        assertNull(result.resolvedAddress)
+    }
 }

@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.network.failover
 
 import com.raulshma.jellyplay.core.model.ServerInfo
+import com.raulshma.jellyplay.core.model.stripLegacyRoutePrefix
 import com.raulshma.jellyplay.core.network.config.OkHttpConfig
 import com.raulshma.jellyplay.core.network.config.OkHttpConfigProvider
 import com.raulshma.jellyplay.core.network.config.applySelfSignedTrust
@@ -40,6 +41,13 @@ data class AddressProbeResult(
     val serverName: String? = null,
     val latencyMs: Long = 0L,
     val error: Exception? = null,
+    /**
+     * The address that actually answered when the probe had to rewrite the
+     * input: set when a legacy `/emby` or `/mediabrowser` route prefix was
+     * stripped to reach the server (Jellyfin 12 removed those prefixes);
+     * null when the probed address answered unchanged — or nothing answered.
+     */
+    val resolvedAddress: String? = null,
 )
 
 /**
@@ -288,10 +296,23 @@ class ServerAddressRouter @Inject constructor(
     /** Probes one specific address. Exposed for health checks / validation. */
     suspend fun probe(address: String): AddressProbeResult {
         val normalized = address.trim().trimEnd('/')
-        return if (normalized.isEmpty()) {
-            AddressProbeResult(reachable = false, error = IllegalArgumentException("Blank address"))
+        if (normalized.isEmpty()) {
+            return AddressProbeResult(reachable = false, error = IllegalArgumentException("Blank address"))
+        }
+        val result = prober(normalized)
+        if (result.reachable && result.serverId != null) return result
+        // Jellyfin 12 removed the legacy /emby and /mediabrowser route
+        // prefixes: a 10.x server upgraded in place 404s them (any HTTP
+        // response still counts "reachable", hence the identity check).
+        // Retry the bare address once and adopt it only when a real server
+        // identity answers; reverse proxies that consume the prefix answer
+        // with one on the original address and never reach here.
+        val stripped = stripLegacyRoutePrefix(normalized) ?: return result
+        val retried = prober(stripped)
+        return if (retried.reachable && retried.serverId != null) {
+            retried.copy(resolvedAddress = stripped)
         } else {
-            prober(normalized)
+            result
         }
     }
 

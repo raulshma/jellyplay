@@ -74,13 +74,14 @@ USER_ID="$(grep -oE '"User":\{[^}]*"Id":"[0-9a-f-]+"' <<<"$auth_json" | grep -oE
 [[ -n "$TOKEN" ]] || { echo "AUTH RESPONSE: $auth_json" >&2; fail "no AccessToken in AuthenticateByName response"; }
 [[ -n "$USER_ID" ]] || fail "no User.Id in AuthenticateByName response"
 echo "   authenticated as $USERNAME ($USER_ID)."
+AUTH="Authorization: MediaBrowser Token=\"$TOKEN\""
 
 # ── 3. resolve the item id ─────────────────────────────────────────────────
 # URL-encode the search term (spaces → %20; the clip name is plain ASCII).
 SEARCH_ENC="${ITEM_NAME// /%20}"
 items_json="$(curl -s --max-time 15 \
     "$SERVER_URL/Items?searchTerm=$SEARCH_ENC&Recursive=true&IncludeItemTypes=Movie&Limit=5" \
-    -H "X-Emby-Token: $TOKEN")"
+    -H "$AUTH")"
 ITEM_ID="$(grep -oE '"Id":"[0-9a-f-]+"' <<<"$items_json" | head -1 | sed 's/.*:"//; s/"//')"
 ITEM_FOUND_NAME="$(grep -oE '"Name":"[^"]+"' <<<"$items_json" | head -1 | sed 's/.*:"//; s/"$//')"
 [[ -n "$ITEM_ID" ]] || { echo "ITEMS RESPONSE: $items_json" >&2; fail "no Movie item matched searchTerm='$ITEM_NAME'"; }
@@ -90,7 +91,7 @@ echo "   item: '$ITEM_FOUND_NAME' ($ITEM_ID)."
 # resume position (the 12 s clip would otherwise resume at/near its end on a
 # second run and the playback step could see ENDED instead of PLAYING).
 curl -s --max-time 10 -X DELETE "$SERVER_URL/Users/$USER_ID/PlayedItems/$ITEM_ID" \
-    -H "X-Emby-Token: $TOKEN" >/dev/null || true
+    -H "$AUTH" >/dev/null || true
 
 # ── 4. app image ───────────────────────────────────────────────────────────
 if [[ ! -f "$EXE" ]]; then

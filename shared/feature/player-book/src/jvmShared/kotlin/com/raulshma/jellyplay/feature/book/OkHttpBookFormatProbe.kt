@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.book
 
 import com.raulshma.jellyplay.core.model.parseContentDispositionFileName
+import com.raulshma.jellyplay.core.network.auth.tokenAuthHeader
 import kotlin.coroutines.resume
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -17,9 +18,9 @@ import java.io.IOException
  * (`Range: bytes=0-0`) against the book's download URL — HEAD is not
  * universally supported by servers/proxies, while a ranged GET costs one byte
  * and always carries the headers. The access token rides the
- * `Authorization: MediaBrowser` header (Jellyfin 12 401s the `?api_key=`
- * query param on data endpoints); the URL keeps its api_key for pre-12
- * servers, which ignore the header they don't know. The body is closed
+ * `Authorization: MediaBrowser` header (Jellyfin 12 401s the legacy
+ * `?api_key=` query param on data endpoints); the URL keeps its capital
+ * `ApiKey` param, which every server since 10.8 accepts. The body is closed
  * immediately; failures resolve to null (the reader falls back to its
  * path-based error naming).
  */
@@ -31,7 +32,11 @@ class OkHttpBookFormatProbe(
         val request = Request.Builder()
             .url(url)
             .header("Range", "bytes=0-0")
-            .apply { if (!accessToken.isNullOrBlank()) header("Authorization", mediaBrowserAuth(accessToken)) }
+            .apply {
+                if (!accessToken.isNullOrBlank()) {
+                    tokenAuthHeader(accessToken)
+                }
+            }
             .build()
         val call = client.newCall(request)
         try {
@@ -58,10 +63,5 @@ class OkHttpBookFormatProbe(
             }
         })
         cont.invokeOnCancellation { cancel() }
-    }
-
-    companion object {
-        /** Shared by the probe and the fetcher — the only auth form Jellyfin 12 accepts. */
-        fun mediaBrowserAuth(accessToken: String): String = "MediaBrowser Token=\"$accessToken\""
     }
 }

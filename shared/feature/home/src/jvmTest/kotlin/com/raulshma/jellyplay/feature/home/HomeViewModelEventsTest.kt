@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.data.download.DownloadRequestResult
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
+import com.raulshma.jellyplay.core.data.repository.NoopBookTocCacheRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineFirstItemResolver
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
@@ -285,6 +286,7 @@ class HomeViewModelEventsTest {
             continueWatchingBroadcaster = continueWatchingBroadcaster,
             tvWatchNextScheduler = tvWatchNextScheduler,
             librarySyncHook = librarySyncHook,
+            bookTocCacheRepository = NoopBookTocCacheRepository(),
         ),
         syncStatusStateHolderFactory = JvmHomeSyncStatusFactory(
             SyncStatusStateHolderFactory(

@@ -26,11 +26,11 @@ exactly like the SDK-based native clients:
 | Request kind | Headers |
 | ------------ | ------- |
 | All API calls | `Authorization: MediaBrowser Client="JellyPlay", Version="1.0", DeviceId="<uuid>", Device="JellyPlay+Web", Token="<access token>"` (the `Token` parameter is omitted before login; note the SDK-style space encoding, hence `JellyPlay+Web`) |
-| Raw GETs (subtitles, intro/credits) | `X-Emby-Token: <access token>` |
+| Raw GETs (subtitles, intro/credits) | The same `Authorization: MediaBrowser` header as every other call (the identity parameters plus `Token="<access token>"`; Jellyfin 12 rejects the legacy `X-Emby-Token` header — the native shells' raw OkHttp seam sends the `Token`-only form there) |
 | POST bodies (login, playback reports, mutations) | `Content-Type: application/json` |
 | Error handling | reads the `Retry-After` response header on 429/503 |
 
-`Authorization`, `X-Emby-Token` and a JSON `Content-Type` are all
+`Authorization` and a JSON `Content-Type` are both
 non-simple per the fetch spec, so **every API request triggers an `OPTIONS`
 preflight**. On a default Jellyfin install the server's own CORS middleware
 answers those; if you are adding CORS at the proxy instead, the proxy must
@@ -65,7 +65,7 @@ server {
         if ($request_method = OPTIONS) {
             add_header Access-Control-Allow-Origin $jellyplay_cors always;
             add_header Access-Control-Allow-Methods "GET, POST, DELETE, HEAD, OPTIONS" always;
-            add_header Access-Control-Allow-Headers "Authorization, X-Emby-Token, Content-Type" always;
+            add_header Access-Control-Allow-Headers "Authorization, Content-Type" always;
             add_header Access-Control-Max-Age "86400" always;
             add_header Content-Length 0;
             return 204;
@@ -107,7 +107,7 @@ media.example.net {
 	handle @preflight {
 		header Access-Control-Allow-Origin "https://jellyplay.example.com"
 		header Access-Control-Allow-Methods "GET, POST, DELETE, HEAD, OPTIONS"
-		header Access-Control-Allow-Headers "Authorization, X-Emby-Token, Content-Type"
+		header Access-Control-Allow-Headers "Authorization, Content-Type"
 		header Access-Control-Max-Age "86400"
 		respond "" 204
 	}
@@ -119,8 +119,8 @@ media.example.net {
 
 ## Notes
 
-- **Credentials are not used.** The web client authenticates with headers
-  (`Authorization` / `X-Emby-Token`), never cookies, so
+- **Credentials are not used.** The web client authenticates with the
+  `Authorization` header, never cookies, so
   `Access-Control-Allow-Credentials` is not required and the allowed origin
   can be a literal echo of the request origin.
 - **HTTPS both sides.** A page served over HTTPS cannot call an

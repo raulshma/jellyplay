@@ -19,3 +19,27 @@ fun normalizeServerAddress(address: String): String = address.trim().trimEnd('/'
     if (it.startsWith("http://") || it.startsWith("https://")) it
     else "https://$it"
 }
+
+/**
+ * Strips a trailing legacy `/emby` or `/mediabrowser` route prefix from a
+ * schemed server address, or returns null when none is present.
+ *
+ * Jellyfin served its API under both aliases through 10.x; Jellyfin 12
+ * removed them, so an address carrying one keeps working only when a
+ * reverse proxy consumes the prefix before traffic reaches the server.
+ * Connect-time probes use this to retry the bare address (and adopt it when
+ * a real server identity answers) before declaring the server unreachable.
+ *
+ * Only a prefix that spans the whole path qualifies — anything deeper
+ * (`/jellyfin/emby`, `/emby/sub`, a query string) belongs to the deployment
+ * and is left alone.
+ */
+fun stripLegacyRoutePrefix(address: String): String? {
+    val schemeEnd = address.indexOf("://")
+    if (schemeEnd < 0) return null
+    val pathStart = address.indexOf('/', schemeEnd + 3)
+    if (pathStart < 0) return null
+    val path = address.substring(pathStart).trimEnd('/')
+    if (!path.equals("/emby", ignoreCase = true) && !path.equals("/mediabrowser", ignoreCase = true)) return null
+    return address.substring(0, pathStart)
+}

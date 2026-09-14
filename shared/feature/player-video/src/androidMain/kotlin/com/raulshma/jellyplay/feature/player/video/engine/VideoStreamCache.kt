@@ -39,7 +39,7 @@ import kotlin.concurrent.withLock
  * ([VIDEO_CACHE_DIR_NAME], a sibling of audio's `audio_cache`) and is **not**
  * swept by [com.raulshma.jellyplay.core.data.cache.CacheManager] (see the
  * exclusion added there). Cache keys strip token rotation via
- * [STRIP_SAFE_QUERY_PARAMS] (`api_key`) so re-auth does not invalidate
+ * [STRIP_SAFE_QUERY_PARAMS] (`ApiKey`/`api_key`) so re-auth does not invalidate
  * cached content. Session-keyed URLs are never key-normalized — distinct
  * sessions are distinct content ([isSessionKeyedUrl]); eligibility gating in
  * [ExoPlayerEngine] rejects them, and the key factory is the backstop.

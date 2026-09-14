@@ -85,7 +85,7 @@ class AudioEffectsStore constructor(
 
     internal fun read(prefs: Preferences): AudioEffectsSlice {
         val equalizerSettingsRaw = prefs[Keys.EQUALIZER_SETTINGS]
-        val equalizerSettings = if (equalizerSettingsRaw != cachedEqualizerSettings.raw) {
+        val equalizerSettings = if (equalizerSettingsRaw != cachedEqualizerSettings.key) {
             try {
                 equalizerSettingsRaw?.let { PreferenceCodec.json.decodeFromString<EqualizerSettings>(it) }
             } catch (_: Exception) {

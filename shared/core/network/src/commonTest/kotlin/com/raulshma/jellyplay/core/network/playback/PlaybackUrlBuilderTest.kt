@@ -17,7 +17,7 @@ class PlaybackUrlBuilderTest {
     @Test
     fun `video stream url uses static prefix with ticks and api key`() {
         assertEquals(
-            "$BASE/Videos/item1/stream?static=true&mediaSourceId=ms1&startTimeTicks=123456789&api_key=$KEY",
+            "$BASE/Videos/item1/stream?static=true&mediaSourceId=ms1&startTimeTicks=123456789&ApiKey=$KEY",
             buildStreamUrl(
                 baseUrl = BASE, apiKey = KEY, userId = USER, userServerId = null,
                 itemId = "item1", mediaSourceId = "ms1", startTimeTicks = 123456789,
@@ -28,11 +28,11 @@ class PlaybackUrlBuilderTest {
     @Test
     fun `max bitrate is appended only when positive`() {
         assertEquals(
-            "$BASE/Videos/i/stream?static=true&mediaSourceId=m&startTimeTicks=0&maxBitrate=8000&api_key=$KEY",
+            "$BASE/Videos/i/stream?static=true&mediaSourceId=m&startTimeTicks=0&maxBitrate=8000&ApiKey=$KEY",
             buildStreamUrl(BASE, KEY, USER, null, "i", "m", maxBitrate = 8000),
         )
         assertEquals(
-            "$BASE/Videos/i/stream?static=true&mediaSourceId=m&startTimeTicks=0&api_key=$KEY",
+            "$BASE/Videos/i/stream?static=true&mediaSourceId=m&startTimeTicks=0&ApiKey=$KEY",
             buildStreamUrl(BASE, KEY, USER, null, "i", "m", maxBitrate = 0),
         )
     }
@@ -40,12 +40,12 @@ class PlaybackUrlBuilderTest {
     @Test
     fun `audio universal endpoint carries deviceId and userId`() {
         assertEquals(
-            "$BASE/Audio/i/universal?mediaSourceId=m&startTimeTicks=0&deviceId=null&userId=$USER&api_key=$KEY",
+            "$BASE/Audio/i/universal?mediaSourceId=m&startTimeTicks=0&deviceId=null&userId=$USER&ApiKey=$KEY",
             buildStreamUrl(BASE, KEY, USER, null, "i", "m", useAudioEndpoint = true),
             "userServerId null interpolates verbatim (JVM parity: serverId is never populated)",
         )
         assertEquals(
-            "$BASE/Audio/i/universal?mediaSourceId=m&startTimeTicks=0&deviceId=srv&userId=$USER&api_key=$KEY",
+            "$BASE/Audio/i/universal?mediaSourceId=m&startTimeTicks=0&deviceId=srv&userId=$USER&ApiKey=$KEY",
             buildStreamUrl(BASE, KEY, USER, "srv", "i", "m", useAudioEndpoint = true),
         )
     }
@@ -53,16 +53,16 @@ class PlaybackUrlBuilderTest {
     @Test
     fun `live streams skip static and echo LiveStreamId`() {
         assertEquals(
-            "$BASE/Videos/i/stream?mediaSourceId=m&startTimeTicks=7&LiveStreamId=ls1&api_key=$KEY",
+            "$BASE/Videos/i/stream?mediaSourceId=m&startTimeTicks=7&LiveStreamId=ls1&ApiKey=$KEY",
             buildStreamUrl(BASE, KEY, USER, null, "i", "m", startTimeTicks = 7, liveStreamId = "ls1"),
         )
         assertEquals(
-            "$BASE/Audio/i/universal?mediaSourceId=m&startTimeTicks=0&deviceId=null&userId=$USER&LiveStreamId=ls2&api_key=$KEY",
+            "$BASE/Audio/i/universal?mediaSourceId=m&startTimeTicks=0&deviceId=null&userId=$USER&LiveStreamId=ls2&ApiKey=$KEY",
             buildStreamUrl(BASE, KEY, USER, null, "i", "m", useAudioEndpoint = true, liveStreamId = "ls2"),
         )
         // Blank live id counts as VOD.
         assertEquals(
-            "$BASE/Videos/i/stream?static=true&mediaSourceId=m&startTimeTicks=0&api_key=$KEY",
+            "$BASE/Videos/i/stream?static=true&mediaSourceId=m&startTimeTicks=0&ApiKey=$KEY",
             buildStreamUrl(BASE, KEY, USER, null, "i", "m", liveStreamId = ""),
         )
     }
@@ -76,7 +76,7 @@ class PlaybackUrlBuilderTest {
     @Test
     fun `book download url is the raw Download endpoint with api key`() {
         assertEquals(
-            "$BASE/Items/item1/Download?api_key=$KEY",
+            "$BASE/Items/item1/Download?ApiKey=$KEY",
             buildBookDownloadUrl(BASE, KEY, "item1"),
         )
     }
@@ -87,19 +87,19 @@ class PlaybackUrlBuilderTest {
         // activeBaseUrl raw, so a trailing-slash base used to
         // yield "//Videos/…" on the JVM only.
         assertEquals(
-            "$BASE/Videos/i/stream?static=true&mediaSourceId=m&startTimeTicks=0&api_key=$KEY",
+            "$BASE/Videos/i/stream?static=true&mediaSourceId=m&startTimeTicks=0&ApiKey=$KEY",
             buildStreamUrl("$BASE/", KEY, USER, null, "i", "m"),
         )
         assertEquals(
-            "$BASE/Videos/i/m/Subtitles/0/Stream.srt?api_key=$KEY",
+            "$BASE/Videos/i/m/Subtitles/0/Stream.srt?ApiKey=$KEY",
             buildSubtitleDeliveryUrl("$BASE/", KEY, "i", "m", 0, null),
         )
         assertEquals(
-            "$BASE/Videos/i/m/Subtitles/1/Stream.vtt?api_key=$KEY",
+            "$BASE/Videos/i/m/Subtitles/1/Stream.vtt?ApiKey=$KEY",
             resolveSubtitleDeliveryUrl("$BASE/", KEY, "/Videos/i/m/Subtitles/1/Stream.vtt"),
         )
         assertEquals(
-            "$BASE/Items/item1/Download?api_key=$KEY",
+            "$BASE/Items/item1/Download?ApiKey=$KEY",
             buildBookDownloadUrl("$BASE/", KEY, "item1"),
         )
     }
@@ -107,15 +107,15 @@ class PlaybackUrlBuilderTest {
     @Test
     fun `subtitle delivery url maps codecs and refuses image formats`() {
         assertEquals(
-            "$BASE/Videos/i/m/Subtitles/2/Stream.srt?api_key=$KEY",
+            "$BASE/Videos/i/m/Subtitles/2/Stream.srt?ApiKey=$KEY",
             buildSubtitleDeliveryUrl(BASE, KEY, "i", "m", 2, "subrip"),
         )
         assertEquals(
-            "$BASE/Videos/i/m/Subtitles/3/Stream.ass?api_key=$KEY",
+            "$BASE/Videos/i/m/Subtitles/3/Stream.ass?ApiKey=$KEY",
             buildSubtitleDeliveryUrl(BASE, KEY, "i", "m", 3, "ASS"),
         )
         assertEquals(
-            "$BASE/Videos/i/m/Subtitles/0/Stream.srt?api_key=$KEY",
+            "$BASE/Videos/i/m/Subtitles/0/Stream.srt?ApiKey=$KEY",
             buildSubtitleDeliveryUrl(BASE, KEY, "i", "m", 0, null),
             "null codec defaults to srt",
         )
@@ -126,11 +126,11 @@ class PlaybackUrlBuilderTest {
     @Test
     fun `server delivery urls are absolutized with the right separator`() {
         assertEquals(
-            "$BASE/Videos/i/m/Subtitles/1/Stream.vtt?api_key=$KEY",
+            "$BASE/Videos/i/m/Subtitles/1/Stream.vtt?ApiKey=$KEY",
             resolveSubtitleDeliveryUrl(BASE, KEY, "/Videos/i/m/Subtitles/1/Stream.vtt"),
         )
         assertEquals(
-            "https://cdn.example/sub?track=9&api_key=$KEY",
+            "https://cdn.example/sub?track=9&ApiKey=$KEY",
             resolveSubtitleDeliveryUrl(BASE, KEY, "https://cdn.example/sub?track=9"),
         )
         assertEquals("", resolveSubtitleDeliveryUrl(null, KEY, "/sub"))

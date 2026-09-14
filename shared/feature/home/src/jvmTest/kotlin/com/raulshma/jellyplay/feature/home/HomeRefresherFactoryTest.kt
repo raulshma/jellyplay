@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.home
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import kotlin.test.Test
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
+import com.raulshma.jellyplay.core.data.repository.NoopBookTocCacheRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.usecase.OrderHomeSectionsUseCase
@@ -115,6 +116,7 @@ class HomeRefresherFactoryTest {
             continueWatchingBroadcaster = continueWatchingBroadcaster,
             tvWatchNextScheduler = tvWatchNextScheduler,
             librarySyncHook = librarySyncHook,
+            bookTocCacheRepository = NoopBookTocCacheRepository(),
         )
         val scope = CoroutineScope(SupervisorJob() + StandardTestDispatcher(testScheduler))
         refresherScope = scope

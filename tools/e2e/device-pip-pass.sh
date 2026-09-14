@@ -188,10 +188,11 @@ TOKEN="$(curl -sf -m 10 -X POST -H 'X-Emby-Authorization: MediaBrowser Client="e
   -H 'Content-Type: application/json' -d "{\"Username\":\"$USERNAME\",\"Pw\":\"$PASSWORD\"}" \
   "$SERVER/Users/AuthenticateByName" | grep -oi '"accesstoken":"[^"]*"' | head -1 | cut -d'"' -f4)"
 [ -n "$TOKEN" ] && pass "fixture auth (harness)" || { fail "fixture auth (harness)"; exit 1; }
-curl -sf -m 15 -X POST -H "X-Emby-Token: $TOKEN" "$SERVER/Library/Refresh" >/dev/null || true
+AUTH="Authorization: MediaBrowser Token=\"$TOKEN\""
+curl -sf -m 15 -X POST -H "$AUTH" "$SERVER/Library/Refresh" >/dev/null || true
 CLIP_ID=""
 for i in $(seq 1 30); do
-  CLIP_ID="$(curl -sf -m 10 -G -H "X-Emby-Token: $TOKEN" \
+  CLIP_ID="$(curl -sf -m 10 -G -H "$AUTH" \
     --data-urlencode "searchTerm=$CLIP_NAME" --data-urlencode "Recursive=true" \
     --data-urlencode "IncludeItemTypes=Movie" "$SERVER/Items" \
     | tr '{' '\n' | grep -F "\"Name\":\"$CLIP_NAME\"" \

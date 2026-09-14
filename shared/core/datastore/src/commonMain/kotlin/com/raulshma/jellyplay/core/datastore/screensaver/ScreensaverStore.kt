@@ -81,7 +81,7 @@ class ScreensaverStore constructor(
 
     private fun readDreamImageCategories(prefs: Preferences): Set<DreamImageCategory> {
         val raw = prefs[Keys.DREAM_IMAGE_CATEGORIES]
-        return if (raw != cachedDreamImageCategories.raw) {
+        return if (raw != cachedDreamImageCategories.key) {
             try {
                 raw?.let { json.decodeFromString<Set<DreamImageCategory>>(it) } ?: DEFAULT_DREAM_IMAGE_CATEGORIES
             } catch (_: Exception) { DEFAULT_DREAM_IMAGE_CATEGORIES }

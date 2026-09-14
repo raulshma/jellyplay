@@ -677,7 +677,12 @@ computation producing a sealed surface — fixed precedence `HardError` →
 `NoDownloads` → `Music` → `Content` — where `Content` carries the
 pre-folded `HomeFeed` plus the winning render source carried whole (the
 screen's hero/banner/quick-action facts are single reads of it, not
-re-encoded booleans). The fold relies on the equivalence
+re-encoded booleans) and the winning Continue-Reading fractions map (keyed
+on the carried FEED — the offline gate's decodes for an offline feed, the
+refresher's for an online one; `FallbackPending` renders the offline feed
+and reads the offline map even while the mode mirror still says ONLINE —
+the corner a former screen-side `renderingOffline` pick missed). The fold
+relies on the equivalence
 `offlineMode != ONLINE` ⟺ `renderSource == Offline.Explicit` (both
 directions pinned by `HomeRenderSourceTest`); the screen's `when` is
 exhaustive over the result and decides nothing; `computeHomeRenderSource`
@@ -726,7 +731,7 @@ preserved; RESUMED passed as an argument), and the focus-keyed snap effect.
 backs BOTH production paths — the wasm client and
 `LibraryApiClientImpl.getHomeSections` (both fetch through
 `HomeSectionsFetcher`, which supplies `HomeSectionsAssemblyInputs`). The
-section-ordering policy (CW → Next Up → per-folder Latest →
+section-ordering policy (CW → Continue Reading → Next Up → per-folder Latest →
 Recently-Added-insert-after-last-latest → Recommendations/suggestions →
 pinned) is pinned ONCE for both paths by `HomeSectionsAssemblerTest`.
 
@@ -737,7 +742,7 @@ sub-call schedule, the semaphore bounds (4 for the latest/pinned fan-outs, 3
 for similar-items), the recommendations chain and the two
 `NETWORK_SUBCALL_TTL_MS` TTL sub-caches — it decides what/when is fetched,
 while the assembler decides what the fetched data becomes. Its
-`HomeSectionSources` port (the ten client sub-calls; parameter defaults
+`HomeSectionSources` port (the eleven client sub-calls; parameter defaults
 omitted because Kotlin forbids duplicate defaults across super-interfaces)
 is satisfied by `LibraryApiClientImpl` and `KtorWasmLibraryApiClient` for
 free via their common `LibraryApiClient` supertype. The fetcher's
@@ -850,10 +855,21 @@ the offline feed claims every non-wide section) pinned by
 `HomeRowChassisTest` instead of living only in the render site, whose `when`
 is now exhaustive and decides nothing. `sectionHasSeeAll` is the one See-All
 gate (RECENTLY_ADDED / LATEST_MEDIA) for both the online and mirrored rows,
-and `cwRowClick` is the one CW/NEXT_UP click routing the online and offline
-wide rows share end-to-end — sites differ only in the item mapper, and the
+`resumeRowClick` is the one resume-row click routing every resume row funnels
+through (the CW / Next Up wide rows call it directly; Continue Reading
+reaches it through `posterRowClick`) — call sites differ only in the item
+mapper, and the
 ASK branch maps before the sink, so the Resume-vs-Details dialog wiring
-cannot drift. On the discover side, `DiscoverRowSlot` +
+cannot drift — and `posterRowClick` (beside it) is the matching selection
+for the two poster rows: a resume-section poster row (`isResumeSection`,
+the one CW/CR predicate both folds key on) rides `resumeRowClick`,
+every other poster row opens through the caller's plain-click sink, so the
+poster rows cannot drift on which section types honor the resume behavior
+(`bookProgressFractionFor` in `BookProgressFractions.kt` is the same fold
+for the rows' progress-bar lookup: decoded TOC fraction where the map knows
+the item, percent fallback otherwise, remembered per fractions change —
+pinned in `BookProgressFractionsTest`); `HomeRowChassisTest` pins the two
+click folds. On the discover side, `DiscoverRowSlot` +
 `discoverPatternFor`/`discoverItemWidth` (`HomeDiscoverSection.kt`) write
 the 12-arg `SeerrDiscoverRow` invocation once: the nine shared arguments
 ride a `DiscoverRowSlotArgs` bundle built at composable scope, and the
@@ -901,7 +917,23 @@ in BOTH directions; `HomeSurfaceTest` pins the render-branch fold's
 precedence (and that `Content` carries the winning render source);
 `HomeSectionPrefsTest` (core/model, beside the algebra) pins the three
 section-config write policies directly; `HomeDiscoveryStoreTest` pins the
-store commands' read-modify-write + normalization; `HomeQuickActionsTest`
+store commands' read-modify-write + normalization — and, since the
+Continue-Reading batch, the enabled-set VERSION-UNION read policy:
+`HOME_ENABLED_SECTION_TYPES_VERSION` stamps every write of the persisted
+enabled-section set, and a set read at an older stamp is unioned with the
+sections shipped in each intervening version (v1 unions in
+`CONTINUE_READING`), so a newly shipped section defaults to VISIBLE for
+users whose persisted set predates it — one-shot only, because every write
+stamps the current version, keeping a later disable the user's own choice
+(the per-user parse cache keys on stamp+raw for the same reason: the CR
+disable rewrites the SAME encoded set under the new stamp, so a cache keyed
+on raw alone would serve the stale union until restart). The ORDER twin
+ships with it: a persisted order missing a configurable section re-inserts
+it at its DEFAULT-ORDER position (after the last present section whose
+default index precedes it — CR lands between CW and Next Up, not at the
+tail where the next `moveSection` read-modify-write would bake it), no
+stamp needed because absence itself is the signal;
+`HomeQuickActionsTest`
 pins the quick-action routing table; `HomeSearchSessionTest` pins the close
 ordering; `HomeSectionConfigSheetTest` pins the production
 `sectionConfigCapabilities` derivation; `HomeSearchOverlayTest` and
@@ -1334,7 +1366,19 @@ eight copies across core:data / core:network (jvm + wasm failover probing)
 / auth's TLS-trust prompt / settings' trust toggle now call it, and the two
 private twins are gone. Trim-only sites (`switchServerAddress`,
 `NetworkOfflineStore`, `ServerAddressRouter`, `SocketUrl`) are a different
-policy and stay local.
+policy and stay local. The Jellyfin-12 auth batch adds the legacy-route
+policy beside it: **`stripLegacyRoutePrefix`** (same file, pinned in
+`ServerAddressTest`) recognizes a trailing `/emby` / `/mediabrowser` path —
+the route aliases Jellyfin 12 removed. `ServerAddressRouter.probe` retries
+the stripped bare address when the original answers without a server
+identity (a 404 still counts "reachable", hence the identity check) or is
+outright unreachable, and
+reports it as `AddressProbeResult.resolvedAddress`; the auth clients
+persist the resolved form (`AuthApiClientImpl`, the wasm
+`KtorWasmAuthApiClient` mirror — `ServerAddressRouterTest` /
+`AuthApiClientTest` pin the JVM pair; the wasm twin is kept by the
+mirror-twin convention, not server-tested), so the next connect probes the
+working address directly.
 
 The 2026-09-07 second batch deepened the paged reads and the telemetry
 capture side. **`JellyfinPagingSource`** (`shared/core/data` commonMain
@@ -1618,8 +1662,8 @@ the 2026-09-07 fold) is the ONE seam for the hand-built raw-OkHttp
 requests the plugin catalogue, newsletter/playback-reporting plugin
 endpoints and intro/credit probes used to copy per endpoint (~28 sites
 across Plugin/MediaInfo/Playback clients, three incompatible private
-guard adapters): session guard → `X-Emby-Token` →
-`newCall().execute().use` → status check with the per-endpoint failure
+guard adapters): session guard → `Authorization: MediaBrowser`
+token header → `newCall().execute().use` → status check with the per-endpoint failure
 text, over `getJson`/`postStatusOnly`/`deleteStatusOnly`/`getBodyText`
 members mirroring the wasm `WasmApiSupport` shapes (this is the JVM
 twin of those helpers, NOT the deferred cross-platform WireRequest
@@ -1645,6 +1689,18 @@ MediaInfo/LiveTv are gone), `MetadataApiClientImpl`'s 12 UUID + 3
 ImageType ladders are two private helpers, and `TtlCache.getOrPut`
 (core/model, pinned beside `TtlCacheTest`) folds the get→fetch→put
 contortion in the Admin/MediaInfo cache-aside sites.
+
+The same Jellyfin-12 auth migration's query-param half: the playback
+stream/subtitle and book-download builders (`PlaybackUrlBuilders`) and the
+socket URL (`SocketUrl`) send the token as capital `ApiKey` — the lowercase
+`api_key` alias is legacy, gated behind the server's
+`EnableLegacyAuthorization` flag (off by default in Jellyfin 12), where
+`/Items/{id}/Download` and the socket 401/403 on it — while
+`StreamCacheKeys` strips BOTH spellings from byte-cache keys (pre-12
+servers bake the lowercase alias into URLs they hand back, so old cached
+keys must keep resolving), and the mpv token redaction widened to match —
+the redaction regex set now lives in `MpvLogRedaction` (player-video
+commonMain) so `MpvLogRedactionTest` pins it beside the fold.
 
 ## Navigation destinations
 
@@ -2899,9 +2955,10 @@ probe/persist choreographies getting homes.
 ## The 2026-09-13 batch (reading experience 2.0)
 
 The book reader (`shared/feature/player-book`, landed earlier the same day
-with CBZ/CBR/PDF/EPUB reading) grew the advanced-reading surface of
-docs/book-reader-roadmap.md; the module map of that roadmap is the
-authoritative overview. Shape notes for engineers:
+with CBZ/CBR/PDF/EPUB reading) grew the advanced-reading surface of the
+reading-experience 2.0 roadmap — all waves shipped; the roadmap doc was
+retired at completion, and `docs/book-reader.md` is the reader's
+user-facing doc. Shape notes for engineers:
 
 - **Marks are a data-layer feature, not a reader feature**: Room schema 55
   adds `book_bookmarks` + `book_annotations` (indexed by itemId), exposed

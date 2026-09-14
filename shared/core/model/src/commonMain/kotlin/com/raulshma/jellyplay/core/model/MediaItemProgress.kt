@@ -17,3 +17,27 @@ fun MediaItem.progressFraction(positionTicks: Long? = playbackPositionTicks): Fl
     val runtime = runTimeTicks?.takeIf { it > 0 } ?: return null
     return (position.toFloat() / runtime.toFloat()).coerceIn(0f, 1f)
 }
+
+/**
+ * Reading progress (0..1) for a BOOK item, decoded from the
+ * [BookProgressPolicy] ticks encodings the reader reports — [progressFraction]
+ * cannot apply here because books carry no `runTimeTicks`, so the video
+ * position/runtime math never leaves 0.
+ *
+ * A known `pageCount` (paged PDF/CBZ, from the book TOC cache) resolves the
+ * page index encoding exactly; everything else — EPUB reflowable percent
+ * ticks, or an unknown page count — falls back to the percent decoding
+ * (`ticksToPercent`), which is also the correct reading of percent-encoded
+ * paged positions within a page. Null when the item has no saved position, so
+ * "no progress to show" stays distinguishable from a 0-position start.
+ */
+fun MediaItem.bookProgressFraction(pageCount: Int? = null): Float? {
+    val position = playbackPositionTicks ?: return null
+    if (position <= 0L) return null
+    val fraction = if (pageCount != null && pageCount > 0) {
+        (BookProgressPolicy.ticksToPage(position) + 1f) / pageCount
+    } else {
+        BookProgressPolicy.ticksToPercent(position).toFloat()
+    }
+    return fraction.coerceIn(0f, 1f)
+}

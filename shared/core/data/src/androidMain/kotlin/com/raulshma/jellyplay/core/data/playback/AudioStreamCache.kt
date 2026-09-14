@@ -31,8 +31,8 @@ import kotlin.coroutines.resumeWithException
  *
  * The cache directory lives at `cacheDir/audio_cache` and is **not** swept by
  * [com.raulshma.jellyplay.core.data.cache.CacheManager] (see the exclusion added
- * there). Cache keys strip the `api_key` query parameter so token rotation
- * does not invalidate cached content.
+ * there). Cache keys strip the token query parameter (`ApiKey`/`api_key`) so
+ * token rotation does not invalidate cached content.
  *
  * If the cache directory cannot be opened (disk full, permissions),
  * [getCacheDataSourceFactory] degrades to passthrough — returning the upstream
@@ -136,7 +136,7 @@ open class AudioStreamCache(
     /** Bytes currently held in the cache. */
     fun cacheSpaceBytes(): Long = cache?.cacheSpace ?: 0L
 
-    /** Cached bytes for a given URL (api_key stripped from the key). */
+    /** Cached bytes for a given URL (token param stripped from the key). */
     fun getCachedBytes(url: String): Long {
         val sc = cache ?: return 0L
         val key = stripApiKey(url)
@@ -210,6 +210,6 @@ open class AudioStreamCache(
         }
     }
 
-    /** Strips `api_key=...` from the query string so cache keys are token-invariant. */
+    /** Strips the token param (`ApiKey`/`api_key`) from the query string so cache keys are token-invariant. */
     internal fun stripApiKey(url: String): String = stripVolatileQueryParams(url, STRIP_SAFE_QUERY_PARAMS)
 }

@@ -38,7 +38,7 @@ import kotlin.test.assertTrue
  * the recorded follow-up; playback waited for the JVM impl's hand-built
  * stream-URL table to fold onto the shared PlaybackUrlBuilders, and the JVM
  * impl's raw-OkHttp getBodyText probes are extracted by [jvmWireCalls] to
- * match wasm's getBodyTextWithEmbyToken, and its raw-OkHttp postStatusOnly
+ * match wasm's getBodyText, and its raw-OkHttp postStatusOnly
  * mutations to match wasm's postStatusOnly). The ARR/Seerr/Tmdb wasm mirrors
  * are OUT of scope for this extraction — they use a different URL-builder
  * idiom on both sides.
@@ -366,7 +366,7 @@ class WasmMirrorContractTest {
     private val wasmVerbs = mapOf(
         "getJson" to "GET",
         "getBytes" to "GET",
-        "getBodyTextWithEmbyToken" to "GET",
+        "getBodyText" to "GET",
         "postForJson" to "POST",
         "postStatusOnly" to "POST",
         "deleteStatusOnly" to "DELETE",
@@ -384,7 +384,7 @@ class WasmMirrorContractTest {
     private fun wasmWireCalls(block: String, itemsDefaults: Set<String>): List<WireCall> {
         val transport = Regex(
             // one nesting level of type args: getJson<List<BaseItemDtoWire>>(
-            "\\b(getJson|getBytes|getBodyTextWithEmbyToken|postForJson|postStatusOnly|deleteStatusOnly)\\s*(?:<(?:[^<>]|<[^<>]*>)+>)?\\s*\\(",
+            "\\b(getJson|getBytes|getBodyText|postForJson|postStatusOnly|deleteStatusOnly)\\s*(?:<(?:[^<>]|<[^<>]*>)+>)?\\s*\\(",
         )
         val sites = transport.findAll(block).toList()
         val singleCall = sites.size == 1
@@ -477,7 +477,7 @@ class WasmMirrorContractTest {
         }
 
         // Raw-OkHttp calls through JellyfinRawRequester — getBodyText is the
-        // X-Emby-Token GET that the wasm side names getBodyTextWithEmbyToken
+        // Authorization-header GET that the wasm side also names getBodyText
         // (the token rides the header on both sides, never the query).
         for (match in Regex("\\brawRequester\\.getBodyText\\s*\\(").findAll(block)) {
             val openParen = block.indexOf('(', match.range.endInclusive - 1)
@@ -487,7 +487,7 @@ class WasmMirrorContractTest {
         }
 
         // Raw-OkHttp POSTs through JellyfinRawRequester — the wasm twin is
-        // postStatusOnly (the token rides the X-Emby-Token header on both
+        // postStatusOnly (the token rides the Authorization header on both
         // sides); any lone query param rides the path template on both.
         for (match in Regex("\\brawRequester\\.postStatusOnly\\s*\\(").findAll(block)) {
             val openParen = block.indexOf('(', match.range.endInclusive - 1)

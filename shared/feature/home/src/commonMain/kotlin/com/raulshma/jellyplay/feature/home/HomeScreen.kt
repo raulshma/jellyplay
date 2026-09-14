@@ -603,6 +603,11 @@ private fun MainHomeContent(
                                 headerHeight = headerHeight,
                                 isLightTheme = isLightTheme,
                                 continueWatchingClickBehavior = state.continueWatchingClickBehavior,
+                                // The CR progress bars ride the fold too —
+                                // the surface carries whichever map belongs
+                                // to the carried feed (online vs offline
+                                // gate decodes, FallbackPending included).
+                                bookProgressFractions = s.bookProgressFractions,
                                 discoverRows = discoverRows,
                                 allDiscoverItems = allDiscoverItems,
                                 recentlyGrabbed = state.recentlyGrabbed,

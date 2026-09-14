@@ -228,7 +228,7 @@ private fun PicoWebView(
                             if (request?.isForMainFrame == true) isLoading = false
                         }
 
-                        // Attach the X-Emby-Token header to every same-origin request so
+                        // Attach the Authorization header to every same-origin request so
                         // in-page fetches (config load/save), images, and controller JS
                         // authenticate against the Jellyfin server.
                         override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {

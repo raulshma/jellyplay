@@ -263,7 +263,7 @@ object MultiConnectionDownloadStrategy {
      * Transfers one `[start, end]` byte range into [file] at its scattered
      * offset. Rides the [DownloadTransferClient] seam: the adapter emits the
      * same headers this method used to hand-build (User-Agent JellyPlay/1.0.0,
-     * `Range: bytes=start-end`, `X-Emby-Token` when the token is non-blank), so
+     * `Range: bytes=start-end`, `Authorization` when the token is non-blank), so
      * only the response handling maps onto [TransferResponse]. Runs on
      * [Dispatchers.IO]; `execute` suspends instead of the old blocking
      * `Call.execute()` (cancellation-collapsible) and the per-buffer-read

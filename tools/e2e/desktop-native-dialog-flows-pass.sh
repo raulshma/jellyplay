@@ -71,18 +71,19 @@ TOKEN="$(grep -oE '"AccessToken":"[0-9a-fA-F]+"' <<<"$auth_json" | head -1 | sed
 USER_ID="$(grep -oE '"User":\{[^}]*"Id":"[0-9a-f-]+"' <<<"$auth_json" | grep -oE '"Id":"[0-9a-f-]+"' | head -1 | sed 's/.*:"//; s/"//')"
 [[ -n "$TOKEN" ]] || { echo "AUTH RESPONSE: $auth_json" >&2; fail "no AccessToken in AuthenticateByName response"; }
 echo "   authenticated as $USERNAME."
+AUTH="Authorization: MediaBrowser Token=\"$TOKEN\""
 
 SEARCH_ENC="${ITEM_NAME// /%20}"
 items_json="$(curl -s --max-time 15 \
     "$SERVER_URL/Items?searchTerm=$SEARCH_ENC&Recursive=true&IncludeItemTypes=Movie&Limit=5" \
-    -H "X-Emby-Token: $TOKEN")"
+    -H "$AUTH")"
 ITEM_ID="$(grep -oE '"Id":"[0-9a-fA-F-]+"' <<<"$items_json" | head -1 | sed 's/.*:"//; s/"//')"
 [[ -n "$ITEM_ID" ]] || { echo "ITEMS RESPONSE: $items_json" >&2; fail "no Movie item matched searchTerm='$ITEM_NAME'"; }
 echo "   item: '$ITEM_NAME' ($ITEM_ID)."
 
 # Rerun hygiene: unplayed + no resume position (session-pass lesson).
 curl -s --max-time 10 -X DELETE "$SERVER_URL/Users/$USER_ID/PlayedItems/$ITEM_ID" \
-    -H "X-Emby-Token: $TOKEN" >/dev/null || true
+    -H "$AUTH" >/dev/null || true
 
 # ── 3. workspace with the sample pick files ────────────────────────────────
 STAMP="$(date +%Y%m%d-%H%M%S)"
@@ -109,12 +110,12 @@ printf '1\n00:00:01,000 --> 00:00:03,000\nharness subtitle line\n\n' > "$WORKSPA
 # the 10.11 SetItemImage contract (see bootstrap-jellyfin.sh's measurement).
 POSTER="$REPO_ROOT/tools/e2e/.state/poster.jpg"
 SAMPLE_SIZE="$(wc -c < "$WORKSPACE_NIX/sample.png" | tr -d ' ')"
-HAVE_SIZE="$(curl -sf -m 20 -H "X-Emby-Token: $TOKEN" -o /dev/null \
+HAVE_SIZE="$(curl -sf -m 20 -H "$AUTH" -o /dev/null \
     -w '%{size_download}' "$SERVER_URL/Items/$ITEM_ID/Images/Primary" || echo 0)"
 if [[ "$HAVE_SIZE" == "$SAMPLE_SIZE" && -f "$POSTER" ]]; then
     echo "   restoring fixture poster (Primary == sample.png from a prior run)"
     base64 -w0 "$POSTER" > "$POSTER.b64"
-    curl -sf -m 60 -X POST -H "X-Emby-Token: $TOKEN" -H "Content-Type: image/jpeg" \
+    curl -sf -m 60 -X POST -H "$AUTH" -H "Content-Type: image/jpeg" \
         --data-binary "@$POSTER.b64" "$SERVER_URL/Items/$ITEM_ID/Images/Primary" >/dev/null || true
     rm -f "$POSTER.b64"
 fi

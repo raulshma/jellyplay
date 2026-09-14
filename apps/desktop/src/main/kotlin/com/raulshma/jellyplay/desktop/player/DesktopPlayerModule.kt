@@ -42,7 +42,7 @@ import org.koin.dsl.module
  *   cast seam.
  * - Per-item stream resolution rides [DesktopAudioSourceResolver] — the same
  *   shared `PlaybackRepository.getStreamUrl` overload + adaptive bitrate tier
- *   the Android audio browser uses, with auth in the `api_key` URL parameter
+ *   the Android audio browser uses, with auth in the `ApiKey` URL parameter
  *   (no request headers, matching Android's header-less media3 stack).
  *
  * Engine construction stays lazy (video factory defers until the session asks;

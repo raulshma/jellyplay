@@ -25,8 +25,22 @@ import com.raulshma.jellyplay.core.model.MediaType
  * rejected: the pre-existing parental-rating filter trims post-limit the
  * same way, so the row already accepts under-fill there.
  *
- * BOOK rows are excluded outright: books get their own Continue-Reading
- * surface (later work) and must not pollute the video resume row.
+ * BOOK rows are excluded from the video resume row outright — they surface in
+ * their own Continue Reading section ([readingResumableOnly]) and must not
+ * pollute the video resume row.
  */
 fun List<MediaItem>.resumableOnly(): List<MediaItem> =
     filter { !it.isPlayed && it.mediaType != MediaType.BOOK }
+
+/**
+ * The books half of the resume query — the exact complement of
+ * [resumableOnly]'s book exclusion: keep only BOOK items, under the same
+ * #157 played-row rule (the resume endpoint does not exclude played items, so
+ * a finished book's lingering position would otherwise occupy the row
+ * forever). Applied by every `getContinueReading` implementation (JVM
+ * `LibraryApiClientImpl`, wasm `KtorWasmLibraryApiClient`) as the
+ * belt-and-braces client-side filter behind the server's
+ * `IncludeItemTypes=Book` narrowing.
+ */
+fun List<MediaItem>.readingResumableOnly(): List<MediaItem> =
+    filter { !it.isPlayed && it.mediaType == MediaType.BOOK }

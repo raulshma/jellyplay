@@ -88,21 +88,21 @@ class SubtitleLanguageStore constructor(
      */
     internal fun read(prefs: Preferences): SubtitleSlice {
         val subtitleStyleRaw = prefs[Keys.SUBTITLE_STYLE]
-        val subtitleStyle = if (subtitleStyleRaw != cachedSubtitleStyle.raw) {
+        val subtitleStyle = if (subtitleStyleRaw != cachedSubtitleStyle.key) {
             try {
                 subtitleStyleRaw?.let { PreferenceCodec.json.decodeFromString<SubtitleStyle>(it) }
             } catch (_: Exception) { null }.also { cachedSubtitleStyle = ParsedCache(subtitleStyleRaw, it) }
         } else cachedSubtitleStyle.value
 
         val hdrSubtitleStyleRaw = prefs[Keys.HDR_SUBTITLE_STYLE]
-        val hdrSubtitleStyle = if (hdrSubtitleStyleRaw != cachedHdrSubtitleStyle.raw) {
+        val hdrSubtitleStyle = if (hdrSubtitleStyleRaw != cachedHdrSubtitleStyle.key) {
             try {
                 hdrSubtitleStyleRaw?.let { PreferenceCodec.json.decodeFromString<SubtitleStyle>(it) }
             } catch (_: Exception) { null }.also { cachedHdrSubtitleStyle = ParsedCache(hdrSubtitleStyleRaw, it) }
         } else cachedHdrSubtitleStyle.value
 
         val subtitleDelayByItemRaw = prefs[Keys.SUBTITLE_DELAY_BY_ITEM]
-        val subtitleDelayByItem = if (subtitleDelayByItemRaw != cachedSubtitleDelayByItem.raw) {
+        val subtitleDelayByItem = if (subtitleDelayByItemRaw != cachedSubtitleDelayByItem.key) {
             try {
                 subtitleDelayByItemRaw?.let { PreferenceCodec.json.decodeFromString<Map<String, Long>>(it) }
                     ?: emptyMap()

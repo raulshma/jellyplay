@@ -393,7 +393,7 @@ storage — they are **not** encrypted on disk. They rely on Android's
 per-app sandbox for isolation. What *is* encrypted is your **Jellyfin
 access token**: it's stored encrypted at rest in the app database
 (AES-256-GCM, Android Keystore-backed) and only decrypted in memory to
-attach the `X-Emby-Token` header while downloading. If you need
+attach the `Authorization: MediaBrowser` header while downloading. If you need
 file-level encryption, choose a device with encrypted storage (standard
 on modern Android) and rely on the app sandbox.
 
@@ -444,8 +444,8 @@ multi-connection chunking, and concurrency than the ExoPlayer helper.
   (`DownloadConcurrencyLimiter`) sized from **Max concurrent downloads**
   (default 3, clamped 1–6). A worker enters `Queued` while waiting for a
   permit, then promotes to `Downloading`.
-- **Single-connection path** — OkHttp `GET` with `X-Emby-Token` and a
-  custom `User-Agent`. If resuming (`existingBytes > 0`) it sends
+- **Single-connection path** — OkHttp `GET` with the `Authorization:
+  MediaBrowser` header and a custom `User-Agent`. If resuming (`existingBytes > 0`) it sends
   `Range: bytes=N-` and appends; handles HTTP 416 (stale range → restart
   from 0) and 206 partial content. It polls the DB every ~2 s for
   pause/cancel and updates progress + the foreground notification.

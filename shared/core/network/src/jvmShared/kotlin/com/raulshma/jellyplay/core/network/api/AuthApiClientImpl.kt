@@ -61,7 +61,11 @@ class AuthApiClientImpl @Inject constructor(
         return ServerInfo(
             id = probe.serverId ?: java.util.UUID.randomUUID().toString(),
             name = probe.serverName ?: "Jellyfin Server",
-            address = address,
+            // A legacy /emby (or /mediabrowser) address that only answered
+            // after the prefix was stripped is persisted in its resolved
+            // form, so the next connect and session restore probe the
+            // working address directly.
+            address = probe.resolvedAddress ?: address,
         )
     }
 

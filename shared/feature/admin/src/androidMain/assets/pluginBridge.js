@@ -4,12 +4,19 @@
  * plugin configuration pages expect to find on `window`, mirroring the surface
  * jellyfin-web exposes via its bundled ApiClient/Dashboard.
  *
- * Auth strategy: the shim's fetch()/ajax() calls attach the `X-Emby-Token`
- * header directly so that write requests (config save = POST) carry their body
- * to the server intact. WebViewClient.shouldInterceptRequest cannot forward a
+ * Auth strategy: the shim's fetch()/ajax() calls attach the
+ * `Authorization: MediaBrowser Token="…"` header directly (the token-only
+ * form — Jellyfin 12 rejects the legacy `X-Emby-Token` header) so that write
+ * requests (config save = POST) carry their body to the server intact. The
+ * value is built inline here — no SDK parameter escaping, matching the
+ * Kotlin surfaces' `JellyfinAuthorizationHeader.tokenOnly` for the
+ * server-issued UUID/hex tokens (which contain nothing to escape).
+ * WebViewClient.shouldInterceptRequest cannot forward a
  * POST body (Android's WebResourceRequest exposes none), so intercepting writes
  * is impossible; instead the host intercepts only same-origin GETs (images,
- * CSS) to authenticate resource loads the page itself initiates. UI feedback
+ * CSS) to authenticate resource loads the page itself initiates — it strips
+ * this shim's Authorization header and re-issues with its own, so a GET never
+ * carries two auth headers. UI feedback
  * (saved toast, loading overlay, dialogs) is bridged back to native through
  * NativeInterface.
  *
@@ -63,8 +70,9 @@
         request.headers = request.headers || {};
         if (includeAuthorization !== false && ACCESS_TOKEN) {
             // Write requests (POST) must carry their own token — the host cannot
-            // intercept and re-issue a POST while preserving its body.
-            request.headers['X-Emby-Token'] = ACCESS_TOKEN;
+            // intercept and re-issue a POST while preserving its body. Token-only
+            // Authorization form; the host's GET intercept strips and re-issues it.
+            request.headers['Authorization'] = 'MediaBrowser Token="' + ACCESS_TOKEN + '"';
         }
         var fetchOptions = {
             method: request.type || 'GET',

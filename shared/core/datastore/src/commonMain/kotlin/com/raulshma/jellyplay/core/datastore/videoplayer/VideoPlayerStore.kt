@@ -164,7 +164,7 @@ class VideoPlayerStore constructor(
             // legacy-boolean fallback must still run (its result depends on the
             // four SKIP_*/AUTO_* keys, not on `raw`), so don't short-circuit on
             // a null raw — that would freeze the legacy migration out entirely.
-            if (raw != null && raw == cachedSegmentBehaviors.raw) {
+            if (raw != null && raw == cachedSegmentBehaviors.key) {
                 cachedSegmentBehaviors.value
             } else {
                 readSegmentBehaviors(prefs).also { cachedSegmentBehaviors = ParsedCache(raw, it) }

@@ -18,6 +18,7 @@ class OfflineHomeContentTest {
 
     private val titles = OfflineHomeSectionTitles(
         continueWatching = "Continue Watching",
+        continueReading = "Continue Reading",
         nextUp = "Next Up",
         recentlyDownloaded = "Recently Downloaded",
         movies = "Movies",

@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.admin.plugins
 
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
+import com.raulshma.jellyplay.core.network.auth.tokenAuthHeader
 import java.io.ByteArrayInputStream
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -16,7 +17,7 @@ import okhttp3.Request
 /**
  * Intercepts same-origin **GET** requests (plugin images, CSS, Pattern-B
  * controller scripts) and re-issues them through OkHttp with the
- * `X-Emby-Token` header, so resource loads the page itself initiates
+ * `Authorization` header, so resource loads the page itself initiates
  * authenticate against the Jellyfin server.
  *
  * Only GET is handled: `WebResourceRequest` exposes no request body, so
@@ -42,12 +43,14 @@ internal fun interceptAuthedRequest(
     val requestBuilder = Request.Builder()
         .url(urlStr)
         .get()
-    if (accessToken.isNotBlank()) requestBuilder.header("X-Emby-Token", accessToken)
+    if (accessToken.isNotBlank()) {
+        requestBuilder.tokenAuthHeader(accessToken)
+    }
     // Carry over request headers (Accept, etc.), skipping ones OkHttp manages
-    // and the one we set explicitly.
+    // and the ones we set explicitly.
     request.requestHeaders?.forEach { (key, value) ->
         val lower = key.lowercase()
-        if (lower == "x-emby-token" || lower == "host") return@forEach
+        if (lower == "authorization" || lower == "host") return@forEach
         requestBuilder.header(key, value)
     }
 

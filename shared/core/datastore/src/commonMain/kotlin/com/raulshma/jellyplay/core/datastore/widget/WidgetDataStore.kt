@@ -72,13 +72,13 @@ class WidgetDataStore constructor(
     private val widgetConfigSnapshot: StateFlow<Pair<Map<Int, WidgetConfig>, WidgetConfig?>> =
         sharedPrefs.map { prefs ->
             val perWidgetRaw = prefs[Keys.WIDGET_CONFIGS]
-            val perWidget = if (perWidgetRaw == cachedPerWidgetConfigs.raw) {
+            val perWidget = if (perWidgetRaw == cachedPerWidgetConfigs.key) {
                 cachedPerWidgetConfigs.value
             } else {
                 decodeWidgetConfigs(perWidgetRaw).also { cachedPerWidgetConfigs = ParsedCache(perWidgetRaw, it) }
             }
             val legacyRaw = prefs[Keys.WIDGET_CONFIG]
-            val legacy = if (legacyRaw == cachedLegacyWidgetConfig.raw) {
+            val legacy = if (legacyRaw == cachedLegacyWidgetConfig.key) {
                 cachedLegacyWidgetConfig.value
             } else {
                 decodeWidgetConfig(legacyRaw).also { cachedLegacyWidgetConfig = ParsedCache(legacyRaw, it) }
@@ -184,7 +184,7 @@ class WidgetDataStore constructor(
         var cached = ParsedCache(null, emptyList<T>())
         return sharedPrefs.map { prefs ->
             val raw = prefs[key]
-            if (raw == cached.raw) {
+            if (raw == cached.key) {
                 cached.value
             } else {
                 decodeList<T>(raw).also { cached = ParsedCache(raw, it) }

@@ -13,6 +13,12 @@ import com.raulshma.jellyplay.core.model.isImageSubtitleCodec
  *
  * Session inputs ([baseUrl]/[apiKey]/[userId]/[userServerId]) are supplied
  * per call by the client from the atomic session state.
+ *
+ * The token rides as the capital `ApiKey` query param: players (ExoPlayer,
+ * mpv, browsers) cannot attach headers to media fetches, so the query param
+ * is unavoidable — and the lowercase `api_key` alias is Jellyfin-12 legacy,
+ * gated behind the server's `EnableLegacyAuthorization` flag (off by
+ * default), where `/Items/{id}/Download` and the socket 401/403 on it.
  */
 
 /**
@@ -59,7 +65,7 @@ fun buildStreamUrl(
     // opened as a (growing) direct stream — `static=true` makes the server
     // try a byte-range seek on a non-seekable stream and fail.
     val paramPrefix = if (useAudioEndpoint || isLive) "?" else "?static=true&"
-    return "${baseUrl.trimEnd('/')}$path$paramPrefix$baseParams&api_key=$apiKey"
+    return "${baseUrl.trimEnd('/')}$path$paramPrefix$baseParams&ApiKey=$apiKey"
 }
 
 /**
@@ -75,7 +81,7 @@ fun resolveSubtitleDeliveryUrl(
     if (apiKey == null) return ""
     val base = if (deliveryUrl.startsWith("http")) deliveryUrl else "${baseUrl.trimEnd('/')}$deliveryUrl"
     val separator = if ("?" in base) "&" else "?"
-    return "$base${separator}api_key=$apiKey"
+    return "$base${separator}ApiKey=$apiKey"
 }
 
 /**
@@ -102,15 +108,15 @@ fun buildSubtitleDeliveryUrl(
         "ass", "ssa" -> codec!!.lowercase()
         else -> (codec ?: "srt").lowercase()
     }
-    return "${baseUrl.trimEnd('/')}/Videos/$itemId/$mediaSourceId/Subtitles/$index/Stream.$format?api_key=$apiKey"
+    return "${baseUrl.trimEnd('/')}/Videos/$itemId/$mediaSourceId/Subtitles/$index/Stream.$format?ApiKey=$apiKey"
 }
 
 /**
- * The book download URL (`/Items/{itemId}/Download?api_key=…`). Books have
+ * The book download URL (`/Items/{itemId}/Download?ApiKey=…`). Books have
  * no stream URL — the reader fetches the file verbatim from the Download
  * endpoint and renders it locally. Callers hold a resolved server address +
  * token (no session-null sentinels, unlike the stream builders above); only
  * the base's trailing slash is trimmed so the path can never start `//`.
  */
 fun buildBookDownloadUrl(baseUrl: String, apiKey: String, itemId: String): String =
-    "${baseUrl.trimEnd('/')}/Items/$itemId/Download?api_key=$apiKey"
+    "${baseUrl.trimEnd('/')}/Items/$itemId/Download?ApiKey=$apiKey"

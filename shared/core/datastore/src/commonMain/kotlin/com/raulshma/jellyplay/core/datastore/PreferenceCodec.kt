@@ -151,10 +151,11 @@ internal object PreferenceCodec {
 
 /**
  * Memoisation holder for a JSON-decoded preference blob, keyed on the raw
- * string so the decode is skipped when the underlying key has not changed on a
- * given `dataStore.data` emission.
+ * string — or a composite of it, for readers whose decoded value depends on
+ * more than the raw string alone — so the decode is skipped when the inputs
+ * have not changed on a given `dataStore.data` emission.
  */
 internal data class ParsedCache<T>(
-    val raw: String?,
+    val key: String?,
     val value: T,
 )

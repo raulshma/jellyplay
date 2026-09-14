@@ -69,9 +69,6 @@ class MpvPlayerEngine(
         // so a no-render bug can be traced end-to-end without logcat drowning.
         private val MPV_SUBTITLE_LOG_PATTERN =
             Regex("(?i)(sub|subtitle|libass|webvtt|vtt|srt|ssa|ass|ffmpeg|http|stream|vo/|demux|cplayer|vd)")
-        private val REDACT_API_KEY = Regex("(?i)(api_key=)[^&\\s]+")
-        private val REDACT_API_KEY_ENCODED = Regex("(?i)(api_key%3D)[^&\\s]+")
-        private val REDACT_EMBY_TOKEN = Regex("(?i)(X-Emby-Token:\\s*)[^,\\s]+")
     }
 
     private val isLowRamDevice by lazy { EngineDeviceProfile.isLowRamDevice(context) }
@@ -1776,11 +1773,9 @@ class MpvPlayerEngine(
         else -> "trace"
     }
 
-    private fun redactSensitive(value: String): String =
-        value
-            .replace(REDACT_API_KEY, "\$1***")
-            .replace(REDACT_API_KEY_ENCODED, "\$1***")
-            .replace(REDACT_EMBY_TOKEN, "\$1***")
+    // The regex set lives in MpvLogRedaction (commonMain) so it is
+    // test-pinned; this alias keeps the engine's call sites unchanged.
+    private fun redactSensitive(value: String): String = MpvLogRedaction.redact(value)
 
     private fun MPV.safeSetOption(name: String, value: String) {
         try {

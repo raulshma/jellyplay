@@ -44,6 +44,7 @@ val homeModule: Module = module {
             continueWatchingBroadcaster = get(),
             tvWatchNextScheduler = get(),
             librarySyncHook = get(),
+            bookTocCacheRepository = get(),
         )
     }
     viewModel {
@@ -58,6 +59,7 @@ val homeModule: Module = module {
             downloadIntake = get(),
             mediaDownloadActions = get(),
             offlineRepository = get(),
+            bookTocCacheRepository = get(),
             offlineModeManager = get(),
             newsletterTriggerManager = get(),
             prefs = HomeStores(

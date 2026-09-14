@@ -67,7 +67,7 @@ class NavigationStore constructor(
 
     private fun readHiddenNavItems(prefs: Preferences): Set<String> {
         val raw = prefs[Keys.HIDDEN_NAV_ITEMS]
-        return if (raw != cachedHiddenNavItems.raw) {
+        return if (raw != cachedHiddenNavItems.key) {
             try {
                 raw?.let { json.decodeFromString<Set<String>>(it) } ?: emptySet()
             } catch (_: Exception) { emptySet() }
@@ -77,7 +77,7 @@ class NavigationStore constructor(
 
     private fun readNavItemOrder(prefs: Preferences): List<String> {
         val raw = prefs[Keys.NAV_ITEM_ORDER]
-        return if (raw != cachedNavItemOrder.raw) {
+        return if (raw != cachedNavItemOrder.key) {
             try {
                 raw?.let { json.decodeFromString<List<String>>(it) } ?: emptyList()
             } catch (_: Exception) { emptyList() }

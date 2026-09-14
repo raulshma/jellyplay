@@ -42,6 +42,7 @@ import com.raulshma.jellyplay.core.network.library.buildMediaItemsQuerySpec
 import com.raulshma.jellyplay.core.network.library.buildSearchHintsQuerySpec
 import com.raulshma.jellyplay.core.network.library.emptyFallbackTotalCount
 import com.raulshma.jellyplay.core.network.library.filterByParentalRating
+import com.raulshma.jellyplay.core.network.library.readingResumableOnly
 import com.raulshma.jellyplay.core.network.library.resumableOnly
 import com.raulshma.jellyplay.core.network.library.toCollectionSummary
 import com.raulshma.jellyplay.core.network.library.toGenre
@@ -250,6 +251,32 @@ class KtorWasmLibraryApiClient(
                 // #157: same rule the JVM client applies — see resumableOnly()
                 // for the rationale.
                 .resumableOnly()
+        }
+
+    override suspend fun getContinueReading(limit: Int): Result<List<com.raulshma.jellyplay.core.model.MediaItem>> =
+        apiResultWithRetry {
+            val server = requireConnectedServer()
+            // Same wire shape as getContinueWatching plus the SDK's
+            // includeItemTypes narrowing to books (getResumeItems'
+            // `includeItemTypes` named arg, serial name "Book").
+            val response = getJson<BaseItemQueryResultDtoWire>(
+                url = apiUrl(server.address, "/UserItems/Resume"),
+                accessToken = currentToken(),
+                query = q(
+                    "limit" to limit.toString(),
+                    "fields" to LIST_PROJECTION_FIELDS.joined(),
+                    "includeItemTypes" to "Book",
+                    "enableTotalRecordCount" to "true",
+                    "enableImages" to "true",
+                    "excludeActiveSessions" to "false",
+                ),
+            )
+            response.items.map { it.toMediaItem() }
+                .filterByParentalRating(currentMaxParentalRating)
+                .distinctBy { it.id }
+                // #157: same rule the JVM client applies — see
+                // readingResumableOnly() for the rationale.
+                .readingResumableOnly()
         }
 
     override suspend fun getLibraryFolders(): Result<List<LibraryFolder>> = apiResultWithRetry {

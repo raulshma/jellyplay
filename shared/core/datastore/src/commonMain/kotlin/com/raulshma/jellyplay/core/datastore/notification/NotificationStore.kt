@@ -132,7 +132,7 @@ class NotificationStore constructor(
 
     private fun readNotificationLibraryConfigs(prefs: Preferences): Map<String, LibraryNotificationConfig> {
         val raw = prefs[Keys.NOTIFICATIONS_LIBRARY_CONFIGS]
-        return if (raw != cachedNotificationLibraryConfigs.raw) {
+        return if (raw != cachedNotificationLibraryConfigs.key) {
             try {
                 raw?.let { json.decodeFromString<Map<String, LibraryNotificationConfig>>(it) } ?: emptyMap()
             } catch (_: Exception) { emptyMap() }
@@ -144,7 +144,7 @@ class NotificationStore constructor(
 
     private fun readEnabledNewsletterSections(prefs: Preferences): Set<NewsletterSectionType> {
         val raw = prefs[Keys.ENABLED_NEWSLETTER_SECTIONS]
-        return if (raw != cachedEnabledNewsletterSections.raw) {
+        return if (raw != cachedEnabledNewsletterSections.key) {
             try {
                 raw?.let { json.decodeFromString<Set<NewsletterSectionType>>(it) } ?: NewsletterSectionType.entries.toSet()
             } catch (_: Exception) { NewsletterSectionType.entries.toSet() }
@@ -156,7 +156,7 @@ class NotificationStore constructor(
 
     private fun readNewsletterSectionOrder(prefs: Preferences): List<NewsletterSectionType> {
         val raw = prefs[Keys.NEWSLETTER_SECTION_ORDER]
-        return if (raw != cachedNewsletterSectionOrder.raw) {
+        return if (raw != cachedNewsletterSectionOrder.key) {
             try {
                 raw?.let { json.decodeFromString<List<NewsletterSectionType>>(it) } ?: NewsletterSectionType.DEFAULT_ORDER
             } catch (_: Exception) { NewsletterSectionType.DEFAULT_ORDER }

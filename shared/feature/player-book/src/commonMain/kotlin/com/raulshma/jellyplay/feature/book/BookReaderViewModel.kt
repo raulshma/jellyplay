@@ -436,7 +436,8 @@ class BookReaderViewModel(
         val downloadUrl = playbackRepository.getBookDownloadUrl(itemId)
         // Header auth for the probe + streaming fetch: Jellyfin 12 401s the
         // legacy ?api_key= query param on data endpoints, so the token must
-        // ride `Authorization: MediaBrowser` (the URL keeps api_key for ≤11).
+        // ride `Authorization: MediaBrowser` (the URL's capital ApiKey param
+        // stays valid on every server since 10.8).
         val accessToken = playbackRepository.getAccessToken()
         val format = BookFormat.fromPath(detail.path) ?: probeDownloadFormat(downloadUrl, accessToken)
         if (format == null) {

@@ -120,6 +120,10 @@ internal fun OfflineHomeMediaRow(
     onSeeAllClick: (() -> Unit)? = null,
     // Play overlay on the card, mirroring HomeMediaRow's onPlayClick.
     onPlayClick: ((OfflineMediaItem) -> Unit)? = null,
+    // Book reading-progress override for the mirrored Continue Reading row —
+    // see [HomeMediaRow.progressFractionFor]; the mirror passes the refresher's
+    // fraction map with a percent-decode fallback.
+    progressFractionFor: ((OfflineMediaItem) -> Float?)? = null,
     // TV-only: reports the D-pad-focused item so the screen's Menu key can
     // open its quick actions (the offline card's own long-press handles touch).
     onFocusedItemChange: ((MediaItem) -> Unit)? = null,
@@ -178,6 +182,7 @@ internal fun OfflineHomeMediaRow(
                 sharedElementKey = "poster_${item.id}",
                 clipToShape = clippingEnabled,
                 gradientBrush = posterScrimBrush,
+                progressFractionOverride = progressFractionFor?.invoke(item),
             )
         }
     }
@@ -462,6 +467,14 @@ fun HomeMediaRow(
     showEpisodeSeriesBadge: Boolean = false,
     onSectionLongClick: (() -> Unit)? = null,
     onSeeAllClick: (() -> Unit)? = null,
+    /**
+     * Per-item progress override for rows whose items carry no usable
+     * `runTimeTicks` — the Continue Reading row passes the refresher's
+     * book-fraction decodes (paged page fractions need the TOC cache's page
+     * count, which [MediaItem.progressFraction] cannot know). Null (default)
+     * keeps the video position/runtime math.
+     */
+    progressFractionFor: ((MediaItem) -> Float?)? = null,
     // TV-only: reports the D-pad-focused item so the screen's Menu key can open
     // its quick actions
     onFocusedItemChange: ((MediaItem) -> Unit)? = null,
@@ -525,8 +538,14 @@ fun HomeMediaRow(
             val memoizedPlayClick = onPlayClick?.let { click -> remember(item, click) { { click(item) } } }
             // Memoize progress so per-card arithmetic runs only when ticks change,
             // not on every scroll/animation-frame recompose (matches WideMediaCard).
-            val progressPercent = remember(item.id, item.playbackPositionTicks, item.runTimeTicks) {
-                item.progressFraction() ?: 0f
+            // The override path skips the memo: a map lookup, cheaper than the
+            // remember slots it would need.
+            val progressPercent = if (progressFractionFor != null) {
+                progressFractionFor(item) ?: 0f
+            } else {
+                remember(item.id, item.playbackPositionTicks, item.runTimeTicks) {
+                    item.progressFraction() ?: 0f
+                }
             }
             // Per-item collection: only photo-folder cards subscribe, and only
             // the affected card recomposes on a prefetch merge.

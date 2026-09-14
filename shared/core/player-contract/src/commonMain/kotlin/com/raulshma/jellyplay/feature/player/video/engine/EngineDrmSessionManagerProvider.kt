@@ -8,7 +8,7 @@ package com.raulshma.jellyplay.feature.player.video.engine
  * only injection point and ExoPlayerEngine casts before use.
  *
  * **Why this exists (forward-looking).** JellyPlay currently relies on the
- * `X-Emby-Token` header for access control and ships no DRM. When DRM content
+ * `Authorization: MediaBrowser` header for access control and ships no DRM. When DRM content
  * is introduced it must be configured at the call site (e.g. resolved from a
  * Jellyfin DRM licence endpoint in `PlayerSessionManager`) and injected here —
  * never hard-coded into `ExoPlayerEngine`. Keeping the engine free of any

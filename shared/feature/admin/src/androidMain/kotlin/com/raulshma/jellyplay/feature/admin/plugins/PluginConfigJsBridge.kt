@@ -11,7 +11,7 @@ import androidx.compose.runtime.setValue
  * Plugin config pages call back into the native side via `window.NativeInterface`
  * for UI feedback (save confirmation, loading overlay, alerts). Data calls
  * (load/save configuration, images) stay on the JS side as standard same-origin
- * fetches; the host attaches the `X-Emby-Token` header to those via
+ * fetches; the host attaches the `Authorization` header to those via
  * [android.webkit.WebViewClient.shouldInterceptRequest].
  *
  * Every method is called on the WebView's JavaBridge thread, so state mutations

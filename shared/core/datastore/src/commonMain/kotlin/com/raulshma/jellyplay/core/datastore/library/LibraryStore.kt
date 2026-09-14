@@ -97,7 +97,7 @@ class LibraryStore constructor(
 
     private fun readDefaultLibrarySortOrders(prefs: Preferences): Map<String, String> {
         val raw = prefs[Keys.DEFAULT_LIBRARY_SORT_ORDERS]
-        return if (raw != cachedDefaultLibrarySortOrders.raw) {
+        return if (raw != cachedDefaultLibrarySortOrders.key) {
             try {
                 raw?.let { json.decodeFromString<Map<String, String>>(it) } ?: emptyMap()
             } catch (_: Exception) { emptyMap() }
@@ -107,7 +107,7 @@ class LibraryStore constructor(
 
     private fun readLibraryViewModes(prefs: Preferences): Map<String, String> {
         val raw = prefs[Keys.LIBRARY_VIEW_MODES]
-        return if (raw != cachedLibraryViewModes.raw) {
+        return if (raw != cachedLibraryViewModes.key) {
             try {
                 raw?.let { json.decodeFromString<Map<String, String>>(it) } ?: emptyMap()
             } catch (_: Exception) { emptyMap() }
@@ -117,7 +117,7 @@ class LibraryStore constructor(
 
     private fun readLibraryFilters(prefs: Preferences): Map<String, String> {
         val raw = prefs[Keys.LIBRARY_FILTERS]
-        return if (raw != cachedLibraryFilters.raw) {
+        return if (raw != cachedLibraryFilters.key) {
             try {
                 raw?.let { json.decodeFromString<Map<String, String>>(it) } ?: emptyMap()
             } catch (_: Exception) { emptyMap() }

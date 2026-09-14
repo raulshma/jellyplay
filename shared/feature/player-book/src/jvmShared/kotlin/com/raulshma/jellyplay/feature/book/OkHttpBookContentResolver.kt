@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.book
 import com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolver
 import com.raulshma.jellyplay.core.model.BookFormat
 import com.raulshma.jellyplay.core.model.lastPathSegment
+import com.raulshma.jellyplay.core.network.auth.tokenAuthHeader
 import java.io.IOException
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -114,11 +115,12 @@ class OkHttpBookFetcher(private val client: OkHttpClient) : BookHttpFetcher {
         onProgress: (BookDownloadProgress) -> Unit,
     ) {
         withContext(Dispatchers.IO) {
-            // Header auth (Jellyfin 12 dropped ?api_key= on data endpoints);
-            // the URL keeps its api_key for pre-12 servers.
+            // Header auth (Jellyfin 12 dropped the legacy ?api_key= param on
+            // data endpoints); the URL keeps its capital ApiKey, which every
+            // server since 10.8 accepts.
             val request = Request.Builder().url(url).apply {
                 if (!accessToken.isNullOrBlank()) {
-                    header("Authorization", OkHttpBookFormatProbe.mediaBrowserAuth(accessToken))
+                    tokenAuthHeader(accessToken)
                 }
             }.build()
             val call = client.newCall(request)

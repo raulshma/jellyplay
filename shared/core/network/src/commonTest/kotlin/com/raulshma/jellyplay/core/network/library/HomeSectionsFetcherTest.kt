@@ -51,6 +51,7 @@ class HomeSectionsFetcherTest {
         val throwables = mutableMapOf<String, Throwable>()
 
         val continueWatchingResults = ArrayDeque<Result<List<MediaItem>>>()
+        val continueReadingResults = ArrayDeque<Result<List<MediaItem>>>()
         val nextUpResults = ArrayDeque<Result<List<MediaItem>>>()
         val foldersResults = ArrayDeque<Result<List<LibraryFolder>>>()
         val latestResults = ArrayDeque<Result<List<MediaItem>>>()
@@ -71,6 +72,9 @@ class HomeSectionsFetcherTest {
 
         override suspend fun getContinueWatching(limit: Int): Result<List<MediaItem>> =
             resolve(continueWatchingResults, "cw:$limit") { emptyList() }
+
+        override suspend fun getContinueReading(limit: Int): Result<List<MediaItem>> =
+            resolve(continueReadingResults, "cr:$limit") { emptyList() }
 
         override suspend fun getNextUp(limit: Int, enableRewatching: Boolean, maxDays: Int): Result<List<MediaItem>> =
             resolve(nextUpResults, "nu:$limit:$enableRewatching:$maxDays") { emptyList() }
@@ -127,6 +131,47 @@ class HomeSectionsFetcherTest {
         assertTrue(fake.calls.isEmpty(), "no transport call may fire for a fully disabled query")
         assertTrue(fetched.sections.isEmpty())
         assertTrue(fetched.failedSectionTypes.isEmpty())
+    }
+
+    @Test
+    fun `continue reading is gated like continue watching`() = runTest {
+        val fake = FakeHomeSectionSources()
+        fake.continueReadingResults += Result.success(listOf(item("book1").copy(mediaType = MediaType.BOOK)))
+
+        val fetched = fetcher(fake).fetch(
+            HomeSectionQuery(enabledSections = setOf(HomeSectionType.CONTINUE_READING)),
+        )
+
+        // Enabled: exactly one port call, one section emitted.
+        assertEquals(listOf("cr:20"), fake.calls)
+        val section = fetched.sections.single()
+        assertEquals(HomeSectionType.CONTINUE_READING, section.type)
+        assertEquals("continue_reading", section.id)
+        assertEquals(listOf("book1"), section.items.map { it.id })
+
+        // Disabled: zero port calls (fetch on a fresh fake with nothing queued).
+        val disabled = FakeHomeSectionSources()
+        val disabledResult = fetcher(disabled).fetch(
+            HomeSectionQuery(enabledSections = setOf(HomeSectionType.CONTINUE_WATCHING)),
+        )
+        assertTrue(disabled.calls.none { it.startsWith("cr:") })
+        assertTrue(disabledResult.sections.none { it.type == HomeSectionType.CONTINUE_READING })
+    }
+
+    @Test
+    fun `continue reading failure records failedSectionTypes`() = runTest {
+        val fake = FakeHomeSectionSources()
+        fake.continueReadingResults += Result.failure(RuntimeException("cr down"))
+        fake.nextUpResults += Result.success(listOf(item("nu1")))
+
+        val fetched = fetcher(fake).fetch(
+            HomeSectionQuery(
+                enabledSections = setOf(HomeSectionType.CONTINUE_READING, HomeSectionType.NEXT_UP),
+            ),
+        )
+
+        assertEquals(setOf(HomeSectionType.CONTINUE_READING), fetched.failedSectionTypes)
+        assertEquals(listOf(HomeSectionType.NEXT_UP), fetched.sections.map { it.type })
     }
 
     @Test

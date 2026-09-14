@@ -58,6 +58,14 @@ fun OfflineMediaCard(
     // transitions — instead of a visually thinner card.
     gradientBrush: Brush? = null,
     clipToShape: Boolean = false,
+    /**
+     * Reading-progress override for BOOK cards: [OfflineMediaItem] carries no
+     * runtime, so its [playedPercentage] cannot express reading position — the
+     * offline Continue Reading row passes the [BookProgressPolicy] decode
+     * (exact page fraction when the TOC cache knows the page count, percent
+     * fallback otherwise). Null (default) keeps the video percentage math.
+     */
+    progressFractionOverride: Float? = null,
 ) {
     // Memoised so recompositions of this card don't re-run the mapping or
     // re-allocate the fallback list (unstable List params would otherwise
@@ -67,11 +75,18 @@ fun OfflineMediaCard(
     val fallbackUrls = remember(item.backdropPath) { listOfNotNull(item.backdropPath) }
     // Gate the progress bar on the normalized watch state so it never shows
     // alongside the "Watched" chip/badge (toMediaItem treats >=95% as played).
-    val hasProgress = mediaItem.hasWatchProgress
+    // The book override wins when present: a positive fraction shows the bar,
+    // anything else falls back to the video percentage math below.
+    val hasProgress = if (progressFractionOverride != null) {
+        progressFractionOverride > 0f
+    } else {
+        mediaItem.hasWatchProgress
+    }
     // PosterCard's progressPercent is a 0–1 fraction (it feeds
     // fillMaxWidth(fraction)), but OfflineMediaItem.playedPercentage is 0–100,
     // so divide by 100 here — otherwise 1% watched would fill the whole bar.
-    val progressFraction = (item.playedPercentage.toFloat() / 100f).coerceIn(0f, 1f)
+    val progressFraction = progressFractionOverride
+        ?: (item.playedPercentage.toFloat() / 100f).coerceIn(0f, 1f)
 
     Box(modifier = modifier) {
         PosterCard(

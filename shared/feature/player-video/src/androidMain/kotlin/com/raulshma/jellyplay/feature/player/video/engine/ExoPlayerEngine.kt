@@ -72,6 +72,7 @@ import com.raulshma.jellyplay.core.model.SubtitleEdgeType
 import com.raulshma.jellyplay.core.model.SubtitleRenderDefaults
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.TrackType
+import com.raulshma.jellyplay.core.network.auth.JellyfinAuthorizationHeader
 import com.raulshma.jellyplay.feature.player.video.subtitle.AssSupport
 import com.raulshma.jellyplay.feature.player.video.subtitle.AndroidFontProvider
 import com.raulshma.jellyplay.feature.player.video.subtitle.OffsettingSubtitleParserFactory
@@ -889,10 +890,11 @@ class ExoPlayerEngine(
 
         val authority = serverUrl?.let { Uri.parse(it).authority }
         if (authority != null && token != null) {
+            val authHeader = JellyfinAuthorizationHeader.tokenOnlyHeader(token)
             factory = ResolvingDataSource.Factory(factory) { dataSpec ->
                 if (dataSpec.uri.authority.equals(authority, ignoreCase = true)) {
                     dataSpec.withRequestHeaders(
-                        mapOf("X-Emby-Token" to token) + dataSpec.httpRequestHeaders
+                        mapOf(authHeader) + dataSpec.httpRequestHeaders
                     )
                 } else {
                     dataSpec

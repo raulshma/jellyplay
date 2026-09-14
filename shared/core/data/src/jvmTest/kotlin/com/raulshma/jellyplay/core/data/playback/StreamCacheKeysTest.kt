@@ -14,7 +14,8 @@ import kotlin.test.assertTrue
  *    (`PlaySessionId` / `TranscodingJobId` / `LiveStreamId`), case-insensitively
  *    — such URLs must never be byte-cached because the bytes differ per session;
  *  - [stripVolatileQueryParams] removes only the strip-safe params (today:
- *    `api_key`, so token rotation does not invalidate cached bytes) and keeps
+ *    the token param in both spellings, `ApiKey` and the legacy `api_key`,
+ *    so token rotation does not invalidate cached bytes) and keeps
  *    every content-bearing param, via the primary [java.net.URI] rewrite;
  *  - a URL with no query passes through untouched;
  *  - a URL [java.net.URI] cannot parse falls back to the regex strip instead of
@@ -72,6 +73,24 @@ class StreamCacheKeysTest {
         )
 
         assertEquals("http://host/stream?a=1&b=2", stripped)
+    }
+
+    @Test
+    fun `strips the ApiKey spelling and normalizes both spellings to one key`() {
+        // The app's URL builders emit the capital ApiKey; pre-12 servers bake
+        // the legacy lowercase alias. Both must strip, or a token rotation
+        // (or the spelling mix itself) splits the cache in two.
+        val newSpelling = stripVolatileQueryParams(
+            "http://host/videos/abc/stream?ApiKey=secret&static=true",
+            STRIP_SAFE_QUERY_PARAMS,
+        )
+        val legacySpelling = stripVolatileQueryParams(
+            "http://host/videos/abc/stream?api_key=secret&static=true",
+            STRIP_SAFE_QUERY_PARAMS,
+        )
+
+        assertEquals("http://host/videos/abc/stream?static=true", newSpelling)
+        assertEquals(newSpelling, legacySpelling)
     }
 
     @Test

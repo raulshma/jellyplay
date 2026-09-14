@@ -26,6 +26,7 @@ import com.raulshma.jellyplay.core.model.ResolvedPlayback
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.EngineSpecificConfig
+import com.raulshma.jellyplay.core.network.auth.JellyfinAuthorizationHeader
 import com.raulshma.jellyplay.feature.player.video.generated.resources.Res
 import org.jetbrains.compose.resources.getString
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_error_loading_media
@@ -161,7 +162,7 @@ class PlayerSessionManager(
         get() = lastPlaybackRequest?.externalSubtitles
 
     /**
-     * The request headers (auth etc., e.g. Jellyfin `X-Emby-Token`) for the
+     * The request headers (auth etc., e.g. Jellyfin `Authorization`) for the
      * current session, or null when no media is loaded. Used to authenticate
      * HTTP-fetched external subtitle bytes (see [SubtitlePreviewRepository]).
      */
@@ -629,7 +630,7 @@ class PlayerSessionManager(
         val serverUrl = playbackRepository.getServerUrl()
         val token = playbackRepository.getAccessToken()
         if (!token.isNullOrBlank()) {
-            headers["X-Emby-Token"] = token
+            headers += JellyfinAuthorizationHeader.tokenOnlyHeader(token)
         }
 
         val request = PlaybackRequest(

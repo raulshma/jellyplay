@@ -15,6 +15,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import kotlinx.coroutines.flow.MutableStateFlow
+import com.raulshma.jellyplay.core.network.auth.JellyfinAuthorizationHeader
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import okhttp3.OkHttpClient
@@ -97,9 +98,7 @@ class ExoLiveEngine(
     private val httpDataSourceFactory = OkHttpDataSource.Factory(streamingClient)
         .setUserAgent("JellyPlay")
         .setDefaultRequestProperties(
-            buildMap {
-                config.authToken?.let { put("X-Emby-Token", it) }
-            }
+            config.authToken?.let { mapOf(JellyfinAuthorizationHeader.tokenOnlyHeader(it)) } ?: emptyMap()
         )
 
     private val dataSourceFactory: DataSource.Factory =

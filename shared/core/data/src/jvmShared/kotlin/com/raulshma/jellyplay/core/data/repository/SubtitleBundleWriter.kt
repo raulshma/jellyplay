@@ -17,7 +17,7 @@ private const val TAG = "SubtitleBundleWriter"
  * Derives the VobSub pair URLs from the server's deliveryUrl for the stream.
  * The server advertises whichever half the MediaStream points at; the sibling
  * is the same path with the extension swapped (query string preserved — it
- * carries the api_key). Returns `palette to bitmap`. The third arm handles an
+ * carries the token). Returns `palette to bitmap`. The third arm handles an
  * endpoint shape with no file extension by assuming the bitmap rides on
  * [subUrl] and probing the conventional `.idx` sibling beside it.
  */

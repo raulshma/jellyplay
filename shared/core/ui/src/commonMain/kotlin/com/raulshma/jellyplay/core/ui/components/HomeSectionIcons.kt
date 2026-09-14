@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.Book
 import com.composables.icons.tabler.outline.Bookmark
 import com.composables.icons.tabler.outline.Clock
 import com.composables.icons.tabler.outline.DeviceTv
@@ -31,6 +32,7 @@ fun rememberHomeSectionIcon(type: HomeSectionType): ImageVector =
 /** Non-composable variant for use outside composition (e.g. settings lists). */
 fun homeSectionIcon(type: HomeSectionType): ImageVector = when (type) {
     HomeSectionType.CONTINUE_WATCHING -> Tabler.Outline.PlayerPlay
+    HomeSectionType.CONTINUE_READING -> Tabler.Outline.Book
     HomeSectionType.NEXT_UP -> Tabler.Outline.PlayerSkipForward
     HomeSectionType.RECENTLY_ADDED -> Tabler.Outline.Clock
     HomeSectionType.LATEST_MEDIA -> Tabler.Outline.LayersLinked

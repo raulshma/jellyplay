@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.core.data.sync.OfflineSyncComparator
 import com.raulshma.jellyplay.core.data.util.DownloadDelegate
 import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.data.worker.awaitResponse
+import com.raulshma.jellyplay.core.network.auth.tokenAuthHeader
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.database.JellyPlayDatabase
@@ -1023,13 +1024,13 @@ class DownloadRepositoryImpl(
         // playback keeps serving it until the resync retries.
         val staging = File(target.parentFile, target.name + ".part")
         return try {
-            // Auth rides on the baked-in api_key query param, with the
-            // X-Emby-Token header as a fallback for servers/reverse proxies
+            // Auth rides on the baked-in ApiKey query param, with the
+            // Authorization header as a fallback for servers/reverse proxies
             // that reject or strip query-token auth (the same pairing
             // DownloadTransferClient uses for the video itself).
             val requestBuilder = Request.Builder().url(url)
             playbackRepository.getAccessToken()?.takeIf { it.isNotBlank() }?.let {
-                requestBuilder.header("X-Emby-Token", it)
+                requestBuilder.tokenAuthHeader(it)
             }
             httpClient.newCall(requestBuilder.build()).awaitResponse().use { resp ->
                 if (!resp.isSuccessful) return@use false

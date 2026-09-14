@@ -116,7 +116,7 @@ class ExperimentalStore constructor(
 
     private fun readEnabledExperimentalFeatures(prefs: Preferences): Set<ExperimentalFeature> {
         val raw = prefs[Keys.ENABLED_EXPERIMENTAL_FEATURES]
-        return if (raw != cachedEnabledExperimentalFeatures.raw) {
+        return if (raw != cachedEnabledExperimentalFeatures.key) {
             try {
                 raw?.let {
                     json.decodeFromString<Set<String>>(it)

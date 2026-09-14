@@ -253,7 +253,8 @@ internal fun baseOkHttpClient(
     // Custom logger that strips Jellyfin access tokens from log lines.
     // OkHttp's HttpLoggingInterceptor has redactHeader(...) but no
     // equivalent for query params in 5.x, and the SDK embeds the access
-    // token as ?api_key=... on stream/image/subtitle/WebSocket URLs.
+    // token as ?ApiKey=... (legacy servers: ?api_key=...) on
+    // stream/image/subtitle/WebSocket URLs.
     // The logger replaces the query string of any URL line containing a
     // token-bearing param with "[redacted]" so verbose network logging
     // can never leak credentials to logcat.

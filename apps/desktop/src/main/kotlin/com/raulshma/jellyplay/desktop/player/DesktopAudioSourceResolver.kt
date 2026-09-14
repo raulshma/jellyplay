@@ -56,7 +56,7 @@ fun interface AudioTrackResolver {
  *     `maxBitrate = tier.targetKbps * 1000` from
  *     [AdaptiveBitrateSelector.resolveBitrate] over the persisted
  *     [StreamingQuality] preference;
- *  4. auth rides in the URL (`api_key` query parameter) exactly like Android —
+ *  4. auth rides in the URL (`ApiKey` query parameter) exactly like Android —
  *     Android's media3 stack sets NO request headers for audio, so the desktop
  *     loads with empty headers too (MpvDesktopEngine resets its
  *     `http-header-fields` list per load — the multi-server leak fix — and an

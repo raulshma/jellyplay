@@ -34,6 +34,7 @@ import com.raulshma.jellyplay.core.network.library.buildItemsByStudioQuerySpec
 import com.raulshma.jellyplay.core.network.library.buildMediaItemsQuerySpec
 import com.raulshma.jellyplay.core.network.library.buildSearchHintsQuerySpec
 import com.raulshma.jellyplay.core.network.library.emptyFallbackTotalCount
+import com.raulshma.jellyplay.core.network.library.readingResumableOnly
 import com.raulshma.jellyplay.core.network.library.resumableOnly
 import org.jellyfin.sdk.model.api.BaseItemKind
 import org.jellyfin.sdk.model.api.CreatePlaylistDto
@@ -194,6 +195,22 @@ class LibraryApiClientImpl @Inject constructor(
             // #157: drop played rows the resume endpoint still reports —
             // see resumableOnly() for the full rationale.
             .resumableOnly()
+    }
+
+    override suspend fun getContinueReading(limit: Int): Result<List<MediaItem>> = engine.apiResultWithRetry {
+        val response = engine.requireApi().itemsApi.getResumeItems(
+            limit = limit,
+            fields = LIST_ITEM_FIELDS,
+            // Server-side narrowing to books; the client filter below stays as
+            // belt-and-braces (old servers may ignore includeItemTypes).
+            includeItemTypes = listOf(BaseItemKind.BOOK),
+        ).content
+        (response?.items ?: emptyList())
+            .toFilteredMediaItems(engine.currentMaxParentalRating)
+            .distinctBy { it.id }
+            // Same #157 played-row rule as getContinueWatching, books half —
+            // see readingResumableOnly().
+            .readingResumableOnly()
     }
 
     override suspend fun getLibraryFolders(): Result<List<LibraryFolder>> = engine.apiResultWithRetry {

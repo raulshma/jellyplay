@@ -75,9 +75,9 @@ import org.w3c.dom.events.Event
  *    browser demuxes it natively (Safari). Chromium needs MSE via hls.js in
  *    a later slice. Direct-play MP4/WebM works everywhere.
  *  - **No HTTP headers.** `<video src>` cannot carry request headers, so the
- *    Jellyfin stream URL must embed `api_key` (it does —
+ *    Jellyfin stream URL must embed `ApiKey` (it does —
  *    `core/network PlaybackUrlBuilders.buildStreamUrl` appends
- *    `&api_key=`); `PlaybackRequest.headers`/`authToken` are dropped.
+ *    `&ApiKey=`); `PlaybackRequest.headers`/`authToken` are dropped.
  *  - **No track selection.** The element exposes no container-level
  *    audio/subtitle enumeration without MSE; `availableTracks` stays empty
  *    and [selectTrack] is a no-op (audio track switching rides the URL).
@@ -391,7 +391,7 @@ class HtmlVideoEngine : MediaEngine {
             .forEach(::appendTrackElement)
 
         // request.headers/authToken are unusable on a media element (class
-        // KDoc): the URL must embed api_key, which buildStreamUrl guarantees.
+        // KDoc): the URL must embed ApiKey, which buildStreamUrl guarantees.
         video.src = request.uri
         video.playbackRate = speedValue.toDouble()
         video.load()
