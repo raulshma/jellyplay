@@ -57,6 +57,8 @@
     <string name="book_reader_behavior">Behavior</string>
     <string name="book_reader_volume_keys">Volume keys turn pages</string>
     <string name="book_reader_animated_turns">Animate page turns</string>
+
+    <string name="book_reader_toc_rail">Chapter tick rail</string>
     <string name="book_reader_reading_speed">Reading speed (words per minute)</string>
     <string name="book_reader_pages_left">%1$d pages left</string>
     <string name="book_reader_chapter_pages_left">%1$d pages left in chapter</string>

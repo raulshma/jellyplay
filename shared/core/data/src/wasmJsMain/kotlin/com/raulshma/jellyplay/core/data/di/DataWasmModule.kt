@@ -9,6 +9,8 @@ import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxRepositoryImpl
 import com.raulshma.jellyplay.core.data.playback.QueuePersistenceHelper
 import com.raulshma.jellyplay.core.data.repository.ReaderAnnotationsRepository
+import com.raulshma.jellyplay.core.data.repository.BookTocCacheRepository
+import com.raulshma.jellyplay.core.data.repository.BookTocCacheRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.ReaderAnnotationsRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.SeenMediaRepository
 import com.raulshma.jellyplay.core.data.repository.SeenMediaRepositoryImpl
@@ -133,6 +135,9 @@ val dataWasmModule: Module = module {
         )
     }
     single<ReaderAnnotationsRepository> { get<ReaderAnnotationsRepositoryImpl>() }
+
+    single { BookTocCacheRepositoryImpl(dao = get(), timeSource = get()) }
+    single<BookTocCacheRepository> { get<BookTocCacheRepositoryImpl>() }
 
     single {
         PlaybackOutboxRepositoryImpl(

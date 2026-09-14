@@ -10,6 +10,7 @@ import com.raulshma.jellyplay.core.database.dao.AuditLogDao
 import com.raulshma.jellyplay.core.database.dao.AudioQueueDao
 import com.raulshma.jellyplay.core.database.dao.BookAnnotationDao
 import com.raulshma.jellyplay.core.database.dao.BookBookmarkDao
+import com.raulshma.jellyplay.core.database.dao.BookTocCacheDao
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
 import com.raulshma.jellyplay.core.database.dao.HomeSectionCacheDao
 import com.raulshma.jellyplay.core.database.dao.ItemPlaybackPreferenceDao
@@ -29,6 +30,7 @@ import com.raulshma.jellyplay.core.database.entity.AudioQueueEntity
 import com.raulshma.jellyplay.core.database.entity.AudioQueueStateEntity
 import com.raulshma.jellyplay.core.database.entity.BookAnnotationEntity
 import com.raulshma.jellyplay.core.database.entity.BookBookmarkEntity
+import com.raulshma.jellyplay.core.database.entity.BookTocCacheEntity
 import com.raulshma.jellyplay.core.database.entity.DownloadEntity
 import com.raulshma.jellyplay.core.database.entity.HomeSectionCacheEntity
 import com.raulshma.jellyplay.core.database.entity.ItemPlaybackPreferenceEntity
@@ -53,7 +55,7 @@ import com.raulshma.jellyplay.core.database.entity.UserEntity
  * the previous version in [com.raulshma.jellyplay.core.database.migration.allMigrations];
  * `allMigrations_coversContiguousRange` enforces that chain.
  */
-const val JELLY_PLAY_DATABASE_VERSION: Int = 55
+const val JELLY_PLAY_DATABASE_VERSION: Int = 56
 
 @Database(
     entities = [
@@ -78,6 +80,7 @@ const val JELLY_PLAY_DATABASE_VERSION: Int = 55
         HomeSectionCacheEntity::class,
         BookBookmarkEntity::class,
         BookAnnotationEntity::class,
+        BookTocCacheEntity::class,
     ],
     version = JELLY_PLAY_DATABASE_VERSION,
     exportSchema = true,
@@ -105,6 +108,7 @@ abstract class JellyPlayDatabase : RoomDatabase() {
     abstract fun homeSectionCacheDao(): HomeSectionCacheDao
     abstract fun bookBookmarkDao(): BookBookmarkDao
     abstract fun bookAnnotationDao(): BookAnnotationDao
+    abstract fun bookTocCacheDao(): BookTocCacheDao
 }
 
 /**

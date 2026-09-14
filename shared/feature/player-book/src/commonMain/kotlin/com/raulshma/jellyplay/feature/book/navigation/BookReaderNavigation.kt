@@ -19,6 +19,8 @@ fun EntryProviderScope<NavKey>.bookReaderSection(
         ) {
             BookReaderScreen(
                 itemId = key.itemId,
+                jumpHref = key.jumpHref,
+                jumpPage = key.jumpPage,
                 onBack = { navigator.goBack() },
             )
         }

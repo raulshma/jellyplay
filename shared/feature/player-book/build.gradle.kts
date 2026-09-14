@@ -105,6 +105,13 @@ kotlin {
             implementation(kotlin("test"))
             implementation(libs.coroutines.test)
             implementation(libs.mockk)
+            // Compose UI regression for the TOC tick rail (ReaderTocRailUiTest):
+            // injected tap/drag through the real gesture detectors. The UI
+            // test needs a real skia scene: currentOs pulls the skiko-awt
+            // runtime (native lib) the ui-test scene renders with.
+            @OptIn(org.jetbrains.compose.ExperimentalComposeLibrary::class)
+            implementation(compose.uiTest)
+            implementation(compose.desktop.currentOs)
         }
         getByName("androidMain").dependencies {
             // WindowCompat / WindowInsetsControllerCompat for the immersive

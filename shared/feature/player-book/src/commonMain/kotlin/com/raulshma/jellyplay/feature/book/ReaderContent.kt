@@ -115,6 +115,7 @@ internal fun PagedReaderContent(
     val brightnessPct by viewModel.brightnessPct.collectAsStateWithLifecycle()
     val volumeKeyPaging by viewModel.volumeKeyPaging.collectAsStateWithLifecycle()
     val animatedPageTurns by viewModel.animatedPageTurns.collectAsStateWithLifecycle()
+    val tocRailVisible by viewModel.tocRailVisible.collectAsStateWithLifecycle()
     var showBookmarks by remember { mutableStateOf(false) }
     var showToc by remember { mutableStateOf(false) }
 
@@ -189,6 +190,34 @@ internal fun PagedReaderContent(
         // Above the pages, under the chrome — controls stay full-brightness.
         BrightnessDimOverlay(brightnessPct)
 
+        // PDF's TOC tick rail: current-outline-neighborhood ticks on the
+        // start edge (tap/drag to jump — see ReaderTocRail). Opt-in via the
+        // reader controls; other paged formats have no TOC and render
+        // nothing.
+        if (content.format == BookFormat.PDF && tocRailVisible) {
+            val pdfTicks = remember(pdfOutline) { pdfTocTicks(pdfOutline) }
+            val pdfTickIndex = remember(pdfTicks, content.currentPage) {
+                pdfCurrentTickIndex(pdfTicks, content.currentPage)
+            }
+            ReaderTocRail(
+                ticks = pdfTicks,
+                currentIndex = pdfTickIndex,
+                onJump = { tick ->
+                    val page = tick.page ?: return@ReaderTocRail
+                    scope.launch {
+                        if (pageTurnScroll(animatedPageTurns) == PageTurnScroll.ANIMATED) {
+                            pagerState.animateScrollToPage(page)
+                        } else {
+                            pagerState.scrollToPage(page)
+                        }
+                    }
+                },
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .padding(start = 4.dp),
+            )
+        }
+
         ReaderTopBar(
             state = state,
             bookmarked = bookmarked,
@@ -235,6 +264,7 @@ internal fun PagedReaderContent(
                     volumeKeyPaging = volumeKeyPaging,
                     animatedPageTurns = animatedPageTurns,
                     readingSpeedWpm = viewModel.readingSpeedWpm.value,
+                    tocRailVisible = tocRailVisible,
                 ),
                 onSetDirection = viewModel::setReadingDirection,
                 onSetFitMode = { fitMode = it },
@@ -244,6 +274,9 @@ internal fun PagedReaderContent(
                     }
                     if (next.animatedPageTurns != animatedPageTurns) {
                         viewModel.setAnimatedPageTurns(next.animatedPageTurns)
+                    }
+                    if (next.tocRailVisible != tocRailVisible) {
+                        viewModel.setTocRailVisible(next.tocRailVisible)
                     }
                 },
                 onOpenToc = { viewModel.dismissSettings(); showToc = true },
@@ -318,6 +351,7 @@ internal fun ReflowableReaderContent(
     val brightnessPct by viewModel.brightnessPct.collectAsStateWithLifecycle()
     val volumeKeyPaging by viewModel.volumeKeyPaging.collectAsStateWithLifecycle()
     val readingSpeedWpm by viewModel.readingSpeedWpm.collectAsStateWithLifecycle()
+    val tocRailVisible by viewModel.tocRailVisible.collectAsStateWithLifecycle()
 
     // Read aloud + sleep timer + auto-scroll (Wave 5). Speech/auto-scroll
     // STATE lives in the VM/screen as noted; the AUTO-SCROLL speed is the
@@ -402,7 +436,7 @@ internal fun ReflowableReaderContent(
             onPercentChanged = { viewModel.onEpubPercentChanged(it); percent = it },
             onStatusChanged = { epubStatus = it },
             onDirectionReported = viewModel::onEpubDirection,
-            onTocReady = { tocItems = it },
+            onTocReady = { tocItems = it; viewModel.onEpubTocReady(it) },
             onRelocated = { viewModel.onEpubRelocated(it) },
             onSelection = { cfi, text -> viewModel.onEpubSelection(cfi, text) },
             onSelectionCleared = { viewModel.onEpubSelectionCleared() },
@@ -520,12 +554,17 @@ internal fun ReflowableReaderContent(
     val downloadProgress by host.viewerDownloadProgress
 
     // Exact resume (ADR 0003 point 4): once READY, jump to the locally stored
-    // CFI — exactly once. A failed display degrades in-place (reader.js keeps
-    // the current page and reports displayError), i.e. the percent resume.
-    LaunchedEffect(epubStatus, content.resumeCfi) {
+    // CFI — exactly once. A deep-link destination (detail "Contents" tap)
+    // outranks the resume anchor. A failed display degrades in-place
+    // (reader.js keeps the current page and reports displayError), i.e. the
+    // percent resume.
+    LaunchedEffect(epubStatus, content.resumeCfi, content.jumpHref) {
         if (epubStatus == EpubReaderStatus.READY && !resumedFromCfi) {
             resumedFromCfi = true
-            content.resumeCfi?.let(host::goToCfi)
+            when {
+                content.jumpHref != null -> host.goTo(content.jumpHref)
+                else -> content.resumeCfi?.let(host::goToCfi)
+            }
         }
     }
 
@@ -630,6 +669,25 @@ internal fun ReflowableReaderContent(
             onOpenSleepTimer = { showSleepTimer = true },
             modifier = Modifier.align(Alignment.TopCenter),
         )
+        // The EPUB TOC tick rail (opt-in via the reader controls):
+        // current-chapter-neighborhood ticks on the start edge. Current entry
+        // rides the relocated event's spine href (the chapter label alone
+        // collides on duplicate titles); hidden until both the toc event and
+        // the first relocation have landed.
+        val tocTicks = remember(tocItems) { epubTocTicks(tocItems) }
+        val tocTickIndex = remember(tocTicks, epubLocation?.chapterHref) {
+            epubCurrentTocIndex(tocItems, epubLocation?.chapterHref)
+        }
+        if (tocRailVisible) {
+            ReaderTocRail(
+                ticks = tocTicks,
+                currentIndex = tocTickIndex,
+                onJump = { tick -> tick.href?.let { href -> hostRef.value?.goTo(href) } },
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .padding(start = 4.dp),
+            )
+        }
         // The bottom chrome hides while the selection bar is up — two
         // bottom-anchored bars would fight for the same edge.
         AnimatedVisibility(
@@ -724,6 +782,7 @@ internal fun ReflowableReaderContent(
                     volumeKeyPaging = volumeKeyPaging,
                     animatedPageTurns = viewModel.animatedPageTurns.value,
                     readingSpeedWpm = readingSpeedWpm,
+                    tocRailVisible = tocRailVisible,
                 ),
                 speechRate = speechRate,
                 speechPitch = speechPitch,
@@ -745,6 +804,9 @@ internal fun ReflowableReaderContent(
                     }
                     if (next.readingSpeedWpm != readingSpeedWpm) {
                         viewModel.setReadingSpeedWpm(next.readingSpeedWpm)
+                    }
+                    if (next.tocRailVisible != tocRailVisible) {
+                        viewModel.setTocRailVisible(next.tocRailVisible)
                     }
                 },
                 onSetSpeechRate = viewModel::setSpeechRate,

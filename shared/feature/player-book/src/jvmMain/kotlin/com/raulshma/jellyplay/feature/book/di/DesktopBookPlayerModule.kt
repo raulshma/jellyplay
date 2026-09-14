@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.book.di
 
+import com.raulshma.jellyplay.core.data.book.BookTocProber
 import com.raulshma.jellyplay.core.network.di.NetworkQualifiers
 import com.raulshma.jellyplay.feature.book.BookContentResolver
 import com.raulshma.jellyplay.feature.book.BookDocumentOpener
@@ -8,6 +9,7 @@ import com.raulshma.jellyplay.feature.book.BookHttpFetcher
 import com.raulshma.jellyplay.feature.book.BookSpeechEngine
 import com.raulshma.jellyplay.feature.book.DesktopBookDocumentOpener
 import com.raulshma.jellyplay.feature.book.DesktopBookSpeechEngine
+import com.raulshma.jellyplay.feature.book.LocalBookTocProber
 import com.raulshma.jellyplay.feature.book.OkHttpBookContentResolver
 import com.raulshma.jellyplay.feature.book.OkHttpBookFetcher
 import com.raulshma.jellyplay.feature.book.OkHttpBookFormatProbe
@@ -41,6 +43,9 @@ fun desktopBookPlayerModule(dataDir: okio.Path): Module = module {
     // UNAVAILABLE and the reader degrades (caption + hidden controls).
     single<BookSpeechEngine> { DesktopBookSpeechEngine() }
     single<PdfOutlineParser> { PdfOutlineParser() }
+    // The detail screen's TOC probe (never-opened books) — same PDFBox
+    // binding, plus the jvmShared EPUB/comic parsers.
+    single<BookTocProber> { LocalBookTocProber(get()) }
     single {
         EpubDesktopEnv(
             kcefDir = (dataDir / "kcef").toFile(),

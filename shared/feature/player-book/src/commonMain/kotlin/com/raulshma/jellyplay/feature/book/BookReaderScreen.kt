@@ -55,6 +55,10 @@ import org.koin.compose.viewmodel.koinViewModel
 fun BookReaderScreen(
     itemId: String,
     onBack: () -> Unit,
+    /** One-shot deep-link destination (detail "Contents" tap), EPUB href. */
+    jumpHref: String? = null,
+    /** One-shot deep-link destination, 0-based page (PDF). */
+    jumpPage: Int? = null,
     viewModel: BookReaderViewModel = koinViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -81,8 +85,8 @@ fun BookReaderScreen(
     // their own windows first, so this only fires when the reader is exposed.
     JellyPlayBackHandler(enabled = true, onBack = onBack)
 
-    LaunchedEffect(itemId) {
-        viewModel.load(itemId)
+    LaunchedEffect(itemId, jumpHref, jumpPage) {
+        viewModel.load(itemId, jumpHref, jumpPage)
     }
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {

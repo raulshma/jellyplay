@@ -251,6 +251,24 @@ class BookReaderViewModelTest {
         assertEquals(2, (ready.content as ReadyContent.Paged).currentPage)
     }
 
+    /**
+     * Regresses the dead Contents deep-link for paged books: openBook used to
+     * clear pendingJumpPage before the paged-resume branch read it, so the
+     * jump page never took effect and the reader opened at the server resume
+     * position instead.
+     */
+    @Test
+    fun `paged deep link jumpPage outranks the server resume position`() = runTest(mainDispatcher) {
+        stubDetail("comic.cbz", positionTicks = BookProgressPolicy.pageToTicks(1))
+
+        val vm = viewModel()
+        vm.load("item-1", jumpPage = 2)
+        advanceUntilIdle()
+
+        val ready = assertIs<BookReaderUiState.Ready>(vm.uiState.value)
+        assertEquals(2, (ready.content as ReadyContent.Paged).currentPage)
+    }
+
     @Test
     fun `reflowable jump is a no-op for a null-cfi row`() = runTest(mainDispatcher) {
         stubDetail("novel.epub", positionTicks = 0L)

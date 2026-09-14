@@ -92,6 +92,7 @@ internal object EpubEventParser {
                     remainingPages = (map["remainingPages"] as? Number)?.toInt(),
                     remainingLocations = (map["remainingLocations"] as? Number)?.toInt(),
                     cfi = (map["cfi"] as? String)?.takeIf { it.isNotBlank() },
+                    href = (map["href"] as? String)?.takeIf { it.isNotBlank() },
                 ),
             )
             "tap" -> EpubEvent.Tap(

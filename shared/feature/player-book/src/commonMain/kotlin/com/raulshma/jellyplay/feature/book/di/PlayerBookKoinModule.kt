@@ -39,6 +39,7 @@ val playerBookModule: Module = module {
             pdfOutlineParser = get(),
             formatProbe = getOrNull() ?: NoopBookFormatProbe,
             speechEngine = getOrNull() ?: NoopBookSpeechEngine,
+            tocCacheRepository = get(),
             flushScope = get(DatastoreQualifiers.applicationScope),
         )
     }

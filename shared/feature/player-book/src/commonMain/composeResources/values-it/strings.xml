@@ -56,6 +56,8 @@
     <string name="book_reader_behavior">Comportamento</string>
     <string name="book_reader_volume_keys">I tasti volume cambiano pagina</string>
     <string name="book_reader_animated_turns">Animare il cambio di pagina</string>
+
+    <string name="book_reader_toc_rail">Barra dei segni dei capitoli</string>
     <string name="book_reader_reading_speed">Velocità di lettura (parole al minuto)</string>
     <string name="book_reader_pages_left">%1$d pagine rimanenti</string>
     <string name="book_reader_chapter_pages_left">%1$d pagine rimanenti nel capitolo</string>

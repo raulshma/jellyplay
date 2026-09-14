@@ -251,6 +251,59 @@ class EpubReaderScriptTest {
     }
 
     /**
+     * Regresses the dead TOC jump (sheet, rail and detail-screen deep link
+     * all ride `goTo`): epub.js keys its spine map by the RAW OPF manifest
+     * hrefs while TOC hrefs are raw relative to the nav/NCX document, so a
+     * nav doc in a subdirectory emits "../Text/ch1.xhtml" and
+     * rendition.display() silently rejects ("No Section Found") — the jump
+     * dies without even a displayError. goTo must resolve through the same
+     * exact → ../-fold → boundary-suffix ladder the label matcher
+     * (chapterLabelFor) uses, and re-attach the #fragment so sub-section
+     * TOC entries still land on their anchor.
+     */
+    @Test
+    fun `reader js resolves nav-relative toc hrefs before display`() {
+        val source = java.io.File("src/commonMain/composeResources/files/epubjs/reader.js").readText()
+        kotlin.test.assertTrue(source.contains("function resolveSpineHref"), "href resolver must exist")
+        kotlin.test.assertTrue(
+            source.contains("book.spine.get(clean)"),
+            "resolver must try the exact spine key first",
+        )
+        kotlin.test.assertTrue(
+            source.contains("parts[i] === '..'"),
+            "resolver must lexically fold ../ segments (nav docs in subdirectories)",
+        )
+        kotlin.test.assertTrue(
+            source.contains("endsWith(spineHref, '/' + clean) || endsWith(clean, '/' + spineHref)"),
+            "resolver needs the boundary-suffix pass over the spine items",
+        )
+        kotlin.test.assertTrue(
+            source.contains("rendition.display(resolveSpineHref(raw) + fragment)"),
+            "goTo must display the resolved href and keep the anchor fragment",
+        )
+    }
+
+    /**
+     * Regresses the spine-fraction percent fallback (the readout and the
+     * synced PlaybackPositionTicks while locations generate on a large
+     * book): epub.js assigns spine indexes in a 0-based forEach, so the
+     * fraction must divide the raw index — the old `index - 1` offset made
+     * chapter two report 0% and capped the last chapter below (n-2)/n.
+     */
+    @Test
+    fun `reader js spine fallback divides the zero-based index`() {
+        val source = java.io.File("src/commonMain/composeResources/files/epubjs/reader.js").readText()
+        kotlin.test.assertTrue(
+            source.contains("Math.min(Math.max(item.index / count, 0), 1)"),
+            "spine fraction must use the raw 0-based index over the spine length",
+        )
+        kotlin.test.assertFalse(
+            source.contains("item.index - 1"),
+            "spine indexes are 0-based; the -1 offset shifts every chapter down",
+        )
+    }
+
+    /**
      * Regresses the dead tap-zone wiring: epub.js 0.3.x emits the raw
      * forwarded content events (click/mousedown/touchstart/touchend) on the
      * per-chapter Contents emitter ONLY — they never bubble to the

@@ -64,11 +64,15 @@ sealed interface ReadyContent {
      * convention), not a page index. [resumeCfi] is the local exact-resume
      * anchor (ReaderStore's last-CFI map) — the screen jumps to it once the
      * host reaches READY; null reopens at the server [resumePercent].
+     * [jumpHref] is a one-shot deep-link destination (detail-screen
+     * "Contents" tap) that outranks the resume anchor on the first jump;
+     * null = normal resume.
      */
     data class Reflowable(
         val bookFile: Path,
         val resumePercent: Double,
         val resumeCfi: String? = null,
+        val jumpHref: String? = null,
     ) : ReadyContent
 }
 
@@ -86,6 +90,8 @@ data class EpubLocation(
     val cfi: String?,
     val remainingPages: Int? = null,
     val remainingLocations: Int? = null,
+    /** Raw current spine href — the TOC tick rail's current-entry matcher. */
+    val chapterHref: String? = null,
 )
 
 /** A live text selection inside the reflowable reader (CFI + selected text). */

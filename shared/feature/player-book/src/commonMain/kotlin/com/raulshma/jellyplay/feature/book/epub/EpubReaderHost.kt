@@ -71,6 +71,12 @@ internal data class EpubRelocation(
      * `percent` event carries no anchor at all.
      */
     val cfi: String? = null,
+    /**
+     * The raw current spine href, or `null` when not reported — lets native
+     * identify the current TOC entry (the chapter label alone collides on
+     * duplicate titles).
+     */
+    val href: String? = null,
 )
 
 /** One full-text search hit (chapter scan in reader.js). */

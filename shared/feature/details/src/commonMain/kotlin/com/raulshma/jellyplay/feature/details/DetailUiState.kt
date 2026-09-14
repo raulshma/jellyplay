@@ -117,7 +117,28 @@ data class DetailUiState(
     // canManageSeries combine stays a pure derivation over snapshot state
     // instead of issuing network I/O on every identity tick.
     val sonarrServersResolved: Boolean = false,
+    // Book-only extras (BOOK media type, null otherwise): the resolved format,
+    // the local TOC cache (contents + page count), and the reader marks
+    // counts. Written by the VM's loadBookExtras — the cache row comes from
+    // the reader's write-through or the local-file probe; null/empty until
+    // then and the sections hide.
+    val book: BookDetailState? = null,
 ) {
+    /**
+     * Everything the detail screen renders for a BOOK item beyond the shared
+     * header/actions: resolved file format, cached table of contents and
+     * page count (from the reader's write-through or the local-file probe),
+     * and the local reader-marks counts.
+     */
+    @Immutable
+    data class BookDetailState(
+        val format: com.raulshma.jellyplay.core.model.BookFormat,
+        val toc: List<com.raulshma.jellyplay.core.model.BookTocEntry> = emptyList(),
+        /** Paged book page count (0 = reflowable/unknown). */
+        val pageCount: Int = 0,
+        val bookmarkCount: Int = 0,
+        val highlightCount: Int = 0,
+    )
     /**
      * The navigation/refresh reset, declared once (the
      * `VideoPlayerUiState.keepAcrossItems()` precedent): the surviving leaves

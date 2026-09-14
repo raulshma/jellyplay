@@ -91,8 +91,12 @@ fun MediaDetailScreen(
     itemId: String,
     onPlayClick: (itemId: String, mediaSourceId: String?, startPosition: Long, subtitleStreamIndex: Int?, audioStreamIndex: Int?) -> Unit,
     onAudioClick: (itemId: String) -> Unit,
-    /** Open the book reader for a BOOK item (details screen Read button). */
-    onReadClick: (itemId: String) -> Unit = {},
+    /**
+     * Open the book reader for a BOOK item (details screen Read button).
+     * The jump pair is the one-shot "Contents" deep-link destination (EPUB
+     * href / 0-based PDF page) — nulls for plain Read/Continue.
+     */
+    onReadClick: (itemId: String, jumpHref: String?, jumpPage: Int?) -> Unit = { _, _, _ -> },
     onItemClick: (itemId: String) -> Unit,
     onPersonClick: (personId: String) -> Unit,
     onNavigateToSeries: (seriesId: String) -> Unit,
@@ -147,7 +151,15 @@ fun MediaDetailScreen(
     }
     // Memoized so the URL isn't rebuilt on every recomposition (e.g. on each
     // scroll-derived state change funnelling through ArtworkThemeWrapper).
-    val backdropUrl = remember(targetBackdropId) { viewModel.getBackdropUrl(targetBackdropId) }
+    // Books have no Backdrop image — the hero (and the cover-tinted theme)
+    // source the PRIMARY (cover) art instead.
+    val backdropUrl = remember(targetBackdropId, currentItem?.mediaType) {
+        if (currentItem?.mediaType == MediaType.BOOK) {
+            viewModel.getImageUrl(targetBackdropId)
+        } else {
+            viewModel.getBackdropUrl(targetBackdropId)
+        }
+    }
 
     val outerIsLightTheme = rememberIsLightTheme()
 
@@ -459,6 +471,7 @@ fun MediaDetailScreen(
                     resyncState = resyncState,
                     downloadedEpisodeIds = downloads.downloadedEpisodeIds,
                     downloadPicker = downloads.downloadPicker,
+                    book = uiState.book,
                 )
 
                 val onVideoClick = rememberVideoClickHandler(
@@ -535,7 +548,9 @@ fun MediaDetailScreen(
                             onPlayClick(extra.id, null, 0L, null, null)
                         },
                         onAudioClick = { onAudioClick(itemId) },
-                        onReadClick = { onReadClick(itemId) },
+                        onReadClick = { readItemId: String, jumpHref: String?, jumpPage: Int? ->
+                            onReadClick(readItemId, jumpHref, jumpPage)
+                        },
                         onPlayAlbumTrack = { index: Int -> viewModel.playAlbum(index) },
                         onSubtitleSelect = { idx: Int? -> viewModel.selectSubtitle(idx) },
                         onAudioSelect = { idx: Int? -> viewModel.selectAudio(idx) },

@@ -26,6 +26,11 @@ back to the server so you can pick up on any device.
 - 🔎 **Search in book** — EPUBs are full-text searchable with jump-to-hit
   and a flash highlight; PDFs expose their outline (table of contents)
   with page jumps.
+- 📍 **Chapter tick rail** — an opt-in stack of side ticks on the reader's
+  edge shows where the current chapter sits in the table of contents (two
+  neighbors out on each side); press-drag scrubs chapter titles and
+  release jumps. Off by default; enable it in the reader settings'
+  behavior section.
 - 🎛️ **Reading direction toggle** — comic pages can be flipped
   left-to-right or right-to-left (manga) per book.
 - 🎨 **EPUB typography** — reflowable books offer light/sepia/dark themes
@@ -50,6 +55,12 @@ back to the server so you can pick up on any device.
 - 🌙 **Sleep timer & auto-scroll** — stop read-aloud/auto-scroll after
   5–60 minutes or at the end of the chapter; scroll-mode EPUBs gain
   auto-scroll with a persisted speed slider and tap-to-pause.
+- 🖼️ **Book-aware detail screen** — a book's detail page shows its cover
+  as a blurred hero, the author, the file format (EPUB / PDF / Comic), a
+  reading-progress card (percent or page N of M, plus local bookmark and
+  highlight counts), a **Contents** row that deep-links into the reader at
+  a chapter, and a "Mark as finished" action. Video-only sections (cast,
+  studios, skip chips) stay hidden for books.
 - 📚 **Offline reading** — books download like any other media and open
   from the offline library with no network; positions made offline are
   queued and synced to the server on reconnect.
@@ -77,6 +88,47 @@ stay compatible. Bookmarks use the same encoding plus the CFI.
 
 Marking a book as read is always a user action — the server never
 auto-completes a book from progress.
+
+## The detail screen's Contents
+
+The detail screen never parses a book file itself. The reader write-throughs
+what each open makes known — EPUB table of contents, PDF outline, paged page
+count — into a local `book_toc_cache` table (schema v56, per install like the
+marks), and the detail screen reads that. A book that has never been opened
+but **is downloaded** gets one fallback parse of the local file (same parsers
+as the reader: PDFBox outline, container NCX/nav, comic page count — except
+CBR, whose RAR count only arrives via the cache on first read); a remote
+never-downloaded book simply hides the Contents section rather than fetching
+the whole file for a speculative parse.
+
+## The chapter tick rail
+
+While a book with a table of contents is open **and the rail is enabled**
+(off by default — the settings sheet's behavior section has a "Chapter
+tick rail" switch), the reader keeps a compact stack of ticks on the start
+edge: two TOC entries before the current chapter, the current one (widest,
+accent-tinted), and two after. It is an orientation and jump affordance,
+not a second TOC sheet:
+
+- **Tap a tick** to jump to that chapter; the title bubble flashes what you
+  tapped.
+- **Press-drag** scrubs like the library screen's alphabet rail — the title
+  bubble tracks the finger showing only the chapter title, and dragging past
+  either end of the stack keeps stepping one chapter per row through the
+  whole TOC. The jump commits on release (an EPUB chapter jump rebuilds the
+  WebView section, so it does not live-jump mid-drag).
+
+TOC jumps (rail, TOC sheet, and the detail screen's Contents row) resolve
+nav-relative hrefs to spine hrefs inside reader.js — epub.js keys its spine
+map by the raw OPF hrefs while TOC hrefs are relative to the nav document,
+so a nav doc in a subdirectory (`../Text/ch1.xhtml`) would otherwise be a
+silent no-op.
+
+The rail never appears for books without a TOC — comics, TOC-less EPUBs,
+PDFs without an outline. The current entry comes from the relocation
+event's spine href (EPUB) or the outline page (PDF); the tick window, drag
+math, and fisheye lens live in the same compose-free geometry pattern as
+the library rail (`TocRailGeometry` in the book feature).
 
 ## Server versions
 

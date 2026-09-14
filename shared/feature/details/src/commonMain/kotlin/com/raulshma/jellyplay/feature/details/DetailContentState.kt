@@ -95,6 +95,8 @@ internal data class DetailContentState(
     val downloadedEpisodeIds: Set<String> = emptySet(),
     // Pre-download picker (quality + external-subtitle selection).
     val downloadPicker: DownloadPickerState = DownloadPickerState(),
+    // Book-only extras (BOOK media type): format + TOC cache + marks counts.
+    val book: DetailUiState.BookDetailState? = null,
 )
 
 /**
@@ -134,8 +136,12 @@ internal data class PlaybackCallbacks(
     /** Play a special feature / extra (featurette, deleted scene, etc.) in the player. */
     val onPlayExtra: (MediaItem) -> Unit = {},
     val onAudioClick: () -> Unit = {},
-    /** Open the book reader for the current item (BOOK media type, readable format). */
-    val onReadClick: (itemId: String) -> Unit = {},
+    /**
+     * Open the book reader for the current item (BOOK media type, readable
+     * format). The jump pair is the one-shot "Contents" destination (EPUB
+     * href / 0-based PDF page) — nulls for plain Read/Continue.
+     */
+    val onReadClick: (itemId: String, jumpHref: String?, jumpPage: Int?) -> Unit = { _, _, _ -> },
     val onPlayAlbumTrack: (Int) -> Unit = {},
     val onSubtitleSelect: (Int?) -> Unit = {},
     val onAudioSelect: (Int?) -> Unit = {},

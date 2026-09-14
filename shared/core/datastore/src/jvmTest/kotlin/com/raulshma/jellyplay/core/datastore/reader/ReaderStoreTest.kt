@@ -71,6 +71,7 @@ class ReaderStoreTest {
         assertEquals(ReaderStore.DEFAULT_BRIGHTNESS_PCT, slice().brightnessPct)
         assertEquals(false, slice().volumeKeyPaging)
         assertEquals(true, slice().animatedPageTurns)
+        assertEquals(false, slice().tocRailVisible)
         assertEquals(ReaderStore.DEFAULT_SPEECH_RATE, slice().speechRate)
         assertEquals(ReaderStore.DEFAULT_SPEECH_PITCH, slice().speechPitch)
         assertEquals(ReaderStore.DEFAULT_READING_SPEED_WPM, slice().readingSpeedWpm)
@@ -198,12 +199,14 @@ class ReaderStoreTest {
         store.setScrollMode(true)
         store.setVolumeKeyPaging(true)
         store.setAnimatedPageTurns(false)
+        store.setTocRailVisible(true)
 
         val slice = slice()
         assertEquals(true, slice.justify)
         assertEquals(true, slice.scrollMode)
         assertEquals(true, slice.volumeKeyPaging)
         assertEquals(false, slice.animatedPageTurns)
+        assertEquals(true, slice.tocRailVisible)
     }
 
     @Test
@@ -317,6 +320,7 @@ class ReaderStoreTest {
         store.setBrightnessPct(40)
         store.setVolumeKeyPaging(true)
         store.setAnimatedPageTurns(false)
+        store.setTocRailVisible(true)
         store.setSpeechRate(120)
         store.setSpeechPitch(90)
         store.setReadingSpeedWpm(320)
@@ -337,6 +341,7 @@ class ReaderStoreTest {
         assertEquals(ReaderStore.DEFAULT_BRIGHTNESS_PCT, slice.brightnessPct)
         assertEquals(false, slice.volumeKeyPaging)
         assertEquals(true, slice.animatedPageTurns)
+        assertEquals(false, slice.tocRailVisible)
         assertEquals(ReaderStore.DEFAULT_SPEECH_RATE, slice.speechRate)
         assertEquals(ReaderStore.DEFAULT_SPEECH_PITCH, slice.speechPitch)
         assertEquals(ReaderStore.DEFAULT_READING_SPEED_WPM, slice.readingSpeedWpm)
@@ -356,6 +361,7 @@ class ReaderStoreTest {
                 "reader_brightness_pct",
                 "reader_volume_key_paging",
                 "reader_animated_page_turns",
+                "reader_toc_rail",
                 "reader_speech_rate",
                 "reader_speech_pitch",
                 "reader_reading_speed_wpm",

@@ -56,6 +56,8 @@
     <string name="book_reader_behavior">行为</string>
     <string name="book_reader_volume_keys">音量键翻页</string>
     <string name="book_reader_animated_turns">翻页动画</string>
+
+    <string name="book_reader_toc_rail">章节刻度栏</string>
     <string name="book_reader_reading_speed">阅读速度（字/分钟）</string>
     <string name="book_reader_pages_left">剩余 %1$d 页</string>
     <string name="book_reader_chapter_pages_left">本章剩余 %1$d 页</string>

@@ -1147,8 +1147,24 @@ val MIGRATION_54_55 = object : Migration(54, 55) {
     }
 }
 
+val MIGRATION_55_56 = object : Migration(55, 56) {
+    override suspend fun migrate(db: SQLiteConnection) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS book_toc_cache (
+                itemId TEXT NOT NULL PRIMARY KEY,
+                format TEXT NOT NULL,
+                pageCount INTEGER NOT NULL,
+                entriesJson TEXT NOT NULL,
+                updatedAt INTEGER NOT NULL
+            )
+            """.trimIndent()
+        )
+    }
+}
+
 /**
- * The complete, correctly-ordered v1→v55 migration chain, with the
+ * The complete, correctly-ordered v1→v56 migration chain, with the
  * token-encrypting [Migration24To25] (which needs a [TokenCipher]) and the
  * container-backfilling [Migration53To54] (which needs a [ContainerProbe])
  * as constructor-injected steps at their true positions. Room matches
@@ -1215,4 +1231,5 @@ fun allMigrations(
         MIGRATION_52_53,
         Migration53To54(containerProbe),
         MIGRATION_54_55,
+        MIGRATION_55_56,
     )

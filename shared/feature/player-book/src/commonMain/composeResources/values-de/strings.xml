@@ -56,6 +56,8 @@
     <string name="book_reader_behavior">Verhalten</string>
     <string name="book_reader_volume_keys">Lautstasten blättern</string>
     <string name="book_reader_animated_turns">Seitenwechsel animieren</string>
+
+    <string name="book_reader_toc_rail">Kapitel-Markierungsleiste</string>
     <string name="book_reader_reading_speed">Lesegeschwindigkeit (Wörter pro Minute)</string>
     <string name="book_reader_pages_left">%1$d Seiten übrig</string>
     <string name="book_reader_chapter_pages_left">%1$d Seiten übrig im Kapitel</string>

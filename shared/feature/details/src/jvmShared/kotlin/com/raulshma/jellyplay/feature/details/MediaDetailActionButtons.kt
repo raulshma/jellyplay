@@ -67,6 +67,8 @@ import com.raulshma.jellyplay.feature.details.generated.resources.detail_play_re
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_continue_percent
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_continue_page
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_book_download_only
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_cd_mark_as_finished
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_cd_mark_as_unfinished
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_read
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_skip_available_both
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_skip_available_credits
@@ -197,7 +199,7 @@ internal fun DetailActionButtons(
         {
             if (!canPlayPrimary) return@remember
             if (isBook) {
-                callbacks.playback.onReadClick(item.id)
+                callbacks.playback.onReadClick(item.id, null, null)
             } else if (isAlbum && state.albumTracks.isNotEmpty()) {
                 callbacks.playback.onPlayAlbumTrack(0)
                 state.albumTracks.firstOrNull()?.let { track ->
@@ -253,6 +255,7 @@ internal fun DetailActionButtons(
                         scale = markScale,
                         interactionSource = markInteractionSource,
                         focusState = markTvFocusState,
+                        isBook = isBook,
                         onClick = { if (item.isPlayed) callbacks.userData.onMarkUnplayed() else callbacks.userData.onMarkPlayed() },
                     )
                 }
@@ -304,6 +307,7 @@ internal fun DetailActionButtons(
                     scale = markScale,
                     interactionSource = markInteractionSource,
                     focusState = markHFocusState,
+                    isBook = isBook,
                     onClick = { if (item.isPlayed) callbacks.userData.onMarkUnplayed() else callbacks.userData.onMarkPlayed() },
                 )
             }
@@ -445,6 +449,8 @@ private fun MarkWatchedButton(
     scale: Float,
     interactionSource: MutableInteractionSource,
     focusState: com.raulshma.jellyplay.core.ui.tv.TvFocusState,
+    /** BOOK items read "finished" instead of "watched" in the a11y copy. */
+    isBook: Boolean = false,
     onClick: () -> Unit,
 ) {
     val confirmHaptic = rememberConfirmHaptic()
@@ -466,10 +472,11 @@ private fun MarkWatchedButton(
             .then(Modifier.tvFocusIndicator(focusState, shape))
             .clickable(interactionSource = interactionSource, indication = null, onClick = { confirmHaptic(); onClick() }),
     ) {
-        val contentDescription = if (isPlayed) {
-            stringResource(Res.string.detail_cd_mark_as_unwatched)
-        } else {
-            stringResource(Res.string.detail_cd_mark_as_watched)
+        val contentDescription = when {
+            isBook && isPlayed -> stringResource(Res.string.detail_cd_mark_as_unfinished)
+            isBook -> stringResource(Res.string.detail_cd_mark_as_finished)
+            isPlayed -> stringResource(Res.string.detail_cd_mark_as_unwatched)
+            else -> stringResource(Res.string.detail_cd_mark_as_watched)
         }
         Icon(
             if (isPlayed) Tabler.Outline.Eye else Tabler.Outline.EyeOff,

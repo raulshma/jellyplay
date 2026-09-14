@@ -417,4 +417,20 @@
     <string name="detail_file_category_trickplay">Trickplay</string>
     <string name="detail_file_category_segment">Segmente</string>
     <string name="detail_file_category_image">Bilder</string>
+    <!-- ── Buch-Detailseite (lesesensibler Rumpf) ── -->
+    <string name="detail_section_contents">Inhalt</string>
+    <string name="detail_book_format_comic">Comic</string>
+    <string name="detail_book_finished_badge">Beendet</string>
+    <string name="detail_book_page_progress">Seite %1$d von %2$d</string>
+    <string name="detail_book_percent_progress">%1$d% gelesen</string>
+    <string name="detail_cd_mark_as_finished">Als beendet markieren</string>
+    <string name="detail_cd_mark_as_unfinished">Als nicht beendet markieren</string>
+    <plurals name="detail_book_bookmarks">
+        <item quantity="one">%1$d Lesezeichen</item>
+        <item quantity="other">%1$d Lesezeichen</item>
+    </plurals>
+    <plurals name="detail_book_highlights">
+        <item quantity="one">%1$d Markierung</item>
+        <item quantity="other">%1$d Markierungen</item>
+    </plurals>
 </resources>

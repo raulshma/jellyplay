@@ -56,6 +56,8 @@
     <string name="book_reader_behavior">동작</string>
     <string name="book_reader_volume_keys">볼륨 키로 페이지 넘기기</string>
     <string name="book_reader_animated_turns">페이지 넘김 애니메이션</string>
+
+    <string name="book_reader_toc_rail">챕터 눈금 레일</string>
     <string name="book_reader_reading_speed">읽기 속도 (분당 단어 수)</string>
     <string name="book_reader_pages_left">%1$d페이지 남음</string>
     <string name="book_reader_chapter_pages_left">이 장에 %1$d페이지 남음</string>

@@ -418,4 +418,20 @@
     <string name="detail_file_category_trickplay">Trickplay</string>
     <string name="detail_file_category_segment">Segments</string>
     <string name="detail_file_category_image">Images</string>
+    <!-- ── Détail du livre (corps adapté à la lecture) ── -->
+    <string name="detail_section_contents">Sommaire</string>
+    <string name="detail_book_format_comic">Bande dessinée</string>
+    <string name="detail_book_finished_badge">Terminé</string>
+    <string name="detail_book_page_progress">Page %1$d sur %2$d</string>
+    <string name="detail_book_percent_progress">%1$d% lu</string>
+    <string name="detail_cd_mark_as_finished">Marquer comme terminé</string>
+    <string name="detail_cd_mark_as_unfinished">Marquer comme non terminé</string>
+    <plurals name="detail_book_bookmarks">
+        <item quantity="one">%1$d marque-page</item>
+        <item quantity="other">%1$d marque-pages</item>
+    </plurals>
+    <plurals name="detail_book_highlights">
+        <item quantity="one">%1$d surlignage</item>
+        <item quantity="other">%1$d surlignages</item>
+    </plurals>
 </resources>

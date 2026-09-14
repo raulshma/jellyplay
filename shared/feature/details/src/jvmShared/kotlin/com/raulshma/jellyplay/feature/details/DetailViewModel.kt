@@ -6,6 +6,10 @@ import com.raulshma.jellyplay.core.data.download.MediaDownloadActions
 import com.raulshma.jellyplay.core.data.offline.OfflineDeleteActions
 import com.raulshma.jellyplay.core.data.repository.DetailLoadState
 import com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
+import com.raulshma.jellyplay.core.data.repository.BookTocCacheRepository
+import com.raulshma.jellyplay.core.data.repository.NoopBookTocCacheRepository
+import com.raulshma.jellyplay.core.data.repository.ReaderAnnotationsRepository
+import com.raulshma.jellyplay.core.data.book.BookTocProber
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
@@ -19,6 +23,8 @@ import com.raulshma.jellyplay.core.model.DetailContext
 import com.raulshma.jellyplay.core.model.DetailOrigin
 import com.raulshma.jellyplay.core.model.DetailPreferences
 import com.raulshma.jellyplay.core.model.ExperimentalFeature
+import com.raulshma.jellyplay.core.model.BookFormat
+import com.raulshma.jellyplay.core.model.BookTocEntry
 import com.raulshma.jellyplay.core.model.CollectionSummary
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaDetailSnapshot
@@ -112,6 +118,16 @@ class DetailViewModel internal constructor(
     private val actionFactories: DetailActionFactories,
     /** Quick-action download/remove routing shared with the other host screens (#147). */
     private val mediaDownloadActions: MediaDownloadActions,
+    /**
+     * Book-only seams (BOOK media type). The TOC cache is the reader's
+     * write-through table (`book_toc_cache`); the marks repo supplies the
+     * bookmark/highlight counts; the prober parses a never-opened book's
+     * LOCAL file (player-book binding) when no cache row exists yet. All
+     * defaulted so existing test constructions compile.
+     */
+    private val bookTocCacheRepository: BookTocCacheRepository = NoopBookTocCacheRepository(),
+    private val readerAnnotationsRepository: ReaderAnnotationsRepository? = null,
+    private val bookTocProber: BookTocProber? = null,
 ) : JellyPlayViewModel() {
 
     /** Media-detail preference fields, projected centrally off the store slices. */
@@ -313,6 +329,8 @@ class DetailViewModel internal constructor(
     // optimistic rewrite, so the VM keeps no local catalogue snapshot. The
     // download sheet's per-season cache moved into [downloadLifecycleActions].
     private var loadJob: Job? = null
+    /** The BOOK item whose extras (TOC cache + marks counts) are being observed. */
+    private var bookExtrasJob: Job? = null
     private var currentItemId: String? = null
     private var currentSeriesId: String? = null
     private var seerrDataLoaded = false
@@ -645,12 +663,85 @@ class DetailViewModel internal constructor(
         } else {
             triggerLocalSideEffects(itemId, detail)
         }
+        // Book extras (TOC cache + marks counts) ride their own observe job —
+        // cache-first, with the local-file probe as the never-opened fallback.
+        // Runs for every media type so a book → non-book move cancels the
+        // previous book's marks collector.
+        loadBookExtras(itemId, detail.path, snapshot.context.download?.downloadPath)
         // Collections are remote-only companion content (not part of the snapshot);
         // gated on remoteDiscovery so a local origin never starts it.
         if (isRemote && snapshot.capabilities.remoteDiscovery &&
             detail.item.mediaType == MediaType.COLLECTION
         ) {
             loadCollectionItems(itemId)
+        }
+    }
+
+    /**
+     * Book-only extras: publishes [DetailUiState.BookDetailState] for the
+     * current BOOK item and keeps the marks counts live while the screen is
+     * up.
+     *
+     * TOC resolution order mirrors the reading experience itself: the
+     * reader's write-through cache first (instant, offline, exactly what the
+     * last open saw); when there is no row yet, a one-shot probe of the
+     * book's LOCAL file (a completed download) parses the same structures
+     * the reader would (PDF outline, EPUB NCX/nav, comic page count) and
+     * write-throughs the result, so the probe cost is paid once per install.
+     * A remote never-downloaded book has no local file — the sections stay
+     * hidden rather than fetching the whole file for a speculative parse.
+     */
+    private fun loadBookExtras(itemId: String, itemPath: String?, downloadPath: String?) {
+        // Cancel before the book check: the marks collector below must not
+        // outlive a book → non-book navigation.
+        bookExtrasJob?.cancel()
+        val format = BookFormat.fromPath(itemPath) ?: return
+        bookExtrasJob = launch {
+            fun publish(toc: List<BookTocEntry>, pageCount: Int) {
+                if (currentItemId != itemId) return
+                _uiState.update {
+                    it.copy(
+                        book = (it.book ?: DetailUiState.BookDetailState(format = format)).copy(
+                            toc = toc,
+                            pageCount = pageCount,
+                        ),
+                    )
+                }
+            }
+
+            val cached = runCatching { bookTocCacheRepository.getToc(itemId) }.getOrNull()
+            publish(cached?.entries ?: emptyList(), cached?.pageCount ?: 0)
+
+            if (cached == null) {
+                val probe = runCatching { bookTocProber?.probe(downloadPath, format) }.getOrNull()
+                if (probe != null && currentItemId == itemId) {
+                    // Write-through: the next detail visit reads the cache.
+                    runCatching {
+                        bookTocCacheRepository.putToc(itemId, probe.format, probe.pageCount, probe.entries)
+                    }
+                    publish(probe.entries, probe.pageCount)
+                }
+            }
+
+            // Marks counts observe live (the reader edits them on another
+            // screen; returning here re-renders the counts). Cancelled with
+            // the job on the next load.
+            val marks = readerAnnotationsRepository ?: return@launch
+            combine(
+                marks.observeBookmarks(itemId),
+                marks.observeAnnotations(itemId),
+            ) { bookmarks, annotations -> bookmarks.size to annotations.size }
+                .collect { (bookmarkCount, highlightCount) ->
+                    if (currentItemId != itemId) return@collect
+                    _uiState.update {
+                        it.copy(
+                            book = (it.book ?: DetailUiState.BookDetailState(format = format)).copy(
+                                bookmarkCount = bookmarkCount,
+                                highlightCount = highlightCount,
+                            ),
+                        )
+                    }
+                }
         }
     }
 

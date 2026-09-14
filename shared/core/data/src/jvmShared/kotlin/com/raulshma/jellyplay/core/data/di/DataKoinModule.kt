@@ -66,6 +66,8 @@ import com.raulshma.jellyplay.core.data.repository.PlayedStateSync
 import com.raulshma.jellyplay.core.data.repository.PlayedStateSyncImpl
 import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.data.repository.ReaderAnnotationsRepository
+import com.raulshma.jellyplay.core.data.repository.BookTocCacheRepository
+import com.raulshma.jellyplay.core.data.repository.BookTocCacheRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.ReaderAnnotationsRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.RealtimeConnection
 import com.raulshma.jellyplay.core.data.repository.SearchHistoryRepository
@@ -277,6 +279,9 @@ val dataJvmModule: Module = module {
         )
     }
     single<ReaderAnnotationsRepository> { get<ReaderAnnotationsRepositoryImpl>() }
+
+    single { BookTocCacheRepositoryImpl(dao = get(), timeSource = get()) }
+    single<BookTocCacheRepository> { get<BookTocCacheRepositoryImpl>() }
 
     single { WatchHistoryRepositoryImpl(get()) }
     single<WatchHistoryRepository> { get<WatchHistoryRepositoryImpl>() }

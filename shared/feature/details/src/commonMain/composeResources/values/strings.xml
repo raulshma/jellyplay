@@ -452,4 +452,20 @@
     <string name="detail_local_subtitle_default_badge">DEFAULT</string>
     <string name="detail_local_subtitle_forced_badge">FORCED</string>
 
+    <!-- ── Book detail (reading-aware body) ── -->
+    <string name="detail_section_contents">Contents</string>
+    <string name="detail_book_format_comic">Comic</string>
+    <string name="detail_book_finished_badge">Finished</string>
+    <string name="detail_book_page_progress">Page %1$d of %2$d</string>
+    <string name="detail_book_percent_progress">%1$d% read</string>
+    <string name="detail_cd_mark_as_finished">Mark as Finished</string>
+    <string name="detail_cd_mark_as_unfinished">Mark as Unfinished</string>
+    <plurals name="detail_book_bookmarks">
+        <item quantity="one">%1$d bookmark</item>
+        <item quantity="other">%1$d bookmarks</item>
+    </plurals>
+    <plurals name="detail_book_highlights">
+        <item quantity="one">%1$d highlight</item>
+        <item quantity="other">%1$d highlights</item>
+    </plurals>
 </resources>

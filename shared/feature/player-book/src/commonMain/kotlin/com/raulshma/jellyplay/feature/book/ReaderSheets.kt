@@ -95,6 +95,7 @@ import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_theme
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_theme_sepia
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_toc
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_toc_empty
+import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_toc_rail
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_typography
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_volume_keys
 import kotlinx.coroutines.delay
@@ -123,13 +124,15 @@ internal data class ReaderTypographyState(
 )
 
 /**
- * The behavior bundle (volume-key paging, animated page turns, reading
- * speed) — same copy-on-change edit contract as [ReaderTypographyState].
+ * The behavior bundle (volume-key paging, animated page turns, the chapter
+ * tick rail, reading speed) — same copy-on-change edit contract as
+ * [ReaderTypographyState].
  */
 internal data class ReaderBehaviorState(
     val volumeKeyPaging: Boolean,
     val animatedPageTurns: Boolean,
     val readingSpeedWpm: Int,
+    val tocRailVisible: Boolean = false,
 )
 
 /** The section label the settings sheets repeat between groups. */
@@ -231,6 +234,13 @@ internal fun PagedSettingsSheet(
                 checked = behavior.animatedPageTurns,
                 onChange = { onBehaviorChange(behavior.copy(animatedPageTurns = it)) },
             )
+            if (tocAvailable) {
+                SettingsSwitchRow(
+                    label = stringResource(Res.string.book_reader_toc_rail),
+                    checked = behavior.tocRailVisible,
+                    onChange = { onBehaviorChange(behavior.copy(tocRailVisible = it)) },
+                )
+            }
             if (tocAvailable) {
                 TextButton(
                     onClick = onOpenToc,
@@ -376,6 +386,11 @@ internal fun ReflowableSettingsSheet(
                 label = stringResource(Res.string.book_reader_volume_keys),
                 checked = behavior.volumeKeyPaging,
                 onChange = { onBehaviorChange(behavior.copy(volumeKeyPaging = it)) },
+            )
+            SettingsSwitchRow(
+                label = stringResource(Res.string.book_reader_toc_rail),
+                checked = behavior.tocRailVisible,
+                onChange = { onBehaviorChange(behavior.copy(tocRailVisible = it)) },
             )
             ReadingSpeedStepper(wpm = behavior.readingSpeedWpm) {
                 onBehaviorChange(behavior.copy(readingSpeedWpm = it))

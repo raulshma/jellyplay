@@ -136,10 +136,11 @@
                 var item = book.spine.get(loc.start.cfi) || (loc.start.href ? book.spine.get(loc.start.href) : null);
                 var count = book.spine.items ? book.spine.items.length : 0;
                 if (item && typeof item.index === 'number' && count > 0) {
-                    // Spine indexes are 1-based; without the offset the first
-                    // chapter opens above 0% and the last reads 100% before
-                    // it is finished.
-                    return Math.min(Math.max((item.index - 1) / count, 0), 1);
+                    // Spine indexes are 0-based in this epub.js build
+                    // (assigned in a 0-based forEach): chapter one reads
+                    // 0%, the last (n-1)/n — 100% still waits for
+                    // generated locations.
+                    return Math.min(Math.max(item.index / count, 0), 1);
                 }
             }
         } catch (ignored) {}
@@ -187,6 +188,45 @@
             }
         }
         return '';
+    }
+
+    /*
+     * TOC href → spine-resolvable href. epub.js keys its spine map by the RAW
+     * OPF manifest hrefs while TOC hrefs are raw relative to the nav/NCX
+     * document, so a nav doc in a subdirectory emits "../Text/ch1.xhtml" and
+     * rendition.display() silently rejects ("No Section Found") — the jump
+     * dies without even a displayError. Same fallback ladder as the label
+     * matcher (chapterLabelFor): fragment-stripped exact, lexical ../
+     * folding, then a "/"-boundary suffix pass over the spine. Always
+     * returns a fragment-free href; the caller re-attaches the fragment.
+     */
+    function resolveSpineHref(href) {
+        var clean = cleanHref(href);
+        if (!clean) return clean;
+        if (!book || !book.spine) return clean;
+        if (book.spine.get(clean)) return clean;
+        // Lexical ../ fold (leading "../"s collapse at the root, exactly like
+        // URL resolution against the package base).
+        var parts = clean.split('/');
+        var stack = [];
+        for (var i = 0; i < parts.length; i++) {
+            if (parts[i] === '..') {
+                if (stack.length) stack.pop();
+            } else if (parts[i] && parts[i] !== '.') {
+                stack.push(parts[i]);
+            }
+        }
+        var folded = stack.join('/');
+        if (folded && folded !== clean && book.spine.get(folded)) return folded;
+        // Boundary-suffix pass (nav hrefs missing their directory prefix).
+        var items = book.spine.spineItems || [];
+        for (var j = 0; j < items.length; j++) {
+            var spineHref = cleanHref(items[j].href);
+            if (spineHref && (endsWith(spineHref, '/' + clean) || endsWith(clean, '/' + spineHref))) {
+                return spineHref;
+            }
+        }
+        return clean;
     }
 
     /*
@@ -499,9 +539,13 @@
         var remaining = null;
         var bookRemaining = null;
         var cfi = null;
+        var href = null;
         try {
             if (loc && loc.start) {
                 label = chapterLabelFor(loc.start.href);
+                // Raw spine href so native can identify the current TOC entry
+                // (the chapter label alone collides on duplicate titles).
+                if (loc.start.href) href = String(loc.start.href);
                 if (loc.start.cfi) cfi = String(loc.start.cfi);
                 var shown = loc.start.displayed;
                 if (shown && typeof shown.page === 'number' &&
@@ -527,6 +571,7 @@
             type: 'relocated',
             percent: currentPercent(),
             chapterLabel: label,
+            href: href,
             remainingPages: remaining,
             remainingLocations: bookRemaining,
             // The page-start CFI native needs for bookmarks + exact resume;
@@ -960,7 +1005,11 @@
         },
 
         goTo: function (href) {
-            if (rendition && href) rendition.display(String(href));
+            if (rendition && href) {
+                var raw = String(href);
+                var fragment = raw.indexOf('#') >= 0 ? raw.substring(raw.indexOf('#')) : '';
+                rendition.display(resolveSpineHref(raw) + fragment);
+            }
         },
 
         goToCfi: function (cfi) {

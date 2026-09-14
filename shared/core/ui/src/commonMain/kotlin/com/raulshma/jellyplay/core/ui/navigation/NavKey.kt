@@ -209,7 +209,14 @@ sealed class Route : NavKey {
         override val isPlayer = true
     }
 
-    @Serializable data class BookReader(val itemId: String) : Route() {
+    // Optional one-shot deep-link destination (detail "Contents" tap):
+    // jumpHref = EPUB spine href, jumpPage = 0-based PDF page. Defaults keep
+    // plain Read/Continue call sites compiling.
+    @Serializable data class BookReader(
+        val itemId: String,
+        val jumpHref: String? = null,
+        val jumpPage: Int? = null,
+    ) : Route() {
         override val isFullScreen = true
         override val isPlayer = true
     }

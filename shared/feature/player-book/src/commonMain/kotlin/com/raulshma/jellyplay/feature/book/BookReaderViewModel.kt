@@ -14,12 +14,16 @@ import com.raulshma.jellyplay.core.datastore.reader.ReaderFontFamily
 import com.raulshma.jellyplay.core.datastore.reader.ReaderSlice
 import com.raulshma.jellyplay.core.datastore.reader.ReaderStore
 import com.raulshma.jellyplay.core.datastore.reader.ReaderTheme
+import com.raulshma.jellyplay.core.data.repository.BookTocCacheRepository
+import com.raulshma.jellyplay.core.data.repository.NoopBookTocCacheRepository
 import com.raulshma.jellyplay.core.model.BookFormat
 import com.raulshma.jellyplay.core.model.BookProgressPolicy
+import com.raulshma.jellyplay.core.model.BookTocEntry
 import com.raulshma.jellyplay.core.model.pathExtension
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.feature.book.epub.EpubRelocation
 import com.raulshma.jellyplay.feature.book.epub.EpubSpeechParagraph
+import com.raulshma.jellyplay.feature.book.epub.EpubTocItem
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -93,6 +97,13 @@ class BookReaderViewModel(
      * Defaulted so tests and non-DI constructions compile unchanged.
      */
     private val speechEngine: BookSpeechEngine = NoopBookSpeechEngine,
+    /**
+     * Local book-TOC cache (the `book_toc_cache` table the media-detail
+     * screen reads). Every successful open writes what became known — page
+     * counts and/or TOC entries — so the detail screen's "Contents" renders
+     * without re-parsing the file. Neutral default keeps tests compiling.
+     */
+    private val tocCacheRepository: BookTocCacheRepository = NoopBookTocCacheRepository(),
     /**
      * Process-wide scope for the exit flush: [reportNow] with `final = true`
      * runs from `onDispose`, and viewModelScope is already cancelled by the
@@ -176,6 +187,9 @@ class BookReaderViewModel(
     val volumeKeyPaging: StateFlow<Boolean> = readerPref { it.volumeKeyPaging }
 
     val animatedPageTurns: StateFlow<Boolean> = readerPref { it.animatedPageTurns }
+
+    /** Opt-in chapter tick rail (see ReaderTocRail.kt); off by default. */
+    val tocRailVisible: StateFlow<Boolean> = readerPref { it.tocRailVisible }
 
     val readingSpeedWpm: StateFlow<Int> =
         readerPref { it.readingSpeedWpm }
@@ -316,6 +330,10 @@ class BookReaderViewModel(
     val pdfOutline: StateFlow<List<PdfOutlineNode>> = _pdfOutline.asStateFlow()
 
     private var loadedItemId: String? = null
+    private var loadedBookFormat: BookFormat? = null
+    /** Deep-link destination carried from [load] into [openBook] (cleared there). */
+    private var pendingJumpHref: String? = null
+    private var pendingJumpPage: Int? = null
     private var document: BookDocument? = null
     private val pageCache = PageCache<ImageBitmap>()
     private var currentPage = 0
@@ -351,10 +369,14 @@ class BookReaderViewModel(
     private var userDirectionPinned = false
 
     /** Screen entry point (audio-player convention: the screen triggers the load, the VM holds no itemId ctor dep). */
-    fun load(itemId: String) {
+    fun load(itemId: String, jumpHref: String? = null, jumpPage: Int? = null) {
         if (loadedItemId == itemId && _uiState.value !is BookReaderUiState.Idle) return
         loadedItemId = itemId
         marksItemId.value = itemId
+        // One-shot deep-link destination (detail "Contents" tap). Consumed
+        // (and cleared) by [openBook] — a later plain re-load must resume.
+        pendingJumpHref = jumpHref
+        pendingJumpPage = jumpPage
         userDirectionPinned = false
         // One collector per item — a re-load must not stack a second one.
         directionJob?.cancel()
@@ -458,7 +480,13 @@ class BookReaderViewModel(
         // Reflowable books never enter the document/pager layer: the WebView
         // host owns rendering, and the position math is percent-based. The
         // locally stored CFI (ADR 0003 point 4) outranks the server percent on
-        // this install — the screen jumps to it once the host is READY.
+        // this install — the screen jumps to it once the host is READY. A
+        // deep-link destination (detail "Contents" tap) outranks both.
+        loadedBookFormat = format
+        val jumpHref = pendingJumpHref
+        val jumpPage = pendingJumpPage
+        pendingJumpHref = null
+        pendingJumpPage = null
         if (format.isReflowable) {
             val resumePercent = BookProgressPolicy.ticksToPercent(detail.playbackPositionTicks)
             currentPercent = resumePercent
@@ -468,6 +496,7 @@ class BookReaderViewModel(
                     bookFile = resolved.path,
                     resumePercent = resumePercent,
                     resumeCfi = readerStore.lastCfi(itemId),
+                    jumpHref = jumpHref,
                 ),
             )
             return
@@ -480,10 +509,12 @@ class BookReaderViewModel(
         }
         document = doc
 
-        val resume = BookProgressPolicy.clampPage(
-            BookProgressPolicy.ticksToPage(detail.playbackPositionTicks),
-            doc.pageCount,
-        )
+        val resume = jumpPage
+            ?.let { BookProgressPolicy.clampPage(it, doc.pageCount) }
+            ?: BookProgressPolicy.clampPage(
+                BookProgressPolicy.ticksToPage(detail.playbackPositionTicks),
+                doc.pageCount,
+            )
         currentPage = resume
         pageCache.onPageChanged(resume)
         doc.onPageChanged(resume)
@@ -495,9 +526,40 @@ class BookReaderViewModel(
                 format = format,
             ),
         )
-        if (format == BookFormat.PDF) {
-            parseOutline(resolved.path)
+        // TOC cache write-through: the page count is known the moment the
+        // document opens — for a comic that is the whole story (no TOC), for
+        // a PDF the outline rides the parseOutline callback below.
+        if (format != BookFormat.PDF) {
+            cacheToc(format, doc.pageCount, emptyList())
+        } else {
+            parseOutline(resolved.path, doc.pageCount)
         }
+    }
+
+    /**
+     * Writes what this open made known into the local TOC cache the
+     * media-detail screen reads. A no-op when there is nothing to record —
+     * an EPUB that never reported a TOC must not clobber a good cached one
+     * with an empty row.
+     */
+    private fun cacheToc(format: BookFormat, pageCount: Int, entries: List<BookTocEntry>) {
+        if (entries.isEmpty() && pageCount <= 0) return
+        val itemId = loadedItemId ?: return
+        scope.launch {
+            runCatching { tocCacheRepository.putToc(itemId, format, pageCount, entries) }
+        }
+    }
+
+    /**
+     * The EPUB host's TOC event, forwarded by the screen. The reader UI
+     * keeps its own copy — this only feeds the detail screen's cache (flat
+     * labels, level 0: epub.js's toc carries no nesting).
+     */
+    internal fun onEpubTocReady(items: List<EpubTocItem>) {
+        if (items.isEmpty()) return
+        val format = loadedBookFormat ?: return
+        val entries = items.map { BookTocEntry(label = it.label, href = it.href, page = null, level = 0) }
+        cacheToc(format, pageCount = 0, entries = entries)
     }
 
     /**
@@ -505,10 +567,20 @@ class BookReaderViewModel(
      * synchronously). Failures already fold to an empty list inside the
      * parser — the TOC sheet simply shows its empty state.
      */
-    private fun parseOutline(path: okio.Path) {
+    private fun parseOutline(path: okio.Path, pageCount: Int) {
         scope.launch {
-            _pdfOutline.value = withContext(Dispatchers.Default) {
+            val nodes = withContext(Dispatchers.Default) {
                 runCatching { pdfOutlineParser.parse(path) }.getOrDefault(emptyList())
+            }
+            _pdfOutline.value = nodes
+            // Same write-through as the open-time page count, now with the
+            // outline flattened into detail-screen entries (nesting kept).
+            if (nodes.isNotEmpty()) {
+                cacheToc(
+                    format = BookFormat.PDF,
+                    pageCount = pageCount,
+                    entries = nodes.flatMap { it.flattenToTocEntries() },
+                )
             }
         }
     }
@@ -600,6 +672,7 @@ class BookReaderViewModel(
             cfi = latestEpubCfi,
             remainingPages = relocation.remainingPages ?: _currentEpubLocation.value?.remainingPages,
             remainingLocations = relocation.remainingLocations ?: _currentEpubLocation.value?.remainingLocations,
+            chapterHref = relocation.href ?: _currentEpubLocation.value?.chapterHref,
         )
         // Speech chapter turn landed: the context request waits for exactly
         // this relocation (requesting earlier could resolve the OLD chapter).
@@ -746,6 +819,10 @@ class BookReaderViewModel(
 
     fun setAnimatedPageTurns(enabled: Boolean) {
         scope.launch { runCatching { readerStore.setAnimatedPageTurns(enabled) } }
+    }
+
+    fun setTocRailVisible(enabled: Boolean) {
+        scope.launch { runCatching { readerStore.setTocRailVisible(enabled) } }
     }
 
     /** Reading-speed write for the time-left estimate; clamped into its 100..1000 band. */

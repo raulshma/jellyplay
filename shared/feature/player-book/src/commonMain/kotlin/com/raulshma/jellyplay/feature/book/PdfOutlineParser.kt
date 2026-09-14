@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.book
 
+import com.raulshma.jellyplay.core.model.BookTocEntry
 import okio.Path
 
 /**
@@ -14,6 +15,16 @@ data class PdfOutlineNode(
     val pageIndex: Int?,
     val children: List<PdfOutlineNode>,
 )
+
+/**
+ * Depth-first flatten of this node's subtree into [BookTocEntry] rows for the
+ * detail-screen TOC cache, nesting preserved as [BookTocEntry.level]. Blank
+ * titles pad to a single space so the row keeps rendering.
+ */
+fun PdfOutlineNode.flattenToTocEntries(level: Int = 0): List<BookTocEntry> = buildList {
+    add(BookTocEntry(label = title.ifBlank { " " }, href = null, page = pageIndex, level = level))
+    children.forEach { addAll(it.flattenToTocEntries(level + 1)) }
+}
 
 /**
  * PDF outline extraction seam (the paged TOC story): desktop walks the outline

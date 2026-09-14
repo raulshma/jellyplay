@@ -111,6 +111,7 @@ class ReaderStore constructor(
         val READER_BRIGHTNESS_PCT = intPreferencesKey("reader_brightness_pct")
         val READER_VOLUME_KEY_PAGING = booleanPreferencesKey("reader_volume_key_paging")
         val READER_ANIMATED_PAGE_TURNS = booleanPreferencesKey("reader_animated_page_turns")
+        val READER_TOC_RAIL = booleanPreferencesKey("reader_toc_rail")
         val READER_SPEECH_RATE = intPreferencesKey("reader_speech_rate")
         val READER_SPEECH_PITCH = intPreferencesKey("reader_speech_pitch")
         val READER_READING_SPEED_WPM = intPreferencesKey("reader_reading_speed_wpm")
@@ -175,6 +176,7 @@ class ReaderStore constructor(
         brightnessPct = decodeClampedInt(prefs[Keys.READER_BRIGHTNESS_PCT], MIN_BRIGHTNESS_PCT, MAX_BRIGHTNESS_PCT, DEFAULT_BRIGHTNESS_PCT),
         volumeKeyPaging = prefs[Keys.READER_VOLUME_KEY_PAGING] ?: false,
         animatedPageTurns = prefs[Keys.READER_ANIMATED_PAGE_TURNS] ?: true,
+        tocRailVisible = prefs[Keys.READER_TOC_RAIL] ?: false,
         speechRate = decodeClampedInt(prefs[Keys.READER_SPEECH_RATE], MIN_SPEECH_RATE, MAX_SPEECH_RATE, DEFAULT_SPEECH_RATE),
         speechPitch = decodeClampedInt(prefs[Keys.READER_SPEECH_PITCH], MIN_SPEECH_PITCH, MAX_SPEECH_PITCH, DEFAULT_SPEECH_PITCH),
         readingSpeedWpm = decodeClampedInt(prefs[Keys.READER_READING_SPEED_WPM], MIN_READING_SPEED_WPM, MAX_READING_SPEED_WPM, DEFAULT_READING_SPEED_WPM),
@@ -262,6 +264,13 @@ class ReaderStore constructor(
     suspend fun setAnimatedPageTurns(enabled: Boolean) {
         dataStore.edit { prefs ->
             prefs[Keys.READER_ANIMATED_PAGE_TURNS] = enabled
+        }
+    }
+
+    /** Show the chapter tick rail while reading (off by default — opt-in via the reader controls). */
+    suspend fun setTocRailVisible(enabled: Boolean) {
+        dataStore.edit { prefs ->
+            prefs[Keys.READER_TOC_RAIL] = enabled
         }
     }
 
@@ -371,6 +380,7 @@ class ReaderStore constructor(
             prefs.remove(Keys.READER_BRIGHTNESS_PCT)
             prefs.remove(Keys.READER_VOLUME_KEY_PAGING)
             prefs.remove(Keys.READER_ANIMATED_PAGE_TURNS)
+            prefs.remove(Keys.READER_TOC_RAIL)
             prefs.remove(Keys.READER_SPEECH_RATE)
             prefs.remove(Keys.READER_SPEECH_PITCH)
             prefs.remove(Keys.READER_READING_SPEED_WPM)
@@ -396,6 +406,7 @@ class ReaderStore constructor(
         Keys.READER_BRIGHTNESS_PCT,
         Keys.READER_VOLUME_KEY_PAGING,
         Keys.READER_ANIMATED_PAGE_TURNS,
+        Keys.READER_TOC_RAIL,
         Keys.READER_SPEECH_RATE,
         Keys.READER_SPEECH_PITCH,
         Keys.READER_READING_SPEED_WPM,
@@ -420,6 +431,7 @@ data class ReaderSlice(
     val brightnessPct: Int = ReaderStore.DEFAULT_BRIGHTNESS_PCT,
     val volumeKeyPaging: Boolean = false,
     val animatedPageTurns: Boolean = true,
+    val tocRailVisible: Boolean = false,
     val speechRate: Int = ReaderStore.DEFAULT_SPEECH_RATE,
     val speechPitch: Int = ReaderStore.DEFAULT_SPEECH_PITCH,
     val readingSpeedWpm: Int = ReaderStore.DEFAULT_READING_SPEED_WPM,

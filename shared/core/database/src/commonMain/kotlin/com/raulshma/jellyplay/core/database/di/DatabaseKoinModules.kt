@@ -57,4 +57,5 @@ val databaseDaosModule = module {
     single { get<JellyPlayDatabase>().bookBookmarkDao() }
 
     single { get<JellyPlayDatabase>().bookAnnotationDao() }
+    single { get<JellyPlayDatabase>().bookTocCacheDao() }
 }

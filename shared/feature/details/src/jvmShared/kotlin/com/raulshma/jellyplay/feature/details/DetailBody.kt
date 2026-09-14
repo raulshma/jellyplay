@@ -26,6 +26,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
@@ -152,6 +153,11 @@ internal fun DetailBodyPortrait(
     val adaptiveInfo = LocalAdaptiveInfo.current
     val detail = state.detail
 
+    // Books on compact phones: the hero backdrop already shows the cover
+    // sharp edge-to-edge (BookCoverHero.SHARP), so the poster card would be
+    // a duplicate. Tablet/TV/desktop keep the poster next to the blurred hero.
+    val hideBookPoster = item?.mediaType == MediaType.BOOK && !isTv && !isExpanded
+
     Column(modifier = Modifier.padding(top = 0.dp)) {
         val posterWidth = when {
             isTv -> 160.dp
@@ -162,44 +168,46 @@ internal fun DetailBodyPortrait(
         val overlap = 40.dp
         val boxHeight = posterHeight - overlap
 
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(boxHeight),
-        ) {
-            Row(
+        if (!hideBookPoster) {
+            Box(
                 modifier = Modifier
-                    .padding(horizontal = adaptiveInfo.contentPadding(isTv))
-                    .offset(y = -overlap),
-                verticalAlignment = Alignment.Bottom,
+                    .fillMaxWidth()
+                    .height(boxHeight),
             ) {
-                AnimatedVisibility(
-                    visible = contentVisible,
-                    enter = EnterTransition.None,
-                    exit = ExitTransition.None,
+                Row(
+                    modifier = Modifier
+                        .padding(horizontal = adaptiveInfo.contentPadding(isTv))
+                        .offset(y = -overlap),
+                    verticalAlignment = Alignment.Bottom,
                 ) {
-                    FadingItem(
-                        modifier = Modifier
-                            .width(posterWidth)
-                            .requiredHeight(posterHeight),
+                    AnimatedVisibility(
+                        visible = contentVisible,
+                        enter = EnterTransition.None,
+                        exit = ExitTransition.None,
                     ) {
-                        MediaImage(
-                            // Prefer the on-disk poster (DetailAssets.posterPath)
-                            // for a LOCAL origin before the server fallback.
-                            url = state.assets.posterPath
-                                ?: callbacks.artwork.getImageUrl(state.itemId),
-                            contentDescription = null,
-                            blurHash = item?.blurHashes?.primary,
-                            // Portrait poster (~120 dp × 3× ≈ 432 px) — decode a
-                            // right-sized thumbnail instead of the default 512×512
-                            // (or larger) bitmap.
-                            size = coil3.size.Size(480, 600),
+                        FadingItem(
                             modifier = Modifier
-                                .fillMaxSize()
-                                .clip(ShapeCache.smooth8)
-                                .graphicsLayer { alpha = scrollState.contentAlpha },
-                            contentScale = ContentScale.Crop,
-                        )
+                                .width(posterWidth)
+                                .requiredHeight(posterHeight),
+                        ) {
+                            MediaImage(
+                                // Prefer the on-disk poster (DetailAssets.posterPath)
+                                // for a LOCAL origin before the server fallback.
+                                url = state.assets.posterPath
+                                    ?: callbacks.artwork.getImageUrl(state.itemId),
+                                contentDescription = null,
+                                blurHash = item?.blurHashes?.primary,
+                                // Portrait poster (~120 dp × 3× ≈ 432 px) — decode a
+                                // right-sized thumbnail instead of the default 512×512
+                                // (or larger) bitmap.
+                                size = coil3.size.Size(480, 600),
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .clip(ShapeCache.smooth8)
+                                    .graphicsLayer { alpha = scrollState.contentAlpha },
+                                contentScale = ContentScale.Crop,
+                            )
+                        }
                     }
                 }
             }

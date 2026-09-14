@@ -164,6 +164,31 @@ class EpubEventParserTest {
     }
 
     @Test
+    fun `relocated href decodes and defaults to null when absent or blank`() {
+        // The spine href the TOC tick rail matches the current entry with.
+        assertEquals(
+            listOf(EpubEvent.Relocated(EpubRelocation(0.5, "One", 3, href = "text/ch1.xhtml"))),
+            EpubEventParser.parse(
+                """{"type":"relocated","percent":0.5,"chapterLabel":"One","remainingPages":3,""" +
+                    """"href":"text/ch1.xhtml"}""",
+            ),
+        )
+        // An older reader.js (or a relocation without a start href) stays null.
+        assertEquals(
+            listOf(EpubEvent.Relocated(EpubRelocation(0.5, "One", 3, href = null))),
+            EpubEventParser.parse(
+                """{"type":"relocated","percent":0.5,"chapterLabel":"One","remainingPages":3}""",
+            ),
+        )
+        assertEquals(
+            listOf(EpubEvent.Relocated(EpubRelocation(0.5, "One", 3, href = null))),
+            EpubEventParser.parse(
+                """{"type":"relocated","percent":0.5,"chapterLabel":"One","remainingPages":3,"href":""}""",
+            ),
+        )
+    }
+
+    @Test
     fun `relocated event clamps percent and drops non-numeric extras`() {
         assertEquals(
             listOf(EpubEvent.Relocated(EpubRelocation(1.0, "Two", 3))),

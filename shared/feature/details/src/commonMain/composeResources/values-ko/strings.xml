@@ -411,4 +411,18 @@
     <string name="detail_file_category_trickplay">트릭플레이</string>
     <string name="detail_file_category_segment">세그먼트</string>
     <string name="detail_file_category_image">이미지</string>
+    <!-- ── 책 상세 (읽기 화면) ── -->
+    <string name="detail_section_contents">목차</string>
+    <string name="detail_book_format_comic">만화</string>
+    <string name="detail_book_finished_badge">완독</string>
+    <string name="detail_book_page_progress">%2$d쪽 중 %1$d쪽</string>
+    <string name="detail_book_percent_progress">%1$d% 읽음</string>
+    <string name="detail_cd_mark_as_finished">완독으로 표시</string>
+    <string name="detail_cd_mark_as_unfinished">완독 취소</string>
+    <plurals name="detail_book_bookmarks">
+        <item quantity="other">책갈피 %1$d개</item>
+    </plurals>
+    <plurals name="detail_book_highlights">
+        <item quantity="other">밑줄 %1$d개</item>
+    </plurals>
 </resources>

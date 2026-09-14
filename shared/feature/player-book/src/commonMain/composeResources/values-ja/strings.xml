@@ -56,6 +56,8 @@
     <string name="book_reader_behavior">動作</string>
     <string name="book_reader_volume_keys">音量キーでページ送り</string>
     <string name="book_reader_animated_turns">ページめくりをアニメーション</string>
+
+    <string name="book_reader_toc_rail">章目盛りレール</string>
     <string name="book_reader_reading_speed">読書速度（語/分）</string>
     <string name="book_reader_pages_left">残り %1$d ページ</string>
     <string name="book_reader_chapter_pages_left">この章の残り %1$d ページ</string>
