@@ -8,10 +8,18 @@ import com.raulshma.jellyplay.core.model.PlaybackReportingDetail
 import com.raulshma.jellyplay.core.model.PlaybackReportingStatus
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlin.coroutines.coroutineContext
 
 data class DailyWatchActivity(
     val date: String,
@@ -47,6 +55,25 @@ class WatchHistoryRepositoryImpl constructor(
     private val _playbackReportingStatus = MutableStateFlow(PlaybackReportingStatus.UNKNOWN)
     override val playbackReportingStatus: StateFlow<PlaybackReportingStatus> = _playbackReportingStatus.asStateFlow()
 
+    /**
+     * Memoizes the played-items scan per `(year, filter)`: the paged network
+     * scan behind [getPlayedItems] serves both the heatmap grid (through
+     * [getDailyActivity]'s fallback) and every day-tap detail sheet (through
+     * [getItemsForDay]'s fallback), so each tap on a day re-scanned the whole
+     * year page by page. Concurrent callers for one key share a single
+     * in-flight fetch (Mutex-guarded in-flight Deferred map — the hand-rolled
+     * SingleFlightFetcher core, minus its identity/epoch machinery). Entries
+     * live until the next [refreshPlaybackReportingStatus], so a day tap is
+     * exactly as stale as the grid load it belongs to.
+     */
+    private data class PlayedItemsKey(val year: Int, val filter: HeatmapFilter)
+
+    private val playedItemsMutex = Mutex()
+    private val playedItemsCache = mutableMapOf<PlayedItemsKey, List<MediaItem>>()
+    private val playedItemsInFlight = mutableMapOf<PlayedItemsKey, Deferred<List<MediaItem>>>()
+    /** Bumped by [refreshPlaybackReportingStatus]; a flight only stores under its own generation. */
+    private var playedItemsGeneration = 0L
+
     override suspend fun getMinimumActivityDate(): String? {
         val user = apiClient.currentUser.first() ?: return null
         return try {
@@ -65,6 +92,14 @@ class WatchHistoryRepositoryImpl constructor(
     }
 
     override suspend fun refreshPlaybackReportingStatus() {
+        // A new refresh window begins: drop the played-items memo so the grid
+        // and day taps re-scan. A flight that started before this point still
+        // returns its result to its callers but stores nothing — its
+        // generation no longer matches.
+        playedItemsMutex.withLock {
+            playedItemsGeneration++
+            playedItemsCache.clear()
+        }
         _playbackReportingStatus.value = apiClient.checkPlaybackReportingPlugin()
             .getOrDefault(PlaybackReportingStatus.UNAVAILABLE)
     }
@@ -170,7 +205,56 @@ class WatchHistoryRepositoryImpl constructor(
         return details
     }
 
-    override suspend fun getPlayedItems(year: Int, filter: HeatmapFilter): List<MediaItem> {
+    override suspend fun getPlayedItems(year: Int, filter: HeatmapFilter): List<MediaItem> =
+        getOrFetchPlayedItems(PlayedItemsKey(year, filter))
+
+    private suspend fun getOrFetchPlayedItems(key: PlayedItemsKey): List<MediaItem> = coroutineScope {
+        val deferred: Deferred<List<MediaItem>> = playedItemsMutex.withLock {
+            playedItemsCache[key]?.let { return@coroutineScope it }
+            val generationAtStart = playedItemsGeneration
+            playedItemsInFlight.getOrPut(key) {
+                async {
+                    try {
+                        fetchAndStorePlayedItems(key, generationAtStart)
+                    } finally {
+                        playedItemsMutex.withLock { playedItemsInFlight.remove(key) }
+                    }
+                }
+            }
+        }
+        try {
+            deferred.await()
+        } catch (ce: CancellationException) {
+            // The flight is a child of its originator's scope: an awaiter that
+            // is not itself cancelled saw the originator die — re-enter the
+            // single-flight machinery on this still-alive caller instead of
+            // failing the tap (the SingleFlightFetcher cancellation ladder).
+            // Re-entering (rather than fetching directly) matters when several
+            // awaiters survive: the first through the mutex becomes the new
+            // originator and the rest join its flight, instead of every
+            // orphaned awaiter firing its own full-year scan concurrently.
+            if (coroutineContext[Job]?.isCancelled == true) throw ce
+            getOrFetchPlayedItems(key)
+        }
+    }
+
+    private suspend fun fetchAndStorePlayedItems(key: PlayedItemsKey, generationAtStart: Long): List<MediaItem> {
+        val items = fetchPlayedItems(key.year, key.filter)
+        if (items.isNotEmpty()) {
+            playedItemsMutex.withLock {
+                // A failed page surfaces as an empty result (never cached, so a
+                // failed scan can't pin an empty day — a genuinely empty year
+                // just re-scans per tap, the pre-memo behavior), and a refresh
+                // that landed mid-flight vetoes this write via the generation.
+                if (playedItemsGeneration == generationAtStart) {
+                    playedItemsCache[key] = items
+                }
+            }
+        }
+        return items
+    }
+
+    private suspend fun fetchPlayedItems(year: Int, filter: HeatmapFilter): List<MediaItem> {
         val user = apiClient.currentUser.first() ?: return emptyList()
         val types = filter.itemTypes
         val allItems = mutableListOf<MediaItem>()

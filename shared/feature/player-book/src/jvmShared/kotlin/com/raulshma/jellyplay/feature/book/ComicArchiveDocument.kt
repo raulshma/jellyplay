@@ -20,11 +20,12 @@ import okio.Path
  * [Companion.open] sniffs the container: the zip path is tried first and RAR
  * only when it fails or holds no images — some .cbr files are actually zip,
  * so content beats the file extension. Pages decode through the platform
- * [decodeImageBytes] actual (Android BitmapFactory / desktop ImageIO) and
- * pass through a [PageCache] so a swipe never re-extracts the neighboring
- * page. Render sizing is ignored — archives carry no vector layer, so pages
- * decode at their native size (pageSize stays null: the entry images are
- * unknowable before extraction, and the cache key collapses to the page).
+ * [decodeImageBytes] actual (Android BitmapFactory / desktop ImageIO), capped
+ * on the longest edge so a high-res scan can't turn each cached page into a
+ * ~100 MB bitmap, and pass through a [PageCache] so a swipe never re-extracts
+ * the neighboring page. Render sizing is ignored — archives carry no vector
+ * layer (pageSize stays null: the entry images are unknowable before
+ * extraction, and the cache key collapses to the page).
  */
 class ComicArchiveDocument private constructor(
     private val source: PageSource,
@@ -47,7 +48,7 @@ class ComicArchiveDocument private constructor(
         // Decode off the caller: the pager's LaunchedEffects run on the UI
         // dispatcher, and a full comic page (BitmapFactory/ImageIO) is a
         // multi-hundred-ms main-thread freeze if decoded in place.
-        return withContext(Dispatchers.Default) { decodeImageBytes(bytes) }
+        return withContext(Dispatchers.Default) { decodeImageBytes(bytes, COMIC_MAX_DECODE_EDGE) }
             ?.also { cache.put(comicCacheKey(pageIndex), it) }
     }
 
@@ -63,6 +64,14 @@ class ComicArchiveDocument private constructor(
 
         /** Width component of the comic cache keys — sizing is ignored, so it is constant. */
         private const val COMIC_CACHE_RENDER_WIDTH = 0
+
+        /**
+         * Longest-edge decode cap: the window cache holds 5 pages, and at
+         * native size a single 4000x6000 scan is a ~96 MB bitmap — the cap
+         * keeps every page comfortably above fit-width display resolution
+         * while bounding the cache at a fraction of that.
+         */
+        private const val COMIC_MAX_DECODE_EDGE = 4000
 
         /** Digit-aware natural order — "2" < "10"; digit runs compare numerically, the rest char-wise. */
         internal fun naturalCompare(a: String, b: String): Int {

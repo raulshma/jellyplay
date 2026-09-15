@@ -157,6 +157,9 @@ class AudioPlayerViewModel(
 
     private var downloadJob: Job? = null
 
+    /** At most one favorite-state fetch in flight (the favorite collector below). */
+    private var favoriteJob: Job? = null
+
     private val _currentDownloadItem = stateFlow<com.raulshma.jellyplay.core.model.DownloadItem?>(null)
     val currentDownloadItem: StateFlow<com.raulshma.jellyplay.core.model.DownloadItem?> = _currentDownloadItem.flow
 
@@ -240,9 +243,19 @@ class AudioPlayerViewModel(
         }
         launch {
             queueManager.currentPlayingItemId.collect { itemId ->
+                favoriteJob?.cancel()
                 if (itemId != null) {
-                    mediaRepository.getMediaDetail(itemId)
-                        .onSuccess { d -> _uiState.update { it.copy(isFavorite = d.item.isFavorite) } }
+                    // One fetch in flight, launched off the collect body so a
+                    // burst of skips coalesces; itemId is captured per fetch and
+                    // the write is dropped if another track took over meanwhile.
+                    favoriteJob = launch {
+                        mediaRepository.getMediaDetail(itemId)
+                            .onSuccess { d ->
+                                if (queueManager.currentPlayingItemId.value == itemId) {
+                                    _uiState.update { it.copy(isFavorite = d.item.isFavorite) }
+                                }
+                            }
+                    }
                 } else {
                     _uiState.update { it.copy(isFavorite = false) }
                 }

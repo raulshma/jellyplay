@@ -53,6 +53,9 @@ class MpvPlayerEngine(
 
     companion object {
         private const val TAG = "MpvPlayerEngine"
+        // Upper bound on how long the cheap-scalar guard in
+        // updateVideoStatsOnly may skip the full property re-read.
+        private const val FULL_STATS_REREAD_MS = 2_000L
         private const val DEMUXER_MAX_BYTES_LOW = 32 * 1024 * 1024L
         private const val DEMUXER_MAX_BYTES_NORMAL = 64 * 1024 * 1024L
         private const val DEMUXER_MAX_BACK_BYTES_LOW = 16 * 1024 * 1024L
@@ -1152,6 +1155,9 @@ class MpvPlayerEngine(
         }
     }
 
+    /** ElapsedRealtime of the last unguarded (full) stats read — see updateVideoStatsOnly. */
+    private var lastFullStatsReadMs = 0L
+
     private fun updateVideoStatsOnly(posMs: Long) {
         val m = mpvView?.mpv ?: return
         try {
@@ -1168,6 +1174,34 @@ class MpvPlayerEngine(
             val combinedBitrate = (videoBitrateBps ?: 0) + (audioBitrateBps ?: 0)
             val bufferHealthMs = (_bufferedPositionMs.value - posMs).coerceAtLeast(0L)
             val bufferSizeBytes = if (combinedBitrate > 0) combinedBitrate * bufferHealthMs / 8000 else 0L
+            val droppedFrames = try {
+                m.getPropertyInt("decoder-frame-drop-count")?.toLong() ?: 0L
+            } catch (_: Exception) { 0L }
+            val totalVideoFrames = try {
+                m.getPropertyInt("displayed-frame-count")?.toLong() ?: 0L
+            } catch (_: Exception) { 0L }
+            val bufferedPositionMs = _bufferedPositionMs.value
+
+            // Cheap-scalar change guard first (mirrors the Exo adapter): the
+            // ~10 string/track reads further down are worth paying only once a
+            // scalar actually moved. publishStatsIfChanged stays the final emit
+            // guard. The scalar set can freeze while paused (frame counters
+            // stop, bitrates drop to 0), so a periodic full re-read is forced
+            // anyway to pick up fields the guard never sees move (hwdec
+            // switches, avsync, vo-delayed, track changes).
+            val nowMs = android.os.SystemClock.elapsedRealtime()
+            val last = lastVideoStats
+            if (last != null && last.videoBitrate == videoBitrateBps &&
+                last.audioBitrate == audioBitrateBps &&
+                last.bufferedPositionMs == bufferedPositionMs &&
+                last.droppedFrames == droppedFrames &&
+                last.totalVideoFrames == totalVideoFrames &&
+                nowMs - lastFullStatsReadMs < FULL_STATS_REREAD_MS
+            ) {
+                return
+            }
+            lastFullStatsReadMs = nowMs
+
             val newStats = EngineVideoStats(
                 videoCodec = try { m.getPropertyString("video-format") } catch (_: Exception) { null },
                 videoDecoder = try { m.getPropertyString("hwdec-current") } catch (_: Exception) { null },
@@ -1195,13 +1229,9 @@ class MpvPlayerEngine(
                 } catch (_: Exception) { null },
                 audioBitrate = audioBitrateBps,
                 estimatedBandwidthBps = combinedBitrate.toLong(),
-                droppedFrames = try {
-                    m.getPropertyInt("decoder-frame-drop-count")?.toLong() ?: 0L
-                } catch (_: Exception) { 0L },
-                totalVideoFrames = try {
-                    m.getPropertyInt("displayed-frame-count")?.toLong() ?: 0L
-                } catch (_: Exception) { 0L },
-                bufferedPositionMs = _bufferedPositionMs.value,
+                droppedFrames = droppedFrames,
+                totalVideoFrames = totalVideoFrames,
+                bufferedPositionMs = bufferedPositionMs,
                 bufferSizeBytes = bufferSizeBytes,
                 avsyncMs = m.propDoubleOrNull("total-avsync")?.let { if (it != 0f) it else null },
                 displayFps = m.propDoubleOrNull("display-fps")?.let { fps -> if (fps > 0f) fps else null },

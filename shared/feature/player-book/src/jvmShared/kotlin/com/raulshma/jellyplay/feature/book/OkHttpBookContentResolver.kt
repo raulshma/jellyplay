@@ -133,6 +133,13 @@ class OkHttpBookFetcher(private val client: OkHttpClient) : BookHttpFetcher {
                 val body = response.body ?: error("Book download failed: empty body")
                 val total = body.contentLength().takeIf { it >= 0 }
                 var downloaded = 0L
+                // The consumer copies its whole Loading state per callback, so a
+                // per-chunk (64 KB) call is thousands of state copies on a large
+                // book. Report on whole-percent steps or a ~100 ms heartbeat
+                // (the only gate when the server sends no length); the final
+                // call after the loop always lands, closing the bar at 100%.
+                var lastReportedPercent = -1
+                var lastReportedAtMs = 0L
                 FileSystem.SYSTEM.sink(destination).buffer().use { sink ->
                     body.byteStream().use { input ->
                         val buffer = ByteArray(DEFAULT_BUFFER_BYTES)
@@ -142,8 +149,17 @@ class OkHttpBookFetcher(private val client: OkHttpClient) : BookHttpFetcher {
                             if (read == -1) break
                             sink.write(buffer, 0, read)
                             downloaded += read
-                            onProgress(BookDownloadProgress(downloaded, total))
+                            val percent = total?.takeIf { it > 0 }?.let { (downloaded * 100 / it).toInt() }
+                            val nowMs = System.currentTimeMillis()
+                            if ((percent != null && percent != lastReportedPercent) ||
+                                nowMs - lastReportedAtMs >= PROGRESS_MIN_INTERVAL_MS
+                            ) {
+                                if (percent != null) lastReportedPercent = percent
+                                lastReportedAtMs = nowMs
+                                onProgress(BookDownloadProgress(downloaded, total))
+                            }
                         }
+                        onProgress(BookDownloadProgress(downloaded, total))
                     }
                 }
             }
@@ -171,5 +187,8 @@ class OkHttpBookFetcher(private val client: OkHttpClient) : BookHttpFetcher {
 
     companion object {
         private const val DEFAULT_BUFFER_BYTES = 64 * 1024
+
+        /** Minimum wall-clock gap between two progress callbacks. */
+        private const val PROGRESS_MIN_INTERVAL_MS = 100L
     }
 }

@@ -1,16 +1,13 @@
 package com.raulshma.jellyplay.core.ui.components
 
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateTo
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableFloatState
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -21,6 +18,20 @@ import com.raulshma.jellyplay.core.designsystem.theme.AmbientColors
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
+
+// Minimum time between blob phase updates (~30 Hz). The blobs drift over
+// 10-22 s, so display-rate (60-120 Hz) phase writes are wasted full-screen
+// redraws; a time-based gate yields ~30 Hz on any display refresh rate.
+private const val MIN_PHASE_UPDATE_INTERVAL_NS = 33_000_000L
+
+// Triangle-wave blob progress (0→1→0) with the same per-blob periods the
+// Animatable spec produced (10 s + index * 3 s, linear, reversed). Derived
+// from the frame timestamp, so the motion is unchanged — just stepped.
+private fun blobDriftProgress(nanos: Long, index: Int): Float {
+    val periodNanos = (10_000L + index * 3_000L) * 2 * 1_000_000L
+    val fraction = (nanos % periodNanos).toFloat() / periodNanos
+    return if (fraction < 0.5f) fraction * 2f else 2f - fraction * 2f
+}
 
 /**
  * A full-screen decorative background built from a small number of slowly
@@ -37,8 +48,8 @@ import kotlin.math.sin
  *
  * @param colors the palette to sample blobs from. When empty, falls back to
  *  [AmbientColors] deep tones.
- * @param blobCount how many drifting blobs to render. Each drives its own
- *  infinite animation, so keep this small for performance.
+ * @param blobCount how many drifting blobs to render. All step from one
+ *  shared ~30 Hz-gated frame clock, so keep this small for performance.
  */
 @Composable
 fun AmbientColorBackdrop(
@@ -47,16 +58,17 @@ fun AmbientColorBackdrop(
     blobCount: Int = 3,
 ) {
     val reducedMotion = LocalReducedMotion.current
-    val animatables = remember(blobCount) {
-        List(blobCount) { Animatable(initialValue = 0f) }
+    val blobProgress = remember(blobCount) {
+        List(blobCount) { mutableFloatStateOf(0f) }
     }
 
     // Resolve the blob palette + the per-blob 3-stop gradient stops ONCE (keyed
-    // on the palette). The Canvas below redraws every animation frame (~60fps
-    // over a 10-22s drift), and previously allocated a fresh List<Color> per
-    // blob per frame just to build the radialGradient stops. The center/radius
-    // still vary per frame, but the stop colors are identical for a given
-    // palette, so hoisting them out of the draw phase removes that churn.
+    // on the palette). The Canvas below redraws on every gated phase step
+    // (~30 Hz over a 10-22s drift), and previously allocated a fresh
+    // List<Color> per blob per frame just to build the radialGradient stops.
+    // The center/radius still vary per frame, but the stop colors are identical
+    // for a given palette, so hoisting them out of the draw phase removes that
+    // churn.
     val blobStops = rememberBlobStops(colors, blobCount)
 
     // Each brush is built ONCE at a nominal radius of 1 and drawn through a
@@ -69,25 +81,14 @@ fun AmbientColorBackdrop(
         }
     }
 
-    // Each blob runs its own slow infinite animation. Frozen under reduced
-    // motion (the LaunchedEffect bodies are skipped, values stay 0f) which also
-    // serves as the performance-mode freeze — callers gate this composable on
-    // performance mode themselves when they want zero animation cost.
+    // The blobs drift on a shared ~30 Hz-gated frame clock (see
+    // [LaunchBlobDrift]) instead of per-blob Animatables. Frozen
+    // under reduced motion (the effect body is skipped, values stay 0f) which
+    // also serves as the performance-mode freeze — callers gate this
+    // composable on performance mode themselves when they want zero animation
+    // cost.
     if (!reducedMotion) {
-        animatables.forEachIndexed { index, animatable ->
-            LaunchedEffect(index) {
-                animatable.animateTo(
-                    targetValue = 1f,
-                    animationSpec = infiniteRepeatable(
-                        animation = tween(
-                            durationMillis = 10000 + index * 3000,
-                            easing = LinearEasing,
-                        ),
-                        repeatMode = RepeatMode.Reverse,
-                    ),
-                )
-            }
-        }
+        LaunchBlobDrift(blobProgress)
     }
 
     Canvas(modifier = modifier.fillMaxSize()) {
@@ -95,7 +96,7 @@ fun AmbientColorBackdrop(
         val height = size.height
 
         blobBrushes.forEachIndexed { index, brush ->
-            val progress = animatables[index].value
+            val progress = blobProgress[index].floatValue
             val x = width * (0.2f + 0.6f * sin(progress * 2f * PI.toFloat() + index))
             val y = height * (0.2f + 0.6f * cos(progress * 2f * PI.toFloat() + index * 1.5f))
             val radius = (width.coerceAtMost(height) * 0.4f) *
@@ -104,6 +105,32 @@ fun AmbientColorBackdrop(
             translate(x, y) {
                 scale(radius, radius, pivot = Offset.Zero) {
                     drawCircle(brush = brush, radius = 1f, center = Offset.Zero)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Steps [blobProgress] on the shared ~30 Hz-gated frame clock: each entry
+ * receives its triangle-wave drift phase ([blobDriftProgress]) derived from
+ * the frame timestamp, skipping frame callbacks closer together than
+ * [MIN_PHASE_UPDATE_INTERVAL_NS]. Shared by [AmbientColorBackdrop] and the
+ * audio player's `AmbientBackground` so the gated clock loop lives in one
+ * place. Not composing this (the reduced-motion path) freezes the blobs at
+ * their current values.
+ */
+@Composable
+fun LaunchBlobDrift(blobProgress: List<MutableFloatState>) {
+    LaunchedEffect(blobProgress) {
+        var lastPhaseUpdateNanos = 0L
+        while (true) {
+            withFrameNanos { nanoTime ->
+                if (nanoTime - lastPhaseUpdateNanos >= MIN_PHASE_UPDATE_INTERVAL_NS) {
+                    lastPhaseUpdateNanos = nanoTime
+                    blobProgress.forEachIndexed { index, progress ->
+                        progress.floatValue = blobDriftProgress(nanoTime, index)
+                    }
                 }
             }
         }

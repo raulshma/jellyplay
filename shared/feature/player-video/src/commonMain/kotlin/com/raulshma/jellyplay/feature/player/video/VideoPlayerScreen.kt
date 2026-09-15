@@ -558,7 +558,6 @@ fun VideoPlayerScreen(
     val isCastConnecting by viewModel.cast.isConnectingFlow.collectAsStateWithLifecycle(initialValue = false)
     val castIsPlaying by viewModel.cast.castIsPlaying.collectAsStateWithLifecycle(initialValue = false)
     val castDuration by viewModel.cast.castDurationMs.collectAsStateWithLifecycle(initialValue = 0L)
-    val castVolume by viewModel.cast.castVolumeFlow.collectAsStateWithLifecycle(initialValue = 1f)
 
     val isPlaying = if (isCastConnected) castIsPlaying else uiState.isPlaying
     // If playback is actually running, the user intended it — reconcile the
@@ -742,7 +741,6 @@ fun VideoPlayerScreen(
         windowOps,
         uiState.gestures.swipeSeekMaxMs,
         isCastConnected,
-        castVolume,
         doSeekTo,
     ) {
         GestureSeekController(
@@ -750,7 +748,7 @@ fun VideoPlayerScreen(
             getEngine = { engine },
             getSwipeSeekMaxMs = { uiState.gestures.swipeSeekMaxMs },
             isCastConnected = { isCastConnected },
-            getCastVolume = { castVolume },
+            getCastVolume = { viewModel.cast.castVolumeFlow.value },
             readWindowBrightness = { windowOps.readWindowBrightness() },
             writeWindowBrightness = { newBrightness ->
                 windowOps.writeWindowBrightness(newBrightness)
@@ -767,8 +765,6 @@ fun VideoPlayerScreen(
             setCastVolume = viewModel.cast::setCastVolume,
         )
     }
-    val brightnessOverlay by gestureController.brightnessOverlay.collectAsStateWithLifecycle()
-    val volumeOverlay by gestureController.volumeOverlay.collectAsStateWithLifecycle()
     val gestureSeekPositionMs by gestureController.seekPositionMs.collectAsStateWithLifecycle()
     val gestureDeltaMs by gestureController.deltaMs.collectAsStateWithLifecycle()
     val isGestureSeeking by gestureController.isSeeking.collectAsStateWithLifecycle()
@@ -909,8 +905,8 @@ fun VideoPlayerScreen(
             artworkUrl = uiState.media.artworkUrl,
             isPlaying = isPlaying,
             castPositionFlow = viewModel.cast.castPositionMs,
+            castVolumeFlow = viewModel.cast.castVolumeFlow,
             durationMs = duration,
-            volume = castVolume,
             isConnecting = isCastConnecting,
             audioTracks = trackState.audioTracks,
             subtitleTracks = trackState.subtitleTracks,
@@ -1291,10 +1287,9 @@ fun VideoPlayerScreen(
             }
 
             GestureOverlay(
-                seekDirection = seekState.direction,
-                seekOffsetMs = seekState.offsetMs,
-                brightnessValue = brightnessOverlay,
-                volumeValue = volumeOverlay,
+                seekState = seekState,
+                brightnessFlow = gestureController.brightnessOverlay,
+                volumeFlow = gestureController.volumeOverlay,
                 indicatorSide = uiState.gestures.gestureIndicatorSide,
                 gesturesEnabled = uiState.gestures.gesturesEnabled && !isScreenLocked,
                 swipeSeekMaxMs = uiState.gestures.swipeSeekMaxMs,

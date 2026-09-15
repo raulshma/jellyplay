@@ -45,7 +45,9 @@ back to the server so you can pick up on any device.
   preference; paged books show pages left.
 - 🔍 **Paged zoom & fit** — PDF and comic pages pinch-zoom with pan,
   double-tap to toggle zoom, and a fit mode (fit width / fit page /
-  original); zoomed pages re-raster sharply (up to 3×).
+  original); zoomed PDF pages re-raster sharply (up to 3×). Comic pages
+  decode under a longest-edge cap (4000 px) to bound memory, so deep zoom
+  into very large scans softens slightly instead of re-rastering.
 - ☀️ **Brightness** — an in-reader dim slider lives in the bottom chrome of
   both readers.
 - 🔊 **Read aloud (Android)** — EPUBs can be spoken with the system TTS

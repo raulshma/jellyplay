@@ -25,6 +25,7 @@ import com.raulshma.jellyplay.feature.book.epub.sendBookChunks
 import com.raulshma.jellyplay.feature.book.epub.toJsonArg
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlinx.coroutines.test.runTest
 
 /**
  * Pins the reader.js command scripts byte-for-byte: the appearance bundle's
@@ -231,7 +232,7 @@ class EpubReaderScriptTest {
     }
 
     @Test
-    fun `chunked book transfer rides the appearance on the begin frame`() {
+    fun `chunked book transfer rides the appearance on the begin frame`() = runTest {
         val scripts = mutableListOf<String>()
         sendBookChunks(
             base64 = "QUJD", // "ABC" — a single chunk

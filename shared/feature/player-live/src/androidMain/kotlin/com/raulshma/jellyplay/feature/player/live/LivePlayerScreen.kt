@@ -176,8 +176,12 @@ fun LivePlayerScreen(
     }
 
     // Position ticker — drives the seek bar + at-live-edge while playing.
-    LaunchedEffect(state.isPlaying) {
-        while (state.isPlaying) {
+    // Consumers of the refreshed flows all render inside the AnimatedVisibility
+    // chrome and leave composition when it hides, so only poll while the
+    // overlay is visible; isAtLiveEdge stays correct while hidden via the
+    // engine's playback-state listener.
+    LaunchedEffect(state.isPlaying, overlayVisible) {
+        while (state.isPlaying && overlayVisible) {
             viewModel.refreshPosition()
             delay(POSITION_TICK_MS)
         }

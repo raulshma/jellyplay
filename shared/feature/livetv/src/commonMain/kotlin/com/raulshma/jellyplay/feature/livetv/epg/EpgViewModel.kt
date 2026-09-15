@@ -152,14 +152,27 @@ class EpgViewModel(
     }
 
     /**
+     * Serializes [fetchGuideIntoState] passes. The user-triggered [loadGuide]
+     * (also the record-success reload) and the auto-refresh loop can overlap;
+     * without the lock two full guide fetches run concurrently and the slower
+     * one can publish last, leaving channels/programs/window mutually
+     * inconsistent. Waiting for the lock keeps the trailing refresh — each
+     * pass computes its window at the moment it holds the lock, so a pass
+     * queued behind an in-flight one re-fetches fresh rather than being
+     * dropped.
+     */
+    private val guideFetchMutex = Mutex()
+
+    /**
      * Fetches the guide for the standard window ([guideWindow] over the
      * injected clock) and, on success, publishes channels, programs, the
      * window bounds and the rebuilt grid. Shared by the user-triggered
      * [loadGuide] and the auto-refresh loop; callers own loading/error UX.
+     * Serialized by [guideFetchMutex].
      */
-    private suspend fun fetchGuideIntoState(): Result<EpgGuide> {
+    private suspend fun fetchGuideIntoState(): Result<EpgGuide> = guideFetchMutex.withLock {
         val (start, end) = guideWindow(timeSource.nowInstant())
-        return mediaRepository.getLiveTvGuide(startDateUtc = start.toString(), endDateUtc = end.toString(), limit = 100)
+        mediaRepository.getLiveTvGuide(startDateUtc = start.toString(), endDateUtc = end.toString(), limit = 100)
             .onSuccess { guide ->
                 _channels.value = guide.channels
                 _programs.value = guide.programs

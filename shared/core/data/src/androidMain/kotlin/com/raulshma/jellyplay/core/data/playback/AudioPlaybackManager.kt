@@ -107,6 +107,14 @@ class AudioPlaybackManager(
         // EnginePositionTicker.POSITION_PAUSED_RECHECK_MS) instead of polling
         // at POSITION_POLL_INTERVAL_MS for the whole paused session.
         private const val POSITION_PAUSED_RECHECK_MS = 2_500L
+        // While no player exists, the tracking loop backs off exponentially from
+        // this floor up to POSITION_NO_PLAYER_MAX_WAIT_MS instead of waking the
+        // dispatcher at the poll rate for the whole player-less service lifetime.
+        private const val POSITION_NO_PLAYER_MIN_WAIT_MS = 250L
+        // Backoff ceiling for the player-less stretch — deliberately the paused
+        // recheck cadence, but named separately: the no-player loop and the
+        // paused loop are distinct states that could drift apart.
+        private const val POSITION_NO_PLAYER_MAX_WAIT_MS = POSITION_PAUSED_RECHECK_MS
     }
 
     private var exoPlayer: ExoPlayer? = null
@@ -1551,13 +1559,18 @@ class AudioPlaybackManager(
             var lastDuration = 0L
             var bandwidthSampleTick = 0
             var lastBufferedPosition = 0L
+            var noPlayerWaitMs = POSITION_NO_PLAYER_MIN_WAIT_MS
             while (true) {
                 val player = exoPlayer
                 if (player == null) {
-                    // No player yet — wait briefly and re-check rather than busy-looping.
-                    delay(250)
+                    // No player yet — back off exponentially (doubling to the
+                    // POSITION_NO_PLAYER_MAX_WAIT_MS cap) so player-less stretches
+                    // between sessions don't wake the loop at the poll rate.
+                    delay(noPlayerWaitMs)
+                    noPlayerWaitMs = (noPlayerWaitMs * 2).coerceAtMost(POSITION_NO_PLAYER_MAX_WAIT_MS)
                     continue
                 }
+                noPlayerWaitMs = POSITION_NO_PLAYER_MIN_WAIT_MS
                 // While paused, the position/duration/lyrics/crossfade work below
                 // is a no-op (position doesn't move, crossfader only runs when
                 // playing, lyrics index is stable). Suspend reactively on the

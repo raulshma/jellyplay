@@ -225,6 +225,10 @@ class SessionCoordinator(
     }
 
     private companion object {
-        const val AUTH_CONFIRMATION_TIMEOUT_MS = 10_000L
+        // The mirror flip trails the restore by ~10 ms, so this exists purely
+        // to bound the corrupted-flow case — not to outlast a slow cold start.
+        // A pathological stall past 2.5 s trades one possible frame of auth
+        // flash for un-blocking the splash instead of pinning it for seconds.
+        const val AUTH_CONFIRMATION_TIMEOUT_MS = 2_500L
     }
 }

@@ -190,7 +190,12 @@ class DownloadsViewModel(
      */
     private fun sameListStructure(old: List<DownloadItem>, new: List<DownloadItem>): Boolean {
         if (old.size != new.size) return false
-        return old.zip(new).all { (o, n) -> o.id == n.id && o.status == n.status }
+        for (i in old.indices) {
+            val o = old[i]
+            val n = new[i]
+            if (o.id != n.id || o.status != n.status) return false
+        }
+        return true
     }
 
     /**

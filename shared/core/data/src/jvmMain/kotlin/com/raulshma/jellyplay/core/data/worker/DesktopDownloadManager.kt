@@ -24,8 +24,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.firstOrNull
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
@@ -135,10 +135,10 @@ class DesktopDownloadManager(
             // eligibility rules; safe no-op when nothing qualifies).
             runCatchingRethrowingCancellation { downloadRepository.value.resumeInterruptedDownloads() }
                 .onFailure { Log.w(TAG, "Startup resume of interrupted downloads failed", it) }
-            downloadDao.getPendingDownloads()
-                .map { rows -> rows.filter { it.status == DownloadStatus.PENDING.name } }
-                .collect { pending ->
-                    pending.forEach { kick(it.id) }
+            downloadDao.getPendingDownloadIds()
+                .distinctUntilChanged()
+                .collect { pendingIds ->
+                    pendingIds.forEach { kick(it) }
                 }
         }
         reconnectJob = scope.launch { watchReconnect() }
@@ -184,12 +184,12 @@ class DesktopDownloadManager(
     // ── transfer orchestration (mirrors DownloadWorker.doWork) ──────────────
 
     private fun kick(downloadId: String) {
-        // Reserve the slot atomically BEFORE launching: the pending-rows
-        // observer re-emits on every download-table change (each 2 s progress
-        // tick of any other row) and re-kicks every still-PENDING row, so a
-        // concurrent kick must see the reservation even before processRow
-        // performs its first DB read. putIfAbsent is the ExistingWorkPolicy
-        // .KEEP equivalent — only one transfer per row, ever.
+        // Reserve the slot atomically BEFORE launching: the pending-ids
+        // observer re-kicks every still-PENDING row whenever the PENDING id
+        // set changes (a row entering or leaving it), so a concurrent kick
+        // must see the reservation even before processRow performs its first
+        // DB read. putIfAbsent is the ExistingWorkPolicy.KEEP equivalent —
+        // only one transfer per row, ever.
         val handle = TransferHandle()
         if (activeTransfers.putIfAbsent(downloadId, handle) != null) return
         scope.launch { processRow(downloadId, handle) }

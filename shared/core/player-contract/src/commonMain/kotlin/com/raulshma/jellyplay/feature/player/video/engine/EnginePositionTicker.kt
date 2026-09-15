@@ -71,9 +71,15 @@ class EnginePositionTicker(
         while (isActive) {
             if (!isCurrentlyPlaying()) {
                 // Bounded wait — see [POSITION_PAUSED_RECHECK_MS].
-                withTimeoutOrNull(POSITION_PAUSED_RECHECK_MS) {
+                val resumed = withTimeoutOrNull(POSITION_PAUSED_RECHECK_MS) {
                     isPlayingFlow.first { it }
                 }
+                // Timed out and still paused: loop straight back into the
+                // bounded wait instead of also paying the interval delay, so a
+                // paused session cycles at POSITION_PAUSED_RECHECK_MS and a
+                // resume isn't held off by a stale interval sleep. A
+                // flow-driven resume falls through to the playing path below.
+                if (resumed == null && !isCurrentlyPlaying()) continue
             }
             delay(pollingIntervalMs.value)
             val currentlyPlaying = isCurrentlyPlaying()

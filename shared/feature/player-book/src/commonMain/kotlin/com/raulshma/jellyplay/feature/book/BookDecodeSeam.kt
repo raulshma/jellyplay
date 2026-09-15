@@ -8,8 +8,14 @@ import androidx.compose.ui.graphics.ImageBitmap
  * expect/actual with the same ARGB-int → ImageBitmap bridge shape).
  */
 
-/** Decode encoded image bytes (jpg/png/gif/bmp/webp as the platform supports) into a bitmap; null on failure. */
-internal expect fun decodeImageBytes(bytes: ByteArray): ImageBitmap?
+/**
+ * Decode encoded image bytes (jpg/png/gif/bmp/webp as the platform supports)
+ * into a bitmap; null on failure. The decoded bitmap's longest edge stays
+ * within [maxEdgePx] (power-of-two subsampling on Android, post-decode
+ * downscale on desktop) — archive scans without it decode at native size,
+ * where a single page costs ~100 MB.
+ */
+internal expect fun decodeImageBytes(bytes: ByteArray, maxEdgePx: Int): ImageBitmap?
 
 /**
  * ARGB-packed pixels → [ImageBitmap]. Android builds a `Bitmap` via

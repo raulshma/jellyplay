@@ -157,7 +157,9 @@ fun WaveformSeekBar(
                     val width = size.width
                     val height = size.height
                     val centerY = height / 2f
-                    val steps = (width / 2f).toInt().coerceAtLeast(100)
+                    // One sample per 4 px is plenty for the 6-period sine at
+                    // the 4 dp stroke width; each segment is rebuilt per frame.
+                    val steps = (width / 4f).toInt().coerceAtLeast(100)
                     val wavePath = Path()
 
                     onDrawBehind {

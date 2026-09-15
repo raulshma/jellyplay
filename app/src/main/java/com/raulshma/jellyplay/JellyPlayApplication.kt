@@ -88,6 +88,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -104,6 +105,16 @@ private const val DEVICE_ID_PREWARM_TIMEOUT_MS = 5_000L
  * never wait on the persisted read longer than the gate itself.
  */
 private const val SECURITY_SLICE_PREWARM_TIMEOUT_MS = PlayerActivity.APP_LOCK_GATE_READ_TIMEOUT_MS
+
+/**
+ * Defers the audio/widget group and the background-scheduler group in
+ * [onCreate] out of the t=0 first-frame window — the same idiom (and
+ * duration) as SettingsSearchCatalogPrewarmer's default-pass deferral:
+ * two seconds in, the first frame has long landed and both groups run
+ * uncontended. Every WorkManager enqueue in the scheduler group is
+ * KEEP-idempotent, so the deferral changes no semantics.
+ */
+private const val BACKGROUND_START_DEFERRAL_MS = 2_000L
 
 class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Configuration.Provider {
 
@@ -505,6 +516,7 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
         // order, just no longer gated on the DataStore reads and cache
         // prewarms finishing first.
         applicationScope.launch(Dispatchers.IO) {
+            delay(BACKGROUND_START_DEFERRAL_MS)
             audioPlaybackManager.start()
             nowPlayingWidgetUpdater.start()
         }
@@ -513,6 +525,7 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
         // audio init. Each lazy resolution constructs its scheduler here (off
         // the main thread) instead of during onCreate.
         applicationScope.launch(Dispatchers.IO) {
+            delay(BACKGROUND_START_DEFERRAL_MS)
             widgetWorkScheduler.enqueuePeriodic()
             userDataSyncScheduler.enqueuePeriodic()
             playbackSyncScheduler.enqueuePeriodic()

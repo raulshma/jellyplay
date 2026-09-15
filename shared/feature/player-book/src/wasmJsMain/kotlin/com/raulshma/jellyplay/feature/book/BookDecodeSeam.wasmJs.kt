@@ -15,7 +15,7 @@ import androidx.compose.ui.graphics.ImageBitmap
  * - [argbPixelsToImageBitmap] throws: its only caller is the jvmMain PDFBox
  *   PDF raster step, which is unreachable on wasm.
  */
-internal actual fun decodeImageBytes(bytes: ByteArray): ImageBitmap? = null
+internal actual fun decodeImageBytes(bytes: ByteArray, maxEdgePx: Int): ImageBitmap? = null
 
 internal actual fun argbPixelsToImageBitmap(pixels: IntArray, width: Int, height: Int): ImageBitmap =
     error("PDF rasterization is a desktop-only path; unreachable on wasm")

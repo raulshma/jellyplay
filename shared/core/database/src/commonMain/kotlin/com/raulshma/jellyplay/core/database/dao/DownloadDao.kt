@@ -288,8 +288,20 @@ interface DownloadDao {
     @Query("UPDATE downloads SET retryCount = 0 WHERE id = :id")
     suspend fun resetRetryCount(id: String)
 
-    @Query("SELECT * FROM downloads WHERE status IN ('PENDING', 'PAUSED') ORDER BY priority DESC, createdAt ASC")
-    fun getPendingDownloads(): Flow<List<DownloadEntity>>
+    /**
+     * Reactive ids of the rows the desktop downloads conveyor re-kicks: the
+     * pending query narrowed to the one column its only consumer reads, and to
+     * the `PENDING` rows it actually kicked (the former full-row
+     * `IN ('PENDING', 'PAUSED')` query had its `PAUSED` half filtered out in
+     * Kotlin — a paused row must never re-kick). The `priority DESC,
+     * createdAt ASC` order is kept so multi-row kick order is unchanged. Room
+     * invalidation is table-level, so every [updateProgressWithSpeed] tick
+     * re-ran the full 23-column read; same narrow-projection rationale as
+     * [getRecoveryRows] / [getActiveDownloadProgress]. Served by the `status`
+     * index.
+     */
+    @Query("SELECT id FROM downloads WHERE status = 'PENDING' ORDER BY priority DESC, createdAt ASC")
+    fun getPendingDownloadIds(): Flow<List<String>>
 
     @Query("SELECT DISTINCT seriesId FROM downloads WHERE seriesId IS NOT NULL")
     suspend fun getDownloadedSeriesIds(): List<String>

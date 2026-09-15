@@ -156,6 +156,11 @@ internal actual fun rememberEpubReaderHost(
             if (bookSent || state.loadingState !is LoadingState.Finished) return@LaunchedEffect
             bookSent = true
             sendBookChunks(base64, resumePercent, appearance) { navigator.evaluateJavaScript(it, null) }
+            // The book now lives in the WebView — the composition-held copy
+            // would otherwise pin the whole base64 payload for the session.
+            // The effect re-enters on the null and returns early; bookSent
+            // bars a re-send.
+            bookBase64 = null
         }
 
         // Appearance push for CHANGES after load — see pushAppearanceScripts.

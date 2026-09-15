@@ -177,18 +177,23 @@ class DetailViewModel internal constructor(
      * ManageSeriesScreen.
      */
     val canManageSeries: StateFlow<Boolean> = combine(
-        // Map to identity-relevant fields only so favorite/played toggles (which
-        // change isFavorite/isPlayed but not id/mediaType) produce structurally
-        // equal emissions that StateFlow deduplicates.
-        _uiState.map { it.detail?.item?.let { item -> ItemIdentity(item.id, item.mediaType) } },
-        _uiState.map { it.detail?.providerIds?.get("tvdb") },
+        // ONE _uiState projection + dedupe: only a change to one of the
+        // identity-relevant fields re-runs the gate below. Favorite/played
+        // toggles change isFavorite/isPlayed but not id/mediaType, so their
+        // emissions collapse into a single distinct one here.
+        _uiState.map {
+            SeriesManageInputs(
+                identity = it.detail?.item?.let { item -> ItemIdentity(item.id, item.mediaType) },
+                tvdbId = it.detail?.providerIds?.get("tvdb"),
+                sonarrResolved = it.sonarrServersResolved,
+            )
+        }.distinctUntilChanged(),
         stores.experimentalStore.experimental.map { it.enabledExperimentalFeatures.contains(ExperimentalFeature.DIRECT_ARR_INTEGRATION) },
-        _uiState.map { it.sonarrServersResolved },
-    ) { itemIdentity, tvdbId, flagEnabled, sonarrResolved ->
-        if (!flagEnabled || itemIdentity == null) false
-        else if (itemIdentity.mediaType != MediaType.SERIES) false
-        else if (tvdbId?.toIntOrNull() == null) false
-        else sonarrResolved
+    ) { inputs, flagEnabled ->
+        if (!flagEnabled || inputs.identity == null) false
+        else if (inputs.identity.mediaType != MediaType.SERIES) false
+        else if (inputs.tvdbId?.toIntOrNull() == null) false
+        else inputs.sonarrResolved
     }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
 
     private val seerrRequestState = SeerrRequestStateHolder(scope, remoteDiscovery.seerrRequestDelegate)
@@ -1455,3 +1460,15 @@ private data class SeerrConnectionFlags(
  */
 @Immutable
 private data class ItemIdentity(val id: String, val mediaType: MediaType)
+
+/**
+ * Structural snapshot of the [DetailUiState]-derived [canManageSeries] inputs,
+ * grouped so a single map + dedupe per uiState emission feeds the combine
+ * instead of one projection per field.
+ */
+@Immutable
+private data class SeriesManageInputs(
+    val identity: ItemIdentity?,
+    val tvdbId: String?,
+    val sonarrResolved: Boolean,
+)

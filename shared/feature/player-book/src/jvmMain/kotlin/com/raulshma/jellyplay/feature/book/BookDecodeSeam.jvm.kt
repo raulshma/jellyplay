@@ -2,18 +2,39 @@ package com.raulshma.jellyplay.feature.book
 
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toComposeImageBitmap
+import java.awt.Graphics2D
+import java.awt.RenderingHints
 import java.awt.image.BufferedImage
 import java.io.ByteArrayInputStream
 import javax.imageio.ImageIO
+import kotlin.math.max
+import kotlin.math.roundToInt
 import org.jetbrains.skia.ColorAlphaType
 import org.jetbrains.skia.ColorSpace
 import org.jetbrains.skia.ColorType
 import org.jetbrains.skia.Image
 import org.jetbrains.skia.ImageInfo
 
-internal actual fun decodeImageBytes(bytes: ByteArray): ImageBitmap? =
+internal actual fun decodeImageBytes(bytes: ByteArray, maxEdgePx: Int): ImageBitmap? =
     runCatching {
-        ImageIO.read(ByteArrayInputStream(bytes))?.toImageBitmap()
+        // ImageIO has no decode-time bounds pass, so an oversized scan lands
+        // at full size once and is immediately downscaled off the heap via a
+        // Graphics2D draw.
+        val decoded = ImageIO.read(ByteArrayInputStream(bytes)) ?: return@runCatching null
+        val longest = maxOf(decoded.width, decoded.height)
+        if (longest <= maxEdgePx) return@runCatching decoded.toImageBitmap()
+        val scale = maxEdgePx.toDouble() / longest
+        val w = max(1, (decoded.width * scale).roundToInt())
+        val h = max(1, (decoded.height * scale).roundToInt())
+        val scaled = BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB)
+        val g: Graphics2D = scaled.createGraphics()
+        try {
+            g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR)
+            g.drawImage(decoded, 0, 0, w, h, null)
+        } finally {
+            g.dispose()
+        }
+        scaled.toImageBitmap()
     }.getOrNull()
 
 /** ARGB-int → ImageBitmap bridge for any decoded [BufferedImage] (decode seam + PDF pager). */

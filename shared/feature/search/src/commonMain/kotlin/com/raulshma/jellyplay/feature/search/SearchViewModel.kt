@@ -89,15 +89,15 @@ internal class SearchViewModel(
     val searchHistory: StateFlow<List<SearchHistoryItem>> = _searchHistory.flow
 
     private val seerrPrefs: StateFlow<SeerrPreferences> =
-        seerrRepository.getPreferences().stateIn(scope, SharingStarted.Lazily, SeerrPreferences())
+        seerrRepository.getPreferences().stateIn(scope, SharingStarted.WhileSubscribed(5_000), SeerrPreferences())
 
     val isSeerrConnected: StateFlow<Boolean> = seerrPrefs.map {
         it.serverUrl.isNotBlank()
-    }.stateIn(scope, SharingStarted.Lazily, false)
+    }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
 
     val isSeerrSearchEnabled: StateFlow<Boolean> = seerrPrefs.map {
         it.searchEnabled
-    }.stateIn(scope, SharingStarted.Lazily, false)
+    }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
 
     private val queryFlow = stateFlow("")
 

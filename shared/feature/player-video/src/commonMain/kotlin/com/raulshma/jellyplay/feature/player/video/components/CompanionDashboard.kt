@@ -113,8 +113,12 @@ fun CompanionDashboard(
     // (header, poster, tabs, tab content) to recompose per tick; only the slider
     // + two time labels and the lyrics active-line index actually need it.
     castPositionFlow: StateFlow<Long>,
+    // StateFlow rather than a pre-collected Float for the same reason: the
+    // volume slider in CompanionControlBar is the only reader, and it changes
+    // continuously while a slider drag (or cast-session volume event) is in
+    // flight.
+    castVolumeFlow: StateFlow<Float>,
     durationMs: Long,
-    volume: Float,
     isConnecting: Boolean,
     audioTracks: List<TrackOption>,
     subtitleTracks: List<TrackOption>,
@@ -245,8 +249,8 @@ fun CompanionDashboard(
                         CompanionControlBar(
                             isPlaying = isPlaying,
                             castPositionFlow = castPositionFlow,
+                            castVolumeFlow = castVolumeFlow,
                             durationMs = durationMs,
-                            volume = volume,
                             onPlayPause = onPlayPause,
                             onSeekBack = onSeekBack,
                             onSeekForward = onSeekForward,
@@ -420,8 +424,8 @@ fun CompanionDashboard(
                 CompanionControlBar(
                     isPlaying = isPlaying,
                     castPositionFlow = castPositionFlow,
+                    castVolumeFlow = castVolumeFlow,
                     durationMs = durationMs,
-                    volume = volume,
                     onPlayPause = onPlayPause,
                     onSeekBack = onSeekBack,
                     onSeekForward = onSeekForward,
@@ -766,8 +770,8 @@ fun EpisodesTabContent(
 fun CompanionControlBar(
     isPlaying: Boolean,
     castPositionFlow: StateFlow<Long>,
+    castVolumeFlow: StateFlow<Float>,
     durationMs: Long,
-    volume: Float,
     onPlayPause: () -> Unit,
     onSeekBack: () -> Unit,
     onSeekForward: () -> Unit,
@@ -781,6 +785,7 @@ fun CompanionControlBar(
     // derivedStateOf) and stops the entire CompanionDashboard tree from
     // recomposing on every position update.
     val currentPositionMs by castPositionFlow.collectAsStateWithLifecycle()
+    val volume by castVolumeFlow.collectAsStateWithLifecycle()
     Column(
         modifier = Modifier
             .fillMaxWidth()

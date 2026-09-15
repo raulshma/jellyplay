@@ -77,6 +77,10 @@ internal actual fun rememberEpubReaderHost(
         // that drops the send would strand the reader on the boot veil.
         bookSent = true
         sendBookChunks(base64, resumePercent, appearance) { view.evaluateJavascript(it, null) }
+        // The book now lives in the WebView — the composition-held copy would
+        // otherwise pin the whole base64 payload for the session. The effect
+        // re-enters on the null and returns early; bookSent bars a re-send.
+        bookBase64 = null
     }
 
     AndroidView(

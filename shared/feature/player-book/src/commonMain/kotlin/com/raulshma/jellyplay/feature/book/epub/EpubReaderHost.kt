@@ -4,6 +4,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import com.raulshma.jellyplay.core.datastore.reader.ReaderTheme
 import com.raulshma.jellyplay.core.datastore.reader.ReadingDirection
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import okio.Path
 
 /** Where the reflowable reader is in its boot/ready sequence (fed by `reader.js`). */
@@ -308,19 +310,26 @@ internal fun buildConsumeEventsScript(): String = "window.jellyPlayReader.consum
  * on loadBookEnd. The saved appearance rides the begin frame so the rendition
  * is built with the user's preferences. [eval] is the platform's
  * evaluate(Java)Script seam, so the protocol lives once for both hosts.
+ *
+ * Chunking + per-chunk script concat transiently cost a few times the book
+ * size in strings — they run on [Dispatchers.Default]; the [eval] loop stays
+ * on the caller's (main) dispatcher, where evaluate(Java)Script must run.
  */
-internal fun sendBookChunks(
+internal suspend fun sendBookChunks(
     base64: String,
     resumePercent: Double,
     appearance: EpubAppearance,
     eval: (String) -> Unit,
 ) {
-    val chunks = base64.chunked(BOOK_CHUNK_CHARS)
-    eval(buildLoadBookBeginScript(chunks.size, resumePercent, appearance))
-    chunks.forEachIndexed { index, chunk ->
-        eval(buildLoadBookChunkScript(index, chunk))
+    val scripts = withContext(Dispatchers.Default) {
+        val chunks = base64.chunked(BOOK_CHUNK_CHARS)
+        buildList(chunks.size + 2) {
+            add(buildLoadBookBeginScript(chunks.size, resumePercent, appearance))
+            chunks.forEachIndexed { index, chunk -> add(buildLoadBookChunkScript(index, chunk)) }
+            add(buildLoadBookEndScript())
+        }
     }
-    eval(buildLoadBookEndScript())
+    scripts.forEach(eval)
 }
 
 /**
