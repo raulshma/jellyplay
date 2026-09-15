@@ -8,9 +8,12 @@ import com.raulshma.jellyplay.core.datastore.reader.ReaderStore
 import com.raulshma.jellyplay.feature.book.BookContentResolver
 import com.raulshma.jellyplay.feature.book.BookDocumentOpener
 import com.raulshma.jellyplay.feature.book.BookReaderViewModel
+import com.raulshma.jellyplay.feature.book.ReaderPreferences
 import com.raulshma.jellyplay.feature.book.BookSpeechEngine
 import com.raulshma.jellyplay.feature.book.NoopBookFormatProbe
 import com.raulshma.jellyplay.feature.book.NoopBookSpeechEngine
+import com.raulshma.jellyplay.core.data.playback.focus.NoopPlaybackFocus
+import com.raulshma.jellyplay.core.data.playback.focus.PlaybackFocus
 import com.raulshma.jellyplay.feature.book.PdfOutlineParser
 import org.koin.compose.viewmodel.dsl.viewModel
 import org.koin.core.module.Module
@@ -32,13 +35,14 @@ val playerBookModule: Module = module {
         BookReaderViewModel(
             mediaRepository = get(),
             playbackRepository = get(),
-            readerStore = get(),
+            preferences = ReaderPreferences(store = get(), scope = get(DatastoreQualifiers.applicationScope)),
             annotationsRepository = get(),
             contentResolver = get(),
             documentOpener = get(),
             pdfOutlineParser = get(),
             formatProbe = getOrNull() ?: NoopBookFormatProbe,
             speechEngine = getOrNull() ?: NoopBookSpeechEngine,
+            playbackFocus = getOrNull() ?: NoopPlaybackFocus,
             tocCacheRepository = get(),
             flushScope = get(DatastoreQualifiers.applicationScope),
         )

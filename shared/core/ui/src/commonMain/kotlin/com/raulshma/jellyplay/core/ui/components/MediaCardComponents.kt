@@ -64,8 +64,6 @@ import coil3.compose.LocalPlatformContext
 import coil3.size.Size as CoilSize
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
-import com.raulshma.jellyplay.core.model.bookProgressFraction
-import kotlin.math.roundToInt
 
 import com.raulshma.jellyplay.core.ui.animation.fastEffectsSpec
 import com.raulshma.jellyplay.core.ui.animation.pressScale
@@ -486,14 +484,7 @@ fun PosterCard(
                 }
                 val bookPercent =
                     remember(isBook, item.isPlayed, bookProgressFractionOverride, item.playbackPositionTicks) {
-                        if (!isBook || item.isPlayed) {
-                            null
-                        } else {
-                            val fraction = bookProgressFractionOverride ?: item.bookProgressFraction()
-                            fraction?.takeIf { it > 0f }
-                                ?.let { (it * 100).roundToInt().coerceIn(0, 100) }
-                                ?.takeIf { it > 0 }
-                        }
+                        bookFooterPercent(item, bookProgressFractionOverride)
                     }
 
                 val timeText = remainingTime ?: totalTime

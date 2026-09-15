@@ -4,6 +4,9 @@ import com.raulshma.jellyplay.core.data.playback.AudioEffectsManager
 import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
 import com.raulshma.jellyplay.core.data.playback.AudioQueueManager
 import com.raulshma.jellyplay.core.data.playback.DefaultAudioQueueFacade
+import com.raulshma.jellyplay.core.data.playback.focus.DefaultPlaybackFocus
+import com.raulshma.jellyplay.core.data.playback.focus.FocusArbiter
+import com.raulshma.jellyplay.core.data.playback.focus.PlaybackFocus
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import com.raulshma.jellyplay.feature.player.audio.AudioPlayerCast
 import com.raulshma.jellyplay.feature.player.audio.AudioPlayerEngine
@@ -35,6 +38,11 @@ import org.koin.dsl.module
  * - [AudioQueueFacade] is the shared [DefaultAudioQueueFacade] over the
  *   desktop queue manager — every play/enqueue/instant-mix button in the
  *   music section is real.
+ * - [PlaybackFocus] (ADR-0004 slice 2) is the REAL commonMain
+ *   [DefaultPlaybackFocus] over the in-process [DesktopFocusArbiter] twin
+ *   and the [DesktopAudioQueueManagerSurface] music adapter — cross-player
+ *   exclusivity (music vs book read-aloud) is arbitrated in-process on
+ *   desktop; the wasm graph keeps the Noop fallback (ADR decision 6).
  * - [AudioEffectsManager] is the desktop [DesktopAudioEffectsManager] (full
  *   state machine + mpv `af` DSP via the queue manager's engine); the
  *   concrete instance is wired into the queue manager so effect mutations
@@ -71,6 +79,25 @@ val desktopPlayerModule: Module = module {
         )
     }
 
+    // ── Cross-player exclusivity (PlaybackFocus, ADR-0004 slice 2) ─────────
+    // The desktop twin of androidCoreDataModule's focus block: the REAL
+    // commonMain module over the in-process arbiter (vacuous grants — there
+    // is no OS seat on desktop) and the music surface adapter. With this
+    // binding, PlayerBookKoinModule's `getOrNull() ?: NoopPlaybackFocus`
+    // fallback resolves a REAL module on desktop — claim-state publication
+    // goes live (wasm keeps the Noop fallback: fail-closed vacuous
+    // arbitration, ADR decision 6). The surface defers the manager via the
+    // same kotlin-Lazy cycle breaker the Android graph uses: the manager
+    // ctor-injects the PlaybackFocus single, the surface touches the manager
+    // only on the first pause command — long after construction.
+    single<FocusArbiter> { DesktopFocusArbiter() }
+    single<PlaybackFocus> {
+        DefaultPlaybackFocus(
+            arbiter = get(),
+            surfaces = listOf(DesktopAudioQueueManagerSurface(manager = lazy { get<DesktopAudioQueueManager>() })),
+        )
+    }
+
     single {
         DesktopAudioQueueManager(
             trackResolver = get(),
@@ -81,6 +108,7 @@ val desktopPlayerModule: Module = module {
             sleepTimerManager = get(),
             scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
             effectsManager = get(),
+            playbackFocus = get(),
             engineFactory = { MpvDesktopEngine(extraOptions = mapOf("vo" to "null")) },
         )
     }

@@ -1,6 +1,16 @@
 package com.raulshma.jellyplay.feature.book
 
+import com.raulshma.jellyplay.feature.book.epub.EpubAnnotationSpec
+import com.raulshma.jellyplay.feature.book.epub.EpubReaderHandle
 import com.raulshma.jellyplay.feature.book.epub.EpubSpeechParagraph
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -13,9 +23,29 @@ import kotlin.test.assertTrue
  * re-speaks), skip ±1 sentence (within and across paragraphs) with the
  * chapter-end handoff past the last sentence, finish vs stop, and the
  * stale-utterance guard (a late onDone from a replaced utterance can never
- * advance the loop). Value-fake engine, no mockk.
+ * advance the loop). Value-fake engine + recording host (the continuation's
+ * direct seam), no mockk.
  */
 class ReaderSpeechControllerTest {
+
+    /** Recording host fake: the chapter continuation's direct seam. */
+    private class FakeEpubHost : EpubReaderHandle {
+        val log = mutableListOf<String>()
+        override val viewerDownloadProgress: androidx.compose.runtime.State<Float?> =
+            androidx.compose.runtime.mutableStateOf<Float?>(null)
+        override fun next() { log.add("next") }
+        override fun prev() { log.add("prev") }
+        override fun goTo(href: String) { log.add("goTo:$href") }
+        override fun goToCfi(cfi: String) { log.add("goToCfi:$cfi") }
+        override fun setFlow(scrolled: Boolean) { log.add("setFlow:$scrolled") }
+        override fun applyAnnotations(entries: List<EpubAnnotationSpec>) { log.add("apply:${entries.size}") }
+        override fun addAnnotation(entry: EpubAnnotationSpec) { log.add("add:${entry.cfi}") }
+        override fun removeAnnotation(cfi: String) { log.add("remove:$cfi") }
+        override fun clearSelection() { log.add("clearSelection") }
+        override fun search(query: String, token: Int) { log.add("search:$query/$token") }
+        override fun requestSpeechContext(cfi: String?) { log.add("speechContext:$cfi") }
+        override fun setAutoScroll(enabled: Boolean, pxPerSec: Int) { log.add("autoScroll:$enabled/$pxPerSec") }
+    }
 
     private class FakeSpeechEngine : BookSpeechEngine {
         override val availability = kotlinx.coroutines.flow.MutableStateFlow(BookSpeechAvailability.AVAILABLE)
@@ -68,12 +98,13 @@ class ReaderSpeechControllerTest {
     @Test
     fun `loop speaks paragraphs in order then hands off at chapter end`() {
         val engine = FakeSpeechEngine()
+        val host = FakeEpubHost()
         var spoke = mutableListOf<Pair<Int, String>>()
-        var chapterEnds = 0
         val controller = ReaderSpeechController(
             engine = engine,
+            scope = CoroutineScope(UnconfinedTestDispatcher()),
+            host = { host },
             onSpeakParagraph = { index, cfi -> spoke.add(index to cfi) },
-            onChapterEnd = { chapterEnds++ },
             onFinished = {},
         )
 
@@ -88,9 +119,9 @@ class ReaderSpeechControllerTest {
         assertEquals(1, controller.state.value.spokenParagraphIndex)
 
         engine.complete()
-        // Paragraphs exhausted: chapter-end handoff, session stays live with
-        // no paragraph index.
-        assertEquals(1, chapterEnds)
+        // Paragraphs exhausted: the controller turns the page itself through
+        // the host seam, session stays live with no paragraph index.
+        assertEquals(1, host.log.count { it == "next" })
         assertTrue(controller.state.value.active)
         assertNull(controller.state.value.spokenParagraphIndex)
     }
@@ -100,8 +131,9 @@ class ReaderSpeechControllerTest {
         val engine = FakeSpeechEngine()
         val controller = ReaderSpeechController(
             engine = engine,
+            scope = CoroutineScope(UnconfinedTestDispatcher()),
+            host = { null },
             onSpeakParagraph = { _, _ -> },
-            onChapterEnd = {},
             onFinished = {},
         )
         controller.start(paragraphs("one", "two"))
@@ -119,8 +151,9 @@ class ReaderSpeechControllerTest {
         val engine = FakeSpeechEngine()
         val controller = ReaderSpeechController(
             engine = engine,
+            scope = CoroutineScope(UnconfinedTestDispatcher()),
+            host = { null },
             onSpeakParagraph = { _, _ -> },
-            onChapterEnd = {},
             onFinished = {},
         )
         controller.start(paragraphs("one", "two"))
@@ -138,8 +171,9 @@ class ReaderSpeechControllerTest {
         val engine = FakeSpeechEngine()
         val controller = ReaderSpeechController(
             engine = engine,
+            scope = CoroutineScope(UnconfinedTestDispatcher()),
+            host = { null },
             onSpeakParagraph = { _, _ -> },
-            onChapterEnd = {},
             onFinished = {},
         )
         controller.start(paragraphs("one", "two"))
@@ -162,11 +196,12 @@ class ReaderSpeechControllerTest {
     @Test
     fun `skip forward moves one paragraph and past the last hands off`() {
         val engine = FakeSpeechEngine()
-        var chapterEnds = 0
+        val host = FakeEpubHost()
         val controller = ReaderSpeechController(
             engine = engine,
+            scope = CoroutineScope(UnconfinedTestDispatcher()),
+            host = { host },
             onSpeakParagraph = { _, _ -> },
-            onChapterEnd = { chapterEnds++ },
             onFinished = {},
         )
         controller.start(paragraphs("one", "two", "three"))
@@ -178,8 +213,8 @@ class ReaderSpeechControllerTest {
         controller.skipForward()
         assertEquals(listOf("one", "two", "three"), engine.spoken)
 
-        controller.skipForward() // past the last → chapter end
-        assertEquals(1, chapterEnds)
+        controller.skipForward() // past the last → chapter end (the host turn)
+        assertEquals(1, host.log.count { it == "next" })
         assertNull(controller.state.value.spokenParagraphIndex)
     }
 
@@ -188,8 +223,9 @@ class ReaderSpeechControllerTest {
         val engine = FakeSpeechEngine()
         val controller = ReaderSpeechController(
             engine = engine,
+            scope = CoroutineScope(UnconfinedTestDispatcher()),
+            host = { null },
             onSpeakParagraph = { _, _ -> },
-            onChapterEnd = {},
             onFinished = {},
         )
         controller.start(paragraphs("one", "two"))
@@ -207,8 +243,9 @@ class ReaderSpeechControllerTest {
         var finished = 0
         val controller = ReaderSpeechController(
             engine = engine,
+            scope = CoroutineScope(UnconfinedTestDispatcher()),
+            host = { null },
             onSpeakParagraph = { _, _ -> },
-            onChapterEnd = {},
             onFinished = { finished++ },
         )
         controller.start(paragraphs("one"))
@@ -228,8 +265,9 @@ class ReaderSpeechControllerTest {
         var finished = 0
         val controller = ReaderSpeechController(
             engine = engine,
+            scope = CoroutineScope(UnconfinedTestDispatcher()),
+            host = { null },
             onSpeakParagraph = { _, _ -> },
-            onChapterEnd = {},
             onFinished = { finished++ },
             onError = { errors++ },
         )
@@ -243,31 +281,35 @@ class ReaderSpeechControllerTest {
     @Test
     fun `empty chapter takes the chapter-end path immediately`() {
         val engine = FakeSpeechEngine()
-        var chapterEnds = 0
+        val host = FakeEpubHost()
         val controller = ReaderSpeechController(
             engine = engine,
+            scope = CoroutineScope(UnconfinedTestDispatcher()),
+            host = { host },
             onSpeakParagraph = { _, _ -> },
-            onChapterEnd = { chapterEnds++ },
             onFinished = {},
         )
         controller.start(paragraphs())
         assertTrue(engine.spoken.isEmpty())
-        assertEquals(1, chapterEnds)
+        assertEquals(1, host.log.count { it == "next" })
         assertTrue(controller.state.value.active)
     }
 
     @Test
-    fun `await context marks the session live without paragraphs`() {
+    fun `await context marks the session live and asks the host for the chapter`() {
         val engine = FakeSpeechEngine()
+        val host = FakeEpubHost()
         val controller = ReaderSpeechController(
             engine = engine,
+            scope = CoroutineScope(UnconfinedTestDispatcher()),
+            host = { host },
             onSpeakParagraph = { _, _ -> },
-            onChapterEnd = {},
             onFinished = {},
         )
-        controller.awaitContext()
+        controller.awaitContext(cfi = "epubcfi(/6/4!/4/2)")
         assertEquals(ReaderSpeechState(active = true), controller.state.value)
         assertTrue(engine.spoken.isEmpty())
+        assertEquals(listOf("speechContext:epubcfi(/6/4!/4/2)"), host.log)
     }
 
     @Test
@@ -276,8 +318,9 @@ class ReaderSpeechControllerTest {
         var spoke = mutableListOf<Pair<Int, String>>()
         val controller = ReaderSpeechController(
             engine = engine,
+            scope = CoroutineScope(UnconfinedTestDispatcher()),
+            host = { null },
             onSpeakParagraph = { index, cfi -> spoke.add(index to cfi) },
-            onChapterEnd = {},
             onFinished = {},
         )
         controller.start(paragraphs("First one. Second two! Third three?"))
@@ -298,8 +341,9 @@ class ReaderSpeechControllerTest {
         val engine = FakeSpeechEngine()
         val controller = ReaderSpeechController(
             engine = engine,
+            scope = CoroutineScope(UnconfinedTestDispatcher()),
+            host = { null },
             onSpeakParagraph = { _, _ -> },
-            onChapterEnd = {},
             onFinished = {},
         )
         controller.start(paragraphs("First one. Second two. Third three."))
@@ -327,5 +371,163 @@ class ReaderSpeechControllerTest {
             splitSentences("Mr. Brown arrived."),
         )
         assertEquals(emptyList(), splitSentences("   "))
+    }
+}
+
+/**
+ * Continuation-protocol pins at the controller interface (the guards the VM
+ * harness used to be the only way to reach): relocation release, the
+ * book-end identity guard, the empty-chapter percent-stall guard, and the
+ * timeout that re-requests when a book-end turn never relocates.
+ */
+class ReaderSpeechContinuationTest {
+
+    private class FakeSpeechEngine : BookSpeechEngine {
+        override val availability = MutableStateFlow(BookSpeechAvailability.AVAILABLE)
+        val spoken = mutableListOf<String>()
+        private var pendingDone: (() -> Unit)? = null
+        override fun configure(ratePercent: Int, pitchPercent: Int) {}
+        override fun speak(text: String, onDone: () -> Unit) {
+            spoken.add(text)
+            pendingDone = onDone
+        }
+        override fun stop() { pendingDone = null }
+        override fun shutdown() {}
+        fun complete() {
+            val done = pendingDone
+            pendingDone = null
+            done?.invoke()
+        }
+    }
+
+    /** Minimal host fake: records the continuation's two direct host touches. */
+    private class RecordingHost : EpubReaderHandle {
+        var turns = 0
+            private set
+        val contextRequests = mutableListOf<String?>()
+        override val viewerDownloadProgress: androidx.compose.runtime.State<Float?> =
+            androidx.compose.runtime.mutableStateOf<Float?>(null)
+        override fun next() { turns++ }
+        override fun prev() {}
+        override fun goTo(href: String) {}
+        override fun goToCfi(cfi: String) {}
+        override fun setFlow(scrolled: Boolean) {}
+        override fun applyAnnotations(entries: List<EpubAnnotationSpec>) {}
+        override fun addAnnotation(entry: EpubAnnotationSpec) {}
+        override fun removeAnnotation(cfi: String) {}
+        override fun clearSelection() {}
+        override fun search(query: String, token: Int) {}
+        override fun requestSpeechContext(cfi: String?) { contextRequests.add(cfi) }
+        override fun setAutoScroll(enabled: Boolean, pxPerSec: Int) {}
+    }
+
+    private fun paragraphs(vararg texts: String): List<EpubSpeechParagraph> =
+        texts.mapIndexed { index, text -> EpubSpeechParagraph(cfi = "epubcfi(/6/8!/4/$index)", text = text) }
+
+    @Test
+    fun `relocation releases the advance wait and re-requests the current chapter`() = runTest {
+        val engine = FakeSpeechEngine()
+        val host = RecordingHost()
+        val controller = ReaderSpeechController(
+            engine = engine,
+            scope = backgroundScope,
+            host = { host },
+            onSpeakParagraph = { _, _ -> },
+        )
+        // Non-null start cfi so the INITIAL context request is distinguishable
+        // from the null re-requests the continuation protocol issues.
+        controller.awaitContext("epubcfi(/start)")
+        controller.onSpeechContext(paragraphs("one"), currentPercent = 0.1)
+        advanceUntilIdle()
+        engine.complete() // chapter end → the direct host turn + armed wait
+        assertEquals(1, host.turns)
+
+        // Relocation arrives BEFORE the timeout: exactly one re-request (the
+        // trailing null), and the timeout never contributes a second one.
+        controller.onRelocated()
+        advanceTimeBy(10_000)
+        advanceUntilIdle()
+        assertEquals(listOf("epubcfi(/start)", null), host.contextRequests)
+    }
+
+    @Test
+    fun `timeout re-requests when a book-end turn never relocates`() = runTest {
+        val engine = FakeSpeechEngine()
+        val host = RecordingHost()
+        val controller = ReaderSpeechController(
+            engine = engine,
+            scope = backgroundScope,
+            host = { host },
+            onSpeakParagraph = { _, _ -> },
+        )
+        // Non-null start cfi: the initial request must not pollute the
+        // null-re-request counts below.
+        controller.awaitContext("epubcfi(/start)")
+        controller.onSpeechContext(paragraphs("one"), currentPercent = 0.1)
+        advanceUntilIdle()
+        engine.complete()
+
+        advanceTimeBy(1_499)
+        runCurrent()
+        assertEquals(0, host.contextRequests.count { it == null }, "the wait is bounded but not eager")
+        advanceTimeBy(1)
+        runCurrent()
+        assertEquals(1, host.contextRequests.count { it == null }, "the timeout re-requests at 1500 ms")
+    }
+
+    @Test
+    fun `same-chapter context after a turn finishes the session`() = runTest {
+        val engine = FakeSpeechEngine()
+        val controller = ReaderSpeechController(
+            engine = engine,
+            scope = backgroundScope,
+            host = { null },
+            onSpeakParagraph = { _, _ -> },
+        )
+        controller.awaitContext()
+        val chapter = paragraphs("one")
+        controller.onSpeechContext(chapter, currentPercent = 0.1)
+        advanceUntilIdle()
+        engine.complete() // chapter end; the turn never relocates
+        advanceTimeBy(2_000)
+        advanceUntilIdle()
+
+        // The turn's context request comes back with the SAME chapter — the
+        // identity guard finishes instead of looping.
+        controller.onSpeechContext(chapter, currentPercent = 0.2)
+        assertFalse(controller.state.value.active)
+    }
+
+    @Test
+    fun `empty chapter with a stalled percent finishes instead of looping`() = runTest {
+        val engine = FakeSpeechEngine()
+        val controller = ReaderSpeechController(
+            engine = engine,
+            scope = backgroundScope,
+            host = { null },
+            onSpeakParagraph = { _, _ -> },
+        )
+        controller.awaitContext()
+        controller.onSpeechContext(paragraphs("one"), currentPercent = 0.5)
+        advanceUntilIdle()
+        controller.reportPercent(0.5) // the position is current AT the turn (the VM reports every event)
+        engine.complete()
+        advanceTimeBy(2_000)
+        advanceUntilIdle()
+
+        // Empty context AND the percent never moved since the turn: done.
+        controller.onSpeechContext(emptyList(), currentPercent = 0.5)
+        assertFalse(controller.state.value.active)
+
+        // An empty context whose percent DID move keeps advancing instead.
+        controller.awaitContext()
+        controller.onSpeechContext(paragraphs("two"), currentPercent = 0.7)
+        advanceUntilIdle()
+        controller.reportPercent(0.7)
+        engine.complete()
+        advanceTimeBy(2_000)
+        advanceUntilIdle()
+        controller.onSpeechContext(emptyList(), currentPercent = 0.8)
+        assertTrue(controller.state.value.active)
     }
 }

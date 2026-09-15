@@ -17,6 +17,8 @@ import com.raulshma.jellyplay.core.model.BookProgressPolicy
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.feature.book.epub.EpubAnnotationSpec
+import com.raulshma.jellyplay.feature.book.epub.EpubReaderHandle
 import androidx.compose.ui.graphics.ImageBitmap
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -31,12 +33,10 @@ import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
@@ -62,6 +62,7 @@ class BookReaderViewModelTest {
     private lateinit var mediaRepository: MediaRepository
     private lateinit var playbackRepository: PlaybackRepository
     private lateinit var readerStore: ReaderStore
+    private lateinit var readerPreferences: ReaderPreferences
     private lateinit var annotationsRepository: FakeReaderAnnotationsRepository
     private lateinit var contentResolver: FakeBookContentResolver
     private val readerSlice = MutableStateFlow(ReaderSlice())
@@ -95,7 +96,13 @@ class BookReaderViewModelTest {
         coEvery { readerStore.setReadingSpeedWpm(any()) } returns Unit
         coEvery { readerStore.setSpeechRate(any()) } returns Unit
         coEvery { readerStore.setSpeechPitch(any()) } returns Unit
+        coEvery { readerStore.setAutoScrollSpeedPxPerSec(any()) } returns Unit
+        coEvery { readerStore.setReadingDirection(any(), any()) } returns Unit
         every { readerStore.perBookAppearance(any()) } returns null
+        readerPreferences = ReaderPreferences(
+            store = readerStore,
+            scope = CoroutineScope(StandardTestDispatcher(mainDispatcher.scheduler)),
+        )
     }
 
     @AfterTest
@@ -106,15 +113,18 @@ class BookReaderViewModelTest {
     private fun viewModel(
         documentOpener: BookDocumentOpener = FakeBookDocumentOpener(pageCount = 3),
         speechEngine: BookSpeechEngine = NoopBookSpeechEngine,
+        playbackFocus: com.raulshma.jellyplay.core.data.playback.focus.PlaybackFocus =
+            com.raulshma.jellyplay.core.data.playback.focus.NoopPlaybackFocus,
     ): BookReaderViewModel = BookReaderViewModel(
         mediaRepository = mediaRepository,
         playbackRepository = playbackRepository,
-        readerStore = readerStore,
+        preferences = readerPreferences,
         annotationsRepository = annotationsRepository,
         contentResolver = contentResolver,
         documentOpener = documentOpener,
         pdfOutlineParser = PdfOutlineParser(),
         speechEngine = speechEngine,
+        playbackFocus = playbackFocus,
         flushScope = CoroutineScope(UnconfinedTestDispatcher(mainDispatcher.scheduler)),
     )
 
@@ -170,12 +180,14 @@ class BookReaderViewModelTest {
         vm.load("item-1")
         advanceUntilIdle()
 
-        vm.onEpubRelocated(
-            com.raulshma.jellyplay.feature.book.epub.EpubRelocation(
-                percent = 0.5,
-                chapterLabel = "Chapter 2",
-                remainingPages = 3,
-                cfi = "epubcfi(/6/8!/4/2)",
+        vm.onEpubEvent(
+            com.raulshma.jellyplay.feature.book.epub.EpubEvent.Relocated(
+                com.raulshma.jellyplay.feature.book.epub.EpubRelocation(
+                    percent = 0.5,
+                    chapterLabel = "Chapter 2",
+                    remainingPages = 3,
+                    cfi = "epubcfi(/6/8!/4/2)",
+                ),
             ),
         )
         advanceUntilIdle()
@@ -212,8 +224,10 @@ class BookReaderViewModelTest {
         val vm = viewModel()
         vm.load("item-1")
         advanceUntilIdle()
-        vm.onEpubRelocated(
-            com.raulshma.jellyplay.feature.book.epub.EpubRelocation(0.5, "Chapter 1", null, cfi = null),
+        vm.onEpubEvent(
+            com.raulshma.jellyplay.feature.book.epub.EpubEvent.Relocated(
+                com.raulshma.jellyplay.feature.book.epub.EpubRelocation(0.5, "Chapter 1", null, cfi = null),
+            ),
         )
         advanceUntilIdle()
 
@@ -302,12 +316,19 @@ class BookReaderViewModelTest {
         val vm = viewModel()
         vm.load("item-1")
         advanceUntilIdle()
-        vm.onEpubRelocated(
-            com.raulshma.jellyplay.feature.book.epub.EpubRelocation(0.25, "One", null, cfi = "epubcfi(/6/4)"),
+        vm.onEpubEvent(
+            com.raulshma.jellyplay.feature.book.epub.EpubEvent.Relocated(
+                com.raulshma.jellyplay.feature.book.epub.EpubRelocation(0.25, "One", null, cfi = "epubcfi(/6/4)"),
+            ),
         )
         advanceUntilIdle()
 
-        vm.onEpubSelection("epubcfi(/6/4!/4/2:0..28)", "the chosen words")
+        vm.onEpubEvent(
+            com.raulshma.jellyplay.feature.book.epub.EpubEvent.Selected(
+                "epubcfi(/6/4!/4/2:0..28)",
+                "the chosen words",
+            ),
+        )
         assertEquals("the chosen words", vm.selection.value?.text)
         assertEquals(null, vm.annotationAtSelection())
 
@@ -350,7 +371,12 @@ class BookReaderViewModelTest {
         vm.load("item-1")
         advanceUntilIdle()
 
-        vm.onEpubSelection("epubcfi(/6/4!/4/2:0..28)", "old")
+        vm.onEpubEvent(
+            com.raulshma.jellyplay.feature.book.epub.EpubEvent.Selected(
+                "epubcfi(/6/4!/4/2:0..28)",
+                "old",
+            ),
+        )
         assertEquals(9L, vm.annotationAtSelection()?.id)
     }
 
@@ -379,13 +405,67 @@ class BookReaderViewModelTest {
         val vm = viewModel()
         vm.load("item-1")
         advanceUntilIdle()
-        vm.onEpubRelocated(
-            com.raulshma.jellyplay.feature.book.epub.EpubRelocation(0.4, "Two", null, cfi = "epubcfi(/6/20)"),
+        vm.onEpubEvent(
+            com.raulshma.jellyplay.feature.book.epub.EpubEvent.Relocated(
+                com.raulshma.jellyplay.feature.book.epub.EpubRelocation(0.4, "Two", null, cfi = "epubcfi(/6/20)"),
+            ),
         )
         advanceTimeBy(1_000)
         advanceUntilIdle()
 
         coVerify { readerStore.setLastCfi("item-1", "epubcfi(/6/20)") }
+    }
+
+    // ------------------------------------------------------------------
+    // The single position fold (both reflowable position event kinds)
+    // ------------------------------------------------------------------
+
+    @Test
+    fun `location flow carries the boot resume percent before any event`() = runTest(mainDispatcher) {
+        stubDetail("novel.epub", positionTicks = BookProgressPolicy.percentToTicks(0.3))
+
+        val vm = viewModel()
+        vm.load("item-1")
+        advanceUntilIdle()
+
+        // Boot carrier: seeded at open, no percent/relocated event needed.
+        val location = vm.currentEpubLocation.value
+        assertEquals(0.3, location?.percent)
+        assertEquals("", location?.chapterLabel)
+        assertNull(location?.cfi)
+    }
+
+    @Test
+    fun `percent and relocated events ride one report path`() = runTest(mainDispatcher) {
+        stubDetail("novel.epub", positionTicks = 0L)
+
+        val vm = viewModel()
+        vm.load("item-1")
+        advanceUntilIdle()
+
+        // The bare percent event folds through the same clamp + location +
+        // debounced-report sequence a relocation does.
+        vm.onEpubEvent(com.raulshma.jellyplay.feature.book.epub.EpubEvent.Percent(0.4))
+        advanceTimeBy(1_000)
+        advanceUntilIdle()
+        coVerify(exactly = 1) {
+            playbackRepository.reportBookProgress("item-1", BookProgressPolicy.percentToTicks(0.4), any())
+        }
+        assertEquals(0.4, vm.currentEpubLocation.value?.percent)
+
+        vm.onEpubEvent(
+            com.raulshma.jellyplay.feature.book.epub.EpubEvent.Relocated(
+                com.raulshma.jellyplay.feature.book.epub.EpubRelocation(0.6, "Two", 1, cfi = "epubcfi(/6/8)"),
+            ),
+        )
+        advanceTimeBy(1_000)
+        advanceUntilIdle()
+        coVerify(exactly = 1) {
+            playbackRepository.reportBookProgress("item-1", BookProgressPolicy.percentToTicks(0.6), any())
+        }
+        coVerify { readerStore.setLastCfi("item-1", "epubcfi(/6/8)") }
+        assertEquals(0.6, vm.currentEpubLocation.value?.percent)
+        assertEquals("Two", vm.currentEpubLocation.value?.chapterLabel)
     }
 
     // ------------------------------------------------------------------
@@ -399,20 +479,21 @@ class BookReaderViewModelTest {
         vm.load("item-1")
         advanceUntilIdle()
 
-        vm.setFontFamily(ReaderFontFamily.SERIF)
-        vm.setLineHeightPct(150)
-        vm.setMarginPct(20)
-        vm.setJustify(true)
-        vm.setScrollMode(true)
-        vm.setBrightnessPct(40)
-        vm.setVolumeKeyPaging(true)
-        vm.setAnimatedPageTurns(false)
-        vm.setReadingSpeedWpm(300)
+        val prefs = vm.preferences
+        prefs.setFontFamily(ReaderFontFamily.SERIF)
+        prefs.setLineHeightPct(150)
+        prefs.setMarginPct(20)
+        prefs.setJustify(true)
+        prefs.setScrollMode(true)
+        prefs.setBrightnessPct(40)
+        prefs.setVolumeKeyPaging(true)
+        prefs.setAnimatedPageTurns(false)
+        prefs.setReadingSpeedWpm(300)
         // Out-of-band inputs clamp into the store bands.
-        vm.setLineHeightPct(999)
-        vm.setMarginPct(-5)
-        vm.setBrightnessPct(120)
-        vm.setReadingSpeedWpm(5)
+        prefs.setLineHeightPct(999)
+        prefs.setMarginPct(-5)
+        prefs.setBrightnessPct(120)
+        prefs.setReadingSpeedWpm(5)
         advanceUntilIdle()
 
         coVerify { readerStore.setFontFamily(ReaderFontFamily.SERIF) }
@@ -443,8 +524,8 @@ class BookReaderViewModelTest {
         vm.load("item-1")
         advanceUntilIdle()
 
-        vm.setReaderTheme(ReaderTheme.SEPIA)
-        vm.adjustReaderFontSize(+2)
+        vm.preferences.setTheme(ReaderTheme.SEPIA)
+        vm.preferences.adjustFontSize(+2)
         advanceUntilIdle()
 
         // Per-book mode: both writes land in the override; the globals stay untouched.
@@ -463,8 +544,8 @@ class BookReaderViewModelTest {
         vm.load("item-1")
         advanceUntilIdle()
 
-        vm.setReaderTheme(ReaderTheme.LIGHT)
-        vm.adjustReaderFontSize(+1)
+        vm.preferences.setTheme(ReaderTheme.LIGHT)
+        vm.preferences.adjustFontSize(+1)
         advanceUntilIdle()
 
         coVerify { readerStore.setReaderTheme(ReaderTheme.LIGHT) }
@@ -485,9 +566,10 @@ class BookReaderViewModelTest {
         vm.load("item-1")
         advanceUntilIdle()
 
-        assertEquals(ReaderTheme.SEPIA, vm.effectiveReaderTheme.value)
-        assertEquals(22, vm.effectiveReaderFontSizePx.value)
-        assertEquals(PerBookAppearance(theme = ReaderTheme.SEPIA, fontSizePx = 22), vm.perBookAppearance.value)
+        val snap = vm.prefs.value
+        assertEquals(ReaderTheme.SEPIA, snap.effective.theme)
+        assertEquals(22, snap.effective.fontSizePx)
+        assertEquals(PerBookAppearance(theme = ReaderTheme.SEPIA, fontSizePx = 22), snap.perBook)
     }
 
     @Test
@@ -503,7 +585,7 @@ class BookReaderViewModelTest {
         vm.load("item-1")
         advanceUntilIdle()
 
-        vm.setUsePerBookAppearance(false)
+        vm.preferences.setUsePerBookAppearance(false)
         advanceUntilIdle()
 
         // The in-session look survives the switch: effective → globals, then the override clears.
@@ -521,7 +603,7 @@ class BookReaderViewModelTest {
         vm.load("item-1")
         advanceUntilIdle()
 
-        vm.setUsePerBookAppearance(true)
+        vm.preferences.setUsePerBookAppearance(true)
         advanceUntilIdle()
 
         coVerify {
@@ -540,13 +622,16 @@ class BookReaderViewModelTest {
             stubDetail("novel.epub", positionTicks = 0L)
             val engine = FakeBookSpeechEngine()
             val vm = viewModel(speechEngine = engine)
-            val commands = mutableListOf<ReaderHostCommand>()
-            val commandsJob = launch(start = CoroutineStart.UNDISPATCHED) { vm.hostCommands.collect { commands.add(it) } }
+            val host = FakeEpubHost()
+            val port = FakeReaderSession(host)
+            vm.attachReaderSession(port)
             vm.load("item-1")
             advanceUntilIdle()
-            vm.onEpubRelocated(
-                com.raulshma.jellyplay.feature.book.epub.EpubRelocation(
-                    0.1, "One", null, cfi = "epubcfi(/6/4!/4/2)",
+            vm.onEpubEvent(
+                com.raulshma.jellyplay.feature.book.epub.EpubEvent.Relocated(
+                    com.raulshma.jellyplay.feature.book.epub.EpubRelocation(
+                        0.1, "One", null, cfi = "epubcfi(/6/4!/4/2)",
+                    ),
                 ),
             )
             advanceUntilIdle()
@@ -554,40 +639,44 @@ class BookReaderViewModelTest {
             vm.startReadAloud()
             advanceUntilIdle()
             // Engine configured from the persisted defaults; the context
-            // request anchors at the relocated CFI.
+            // request anchors at the relocated CFI, straight through the
+            // speech controller's host seam (no command channel).
             assertEquals(100, engine.configuredRate)
             assertEquals(100, engine.configuredPitch)
-            val request = commands.filterIsInstance<ReaderHostCommand.RequestSpeechContext>().single()
-            assertEquals("epubcfi(/6/4!/4/2)", request.cfi)
-            assertTrue(commands.none { it is ReaderHostCommand.FollowSpeech })
+            assertEquals(listOf("speechContext:epubcfi(/6/4!/4/2)"), host.log)
+            assertTrue(port.follows.isEmpty())
 
             val chapterOne = listOf(
                 com.raulshma.jellyplay.feature.book.epub.EpubSpeechParagraph("epubcfi(/6/4!/4/10)", "first"),
                 com.raulshma.jellyplay.feature.book.epub.EpubSpeechParagraph("epubcfi(/6/4!/4/11)", "second"),
             )
-            vm.onSpeechContext(chapterOne)
+            vm.onEpubEvent(
+                com.raulshma.jellyplay.feature.book.epub.EpubEvent.SpeechContext(chapterOne),
+            )
             advanceUntilIdle()
             assertEquals(listOf("first"), engine.spoken)
-            assertEquals(
-                "epubcfi(/6/4!/4/10)",
-                commands.filterIsInstance<ReaderHostCommand.FollowSpeech>().last().cfi,
-            )
+            assertEquals("epubcfi(/6/4!/4/10)", port.follows.single())
 
             engine.complete()
             assertEquals(listOf("first", "second"), engine.spoken)
             engine.complete()
             advanceUntilIdle()
-            // Chapter end: page turn command, then the context re-request
-            // rides the turn's relocation (null = current chapter).
-            assertTrue(commands.any { it is ReaderHostCommand.AdvanceSpeechChapter })
-            vm.onEpubRelocated(
-                com.raulshma.jellyplay.feature.book.epub.EpubRelocation(0.2, "Two", null, cfi = "epubcfi(/6/6)"),
+            // Chapter end: the controller turns the host page itself, then
+            // the context re-request rides the turn's relocation
+            // (null = current chapter).
+            assertTrue(host.log.any { it == "next" })
+            vm.onEpubEvent(
+                com.raulshma.jellyplay.feature.book.epub.EpubEvent.Relocated(
+                    com.raulshma.jellyplay.feature.book.epub.EpubRelocation(0.2, "Two", null, cfi = "epubcfi(/6/6)"),
+                ),
             )
             advanceUntilIdle()
-            assertNull(commands.filterIsInstance<ReaderHostCommand.RequestSpeechContext>().last().cfi)
+            assertEquals("speechContext:null", host.log.last { it.startsWith("speechContext:") })
 
-            vm.onSpeechContext(
-                listOf(com.raulshma.jellyplay.feature.book.epub.EpubSpeechParagraph("epubcfi(/6/6!/4/1)", "next chapter")),
+            vm.onEpubEvent(
+                com.raulshma.jellyplay.feature.book.epub.EpubEvent.SpeechContext(
+                    listOf(com.raulshma.jellyplay.feature.book.epub.EpubSpeechParagraph("epubcfi(/6/6!/4/1)", "next chapter")),
+                ),
             )
             advanceUntilIdle()
             assertEquals(listOf("first", "second", "next chapter"), engine.spoken)
@@ -599,28 +688,31 @@ class BookReaderViewModelTest {
             advanceUntilIdle()
             advanceTimeBy(2_000)
             advanceUntilIdle()
-            vm.onSpeechContext(
-                listOf(com.raulshma.jellyplay.feature.book.epub.EpubSpeechParagraph("epubcfi(/6/6!/4/1)", "next chapter")),
+            vm.onEpubEvent(
+                com.raulshma.jellyplay.feature.book.epub.EpubEvent.SpeechContext(
+                    listOf(com.raulshma.jellyplay.feature.book.epub.EpubSpeechParagraph("epubcfi(/6/6!/4/1)", "next chapter")),
+                ),
             )
             advanceUntilIdle()
             assertFalse(vm.speechState.value.active)
-            commandsJob.cancel()
         }
 
     @Test
     fun `start read aloud is a no-op without an engine`() = runTest(mainDispatcher) {
         stubDetail("novel.epub", positionTicks = 0L)
         val vm = viewModel() // Noop engine: UNAVAILABLE
-        val commands = mutableListOf<ReaderHostCommand>()
-        val commandsJob = launch(start = CoroutineStart.UNDISPATCHED) { vm.hostCommands.collect { commands.add(it) } }
+        val host = FakeEpubHost()
+        val port = FakeReaderSession(host)
+        vm.attachReaderSession(port)
         vm.load("item-1")
         advanceUntilIdle()
 
         vm.startReadAloud()
         advanceUntilIdle()
         assertFalse(vm.speechState.value.active)
-        assertTrue(commands.isEmpty())
-        commandsJob.cancel()
+        assertTrue(host.log.isEmpty())
+        assertTrue(port.follows.isEmpty())
+        assertEquals(0, port.sleepFires)
     }
 
     @Test
@@ -650,17 +742,22 @@ class BookReaderViewModelTest {
         stubDetail("novel.epub", positionTicks = 0L)
         val engine = FakeBookSpeechEngine()
         val vm = viewModel(speechEngine = engine)
-        val commands = mutableListOf<ReaderHostCommand>()
-        val commandsJob = launch(start = CoroutineStart.UNDISPATCHED) { vm.hostCommands.collect { commands.add(it) } }
+        val host = FakeEpubHost()
+        val port = FakeReaderSession(host)
+        vm.attachReaderSession(port)
         vm.load("item-1")
         advanceUntilIdle()
-        vm.onEpubRelocated(
-            com.raulshma.jellyplay.feature.book.epub.EpubRelocation(0.1, "One", null, cfi = "epubcfi(/6/4)"),
+        vm.onEpubEvent(
+            com.raulshma.jellyplay.feature.book.epub.EpubEvent.Relocated(
+                com.raulshma.jellyplay.feature.book.epub.EpubRelocation(0.1, "One", null, cfi = "epubcfi(/6/4)"),
+            ),
         )
         vm.startReadAloud()
         advanceUntilIdle()
-        vm.onSpeechContext(
-            listOf(com.raulshma.jellyplay.feature.book.epub.EpubSpeechParagraph("epubcfi(/6/4!/4/1)", "para")),
+        vm.onEpubEvent(
+            com.raulshma.jellyplay.feature.book.epub.EpubEvent.SpeechContext(
+                listOf(com.raulshma.jellyplay.feature.book.epub.EpubSpeechParagraph("epubcfi(/6/4!/4/1)", "para")),
+            ),
         )
         advanceUntilIdle()
         assertEquals(listOf("para"), engine.spoken)
@@ -668,23 +765,64 @@ class BookReaderViewModelTest {
         vm.startSleepTimer(ReaderSleepOption.EndOfChapter)
         assertTrue(vm.sleepTimerState.value.running)
 
-        vm.onEpubRelocated(
-            com.raulshma.jellyplay.feature.book.epub.EpubRelocation(0.2, "Two", null, cfi = "epubcfi(/6/6)"),
+        vm.onEpubEvent(
+            com.raulshma.jellyplay.feature.book.epub.EpubEvent.Relocated(
+                com.raulshma.jellyplay.feature.book.epub.EpubRelocation(0.2, "Two", null, cfi = "epubcfi(/6/6)"),
+            ),
         )
         advanceUntilIdle()
         assertFalse(vm.sleepTimerState.value.running)
         assertFalse(vm.speechState.value.active)
-        assertTrue(commands.any { it is ReaderHostCommand.SleepTimerFired })
+        assertEquals(1, port.sleepFires, "the session's auto-scroll stop was announced")
         assertTrue(engine.stopCount > 0)
-        commandsJob.cancel()
+    }
+
+    @Test
+    fun `read aloud claims the focus floor and releases it on stop`() = runTest(mainDispatcher) {
+        stubDetail("novel.epub", positionTicks = 0L)
+        val engine = FakeBookSpeechEngine()
+        val claims = mutableListOf<String>()
+        val focus = object : com.raulshma.jellyplay.core.data.playback.focus.PlaybackFocus {
+            override val claimState =
+                kotlinx.coroutines.flow.MutableStateFlow<com.raulshma.jellyplay.core.data.playback.focus.FocusClaimState>(
+                    com.raulshma.jellyplay.core.data.playback.focus.FocusClaimState.Idle,
+                )
+            override fun acquire(
+                claimant: com.raulshma.jellyplay.core.data.playback.focus.PlaybackSurfaceId,
+            ) = claims.add("acquire:$claimant").let {
+                com.raulshma.jellyplay.core.data.playback.focus.FocusOutcome.Granted
+            }
+            override fun release(
+                claimant: com.raulshma.jellyplay.core.data.playback.focus.PlaybackSurfaceId,
+            ) {
+                claims.add("release:$claimant")
+            }
+        }
+        val vm = viewModel(speechEngine = engine, playbackFocus = focus)
+        vm.load("item-1")
+        advanceUntilIdle()
+        vm.onEpubEvent(
+            com.raulshma.jellyplay.feature.book.epub.EpubEvent.Relocated(
+                com.raulshma.jellyplay.feature.book.epub.EpubRelocation(0.1, "One", null, cfi = "epubcfi(/6/4)"),
+            ),
+        )
+        advanceUntilIdle()
+
+        vm.startReadAloud()
+        advanceUntilIdle()
+        assertTrue(claims.contains("acquire:READ_ALOUD"), "the floor is claimed before any speech")
+
+        vm.stopReadAloud()
+        advanceUntilIdle()
+        assertTrue(claims.contains("release:READ_ALOUD"), "the floor is released with the session")
     }
 
     @Test
     fun `timed sleep timer fires after the countdown`() = runTest(mainDispatcher) {
         stubDetail("novel.epub", positionTicks = 0L)
         val vm = viewModel()
-        val commands = mutableListOf<ReaderHostCommand>()
-        val commandsJob = launch(start = CoroutineStart.UNDISPATCHED) { vm.hostCommands.collect { commands.add(it) } }
+        val port = FakeReaderSession(null)
+        vm.attachReaderSession(port)
         vm.load("item-1")
         advanceUntilIdle()
 
@@ -693,8 +831,7 @@ class BookReaderViewModelTest {
         advanceTimeBy(5 * 60_000 + 1_000)
         advanceUntilIdle()
         assertFalse(vm.sleepTimerState.value.running)
-        assertTrue(commands.any { it is ReaderHostCommand.SleepTimerFired })
-        commandsJob.cancel()
+        assertEquals(1, port.sleepFires)
     }
 }
 
@@ -802,6 +939,35 @@ private class FakeBookContentResolver : BookContentResolver {
         accessToken: String?,
         onProgress: (BookDownloadProgress) -> Unit,
     ): ResolvedBook = ResolvedBook.ReaderCache("cache/$fileName".toPath(), downloadedNow = false)
+}
+
+/** Recording host: the speech continuation's direct seam through the session port. */
+private class FakeEpubHost : EpubReaderHandle {
+    val log = mutableListOf<String>()
+    override val viewerDownloadProgress: androidx.compose.runtime.State<Float?> =
+        androidx.compose.runtime.mutableStateOf<Float?>(null)
+    override fun next() { log.add("next") }
+    override fun prev() { log.add("prev") }
+    override fun goTo(href: String) { log.add("goTo:$href") }
+    override fun goToCfi(cfi: String) { log.add("goToCfi:$cfi") }
+    override fun setFlow(scrolled: Boolean) { log.add("setFlow:$scrolled") }
+    override fun applyAnnotations(entries: List<EpubAnnotationSpec>) { log.add("apply:${entries.size}") }
+    override fun addAnnotation(entry: EpubAnnotationSpec) { log.add("add:${entry.cfi}") }
+    override fun removeAnnotation(cfi: String) { log.add("remove:$cfi") }
+    override fun clearSelection() { log.add("clearSelection") }
+    override fun search(query: String, token: Int) { log.add("search:$query/$token") }
+    override fun requestSpeechContext(cfi: String?) { log.add("speechContext:$cfi") }
+    override fun setAutoScroll(enabled: Boolean, pxPerSec: Int) { log.add("autoScroll:$enabled/$pxPerSec") }
+}
+
+/** Recording session port: the VM's window onto the reflowable session (host + hooks). */
+private class FakeReaderSession(
+    override val host: EpubReaderHandle?,
+) : ReaderSessionPort {
+    val follows = mutableListOf<String>()
+    var sleepFires = 0
+    override fun followSpeech(cfi: String) { follows.add(cfi) }
+    override fun sleepTimerFired() { sleepFires++ }
 }
 
 private class FakeBookDocumentOpener(private val pageCount: Int) : BookDocumentOpener {

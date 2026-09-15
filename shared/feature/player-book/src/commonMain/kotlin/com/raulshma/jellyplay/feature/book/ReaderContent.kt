@@ -28,6 +28,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -64,11 +65,7 @@ import com.raulshma.jellyplay.feature.book.epub.EpubAnnotationColor
 import com.raulshma.jellyplay.feature.book.epub.EpubAnnotationSpec
 import com.raulshma.jellyplay.feature.book.epub.EpubAnnotationStyle
 import com.raulshma.jellyplay.feature.book.epub.EpubAppearance
-import com.raulshma.jellyplay.feature.book.epub.EpubReaderCallbacks
 import com.raulshma.jellyplay.feature.book.epub.EpubReaderStatus
-import com.raulshma.jellyplay.feature.book.epub.EpubSearchResult
-import com.raulshma.jellyplay.feature.book.epub.EpubTapZone
-import com.raulshma.jellyplay.feature.book.epub.EpubTocItem
 import com.raulshma.jellyplay.feature.book.epub.rememberEpubReaderHost
 import com.raulshma.jellyplay.feature.book.generated.resources.Res
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_copied
@@ -112,12 +109,15 @@ internal fun PagedReaderContent(
     var doubleTapZoomToken by remember { mutableStateOf(0) }
     val bookmarks by viewModel.bookmarks.collectAsStateWithLifecycle()
     val pdfOutline by viewModel.pdfOutline.collectAsStateWithLifecycle()
-    val brightnessPct by viewModel.brightnessPct.collectAsStateWithLifecycle()
-    val volumeKeyPaging by viewModel.volumeKeyPaging.collectAsStateWithLifecycle()
-    val animatedPageTurns by viewModel.animatedPageTurns.collectAsStateWithLifecycle()
-    val tocRailVisible by viewModel.tocRailVisible.collectAsStateWithLifecycle()
-    var showBookmarks by remember { mutableStateOf(false) }
-    var showToc by remember { mutableStateOf(false) }
+    val prefs by viewModel.prefs.collectAsStateWithLifecycle()
+    val brightnessPct = prefs.global.brightnessPct
+    val volumeKeyPaging = prefs.global.volumeKeyPaging
+    val animatedPageTurns = prefs.global.animatedPageTurns
+    val tocRailVisible = prefs.global.tocRailVisible
+    // Same admission holder as the reflowable half (the settings sheet and
+    // the two paged sheets are ever raised here); one `open` fold feeds the
+    // auto-hide suppression below.
+    val sheets = remember { ReaderSheetStack() }
 
     // Bookmarks load per item; the current page rides `state` — keying the
     // derived fill on both keeps the icon in step with either changing.
@@ -129,8 +129,9 @@ internal fun PagedReaderContent(
     LaunchedEffect(content.currentPage) { doubleTapZoomToken = 0 }
 
     // Auto-hide the chrome like player controls; suppress while a sheet
-    // holds the screen.
-    AutoHideControlsEffect(state.showControls, state.showSettings, showBookmarks, showToc, onTimeout = viewModel::toggleControls)
+    // holds the screen (the settings sheet included — ReaderSheetStack owns
+    // every sheet now).
+    AutoHideControlsEffect(state.showControls, sheets.open, onTimeout = viewModel::toggleControls)
 
     Box(
         modifier = Modifier
@@ -144,7 +145,12 @@ internal fun PagedReaderContent(
                 onForward = viewModel::nextPage,
                 onBackward = viewModel::previousPage,
                 onBack = onBack,
-                onToggleControls = viewModel::toggleControls,
+                // The sheet owner closes its settings sheet on a chrome
+                // toggle — the fold toggleControls used to carry as VM state.
+                onToggleControls = {
+                    sheets.showSettings = false
+                    viewModel.toggleControls()
+                },
                 volumeKeyPaging = volumeKeyPaging,
                 onDoubleTap = { doubleTapZoomToken++ },
             ),
@@ -222,9 +228,9 @@ internal fun PagedReaderContent(
             state = state,
             bookmarked = bookmarked,
             onToggleBookmark = viewModel::toggleBookmarkAtCurrentPosition,
-            onOpenBookmarks = { showBookmarks = true },
+            onOpenBookmarks = { sheets.showBookmarks = true },
             onOpenAnnotations = {},
-            onOpenSettings = viewModel::openSettings,
+            onOpenSettings = { sheets.showSettings = true },
             onBack = onBack,
             modifier = Modifier.align(Alignment.TopCenter),
         )
@@ -238,9 +244,9 @@ internal fun PagedReaderContent(
                 currentPage = content.currentPage,
                 pageCount = content.pageCount,
                 brightnessPct = brightnessPct,
-                onBrightnessChange = viewModel::setBrightnessPct,
+                onBrightnessChange = viewModel.preferences::setBrightnessPct,
                 tocVisible = content.format == BookFormat.PDF,
-                onOpenToc = { showToc = true },
+                onOpenToc = { sheets.showToc = true },
                 onSeekPage = { page ->
                     // Slider seeks only scroll the pager — the VM follows
                     // through the snapshotFlow (the original contract).
@@ -255,54 +261,39 @@ internal fun PagedReaderContent(
             )
         }
 
-        if (state.showSettings) {
+        if (sheets.showSettings) {
             PagedSettingsSheet(
                 direction = direction,
                 tocAvailable = content.format == BookFormat.PDF,
                 fitMode = fitMode,
-                behavior = ReaderBehaviorState(
-                    volumeKeyPaging = volumeKeyPaging,
-                    animatedPageTurns = animatedPageTurns,
-                    readingSpeedWpm = viewModel.readingSpeedWpm.value,
-                    tocRailVisible = tocRailVisible,
-                ),
+                prefs = prefs,
                 onSetDirection = viewModel::setReadingDirection,
                 onSetFitMode = { fitMode = it },
-                onBehaviorChange = { next ->
-                    if (next.volumeKeyPaging != volumeKeyPaging) {
-                        viewModel.setVolumeKeyPaging(next.volumeKeyPaging)
-                    }
-                    if (next.animatedPageTurns != animatedPageTurns) {
-                        viewModel.setAnimatedPageTurns(next.animatedPageTurns)
-                    }
-                    if (next.tocRailVisible != tocRailVisible) {
-                        viewModel.setTocRailVisible(next.tocRailVisible)
-                    }
-                },
-                onOpenToc = { viewModel.dismissSettings(); showToc = true },
-                onDismissRequest = viewModel::dismissSettings,
+                onBehaviorChange = viewModel.preferences::applyBehavior,
+                onOpenToc = { sheets.showSettings = false; sheets.showToc = true },
+                onDismissRequest = { sheets.showSettings = false },
             )
         }
-        if (showToc && content.format == BookFormat.PDF) {
+        if (sheets.showToc && content.format == BookFormat.PDF) {
             PdfOutlineSheet(
                 nodes = pdfOutline,
                 onJump = { page ->
-                    showToc = false
+                    sheets.showToc = false
                     viewModel.onPageChanged(page)
                 },
-                onDismissRequest = { showToc = false },
+                onDismissRequest = { sheets.showToc = false },
             )
         }
-        if (showBookmarks) {
+        if (sheets.showBookmarks) {
             BookmarksSheet(
                 bookmarks = bookmarks,
                 title = state.title,
                 onJump = { bookmark ->
-                    showBookmarks = false
+                    sheets.showBookmarks = false
                     viewModel.jumpToBookmark(bookmark)
                 },
                 onDelete = { bookmark -> viewModel.deleteBookmark(bookmark.id) },
-                onDismissRequest = { showBookmarks = false },
+                onDismissRequest = { sheets.showBookmarks = false },
             )
         }
     }
@@ -314,6 +305,15 @@ internal sealed interface NoteDialogTarget {
     data class Existing(val annotation: ReaderAnnotation) : NoteDialogTarget
 }
 
+/**
+ * The reflowable reader's RENDER shell over its Compose-free
+ * [ReflowableReaderSession] (ReaderControllers.kt): this composable collects
+ * the VM/session state, calls the platform host factory, binds the returned
+ * handle into the session, and dispatches one-line effects (flow flip,
+ * annotation sync, exact resume, speech-end highlight drop) plus the sheet
+ * callbacks into session methods — every decision lives in the session. See
+ * the file header for the input-handling split ([readerKeys] + JS taps).
+ */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun ReflowableReaderContent(
@@ -325,33 +325,30 @@ internal fun ReflowableReaderContent(
     viewModel: BookReaderViewModel,
     onBack: () -> Unit,
 ) {
-    var epubStatus by remember { mutableStateOf(EpubReaderStatus.LOADING) }
-    var percent by remember(content.bookFile) { mutableStateOf(content.resumePercent) }
-    var tocItems by remember { mutableStateOf<List<EpubTocItem>>(emptyList()) }
-    var showToc by remember { mutableStateOf(false) }
-    var showBookmarks by remember { mutableStateOf(false) }
-    var showAnnotations by remember { mutableStateOf(false) }
-    var showSearch by remember { mutableStateOf(false) }
-    var showSleepTimer by remember { mutableStateOf(false) }
-    var noteTarget by remember { mutableStateOf<NoteDialogTarget?>(null) }
-    var resumedFromCfi by remember { mutableStateOf(false) }
+    // The local sheet/dialog flags ride ONE holder whose `open` fold is the
+    // single "a sheet holds the screen" predicate for nav gating and
+    // auto-hide (ReaderSheetStack) — the settings sheet included.
+    val sheets = remember { ReaderSheetStack() }
     val bookmarks by viewModel.bookmarks.collectAsStateWithLifecycle()
     val annotations by viewModel.annotations.collectAsStateWithLifecycle()
     val selection by viewModel.selection.collectAsStateWithLifecycle()
     val epubLocation by viewModel.currentEpubLocation.collectAsStateWithLifecycle()
 
     // Global typography + behavior slices (the theme/font params above are
-    // the EFFECTIVE values — per-book override ?: global).
-    val fontFamily by viewModel.readerFontFamily.collectAsStateWithLifecycle()
-    val lineHeightPct by viewModel.lineHeightPct.collectAsStateWithLifecycle()
-    val marginPct by viewModel.marginPct.collectAsStateWithLifecycle()
-    val justifyText by viewModel.justify.collectAsStateWithLifecycle()
-    val scrollMode by viewModel.scrollMode.collectAsStateWithLifecycle()
-    val perBookOverride by viewModel.perBookAppearance.collectAsStateWithLifecycle()
-    val brightnessPct by viewModel.brightnessPct.collectAsStateWithLifecycle()
-    val volumeKeyPaging by viewModel.volumeKeyPaging.collectAsStateWithLifecycle()
-    val readingSpeedWpm by viewModel.readingSpeedWpm.collectAsStateWithLifecycle()
-    val tocRailVisible by viewModel.tocRailVisible.collectAsStateWithLifecycle()
+    // the EFFECTIVE values — per-book override ?: global) ride ONE preference
+    // snapshot instead of one collect per knob.
+    val prefs by viewModel.prefs.collectAsStateWithLifecycle()
+    val global = prefs.global
+    val fontFamily = global.fontFamily
+    val lineHeightPct = global.lineHeightPct
+    val marginPct = global.marginPct
+    val justifyText = global.justify
+    val scrollMode = global.scrollMode
+    val perBookActive = prefs.perBookActive
+    val brightnessPct = global.brightnessPct
+    val volumeKeyPaging = global.volumeKeyPaging
+    val readingSpeedWpm = global.readingSpeedWpm
+    val tocRailVisible = global.tocRailVisible
 
     // Read aloud + sleep timer + auto-scroll (Wave 5). Speech/auto-scroll
     // STATE lives in the VM/screen as noted; the AUTO-SCROLL speed is the
@@ -363,19 +360,9 @@ internal fun ReflowableReaderContent(
     // Platforms without an engine report UNAVAILABLE and hide the controls.
     val speechAvailable =
         viewModel.speechAvailability.collectAsStateWithLifecycle().value != BookSpeechAvailability.UNAVAILABLE
-    val speechRate by viewModel.speechRate.collectAsStateWithLifecycle()
-    val speechPitch by viewModel.speechPitch.collectAsStateWithLifecycle()
+    val speechRate = global.speechRate
+    val speechPitch = global.speechPitch
     val sleepTimerState by viewModel.sleepTimerState.collectAsStateWithLifecycle()
-    var autoScrollActive by remember { mutableStateOf(false) }
-    val autoScrollSpeedPx by viewModel.autoScrollSpeedPxPerSec.collectAsStateWithLifecycle()
-
-    /** The ephemeral speech-highlight CFI (null = nothing painted). */
-    var speechHighlightCfi by remember { mutableStateOf<String?>(null) }
-    // The highlight paint checks the live persisted marks (a paragraph whose
-    // CFI a saved annotation occupies is never painted — removeAnnotation is
-    // CFI-keyed and would later wipe the real mark), so it reads the CURRENT
-    // list, not the composition-time capture.
-    val currentAnnotations by rememberUpdatedState(annotations)
 
     // The "pending mark" snapshot the selection bar previews and the note
     // dialog saves with — also the last-used style/color memory.
@@ -387,75 +374,33 @@ internal fun ReflowableReaderContent(
     val scope = rememberCoroutineScope()
     val copiedLabel = stringResource(Res.string.book_reader_copied)
 
-    // Search plumbing: the latest token only (late results of older queries
-    // drop), and the ephemeral result flash highlight.
-    var searchState by remember { mutableStateOf<ReaderSearchState>(ReaderSearchState.Idle) }
-    var searchToken by remember { mutableStateOf(0) }
-    var ephemeralCfi by remember { mutableStateOf<String?>(null) }
-
-    // `remember {}` callbacks capture state OBJECTS (fresh reads at event
-    // time), but plain parameters (direction, uiState) would go stale in the
-    // remembered closure — direction flows through rememberUpdatedState and
-    // chrome visibility through the VM's uiState instead.
+    // `remember {}` event-time reads capture state OBJECTS, but plain
+    // parameters (direction) would go stale in the remembered closure —
+    // direction flows through rememberUpdatedState.
     val currentDirection by rememberUpdatedState(direction)
-    // Late-bound host: the callbacks object is created BEFORE the host (the
-    // host factory takes the callbacks), so JS-tap navigation reaches it
-    // through this stable holder — filled as soon as the host exists (taps
-    // can only arrive after the page loads, so it is never null in practice).
-    val hostRef = remember { mutableStateOf<com.raulshma.jellyplay.feature.book.epub.EpubReaderHandle?>(null) }
 
-    /** Drops the search flash highlight (leaving the search context). */
-    fun removeEphemeralHighlight() {
-        ephemeralCfi?.let { cfi -> hostRef.value?.removeAnnotation(cfi) }
-        ephemeralCfi = null
-    }
-
-    // JS-reported taps drive touch navigation with the same direction-aware
-    // mapping as the keys (LEFT zone pages forward under RTL). reader.js
-    // already skips taps while a selection gesture is live; the selection
-    // state guard here is the belt. Sheet-open taps are pure noise.
-    fun handleJsTap(zone: EpubTapZone) {
-        val sheetOpen = showToc || showBookmarks || showAnnotations || showSearch ||
-            (viewModel.uiState.value as? BookReaderUiState.Ready)?.showSettings == true
-        if (sheetOpen || viewModel.selection.value != null) return
-        when (epubTapAction(zone, currentDirection)) {
-            ReaderTapAction.FORWARD -> {
-                removeEphemeralHighlight()
-                hostRef.value?.next()
-            }
-            ReaderTapAction.BACKWARD -> {
-                removeEphemeralHighlight()
-                hostRef.value?.prev()
-            }
-            ReaderTapAction.TOGGLE_CONTROLS -> viewModel.toggleControls()
-        }
-    }
-
-    val callbacks = remember {
-        EpubReaderCallbacks(
-            onPercentChanged = { viewModel.onEpubPercentChanged(it); percent = it },
-            onStatusChanged = { epubStatus = it },
-            onDirectionReported = viewModel::onEpubDirection,
-            onTocReady = { tocItems = it; viewModel.onEpubTocReady(it) },
-            onRelocated = { viewModel.onEpubRelocated(it) },
-            onSelection = { cfi, text -> viewModel.onEpubSelection(cfi, text) },
-            onSelectionCleared = { viewModel.onEpubSelectionCleared() },
-            onSearchResults = { token, results ->
-                if (token == searchToken) {
-                    searchState = ReaderSearchState.Results(results)
-                }
-            },
-            onTap = { zone -> handleJsTap(zone) },
-            onSwipe = { toLeft ->
-                // Physical swipe → the zone a tap on that side would produce
-                // (swipe left ≡ tap right), so navigation rides the exact
-                // same direction-aware mapping as taps.
-                handleJsTap(if (toLeft) EpubTapZone.RIGHT else EpubTapZone.LEFT)
-            },
-            onSpeechContext = { paragraphs -> viewModel.onSpeechContext(paragraphs) },
-            onAutoScrollStopped = { autoScrollActive = false },
+    // The Compose-free session (ReaderControllers.kt): the host handle
+    // lifecycle, the annotation/auto-scroll/search controllers, the
+    // resume-jump latch, the JS-tap router and the whole event dispatch —
+    // everything this composable used to inline as untestable state. What
+    // remains here is the render shell: state collection, the host call, the
+    // one-line effect dispatches and the sheet callbacks below. Constructor
+    // lambdas read state objects/flows FRESH (the session's speed provider
+    // reads the VM's preference StateFlow, never a recomposition-captured
+    // slice).
+    val session = remember {
+        ReflowableReaderSession(
+            direction = { currentDirection },
+            sheetOpen = { sheets.open },
+            selectionActive = { viewModel.selection.value != null },
+            autoScrollSpeed = { viewModel.prefs.value.global.autoScrollSpeedPxPerSec },
+            onToggleControls = viewModel::toggleControls,
+            forward = viewModel::onEpubEvent,
         )
     }
+    // The VM's speech loop + sleep timer execute their host-side halves
+    // through this port (the collapsed command channel's replacement).
+    LaunchedEffect(session) { viewModel.attachReaderSession(session) }
     // The full appearance bundle: rides the chunked load protocol on boot
     // AND re-fires the hosts' change push whenever any axis moves (their
     // LaunchedEffect keys on the data class). Mappings: family → CSS stack
@@ -474,76 +419,28 @@ internal fun ReflowableReaderContent(
         bookFile = content.bookFile,
         resumePercent = content.resumePercent,
         appearance = appearance,
-        callbacks = callbacks,
+        onEvent = session.onEvent,
     )
-    LaunchedEffect(host) { hostRef.value = host }
+    // The late-bound binding: the session (and, through its port, the VM's
+    // speech loop) reaches the host from here. Unbound again on dispose so
+    // every session-side command degrades to a no-op — the old channel's
+    // dropped-command semantics for a detached screen.
+    DisposableEffect(host) {
+        session.attachHost(host)
+        onDispose { session.attachHost(null) }
+    }
     // Scroll-mode flip: reader.js's setFlow rebuilds the rendition and
     // re-displays the same position. Keyed on boot status too — a flip made
     // while the WebView was still loading is dropped by the platform (a
     // script before page-finished is a no-op), so it must re-fire on READY
     // to land; reader.js no-ops when the flow already matches `pending`.
-    LaunchedEffect(scrollMode, epubStatus) {
-        host.setFlow(scrollMode)
-        // Leaving scrolled flow kills auto-scroll (its scroller is gone);
-        // mirror the state so the chrome toggle resets with it.
-        if (!scrollMode && autoScrollActive) {
-            autoScrollActive = false
-            host.setAutoScroll(false, autoScrollSpeedPx)
-        }
+    LaunchedEffect(scrollMode, session.status) {
+        session.onFlowChanged(scrollMode)
     }
 
-    /**
-     * Auto-scroll toggle for scrolled flow: host rAF loop at the session
-     * speed. Any web input (reader.js stops on wheel/touchstart) reports
-     * `onAutoScrollStopped`, which resets [autoScrollActive] above so this
-     * icon re-arms cleanly after every manual interruption.
-     */
-    fun toggleAutoScroll() {
-        autoScrollActive = !autoScrollActive
-        host.setAutoScroll(autoScrollActive, autoScrollSpeedPx)
-    }
-
-    /** Drops the ephemeral speech highlight (session end). */
-    fun removeSpeechHighlight() {
-        speechHighlightCfi?.let { cfi -> hostRef.value?.removeAnnotation(cfi) }
-        speechHighlightCfi = null
-    }
-
-    // The VM's one-shot host commands: speech context requests, chapter
-    // turns, paragraph follows and the sleep timer's auto-scroll stop. The
-    // VM owns the loop, this is the only place the host gets touched for it.
-    LaunchedEffect(Unit) {
-        viewModel.hostCommands.collect { command ->
-            when (command) {
-                is ReaderHostCommand.RequestSpeechContext ->
-                    hostRef.value?.requestSpeechContext(command.cfi)
-                ReaderHostCommand.AdvanceSpeechChapter -> hostRef.value?.next()
-                is ReaderHostCommand.FollowSpeech -> {
-                    // Follow: repaint the ephemeral paragraph highlight (a
-                    // persisted mark on the same CFI is never overwritten —
-                    // removal is CFI-keyed and would later wipe it) and
-                    // goToCfi (epub.js no-ops when already visible).
-                    removeSpeechHighlight()
-                    if (currentAnnotations.none { it.cfi == command.cfi }) {
-                        hostRef.value?.addAnnotation(
-                            EpubAnnotationSpec(command.cfi, EpubAnnotationStyle.HIGHLIGHT, EpubAnnotationColor.YELLOW),
-                        )
-                        speechHighlightCfi = command.cfi
-                    }
-                    hostRef.value?.goToCfi(command.cfi)
-                }
-                ReaderHostCommand.SleepTimerFired -> {
-                    if (autoScrollActive) {
-                        autoScrollActive = false
-                        hostRef.value?.setAutoScroll(false, autoScrollSpeedPx)
-                    }
-                }
-            }
-        }
-    }
     // Session end (stop/finish/engine loss) drops the painted highlight.
     LaunchedEffect(speechState.active) {
-        if (!speechState.active) removeSpeechHighlight()
+        session.onSpeechActiveChanged(speechState.active)
     }
     // `host`'s composable call above emits the platform WebView directly into
     // the parent Box (this composable declares no root container), so the
@@ -553,42 +450,17 @@ internal fun ReflowableReaderContent(
     // JS-reported tap events instead.
     val downloadProgress by host.viewerDownloadProgress
 
-    // Exact resume (ADR 0003 point 4): once READY, jump to the locally stored
-    // CFI — exactly once. A deep-link destination (detail "Contents" tap)
-    // outranks the resume anchor. A failed display degrades in-place
-    // (reader.js keeps the current page and reports displayError), i.e. the
-    // percent resume.
-    LaunchedEffect(epubStatus, content.resumeCfi, content.jumpHref) {
-        if (epubStatus == EpubReaderStatus.READY && !resumedFromCfi) {
-            resumedFromCfi = true
-            when {
-                content.jumpHref != null -> host.goTo(content.jumpHref)
-                else -> content.resumeCfi?.let(host::goToCfi)
-            }
-        }
+    // Exact resume (ADR 0003 point 4): the latch + jump decision are the
+    // session's (see [ReflowableReaderSession.resumeJump]); this shell just
+    // re-offers the anchors whenever the boot status or either anchor moves.
+    LaunchedEffect(session.status, content.resumeCfi, content.jumpHref) {
+        session.resumeJump(content.resumeCfi, content.jumpHref)
     }
 
-    // Persisted annotations → host paint. READY applies the full set once
-    // (replace semantics are safe pre-interaction); every later list change
-    // syncs INCREMENTALLY (add/remove per CFI) so the ephemeral search flash
-    // and any selection-in-progress survive unrelated edits.
-    var appliedAnnotations by remember { mutableStateOf<Map<String, EpubAnnotationSpec>>(emptyMap()) }
-    LaunchedEffect(epubStatus) {
-        if (epubStatus == EpubReaderStatus.READY) {
-            val target = annotations.associate { it.cfi to it.toEpubSpec() }
-            host.applyAnnotations(target.values.toList())
-            appliedAnnotations = target
-        }
-    }
-    LaunchedEffect(annotations, epubStatus) {
-        if (epubStatus != EpubReaderStatus.READY) return@LaunchedEffect
-        val target = annotations.associate { it.cfi to it.toEpubSpec() }
-        if (target == appliedAnnotations) return@LaunchedEffect
-        (appliedAnnotations.keys - target.keys).forEach(host::removeAnnotation)
-        target.forEach { (cfi, spec) ->
-            if (appliedAnnotations[cfi] != spec) host.addAnnotation(spec)
-        }
-        appliedAnnotations = target
+    // Persisted annotations -> host paint, through the sync controller (full
+    // apply on READY entry, incremental diffs after — see ReaderAnnotationSync).
+    LaunchedEffect(session.status, annotations) {
+        session.syncAnnotations(annotations)
     }
 
     // The selection bar must know whether the live selection sits on an
@@ -598,16 +470,12 @@ internal fun ReflowableReaderContent(
     }
     val bookmarked = remember(bookmarks, epubLocation, state) { viewModel.hasBookmarkAtCurrentPosition() }
 
-    // Auto-hide the chrome like player controls; suppress while a sheet holds
-    // the screen.
+    // Auto-hide the chrome like player controls; suppress while a sheet
+    // holds the screen (the holder's fold includes the settings sheet and
+    // the note dialog).
     AutoHideControlsEffect(
         state.showControls,
-        state.showSettings,
-        showToc,
-        showBookmarks,
-        showAnnotations,
-        showSearch,
-        showSleepTimer,
+        sheets.open,
         onTimeout = viewModel::toggleControls,
     )
 
@@ -619,7 +487,12 @@ internal fun ReflowableReaderContent(
                 onForward = { host.next() },
                 onBackward = { host.prev() },
                 onBack = onBack,
-                onToggleControls = viewModel::toggleControls,
+                // The sheet owner closes its settings sheet on a chrome
+                // toggle — the fold toggleControls used to carry as VM state.
+                onToggleControls = {
+                    sheets.showSettings = false
+                    viewModel.toggleControls()
+                },
                 volumeKeyPaging = volumeKeyPaging,
             ),
     ) {
@@ -644,7 +517,7 @@ internal fun ReflowableReaderContent(
                 )
             }
         } ?: run {
-            if (epubStatus != EpubReaderStatus.READY && epubStatus != EpubReaderStatus.ERROR) {
+            if (session.status != EpubReaderStatus.READY && session.status != EpubReaderStatus.ERROR) {
                 ReaderVeil {
                     LoadingIndicator(modifier = Modifier.size(48.dp))
                     Text(
@@ -661,12 +534,12 @@ internal fun ReflowableReaderContent(
             state = state,
             bookmarked = bookmarked,
             onToggleBookmark = viewModel::toggleBookmarkAtCurrentPosition,
-            onOpenBookmarks = { showBookmarks = true },
-            onOpenAnnotations = { showAnnotations = true },
-            onOpenSettings = viewModel::openSettings,
+            onOpenBookmarks = { sheets.showBookmarks = true },
+            onOpenAnnotations = { sheets.showAnnotations = true },
+            onOpenSettings = { sheets.showSettings = true },
             onBack = onBack,
             sleepTimerActive = sleepTimerState.running,
-            onOpenSleepTimer = { showSleepTimer = true },
+            onOpenSleepTimer = { sheets.showSleepTimer = true },
             modifier = Modifier.align(Alignment.TopCenter),
         )
         // The EPUB TOC tick rail (opt-in via the reader controls):
@@ -674,15 +547,15 @@ internal fun ReflowableReaderContent(
         // rides the relocated event's spine href (the chapter label alone
         // collides on duplicate titles); hidden until both the toc event and
         // the first relocation have landed.
-        val tocTicks = remember(tocItems) { epubTocTicks(tocItems) }
+        val tocTicks = remember(session.tocItems) { epubTocTicks(session.tocItems) }
         val tocTickIndex = remember(tocTicks, epubLocation?.chapterHref) {
-            epubCurrentTocIndex(tocItems, epubLocation?.chapterHref)
+            epubCurrentTocIndex(session.tocItems, epubLocation?.chapterHref)
         }
         if (tocRailVisible) {
             ReaderTocRail(
                 ticks = tocTicks,
                 currentIndex = tocTickIndex,
-                onJump = { tick -> tick.href?.let { href -> hostRef.value?.goTo(href) } },
+                onJump = { tick -> tick.href?.let { href -> host.goTo(href) } },
                 modifier = Modifier
                     .align(Alignment.CenterStart)
                     .padding(start = 4.dp),
@@ -697,17 +570,19 @@ internal fun ReflowableReaderContent(
             modifier = Modifier.align(Alignment.BottomCenter),
         ) {
             ReflowableBottomBar(
-                // The relocated event's percent (latest) wins once a location
-                // exists; the percent-event state is the boot fallback.
-                percent = epubLocation?.percent ?: percent,
+                // The location flow is the single percent carrier: the VM
+                // seeds it with the boot resume percent at open, so the
+                // elvis only satisfies the non-null parameter before the
+                // first Ready frame observes it.
+                percent = epubLocation?.percent ?: content.resumePercent,
                 remainingPages = epubLocation?.remainingPages,
                 minutesLeftInChapter = epubLocation?.remainingPages
                     ?.let { locationPagesMinutesRemaining(it, readingSpeedWpm) },
                 minutesLeftInBook = epubLocation?.remainingLocations
                     ?.let { locationPagesMinutesRemaining(it, readingSpeedWpm) },
                 brightnessPct = brightnessPct,
-                onBrightnessChange = viewModel::setBrightnessPct,
-                onOpenToc = { showToc = true },
+                onBrightnessChange = viewModel.preferences::setBrightnessPct,
+                onOpenToc = { sheets.showToc = true },
                 speechAvailable = speechAvailable,
                 speechActive = speechState.active,
                 speechPaused = speechState.paused,
@@ -716,8 +591,8 @@ internal fun ReflowableReaderContent(
                 onSpeechSkipForward = viewModel::skipSpeechForward,
                 onSpeechStop = viewModel::stopReadAloud,
                 autoScrollVisible = scrollMode,
-                autoScrollActive = autoScrollActive,
-                onAutoScrollToggle = ::toggleAutoScroll,
+                autoScrollActive = session.autoScroll.active,
+                onAutoScrollToggle = session.autoScroll::toggle,
             )
         }
         selection?.let { sel ->
@@ -746,7 +621,7 @@ internal fun ReflowableReaderContent(
                         }
                     },
                     onEditNote = {
-                        noteTarget = if (existingAnnotation != null) {
+                        sheets.noteTarget = if (existingAnnotation != null) {
                             NoteDialogTarget.Existing(existingAnnotation)
                         } else {
                             NoteDialogTarget.Selection
@@ -766,95 +641,66 @@ internal fun ReflowableReaderContent(
             modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 96.dp),
         )
 
-        if (state.showSettings) {
+        if (sheets.showSettings) {
             ReflowableSettingsSheet(
-                theme = theme,
-                fontSizePx = fontSizePx,
-                perBook = perBookOverride != null,
-                typography = ReaderTypographyState(
-                    fontFamily = fontFamily,
-                    lineHeightPct = lineHeightPct,
-                    marginPct = marginPct,
-                    justify = justifyText,
-                    scrollMode = scrollMode,
-                ),
-                behavior = ReaderBehaviorState(
-                    volumeKeyPaging = volumeKeyPaging,
-                    animatedPageTurns = viewModel.animatedPageTurns.value,
-                    readingSpeedWpm = readingSpeedWpm,
-                    tocRailVisible = tocRailVisible,
-                ),
-                speechRate = speechRate,
-                speechPitch = speechPitch,
+                prefs = prefs,
                 speechAvailable = speechAvailable,
-                autoScrollSpeedPx = autoScrollSpeedPx,
-                onSetTheme = viewModel::setReaderTheme,
-                onAdjustFontSize = viewModel::adjustReaderFontSize,
-                onSetPerBook = viewModel::setUsePerBookAppearance,
-                onTypographyChange = { next ->
-                    if (next.fontFamily != fontFamily) viewModel.setFontFamily(next.fontFamily)
-                    if (next.lineHeightPct != lineHeightPct) viewModel.setLineHeightPct(next.lineHeightPct)
-                    if (next.marginPct != marginPct) viewModel.setMarginPct(next.marginPct)
-                    if (next.justify != justifyText) viewModel.setJustify(next.justify)
-                    if (next.scrollMode != scrollMode) viewModel.setScrollMode(next.scrollMode)
-                },
-                onBehaviorChange = { next ->
-                    if (next.volumeKeyPaging != volumeKeyPaging) {
-                        viewModel.setVolumeKeyPaging(next.volumeKeyPaging)
-                    }
-                    if (next.readingSpeedWpm != readingSpeedWpm) {
-                        viewModel.setReadingSpeedWpm(next.readingSpeedWpm)
-                    }
-                    if (next.tocRailVisible != tocRailVisible) {
-                        viewModel.setTocRailVisible(next.tocRailVisible)
-                    }
-                },
+                onSetTheme = viewModel.preferences::setTheme,
+                onAdjustFontSize = viewModel.preferences::adjustFontSize,
+                onSetPerBook = viewModel.preferences::setUsePerBookAppearance,
+                // Whole-bundle commits; the which-axis-changed diff lives in
+                // ReaderPreferences.applyTypography/applyBehavior (one home,
+                // no stale recomposition captures).
+                onTypographyChange = viewModel.preferences::applyTypography,
+                onBehaviorChange = viewModel.preferences::applyBehavior,
                 onSetSpeechRate = viewModel::setSpeechRate,
                 onSetSpeechPitch = viewModel::setSpeechPitch,
                 onSetAutoScrollSpeed = { speed ->
-                    viewModel.setAutoScrollSpeedPxPerSec(speed)
-                    // Live re-target: an active rAF loop picks the new speed.
-                    if (autoScrollActive) host.setAutoScroll(true, speed)
+                    viewModel.preferences.setAutoScrollSpeedPxPerSec(speed)
+                    // Live re-target: an active rAF loop picks the new speed
+                    // (the session's speed provider reads the live snapshot).
+                    session.autoScroll.retarget()
                 },
-                onOpenToc = { viewModel.dismissSettings(); showToc = true },
-                onDismissRequest = viewModel::dismissSettings,
+                onOpenToc = { sheets.showSettings = false; sheets.showToc = true },
+                onDismissRequest = { sheets.showSettings = false },
             )
         }
-        if (showSleepTimer) {
+        if (sheets.showSleepTimer) {
             SleepTimerSheet(
                 state = sleepTimerState,
                 onSelect = viewModel::startSleepTimer,
                 onCancel = viewModel::cancelSleepTimer,
-                onDismissRequest = { showSleepTimer = false },
+                onDismissRequest = { sheets.showSleepTimer = false },
             )
         }
-        if (showToc) {
+        if (sheets.showToc) {
             EpubTocSheet(
-                tocItems = tocItems,
-                onJump = { href -> showToc = false; host.goTo(href) },
-                onOpenSearch = { showToc = false; showSearch = true; searchState = ReaderSearchState.Idle },
-                onDismissRequest = { showToc = false },
+                tocItems = session.tocItems,
+                onJump = { href -> sheets.showToc = false; host.goTo(href) },
+                onOpenSearch = { sheets.showToc = false; sheets.showSearch = true; session.resetSearch() },
+                onDismissRequest = { sheets.showToc = false },
             )
         }
-        if (showBookmarks) {
+        if (sheets.showBookmarks) {
             BookmarksSheet(
                 bookmarks = bookmarks,
                 title = state.title,
                 onJump = { bookmark ->
-                    showBookmarks = false
-                    // Null-CFI rows have no in-reader fallback (the host has
-                    // no display-by-percent after boot) — the jump is a no-op.
-                    bookmark.cfi?.let(host::goToCfi)
+                    sheets.showBookmarks = false
+                    // Jumpability is the codec's rule (CFI-carrying rows
+                    // only): null-CFI rows have no in-reader fallback (the
+                    // host has no display-by-percent after boot).
+                    if (ReaderBookmarkCodec.isJumpable(bookmark)) host.goToCfi(bookmark.cfi!!)
                 },
                 onDelete = { bookmark -> viewModel.deleteBookmark(bookmark.id) },
-                onDismissRequest = { showBookmarks = false },
+                onDismissRequest = { sheets.showBookmarks = false },
             )
         }
-        if (showAnnotations) {
+        if (sheets.showAnnotations) {
             AnnotationsSheet(
                 annotations = annotations,
-                onJump = { annotation -> showAnnotations = false; host.goToCfi(annotation.cfi) },
-                onEditNote = { annotation -> noteTarget = NoteDialogTarget.Existing(annotation) },
+                onJump = { annotation -> sheets.showAnnotations = false; host.goToCfi(annotation.cfi) },
+                onEditNote = { annotation -> sheets.noteTarget = NoteDialogTarget.Existing(annotation) },
                 onRecolor = { annotation, color -> viewModel.updateAnnotation(annotation.id, color = color) },
                 onDelete = { annotation -> viewModel.deleteAnnotation(annotation.id) },
                 onExport = { asJson ->
@@ -862,39 +708,21 @@ internal fun ReflowableReaderContent(
                     clipboard.setText(AnnotatedString(exported))
                     scope.launch { snackbarHostState.showSnackbar(copiedLabel) }
                 },
-                onDismissRequest = { showAnnotations = false },
+                onDismissRequest = { sheets.showAnnotations = false },
             )
         }
-        if (showSearch) {
+        if (sheets.showSearch) {
             SearchSheet(
-                state = searchState,
-                onSearch = { query, token ->
-                    searchToken = token
-                    searchState = ReaderSearchState.Searching
-                    removeEphemeralHighlight()
-                    host.search(query, token)
-                },
-                onResultTap = { result ->
-                    removeEphemeralHighlight()
-                    host.goToCfi(result.cfi)
-                    // Ephemeral flash — skipped when a persisted mark already
-                    // paints this CFI (removeAnnotation is CFI-keyed and
-                    // would later wipe the real mark's paint).
-                    if (annotations.none { it.cfi == result.cfi }) {
-                        host.addAnnotation(
-                            EpubAnnotationSpec(result.cfi, EpubAnnotationStyle.HIGHLIGHT, EpubAnnotationColor.YELLOW),
-                        )
-                        ephemeralCfi = result.cfi
-                    }
-                },
+                state = session.searchSession.state,
+                onSearch = session::search,
+                onResultTap = session::openSearchResult,
                 onDismissRequest = {
-                    showSearch = false
-                    removeEphemeralHighlight()
-                    searchState = ReaderSearchState.Idle
+                    sheets.showSearch = false
+                    session.resetSearch()
                 },
             )
         }
-        noteTarget?.let { target ->
+        sheets.noteTarget?.let { target ->
             NoteDialog(
                 initialNote = (target as? NoteDialogTarget.Existing)?.annotation?.note,
                 onSave = { note ->
@@ -906,47 +734,11 @@ internal fun ReflowableReaderContent(
                         is NoteDialogTarget.Existing ->
                             viewModel.updateAnnotation(target.annotation.id, note = note)
                     }
-                    noteTarget = null
+                    sheets.noteTarget = null
                 },
-                onDismiss = { noteTarget = null },
+                onDismiss = { sheets.noteTarget = null },
             )
         }
-    }
-}
-
-/**
- * Live zoom/pan state of one page tile. `raster` is the bitmap's render
- * multiplier vs the base fit width (1 = the fitted base bitmap); `zoom` is
- * the graphicsLayer scale ON TOP of that. The VISUAL scale the user sees is
- * `visual` — at raster > 1 the bitmap displays 1:1 (ContentScale.None), so
- * its intrinsic pixels already carry `raster`× of the zoom. Pan is clamped
- * to ±(visual − 1) × tile / 2 per axis: the page can never be dragged fully
- * off-screen, and it pans freely inside its overflow at each scale.
- */
-private class PageZoomState {
-    var zoom by mutableFloatStateOf(1f)
-    var raster by mutableFloatStateOf(1f)
-    var pan by mutableStateOf(Offset.Zero)
-    var tileSize by mutableStateOf(IntSize.Zero)
-
-    val visual: Float get() = if (raster > 1f) raster * zoom else zoom
-
-    fun setVisual(value: Float) {
-        val r = raster
-        zoom = (value / if (r > 1f) r else 1f).coerceIn(0.05f, 20f)
-        clampPan()
-    }
-
-    fun clampPan() {
-        val maxX = (visual - 1f) * tileSize.width / 2f
-        val maxY = (visual - 1f) * tileSize.height / 2f
-        pan = Offset(pan.x.coerceIn(-maxX, maxX), pan.y.coerceIn(-maxY, maxY))
-    }
-
-    fun reset() {
-        zoom = 1f
-        raster = 1f
-        pan = Offset.Zero
     }
 }
 
@@ -1001,10 +793,10 @@ private fun PageTile(
     // Settle → re-raster: keys on the visual scale, so pinch frames and
     // animation frames keep cancelling the timer; the still moment fires it.
     LaunchedEffect(pageIndex, widthPx, heightPx, fitMode, zoomState.visual) {
-        if (zoomState.visual <= 1.01f && zoomState.raster <= 1f) return@LaunchedEffect
         delay(ZOOM_SETTLE_MS)
-        val target = zoomState.visual.coerceIn(1f, MAX_PAGE_RASTER_SCALE)
-        if (abs(target - zoomState.raster) < 0.05f) return@LaunchedEffect
+        // Pure decide-then-apply: the retarget rule (cap, 0.05 dead-band,
+        // base-scale skip) lives in pageRasterTarget, pinned beside the state.
+        val target = pageRasterTarget(zoomState.visual, zoomState.raster) ?: return@LaunchedEffect
         val fresh = viewModel.requestPage(pageIndex, widthPx, heightPx, fitMode, target)
         if (fresh == null) return@LaunchedEffect
         bitmap.value = fresh
@@ -1025,10 +817,10 @@ private fun PageTile(
                     while (true) {
                         val event = awaitPointerEvent()
                         if (event.changes.none { it.pressed }) break
-                        // Claim only real zooms: two fingers, or any finger
-                        // while zoomed. A single finger at 1× stays FREE for
-                        // the pager's swipe (no consume).
-                        if (!tracking && (event.changes.size >= 2 || zoomState.visual > 1.01f)) {
+                        // Claim only real zooms (two fingers, or any
+                        // finger while zoomed): a single finger at 1× stays
+                        // FREE for the pager's swipe (no consume).
+                        if (!tracking && shouldClaimZoomGesture(event.changes.size, zoomState.visual)) {
                             tracking = true
                         }
                         if (!tracking) continue
@@ -1091,8 +883,6 @@ private const val DOUBLE_TAP_ZOOM_ANIM_MS = 220
 /** Stillness window that fires a zoom re-raster. */
 private const val ZOOM_SETTLE_MS = 300L
 
-/** Pinch ceiling — above the 3× re-raster cap the scaled bitmap is kept. */
-private const val MAX_VISUAL_ZOOM_SCALE = 6f
 
 /** Domain annotation → the host paint spec (the two enum pairs are 1:1). */
 internal fun ReaderAnnotation.toEpubSpec(): EpubAnnotationSpec = EpubAnnotationSpec(

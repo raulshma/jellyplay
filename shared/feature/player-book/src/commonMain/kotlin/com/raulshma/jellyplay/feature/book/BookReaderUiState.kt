@@ -26,7 +26,6 @@ sealed interface BookReaderUiState {
         val title: String,
         val content: ReadyContent,
         val showControls: Boolean = true,
-        val showSettings: Boolean = false,
     ) : BookReaderUiState
 
     /**
@@ -77,12 +76,14 @@ sealed interface ReadyContent {
 }
 
 /**
- * The reflowable reader's current position, folded from `relocated` events:
- * the debounced-report percent plus the last page-start CFI and chapter label
- * (both null/empty until the first relocation that carries them), the
- * chapter-scoped pages the event reports, and the book-scope remaining
- * location pages (both null when absent — before locations exist); the
- * percent event keeps the last known value.
+ * The reflowable reader's current position — the ONE percent carrier: seeded
+ * with the boot resume percent at open, then folded from both position event
+ * kinds (`relocated` for the rich fields, the bare `percent` event for
+ * percent-only refreshes between relocations). Carries the debounced-report
+ * percent plus the last page-start CFI and chapter label (both null/empty
+ * until the first relocation that carries them), the chapter-scoped pages
+ * and the book-scope remaining location pages the event reports (both null
+ * when absent — before locations exist).
  */
 data class EpubLocation(
     val percent: Double,
@@ -99,30 +100,3 @@ data class ReaderSelection(
     val cfi: String,
     val text: String,
 )
-
-/**
- * One host-bound reader command, emitted by the ViewModel's speech loop and
- * sleep timer through `BookReaderViewModel.hostCommands` and executed by the
- * SCREEN against its EPUB host — the coordination/state split stays exactly
- * where Wave 3 put it (the VM coordinates marks, the screen owns the host,
- * and the two meet through this event channel because `requestSpeechContext`
- * / `next` / `goToCfi` / `setAutoScroll` are host methods the VM cannot call).
- *
- * Never a state: each value is a one-shot action (request, advance, follow,
- * stop) whose result flows back through `onSpeechContext` or the host's
- * event callbacks.
- */
-internal sealed interface ReaderHostCommand {
-
-    /** Ask the host for speakable paragraphs (`cfi` of null = current chapter). */
-    data class RequestSpeechContext(val cfi: String?) : ReaderHostCommand
-
-    /** Physical chapter turn — the speech context covers only the current chapter. */
-    data object AdvanceSpeechChapter : ReaderHostCommand
-
-    /** Follow the spoken paragraph: paint its ephemeral highlight + `goToCfi`. */
-    data class FollowSpeech(val cfi: String) : ReaderHostCommand
-
-    /** The sleep timer fired: the screen stops its auto-scroll, the VM stopped speech. */
-    data object SleepTimerFired : ReaderHostCommand
-}

@@ -29,7 +29,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Book
 import com.raulshma.jellyplay.core.datastore.reader.ReadingDirection
-import com.raulshma.jellyplay.core.datastore.reader.ReaderTheme
 import com.raulshma.jellyplay.core.ui.components.JellyPlayBackHandler
 import com.raulshma.jellyplay.feature.book.generated.resources.Res
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_error_cannot_open
@@ -63,10 +62,11 @@ fun BookReaderScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val direction by viewModel.readingDirection.collectAsStateWithLifecycle()
+    val prefs by viewModel.prefs.collectAsStateWithLifecycle()
     // EFFECTIVE theme/font: the per-book override when one exists, else the
     // global — the only values the reader renders with.
-    val theme by viewModel.effectiveReaderTheme.collectAsStateWithLifecycle()
-    val fontSizePx by viewModel.effectiveReaderFontSizePx.collectAsStateWithLifecycle()
+    val theme = prefs.effective.theme
+    val fontSizePx = prefs.effective.fontSizePx
 
     val windowOps = rememberReaderWindowOps()
     DisposableEffect(Unit) {

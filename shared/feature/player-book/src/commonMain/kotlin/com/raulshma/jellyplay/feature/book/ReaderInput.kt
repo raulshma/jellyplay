@@ -13,33 +13,51 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import com.raulshma.jellyplay.core.datastore.reader.ReadingDirection
 import com.raulshma.jellyplay.feature.book.epub.EpubTapZone
+import com.raulshma.jellyplay.feature.book.epub.tapZoneFor
 
 /**
- * What a content tap should do. Shared vocabulary of the native tap zones
- * (paged reader) and the JS-reported ones (reflowable reader) so both map
- * through the same direction-aware logic.
+ * What any content input should do after the guards fold. The shared
+ * vocabulary of every input path — the native paged tap zones, the
+ * JS-reported taps and swipes, the keyboard arrows and the volume keys — so
+ * all of them map through [readerNavDecision]'s one direction-aware rule
+ * ([IGNORE] exists only for the guarded paths: a sheet holding the screen or
+ * a live text selection).
  */
-internal enum class ReaderTapAction { FORWARD, BACKWARD, TOGGLE_CONTROLS }
+internal enum class ReaderNavDecision { FORWARD, BACKWARD, TOGGLE_CONTROLS, IGNORE }
 
 /**
  * Physical-left input (left arrow / leading tap zone) pages forward under
- * RTL, backward under LTR — the one named place the direction mapping lives
- * for the key handler, the native tap zones and the JS tap events.
+ * RTL, backward under LTR — the one named direction predicate both the arrow
+ * keys ([handleKeyEvent]) and the content-input decision ([readerNavDecision])
+ * fold through.
  */
 internal fun ReadingDirection.isForwardFromLeft(): Boolean = this == ReadingDirection.RTL
 
 /**
- * Maps a JS-reported content tap zone ([EpubTapZone], computed by reader.js
- * from the touch thirds) to the direction-aware action: the left zone pages
- * forward under RTL, backward under LTR (mirroring key handling); the center
- * zone toggles the chrome. Pure — pinned by ReaderInputTest.
+ * THE content-input decision — the one direction-aware "which third → which
+ * action" rule. The guards fold in front (sheet-open taps are noise: a modal
+ * holds the screen; a live selection must not page), then the leading third
+ * pages backward / the trailing third forward under LTR and the reverse
+ * under RTL (mirroring the arrow keys via [isForwardFromLeft]), and the
+ * center toggles the chrome. Every input path funnels through this one
+ * function: the native paged tap zones ([readerTapZones] resolves their
+ * gesture geometry with the same [tapZoneFor] the bridge decode uses), the
+ * JS-reported taps, and the swipes (synthesized zones — swipe left ≡ tap on
+ * the right). Pure — pinned by ReaderInputTest.
  */
-internal fun epubTapAction(zone: EpubTapZone, direction: ReadingDirection): ReaderTapAction =
-    when (zone) {
-        EpubTapZone.LEFT -> if (direction.isForwardFromLeft()) ReaderTapAction.FORWARD else ReaderTapAction.BACKWARD
-        EpubTapZone.RIGHT -> if (direction.isForwardFromLeft()) ReaderTapAction.BACKWARD else ReaderTapAction.FORWARD
-        EpubTapZone.CENTER -> ReaderTapAction.TOGGLE_CONTROLS
+internal fun readerNavDecision(
+    zone: EpubTapZone,
+    direction: ReadingDirection,
+    sheetOpen: Boolean = false,
+    selectionActive: Boolean = false,
+): ReaderNavDecision {
+    if (sheetOpen || selectionActive) return ReaderNavDecision.IGNORE
+    return when (zone) {
+        EpubTapZone.LEFT -> if (direction.isForwardFromLeft()) ReaderNavDecision.FORWARD else ReaderNavDecision.BACKWARD
+        EpubTapZone.RIGHT -> if (direction.isForwardFromLeft()) ReaderNavDecision.BACKWARD else ReaderNavDecision.FORWARD
+        EpubTapZone.CENTER -> ReaderNavDecision.TOGGLE_CONTROLS
     }
+}
 
 /**
  * Volume-key paging mapping (physical, like PageUp/PageDown): VolumeDown
@@ -49,9 +67,9 @@ internal fun epubTapAction(zone: EpubTapZone, direction: ReadingDirection): Read
  * ReaderInputTest; wired only when the volumeKeyPaging preference is on
  * (Android hardware; a harmless no-op where no volume keys exist).
  */
-internal fun volumeKeyPagingAction(key: Key): ReaderTapAction? = when (key) {
-    Key.VolumeDown -> ReaderTapAction.FORWARD
-    Key.VolumeUp -> ReaderTapAction.BACKWARD
+internal fun volumeKeyPagingAction(key: Key): ReaderNavDecision? = when (key) {
+    Key.VolumeDown -> ReaderNavDecision.FORWARD
+    Key.VolumeUp -> ReaderNavDecision.BACKWARD
     else -> null
 }
 
@@ -78,9 +96,10 @@ internal fun handleKeyEvent(
     if (volumeKeyPaging) {
         volumeKeyPagingAction(event.key)?.let { action ->
             when (action) {
-                ReaderTapAction.FORWARD -> onForward()
-                ReaderTapAction.BACKWARD -> onBackward()
-                ReaderTapAction.TOGGLE_CONTROLS -> Unit // unreachable for volume keys
+                ReaderNavDecision.FORWARD -> onForward()
+                ReaderNavDecision.BACKWARD -> onBackward()
+                ReaderNavDecision.TOGGLE_CONTROLS -> Unit // unreachable for volume keys
+                ReaderNavDecision.IGNORE -> Unit // unreachable — keys carry no sheet/selection guards
             }
             return true
         }
@@ -131,12 +150,13 @@ internal fun Modifier.chromeToggleKey(onToggleControls: () -> Unit): Modifier =
     }
 
 /**
- * Direction-aware tap zones: leading third = backward, trailing third =
- * forward, center = toggle chrome — with "leading" flipping under RTL.
- * [direction] keys the detector so a flip re-arms it with the new mapping.
- * An [onDoubleTap] (paged reader zoom toggle) makes single taps wait the
- * double-tap timeout — that is the cost of both gestures living on the same
- * surface; the paged reader is the only caller that passes one.
+ * Direction-aware tap zones: the gesture's thirds resolve through
+ * [tapZoneFor] (the same geometry rule the JS bridge decode uses) and the
+ * action through [readerNavDecision] — the one funnel every input path
+ * rides. [direction] keys the detector so a flip re-arms it with the new
+ * mapping. An [onDoubleTap] (paged reader zoom toggle) makes single taps
+ * wait the double-tap timeout — that is the cost of both gestures living on
+ * the same surface; the paged reader is the only caller that passes one.
  */
 internal fun Modifier.readerTapZones(
     direction: ReadingDirection,
@@ -147,28 +167,23 @@ internal fun Modifier.readerTapZones(
 ): Modifier = pointerInput(direction) {
     detectTapGestures(
         onTap = { offset ->
-            val action = when {
-                offset.x < size.width / 3f ->
-                    if (direction.isForwardFromLeft()) ReaderTapAction.FORWARD else ReaderTapAction.BACKWARD
-                offset.x > size.width * 2f / 3f ->
-                    if (direction.isForwardFromLeft()) ReaderTapAction.BACKWARD else ReaderTapAction.FORWARD
-                else -> ReaderTapAction.TOGGLE_CONTROLS
-            }
-            action.dispatch(onForward, onBackward, onToggleControls)
+            readerNavDecision(tapZoneFor(offset.x.toDouble(), size.width.toDouble()), direction)
+                .dispatch(onForward, onBackward, onToggleControls)
         },
         onDoubleTap = onDoubleTap?.let { handler -> { _ -> handler() } },
     )
 }
 
-private fun ReaderTapAction.dispatch(
+private fun ReaderNavDecision.dispatch(
     onForward: () -> Unit,
     onBackward: () -> Unit,
     onToggleControls: () -> Unit,
 ) {
     when (this) {
-        ReaderTapAction.FORWARD -> onForward()
-        ReaderTapAction.BACKWARD -> onBackward()
-        ReaderTapAction.TOGGLE_CONTROLS -> onToggleControls()
+        ReaderNavDecision.FORWARD -> onForward()
+        ReaderNavDecision.BACKWARD -> onBackward()
+        ReaderNavDecision.TOGGLE_CONTROLS -> onToggleControls()
+        ReaderNavDecision.IGNORE -> Unit // unreachable natively — no sheet/selection guards folded
     }
 }
 

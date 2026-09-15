@@ -11,7 +11,7 @@ import okio.Path
  * The wasmJs actual of the EPUB host seam: no WebView host exists on the
  * browser for now (the Android actual embeds a WebView, desktop embeds
  * KCEF/Chromium), so the handle degrades honestly — it reports
- * [EpubReaderStatus.ERROR] through the callbacks immediately (the reader
+ * [EpubReaderStatus.ERROR] through the event seam immediately (the reader
  * screen hides its loading veil on ERROR and shows its own error affordances)
  * and every command ([EpubReaderHandle.next]/[prev]/[goTo] and the newer
  * Wave 2 surface: goToCfi/setFlow/annotations/search/speech/auto-scroll) is a
@@ -39,11 +39,11 @@ internal actual fun rememberEpubReaderHost(
     bookFile: Path,
     resumePercent: Double,
     appearance: EpubAppearance,
-    callbacks: EpubReaderCallbacks,
+    onEvent: EpubEventListener,
 ): EpubReaderHandle {
     val handle = remember { WasmEpubReaderHandle() }
     LaunchedEffect(handle) {
-        callbacks.onStatusChanged(EpubReaderStatus.ERROR)
+        onEvent.onEvent(EpubEvent.Status(EpubReaderStatus.ERROR))
     }
     return handle
 }

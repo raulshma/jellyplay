@@ -1,9 +1,14 @@
 package com.raulshma.jellyplay.feature.book
 
+import com.raulshma.jellyplay.feature.book.epub.EpubReaderHandle
 import com.raulshma.jellyplay.feature.book.epub.EpubSpeechParagraph
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 
 /**
  * The read-aloud loop's live state. `spokenParagraphIndex` (the paragraph of
@@ -71,10 +76,12 @@ internal fun splitSentences(text: String): List<String> {
  * Drives the sentence-by-sentence read-aloud loop over a
  * [BookSpeechEngine]: speak sentence *i* → its `onDone` → sentence *i+1* →
  * …; when the chapter's sentences exhaust, the controller does NOT finish —
- * it parks (index null, session live) and hands continuation to
- * [onChapterEnd], whose owner advances the reader and feeds the next
- * chapter back through [start]. Skips move ±1 SENTENCE (forward past the
- * last sentence takes the chapter-end path); pause stops the engine and
+ * it parks (index null, session live), turns the page itself through the
+ * [host] seam and re-requests the next chapter's context once the turn's
+ * relocation lands ([onRelocated]) or the [SPEECH_CHAPTER_ADVANCE_TIMEOUT_MS]
+ * timeout fires (a book-end turn never relocates — the identity guard in
+ * [onSpeechContext] finishes there). Skips move ±1 SENTENCE (forward past
+ * the last sentence takes the chapter-end path); pause stops the engine and
  * keeps the position, resume re-speaks the current sentence from its start.
  * The engine itself stays text-agnostic — granularity lives here.
  *
@@ -84,14 +91,29 @@ internal fun splitSentences(text: String): List<String> {
  * contract posts `onDone` there; the ViewModel calls in from its scope).
  *
  * Compose-free by convention (the other reader controllers' rule): the
- * screen renders [state] and executes [com.raulshma.jellyplay.feature.book.ReaderHostCommand]s,
- * this class owns only the loop.
+ * screen renders [state], this class owns the loop AND its chapter
+ * continuation — controller → host → JS directly, no command channel (the
+ * host accessor's shape and late-binding rationale are [ReaderAnnotationSync]'s).
  */
 internal class ReaderSpeechController(
     private val engine: BookSpeechEngine,
+    /**
+     * Owns the chapter-advance timeout: the continuation waits for the turn's
+     * relocation, and a book-end turn never delivers one — the timeout
+     * re-requests the context anyway so the identity guard can finish.
+     */
+    private val scope: CoroutineScope,
+    /**
+     * The host seam — the ViewModel's attached [ReaderSessionPort] handle:
+     * chapter turns (`next`) and context requests (`requestSpeechContext`)
+     * execute DIRECTLY against it. Late-bound (`() -> Handle?`) because the
+     * host is session-owned and created after this controller; a null host
+     * (detached screen) degrades the continuation to a no-op, which the
+     * parked session simply outlives.
+     */
+    private val host: () -> EpubReaderHandle?,
     private val onSpeakParagraph: (index: Int, cfi: String) -> Unit,
-    private val onChapterEnd: () -> Unit,
-    private val onFinished: () -> Unit,
+    private val onFinished: () -> Unit = {},
     private val onError: () -> Unit = {},
 ) {
 
@@ -107,33 +129,102 @@ internal class ReaderSpeechController(
     /** Bumped by every loop interruption; utterance completions must match it. */
     private var generation = 0
 
+    // -----------------------------------------------------------------
+    // Chapter continuation state (the protocol the VM used to keep as four
+    // hand-synced fields).
+    // -----------------------------------------------------------------
+
     /**
-     * Marks the session live without paragraphs yet (the context request is
-     * in flight) — the chrome can already show the active/paused state and
-     * a late context still lands because [onSpeechContext] guards on active.
+     * First-paragraph CFI of the chapter being spoken — the book-end identity
+     * guard. The RAW first paragraph, not the first SENTENCE: a paragraph
+     * that splits into no sentences still anchors the chapter identity.
      */
-    fun awaitContext() {
+    private var chapterKey: String? = null
+
+    /** True between "chapter end" and "context re-requested" (relocation wait window). */
+    private var advancing = false
+
+    /** Percent snapshot at the chapter turn — the empty-chapter continuation guard. */
+    private var percentAtAdvance = 0.0
+
+    /** Live percent, kept current by the owner via [reportPercent]. */
+    private var currentPercent = 0.0
+
+    private var advanceTimeout: Job? = null
+
+    /**
+     * The owner keeps this current from the relocated/percent events — the
+     * stall guard compares it against [percentAtAdvance].
+     */
+    fun reportPercent(percent: Double) {
+        currentPercent = percent
+    }
+
+    /**
+     * Chapter-end continuation: remember the chapter identity + percent,
+     * turn the page through the host seam, then re-request the context once
+     * the turn's relocation arrives ([onRelocated]) or the timeout fires (a
+     * book-end turn never relocates — the identity guard finishes there).
+     */
+    fun advanceChapter() {
+        // chapterKey already holds the current chapter's raw first-paragraph
+        // CFI (set by [start]); nothing between start and the turn rewrites it.
+        percentAtAdvance = currentPercent
+        advancing = true
+        host()?.next()
+        advanceTimeout?.cancel()
+        advanceTimeout = scope.launch {
+            delay(SPEECH_CHAPTER_ADVANCE_TIMEOUT_MS)
+            requestContextAfterAdvance()
+        }
+    }
+
+    /** The host relocated — exactly the event the turn's context request waits for. */
+    fun onRelocated() {
+        if (!advancing) return
+        advanceTimeout?.cancel()
+        advanceTimeout = null
+        requestContextAfterAdvance()
+    }
+
+    private fun requestContextAfterAdvance() {
+        if (!advancing) return
+        advancing = false
+        host()?.requestSpeechContext(null)
+    }
+
+    /**
+     * Marks the session live without paragraphs yet and asks the host for the
+     * chapter's speakable context at [cfi] (null = the current chapter) —
+     * the answer lands in [onSpeechContext], guarded on active, so the
+     * chrome can already show the active/paused state while it is in flight.
+     */
+    fun awaitContext(cfi: String? = null) {
         hardStopEngine()
         units = emptyList()
         unitIndex = -1
+        clearContinuation()
         _state.value = ReaderSpeechState(active = true)
+        host()?.requestSpeechContext(cfi)
     }
 
     /**
      * Speaks [paragraphs] from the first sentence. An empty chapter is not an
-     * error: it takes the chapter-end path immediately so the owner can
-     * advance (an empty context at book end terminates through the owner's
-     * same-chapter/percent guard, never through an infinite loop here).
+     * error: it takes the chapter-end path immediately so the loop advances
+     * itself (an empty context at book end terminates through the
+     * same-chapter/percent guard in [onSpeechContext], never through an
+     * infinite loop here).
      */
     fun start(paragraphs: List<EpubSpeechParagraph>) {
         hardStopEngine()
+        chapterKey = paragraphs.firstOrNull()?.cfi
         units = paragraphs.flatMapIndexed { index, paragraph ->
             splitSentences(paragraph.text).map { SpeechUnit(index, paragraph.cfi, it) }
         }
         unitIndex = -1
         if (units.isEmpty()) {
             _state.value = ReaderSpeechState(active = true)
-            onChapterEnd()
+            advanceChapter()
             return
         }
         speakUnit(0)
@@ -165,7 +256,7 @@ internal class ReaderSpeechController(
             engine.stop()
             unitIndex = -1
             _state.value = ReaderSpeechState(active = true)
-            onChapterEnd()
+            advanceChapter()
         } else {
             speakUnit(next)
         }
@@ -183,6 +274,7 @@ internal class ReaderSpeechController(
         hardStopEngine()
         units = emptyList()
         unitIndex = -1
+        clearContinuation()
         _state.value = ReaderSpeechState()
     }
 
@@ -209,6 +301,41 @@ internal class ReaderSpeechController(
         onError()
     }
 
+    /**
+     * Host answer to a speech-context request, guards folded in (moved
+     * verbatim from the owning ViewModel): a context whose first paragraph
+     * repeats the chapter being spoken means the chapter turn did not
+     * relocate (book end) → finish; an empty context mid-book means a
+     * chapter with nothing speakable → the caller keeps advancing (the
+     * percent snapshot taken at the turn breaks the loop once the position
+     * stops moving); anything else starts the loop on the new chapter.
+     */
+    fun onSpeechContext(paragraphs: List<EpubSpeechParagraph>, currentPercent: Double) {
+        if (!_state.value.active) return // late answer to a stopped session
+        val firstCfi = paragraphs.firstOrNull()?.cfi
+        if (firstCfi != null && firstCfi == chapterKey) {
+            // The turn did not relocate — the same chapter came back. Book end.
+            finish()
+            return
+        }
+        if (paragraphs.isEmpty() && currentPercent == percentAtAdvance) {
+            // Nothing speakable AND the position never moved: advancing again
+            // cannot help (book end, or a static rendition) — finish instead
+            // of looping.
+            finish()
+            return
+        }
+        start(paragraphs)
+    }
+
+    /** Clears the continuation bookkeeping (NOT the loop state — callers drive that). */
+    private fun clearContinuation() {
+        chapterKey = null
+        advancing = false
+        advanceTimeout?.cancel()
+        advanceTimeout = null
+    }
+
     private fun speakUnit(index: Int) {
         val unit = units.getOrNull(index) ?: return
         generation++
@@ -227,7 +354,7 @@ internal class ReaderSpeechController(
         if (next >= units.size) {
             unitIndex = -1
             _state.value = ReaderSpeechState(active = true)
-            onChapterEnd()
+            advanceChapter()
         } else {
             speakUnit(next)
         }
@@ -238,3 +365,6 @@ internal class ReaderSpeechController(
         engine.stop()
     }
 }
+
+/** How long the continuation waits for the chapter turn's relocation before re-requesting the context anyway. */
+private const val SPEECH_CHAPTER_ADVANCE_TIMEOUT_MS = 1_500L

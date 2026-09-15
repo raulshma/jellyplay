@@ -11,6 +11,11 @@ import com.raulshma.jellyplay.core.data.download.DownloadIntakeImpl
 import com.raulshma.jellyplay.core.data.playback.AudioEffectsManager
 import com.raulshma.jellyplay.core.data.playback.AudioEffectsProcessor
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
+import com.raulshma.jellyplay.core.data.playback.focus.AndroidFocusArbiter
+import com.raulshma.jellyplay.core.data.playback.focus.AudioPlaybackManagerSurface
+import com.raulshma.jellyplay.core.data.playback.focus.DefaultPlaybackFocus
+import com.raulshma.jellyplay.core.data.playback.focus.FocusArbiter
+import com.raulshma.jellyplay.core.data.playback.focus.PlaybackFocus
 import com.raulshma.jellyplay.core.data.playback.AudioPrefetchEngine
 import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
 import com.raulshma.jellyplay.core.data.playback.AudioQueueManager
@@ -67,10 +72,19 @@ import org.koin.dsl.module
  */
 fun androidCoreDataModule(context: Context): Module = module {
 
+    // ── Cross-player exclusivity (PlaybackFocus, ADR-0004) ─────────────
+    single<FocusArbiter> { AndroidFocusArbiter(context.applicationContext) }
+    single<PlaybackFocus> {
+        DefaultPlaybackFocus(
+            arbiter = get(),
+            surfaces = listOf(AudioPlaybackManagerSurface(manager = lazy { get<AudioPlaybackManager>() })),
+        )
+    }
     // ── Playback stack (media3) ─────────────────────────────────────────
     single {
         AudioPlaybackManager(
             context = context,
+            playbackFocus = get(),
             mediaRepository = get(),
             playlistRepository = get(),
             playbackRepository = get(),

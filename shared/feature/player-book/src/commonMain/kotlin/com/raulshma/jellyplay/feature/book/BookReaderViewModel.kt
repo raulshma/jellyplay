@@ -8,56 +8,53 @@ import com.raulshma.jellyplay.core.data.repository.ReaderAnnotationStyle
 import com.raulshma.jellyplay.core.data.repository.ReaderAnnotationsRepository
 import com.raulshma.jellyplay.core.data.repository.ReaderAnnotation
 import com.raulshma.jellyplay.core.data.repository.ReaderBookmark
-import com.raulshma.jellyplay.core.datastore.reader.PerBookAppearance
+import com.raulshma.jellyplay.core.data.playback.focus.FocusClaimState
+import com.raulshma.jellyplay.core.data.playback.focus.FocusOutcome
+import com.raulshma.jellyplay.core.data.playback.focus.NoopPlaybackFocus
+import com.raulshma.jellyplay.core.data.playback.focus.PlaybackFocus
+import com.raulshma.jellyplay.core.data.playback.focus.PlaybackSurfaceId
 import com.raulshma.jellyplay.core.datastore.reader.ReadingDirection
-import com.raulshma.jellyplay.core.datastore.reader.ReaderFontFamily
-import com.raulshma.jellyplay.core.datastore.reader.ReaderSlice
-import com.raulshma.jellyplay.core.datastore.reader.ReaderStore
-import com.raulshma.jellyplay.core.datastore.reader.ReaderTheme
 import com.raulshma.jellyplay.core.data.repository.BookTocCacheRepository
 import com.raulshma.jellyplay.core.data.repository.NoopBookTocCacheRepository
 import com.raulshma.jellyplay.core.model.BookFormat
 import com.raulshma.jellyplay.core.model.BookProgressPolicy
 import com.raulshma.jellyplay.core.model.BookTocEntry
-import com.raulshma.jellyplay.core.model.pathExtension
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import com.raulshma.jellyplay.feature.book.epub.EpubEvent
 import com.raulshma.jellyplay.feature.book.epub.EpubRelocation
 import com.raulshma.jellyplay.feature.book.epub.EpubSpeechParagraph
 import com.raulshma.jellyplay.feature.book.epub.EpubTocItem
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
 
 /**
  * Koin-owned state owner for the book reader (video-player conventions:
  * sealed uiState, no writes from non-VM modules). One screen lifetime loads
- * one item: MediaDetail → [BookFormat.fromPath] → [BookContentResolver]
- * (offline download first, else the reader-cache fetch) → then by format:
- * PAGED books go through [BookDocumentOpener] into paged state, while
- * REFLOWABLE (EPUB) books skip the document layer entirely — the screen's
- * WebView host renders the resolved file, and progress is a percent
- * (jellyfin-web interop: `ticks = floor(percent × 10_000_000)`).
+ * one item through [BookSessionLoader] — MediaDetail → [BookFormat.fromPath]
+ * → [BookContentResolver] (offline download first, else the reader-cache
+ * fetch) → then by format: PAGED books go through [BookDocumentOpener] into
+ * paged state, while REFLOWABLE (EPUB) books skip the document layer
+ * entirely — the screen's WebView host renders the resolved file, and
+ * progress is a percent (jellyfin-web interop: `ticks = floor(percent ×
+ * 10_000_000)`).
  *
- * Progress is reported to `PlaybackRepository.reportBookProgress` debounced
- * (~800 ms) per page change / relocated event and immediately on dispose.
+ * Progress reporting is delegated to [ReaderProgressReporter] (debounce,
+ * final-flush idempotence across onDispose+onCleared, the flush-scope
+ * escape, the last-CFI ride-along); the VM keeps only the payload lambdas
+ * that read its session state. `final = true` reports go to
+ * `PlaybackRepository.reportBookProgress` immediately on dispose.
  * Marking a book read stays a user action (see docs/book-reader.md): nothing
  * here auto-sets the played flag at the last page or a percent threshold.
  *
@@ -65,23 +62,33 @@ import kotlin.math.roundToInt
  * per loaded item through [bookmarks]/[annotations] (re-subscribed per load);
  * the toggle/jump COORDINATION lives here while the EPUB host stays
  * screen-owned — [jumpToBookmark] only resolves the paged path, the screen
- * drives `host.goToCfi` for reflowable jumps (it owns the host). Exact
- * reflowable resume rides the ReaderStore last-CFI map: [ReadyContent.Reflowable.resumeCfi]
- * carries the stored anchor to the screen (which jumps once the host is
- * READY), and every debounced progress flush re-persists the current anchor.
+ * drives `host.goToCfi` for reflowable jumps (it owns the host). The
+ * paged-vs-reflowable encoding of a row is [ReaderBookmarkCodec]'s one rule.
+ * Exact reflowable resume rides the ReaderStore last-CFI map:
+ * [ReadyContent.Reflowable.resumeCfi] carries the stored anchor to the
+ * screen (which jumps once the host is READY), and every debounced progress
+ * flush re-persists the current anchor.
  *
  * Read aloud + sleep timer (Wave 5) follow the same split: the speech LOOP
  * ([ReaderSpeechController]) and the timer ([ReaderSleepTimer]) live here
- * over the [BookSpeechEngine] seam, while every host touch
- * (`requestSpeechContext` / `next` / paragraph follow / auto-scroll stop)
- * rides [hostCommands] — one-shot events the screen executes because only
- * it holds the EPUB host.
+ * over the [BookSpeechEngine] seam, while every host touch runs through the
+ * attached [ReaderSessionPort] (the screen's reflowable session, bound by
+ * the reader composition): the speech chapter continuation executes
+ * controller → host directly, and the paragraph follow + the sleep timer's
+ * auto-scroll stop are plain calls on the port — the one-shot
+ * `hostCommands` channel and its screen collector are gone.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class BookReaderViewModel(
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
-    private val readerStore: ReaderStore,
+    /**
+     * The reader preference choreography ([ReaderPreferences] — snapshot +
+     * commands + write-through). Every pref write routes through it; the VM
+     * keeps only the session-stateful halves (direction gate, engine
+     * configure).
+     */
+    val preferences: ReaderPreferences,
     private val annotationsRepository: ReaderAnnotationsRepository,
     private val contentResolver: BookContentResolver,
     private val documentOpener: BookDocumentOpener,
@@ -105,6 +112,13 @@ class BookReaderViewModel(
      */
     private val tocCacheRepository: BookTocCacheRepository = NoopBookTocCacheRepository(),
     /**
+     * Cross-player exclusivity (PlaybackFocus): read-aloud claims the audio
+     * floor so background music pauses instead of mixing with the spoken
+     * word (ADR-0004). Defaulted to the vacuous [NoopPlaybackFocus] so tests
+     * and platforms without a binding keep single-player semantics.
+     */
+    private val playbackFocus: PlaybackFocus = NoopPlaybackFocus,
+    /**
      * Process-wide scope for the exit flush: [reportNow] with `final = true`
      * runs from `onDispose`, and viewModelScope is already cancelled by the
      * time `onCleared()` tears the screen down — a plain launch there would
@@ -120,123 +134,57 @@ class BookReaderViewModel(
     val readingDirection: StateFlow<ReadingDirection> = _readingDirection.asStateFlow()
 
     /**
+     * The reader preference snapshot ([ReaderPreferences.snapshot]) — every
+     * knob value the screen and sheets render, the per-book override, the
+     * per-item direction and the EFFECTIVE appearance fold (override ?:
+     * global), in one emission. The individual pref flows this replaced were
+     * a 16-member `map + stateIn` re-exposure of the slice field-by-field.
+     */
+    val prefs: StateFlow<ReaderPrefsSnapshot> get() = preferences.snapshot
+
+    /**
      * The item whose marks + appearance override are exposed — the key of the
-     * per-item flows. A load re-points it, so [bookmarks]/[annotations] (and
-     * [perBookAppearance]) re-subscribe to the new item's streams
-     * (flatMapLatest drops the stale subscription).
+     * per-item flows. A load re-points it, so [bookmarks]/[annotations]
+     * re-subscribe to the new item's streams (flatMapLatest drops the stale
+     * subscription) and [preferences.attach] re-points the pref routing.
      */
     private val marksItemId = MutableStateFlow<String?>(null)
 
-    /**
-     * The loaded item's per-book appearance override (null = the book inherits
-     * the global theme/font size). Re-subscribed per load, exactly like the
-     * marks flows — and the router the theme/font setters write through.
-     */
-    val perBookAppearance: StateFlow<PerBookAppearance?> = marksItemId
-        .flatMapLatest { id ->
-            if (id == null) flowOf(null) else readerStore.reader.map { it.perBookAppearance[id] }
-        }
-        .distinctUntilChanged()
-        .stateIn(scope, SharingStarted.Eagerly, null)
+    /** Read aloud (Wave 5) + sleep timer + auto-scroll coordination. */
 
     /**
-     * What the reader RENDERS with: the per-book override's axis ?: the global
-     * one (pure fold in [effectiveAppearance]). Construction, live pushes and
-     * the settings sheet's selection states all read THESE, never the raw
-     * globals (the slice itself stays reachable through [readerStore]), so an
-     * override and its global stay visually coherent.
+     * The screen session seam: the reflowable composition attaches its
+     * [ReflowableReaderSession] here, giving the speech loop and the sleep
+     * timer a direct line to the session-owned host (the chapter turn and
+     * the context request) and to the screen-owned choreography (paragraph
+     * follow, auto-scroll stop). Null until the reader composes; a disposed
+     * screen's session keeps the port but nulls its own host, so every call
+     * degrades to a no-op — the old channel-without-collector semantics.
      */
-    val effectiveReaderTheme: StateFlow<ReaderTheme> = combine(readerStore.reader, perBookAppearance) { slice, per ->
-        effectiveAppearance(slice, per).theme
-    }.stateIn(scope, SharingStarted.Eagerly, readerStore.reader.value.readerTheme)
+    private var readerSession: ReaderSessionPort? = null
 
-    val effectiveReaderFontSizePx: StateFlow<Int> = combine(readerStore.reader, perBookAppearance) { slice, per ->
-        effectiveAppearance(slice, per).fontSizePx
-    }.stateIn(scope, SharingStarted.Eagerly, readerStore.reader.value.readerFontSizePx)
-
-    /**
-     * One reader-slice preference as a StateFlow — every global knob below is
-     * the same `map + stateIn` shape over [ReaderStore.reader], and the
-     * initial value folds out of the same selector (the store slice's current
-     * entry, which already carries the band defaults), so the selector is the
-     * only per-knob code left.
-     */
-    private fun <T> readerPref(selector: (ReaderSlice) -> T): StateFlow<T> =
-        readerStore.reader
-            .map(selector)
-            .stateIn(scope, SharingStarted.Eagerly, selector(readerStore.reader.value))
-
-    /** Global reflowable typography slice (family / leading / margins / justify / flow). */
-    val readerFontFamily: StateFlow<ReaderFontFamily> =
-        readerPref { it.fontFamily }
-
-    val lineHeightPct: StateFlow<Int> =
-        readerPref { it.lineHeightPct }
-
-    val marginPct: StateFlow<Int> =
-        readerPref { it.marginPct }
-
-    val justify: StateFlow<Boolean> = readerPref { it.justify }
-
-    val scrollMode: StateFlow<Boolean> = readerPref { it.scrollMode }
-
-    /** Display + behavior slice: brightness veil, volume-key paging, animated turns, reading speed. */
-    val brightnessPct: StateFlow<Int> =
-        readerPref { it.brightnessPct }
-
-    val volumeKeyPaging: StateFlow<Boolean> = readerPref { it.volumeKeyPaging }
-
-    val animatedPageTurns: StateFlow<Boolean> = readerPref { it.animatedPageTurns }
-
-    /** Opt-in chapter tick rail (see ReaderTocRail.kt); off by default. */
-    val tocRailVisible: StateFlow<Boolean> = readerPref { it.tocRailVisible }
-
-    val readingSpeedWpm: StateFlow<Int> =
-        readerPref { it.readingSpeedWpm }
-
-    // ---------------------------------------------------------------------
-    // Read aloud (Wave 5) + sleep timer + auto-scroll coordination.
-    // ---------------------------------------------------------------------
-
-    /** Read-aloud voice knobs (percent bands live in the ReaderStore). */
-    val speechRate: StateFlow<Int> =
-        readerPref { it.speechRate }
-
-    val speechPitch: StateFlow<Int> =
-        readerPref { it.speechPitch }
-
-    /** Scrolled-flow auto-scroll speed (px/s; the band lives in the ReaderStore). */
-    val autoScrollSpeedPxPerSec: StateFlow<Int> =
-        readerPref { it.autoScrollSpeedPxPerSec }
-
-    /**
-     * One-shot commands the SCREEN executes against its EPUB host (see
-     * [ReaderHostCommand] — the host is screen-owned, so the speech loop's
-     * context requests, chapter turns, paragraph follows and the sleep
-     * timer's auto-scroll stop all ride this channel). Buffered: a command
-     * must never drop to a slow collector mid-utterance.
-     */
-    private val _hostCommands = MutableSharedFlow<ReaderHostCommand>(extraBufferCapacity = 32)
-    internal val hostCommands: SharedFlow<ReaderHostCommand> = _hostCommands.asSharedFlow()
+    /** The reader composition's session binding (one screen, one session). */
+    internal fun attachReaderSession(session: ReaderSessionPort) {
+        readerSession = session
+    }
 
     /**
      * The read-aloud loop driver (sentence sequencing, pause/skip). Chapter
      * continuation: the speech context covers the CURRENT chapter only, so
-     * on chapter end the loop asks [advanceSpeechChapter], which turns the
-     * page (`AdvanceSpeechChapter`) and re-requests the context once the
-     * relocation lands (or the [SPEECH_CHAPTER_ADVANCE_TIMEOUT_MS] timeout
-     * fires — a book-end `next()` never relocates). Book end is detected by
-     * identity, not timing: a context whose first paragraph matches the
-     * chapter being spoken means `next()` did not move — finish.
+     * on chapter end the loop turns the page itself through the attached
+     * session's host and re-requests the context once the relocation lands
+     * (or the chapter-advance timeout fires — a book-end
+     * `next()` never relocates). Book end is detected by identity, not
+     * timing: a context whose first paragraph matches the chapter being
+     * spoken means `next()` did not move — finish.
      */
     private val speechController = ReaderSpeechController(
         engine = speechEngine,
-        onSpeakParagraph = { _, cfi ->
-            _hostCommands.tryEmit(ReaderHostCommand.FollowSpeech(cfi))
-        },
-        onChapterEnd = { advanceSpeechChapter() },
-        onFinished = { clearSpeechSession() },
-        onError = { clearSpeechSession() },
+        scope = scope,
+        host = { readerSession?.host },
+        onSpeakParagraph = { _, cfi -> readerSession?.followSpeech(cfi) },
+        onFinished = {},
+        onError = {},
     )
 
     internal val speechState: StateFlow<ReaderSpeechState> = speechController.state
@@ -251,45 +199,23 @@ class BookReaderViewModel(
 
     /**
      * The sleep timer. Firing stops read-aloud HERE (the VM owns it) and
-     * emits [ReaderHostCommand.SleepTimerFired] so the screen stops its
-     * screen-owned auto-scroll.
+     * tells the attached session so it stops its screen-owned auto-scroll.
      */
     private val sleepTimer = ReaderSleepTimer(scope) {
         stopReadAloud()
-        _hostCommands.tryEmit(ReaderHostCommand.SleepTimerFired)
+        readerSession?.sleepTimerFired()
     }
 
     internal val sleepTimerState: StateFlow<ReaderSleepTimerState> = sleepTimer.state
 
-    /** Paragraphs of the chapter being spoken (fed by `onSpeechContext`). */
-    private var speechParagraphs: List<EpubSpeechParagraph> = emptyList()
-
-    /** First-paragraph CFI of the chapter being spoken — the book-end identity guard. */
-    private var speechChapterKey: String? = null
-
-    /** True between "chapter end" and "context re-requested" (relocation wait window). */
-    private var speechAdvancing = false
-
-    /** Percent snapshot at the chapter turn — the empty-chapter continuation guard. */
-    private var speechPercentAtAdvance = 0.0
-
-    private var speechAdvanceTimeout: Job? = null
-
     /**
-     * Last rate/pitch PUSHED to the engine. The setters fold onto these,
-     * never onto the ReaderStore flow (which lags its own write — reading it
-     * per tap would erase the other axis with a stale value), exactly like
-     * [pendingFontSizePx].
+     * Last rate/pitch PUSHED to the engine, resolved from the preference
+     * snapshot ([ReaderPreferences] write-through keeps it synchronous — the
+     * value a setter just commanded is visible here immediately).
      */
-    private var appliedSpeechRate: Int? = null
-    private var appliedSpeechPitch: Int? = null
-
     private fun configureSpeechEngine(rate: Int? = null, pitch: Int? = null) {
-        val nextRate = rate ?: appliedSpeechRate ?: readerStore.reader.value.speechRate
-        val nextPitch = pitch ?: appliedSpeechPitch ?: readerStore.reader.value.speechPitch
-        appliedSpeechRate = nextRate
-        appliedSpeechPitch = nextPitch
-        speechEngine.configure(nextRate, nextPitch)
+        val slice = preferences.snapshot.value.global
+        speechEngine.configure(rate ?: slice.speechRate, pitch ?: slice.speechPitch)
     }
 
     init {
@@ -300,6 +226,21 @@ class BookReaderViewModel(
             speechEngine.availability.collect { availability ->
                 if (availability == BookSpeechAvailability.UNAVAILABLE && speechState.value.active) {
                     speechController.engineLost()
+                }
+            }
+        }
+        // Displaced claimant (newest-wins, ADR-0004): the user started music
+        // (or later, video) while read-aloud held the floor — pause the loop.
+        // Speech NEVER auto-resumes; the module ignores regains too, so the
+        // user's next play tap is the only way back.
+        scope.launch {
+            playbackFocus.claimState.collect { state ->
+                val holder = (state as? FocusClaimState.Held)?.holder ?: return@collect
+                if (holder != PlaybackSurfaceId.READ_ALOUD &&
+                    speechState.value.active &&
+                    !speechState.value.paused
+                ) {
+                    speechController.pause()
                 }
             }
         }
@@ -317,7 +258,12 @@ class BookReaderViewModel(
         }
         .stateIn(scope, SharingStarted.Eagerly, emptyList())
 
-    /** The reflowable reader's folded position (null until the first relocation). */
+    /**
+     * The reflowable reader's folded position — the ONE percent carrier the
+     * screen reads. Null before the first Ready; seeded with the boot resume
+     * percent in [openBook]; folded from both position event kinds through
+     * [foldEpubPosition] afterwards.
+     */
     private val _currentEpubLocation = MutableStateFlow<EpubLocation?>(null)
     val currentEpubLocation: StateFlow<EpubLocation?> = _currentEpubLocation.asStateFlow()
 
@@ -338,27 +284,48 @@ class BookReaderViewModel(
     private val pageCache = PageCache<ImageBitmap>()
     private var currentPage = 0
 
-    /** Latest relocated percent (reflowable only), 0.0..1.0. */
+    /**
+     * Latest folded percent (reflowable only; seeded from the resume math,
+     * refreshed by both position event kinds), 0.0..1.0 — the progress
+     * report payload's source. The screen never reads this scalar; it reads
+     * [currentEpubLocation].
+     */
     private var currentPercent = 0.0
 
     /** Latest relocated CFI (reflowable only) — the exact-resume / bookmark anchor. */
     private var latestEpubCfi: String? = null
-    private var finalReportFlushed = false
-    private var debounceJob: Job? = null
-    private var directionJob: Job? = null
-    private var pendingFontSizePx: Int? = null
 
     /**
-     * Last override WRITE (theme/font into [PerBookAppearance]) — the
-     * perBookAppearance StateFlow lags the DataStore round trip exactly like
-     * [pendingFontSizePx] does, so back-to-back override writes must fold
-     * onto this, not onto the stale flow value (or the second write would
-     * drop the first). Cleared per load and by the per-book toggle.
+     * The position-report choreography (debounce, final-flush idempotence,
+     * flush-scope escape, last-CFI ride-along). Its payload lambdas read the
+     * session state below — the reporter owns the when, the VM keeps the what.
      */
-    private var pendingPerBook: PerBookAppearance? = null
+    private val progressReporter = ReaderProgressReporter(
+        scope = scope,
+        flushScope = flushScope,
+        itemId = { loadedItemId },
+        buildReport = { item ->
+            val ready = _uiState.value as? BookReaderUiState.Ready
+            if (ready == null) {
+                null
+            } else {
+                ReaderProgressReport(
+                    itemId = item,
+                    ticks = when (val content = ready.content) {
+                        is ReadyContent.Paged -> BookProgressPolicy.pageToTicks(currentPage)
+                        is ReadyContent.Reflowable -> BookProgressPolicy.percentToTicks(currentPercent)
+                    },
+                    cfi = (ready.content as? ReadyContent.Reflowable)?.let { latestEpubCfi },
+                )
+            }
+        },
+        reportProgress = { item, ticks, final ->
+            playbackRepository.reportBookProgress(item, ticks, final = final)
+        },
+        setLastCfi = { item, cfi -> preferences.setLastCfi(item, cfi) },
+    )
 
-    /** The override a theme/font write should route through (null = global). */
-    private fun routingOverride(): PerBookAppearance? = pendingPerBook ?: perBookAppearance.value
+    private var directionJob: Job? = null
     private var loadJob: Job? = null
 
     /**
@@ -368,29 +335,57 @@ class BookReaderViewModel(
      */
     private var userDirectionPinned = false
 
+    /**
+     * The one-book open sequence (detail fetch → format resolve + probe
+     * fallback → content resolve → resume math → document open), owning the
+     * TOC-cache write-through. Built from this VM's constructor seams plus
+     * the three hooks that touch VM state — the loader surfaces
+     * [BookSessionOutcome]s and never writes the ui state.
+     */
+    private val sessionLoader = BookSessionLoader(
+        scope = scope,
+        mediaRepository = mediaRepository,
+        playbackRepository = playbackRepository,
+        contentResolver = contentResolver,
+        documentOpener = documentOpener,
+        formatProbe = formatProbe,
+        pdfOutlineParser = pdfOutlineParser,
+        tocCacheRepository = tocCacheRepository,
+        storedResumeCfi = { itemId -> preferences.lastCfi(itemId) },
+        onSessionReset = ::resetForNewSession,
+        onDownloadProgress = { progress ->
+            (_uiState.value as? BookReaderUiState.Loading)?.let {
+                _uiState.value = it.copy(progress = progress)
+            }
+        },
+        onFormatResolved = { format -> loadedBookFormat = format },
+    )
+
     /** Screen entry point (audio-player convention: the screen triggers the load, the VM holds no itemId ctor dep). */
     fun load(itemId: String, jumpHref: String? = null, jumpPage: Int? = null) {
         if (loadedItemId == itemId && _uiState.value !is BookReaderUiState.Idle) return
         loadedItemId = itemId
         marksItemId.value = itemId
+        // Pref routing (per-book override/direction) re-points at the new item;
+        // any optimistic per-book state from the previous book dies here.
+        preferences.attach(itemId)
         // One-shot deep-link destination (detail "Contents" tap). Consumed
         // (and cleared) by [openBook] — a later plain re-load must resume.
         pendingJumpHref = jumpHref
         pendingJumpPage = jumpPage
         userDirectionPinned = false
         // One collector per item — a re-load must not stack a second one.
+        // The persisted direction (with its pin flag) rides the pref snapshot.
         directionJob?.cancel()
         directionJob = scope.launch {
-            readerStore.reader
-                .map { it.readingDirections[itemId] }
-                .collect { persisted ->
-                    // A persisted user choice always wins; without one, keep
-                    // whatever the book itself reported or the LTR default.
-                    if (persisted != null) {
-                        userDirectionPinned = true
-                        _readingDirection.value = persisted
-                    }
+            preferences.snapshot.collect { snap ->
+                // A persisted user choice always wins; without one, keep
+                // whatever the book itself reported or the LTR default.
+                if (snap.directionPinned) {
+                    userDirectionPinned = true
+                    _readingDirection.value = snap.direction
                 }
+            }
         }
         // Single-flight: a re-load cancels the in-flight fetch/open (which also
         // aborts the streaming download) before starting the next one.
@@ -399,26 +394,17 @@ class BookReaderViewModel(
     }
 
     /**
-     * Format fallback when the item's `Path` carried no known extension:
-     * one cheap ranged GET against the download URL reads Content-Type +
-     * Content-Disposition filename (both served for every book, 10.9–12).
-     * A probe failure (or an unrecognized metadata pair — mobi/azw3) maps to
-     * null and the caller reports the precise unsupported-format error.
+     * Session-scoped state reset for a re-load (new book, same VM): the
+     * previous book's document, cached page bitmaps and per-book position
+     * tracking must not leak into the new reader. Invoked by
+     * [BookSessionLoader.open] at exactly the old position — right after the
+     * loading veil, before the detail fetch. (Per-book pref state dies in
+     * [preferences.attach].)
      */
-    private suspend fun probeDownloadFormat(downloadUrl: String, accessToken: String?): BookFormat? {
-        val metadata = runCatching { formatProbe.probe(downloadUrl, accessToken) }.getOrNull() ?: return null
-        return BookFormat.fromDownloadMetadata(metadata.contentType, metadata.fileName)
-    }
-
-    private suspend fun openBook(itemId: String) {
-        _uiState.value = BookReaderUiState.Loading()
-        // A re-load (new book, same VM) must not leak the previous book's
-        // document, cached page bitmaps or per-book position tracking into
-        // the new reader.
+    private fun resetForNewSession() {
         document?.close()
         document = null
         pageCache.clear()
-        pendingPerBook = null
         currentPage = 0
         currentPercent = 0.0
         latestEpubCfi = null
@@ -428,162 +414,89 @@ class BookReaderViewModel(
         // Read-aloud + sleep timer belong to the previous book's session.
         stopReadAloud()
         sleepTimer.cancel()
-        val detail = mediaRepository.getMediaDetail(itemId).getOrNull()
-        if (detail == null) {
-            _uiState.value = BookReaderUiState.Error(BookReaderUiState.ErrorReason.CannotOpen)
-            return
-        }
-        val downloadUrl = playbackRepository.getBookDownloadUrl(itemId)
-        // Header auth for the probe + streaming fetch: Jellyfin 12 401s the
-        // legacy ?api_key= query param on data endpoints, so the token must
-        // ride `Authorization: MediaBrowser` (the URL's capital ApiKey param
-        // stays valid on every server since 10.8).
-        val accessToken = playbackRepository.getAccessToken()
-        val format = BookFormat.fromPath(detail.path) ?: probeDownloadFormat(downloadUrl, accessToken)
-        if (format == null) {
-            // Distinguish "the item's path names a file the reader can't open"
-            // (e.g. .mobi — download-only) from "no format was knowable at all"
-            // (path blank AND the download probe failed) so the error veil can
-            // name the cause instead of a bare "unsupported format".
-            val extension = detail.path
-                ?.takeIf { it.isNotBlank() }
-                ?.pathExtension()
-                ?.takeIf { it.isNotEmpty() }
-                ?.let { ".$it" }
-            _uiState.value = BookReaderUiState.Error(
-                reason = BookReaderUiState.ErrorReason.UnsupportedFormat,
-                detail = extension,
-            )
-            return
-        }
+    }
 
-        val resolved = runCatching {
-            contentResolver.resolve(
-                itemId = itemId,
-                // The resolver's sanitize owns path stripping — pass the
-                // item path through; it lands as the cache file's base name.
-                fileName = detail.path,
-                format = format,
-                downloadUrl = downloadUrl,
-                accessToken = accessToken,
-                onProgress = { progress ->
-                    (_uiState.value as? BookReaderUiState.Loading)?.let {
-                        _uiState.value = it.copy(progress = progress.fraction)
-                    }
-                },
-            )
-        }.getOrNull()
-        if (resolved == null) {
-            _uiState.value = BookReaderUiState.Error(BookReaderUiState.ErrorReason.CannotOpen)
-            return
-        }
-
-        // Reflowable books never enter the document/pager layer: the WebView
-        // host owns rendering, and the position math is percent-based. The
-        // locally stored CFI (ADR 0003 point 4) outranks the server percent on
-        // this install — the screen jumps to it once the host is READY. A
-        // deep-link destination (detail "Contents" tap) outranks both.
-        loadedBookFormat = format
-        val jumpHref = pendingJumpHref
-        val jumpPage = pendingJumpPage
+    /**
+     * Thin caller over [BookSessionLoader.open]: raises the loading veil,
+     * consumes the pending deep-link destination, then applies the returned
+     * [BookSessionOutcome] — every uiState write and every session-state
+     * mutation (document, page cache, resume anchors, TOC cache) happens
+     * here, in the order the old inlined body used.
+     */
+    private suspend fun openBook(itemId: String) {
+        _uiState.value = BookReaderUiState.Loading()
+        val jump = PendingJump(pendingJumpHref, pendingJumpPage)
         pendingJumpHref = null
         pendingJumpPage = null
-        if (format.isReflowable) {
-            val resumePercent = BookProgressPolicy.ticksToPercent(detail.playbackPositionTicks)
-            currentPercent = resumePercent
-            _uiState.value = BookReaderUiState.Ready(
-                title = detail.item.name,
-                content = ReadyContent.Reflowable(
-                    bookFile = resolved.path,
-                    resumePercent = resumePercent,
-                    resumeCfi = readerStore.lastCfi(itemId),
-                    jumpHref = jumpHref,
-                ),
-            )
-            return
-        }
-
-        val doc = runCatching { documentOpener.open(resolved.path, format) }.getOrNull()
-        if (doc == null) {
-            _uiState.value = BookReaderUiState.Error(BookReaderUiState.ErrorReason.CannotOpen)
-            return
-        }
-        document = doc
-
-        val resume = jumpPage
-            ?.let { BookProgressPolicy.clampPage(it, doc.pageCount) }
-            ?: BookProgressPolicy.clampPage(
-                BookProgressPolicy.ticksToPage(detail.playbackPositionTicks),
-                doc.pageCount,
-            )
-        currentPage = resume
-        pageCache.onPageChanged(resume)
-        doc.onPageChanged(resume)
-        _uiState.value = BookReaderUiState.Ready(
-            title = detail.item.name,
-            content = ReadyContent.Paged(
-                pageCount = doc.pageCount,
-                currentPage = resume,
-                format = format,
-            ),
-        )
-        // TOC cache write-through: the page count is known the moment the
-        // document opens — for a comic that is the whole story (no TOC), for
-        // a PDF the outline rides the parseOutline callback below.
-        if (format != BookFormat.PDF) {
-            cacheToc(format, doc.pageCount, emptyList())
-        } else {
-            parseOutline(resolved.path, doc.pageCount)
-        }
-    }
-
-    /**
-     * Writes what this open made known into the local TOC cache the
-     * media-detail screen reads. A no-op when there is nothing to record —
-     * an EPUB that never reported a TOC must not clobber a good cached one
-     * with an empty row.
-     */
-    private fun cacheToc(format: BookFormat, pageCount: Int, entries: List<BookTocEntry>) {
-        if (entries.isEmpty() && pageCount <= 0) return
-        val itemId = loadedItemId ?: return
-        scope.launch {
-            runCatching { tocCacheRepository.putToc(itemId, format, pageCount, entries) }
-        }
-    }
-
-    /**
-     * The EPUB host's TOC event, forwarded by the screen. The reader UI
-     * keeps its own copy — this only feeds the detail screen's cache (flat
-     * labels, level 0: epub.js's toc carries no nesting).
-     */
-    internal fun onEpubTocReady(items: List<EpubTocItem>) {
-        if (items.isEmpty()) return
-        val format = loadedBookFormat ?: return
-        val entries = items.map { BookTocEntry(label = it.label, href = it.href, page = null, level = 0) }
-        cacheToc(format, pageCount = 0, entries = entries)
-    }
-
-    /**
-     * PDF outline extraction, off the main thread (PDFBox walks the document
-     * synchronously). Failures already fold to an empty list inside the
-     * parser — the TOC sheet simply shows its empty state.
-     */
-    private fun parseOutline(path: okio.Path, pageCount: Int) {
-        scope.launch {
-            val nodes = withContext(Dispatchers.Default) {
-                runCatching { pdfOutlineParser.parse(path) }.getOrDefault(emptyList())
+        when (val session = sessionLoader.open(itemId, jump)) {
+            is BookSessionOutcome.Reflowable -> {
+                currentPercent = session.resumePercent
+                // The boot carrier: the location flow leaves the gate already
+                // carrying the resume percent (empty chapter label, no anchor —
+                // exactly what the screen's old local percent fallback showed),
+                // so the screen has ONE percent source from the first Ready
+                // frame on. Seeded BEFORE the Ready write so no collector can
+                // observe a location-less Ready reflowable book.
+                _currentEpubLocation.value = EpubLocation(
+                    percent = session.resumePercent,
+                    chapterLabel = "",
+                    cfi = null,
+                )
+                _uiState.value = BookReaderUiState.Ready(
+                    title = session.title,
+                    content = ReadyContent.Reflowable(
+                        bookFile = session.bookFile,
+                        resumePercent = session.resumePercent,
+                        resumeCfi = session.resumeCfi,
+                        jumpHref = session.jumpHref,
+                    ),
+                )
             }
-            _pdfOutline.value = nodes
-            // Same write-through as the open-time page count, now with the
-            // outline flattened into detail-screen entries (nesting kept).
-            if (nodes.isNotEmpty()) {
-                cacheToc(
-                    format = BookFormat.PDF,
-                    pageCount = pageCount,
-                    entries = nodes.flatMap { it.flattenToTocEntries() },
+            is BookSessionOutcome.Paged -> {
+                document = session.document
+                currentPage = session.resumePage
+                pageCache.onPageChanged(session.resumePage)
+                _uiState.value = BookReaderUiState.Ready(
+                    title = session.title,
+                    content = ReadyContent.Paged(
+                        pageCount = session.document.pageCount,
+                        currentPage = session.resumePage,
+                        format = session.format,
+                    ),
+                )
+                // TOC cache write-through AFTER the Ready write (the old
+                // ordering): the page count is known the moment the document
+                // opens — for a comic that is the whole story (no TOC), for a
+                // PDF the outline rides the parse callback.
+                sessionLoader.startOpenTocCache(
+                    itemId = itemId,
+                    format = session.format,
+                    file = session.file,
+                    pageCount = session.document.pageCount,
+                    onOutlineParsed = { nodes -> _pdfOutline.value = nodes },
+                )
+            }
+            is BookSessionOutcome.Failed -> _uiState.value = when (val error = session.error) {
+                BookOpenError.CannotOpen -> BookReaderUiState.Error(BookReaderUiState.ErrorReason.CannotOpen)
+                is BookOpenError.UnsupportedFormat -> BookReaderUiState.Error(
+                    reason = BookReaderUiState.ErrorReason.UnsupportedFormat,
+                    detail = error.fileExtension,
                 )
             }
         }
+    }
+
+    /**
+     * The EPUB host's TOC event (arriving through [onEpubEvent]). The reader
+     * UI keeps its own copy — this only feeds the detail screen's cache (flat
+     * labels, level 0: epub.js's toc carries no nesting).
+     */
+    private fun onEpubTocReady(items: List<EpubTocItem>) {
+        if (items.isEmpty()) return
+        val format = loadedBookFormat ?: return
+        val itemId = loadedItemId ?: return
+        val entries = items.map { BookTocEntry(label = it.label, href = it.href, page = null, level = 0) }
+        sessionLoader.cacheToc(itemId, format, pageCount = 0, entries = entries)
     }
 
     /** Render (or cache-hit) one page for the pager; null keeps the placeholder tile. */
@@ -633,7 +546,7 @@ class BookReaderViewModel(
         pageCache.onPageChanged(page)
         document?.onPageChanged(page)
         _uiState.value = ready.copy(content = paged.copy(currentPage = page))
-        scheduleProgressReport()
+        progressReporter.schedule()
     }
 
     /** Keyboard / tap-zone paging. The pager follows [currentPage] via the screen's sync effect. */
@@ -645,54 +558,84 @@ class BookReaderViewModel(
         onPageChanged(currentPage - 1)
     }
 
-    /** WebView-host percent event (reflowable) — debounced percent report. */
-    fun onEpubPercentChanged(percent: Double) {
-        val ready = _uiState.value as? BookReaderUiState.Ready ?: return
-        if (ready.content !is ReadyContent.Reflowable) return
-        currentPercent = percent.coerceIn(0.0, 1.0)
-        _currentEpubLocation.value = _currentEpubLocation.value?.copy(percent = currentPercent)
-        scheduleProgressReport()
+    /**
+     * The ViewModel's single consumption point for the EPUB event channel —
+     * one funnel, one `when`, dispatching to the private per-event folds
+     * below. Screen-owned kinds (the boot status veil, the search session,
+     * tap/swipe navigation, auto-scroll stops) arrive here too — the screen's
+     * seam forwards every event — and deliberately fold to Unit: their state
+     * is screen-local by the ownership split, and this funnel is the place a
+     * new event kind is forced to declare its owner.
+     */
+    internal fun onEpubEvent(event: EpubEvent) {
+        when (event) {
+            is EpubEvent.Percent -> foldEpubPosition(percent = event.value, relocation = null)
+            is EpubEvent.Status -> Unit // screen-local boot veil state
+            is EpubEvent.Direction -> onEpubDirection(event.direction)
+            is EpubEvent.Toc -> onEpubTocReady(event.items)
+            is EpubEvent.Relocated -> foldEpubPosition(percent = event.relocation.percent, relocation = event.relocation)
+            is EpubEvent.Tap -> Unit // screen-local navigation (readerNavDecision)
+            is EpubEvent.Swipe -> Unit // screen-local navigation (readerNavDecision)
+            is EpubEvent.Selected -> onEpubSelection(event.cfi, event.text)
+            EpubEvent.SelectionCleared -> onEpubSelectionCleared()
+            is EpubEvent.SearchResults -> Unit // screen-local search session
+            is EpubEvent.SpeechContext -> onSpeechContext(event.paragraphs)
+            EpubEvent.AutoScrollStopped -> Unit // screen-local auto-scroll controller
+            is EpubEvent.DisplayError -> Unit // reader.js keeps the current page — no VM fallback
+        }
     }
 
     /**
-     * WebView-host relocation (reflowable): folds percent + chapter label +
-     * the chapter-scoped pages remaining (the time-left label's source) + the
-     * page-start CFI into [currentEpubLocation] (the bookmark/annotation
-     * anchor source) and schedules the debounced report, which also
-     * re-persists the exact-resume CFI. Internal: [EpubRelocation] is the
-     * module-private host protocol type.
+     * The ONE reflowable position fold — both position event kinds meet here,
+     * so the clamp + speech-controller report + debounced-report schedule
+     * sequence exists exactly once. The bare `percent` event (reader.js posts
+     * it at boot, when locations finish generating, and right before every
+     * relocation, which carries the same value in richer company) passes
+     * [relocation] as null and only refreshes the location's percent; the
+     * `relocated` event additionally folds the chapter label, the
+     * chapter/book-scoped pages remaining and the page-start CFI (the
+     * bookmark/annotation anchor source) into [currentEpubLocation] and
+     * releases the speech chapter-turn wait. The boot carrier: [openBook]
+     * seeds the location with the resume percent, so the screen reads the
+     * percent from [currentEpubLocation] alone. Private: [EpubRelocation] is
+     * the module-private host protocol type.
      */
-    internal fun onEpubRelocated(relocation: EpubRelocation) {
+    private fun foldEpubPosition(percent: Double?, relocation: EpubRelocation?) {
         val ready = _uiState.value as? BookReaderUiState.Ready ?: return
         if (ready.content !is ReadyContent.Reflowable) return
-        relocation.percent?.let { currentPercent = it.coerceIn(0.0, 1.0) }
-        relocation.cfi?.let { latestEpubCfi = it }
-        _currentEpubLocation.value = EpubLocation(
-            percent = currentPercent,
-            chapterLabel = relocation.chapterLabel,
-            cfi = latestEpubCfi,
-            remainingPages = relocation.remainingPages ?: _currentEpubLocation.value?.remainingPages,
-            remainingLocations = relocation.remainingLocations ?: _currentEpubLocation.value?.remainingLocations,
-            chapterHref = relocation.href ?: _currentEpubLocation.value?.chapterHref,
-        )
-        // Speech chapter turn landed: the context request waits for exactly
-        // this relocation (requesting earlier could resolve the OLD chapter).
-        if (speechAdvancing) {
-            speechAdvanceTimeout?.cancel()
-            speechAdvanceTimeout = null
-            requestContextAfterAdvance()
+        percent?.let {
+            currentPercent = it.coerceIn(0.0, 1.0)
+            speechController.reportPercent(currentPercent)
         }
-        // Sleep timer's END_OF_CHAPTER arm keys on the chapter label.
-        sleepTimer.onChapterLabel(relocation.chapterLabel)
-        scheduleProgressReport()
+        relocation?.cfi?.let { latestEpubCfi = it }
+        _currentEpubLocation.value = if (relocation != null) {
+            EpubLocation(
+                percent = currentPercent,
+                chapterLabel = relocation.chapterLabel,
+                cfi = latestEpubCfi,
+                remainingPages = relocation.remainingPages ?: _currentEpubLocation.value?.remainingPages,
+                remainingLocations = relocation.remainingLocations ?: _currentEpubLocation.value?.remainingLocations,
+                chapterHref = relocation.href ?: _currentEpubLocation.value?.chapterHref,
+            )
+        } else {
+            _currentEpubLocation.value?.copy(percent = currentPercent)
+        }
+        if (relocation != null) {
+            // Speech chapter turn landed: the controller releases its relocation
+            // wait here (requesting earlier could resolve the OLD chapter).
+            speechController.onRelocated()
+            // Sleep timer's END_OF_CHAPTER arm keys on the chapter label.
+            sleepTimer.onChapterLabel(relocation.chapterLabel)
+        }
+        progressReporter.schedule()
     }
 
     /** Text selected inside the WebView host — drives the selection action row. */
-    fun onEpubSelection(cfi: String, text: String) {
+    private fun onEpubSelection(cfi: String, text: String) {
         _selection.value = ReaderSelection(cfi = cfi, text = text)
     }
 
-    fun onEpubSelectionCleared() {
+    private fun onEpubSelectionCleared() {
         _selection.value = null
     }
 
@@ -701,176 +644,47 @@ class BookReaderViewModel(
      * Only a default: once the user has a persisted per-book choice
      * ([setReadingDirection]), that wins for the session's remainder.
      */
-    fun onEpubDirection(direction: ReadingDirection) {
+    private fun onEpubDirection(direction: ReadingDirection) {
         if (userDirectionPinned) return
         _readingDirection.value = direction
-    }
-
-    /**
-     * Theme write. Routes per [routingOverride]: with an override active
-     * ("use for this book only"), the change lands in the item's override (the
-     * global stays untouched); without one it writes the global. The rendered
-     * look is identical either way — the reader consumes [effectiveReaderTheme].
-     */
-    fun setReaderTheme(theme: ReaderTheme) {
-        val itemId = loadedItemId
-        val override = routingOverride()
-        val nextOverride = override?.copy(theme = theme)?.also { pendingPerBook = it }
-        scope.launch {
-            runCatching {
-                if (itemId != null && nextOverride != null) {
-                    readerStore.setPerBookAppearance(itemId, nextOverride)
-                } else {
-                    readerStore.setReaderTheme(theme)
-                }
-            }
-        }
-    }
-
-    /**
-     * Font-size stepper; the store clamps the result into its 12..32 px band.
-     * Steps into the item's [PerBookAppearance] override when one is active
-     * (see [setReaderTheme] for the routing contract).
-     */
-    fun adjustReaderFontSize(delta: Int) {
-        // Step from the last stepped value — the store's StateFlow lags the
-        // DataStore write, so reading it per tap drops rapid increments.
-        val base = pendingFontSizePx ?: effectiveReaderFontSizePx.value
-        val next = (base + delta)
-            .coerceIn(ReaderStore.MIN_FONT_SIZE_PX, ReaderStore.MAX_FONT_SIZE_PX)
-        pendingFontSizePx = next
-        val itemId = loadedItemId
-        val override = routingOverride()
-        val nextOverride = override?.copy(fontSizePx = next)?.also { pendingPerBook = it }
-        scope.launch {
-            runCatching {
-                if (itemId != null && nextOverride != null) {
-                    readerStore.setPerBookAppearance(itemId, nextOverride)
-                } else {
-                    readerStore.setReaderFontSizePx(next)
-                }
-            }
-        }
-    }
-
-    /**
-     * The "use for this book only" switch. ON seeds the item's override with
-     * the CURRENT effective values (the in-session look does not move); OFF
-     * copies the effective values back into the globals and clears the
-     * override — again visually seamless, and the next global change flows
-     * normally. Direction stays per-book-only by design (its own map).
-     */
-    fun setUsePerBookAppearance(enabled: Boolean) {
-        val itemId = loadedItemId ?: return
-        val current = effectiveAppearance(readerStore.reader.value, routingOverride())
-        if (enabled) {
-            pendingPerBook = PerBookAppearance(theme = current.theme, fontSizePx = current.fontSizePx)
-        } else {
-            pendingPerBook = null
-        }
-        // Re-sync the stepper base: a pending step must not leak across the
-        // routing switch (the effective font size is the new base either way).
-        pendingFontSizePx = current.fontSizePx
-        scope.launch {
-            runCatching {
-                if (enabled) {
-                    readerStore.setPerBookAppearance(itemId, pendingPerBook)
-                } else {
-                    readerStore.setReaderTheme(current.theme)
-                    readerStore.setReaderFontSizePx(current.fontSizePx)
-                    readerStore.setPerBookAppearance(itemId, null)
-                }
-            }
-        }
-    }
-
-    /** Global reflowable typography writes — each clamps into its store band. */
-    fun setFontFamily(fontFamily: ReaderFontFamily) {
-        scope.launch { runCatching { readerStore.setFontFamily(fontFamily) } }
-    }
-
-    fun setLineHeightPct(pct: Int) {
-        val clamped = pct.coerceIn(ReaderStore.MIN_LINE_HEIGHT_PCT, ReaderStore.MAX_LINE_HEIGHT_PCT)
-        scope.launch { runCatching { readerStore.setLineHeightPct(clamped) } }
-    }
-
-    fun setMarginPct(pct: Int) {
-        val clamped = pct.coerceIn(ReaderStore.MIN_MARGIN_PCT, ReaderStore.MAX_MARGIN_PCT)
-        scope.launch { runCatching { readerStore.setMarginPct(clamped) } }
-    }
-
-    fun setJustify(justify: Boolean) {
-        scope.launch { runCatching { readerStore.setJustify(justify) } }
-    }
-
-    fun setScrollMode(scrollMode: Boolean) {
-        scope.launch { runCatching { readerStore.setScrollMode(scrollMode) } }
-    }
-
-    /** Brightness veil write (0..100, 100 = no veil); clamped into the store band. */
-    fun setBrightnessPct(pct: Int) {
-        val clamped = pct.coerceIn(ReaderStore.MIN_BRIGHTNESS_PCT, ReaderStore.MAX_BRIGHTNESS_PCT)
-        scope.launch { runCatching { readerStore.setBrightnessPct(clamped) } }
-    }
-
-    /** Behavior writes: volume-key paging (Android hardware; no-op elsewhere) + animated page turns. */
-    fun setVolumeKeyPaging(enabled: Boolean) {
-        scope.launch { runCatching { readerStore.setVolumeKeyPaging(enabled) } }
-    }
-
-    fun setAnimatedPageTurns(enabled: Boolean) {
-        scope.launch { runCatching { readerStore.setAnimatedPageTurns(enabled) } }
-    }
-
-    fun setTocRailVisible(enabled: Boolean) {
-        scope.launch { runCatching { readerStore.setTocRailVisible(enabled) } }
-    }
-
-    /** Reading-speed write for the time-left estimate; clamped into its 100..1000 band. */
-    fun setReadingSpeedWpm(wpm: Int) {
-        val clamped = wpm.coerceIn(ReaderStore.MIN_READING_SPEED_WPM, ReaderStore.MAX_READING_SPEED_WPM)
-        scope.launch { runCatching { readerStore.setReadingSpeedWpm(clamped) } }
-    }
-
-    /** Auto-scroll speed write (px/s); clamped into its 20..120 band. */
-    fun setAutoScrollSpeedPxPerSec(pxPerSec: Int) {
-        val clamped = pxPerSec.coerceIn(ReaderStore.MIN_AUTO_SCROLL_SPEED_PX_PER_SEC, ReaderStore.MAX_AUTO_SCROLL_SPEED_PX_PER_SEC)
-        scope.launch { runCatching { readerStore.setAutoScrollSpeedPxPerSec(clamped) } }
     }
 
     // ---------------------------------------------------------------------
     // Read aloud (reflowable only — the speech context is an EPUB concept).
     // ---------------------------------------------------------------------
 
-    /** Speech-rate write; clamped into its 50..200 band and applied to the engine live. */
+    /** Speech-rate write; clamped by the preference module, applied to the engine live. */
     fun setSpeechRate(pct: Int) {
-        val clamped = pct.coerceIn(ReaderStore.MIN_SPEECH_RATE, ReaderStore.MAX_SPEECH_RATE)
-        configureSpeechEngine(rate = clamped)
-        scope.launch { runCatching { readerStore.setSpeechRate(clamped) } }
+        preferences.setSpeechRate(pct)
+        // The snapshot is synchronous (write-through), so the clamped value
+        // is already current for the other axis.
+        configureSpeechEngine(rate = preferences.snapshot.value.global.speechRate)
     }
 
-    /** Speech-pitch write; clamped into its 50..200 band and applied to the engine live. */
+    /** Speech-pitch write; clamped by the preference module, applied to the engine live. */
     fun setSpeechPitch(pct: Int) {
-        val clamped = pct.coerceIn(ReaderStore.MIN_SPEECH_PITCH, ReaderStore.MAX_SPEECH_PITCH)
-        configureSpeechEngine(pitch = clamped)
-        scope.launch { runCatching { readerStore.setSpeechPitch(clamped) } }
+        preferences.setSpeechPitch(pct)
+        configureSpeechEngine(pitch = preferences.snapshot.value.global.speechPitch)
     }
 
     /**
      * Starts read-aloud at the current position: configures the engine with
-     * the persisted rate/pitch, marks the session live and asks the host for
-     * the current chapter's paragraphs (the answer lands in
-     * [onSpeechContext]). Unavailable engines (desktop/web) and paged books
+     * the persisted rate/pitch, marks the session live and asks the host
+     * (through the attached session's seam) for the current chapter's
+     * paragraphs at the exact resume anchor — the answer lands in
+     * [onSpeechContext]. Unavailable engines (desktop/web) and paged books
      * are a silent no-op — their UI never offers the button.
      */
     fun startReadAloud() {
         val ready = _uiState.value as? BookReaderUiState.Ready ?: return
         if (ready.content !is ReadyContent.Reflowable) return
         if (speechEngine.availability.value == BookSpeechAvailability.UNAVAILABLE) return
+        // Claim the floor FIRST — a refused claim must not leave the session
+        // live but silent (the chrome would show a playing chrome over
+        // nothing). Claim → GRANTED → speak.
+        if (playbackFocus.acquire(PlaybackSurfaceId.READ_ALOUD) != FocusOutcome.Granted) return
         configureSpeechEngine()
-        clearSpeechSession()
-        speechController.awaitContext()
-        _hostCommands.tryEmit(ReaderHostCommand.RequestSpeechContext(latestEpubCfi))
+        speechController.awaitContext(latestEpubCfi)
     }
 
     /** The chrome's single play/pause button: start → pause → resume. */
@@ -878,14 +692,19 @@ class BookReaderViewModel(
         val state = speechState.value
         when {
             !state.active -> startReadAloud()
-            state.paused -> speechController.resume()
-            else -> speechController.pause()
+            state.paused -> resumeReadAloud()
+            else -> pauseReadAloud()
         }
     }
 
+    /** User pause: the claim STAYS held (invariant — OS focus churn between sentences is churn). */
     fun pauseReadAloud() = speechController.pause()
 
-    fun resumeReadAloud() = speechController.resume()
+    /** User resume: re-acquire (a suspended claim re-requests its OS seat). */
+    fun resumeReadAloud() {
+        if (playbackFocus.acquire(PlaybackSurfaceId.READ_ALOUD) != FocusOutcome.Granted) return
+        speechController.resume()
+    }
 
     fun skipSpeechForward() = speechController.skipForward()
 
@@ -893,70 +712,21 @@ class BookReaderViewModel(
 
     /** Ends the session (user stop, screen dispose, sleep timer, engine loss). */
     fun stopReadAloud() {
-        clearSpeechSession()
         speechController.stop()
+        playbackFocus.release(PlaybackSurfaceId.READ_ALOUD)
     }
 
     /**
-     * Host answer to a speech-context request (screen-forwarded
-     * `onSpeechContext`). Continuation protocol: a context whose first
+     * Host answer to a speech-context request (arriving through
+     * [onEpubEvent]). Continuation protocol: a context whose first
      * paragraph repeats the chapter being spoken means the chapter turn did
      * not relocate (book end) → finish; an empty context mid-book means a
      * chapter with nothing speakable → keep advancing (the percent snapshot
      * taken at the turn breaks the loop once the position stops moving);
      * anything else starts the loop on the new chapter.
      */
-    internal fun onSpeechContext(paragraphs: List<EpubSpeechParagraph>) {
-        if (!speechState.value.active) return // late answer to a stopped session
-        speechParagraphs = paragraphs
-        val firstCfi = paragraphs.firstOrNull()?.cfi
-        if (firstCfi != null && firstCfi == speechChapterKey) {
-            // next() did not relocate — the same chapter came back. Book end.
-            speechController.finish()
-            return
-        }
-        if (paragraphs.isEmpty() && currentPercent == speechPercentAtAdvance) {
-            // Nothing speakable AND the position never moved: advancing again
-            // cannot help (book end, or a static rendition) — finish instead
-            // of looping.
-            speechController.finish()
-            return
-        }
-        speechChapterKey = firstCfi
-        speechController.start(paragraphs)
-    }
-
-    /**
-     * Chapter-end continuation: remember the chapter identity + percent,
-     * turn the page, then re-request the context once the turn's relocation
-     * arrives ([onEpubRelocated] releases the wait) or the timeout fires
-     * (a book-end turn never relocates — the identity guard finishes there).
-     */
-    private fun advanceSpeechChapter() {
-        speechChapterKey = speechParagraphs.firstOrNull()?.cfi
-        speechPercentAtAdvance = currentPercent
-        speechAdvancing = true
-        _hostCommands.tryEmit(ReaderHostCommand.AdvanceSpeechChapter)
-        speechAdvanceTimeout?.cancel()
-        speechAdvanceTimeout = scope.launch {
-            delay(SPEECH_CHAPTER_ADVANCE_TIMEOUT_MS)
-            requestContextAfterAdvance()
-        }
-    }
-
-    private fun requestContextAfterAdvance() {
-        if (!speechAdvancing) return
-        speechAdvancing = false
-        _hostCommands.tryEmit(ReaderHostCommand.RequestSpeechContext(null))
-    }
-
-    /** Clears the bookkeeping (NOT the controller state — callers drive that). */
-    private fun clearSpeechSession() {
-        speechParagraphs = emptyList()
-        speechChapterKey = null
-        speechAdvancing = false
-        speechAdvanceTimeout?.cancel()
-        speechAdvanceTimeout = null
+    private fun onSpeechContext(paragraphs: List<EpubSpeechParagraph>) {
+        speechController.onSpeechContext(paragraphs, currentPercent)
     }
 
     // ---------------------------------------------------------------------
@@ -969,24 +739,13 @@ class BookReaderViewModel(
 
     fun toggleControls() {
         val ready = _uiState.value as? BookReaderUiState.Ready ?: return
-        _uiState.value = ready.copy(showControls = !ready.showControls, showSettings = false)
-    }
-
-    fun openSettings() {
-        val ready = _uiState.value as? BookReaderUiState.Ready ?: return
-        _uiState.value = ready.copy(showSettings = true)
-    }
-
-    fun dismissSettings() {
-        val ready = _uiState.value as? BookReaderUiState.Ready ?: return
-        _uiState.value = ready.copy(showSettings = false)
+        _uiState.value = ready.copy(showControls = !ready.showControls)
     }
 
     fun setReadingDirection(direction: ReadingDirection) {
-        val itemId = loadedItemId ?: return
         userDirectionPinned = true
         _readingDirection.value = direction
-        scope.launch { readerStore.setReadingDirection(itemId, direction) }
+        preferences.setReadingDirection(direction)
     }
 
     // ---------------------------------------------------------------------
@@ -994,40 +753,45 @@ class BookReaderViewModel(
     // ---------------------------------------------------------------------
 
     /**
+     * The current reading position shaped for [ReaderBookmarkCodec] — the
+     * paged-vs-reflowable branch keys on the live session's content kind,
+     * exactly the branch the codec's encode/match rules key on the row.
+     */
+    private fun currentBookmarkLocation(ready: BookReaderUiState.Ready): ReaderBookmarkCodec.Location =
+        when (ready.content) {
+            is ReadyContent.Paged -> ReaderBookmarkCodec.Location.Paged(currentPage)
+            is ReadyContent.Reflowable -> {
+                val location = _currentEpubLocation.value
+                ReaderBookmarkCodec.Location.Reflowable(
+                    percent = currentPercent,
+                    cfi = location?.cfi,
+                    chapterLabel = location?.chapterLabel.orEmpty(),
+                )
+            }
+        }
+
+    /**
      * The bookmark sitting at the current position, if any — the toggle
-     * target and the top-bar icon's filled state. Paged match = same encoded
-     * page; reflowable match = same CFI (page-start anchors are stable), or
-     * the null-CFI fallback comparing encoded percents (pre-Wave-3 rows).
+     * target and the top-bar icon's filled state. The position rule (same
+     * encoded page / same CFI / legacy percent fallback) is
+     * [ReaderBookmarkCodec.matches]; item identity stays this caller's
+     * predicate.
      */
     private fun bookmarkAtCurrentPosition(): ReaderBookmark? {
         val itemId = loadedItemId ?: return null
         val ready = _uiState.value as? BookReaderUiState.Ready ?: return null
-        return when (ready.content) {
-            is ReadyContent.Paged -> {
-                val ticks = BookProgressPolicy.pageToTicks(currentPage)
-                bookmarks.value.firstOrNull { it.itemId == itemId && it.cfi == null && it.positionTicks == ticks }
-            }
-            is ReadyContent.Reflowable -> {
-                val location = _currentEpubLocation.value
-                bookmarks.value.firstOrNull { bookmark ->
-                    bookmark.itemId == itemId && when {
-                        bookmark.cfi != null -> bookmark.cfi == location?.cfi
-                        // Null-CFI rows can only match by encoded percent.
-                        else -> bookmark.positionTicks == BookProgressPolicy.percentToTicks(currentPercent)
-                    }
-                }
-            }
-        }
+        val location = currentBookmarkLocation(ready)
+        return bookmarks.value.firstOrNull { it.itemId == itemId && ReaderBookmarkCodec.matches(it, location) }
     }
 
     fun hasBookmarkAtCurrentPosition(): Boolean = bookmarkAtCurrentPosition() != null
 
     /**
      * Bookmark the current position, or remove the bookmark already sitting
-     * there (toggle semantics — one control, no separate delete in the chrome).
-     * Paged rows encode `pageToTicks(currentPage)` with a null CFI and empty
-     * label (paged books have no chapter concept in v1); reflowable rows
-     * encode the relocation percent plus the exact CFI + chapter label.
+     * there (toggle semantics — one control, no separate delete in the
+     * chrome). The row's encoding is [ReaderBookmarkCodec.encode]'s one rule:
+     * paged rows are page ticks with a null CFI and empty label, reflowable
+     * rows are the relocation percent plus the exact CFI + chapter label.
      */
     fun toggleBookmarkAtCurrentPosition() {
         val itemId = loadedItemId ?: return
@@ -1038,23 +802,13 @@ class BookReaderViewModel(
                 if (existing != null) {
                     annotationsRepository.removeBookmark(existing.id)
                 } else {
-                    when (ready.content) {
-                        is ReadyContent.Paged -> annotationsRepository.addBookmark(
-                            itemId = itemId,
-                            positionTicks = BookProgressPolicy.pageToTicks(currentPage),
-                            cfi = null,
-                            chapterLabel = "",
-                        )
-                        is ReadyContent.Reflowable -> {
-                            val location = _currentEpubLocation.value
-                            annotationsRepository.addBookmark(
-                                itemId = itemId,
-                                positionTicks = BookProgressPolicy.percentToTicks(currentPercent),
-                                cfi = location?.cfi,
-                                chapterLabel = location?.chapterLabel.orEmpty(),
-                            )
-                        }
-                    }
+                    val draft = ReaderBookmarkCodec.encode(currentBookmarkLocation(ready))
+                    annotationsRepository.addBookmark(
+                        itemId = itemId,
+                        positionTicks = draft.positionTicks,
+                        cfi = draft.cfi,
+                        chapterLabel = draft.chapterLabel,
+                    )
                 }
             }
         }
@@ -1067,14 +821,15 @@ class BookReaderViewModel(
     /**
      * Jump to a bookmark. Paged books resolve through the pager ([onPageChanged]
      * scrolls + reports); reflowable jumps are HOST-coordinated — the screen
-     * calls `host.goToCfi(bookmark.cfi)` itself, and a null-CFI reflowable row
+     * calls `host.goToCfi(bookmark.cfi)` itself (see
+     * [ReaderBookmarkCodec.isJumpable]), and a null-CFI reflowable row
      * has no fallback (the host exposes no display-by-percent after boot), so
      * there is deliberately nothing to do here for that case.
      */
     fun jumpToBookmark(bookmark: ReaderBookmark) {
         val ready = _uiState.value as? BookReaderUiState.Ready ?: return
         if (ready.content is ReadyContent.Paged) {
-            onPageChanged(BookProgressPolicy.ticksToPage(bookmark.positionTicks))
+            onPageChanged(ReaderBookmarkCodec.pagerJumpPage(bookmark))
         }
     }
 
@@ -1161,51 +916,12 @@ class BookReaderViewModel(
      * Flush of the current position. `final = true` marks the exit flush
      * (dispose / back / onCleared) — the repository then also purges the item's
      * caches and announces the change. Debounced mid-reading reports pass
-     * false: purging per page turn would thrash the caches. The final flush is
-     * idempotent: the screen's onDispose AND [onCleared] both fire it on a
-     * normal exit (Android config change fires only onDispose — the VM
-     * survives), so the second call must not repeat the session-end
-     * choreography.
+     * false: purging per page turn would thrash the caches. The choreography
+     * (idempotence across the onDispose + onCleared double fire, the
+     * flush-scope escape, the last-CFI ride-along) is [ReaderProgressReporter].
      */
     fun reportNow(final: Boolean = true) {
-        debounceJob?.cancel()
-        debounceJob = null
-        val itemId = loadedItemId ?: return
-        if (final) {
-            if (finalReportFlushed) return
-            finalReportFlushed = true
-        }
-        // A failed load must not report position 0 and wipe the server-side
-        // reading position on dispose.
-        val ready = _uiState.value as? BookReaderUiState.Ready ?: return
-        val ticks = when (val content = ready.content) {
-            is ReadyContent.Paged -> BookProgressPolicy.pageToTicks(currentPage)
-            is ReadyContent.Reflowable -> BookProgressPolicy.percentToTicks(currentPercent)
-        }
-        // The exit flush rides the process-wide scope: viewModelScope is
-        // cancelled by onCleared() before a plain launch could run it. The
-        // last-CFI write rides along so the exact-resume anchor survives even
-        // when the reader closed within the debounce window.
-        val cfi = latestEpubCfi
-        (if (final) flushScope else scope).launch {
-            runCatching {
-                if (cfi != null && ready.content is ReadyContent.Reflowable) {
-                    readerStore.setLastCfi(itemId, cfi)
-                }
-                playbackRepository.reportBookProgress(itemId, ticks, final = final)
-            }
-        }
-    }
-
-    private fun scheduleProgressReport() {
-        // Reading activity again (e.g. the screen re-created after the
-        // config-change dispose already flushed): the next exit must flush.
-        finalReportFlushed = false
-        debounceJob?.cancel()
-        debounceJob = scope.launch {
-            delay(PROGRESS_DEBOUNCE_MS)
-            reportNow(final = false)
-        }
+        progressReporter.reportNow(final)
     }
 
     override fun onCleared() {
@@ -1221,16 +937,5 @@ class BookReaderViewModel(
         speechEngine.shutdown()
         document?.close()
         document = null
-    }
-
-    companion object {
-        private const val PROGRESS_DEBOUNCE_MS = 800L
-
-        /**
-         * How long the speech loop waits for the chapter turn's relocation
-         * before re-requesting the context anyway — a book-end `next()` never
-         * relocates, and the same-chapter identity guard finishes there.
-         */
-        private const val SPEECH_CHAPTER_ADVANCE_TIMEOUT_MS = 1_500L
     }
 }

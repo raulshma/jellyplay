@@ -3009,6 +3009,292 @@ user-facing doc. Shape notes for engineers:
   (`ReaderFitMathTest`), and the tile's `graphicsLayer` zoom snaps back to
   1× when the sharper bitmap lands — no visual jump, bounded memory.
 
+## Reader preference choreography (2026-09-15 deepening batch)
+
+- **`ReaderPreferences`**
+  (`shared/feature/player-book/src/commonMain/.../ReaderPreferences.kt`, beside
+  the reader VM) is the reader preference choreography module: every knob
+  write — global or per-book-routed, clamped or stepped, seeded or cleared —
+  is a command here, and the reader reads ONE
+  `snapshot: StateFlow<ReaderPrefsSnapshot>` (raw globals, the item's
+  `PerBookAppearance` override, the per-item direction + pin, and the
+  EFFECTIVE appearance fold — override ?: global — as a derived property).
+  Write-through is the mechanism: a command updates the snapshot
+  synchronously and persists through `ReaderStore` async; while a persist is
+  in flight (CAS-counter), store emissions are not adopted, so a first-persist
+  emission can never clobber a newer command. The four hand-rolled VM latches
+  this killed (`pendingPerBook`, `pendingFontSizePx`, `appliedSpeechRate/Pitch`)
+  were each a patch of the same DataStore-lag race. `ReaderStore`
+  (core/datastore) stays the storage seam; `attach(itemId)` re-points routing
+  per load. Theme/font-size writes route into the override when one is active
+  ("use for this book only" seeds it with the effective values; switching off
+  copies them back). Pinned by `ReaderPreferencesTest`; the VM's Wave-4/5
+  tests read the same behaviour through the module.
+
+## Playback focus (2026-09-15, ADR-0004)
+
+- **`PlaybackFocus`**
+  (`shared/core/data` commonMain `playback/focus/`) is the ONE owner of
+  cross-player exclusivity — "who is playing, and who must pause whom", the
+  policy that used to be an OS accident spread over engine configs,
+  `PlayerAudioLifecycle`, two user prefs, and per-shell code (desktop had
+  none, TTS had none). Interface: `claimState` (Idle / Held / Suspended) +
+  `acquire` / `release`. The matrix (`PlaybackFocusMatrix`) is pure and
+  total over the closed `PlaybackSurfaceId` world; slice-1 rulings are
+  newest-wins, pause-not-duck (no duck vocabulary exists yet), manual-resume
+  (the `playWhenReady` guard makes that true at the OS level: the music
+  surface's `pause()` clears playWhenReady, so the focus-stack regain at
+  release cannot resurrect it). `DefaultPlaybackFocus` is the commonMain
+  executor; `FocusArbiter` (OS seat — `AndroidFocusArbiter`, one
+  AudioFocusRequest per attributes identity, AUDIOFOCUS_GAIN, no delayed
+  gain) and `PlaybackSurface` (commandable victims) are the two ports —
+  EACH with two production adapters since the 2026-09-16 slice-2
+  prerequisites: `FocusArbiter.request(attributes, listener)` takes the
+  claimant's `FocusAudioAttributes` (matrix rows via
+  `PlaybackFocusMatrix.attributesOf` — READ_ALOUD keeps
+  USAGE_MEDIA+CONTENT_TYPE_SPEECH, MUSIC→MUSIC, VIDEO→MOVIE), the desktop
+  in-process `DesktopFocusArbiter` twin grants vacuously, and
+  `DesktopAudioQueueManagerSurface` gives desktop music the same
+  `onPlayingEdge` claim chokepoint Android music has (Denied mirrors to a
+  pause). Desktop binds `DefaultPlaybackFocus` (the reader's
+  `getOrNull() ?: NoopPlaybackFocus` fallback now resolves a real module
+  there); `NoopPlaybackFocus` remains for wasmJs and tests. Still pending
+  (the ADR's migration slice): Android music's OS leg
+  (`handleAudioFocus`) has NOT moved into the module. The reader
+  claims/releases around the read-aloud session and pauses its loop on a
+  displaced `Held`. Slice 1 = TTS-over-music; video is
+  denied until its slice adds a matrix row (the exhaustive `when` makes it a
+  build error, not a silent overlap). See docs/adr/0004-playback-focus.md.
+
+- **Book reader VM extractions.** `BookSessionLoader`
+  (`shared/feature/player-book` commonMain, beside the VM) owns the open-book
+  pipeline (session-reset ordering, detail fetch, format-probe fallback, the
+  `BookOpenError` classification, resume math, the PDF-vs-comic TOC-cache
+  branch) — uiState writes stay VM-side through constructor hooks
+  (`onSessionReset`/`onDownloadProgress`/`onFormatResolved`), the
+  `PlaybackSession` precedent. `ReaderProgressReporter` owns the
+  progress-report choreography (debounce, final-flush idempotence across
+  onDispose+onCleared, flush-scope escape, last-CFI ride-along) — the
+  file's subtlest invariants are now jvmTest-pinnable (17 + 8 tests).
+  `BookReaderViewModel` is pinned by a member-count ratchet
+  (`BookReaderViewModelOwnershipTest`, ≤ 43 since the 2026-09-16 batch
+  deleted the `hostCommands` channel and the settings-sheet uiState field —
+  the player-video god-count precedent). `ReaderBookmarkCodec` (pure, beside the marks) owns
+  the "cfi == null ⇒ paged pageToTicks, else reflowable percentToTicks"
+  branch (encode/matches/decode/decodeLabel/isJumpable/pagerJumpPage) —
+  written once for the VM's four sites (10 tests) and the sheets' display
+  decode; the bookmarks-sheet jump gates on `isJumpable`.
+- **Reader sheet admission + search session.** `ReaderSheetStack`
+  (ReaderSheetStack.kt) holds the six local sheet/dialog flags behind ONE
+  `open` fold consumed by the JS-tap nav gate and the chrome auto-hide —
+  the predicate was previously hand-derived per consumer and had drifted
+  (the note dialog suppressed neither, the sleep-timer sheet suppressed
+  only auto-hide); the note dialog now counts as holding the screen
+  everywhere, and since the 2026-09-16 batch the settings sheet lives in
+  the stack TOO — one owner for all seven sheets, the VM holds no sheet
+  state (`sheets.open` is the only read). `ReaderSearchSession`
+  (ReaderControllers.kt) owns the in-book search token + result state
+  machine — the token lived in three hand-synced places (the sheet's
+  counter, the parent's `searchToken` mirror, reader.js's guard); now the
+  sheet only debounces and reports the surviving query, the session stamps
+  the token (`launchSearch(query) { scan }`), drops stale-token results,
+  and reader.js stays as the second belt. Both jvmTest-pinned.
+- **Paged zoom state + prefs diff.** `PageZoomState` (PageZoomState.kt)
+  moved out of the composable file with its two pure decisions —
+  `pageRasterTarget` (the settle → re-raster rule: 3× raster cap, 0.05
+  dead-band, base-scale skip) and `shouldClaimZoomGesture` (two fingers or
+  any finger while zoomed) — pinned by `PageZoomStateTest` (the feature's
+  most intricate math was previously testable only via composables).
+  `ReaderPreferences.applyTypography` / `applyBehavior` own the settings
+  sheets' whole-bundle commit diff ONCE — the call sites used to re-diff
+  copy-on-change bundles as if-cascades against stale recomposition
+  captures (correct only because the snapshot is write-through
+  synchronous); the diff now reads the live snapshot and only changed axes
+  persist (pinned by exactly-0/exactly-1 coVerify pins in
+  `ReaderPreferencesTest`).
+- **EPUB host event-side dedup.** Superseded 2026-09-16: the 13-lambda
+  `EpubReaderCallbacks` class, `dispatchEpubEvents` and `withStatusHook`
+  are GONE — the hosts push parsed `EpubEvent`s through ONE
+  `EpubEventListener` seam whose `withStatusReceipt` decorator latches the
+  delivery receipt (the reflection guards that kept the field-list honest
+  died with the layer; impossible-by-construction now). `BookDeliveryTracker`
+  (epub/, commonMain) owns the boot-transfer gates
+  (pageGeneration/deliveredGeneration/bookBase64: encode, send, payload
+  release, appearance push) as pure decisions; both hosts shrank to their
+  genuinely divergent halves (WebView bridge vs CEF poll, live vs latched
+  page-load fact — declared divergences in KDoc).
+- **Audio position + progress unification.** `DesktopAudioQueueManager`'s
+  hand-rolled position loop (the FOURTH polling copy) now constructs
+  `EnginePositionTicker` (`isReady = { engine != null }`) — fixing a real
+  drift: its plain-`delay` paused-wait held resumes for up to 2.5 s where
+  the ticker wakes reactively. `AudioProgressReporter` moved androidMain →
+  core/data commonMain (the only Android member, `exoPlayerProvider`,
+  became `positionMsProvider`/`isPlayingProvider` lambdas; `java.util.UUID`
+  became stdlib `Uuid`): the desktop's three prose-parity mirror functions
+  (startProgressReporting/reportStopped/reportStoppedCurrent) were deleted;
+  the load-bearing stop ordering (stop launched NEVER awaited, session id
+  rotated SYNCHRONOUSLY) now has one tested home.
+- **Focus hardening + effects delegation.** Music's play edge now HONORS
+  `acquire()`'s outcome: on `FocusOutcome.Denied` (a displaced holder
+  Suspended under an OS loss — e.g. read-aloud during a phone call) the
+  manager pauses instead of producing audio the interface forbade and
+  leaving `claimState` lying about the floor. ADR-0004's consequences now
+  record the slice-2 prerequisite the review surfaced:
+  `AndroidFocusArbiter` hardcodes speech audio attributes, so the MUSIC
+  migration needs a per-claimant attributes parameter on `FocusArbiter`
+  first (the "one-line change" understates it). `AudioPlaybackManager`
+  rides `AudioEffectsManager by effectsProcessor` class delegation — the
+  ~40 one-line forwarders are gone; `AudioEffectsProcessor` implements the
+  interface (context-free conformance shims over its context-taking
+  overloads), and the manager's three surviving overrides
+  (replay-gain pair, pitch) are the visible answer to "which effects read
+  the queue".
+- **Cast state fan.** `CastStateFanout` (core/data commonMain `cast/`) is
+  the pure per-strategy field fan `updateCastState` used to hand-copy
+  (3-branch `when` × 4–7 fields, zero direct coverage): null = the strategy
+  doesn't own the field, the manager keeps its previous flow value;
+  `CastStrategyNames` is the one dispatch-name vocabulary. Declared
+  divergences pinned: only Jellyfin contributes title/subtitle (Google Cast
+  titles ride MediaItem metadata), only the local player contributes
+  bufferedPositionMs. Observability note recorded below (libvlc).
+- **SingleFlight core.** `SingleFlight<K, V>` (core/data jvmShared
+  `concurrency/`) is the cache-agnostic single-flight core (mutex-guarded
+  in-flight map, epoch-guarded write-back, cancellation ladder) split out
+  of `SingleFlightFetcher` (now the TtlCache/CacheIdentity adapter);
+  `WatchHistoryRepository`'s played-items memo — a hand-rolled ~45-line
+  fork the commit comment apologized for — constructs the core directly.
+  The ladder invariants moved into the 8-test home
+  (`SingleFlightTest` adds concurrent-join, generation-veto,
+  cancellation-ladder re-entry).
+- **Card footer fold.** `bookFooterPercent` (core/ui
+  `components/MediaCardFooters.kt`) is the ONE book-footer admission +
+  percent derivation for poster/wide/offline cards — the sites had
+  hand-copied it and drifted (WideMediaCard had no override param);
+  caller-side `takeIf` guards died with it (non-book overrides can no
+  longer produce a label), and `WideMediaCard` gained
+  `bookProgressFractionOverride` for parity.
+- **URL + decode seams.** `resolveDeliveryUrlWithApiKey`
+  (core/network PlaybackUrlBuilders.kt) is the one absolute-ize + append
+  fold for server-provided delivery URLs with the pre-baked-token guard in
+  EITHER spelling — core/data's transcode resolver used to hand-copy it
+  without the guard, so legacy-token URLs double-appended on the subtitle
+  path (drift fixed; pinned in PlaybackUrlBuilderTest). core/ui's
+  `ImageBitmapFactory` pair (`argbPixelsToImageBitmap` +
+  `decodeImageBytes(bytes, maxEdgePx)`) is now the PUBLIC bounded-decode
+  seam — player-book's parallel `BookDecodeSeam` expect/actual trio was
+  deleted (six actuals bridged one concept); only the jvmMain
+  `BufferedImage.toImageBitmap` adapter remains (PDFBox-specific).
+- **Test hygiene.** player-video's jvmTest `EnginePositionTickerTest` twin
+  (frozen since the KMP merge, testing another module's class by package
+  reuse, pinning the pre-`isReady` contract) is deleted — the
+  player-contract commonTest suite owns the contract.
+
+## The 2026-09-16 architecture-review batch (10 deepenings)
+
+Full-codebase review (three explorer passes, hot spots: player-book,
+playback/cast core, god files). Ten deepening candidates selected and
+implemented; three deferred with reasons (settings screens' section hosts,
+the god-ViewModel cohort funnels, and the reader pref-axis long tail).
+
+- **`AudioQueuePolicy`** (`shared/core/data` commonMain `playback/`, beside
+  `QueueUndoStack`/`NowPlayingTracker`) is the ONE pure owner of the queue
+  semantics both audio managers used to duplicate nearly verbatim:
+  `nextIndex`/`previousIndex` advance-wrap rules per repeat mode (desktop's
+  THREE inline wrap copies unified), `planMove` (the `moveQueueItem` index
+  remap + the moved row as undo payload), `skipsPreviousRestart` (the
+  3,000 ms strictly-greater threshold), the `cycleAbLoop`/`markAbLoop*`
+  marker machine, and `positionTickPlan` (A–B enforcement seek + the
+  pre-seek position publish, publish dedup on coerced values, duration
+  coercion, the lyric-index gate). Declared divergences encoded, not
+  copied: repeat-ONE at track end stays adapter-side (media3 internal /
+  desktop engine replay), Android-only tick duties (crossfade check,
+  bandwidth sampling) remain in the Android ticker.
+  `AudioPlaybackManager` (androidMain) and `DesktopAudioQueueManager` are
+  now thin policy callers; the desktop's ~90-line KDoc parity table points
+  at this module as the pin. Pinned by `AudioQueuePolicyTest` (core:data
+  jvmTest — the lane every pure playback module tests on; runs in CI).
+  Regression found and fixed during verification: the shared
+  `EnginePositionTicker` delays before its FIRST tick where the former
+  hand-rolled desktop loop published the first position/duration before
+  any delay — `startPositionTracking` now primes one synchronous
+  `tickBody()` read after launch (without it the stop-report fallback
+  `_duration.value * 10_000` read 0 and advance stop reports were
+  suppressed).
+- **`AudioProgressReporter.stopAndCancel()`** is the teardown entry both
+  managers' ~35-line hand-rolled `stopAndRelease` tails collapsed into:
+  cancels the loop, launches the final stop report (fire-and-forget,
+  exactly like `reportStopped`), rotates the session id SYNCHRONOUSLY —
+  and rotates even when no report fires, a DECLARED delta vs
+  `reportStopped`'s early return that matches the old tails. Must run
+  BEFORE the adapter releases its engine (it snapshots through the
+  constructor providers).
+- **`EpubEventListener`** (`player-book` epub/) is the reader host's ONE
+  event seam: a single-listener `fun interface` carrying the sealed
+  `EpubEvent`, replacing the 13-lambda `EpubReaderCallbacks` forwarding
+  class, the `dispatchEpubEvents` mapper, and the 166-line reflection
+  guard test that kept the field list honest. The hosts push parsed
+  events straight to the listener (delivery receipts ride the
+  `withStatusReceipt` decorator); `BookReaderViewModel` has ONE
+  `onEpubEvent` funnel, and the screen's own listener handles the
+  screen-local kinds (status veil, TOC mirror, search results, taps,
+  auto-scroll stops) before forwarding the rest. Adding a reader event is
+  now parser-branch + sealed variant + one `when` arm.
+- **`ReflowableReaderSession`** (`ReaderControllers.kt`) is the reflowable
+  reader's session module — the extraction `ReflowableReaderContent`
+  needed: a Compose-free class owning the late-bound host handle, the
+  three screen-side controllers (`ReaderAnnotationSync`,
+  `ReaderAutoScroll`, `ReaderSearchSession`) wired to that one handle, the
+  exact-resume latch, the JS-tap routing, and the search choreography;
+  the composable is a render shell (five one-line effects keyed on
+  composition; the DECISIONS live in the session). Pinned by
+  `ReflowableReaderSessionTest` (16 pins over a `FakeHost` + port fake).
+  The speech chapter-continuation protocol collapsed with it:
+  `ReaderSpeechController` takes the `() -> EpubReaderHandle?` seam
+  directly (the `ReaderAnnotationSync` precedent), so the 8-hop
+  controller→VM→screen→JS→back ping-pong through the `hostCommands`
+  channel is controller→host→JS→event→controller; the channel and
+  `ReaderHostCommand` are deleted (the two non-speech consumers —
+  paragraph-follow paint and the sleep-timer scroll stop — became
+  synchronous `ReaderSessionPort` calls).
+- **Reader percent single carrier.** `foldEpubPosition` is the ONE
+  clamp + speech-report + progress-schedule path; the bare `percent` and
+  the richer `relocated` events both route through it, `openBook` seeds
+  the location flow with the resume percent (empty label, null CFI), and
+  the screen's local percent remember is deleted — `EpubLocation` is the
+  only percent holder.
+- **One tap decision.** `ReaderNavDecision` + `readerNavDecision(zone,
+  direction, sheetOpen, selectionActive)` (ReaderInput.kt) serve native
+  paged taps, JS bridge taps and swipes — the `ReaderTapAction` enum,
+  `epubTapAction`, and the duplicate thirds computation are gone;
+  `tapZoneFor` (EpubEventParser.kt) is the single geometry→zone resolver
+  both input worlds share. The "dead tap/swipe wiring" bug family
+  (895928161) now has one pinnable home (`ReaderInputTest`).
+- **player-live record actions.** `LiveTvPlayerViewModel`'s four
+  hand-copied record blocks ("Mirrors ChannelDetailViewModel") are the
+  SIXTH `RecordActions` adapter (first feature→feature edge
+  `:shared:feature:player-live` → `:shared:feature:livetv`, the
+  shell→livetv precedent); the VM keeps one-line funnels, the screen API
+  is unchanged, and the adapter's message/refresh routing is pinned in
+  `LiveTvPlayerViewModelGapsTest` beside the sibling adapters' pins.
+- **`PlaybackMethodSelection` + `LegacySegmentFallback`** (core/data
+  jvmShared `repository/`, the `StatisticsMath`/`DownloadFailurePolicy`
+  lane) are the pure decisions lifted out of `PlaybackRepositoryImpl`:
+  the live/direct-play/direct-stream/transcode ladder
+  (`selectPlaybackMethod` → play method + URL source) and the legacy
+  intro/credit fallback synthesis (`legacy-intro-`/`legacy-outro-` ids
+  from the timestamps' own itemId, strict `>` gating). The repository
+  keeps choreography; its 954-line facade test passing UNMODIFIED is the
+  behavior-identical pin, with direct branch pins added for the ladder
+  corners the facade never exercised (live direct-play-only,
+  method/URL independence, live-offering-nothing).
+- **`CastQueryParams`** (core/data commonMain `cast/`) —
+  `String.withCastQueryParams` moved out of androidMain `CastManager`'s
+  bottom to sit beside `CastMediaOptions`/`CastStateFanout` (the thin
+  Android-side `MediaItem.withCastOptions` fold delegates to it); pinned
+  by `CastQueryParamsTest` on the CastStateFanoutTest lane (param order,
+  `?`/`&` choice, existing-param preservation, the declared
+  `mediaSourceId` exclusion).
+
 ## Rejected designs
 
 Recorded with evidence so future reviews don't re-suggest them.
@@ -3283,3 +3569,39 @@ re-derives the designs nor lands them casually.
   fold onto a keyed-credentials core only if touched for other reasons
   (field sets genuinely differ; the deletion test only marginally
   concentrates).
+- **`ReaderScaffold`** (2026-09-15 review candidate, not landed): the
+  paged/reflowable renderers hand-assemble the same chrome shell (~8
+  corresponding wiring blocks: top bar, dim overlay, bottom bar,
+  BookmarksSheet, dismiss-then-open choreography; the jump split is the
+  deliberate divergence). Design: a slot-composable taking the content
+  core + per-format chrome params. Deferred: composition-shape only with
+  pixel-visible regression risk across two full renderers — the same
+  class of change as the Settings/Library section hosts, do with device
+  eyes, never bundled with behaviour work. The ReaderChrome bottom-bar
+  parameter funnel (16 params) folds into it naturally.
+- **`STRATEGY_LIBVLC` cast strategy** (2026-09-15 observability note, not
+  a fold): `"libvlc"` is dispatch vocabulary with no
+  `registerStrategy` caller anywhere — if ever activated it silently
+  rides the (nonexistent) local-player transport and no-ops. Decide
+  deliberately: delete the constant or register the strategy.
+- **Settings screens' section hosts** (2026-09-16 review): the recorded
+  section-host design for SettingsScreen/LibraryScreen also applies to
+  `PlaybackSettingsScreen` (single ~1,565-line composable, the largest
+  undocumented one) and `AppearanceSettingsScreen` (~1,050). Deferred:
+  pure mechanical churn with recomposition-sensitive risk and no new seam
+  — land as its own change, never bundled with behaviour work.
+- **God-ViewModel cohort funnels** (2026-09-16 review): Library /
+  Search / Editor / ManageSeries / AudioPlayer ViewModels still grow
+  per-command public surfaces (AudioPlayer: 57 public funs, no ratchet).
+  The HomeViewModel sealed-intent precedent applies cleanly to each;
+  queue after the current pass, member-count ratchets first (cheap,
+  stops growth).
+- **Reader long tail** (2026-09-16 review, speculative): the typography
+  pref axis still bounces ~9 files (store slice → `EpubAppearance` →
+  JSON → reader.js `pending`; a `EpubAppearance.from(snapshot)` factory
+  beside `toJsonArg`/`pushAppearanceScripts` is the concentration move),
+  `ReaderPreferences` keeps a 20+ setter wall around its genuinely deep
+  write-through core, the annotation swatch palette is duplicated
+  Kotlin↔reader.js with no mirror pin, and `MiniJson` (~140 lines)
+  remains vendored in the feature module. Fold opportunistically on the
+  next touch of each file.

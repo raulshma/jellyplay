@@ -9,7 +9,11 @@ import com.raulshma.jellyplay.feature.book.epub.buildAddAnnotationScript
 import com.raulshma.jellyplay.feature.book.epub.buildApplyAnnotationsScript
 import com.raulshma.jellyplay.feature.book.epub.buildClearSelectionScript
 import com.raulshma.jellyplay.feature.book.epub.buildGoToCfiScript
+import com.raulshma.jellyplay.feature.book.epub.EvaluatingEpubReaderHandle
+import com.raulshma.jellyplay.feature.book.epub.buildGoToScript
 import com.raulshma.jellyplay.feature.book.epub.buildLoadBookBeginScript
+import com.raulshma.jellyplay.feature.book.epub.buildNextScript
+import com.raulshma.jellyplay.feature.book.epub.buildPrevScript
 import com.raulshma.jellyplay.feature.book.epub.buildLoadBookEndScript
 import com.raulshma.jellyplay.feature.book.epub.buildRemoveAnnotationScript
 import com.raulshma.jellyplay.feature.book.epub.buildSearchScript
@@ -334,5 +338,56 @@ class EpubReaderScriptTest {
         kotlin.test.assertTrue(source.contains("? x : width / 2"), "broken x must fall back to the center")
         kotlin.test.assertTrue(!source.contains("zoneFromX"), "zone judgment must not live in JS")
         kotlin.test.assertTrue(source.contains("'swipe', dir:"), "swipes must report physical direction")
+    }
+}
+
+/**
+ * Pins [EvaluatingEpubReaderHandle] — the ONE dispatch table both platform
+ * hosts share: every command evaluates the builder script through the
+ * injected eval, verbatim. This is the pin the Android/desktop copy-paste
+ * never had.
+ */
+class EvaluatingEpubReaderHandleTest {
+
+    @Test
+    fun `every command evaluates its builder script verbatim`() {
+        val evaluated = mutableListOf<String>()
+        val host = EvaluatingEpubReaderHandle(
+            viewerDownloadProgress = androidx.compose.runtime.mutableStateOf<Float?>(null),
+            eval = { evaluated.add(it) },
+        )
+
+        host.next()
+        host.prev()
+        host.goTo("ch1.xhtml")
+        host.goToCfi("epubcfi(/6/4)")
+        host.setFlow(scrolled = true)
+        host.applyAnnotations(listOf(EpubAnnotationSpec("epubcfi(/6/2)", EpubAnnotationStyle.UNDERLINE, EpubAnnotationColor.GREEN)))
+        host.addAnnotation(EpubAnnotationSpec("epubcfi(/6/3)", EpubAnnotationStyle.HIGHLIGHT, EpubAnnotationColor.RED))
+        host.removeAnnotation("epubcfi(/6/3)")
+        host.clearSelection()
+        host.search("query", 7)
+        host.requestSpeechContext("epubcfi(/6/5)")
+        host.requestSpeechContext(null)
+        host.setAutoScroll(enabled = true, pxPerSec = 60)
+
+        assertEquals(
+            listOf(
+                buildNextScript(),
+                buildPrevScript(),
+                buildGoToScript("ch1.xhtml"),
+                buildGoToCfiScript("epubcfi(/6/4)"),
+                buildSetFlowScript(true),
+                buildApplyAnnotationsScript(listOf(EpubAnnotationSpec("epubcfi(/6/2)", EpubAnnotationStyle.UNDERLINE, EpubAnnotationColor.GREEN))),
+                buildAddAnnotationScript(EpubAnnotationSpec("epubcfi(/6/3)", EpubAnnotationStyle.HIGHLIGHT, EpubAnnotationColor.RED)),
+                buildRemoveAnnotationScript("epubcfi(/6/3)"),
+                buildClearSelectionScript(),
+                buildSearchScript("query", 7),
+                buildSpeechContextScript("epubcfi(/6/5)"),
+                buildSpeechContextScript(null),
+                buildSetAutoScrollScript(true, 60),
+            ),
+            evaluated,
+        )
     }
 }

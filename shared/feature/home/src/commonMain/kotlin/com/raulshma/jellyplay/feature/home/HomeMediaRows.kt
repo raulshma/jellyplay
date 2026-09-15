@@ -574,8 +574,8 @@ fun HomeMediaRow(
                 // Continue Reading rows decode the book fraction against the
                 // TOC cache's page count; hand the same value to the footer so
                 // the "% complete" label matches the card's progress bar.
-                bookProgressFractionOverride =
-                    progressPercent.takeIf { it > 0f && item.mediaType == MediaType.BOOK },
+                // Book admission lives in bookFooterPercent.
+                bookProgressFractionOverride = progressPercent,
                 blurHash = cardImage.blurHash,
                 onPlayClick = memoizedPlayClick,
                 sharedElementKey = "poster_${item.id}",

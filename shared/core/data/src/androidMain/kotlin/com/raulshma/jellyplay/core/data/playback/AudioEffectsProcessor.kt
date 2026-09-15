@@ -16,7 +16,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlin.math.pow
 
-class AudioEffectsProcessor() {
+class AudioEffectsProcessor() : AudioEffectsManager {
     private lateinit var scope: CoroutineScope
 
     var playerProvider: (() -> ExoPlayer?)? = null
@@ -51,61 +51,61 @@ class AudioEffectsProcessor() {
     private var _nightModeStrength = EffectStrength.MODERATE
 
     private val _nightModeEnabled = MutableStateFlow(false)
-    val nightModeEnabled: StateFlow<Boolean> = _nightModeEnabled.asStateFlow()
+    override val nightModeEnabled: StateFlow<Boolean> = _nightModeEnabled.asStateFlow()
 
     private val _dialogueBoostEnabled = MutableStateFlow(false)
-    val dialogueBoostEnabled: StateFlow<Boolean> = _dialogueBoostEnabled.asStateFlow()
+    override val dialogueBoostEnabled: StateFlow<Boolean> = _dialogueBoostEnabled.asStateFlow()
 
     private val _equalizerEnabled = MutableStateFlow(false)
-    val equalizerEnabled: StateFlow<Boolean> = _equalizerEnabled.asStateFlow()
+    override val equalizerEnabled: StateFlow<Boolean> = _equalizerEnabled.asStateFlow()
 
     private val _equalizerSettings = MutableStateFlow(EqualizerSettings())
-    val equalizerSettings: StateFlow<EqualizerSettings> = _equalizerSettings.asStateFlow()
+    override val equalizerSettings: StateFlow<EqualizerSettings> = _equalizerSettings.asStateFlow()
 
     private val _equalizerPreset = MutableStateFlow(EqualizerPreset.FLAT)
-    val equalizerPreset: StateFlow<EqualizerPreset> = _equalizerPreset.asStateFlow()
+    override val equalizerPreset: StateFlow<EqualizerPreset> = _equalizerPreset.asStateFlow()
 
     private val _bassBoostEnabled = MutableStateFlow(false)
-    val bassBoostEnabled: StateFlow<Boolean> = _bassBoostEnabled.asStateFlow()
+    override val bassBoostEnabled: StateFlow<Boolean> = _bassBoostEnabled.asStateFlow()
 
     private var _bassBoostStrength = EffectStrength.MODERATE
-    val bassBoostStrengthState: EffectStrength get() = _bassBoostStrength
+    override val bassBoostStrengthState: EffectStrength get() = _bassBoostStrength
 
-    val dialogueBoostStrengthState: EffectStrength get() = _dialogueBoostStrength
-    val nightModeStrengthState: EffectStrength get() = _nightModeStrength
+    override val dialogueBoostStrengthState: EffectStrength get() = _dialogueBoostStrength
+    override val nightModeStrengthState: EffectStrength get() = _nightModeStrength
 
     private val _virtualizerEnabled = MutableStateFlow(false)
-    val virtualizerEnabled: StateFlow<Boolean> = _virtualizerEnabled.asStateFlow()
+    override val virtualizerEnabled: StateFlow<Boolean> = _virtualizerEnabled.asStateFlow()
 
     private val _virtualizerStrength = MutableStateFlow(500)
-    val virtualizerStrength: StateFlow<Int> = _virtualizerStrength.asStateFlow()
+    override val virtualizerStrength: StateFlow<Int> = _virtualizerStrength.asStateFlow()
 
     private val _reverbPreset = MutableStateFlow(ReverbPreset.NONE)
-    val reverbPresetState: StateFlow<ReverbPreset> = _reverbPreset.asStateFlow()
+    override val reverbPresetState: StateFlow<ReverbPreset> = _reverbPreset.asStateFlow()
 
     private val _lrBalance = MutableStateFlow(0f)
-    val lrBalance: StateFlow<Float> = _lrBalance.asStateFlow()
+    override val lrBalance: StateFlow<Float> = _lrBalance.asStateFlow()
 
     private val _pitchSemitones = MutableStateFlow(0f)
-    val pitchSemitones: StateFlow<Float> = _pitchSemitones.asStateFlow()
+    override val pitchSemitones: StateFlow<Float> = _pitchSemitones.asStateFlow()
 
     private val _autoEqByGenre = MutableStateFlow(false)
-    val autoEqByGenre: StateFlow<Boolean> = _autoEqByGenre.asStateFlow()
+    override val autoEqByGenre: StateFlow<Boolean> = _autoEqByGenre.asStateFlow()
 
-    val fftData: StateFlow<ByteArray> = visualizerHelper.fftData
-    val waveformData: StateFlow<ByteArray> = visualizerHelper.waveformData
+    override val fftData: StateFlow<ByteArray> = visualizerHelper.fftData
+    override val waveformData: StateFlow<ByteArray> = visualizerHelper.waveformData
 
     private val _replayGainMode = MutableStateFlow(AudioNormalizationMode.NONE)
-    val replayGainMode: StateFlow<AudioNormalizationMode> = _replayGainMode.asStateFlow()
+    override val replayGainMode: StateFlow<AudioNormalizationMode> = _replayGainMode.asStateFlow()
 
     private val _replayGainPreAmpDb = MutableStateFlow(0f)
-    val replayGainPreAmpDb: StateFlow<Float> = _replayGainPreAmpDb.asStateFlow()
+    override val replayGainPreAmpDb: StateFlow<Float> = _replayGainPreAmpDb.asStateFlow()
 
     private val _channelMixMode = MutableStateFlow(ChannelMixMode.AUTO)
-    val channelMixMode: StateFlow<ChannelMixMode> = _channelMixMode.asStateFlow()
+    override val channelMixMode: StateFlow<ChannelMixMode> = _channelMixMode.asStateFlow()
 
     private val _channelMixEnabled = MutableStateFlow(false)
-    val channelMixEnabled: StateFlow<Boolean> = _channelMixEnabled.asStateFlow()
+    override val channelMixEnabled: StateFlow<Boolean> = _channelMixEnabled.asStateFlow()
 
     val nightModeVolumeForStrength: Float
         get() = EffectStrengthMapping.nightModeVolumeAttenuation(_nightModeStrength)
@@ -120,33 +120,33 @@ class AudioEffectsProcessor() {
         this.scope = scope
     }
 
-    fun toggleNightMode() {
+    override fun toggleNightMode() {
         _nightModeEnabled.value = !_nightModeEnabled.value
         applyNightMode()
     }
 
-    fun toggleDialogueBoost() {
+    override fun toggleDialogueBoost() {
         _dialogueBoostEnabled.value = !_dialogueBoostEnabled.value
         applyDialogueBoost()
     }
 
-    fun setDialogueBoostStrength(strength: EffectStrength) {
+    override fun setDialogueBoostStrength(strength: EffectStrength) {
         _dialogueBoostStrength = strength
         dialogueBoost.setStrength(strength)
         if (_dialogueBoostEnabled.value) applyDialogueBoost()
     }
 
-    fun setNightModeStrength(strength: EffectStrength) {
+    override fun setNightModeStrength(strength: EffectStrength) {
         _nightModeStrength = strength
         if (_nightModeEnabled.value) applyNightMode()
     }
 
-    fun toggleEqualizer() {
+    override fun toggleEqualizer() {
         _equalizerEnabled.value = !_equalizerEnabled.value
         applyEqualizer()
     }
 
-    fun setEqualizerBand(bandIndex: Int, levelDb: Int) {
+    override fun setEqualizerBand(bandIndex: Int, levelDb: Int) {
         val newLevels = _equalizerSettings.value.bandLevels.toMutableList()
         newLevels[bandIndex] = levelDb
         _equalizerSettings.value = EqualizerSettings(newLevels)
@@ -154,13 +154,13 @@ class AudioEffectsProcessor() {
         equalizerHelper.setSettings(_equalizerSettings.value)
     }
 
-    fun resetEqualizer() {
+    override fun resetEqualizer() {
         _equalizerSettings.value = EqualizerSettings()
         _equalizerPreset.value = EqualizerPreset.FLAT
         equalizerHelper.setSettings(_equalizerSettings.value)
     }
 
-    fun setNightModeParams(volume: Float, gain: Int) {
+    override fun setNightModeParams(volume: Float, gain: Int) {
         nightModeVolume = volume
         nightModeGain = gain
         if (_nightModeEnabled.value) applyNightMode()
@@ -263,13 +263,26 @@ class AudioEffectsProcessor() {
         applyReplayGain(normalizationGain, isShuffled)
     }
 
+    // Interface-conformance shims over the context-taking overloads above:
+    // the manager (the interface's queue-owning adapter) overrides all three
+    // with queue-aware arguments and never reaches these defaults — they exist
+    // so context-free consumers of AudioEffectsManager compile against the
+    // processor directly ("no current track, normal speed").
+    override fun setReplayGainMode(mode: AudioNormalizationMode) =
+        setReplayGainMode(mode, normalizationGain = null, isShuffled = false)
+
+    override fun setReplayGainPreAmpDb(db: Float) =
+        setReplayGainPreAmpDb(db, normalizationGain = null, isShuffled = false)
+
+    override fun setPitchSemitones(semitones: Float) = setPitchSemitones(semitones, currentSpeed = 1f)
+
     /**
      * Push the channel-mix mode + enabled flag to the DSP
      * [channelMixProcessor]. Drives real downmix/upmix/mono via ITU
      * BS.775 coefficients; on the audio/music path this replaces the
      * previously unwired [ChannelMixMode] preference.
      */
-    fun setChannelMix(mode: ChannelMixMode, enabled: Boolean) {
+    override fun setChannelMix(mode: ChannelMixMode, enabled: Boolean) {
         _channelMixMode.value = mode
         _channelMixEnabled.value = enabled
         // Primary + crossfade sinks each need their own processor state.
@@ -357,7 +370,7 @@ class AudioEffectsProcessor() {
         }
     }
 
-    fun setEqualizerPreset(preset: EqualizerPreset) {
+    override fun setEqualizerPreset(preset: EqualizerPreset) {
         _equalizerPreset.value = preset
         if (preset != EqualizerPreset.CUSTOM) {
             val settings = EqualizerSettings(preset.bandLevels())
@@ -366,12 +379,12 @@ class AudioEffectsProcessor() {
         }
     }
 
-    fun toggleBassBoost() {
+    override fun toggleBassBoost() {
         _bassBoostEnabled.value = !_bassBoostEnabled.value
         applyBassBoost()
     }
 
-    fun setBassBoostStrength(strength: EffectStrength) {
+    override fun setBassBoostStrength(strength: EffectStrength) {
         _bassBoostStrength = strength
         bassBoostHelper.setStrength(strength)
     }
@@ -385,12 +398,12 @@ class AudioEffectsProcessor() {
         bassBoostHelper.setEnabled(_bassBoostEnabled.value)
     }
 
-    fun toggleVirtualizer() {
+    override fun toggleVirtualizer() {
         _virtualizerEnabled.value = !_virtualizerEnabled.value
         applyVirtualizer()
     }
 
-    fun setVirtualizerStrength(strength: Int) {
+    override fun setVirtualizerStrength(strength: Int) {
         _virtualizerStrength.value = strength
         virtualizerHelper.setStrength(strength)
     }
@@ -404,7 +417,7 @@ class AudioEffectsProcessor() {
         virtualizerHelper.setEnabled(_virtualizerEnabled.value)
     }
 
-    fun setReverbPreset(preset: ReverbPreset) {
+    override fun setReverbPreset(preset: ReverbPreset) {
         _reverbPreset.value = preset
         val player = playerProvider?.invoke() ?: return
         val audioSessionId = player.audioSessionId
@@ -419,7 +432,7 @@ class AudioEffectsProcessor() {
         }
     }
 
-    fun setLrBalance(balance: Float) {
+    override fun setLrBalance(balance: Float) {
         _lrBalance.value = balance
         balanceProcessor.setBalance(balance)
     }
@@ -432,11 +445,11 @@ class AudioEffectsProcessor() {
         playerProvider?.invoke()?.playbackParameters = PlaybackParameters(currentSpeed, multiplier)
     }
 
-    fun setAutoEqByGenre(enabled: Boolean) {
+    override fun setAutoEqByGenre(enabled: Boolean) {
         _autoEqByGenre.value = enabled
     }
 
-    fun applyAutoEqForGenre(genres: List<String>?) {
+    override fun applyAutoEqForGenre(genres: List<String>?) {
         if (!_autoEqByGenre.value) return
         if (genres.isNullOrEmpty()) return
         val matchedPreset = genres.firstNotNullOfOrNull { genre ->
@@ -447,7 +460,7 @@ class AudioEffectsProcessor() {
         }
     }
 
-    fun enableVisualizer(enabled: Boolean) {
+    override fun enableVisualizer(enabled: Boolean) {
         visualizerHelper.setEnabled(enabled)
     }
 

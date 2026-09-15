@@ -23,6 +23,10 @@ import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
+import com.raulshma.jellyplay.core.data.playback.focus.FocusOutcome
+import com.raulshma.jellyplay.core.data.playback.focus.NoopPlaybackFocus
+import com.raulshma.jellyplay.core.data.playback.focus.PlaybackFocus
+import com.raulshma.jellyplay.core.data.playback.focus.PlaybackSurfaceId
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.EffectStrength
@@ -50,6 +54,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
+import com.raulshma.jellyplay.feature.player.video.engine.EnginePositionTicker
 import kotlinx.coroutines.sync.withPermit
 import java.util.UUID
 import kotlin.math.pow
@@ -87,12 +92,20 @@ class AudioPlaybackManager(
      */
     playbackScope: CoroutineScope? = null,
     /**
+     * The cross-player exclusivity owner (PlaybackFocus). Music claims the
+     * floor on the is-playing edge (the ONE chokepoint every play path
+     * crosses) and pauses when the matrix commands it (read-aloud took the
+     * floor). Defaulted Noop so plain constructions (tests, previews) keep
+     * single-player semantics.
+     */
+    private val playbackFocus: PlaybackFocus = NoopPlaybackFocus,
+    /**
      * Test seam: factory consulted by [getOrCreatePlayer] before the real
      * [createPlayer] path, so tests can supply a fake ExoPlayer. Production
      * callers omit it and the media3 player is built as before.
      */
     playerFactory: (() -> ExoPlayer)? = null,
-) : AudioEffectsManager, AudioQueueManager {
+) : AudioEffectsManager by effectsProcessor, AudioQueueManager {
     private val scope = playbackScope ?: CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val testPlayerFactory = playerFactory
 
@@ -100,21 +113,11 @@ class AudioPlaybackManager(
 
     companion object {
         // Position-poll interval while playback is actively progressing. Matches
-        // the video side's default ticker cadence (≈4 Hz).
+        // the video side's default ticker cadence (≈4 Hz). The paused re-check
+        // and the player-less backoff bands live on EnginePositionTicker
+        // (POSITION_PAUSED_RECHECK_MS / POSITION_NOT_READY_*), which now owns
+        // this loop.
         private const val POSITION_POLL_INTERVAL_MS = 250L
-        // While paused, the position/lyrics/crossfade work in startPositionTracking
-        // is a no-op; re-check playback state at this interval (mirrors
-        // EnginePositionTicker.POSITION_PAUSED_RECHECK_MS) instead of polling
-        // at POSITION_POLL_INTERVAL_MS for the whole paused session.
-        private const val POSITION_PAUSED_RECHECK_MS = 2_500L
-        // While no player exists, the tracking loop backs off exponentially from
-        // this floor up to POSITION_NO_PLAYER_MAX_WAIT_MS instead of waking the
-        // dispatcher at the poll rate for the whole player-less service lifetime.
-        private const val POSITION_NO_PLAYER_MIN_WAIT_MS = 250L
-        // Backoff ceiling for the player-less stretch — deliberately the paused
-        // recheck cadence, but named separately: the no-player loop and the
-        // paused loop are distinct states that could drift apart.
-        private const val POSITION_NO_PLAYER_MAX_WAIT_MS = POSITION_PAUSED_RECHECK_MS
     }
 
     private var exoPlayer: ExoPlayer? = null
@@ -133,11 +136,15 @@ class AudioPlaybackManager(
         adaptiveBitrateSelector = adaptiveBitrateSelector,
     )
 
+    // Promoted reporter (commonMain): the former `exoPlayerProvider`
+    // seam became the ExoPlayer-backed lambda pair below — behaviour
+    // byte-identical (same cadence/dedup/stop ordering).
     private val progressReporter = AudioProgressReporter(
         scope = scope,
         playbackRepository = playbackRepository,
         remoteSessionActive = { remoteSessionActive },
-        exoPlayerProvider = { exoPlayer },
+        positionMsProvider = { exoPlayer?.currentPosition },
+        isPlayingProvider = { exoPlayer?.isPlaying == true },
         itemIdProvider = { currentItemId },
         playSessionIdProvider = { playSessionId },
         playSessionIdSetter = { playSessionId = it },
@@ -300,33 +307,40 @@ class AudioPlaybackManager(
 
     fun setLyricsOffset(offsetMs: Long) = lyricsManager.setLyricsOffset(offsetMs)
 
-    override val nightModeEnabled: StateFlow<Boolean> get() = effectsProcessor.nightModeEnabled
-    override val dialogueBoostEnabled: StateFlow<Boolean> get() = effectsProcessor.dialogueBoostEnabled
-    override val equalizerEnabled: StateFlow<Boolean> get() = effectsProcessor.equalizerEnabled
-    override val equalizerSettings: StateFlow<com.raulshma.jellyplay.core.model.EqualizerSettings> get() = effectsProcessor.equalizerSettings
-    override val equalizerPreset: StateFlow<EqualizerPreset> get() = effectsProcessor.equalizerPreset
-    override val bassBoostEnabled: StateFlow<Boolean> get() = effectsProcessor.bassBoostEnabled
-    override val bassBoostStrengthState: EffectStrength get() = effectsProcessor.bassBoostStrengthState
-    override val dialogueBoostStrengthState: EffectStrength get() = effectsProcessor.dialogueBoostStrengthState
-    override val nightModeStrengthState: EffectStrength get() = effectsProcessor.nightModeStrengthState
-    override val virtualizerEnabled: StateFlow<Boolean> get() = effectsProcessor.virtualizerEnabled
-    override val virtualizerStrength: StateFlow<Int> get() = effectsProcessor.virtualizerStrength
-    override val reverbPresetState: StateFlow<ReverbPreset> get() = effectsProcessor.reverbPresetState
-    override val lrBalance: StateFlow<Float> get() = effectsProcessor.lrBalance
-    override val pitchSemitones: StateFlow<Float> get() = effectsProcessor.pitchSemitones
-    override val autoEqByGenre: StateFlow<Boolean> get() = effectsProcessor.autoEqByGenre
-    override val fftData: StateFlow<ByteArray> get() = effectsProcessor.fftData
-    override val waveformData: StateFlow<ByteArray> get() = effectsProcessor.waveformData
-    override val replayGainMode: StateFlow<AudioNormalizationMode> get() = effectsProcessor.replayGainMode
-    override val replayGainPreAmpDb: StateFlow<Float> get() = effectsProcessor.replayGainPreAmpDb
-    override val channelMixMode: StateFlow<ChannelMixMode> get() = effectsProcessor.channelMixMode
-    override val channelMixEnabled: StateFlow<Boolean> get() = effectsProcessor.channelMixEnabled
+    // AudioEffectsManager rides class delegation onto effectsProcessor (the
+    // ~40 former one-line forwarders are gone): a context-free effect now
+    // touches its processor + the interface only. The three queue-context
+    // overrides (setReplayGainMode / setReplayGainPreAmpDb /
+    // setPitchSemitones) are what the delegation cannot express — that they
+    // exist is the visible answer to "which effects read the queue".
 
-    var skipPreviousThresholdMs = 3_000L
+    var skipPreviousThresholdMs = AudioQueuePolicy.SKIP_PREVIOUS_RESTART_THRESHOLD_MS
 
     private val playerListener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             _isPlaying.value = isPlaying
+            // Focus claims ride this ONE edge — every play path (queue tap,
+            // resume, notification, tile, widget, cast fling) crosses it, so
+            // no per-entry-point claim sites can drift. Newest user action
+            // wins: this publishes Held(MUSIC), and the reader (whose loop is
+            // not a commandable surface) pauses its speech on the state.
+            if (isPlaying) {
+                val outcome = playbackFocus.acquire(PlaybackSurfaceId.MUSIC)
+                if (outcome is FocusOutcome.Denied) {
+                    // Honor the interface contract ("the caller MUST NOT
+                    // produce audio"): a Denied claim here means another
+                    // holder is Suspended under an OS loss (e.g. read-aloud
+                    // during a phone call) — the newest user action does not
+                    // outrank an OS suspension. Pause mirrors the user's own
+                    // pause: playWhenReady drops, so neither the OS focus
+                    // stack nor a later release can auto-resume this denial.
+                    // The resulting isPlaying=false edge releases the claim
+                    // attempt below on the next listener pass.
+                    pause()
+                }
+            } else {
+                playbackFocus.release(PlaybackSurfaceId.MUSIC)
+            }
         }
 
         override fun onPlayerError(error: PlaybackException) {
@@ -887,23 +901,13 @@ class AudioPlaybackManager(
 
     override fun moveQueueItem(fromIndex: Int, toIndex: Int) {
         assertMainThread("moveQueueItem")
-        val q = _queue.value
-        if (fromIndex < 0 || fromIndex >= q.size) return
-        if (toIndex < 0 || toIndex >= q.size) return
-        if (fromIndex == toIndex) return
-        pushUndoSnapshot(QueueUndoEvent.ItemMoved(q[fromIndex]))
-        val mutable = q.toMutableList()
-        val item = mutable.removeAt(fromIndex)
-        mutable.add(toIndex, item)
-        _queue.value = mutable
-        val current = _currentIndex.value
-        val newIndex = when {
-            current == fromIndex -> toIndex
-            fromIndex < current && toIndex >= current -> current - 1
-            fromIndex > current && toIndex <= current -> current + 1
-            else -> current
-        }
-        _currentIndex.value = newIndex
+        // Pure policy (commonMain): bounds/no-op rejection, the reorder and
+        // the cursor remap in one decision, shared verbatim with the desktop
+        // adapter.
+        val plan = AudioQueuePolicy.planMove(_queue.value, _currentIndex.value, fromIndex, toIndex) ?: return
+        pushUndoSnapshot(QueueUndoEvent.ItemMoved(plan.movedItem))
+        _queue.value = plan.queue
+        _currentIndex.value = plan.currentIndex
         exoPlayer?.moveMediaItem(fromIndex, toIndex)
     }
 
@@ -913,11 +917,9 @@ class AudioPlaybackManager(
         val q = _queue.value
         if (q.isEmpty()) return
         crossfader.cancel()
-        val next = when {
-            _currentIndex.value < q.lastIndex -> _currentIndex.value + 1
-            _repeatMode.value >= 1 -> 0
-            else -> return
-        }
+        // Shared advance/wrap rule (+1 mid-queue, wrap to 0 under repeat ≥
+        // ALL, blocked at the RepeatNone tail — no undo snapshot then).
+        val next = AudioQueuePolicy.nextIndex(_currentIndex.value, q.size, _repeatMode.value) ?: return
         pushUndoSnapshot(QueueUndoEvent.SkippedToNext)
         _currentIndex.value = next
         exoPlayer?.seekTo(next, 0L)
@@ -930,15 +932,13 @@ class AudioPlaybackManager(
         if (q.isEmpty()) return
         val player = exoPlayer ?: return
         crossfader.cancel()
-        if (player.currentPosition > skipPreviousThresholdMs) {
+        // Restart-in-place above the threshold (strictly >): seek the
+        // CURRENT item to zero, no cursor move, no undo snapshot.
+        if (AudioQueuePolicy.skipsPreviousRestart(player.currentPosition, skipPreviousThresholdMs)) {
             player.seekTo(0)
             return
         }
-        val prev = when {
-            _currentIndex.value > 0 -> _currentIndex.value - 1
-            _repeatMode.value >= 1 -> q.lastIndex
-            else -> return
-        }
+        val prev = AudioQueuePolicy.previousIndex(_currentIndex.value, q.size, _repeatMode.value) ?: return
         pushUndoSnapshot(QueueUndoEvent.SkippedToPrevious)
         _currentIndex.value = prev
         player.seekTo(prev, 0L)
@@ -960,28 +960,35 @@ class AudioPlaybackManager(
     }
 
     /**
-     * Marks point A of an A→B loop at the current playback position. Clears B
-     * if it would now be at or before A.
+     * Marks point A of an A→B loop at the current playback position (engine
+     * position when live, last published otherwise). Loop transition rules
+     * live in [AudioQueuePolicy] (shared verbatim with the desktop adapter);
+     * writing the unchanged markers back is StateFlow-conflated to a no-op.
      */
     fun setAbLoopStart() {
         assertMainThread("setAbLoopStart")
-        val pos = exoPlayer?.currentPosition ?: _currentPosition.value
-        _abLoopStartMs.value = pos
-        val end = _abLoopEndMs.value
-        if (end != null && end <= pos) _abLoopEndMs.value = null
+        val next = AudioQueuePolicy.markAbLoopStart(
+            positionMs = exoPlayer?.currentPosition ?: _currentPosition.value,
+            markers = AudioQueuePolicy.AbLoopMarkers(_abLoopStartMs.value, _abLoopEndMs.value),
+        )
+        _abLoopStartMs.value = next.startMs
+        _abLoopEndMs.value = next.endMs
     }
 
     /**
      * Marks point B at the current position. Requires A to be set first and
      * the current position to be strictly after A; otherwise this is a no-op
-     * (prevents an empty / inverted loop).
+     * (prevents an empty / inverted loop) — the guard lives in
+     * [AudioQueuePolicy.markAbLoopEnd].
      */
     fun setAbLoopEnd() {
         assertMainThread("setAbLoopEnd")
-        val start = _abLoopStartMs.value ?: return
-        val pos = exoPlayer?.currentPosition ?: _currentPosition.value
-        if (pos <= start) return
-        _abLoopEndMs.value = pos
+        val next = AudioQueuePolicy.markAbLoopEnd(
+            positionMs = exoPlayer?.currentPosition ?: _currentPosition.value,
+            markers = AudioQueuePolicy.AbLoopMarkers(_abLoopStartMs.value, _abLoopEndMs.value),
+        )
+        _abLoopStartMs.value = next.startMs
+        _abLoopEndMs.value = next.endMs
     }
 
     /** Clears the A→B loop markers. */
@@ -992,16 +999,18 @@ class AudioPlaybackManager(
     }
 
     /**
-     * Cycles the A→B loop UI state: nothing → set A → set B (looping) → clear.
-     * Encapsulates the state machine so callers don't read-then-act.
+     * Cycles the A→B loop UI state: nothing → set A → set B (looping) →
+     * clear. The state machine is [AudioQueuePolicy.cycleAbLoop] (shared
+     * verbatim with the desktop adapter); the marker writes are the manager's.
      */
     fun cycleAbLoop() {
         assertMainThread("cycleAbLoop")
-        when {
-            _abLoopStartMs.value == null -> setAbLoopStart()
-            _abLoopEndMs.value == null -> setAbLoopEnd()
-            else -> clearAbLoop()
-        }
+        val next = AudioQueuePolicy.cycleAbLoop(
+            positionMs = exoPlayer?.currentPosition ?: _currentPosition.value,
+            markers = AudioQueuePolicy.AbLoopMarkers(_abLoopStartMs.value, _abLoopEndMs.value),
+        )
+        _abLoopStartMs.value = next.startMs
+        _abLoopEndMs.value = next.endMs
     }
 
     /**
@@ -1248,42 +1257,13 @@ class AudioPlaybackManager(
         }
     }
 
-    override fun toggleNightMode() {
-        effectsProcessor.toggleNightMode()
-    }
-
-    override fun toggleDialogueBoost() {
-        effectsProcessor.toggleDialogueBoost()
-    }
-
-    override fun setDialogueBoostStrength(strength: com.raulshma.jellyplay.core.model.EffectStrength) {
-        effectsProcessor.setDialogueBoostStrength(strength)
-    }
-
-    override fun setNightModeStrength(strength: com.raulshma.jellyplay.core.model.EffectStrength) {
-        effectsProcessor.setNightModeStrength(strength)
-    }
-
-    override fun toggleEqualizer() {
-        effectsProcessor.toggleEqualizer()
-    }
-
-    override fun setEqualizerBand(bandIndex: Int, levelDb: Int) {
-        effectsProcessor.setEqualizerBand(bandIndex, levelDb)
-    }
-
-    override fun resetEqualizer() {
-        effectsProcessor.resetEqualizer()
-    }
-
-    override fun setNightModeParams(volume: Float, gain: Int) {
-        effectsProcessor.setNightModeParams(volume, gain)
-    }
-
     fun setSkipPreviousThreshold(ms: Long) {
         skipPreviousThresholdMs = ms
     }
 
+    // Queue-aware effects — the AudioEffectsManager members the class
+    // delegation cannot express: they read the current queue item's
+    // normalization gain (replay gain pair) or the playback speed (pitch).
     override fun setReplayGainMode(mode: AudioNormalizationMode) {
         val currentIdx = _currentIndex.value
         val q = _queue.value
@@ -1298,55 +1278,11 @@ class AudioPlaybackManager(
         effectsProcessor.setReplayGainPreAmpDb(db, normalizationGain, _shuffleMode.value)
     }
 
-    override fun setChannelMix(mode: ChannelMixMode, enabled: Boolean) {
-        effectsProcessor.setChannelMix(mode, enabled)
-    }
-
     fun getImageUrl(itemId: String): String =
         imageUrlProvider.getImageUrl(itemId)
 
-    override fun setEqualizerPreset(preset: EqualizerPreset) {
-        effectsProcessor.setEqualizerPreset(preset)
-    }
-
-    override fun toggleBassBoost() {
-        effectsProcessor.toggleBassBoost()
-    }
-
-    override fun setBassBoostStrength(strength: EffectStrength) {
-        effectsProcessor.setBassBoostStrength(strength)
-    }
-
-    override fun toggleVirtualizer() {
-        effectsProcessor.toggleVirtualizer()
-    }
-
-    override fun setVirtualizerStrength(strength: Int) {
-        effectsProcessor.setVirtualizerStrength(strength)
-    }
-
-    override fun setReverbPreset(preset: ReverbPreset) {
-        effectsProcessor.setReverbPreset(preset)
-    }
-
-    override fun setLrBalance(balance: Float) {
-        effectsProcessor.setLrBalance(balance)
-    }
-
     override fun setPitchSemitones(semitones: Float) {
         effectsProcessor.setPitchSemitones(semitones, _speed.value)
-    }
-
-    override fun setAutoEqByGenre(enabled: Boolean) {
-        effectsProcessor.setAutoEqByGenre(enabled)
-    }
-
-    override fun applyAutoEqForGenre(genres: List<String>?) {
-        effectsProcessor.applyAutoEqForGenre(genres)
-    }
-
-    override fun enableVisualizer(enabled: Boolean) {
-        effectsProcessor.enableVisualizer(enabled)
     }
 
     /**
@@ -1554,56 +1490,53 @@ class AudioPlaybackManager(
 
     private fun startPositionTracking() {
         positionJob?.cancel()
-        positionJob = scope.launch {
-            var lastPosition = 0L
-            var lastDuration = 0L
-            var bandwidthSampleTick = 0
-            var lastBufferedPosition = 0L
-            var noPlayerWaitMs = POSITION_NO_PLAYER_MIN_WAIT_MS
-            while (true) {
-                val player = exoPlayer
-                if (player == null) {
-                    // No player yet — back off exponentially (doubling to the
-                    // POSITION_NO_PLAYER_MAX_WAIT_MS cap) so player-less stretches
-                    // between sessions don't wake the loop at the poll rate.
-                    delay(noPlayerWaitMs)
-                    noPlayerWaitMs = (noPlayerWaitMs * 2).coerceAtMost(POSITION_NO_PLAYER_MAX_WAIT_MS)
-                    continue
-                }
-                noPlayerWaitMs = POSITION_NO_PLAYER_MIN_WAIT_MS
-                // While paused, the position/duration/lyrics/crossfade work below
-                // is a no-op (position doesn't move, crossfader only runs when
-                // playing, lyrics index is stable). Suspend reactively on the
-                // play→resume edge instead of polling at 4 Hz for the whole
-                // paused session — mirrors the EnginePositionTicker pattern on
-                // the video side and removes continuous background CPU/battery.
-                if (!player.isPlaying) {
-                    delay(POSITION_PAUSED_RECHECK_MS)
-                    continue
-                }
+        var lastPosition = 0L
+        var lastDuration = 0L
+        var bandwidthSampleTick = 0
+        var lastBufferedPosition = 0L
+        // The shared polling loop (player-contract) owns the cadence, the
+        // bounded reactive paused-wait and the player-less exponential
+        // backoff; this is only the tick body. Paused ticks still reach
+        // [onActive] on a play→pause edge — the body's own gate keeps them
+        // no-ops, exactly as before the unification.
+        positionJob = EnginePositionTicker(
+            scope = scope,
+            pollingIntervalMs = MutableStateFlow(POSITION_POLL_INTERVAL_MS),
+            isPlayingFlow = _isPlaying,
+            isCurrentlyPlaying = { exoPlayer?.isPlaying == true },
+            isReady = { exoPlayer != null },
+            onActive = tickBody@{
+                val player = exoPlayer ?: return@tickBody
+                if (!player.isPlaying) return@tickBody
 
-                val pos = player.currentPosition
-                val dur = player.duration.coerceAtLeast(0L)
-                // A→B loop: when both markers are set and we reach B while
-                // playing, jump back to A.
-                val abEnd = _abLoopEndMs.value
-                val abStart = _abLoopStartMs.value
-                if (abEnd != null && abStart != null && player.isPlaying && pos >= abEnd) {
-                    player.seekTo(abStart)
+                // Shared tick decisions (commonMain AudioQueuePolicy — the
+                // same plan the desktop ticker executes): A–B enforcement
+                // target, position/duration publish dedup, lyric-index gate.
+                val plan = AudioQueuePolicy.positionTickPlan(
+                    positionMs = player.currentPosition,
+                    durationMs = player.duration,
+                    lastPublishedPositionMs = lastPosition,
+                    lastPublishedDurationMs = lastDuration,
+                    hasLyrics = lyricsManager.lyrics.value.isNotEmpty(),
+                    abLoopStartMs = _abLoopStartMs.value,
+                    abLoopEndMs = _abLoopEndMs.value,
+                )
+                plan.seekToMs?.let { player.seekTo(it) }
+                plan.publishPositionMs?.let {
+                    _currentPosition.value = it
+                    lastPosition = it
                 }
-                if (pos != lastPosition) {
-                    _currentPosition.value = pos
-                    lastPosition = pos
+                plan.publishDurationMs?.let {
+                    _duration.value = it
+                    lastDuration = it
                 }
-                if (dur != lastDuration) {
-                    _duration.value = dur
-                    lastDuration = dur
-                }
-                if (lyricsManager.lyrics.value.isNotEmpty()) {
+                if (plan.updateLyricIndex) {
                     lyricsManager.updateCurrentLyricIndex(_currentPosition.value)
                 }
 
-                if (_crossfadeDurationMs.value > 0 && player.isPlaying && _repeatMode.value != 2) {
+                // Android-only tick duties (declared divergences — the
+                // desktop ticker stops at the shared plan above).
+                if (_crossfadeDurationMs.value > 0 && _repeatMode.value != 2) {
                     crossfader.maybeStart()
                 }
 
@@ -1621,22 +1554,22 @@ class AudioPlaybackManager(
                         }
                     }
                 }
-                delay(POSITION_POLL_INTERVAL_MS)
-            }
-        }
+            },
+        ).launch()
     }
 
     fun stopAndRelease() {
         audioPrefetchEngine.stop()
         crossfader.cancel()
 
-        val player = exoPlayer
-        val itemId = currentItemId
-        val sid = playSessionId
-        val pos = player?.currentPosition?.let { it * 10_000 } ?: 0L
-
         positionJob?.cancel()
-        progressReporter.cancel()
+        // Teardown entry (BEFORE the player release below): the reporter
+        // snapshots the final item/session/position through its providers —
+        // which read the still-live player — cancels its loop, launches the
+        // final stop report and rotates the session id synchronously. This
+        // is the former ~35-line hand-rolled tail, now shared with the
+        // desktop adapter inside AudioProgressReporter.
+        progressReporter.stopAndCancel()
         exoPlayer?.removeListener(playerListener)
         mediaSession?.let { sessionManager.clearSession(it) }
         // JellyPlayPlaybackService.onDestroy() may already have released this
@@ -1654,16 +1587,5 @@ class AudioPlaybackManager(
         _currentPosition.value = 0L
         _duration.value = 0L
         lyricsManager.reset()
-        playSessionId = UUID.randomUUID().toString()
-
-        if (player != null && itemId != null && pos > 0) {
-            scope.launch {
-                playbackRepository.reportPlaybackStopped(
-                    itemId = itemId,
-                    sessionId = sid,
-                    positionTicks = pos,
-                )
-            }
-        }
     }
 }

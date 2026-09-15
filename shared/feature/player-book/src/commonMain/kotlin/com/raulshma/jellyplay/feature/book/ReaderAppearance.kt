@@ -13,7 +13,8 @@ import kotlin.math.roundToInt
  * global / cleared); the ViewModel derives its effective flows and routes
  * writes through it (see [BookReaderViewModel.setUsePerBookAppearance]).
  */
-internal data class EffectiveAppearance(
+/** Public only because [ReaderPrefsSnapshot.effective] exposes it — not a stable API surface. */
+data class EffectiveAppearance(
     val theme: ReaderTheme,
     val fontSizePx: Int,
 )

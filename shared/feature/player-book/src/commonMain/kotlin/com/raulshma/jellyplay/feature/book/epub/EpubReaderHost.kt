@@ -3,7 +3,6 @@ package com.raulshma.jellyplay.feature.book.epub
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import com.raulshma.jellyplay.core.datastore.reader.ReaderTheme
-import com.raulshma.jellyplay.core.datastore.reader.ReadingDirection
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okio.Path
@@ -88,31 +87,32 @@ internal data class EpubSearchResult(val cfi: String, val excerpt: String, val c
 internal data class EpubSpeechParagraph(val cfi: String, val text: String)
 
 /**
- * Event sink the platform hosts feed from the JS bridge. Callers capture
- * Compose state / ViewModel calls here; the bridge threads (JavascriptInterface
- * on Android, the CEF poll on desktop) invoke these off the main thread, so
- * every callback must stay thread-safe (StateFlow/state writes are).
+ * The JS→native event seam: ONE listener invoked once per parsed [EpubEvent]
+ * (the hosts feed [EpubEventParser.parse] output straight through it — there
+ * is no separate dispatch step). Callers capture Compose state / ViewModel
+ * calls inside; the bridge threads (JavascriptInterface on Android, the CEF
+ * poll on desktop) invoke the seam off the main thread, so the listener must
+ * stay thread-safe (StateFlow/state writes are).
  */
-internal class EpubReaderCallbacks(
-    val onPercentChanged: (Double) -> Unit = {},
-    val onStatusChanged: (EpubReaderStatus) -> Unit = {},
-    val onDirectionReported: (ReadingDirection) -> Unit = {},
-    val onTocReady: (List<EpubTocItem>) -> Unit = {},
-    /** Fires on every relocation with the chapter label / remaining pages. */
-    val onRelocated: (EpubRelocation) -> Unit = {},
-    /** Content tap, already resolved to a zone ([tapZoneFor]) from raw x + width. */
-    val onTap: (EpubTapZone) -> Unit = {},
-    /** Horizontal swipe (`true` = physical left); mapped to a zone by the screen. */
-    val onSwipe: (toLeft: Boolean) -> Unit = {},
-    val onSelection: (cfi: String, text: String) -> Unit = { _, _ -> },
-    val onSelectionCleared: () -> Unit = {},
-    /** One final event per `search` call — a newer token supersedes older ones. */
-    val onSearchResults: (token: Int, results: List<EpubSearchResult>) -> Unit = { _, _ -> },
-    val onSpeechContext: (paragraphs: List<EpubSpeechParagraph>) -> Unit = {},
-    val onAutoScrollStopped: () -> Unit = {},
-    /** A `display(cfi)` failed (goToCfi / flow switch) — native may fall back to percent. */
-    val onDisplayError: (cfi: String) -> Unit = {},
-)
+internal fun interface EpubEventListener {
+    fun onEvent(event: EpubEvent)
+}
+
+/**
+ * The ONE event-side forwarding site — both platform hosts build their
+ * delivery receipt (see [BookDeliveryTracker.confirmDelivery]) through this
+ * decorator: a [EpubEvent.Status] latches the receipt FIRST (the ladder must
+ * hold the generation before the screen reacts to the status) and only then
+ * reaches the wrapped listener; every other event rides the wrap untouched.
+ * With a single-event seam a new event kind CANNOT bypass the receipt — it
+ * arrives as the same [onEvent] call by construction, which is why the old
+ * thirteen-callback wrap needed a reflection guard and this one does not.
+ */
+internal fun EpubEventListener.withStatusReceipt(receipt: () -> Unit): EpubEventListener =
+    EpubEventListener { event ->
+        if (event is EpubEvent.Status) receipt()
+        this@withStatusReceipt.onEvent(event)
+    }
 
 /**
  * What the screen may do to a live EPUB rendition. `next`/`prev` are physical
@@ -130,7 +130,7 @@ internal interface EpubReaderHandle {
 
     fun goTo(href: String)
 
-    /** Jump to an exact range/chapter CFI; failure surfaces via [EpubReaderCallbacks.onDisplayError]. */
+    /** Jump to an exact range/chapter CFI; failure surfaces via [EpubEvent.DisplayError]. */
     fun goToCfi(cfi: String)
 
     /** Rebuild the rendition as paginated/scrolled, keeping the current position. */
@@ -175,7 +175,7 @@ internal expect fun rememberEpubReaderHost(
     bookFile: Path,
     resumePercent: Double,
     appearance: EpubAppearance,
-    callbacks: EpubReaderCallbacks,
+    onEvent: EpubEventListener,
 ): EpubReaderHandle
 
 /** ReaderTheme → the `setTheme` argument `reader.js` understands. */

@@ -8,9 +8,7 @@ import com.raulshma.jellyplay.core.model.CultureInfo
 import com.raulshma.jellyplay.core.model.IntroTimestamps
 import com.raulshma.jellyplay.core.model.LiveStreamOption
 import com.raulshma.jellyplay.core.model.MediaSegment
-import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.PlaybackInfoResult
-import com.raulshma.jellyplay.core.model.PlayMethod
 import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.PlaybackProgress
 import com.raulshma.jellyplay.core.model.PlaybackStartInfo
@@ -20,6 +18,8 @@ import com.raulshma.jellyplay.core.model.ResolvedPlayback
 import com.raulshma.jellyplay.core.model.TtlCache
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.network.playback.buildBookDownloadUrl
+import com.raulshma.jellyplay.core.network.playback.resolveDeliveryUrl
+import com.raulshma.jellyplay.core.network.playback.resolveDeliveryUrlWithApiKey
 import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.data.concurrency.SingleFlightFetcher
 import kotlinx.coroutines.async
@@ -323,43 +323,24 @@ class PlaybackRepositoryImpl(
                 "liveStreamId=${source.liveStreamId != null}"
         )
 
-        // Live TV channels carry a server-issued liveStreamId; the stream URL
-        // must echo it back as `LiveStreamId` so the tuner opens a live
-        // session. Static direct-play (`/Videos/{id}/stream?static=true`) does
-        // not work for live sources, so route them through direct stream.
-        val isLiveStream = source.liveStreamId != null || source.requiresOpening
-
-        val (url, method) = when {
-            isLiveStream -> {
-                // The SDK does not surface a DirectStreamUrl; the client
-                // constructs `/Videos/{id}/stream` and appends LiveStreamId.
-                // Transcode is the fallback when direct stream is unsupported.
-                val liveId = source.liveStreamId
-                val base = if (source.supportsDirectStream || source.supportsDirectPlay) {
-                    getStreamUrl(itemId, source.id, startTimeTicks, liveStreamId = liveId)
-                } else {
-                    resolveTranscodeUrl(source.transcodeUrl)
-                }
-                val resolvedMethod = if (source.supportsDirectStream) PlayMethod.DIRECT_STREAM
-                    else if (source.supportsTranscoding) PlayMethod.TRANSCODE
-                    else PlayMethod.DIRECT_STREAM
-                base to resolvedMethod
-            }
-            source.supportsDirectPlay ->
-                getStreamUrl(itemId, source.id, startTimeTicks) to PlayMethod.DIRECT_PLAY
-            source.supportsDirectStream ->
-                resolveTranscodeUrl(source.transcodeUrl) to PlayMethod.DIRECT_STREAM
-            source.supportsTranscoding ->
-                resolveTranscodeUrl(source.transcodeUrl) to PlayMethod.TRANSCODE
-            // No playable method offered by the server for this source/mode.
-            else -> return null
+        // Pure decision (see selectPlaybackMethod for the ladder and its
+        // live-source reasoning): the facade keeps only the URL choreography
+        // each decision arm points at.
+        val selection = selectPlaybackMethod(source) ?: return null
+        val url = when (selection.urlSource) {
+            PlaybackUrlSource.LIVE_STREAM ->
+                getStreamUrl(itemId, source.id, startTimeTicks, liveStreamId = source.liveStreamId)
+            PlaybackUrlSource.STATIC_STREAM ->
+                getStreamUrl(itemId, source.id, startTimeTicks)
+            PlaybackUrlSource.TRANSCODE ->
+                resolveTranscodeUrl(source.transcodeUrl)
         }
         if (url.isBlank()) return null
 
         return ResolvedPlayback(
             mediaSourceId = source.id,
             streamUrl = url,
-            playMethod = method,
+            playMethod = selection.playMethod,
             playSessionId = result.playSessionId,
             maxStreamingBitrate = maxStreamingBitrateBits,
             container = source.container,
@@ -369,14 +350,16 @@ class PlaybackRepositoryImpl(
     private fun resolveTranscodeUrl(transcodeUrl: String?): String {
         if (transcodeUrl.isNullOrBlank()) return ""
         val server = apiClient.getServerUrl() ?: return ""
-        val base = if (transcodeUrl.startsWith("http")) transcodeUrl else "$server$transcodeUrl"
         val token = apiClient.getAccessToken()
-        if (token.isNullOrBlank()) return base
-        // Avoid duplicating a token query param if the server already
-        // embedded one in the transcoding URL (either spelling — pre-12
-        // servers bake the legacy lowercase alias).
-        val hasTokenParam = "api_key=" in base || "ApiKey=" in base
-        return if (hasTokenParam) base else "$base${if ('?' in base) "&" else "?"}ApiKey=$token"
+        if (token.isNullOrBlank()) {
+            // No session token: the fold's token-less half still owns the
+            // absolute-ize (trailing-slash trim) — the hand-joined copy this
+            // replaced produced `//path` for a trailing-slash server URL.
+            return resolveDeliveryUrl(server, transcodeUrl)
+        }
+        // The pre-baked-token guard (either spelling — pre-12 servers bake
+        // the legacy lowercase alias) lives in the shared delivery-URL fold.
+        return resolveDeliveryUrlWithApiKey(server, transcodeUrl, token)
     }
 
     override fun getStreamUrl(
@@ -449,33 +432,9 @@ class PlaybackRepositoryImpl(
                 val introResult = introDeferred.await()
                 val creditResult = creditDeferred.await()
 
-                val fallbackSegments = mutableListOf<MediaSegment>()
-                introResult?.let { ts ->
-                    if (ts.hasIntro) {
-                        fallbackSegments.add(
-                            MediaSegment(
-                                id = "legacy-intro-${ts.itemId}",
-                                itemId = ts.itemId,
-                                type = MediaSegmentType.INTRO,
-                                startTicks = ts.introStartTicks,
-                                endTicks = ts.introEndTicks,
-                            )
-                        )
-                    }
-                }
-                creditResult?.let { ts ->
-                    if (ts.hasCredits) {
-                        fallbackSegments.add(
-                            MediaSegment(
-                                id = "legacy-outro-${ts.itemId}",
-                                itemId = ts.itemId,
-                                type = MediaSegmentType.OUTRO,
-                                startTicks = ts.creditStartTicks,
-                                endTicks = ts.creditEndTicks,
-                            )
-                        )
-                    }
-                }
+                // Pure mapping (see legacySegmentFallback): the facade only
+                // sequences the two legacy reads here.
+                val fallbackSegments = legacySegmentFallback(introResult, creditResult)
                 // Only cache on a successful (empty) segments call: the store
                 // flag vetoes exactly this flight's write-back when the
                 // segments API itself failed, leaving the cache untouched so

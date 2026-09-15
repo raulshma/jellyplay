@@ -136,4 +136,61 @@ class PlaybackUrlBuilderTest {
         assertEquals("", resolveSubtitleDeliveryUrl(null, KEY, "/sub"))
         assertEquals("", resolveSubtitleDeliveryUrl(BASE, null, "/sub"))
     }
+
+    @Test
+    fun `delivery url fold appends the token when absent`() {
+        assertEquals(
+            "$BASE/transcode?ApiKey=$KEY",
+            resolveDeliveryUrlWithApiKey(BASE, "/transcode", KEY),
+        )
+        assertEquals(
+            "$BASE/transcode?profile=main&ApiKey=$KEY",
+            resolveDeliveryUrlWithApiKey(BASE, "/transcode?profile=main", KEY),
+            "existing query params get the & separator",
+        )
+    }
+
+    @Test
+    fun `token-less delivery url fold trims the base trailing slash`() {
+        // Regression guard: core/data's blank-token transcode branch once
+        // hand-joined "$server$transcodeUrl", which produced "//path" for a
+        // trailing-slash server URL — only this fold trims.
+        assertEquals(
+            "$BASE/transcode",
+            resolveDeliveryUrl("$BASE/", "/transcode"),
+        )
+        assertEquals(
+            "https://edge.example/hls/mono.m3u8",
+            resolveDeliveryUrl(BASE, "https://edge.example/hls/mono.m3u8"),
+            "an already-absolute delivery url passes through as-is",
+        )
+    }
+
+    @Test
+    fun `delivery url fold never double-appends a pre-baked token`() {
+        assertEquals(
+            "$BASE/transcode?ApiKey=baked",
+            resolveDeliveryUrlWithApiKey(BASE, "/transcode?ApiKey=baked", KEY),
+            "capital ApiKey already present is left untouched",
+        )
+        assertEquals(
+            "$BASE/transcode?api_key=baked",
+            resolveDeliveryUrlWithApiKey(BASE, "/transcode?api_key=baked", KEY),
+            "legacy lowercase api_key (pre-12 servers) is left untouched",
+        )
+    }
+
+    @Test
+    fun `delivery url fold absolutizes and trims the base trailing slash`() {
+        assertEquals(
+            "$BASE/transcode?ApiKey=$KEY",
+            resolveDeliveryUrlWithApiKey("$BASE/", "/transcode", KEY),
+            "a trailing slash on the base can never produce a // path",
+        )
+        assertEquals(
+            "https://edge.example/hls/mono.m3u8?ApiKey=$KEY",
+            resolveDeliveryUrlWithApiKey(BASE, "https://edge.example/hls/mono.m3u8", KEY),
+            "an already-absolute delivery url passes through as-is",
+        )
+    }
 }

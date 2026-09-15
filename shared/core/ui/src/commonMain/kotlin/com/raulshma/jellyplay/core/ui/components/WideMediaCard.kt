@@ -17,8 +17,6 @@ import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.hasWatchProgress
 import com.raulshma.jellyplay.core.model.MediaType
-import com.raulshma.jellyplay.core.model.bookProgressFraction
-import kotlin.math.roundToInt
 import com.raulshma.jellyplay.core.ui.adaptive.LocalJellyPlayUi
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -37,6 +35,9 @@ import com.raulshma.jellyplay.core.ui.tv.enableMarqueeOnFocus
  * @param cardWidth fixed card width (the row computes this from adaptive info).
  * @param surfaceScrimBrush bottom scrim brush — hoisted and shared across every
  *  card in the row to avoid allocating a [Brush] per scrolling card.
+ * @param bookProgressFractionOverride TOC-accurate book fraction for the
+ *  footer's "% complete" label (the [PosterCard] parity param; admission and
+ *  percent math live in [bookFooterPercent]).
  */
 @Composable
 fun WideMediaCard(
@@ -49,6 +50,7 @@ fun WideMediaCard(
     surfaceScrimBrush: Brush,
     modifier: Modifier = Modifier,
     clipToShape: Boolean = false,
+    bookProgressFractionOverride: Float? = null,
 ) {
     val isTv = LocalTvMode.current
     val dominantColor = rememberDominantColor(backdropUrl.ifBlank { imageUrl }, itemId = item.id)
@@ -132,17 +134,7 @@ fun WideMediaCard(
                     formatRuntimeLabelFromTicks(item.runTimeTicks)
                 } else null
             }
-            val bookPercent =
-                remember(isBook, item.isPlayed, item.playbackPositionTicks) {
-                    if (!isBook || item.isPlayed) {
-                        null
-                    } else {
-                        item.bookProgressFraction()
-                            ?.takeIf { it > 0f }
-                            ?.let { (it * 100).roundToInt().coerceIn(0, 100) }
-                            ?.takeIf { it > 0 }
-                    }
-                }
+            val bookPercent = bookFooterPercent(item, bookProgressFractionOverride)
 
             val timeText = remainingTime ?: totalTime
 

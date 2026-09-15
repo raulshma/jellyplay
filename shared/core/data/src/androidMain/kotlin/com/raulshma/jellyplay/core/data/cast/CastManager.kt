@@ -14,6 +14,7 @@ import com.google.android.gms.cast.framework.SessionManagerListener
 import com.raulshma.jellyplay.core.data.cast.dlna.DlnaCastStrategy
 import com.raulshma.jellyplay.core.data.cast.remote.JellyfinRemotePlayCastStrategy
 import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore
+import com.raulshma.jellyplay.feature.player.video.engine.EnginePositionTicker
 import com.raulshma.jellyplay.core.model.CastingStrategy
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,15 +24,11 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicBoolean
@@ -52,14 +49,13 @@ class CastManager(
 ) {
     companion object {
         private const val TAG = "CastManager"
-        // How often the cast ticker re-checks whether playback resumed while
-        // paused. Mirrors the playback engines' POSITION_PAUSED_RECHECK_MS
-        // (internal to shared/feature/player-video, so redeclared here).
-        private const val CAST_PAUSED_RECHECK_MS = 2_500L
-        const val STRATEGY_GOOGLE = "google"
-        const val STRATEGY_LIBVLC = "libvlc"
-        const val STRATEGY_DLNA = "dlna"
-        const val STRATEGY_JELLYFIN = "jellyfin"
+        // Canonical dispatch names live on [CastStrategyNames] (commonMain,
+        // where the pure state fan-out reads them); these public aliases keep
+        // the manager's historical surface for existing consumers.
+        const val STRATEGY_GOOGLE = CastStrategyNames.GOOGLE
+        const val STRATEGY_LIBVLC = CastStrategyNames.LIBVLC
+        const val STRATEGY_DLNA = CastStrategyNames.DLNA
+        const val STRATEGY_JELLYFIN = CastStrategyNames.JELLYFIN
     }
 
     private val strategies = mutableMapOf<String, CastStrategy>()
@@ -73,6 +69,9 @@ class CastManager(
 
     private val coroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var tickerJob: Job? = null
+
+    /** Per-strategy poll cadence, re-read by the shared ticker each tick. */
+    private val castPollingIntervalMs = MutableStateFlow(1000L)
     private var strategyObserverJob: Job? = null
     private var deviceMergeJob: Job? = null
     private var preferredRendererJob: Job? = null
@@ -211,40 +210,69 @@ class CastManager(
         }
     }
 
+    /**
+     * Dispatch + write-through for the now-playing flow family. Dispatch:
+     * refresh the strategy that owns playback state (DLNA / Jellyfin own
+     * renderer-protocol state; every other active strategy rides the
+     * manager-owned CastPlayer, snapshotted off the main thread — or not at
+     * all when no player exists, leaving every flow untouched). Write-through:
+     * [castStateFanout] — pure and commonMain-pinned — decides per strategy
+     * which fields each branch contributes; `null` fields keep their flow's
+     * previous value.
+     */
     private suspend fun updateCastState() {
-        if (activeStrategyName == STRATEGY_DLNA) {
+        val strategyName = activeStrategyName
+        val dlna: DlnaRendererState? = if (strategyName == STRATEGY_DLNA) {
             dlnaCastStrategy.refreshPlaybackState()
-            _castPositionMs.value = dlnaCastStrategy.rendererPositionMs.value
-            _castDurationMs.value = dlnaCastStrategy.rendererDurationMs.value
-            _castIsPlaying.value = dlnaCastStrategy.rendererIsPlaying.value
-            _castVolume.value = dlnaCastStrategy.rendererVolume.value
-            return
-        }
-        if (activeStrategyName == STRATEGY_JELLYFIN) {
-            jellyfinRemotePlayCastStrategy.refreshPlaybackState()
-            _castPositionMs.value = jellyfinRemotePlayCastStrategy.positionMs.value
-            _castDurationMs.value = jellyfinRemotePlayCastStrategy.durationMs.value
-            _castIsPlaying.value = jellyfinRemotePlayCastStrategy.isPlaying.value
-            _castVolume.value = jellyfinRemotePlayCastStrategy.volume.value
-            _castTitle.value = jellyfinRemotePlayCastStrategy.nowPlayingTitle.value
-            _castSubtitle.value = jellyfinRemotePlayCastStrategy.nowPlayingSubtitle.value
-            return
-        }
-        val player = castPlayer ?: return
-        val snapshot = withContext(Dispatchers.Default) {
-            CastPlayerSnapshot(
-                position = player.currentPosition.coerceAtLeast(0),
-                duration = player.duration.coerceAtLeast(0),
-                buffered = player.bufferedPosition.coerceAtLeast(0),
-                isPlaying = player.isPlaying,
-                volume = player.volume,
+            DlnaRendererState(
+                positionMs = dlnaCastStrategy.rendererPositionMs.value,
+                durationMs = dlnaCastStrategy.rendererDurationMs.value,
+                isPlaying = dlnaCastStrategy.rendererIsPlaying.value,
+                volume = dlnaCastStrategy.rendererVolume.value,
             )
+        } else {
+            null
         }
-        _castPositionMs.value = snapshot.position
-        _castDurationMs.value = snapshot.duration
-        _castBufferedPositionMs.value = snapshot.buffered
-        _castIsPlaying.value = snapshot.isPlaying
-        _castVolume.value = snapshot.volume
+        val jellyfin: JellyfinNowPlayingState? = if (strategyName == STRATEGY_JELLYFIN) {
+            jellyfinRemotePlayCastStrategy.refreshPlaybackState()
+            JellyfinNowPlayingState(
+                positionMs = jellyfinRemotePlayCastStrategy.positionMs.value,
+                durationMs = jellyfinRemotePlayCastStrategy.durationMs.value,
+                isPlaying = jellyfinRemotePlayCastStrategy.isPlaying.value,
+                volume = jellyfinRemotePlayCastStrategy.volume.value,
+                title = jellyfinRemotePlayCastStrategy.nowPlayingTitle.value,
+                subtitle = jellyfinRemotePlayCastStrategy.nowPlayingSubtitle.value,
+            )
+        } else {
+            null
+        }
+        val player: CastPlayerSnapshot? = if (dlna == null && jellyfin == null) {
+            castPlayer?.let { player ->
+                withContext(Dispatchers.Default) {
+                    CastPlayerSnapshot(
+                        position = player.currentPosition.coerceAtLeast(0),
+                        duration = player.duration.coerceAtLeast(0),
+                        buffered = player.bufferedPosition.coerceAtLeast(0),
+                        isPlaying = player.isPlaying,
+                        volume = player.volume,
+                    )
+                }
+            }
+        } else {
+            null
+        }
+        applyCastState(castStateFanout(strategyName, dlna, jellyfin, player))
+    }
+
+    /** Writes the fan-out's non-null fields; null fields leave their flow as-is. */
+    private fun applyCastState(fanout: CastStateFanout) {
+        fanout.positionMs?.let { _castPositionMs.value = it }
+        fanout.durationMs?.let { _castDurationMs.value = it }
+        fanout.bufferedPositionMs?.let { _castBufferedPositionMs.value = it }
+        fanout.isPlaying?.let { _castIsPlaying.value = it }
+        fanout.volume?.let { _castVolume.value = it }
+        fanout.title?.let { _castTitle.value = it }
+        fanout.subtitle?.let { _castSubtitle.value = it }
     }
 
     private fun toggleTicker() {
@@ -257,22 +285,20 @@ class CastManager(
             else -> castPlayer != null && castPlayer?.isPlaying == true
         }
         if (shouldTick) {
-            val interval = if (isDlna || isJellyfin) 1000L else 500L
-            tickerJob = coroutineScope.launch {
-                while (isActive) {
-                    // While paused, stop polling and wait for playback to resume
-                    // (bounded so a DLNA/Jellyfin strategy flip is still picked
-                    // up). Mirrors EnginePositionTicker's bounded paused-wait so
-                    // a paused cast session no longer wakes the CPU at 1–2 Hz.
-                    if (!_castIsPlaying.value) {
-                        withTimeoutOrNull(CAST_PAUSED_RECHECK_MS) {
-                            _castIsPlaying.first { it }
-                        }
-                    }
-                    delay(interval)
-                    updateCastState()
-                }
-            }
+            // The shared polling loop (player-contract): bounded reactive
+            // paused-wait, interval re-read per tick, and the post-timeout
+            // `continue` that keeps a paused session off the network. The
+            // hand-rolled copy this replaced had drifted out of the module —
+            // it still paid the interval delay after a timed-out paused wait,
+            // polling the remote renderer while nothing was playing.
+            castPollingIntervalMs.value = if (isDlna || isJellyfin) 1000L else 500L
+            tickerJob = EnginePositionTicker(
+                scope = coroutineScope,
+                pollingIntervalMs = castPollingIntervalMs,
+                isPlayingFlow = _castIsPlaying,
+                isCurrentlyPlaying = { _castIsPlaying.value },
+                onActive = ::updateCastState,
+            ).launch()
         }
     }
 
@@ -612,42 +638,16 @@ class CastManager(
     }
 }
 
-private data class CastPlayerSnapshot(
-    val position: Long,
-    val duration: Long,
-    val buffered: Long,
-    val isPlaying: Boolean,
-    val volume: Float,
-)
-
-/**
- * Appends the active track / quality selections onto a Jellyfin stream URL as
- * standard query params (`AudioStreamIndex`, `SubtitleStreamIndex`,
- * `MaxVideoBitrate`), used by the DLNA and Google Cast transports which both
- * consume a server URL. Existing params are preserved; only non-null options
- * are added. Used for the cast-handoff fix.
- */
-internal fun String.withCastQueryParams(options: CastMediaOptions): String {
-    if (options.audioStreamIndex == null &&
-        options.subtitleStreamIndex == null &&
-        options.maxVideoBitrate == null
-    ) {
-        return this
-    }
-    val separator = if ('?' in this) "&" else "?"
-    val params = buildList {
-        options.audioStreamIndex?.let { add("AudioStreamIndex=${it}") }
-        options.subtitleStreamIndex?.let { add("SubtitleStreamIndex=${it}") }
-        options.maxVideoBitrate?.let { add("MaxVideoBitrate=${it}") }
-    }
-    return this + separator + params.joinToString("&")
-}
-
 /**
  * Returns a copy of [this] [MediaItem] whose stream URI carries the cast
  * options as query params, so Google Cast requests the correct audio/subtitle
  * variant and respects the user's quality ceiling. Subtitle configurations and
  * metadata are preserved.
+ *
+ * Thin Android-side fold: the query-param construction itself lives in the
+ * commonMain `String.withCastQueryParams` (CastQueryParams.kt, beside
+ * [CastMediaOptions]) so the pure shaping is pinned off-platform; this
+ * extension only rewrites the media3 item's URI through it.
  */
 internal fun MediaItem.withCastOptions(options: CastMediaOptions): MediaItem {
     val currentUri = localConfiguration?.uri ?: return this

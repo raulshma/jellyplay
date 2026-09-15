@@ -97,48 +97,21 @@ internal actual fun rememberEpubReaderHost(
     bookFile: Path,
     resumePercent: Double,
     appearance: EpubAppearance,
-    callbacks: EpubReaderCallbacks,
+    onEvent: EpubEventListener,
 ): EpubReaderHandle {
     val env = koinInject<EpubDesktopEnv>()
     val kcef = koinInject<KcefRuntime>()
-    var bookBase64 by remember { mutableStateOf<String?>(null) }
     var pageLoaded by remember { mutableStateOf(false) }
-    /*
-     * Boot-transfer tracking — see AndroidEpubReaderHost for the full story:
-     * [pageGeneration] increments on every finished page load (a reload wipes
-     * reader.js and the book with it); the first reader.js status event is
-     * the delivery receipt for the current generation and releases the
-     * payload. Unreceived generations re-encode and re-send, so a reload can
-     * never strand the reader on the boot veil.
-     */
-    var pageGeneration by remember { mutableStateOf(0) }
-    var deliveredGeneration by remember { mutableStateOf(Int.MIN_VALUE) }
+    // The boot-transfer ladder (generation gating + payload) — see
+    // BookDeliveryTracker: a reload here wipes reader.js and the book with it.
+    val delivery = remember { BookDeliveryTracker() }
 
-    // Reader.js posts its first status only from decodeAndOpen — i.e. after
-    // loadBookEnd assembled OUR bytes — so any status event is a delivery
-    // receipt for the current page generation. Everything else delegates
-    // untouched.
-    val receivingCallbacks = remember(callbacks) {
-        EpubReaderCallbacks(
-            onPercentChanged = callbacks.onPercentChanged,
-            onStatusChanged = { status ->
-                deliveredGeneration = pageGeneration
-                callbacks.onStatusChanged(status)
-            },
-            onDirectionReported = callbacks.onDirectionReported,
-            onTocReady = callbacks.onTocReady,
-            onRelocated = callbacks.onRelocated,
-            onTap = callbacks.onTap,
-            onSwipe = callbacks.onSwipe,
-            onSelection = callbacks.onSelection,
-            onSelectionCleared = callbacks.onSelectionCleared,
-            onSearchResults = callbacks.onSearchResults,
-            onSpeechContext = callbacks.onSpeechContext,
-            onAutoScrollStopped = callbacks.onAutoScrollStopped,
-            onDisplayError = callbacks.onDisplayError,
-        )
+    // Any status event is a delivery receipt for the current page generation;
+    // withStatusReceipt forwards every other event untouched.
+    val receivingEvents = remember(onEvent) {
+        onEvent.withStatusReceipt { delivery.confirmDelivery() }
     }
-    val callbacksRef = rememberUpdatedState(receivingCallbacks)
+    val eventsRef = rememberUpdatedState(receivingEvents)
     val downloadProgress = kcef.progress
     var readerFileUrl by remember { mutableStateOf<String?>(null) }
     val navigatorRef = remember { mutableStateOf<WebViewNavigator?>(null) }
@@ -161,12 +134,12 @@ internal actual fun rememberEpubReaderHost(
         }
         readerFileUrl = file.toURI().toString()
     }
-    LaunchedEffect(bookFile, pageGeneration, deliveredGeneration) {
-        val current = bookBase64
-        if (current != null) return@LaunchedEffect
+    LaunchedEffect(bookFile, delivery.pageGeneration, delivery.deliveredGeneration) {
         // The live page already holds the book — don't re-encode for it.
-        if (pageGeneration <= deliveredGeneration) return@LaunchedEffect
-        bookBase64 = withContext(Dispatchers.IO) { EpubBookCodec.encodeBase64(bookFile) }
+        if (!delivery.shouldEncode()) return@LaunchedEffect
+        delivery.storeEncodedBook(
+            withContext(Dispatchers.IO) { EpubBookCodec.encodeBase64(bookFile) },
+        )
     }
 
     val url = readerFileUrl
@@ -188,25 +161,27 @@ internal actual fun rememberEpubReaderHost(
         LaunchedEffect(state.loadingState) {
             if (state.loadingState is LoadingState.Finished) {
                 pageLoaded = true
-                pageGeneration++
+                delivery.onPageLoadFinished()
             }
         }
 
         // The book rides the chunked loadBookBegin/loadBookChunk/loadBookEnd
         // protocol once the page's JS is reachable. Re-runs per page
         // generation until the JS side confirms; loadBookBegin resets
-        // reader.js's assembly state, so a resend is idempotent.
-        LaunchedEffect(pageGeneration, bookBase64) {
-            val base64 = bookBase64 ?: return@LaunchedEffect
-            if (pageGeneration <= deliveredGeneration) return@LaunchedEffect
-            if (state.loadingState !is LoadingState.Finished) return@LaunchedEffect
+        // reader.js's assembly state, so a resend is idempotent. The send
+        // gate reads the LIVE LoadingState (not the latched pageLoaded): a
+        // reload transiently reports Loading, and a script against the
+        // half-torn-down document is lost.
+        LaunchedEffect(delivery.pageGeneration, delivery.bookBase64) {
+            val base64 = delivery.bookBase64 ?: return@LaunchedEffect
+            if (!delivery.shouldSend(state.loadingState is LoadingState.Finished)) return@LaunchedEffect
             sendBookChunks(base64, resumePercent, appearance) { navigator.evaluateJavaScript(it, null) }
         }
         // The transfer confirmed — the composition no longer needs to pin the
         // whole base64 payload (a later page reload re-encodes via the effect
         // above).
-        LaunchedEffect(deliveredGeneration) {
-            if (deliveredGeneration >= 0) bookBase64 = null
+        LaunchedEffect(delivery.deliveredGeneration) {
+            if (delivery.shouldReleaseEncodedBook()) delivery.releaseEncodedBook()
         }
 
         // Appearance push for CHANGES after load — see pushAppearanceScripts.
@@ -214,8 +189,8 @@ internal actual fun rememberEpubReaderHost(
         // push before loadBookBegin would be a silent no-op (reader.js
         // defaults would win), and the boot bundle already carries the saved
         // appearance.
-        LaunchedEffect(pageGeneration, deliveredGeneration, appearance) {
-            if (deliveredGeneration < pageGeneration) return@LaunchedEffect
+        LaunchedEffect(delivery.pageGeneration, delivery.deliveredGeneration, appearance) {
+            if (!delivery.shouldPushAppearance()) return@LaunchedEffect
             pushAppearanceScripts(appearance) { navigator.evaluateJavaScript(it, null) }
         }
 
@@ -226,64 +201,17 @@ internal actual fun rememberEpubReaderHost(
             while (isActive) {
                 delay(EVENT_POLL_MS)
                 navigator.evaluateJavaScript(buildConsumeEventsScript()) { raw ->
-                    dispatchEpubEvents(raw, callbacksRef.value)
+                    EpubEventParser.parse(raw).forEach(eventsRef.value::onEvent)
                 }
             }
         }
     }
 
     return remember {
-        object : EpubReaderHandle {
-            override val viewerDownloadProgress = downloadProgress
-
-            override fun next() {
-                navigatorRef.value?.evaluateJavaScript(buildNextScript(), null)
-            }
-
-            override fun prev() {
-                navigatorRef.value?.evaluateJavaScript(buildPrevScript(), null)
-            }
-
-            override fun goTo(href: String) {
-                navigatorRef.value?.evaluateJavaScript(buildGoToScript(href), null)
-            }
-
-            override fun goToCfi(cfi: String) {
-                navigatorRef.value?.evaluateJavaScript(buildGoToCfiScript(cfi), null)
-            }
-
-            override fun setFlow(scrolled: Boolean) {
-                navigatorRef.value?.evaluateJavaScript(buildSetFlowScript(scrolled), null)
-            }
-
-            override fun applyAnnotations(entries: List<EpubAnnotationSpec>) {
-                navigatorRef.value?.evaluateJavaScript(buildApplyAnnotationsScript(entries), null)
-            }
-
-            override fun addAnnotation(entry: EpubAnnotationSpec) {
-                navigatorRef.value?.evaluateJavaScript(buildAddAnnotationScript(entry), null)
-            }
-
-            override fun removeAnnotation(cfi: String) {
-                navigatorRef.value?.evaluateJavaScript(buildRemoveAnnotationScript(cfi), null)
-            }
-
-            override fun clearSelection() {
-                navigatorRef.value?.evaluateJavaScript(buildClearSelectionScript(), null)
-            }
-
-            override fun search(query: String, token: Int) {
-                navigatorRef.value?.evaluateJavaScript(buildSearchScript(query, token), null)
-            }
-
-            override fun requestSpeechContext(cfi: String?) {
-                navigatorRef.value?.evaluateJavaScript(buildSpeechContextScript(cfi), null)
-            }
-
-            override fun setAutoScroll(enabled: Boolean, pxPerSec: Int) {
-                navigatorRef.value?.evaluateJavaScript(buildSetAutoScrollScript(enabled, pxPerSec), null)
-            }
-        }
+        EvaluatingEpubReaderHandle(
+            viewerDownloadProgress = downloadProgress,
+            eval = { script -> navigatorRef.value?.evaluateJavaScript(script, null) },
+        )
     }
 }
 

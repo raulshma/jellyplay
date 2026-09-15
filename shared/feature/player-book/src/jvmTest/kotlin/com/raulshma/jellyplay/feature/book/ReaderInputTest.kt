@@ -3,38 +3,42 @@ package com.raulshma.jellyplay.feature.book
 import androidx.compose.ui.input.key.Key
 import com.raulshma.jellyplay.core.datastore.reader.ReadingDirection
 import com.raulshma.jellyplay.feature.book.epub.EpubTapZone
+import com.raulshma.jellyplay.feature.book.epub.tapZoneFor
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
 /**
- * Pins the direction-aware navigation mapping shared by the native tap zones,
- * the key handler and the JS-reported tap events: physical-left input pages
- * forward under RTL, backward under LTR; the center zone toggles the chrome.
- * Also pins the volume-key paging mapping and the animated-turn gating.
+ * Pins the ONE content-input decision ([readerNavDecision]) every input path
+ * funnels through — native paged tap zones, JS-reported taps, swipes — plus
+ * the shared thirds resolver ([tapZoneFor]) it composes with: direction-aware
+ * thirds (physical-left input pages forward under RTL, backward under LTR),
+ * the guards (sheet-open / live-selection → ignore), the broken-geometry
+ * degrade (center → chrome toggle, never a page turn), the volume-key paging
+ * mapping and the animated-turn gating.
  */
 class ReaderInputTest {
 
     @Test
     fun `left zone pages backward under LTR`() {
-        assertEquals(ReaderTapAction.BACKWARD, epubTapAction(EpubTapZone.LEFT, ReadingDirection.LTR))
+        assertEquals(ReaderNavDecision.BACKWARD, readerNavDecision(EpubTapZone.LEFT, ReadingDirection.LTR))
     }
 
     @Test
     fun `right zone pages forward under LTR`() {
-        assertEquals(ReaderTapAction.FORWARD, epubTapAction(EpubTapZone.RIGHT, ReadingDirection.LTR))
+        assertEquals(ReaderNavDecision.FORWARD, readerNavDecision(EpubTapZone.RIGHT, ReadingDirection.LTR))
     }
 
     @Test
     fun `left zone pages forward under RTL (manga mapping)`() {
-        assertEquals(ReaderTapAction.FORWARD, epubTapAction(EpubTapZone.LEFT, ReadingDirection.RTL))
-        assertEquals(ReaderTapAction.BACKWARD, epubTapAction(EpubTapZone.RIGHT, ReadingDirection.RTL))
+        assertEquals(ReaderNavDecision.FORWARD, readerNavDecision(EpubTapZone.LEFT, ReadingDirection.RTL))
+        assertEquals(ReaderNavDecision.BACKWARD, readerNavDecision(EpubTapZone.RIGHT, ReadingDirection.RTL))
     }
 
     @Test
     fun `center zone always toggles the chrome`() {
-        assertEquals(ReaderTapAction.TOGGLE_CONTROLS, epubTapAction(EpubTapZone.CENTER, ReadingDirection.LTR))
-        assertEquals(ReaderTapAction.TOGGLE_CONTROLS, epubTapAction(EpubTapZone.CENTER, ReadingDirection.RTL))
+        assertEquals(ReaderNavDecision.TOGGLE_CONTROLS, readerNavDecision(EpubTapZone.CENTER, ReadingDirection.LTR))
+        assertEquals(ReaderNavDecision.TOGGLE_CONTROLS, readerNavDecision(EpubTapZone.CENTER, ReadingDirection.RTL))
     }
 
     @Test
@@ -44,17 +48,77 @@ class ReaderInputTest {
     }
 
     // ------------------------------------------------------------------
+    // The composed funnel: gesture thirds → zone → direction-aware action
+    // ------------------------------------------------------------------
+
+    @Test
+    fun `gesture thirds resolve and map direction-aware through one funnel`() {
+        // LTR: leading third backward, trailing third forward, center chrome.
+        assertEquals(
+            ReaderNavDecision.BACKWARD,
+            readerNavDecision(tapZoneFor(40.0, 400.0), ReadingDirection.LTR),
+        )
+        assertEquals(
+            ReaderNavDecision.FORWARD,
+            readerNavDecision(tapZoneFor(360.0, 400.0), ReadingDirection.LTR),
+        )
+        assertEquals(
+            ReaderNavDecision.TOGGLE_CONTROLS,
+            readerNavDecision(tapZoneFor(200.0, 400.0), ReadingDirection.LTR),
+        )
+        // RTL (manga): the same thirds flip.
+        assertEquals(
+            ReaderNavDecision.FORWARD,
+            readerNavDecision(tapZoneFor(40.0, 400.0), ReadingDirection.RTL),
+        )
+        assertEquals(
+            ReaderNavDecision.BACKWARD,
+            readerNavDecision(tapZoneFor(360.0, 400.0), ReadingDirection.RTL),
+        )
+    }
+
+    @Test
+    fun `broken geometry degrades to the chrome toggle — never a page turn`() {
+        // The WebView geometry report failing (width 0/absent, x outside the
+        // viewport) must yield the harmless chrome toggle under BOTH
+        // directions, not a page turn.
+        for (direction in ReadingDirection.entries) {
+            assertEquals(ReaderNavDecision.TOGGLE_CONTROLS, readerNavDecision(tapZoneFor(null, 400.0), direction))
+            assertEquals(ReaderNavDecision.TOGGLE_CONTROLS, readerNavDecision(tapZoneFor(40.0, null), direction))
+            assertEquals(ReaderNavDecision.TOGGLE_CONTROLS, readerNavDecision(tapZoneFor(40.0, 0.0), direction))
+            assertEquals(ReaderNavDecision.TOGGLE_CONTROLS, readerNavDecision(tapZoneFor(900.0, 400.0), direction))
+            assertEquals(ReaderNavDecision.TOGGLE_CONTROLS, readerNavDecision(tapZoneFor(-5.0, 400.0), direction))
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // The guards (the JS-tap path folds them; native keys/zones never do)
+    // ------------------------------------------------------------------
+
+    @Test
+    fun `sheet-open and live-selection inputs are ignored`() {
+        assertEquals(
+            ReaderNavDecision.IGNORE,
+            readerNavDecision(EpubTapZone.RIGHT, ReadingDirection.LTR, sheetOpen = true, selectionActive = false),
+        )
+        assertEquals(
+            ReaderNavDecision.IGNORE,
+            readerNavDecision(EpubTapZone.RIGHT, ReadingDirection.LTR, sheetOpen = false, selectionActive = true),
+        )
+    }
+
+    // ------------------------------------------------------------------
     // Volume-key paging (physical mapping, like PageUp/PageDown)
     // ------------------------------------------------------------------
 
     @Test
     fun `volume down pages forward`() {
-        assertEquals(ReaderTapAction.FORWARD, volumeKeyPagingAction(Key.VolumeDown))
+        assertEquals(ReaderNavDecision.FORWARD, volumeKeyPagingAction(Key.VolumeDown))
     }
 
     @Test
     fun `volume up pages backward`() {
-        assertEquals(ReaderTapAction.BACKWARD, volumeKeyPagingAction(Key.VolumeUp))
+        assertEquals(ReaderNavDecision.BACKWARD, volumeKeyPagingAction(Key.VolumeUp))
     }
 
     @Test

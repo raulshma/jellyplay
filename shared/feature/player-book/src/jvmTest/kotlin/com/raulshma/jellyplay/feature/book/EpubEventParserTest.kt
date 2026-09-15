@@ -3,14 +3,14 @@ package com.raulshma.jellyplay.feature.book
 import com.raulshma.jellyplay.core.datastore.reader.ReadingDirection
 import com.raulshma.jellyplay.feature.book.epub.EpubEvent
 import com.raulshma.jellyplay.feature.book.epub.EpubEventParser
-import com.raulshma.jellyplay.feature.book.epub.EpubReaderCallbacks
+import com.raulshma.jellyplay.feature.book.epub.EpubEventListener
 import com.raulshma.jellyplay.feature.book.epub.EpubReaderStatus
 import com.raulshma.jellyplay.feature.book.epub.EpubRelocation
 import com.raulshma.jellyplay.feature.book.epub.EpubSearchResult
 import com.raulshma.jellyplay.feature.book.epub.EpubSpeechParagraph
 import com.raulshma.jellyplay.feature.book.epub.EpubTapZone
 import com.raulshma.jellyplay.feature.book.epub.EpubTocItem
-import com.raulshma.jellyplay.feature.book.epub.dispatchEpubEvents
+import com.raulshma.jellyplay.feature.book.epub.withStatusReceipt
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -19,7 +19,9 @@ import kotlin.test.assertTrue
  * Pins the typed decode of the JS→native event channel: percent clamping,
  * status mapping, direction normalization, TOC flattening, the newer Wave 2
  * events (relocated/tap/selected/selection/search/speech/autoScroll), the
- * array/quoted-string bridge payloads, and malformed-input tolerance.
+ * array/quoted-string bridge payloads, malformed-input tolerance, and the
+ * delivery-receipt decorator both platform hosts wrap the single-event seam
+ * with (the funnel that replaced the thirteen-callback dispatch).
  */
 class EpubEventParserTest {
 
@@ -404,92 +406,25 @@ class EpubEventParserTest {
     }
 
     @Test
-    fun `dispatcher routes events into callbacks`() {
-        val percents = mutableListOf<Double>()
-        val statuses = mutableListOf<EpubReaderStatus>()
-        val directions = mutableListOf<ReadingDirection>()
-        val tocs = mutableListOf<List<EpubTocItem>>()
+    fun `status receipt decorator latches before the listener and passes other events through`() {
+        val seen = mutableListOf<String>()
+        val listener = EpubEventListener { event ->
+            seen += when (event) {
+                is EpubEvent.Status -> "event:${event.status}"
+                is EpubEvent.Percent -> "event:${event.value}"
+                else -> "event:other"
+            }
+        }
+        val receipted = listener.withStatusReceipt { seen += "receipt" }
 
-        dispatchEpubEvents(
-            """[
-               |{"type":"percent","value":0.9},
-               |{"type":"status","value":"ready"},
-               |{"type":"direction","value":"rtl"},
-               |{"type":"toc","value":[{"label":"A","href":"a.xhtml"}]}
-               |]""".trimMargin(),
-            EpubReaderCallbacks(
-                onPercentChanged = { percents.add(it) },
-                onStatusChanged = { statuses.add(it) },
-                onDirectionReported = { directions.add(it) },
-                onTocReady = { tocs.add(it) },
-            ),
+        receipted.onEvent(EpubEvent.Percent(0.25))
+        receipted.onEvent(EpubEvent.Status(EpubReaderStatus.READY))
+
+        assertEquals(
+            listOf("event:0.25", "receipt", "event:READY"),
+            seen,
+            "only Status latches the receipt — and it latches BEFORE the listener " +
+                "(the delivery ladder must hold the generation before the screen reacts)",
         )
-
-        assertEquals(listOf(0.9), percents)
-        assertEquals(listOf(EpubReaderStatus.READY), statuses)
-        assertEquals(listOf(ReadingDirection.RTL), directions)
-        assertEquals(listOf(listOf(EpubTocItem("A", "a.xhtml"))), tocs)
-    }
-
-    @Test
-    fun `dispatcher routes the new event kinds into their callbacks`() {
-        val relocations = mutableListOf<EpubRelocation>()
-        val taps = mutableListOf<EpubTapZone>()
-        val swipes = mutableListOf<Boolean>()
-        val selections = mutableListOf<Pair<String, String>>()
-        var selectionsCleared = 0
-        val searches = mutableListOf<Pair<Int, List<EpubSearchResult>>>()
-        val speech = mutableListOf<List<EpubSpeechParagraph>>()
-        var autoScrollStops = 0
-        val displayErrors = mutableListOf<String>()
-
-        dispatchEpubEvents(
-            """[
-               |{"type":"relocated","percent":0.5,"chapterLabel":"C","remainingPages":4,"cfi":"epubcfi(/6/8!/4/2)"},
-               |{"type":"tap","x":300,"width":400},
-               |{"type":"swipe","dir":"left"},
-               |{"type":"selected","cfi":"epubcfi(/6/4)","text":"hi"},
-               |{"type":"selectionCleared"},
-               |{"type":"searchResults","token":9,"results":[{"cfi":"epubcfi(/6/4)","excerpt":"hi","chapter":"C"}]},
-               |{"type":"speechContext","paragraphs":[{"cfi":"epubcfi(/6/4)","text":"Para."}]},
-               |{"type":"autoScrollStopped"},
-               |{"type":"displayError","cfi":"epubcfi(/6/8)"}
-               |]""".trimMargin(),
-            EpubReaderCallbacks(
-                onRelocated = { relocations.add(it) },
-                onTap = { taps.add(it) },
-                onSwipe = { toLeft -> swipes.add(toLeft) },
-                onSelection = { cfi, text -> selections.add(cfi to text) },
-                onSelectionCleared = { selectionsCleared++ },
-                onSearchResults = { token, results -> searches.add(token to results) },
-                onSpeechContext = { speech.add(it) },
-                onAutoScrollStopped = { autoScrollStops++ },
-                onDisplayError = { displayErrors.add(it) },
-            ),
-        )
-
-        assertEquals(listOf(EpubRelocation(0.5, "C", 4, cfi = "epubcfi(/6/8!/4/2)")), relocations)
-        assertEquals(listOf(EpubTapZone.RIGHT), taps)
-        assertEquals(listOf(true), swipes)
-        assertEquals(listOf("epubcfi(/6/4)" to "hi"), selections)
-        assertEquals(1, selectionsCleared)
-        assertEquals(listOf(9 to listOf(EpubSearchResult("epubcfi(/6/4)", "hi", "C"))), searches)
-        assertEquals(listOf(listOf(EpubSpeechParagraph("epubcfi(/6/4)", "Para."))), speech)
-        assertEquals(1, autoScrollStops)
-        assertEquals(listOf("epubcfi(/6/8)"), displayErrors)
-    }
-
-    @Test
-    fun `dispatcher tolerates null and malformed payloads`() {
-        val percents = mutableListOf<Double>()
-        dispatchEpubEvents(
-            null,
-            EpubReaderCallbacks(onPercentChanged = { percents.add(it) }),
-        )
-        dispatchEpubEvents(
-            "garbage",
-            EpubReaderCallbacks(onPercentChanged = { percents.add(it) }),
-        )
-        assertTrue(percents.isEmpty())
     }
 }

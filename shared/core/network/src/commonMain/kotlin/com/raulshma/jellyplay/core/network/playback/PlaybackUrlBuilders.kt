@@ -69,6 +69,42 @@ fun buildStreamUrl(
 }
 
 /**
+ * Absolute-izes a server-provided [deliveryUrl] against [baseUrl] — the
+ * token-less half of the [resolveDeliveryUrlWithApiKey] fold, for callers
+ * with no session token (core/data's transcode resolver). The base's
+ * trailing slash is trimmed so the joined path can never start `//`; an
+ * already-absolute delivery URL passes through untouched.
+ */
+fun resolveDeliveryUrl(baseUrl: String, deliveryUrl: String): String =
+    if (deliveryUrl.startsWith("http")) deliveryUrl else "${baseUrl.trimEnd('/')}$deliveryUrl"
+
+/**
+ * Absolute-izes a server-provided [deliveryUrl] against [baseUrl] and
+ * appends the access token as the capital `ApiKey` query param — unless the
+ * URL already carries a token param in either spelling (capital `ApiKey`, or
+ * the lowercase `api_key` alias pre-12 servers bake into delivery URLs).
+ *
+ * The ONE fold for server-provided delivery URLs: the subtitle resolver
+ * below and core/data's transcode resolver previously hand-copied it and had
+ * drifted — only the transcode copy guarded the pre-baked param. The guard
+ * now protects both (a URL that already carries a token is returned
+ * untouched, never double-appended). Callers keep their own session-null
+ * sentinels ("" for missing session, or the token-less absolute base)
+ * before calling. The base's trailing slash is trimmed so the joined path
+ * can never start `//` (the [buildBookDownloadUrl] policy).
+ */
+fun resolveDeliveryUrlWithApiKey(
+    baseUrl: String,
+    deliveryUrl: String,
+    apiKey: String,
+): String {
+    val base = resolveDeliveryUrl(baseUrl, deliveryUrl)
+    if ("api_key=" in base || "ApiKey=" in base) return base
+    val separator = if ("?" in base) "&" else "?"
+    return "$base${separator}ApiKey=$apiKey"
+}
+
+/**
  * Absolute-izes a server-provided subtitle [deliveryUrl] and appends the
  * access token (`getSubtitleDeliveryUrl` in the JVM impl).
  */
@@ -79,9 +115,7 @@ fun resolveSubtitleDeliveryUrl(
 ): String {
     if (baseUrl == null) return ""
     if (apiKey == null) return ""
-    val base = if (deliveryUrl.startsWith("http")) deliveryUrl else "${baseUrl.trimEnd('/')}$deliveryUrl"
-    val separator = if ("?" in base) "&" else "?"
-    return "$base${separator}ApiKey=$apiKey"
+    return resolveDeliveryUrlWithApiKey(baseUrl, deliveryUrl, apiKey)
 }
 
 /**

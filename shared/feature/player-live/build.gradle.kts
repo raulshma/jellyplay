@@ -66,6 +66,12 @@ kotlin {
             // AppRuntimeStateStore/PlaybackStore/VideoPlayerAggregateStore.
             implementation(project(":shared:core:datastore"))
             implementation(project(":shared:core:ui"))
+            // RecordActions — livetv's ONE record/cancel choreography the
+            // in-player record quartet delegates to (the VM used to hand-copy
+            // it). Feature-to-feature edge like shell → livetv and
+            // subtitle-tester → player-video; livetv only depends on the core
+            // modules, so the graph stays acyclic.
+            implementation(project(":shared:feature:livetv"))
             // JetBrains CMP distribution (see catalog note): Android targets
             // redirect to the androidx artifacts.
             implementation(libs.jb.compose.runtime)

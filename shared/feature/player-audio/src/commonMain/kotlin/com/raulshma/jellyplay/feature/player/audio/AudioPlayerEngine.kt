@@ -16,7 +16,7 @@ import kotlinx.coroutines.flow.StateFlow
  * for the DSP surface): track metadata + transport + lyrics search/offset +
  * undo/A→B loop + crossfade/gapless setters.
  *
- * One-framework-per-type: the concrete manager is a 1650-line media3 class
+ * One-framework-per-type: the concrete manager is the media3 class
  * that stays the Android Koin single (androidCoreDataModule since then,
  * which also aliases AudioQueueManager/AudioEffectsManager onto it); this
  * seam binds Android-side through the app's `androidAppInteropAdaptersModule`

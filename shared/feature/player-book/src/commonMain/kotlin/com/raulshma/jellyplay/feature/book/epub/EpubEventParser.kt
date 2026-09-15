@@ -145,36 +145,15 @@ internal object EpubEventParser {
 }
 
 /**
- * `evaluateJavascript` on desktop may hand back the payload as a quoted JSON
- * string; the dispatcher unwraps that form before parsing.
- */
-internal fun dispatchEpubEvents(raw: String?, callbacks: EpubReaderCallbacks) {
-    for (event in EpubEventParser.parse(raw)) {
-        when (event) {
-            is EpubEvent.Percent -> callbacks.onPercentChanged(event.value)
-            is EpubEvent.Status -> callbacks.onStatusChanged(event.status)
-            is EpubEvent.Direction -> callbacks.onDirectionReported(event.direction)
-            is EpubEvent.Toc -> callbacks.onTocReady(event.items)
-            is EpubEvent.Relocated -> callbacks.onRelocated(event.relocation)
-            is EpubEvent.Tap -> callbacks.onTap(event.zone)
-            is EpubEvent.Swipe -> callbacks.onSwipe(event.toLeft)
-            is EpubEvent.Selected -> callbacks.onSelection(event.cfi, event.text)
-            EpubEvent.SelectionCleared -> callbacks.onSelectionCleared()
-            is EpubEvent.SearchResults -> callbacks.onSearchResults(event.token, event.results)
-            is EpubEvent.SpeechContext -> callbacks.onSpeechContext(event.paragraphs)
-            EpubEvent.AutoScrollStopped -> callbacks.onAutoScrollStopped()
-            is EpubEvent.DisplayError -> callbacks.onDisplayError(event.cfi)
-        }
-    }
-}
-
-/**
  * Resolves a content tap's zone from the raw gesture coordinates the
  * WebView reports (iframe-relative x against the host page width — the
  * content iframe is a full-bleed stage, so the scales agree). The DECISION
- * lives here, unit-tested, instead of in reader.js: a missing/garbage width
- * degrades to CENTER (chrome toggle — never a page turn), so a broken
- * geometry report can never turn every tap into forward paging.
+ * lives on the Kotlin side, unit-tested, instead of in reader.js — the
+ * native paged reader's tap zones funnel through this same resolver, so the
+ * thirds rule exists exactly once. A missing/garbage width degrades to
+ * CENTER (chrome toggle — never a page turn), so a broken geometry report
+ * can never turn every tap into forward paging; the direction-aware
+ * zone→action mapping is `readerNavDecision` in ReaderInput.kt.
  */
 internal fun tapZoneFor(x: Double?, width: Double?): EpubTapZone {
     if (x == null || width == null || width <= 0.0 || x < 0.0 || x > width) return EpubTapZone.CENTER

@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.core.data.cast
 import android.content.Context
 import android.os.Looper
 import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
 import androidx.test.core.app.ApplicationProvider
 import com.raulshma.jellyplay.core.data.cast.dlna.DlnaCastStrategy
 import com.raulshma.jellyplay.core.data.cast.remote.JellyfinRemotePlayCastStrategy
@@ -46,6 +47,10 @@ import org.robolectric.annotation.Config
  *   [CastSessionEvent.Connected] / [CastSessionEvent.Disconnected] and a
  *   disconnect resets the transport state flows.
  * - `discoveredDevices` merges every registered strategy's list.
+ * - A successful DLNA/Jellyfin load fans the strategy's playback state into
+ *   the manager's now-playing flows (write-through of the pure
+ *   [castStateFanout]; the full per-field contract, including the
+ *   Jellyfin-only title/subtitle divergence, is pinned in CastStateFanoutTest).
  * - `unregisterStrategy` of the active strategy falls back to `google`.
  * - Consumer refcounting: `releaseConsumer` to zero tears the shared state
  *   down (strategy `release()` + `stopDiscovery()`), `softRelease` only stops
@@ -253,6 +258,67 @@ class CastManagerTest {
         job.cancel()
         collector.cancel()
     }
+
+    // ── state fan-out write-through ───────────────────────────────────────
+
+    @Test
+    fun `a DLNA refresh fans renderer state into the manager's now-playing flows`() {
+        castPreference.value = SyncPlayCastSlice(defaultCastingStrategy = CastingStrategy.PREFER_DLNA)
+        every { dlnaCastStrategy.rendererPositionMs } returns MutableStateFlow(12_000L)
+        every { dlnaCastStrategy.rendererDurationMs } returns MutableStateFlow(300_000L)
+        every { dlnaCastStrategy.rendererIsPlaying } returns MutableStateFlow(true)
+        every { dlnaCastStrategy.rendererVolume } returns MutableStateFlow(0.25f)
+        every { dlnaCastStrategy.loadMedia(any(), any(), any(), any()) } returns true
+        every { dlnaCastStrategy.ownsExternalListener } returns false
+        val manager = manager()
+
+        manager.loadMedia(MediaItem.Builder().setMediaId("id").setUri("http://server/v/stream").build(), 0L, mockk())
+        idleMain()
+
+        assertEquals(12_000L, manager.castPositionMs.value)
+        assertEquals(300_000L, manager.castDurationMs.value)
+        assertTrue(manager.castIsPlaying.value)
+        assertEquals(0.25f, manager.castVolume.value)
+        // DECLARED divergence: DLNA owns neither buffered position nor
+        // title/subtitle — those flows keep their previous values.
+        assertEquals(0L, manager.castBufferedPositionMs.value)
+        assertEquals("", manager.castTitle.value)
+        assertEquals("", manager.castSubtitle.value)
+    }
+
+    @Test
+    fun `a Jellyfin refresh fans now-playing title and subtitle into the manager's flows`() {
+        every { jellyfinCastStrategy.positionMs } returns MutableStateFlow(1_000L)
+        every { jellyfinCastStrategy.durationMs } returns MutableStateFlow(2_000L)
+        every { jellyfinCastStrategy.isPlaying } returns MutableStateFlow(true)
+        every { jellyfinCastStrategy.volume } returns MutableStateFlow(0.5f)
+        every { jellyfinCastStrategy.nowPlayingTitle } returns MutableStateFlow("Pilot")
+        every { jellyfinCastStrategy.nowPlayingSubtitle } returns MutableStateFlow("Show · S1E1")
+        // Explicit types: JellyfinRemotePlayCastStrategy overloads loadMedia
+        // (String-based admin variant beside the interface override).
+        every {
+            jellyfinCastStrategy.loadMedia(
+                any<MediaItem>(), any(), any<Player.Listener>(), any(),
+            )
+        } returns true
+        every { jellyfinCastStrategy.ownsExternalListener } returns false
+        val manager = manager()
+        manager.setActiveStrategy(CastManager.STRATEGY_JELLYFIN)
+
+        manager.loadMedia(MediaItem.Builder().setMediaId("id").setUri("http://server/v/stream").build(), 0L, mockk())
+        idleMain()
+
+        assertEquals(1_000L, manager.castPositionMs.value)
+        assertEquals(2_000L, manager.castDurationMs.value)
+        assertTrue(manager.castIsPlaying.value)
+        assertEquals(0.5f, manager.castVolume.value)
+        assertEquals("Pilot", manager.castTitle.value)
+        assertEquals("Show · S1E1", manager.castSubtitle.value)
+        // DECLARED divergence: the remote session reports no buffered position.
+        assertEquals(0L, manager.castBufferedPositionMs.value)
+    }
+
+    // ── discovery merge ────────────────────────────────────────────────────
 
     @Test
     fun `discovered devices merge every strategy's list`() {

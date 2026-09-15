@@ -34,6 +34,9 @@ import com.raulshma.jellyplay.feature.player.live.engine.LivePlayerAudio
 import com.raulshma.jellyplay.feature.player.live.engine.LivePlayerEngine
 import com.raulshma.jellyplay.feature.player.live.engine.LivePlayMethod
 import com.raulshma.jellyplay.feature.player.live.engine.TranscodeReasonsRenderer
+import com.raulshma.jellyplay.feature.livetv.components.RecordAction
+import com.raulshma.jellyplay.feature.livetv.components.RecordActions
+import com.raulshma.jellyplay.feature.livetv.components.RecordOutcome
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
@@ -337,72 +340,47 @@ class LiveTvPlayerViewModel(
     }
 
     // ── In-player recording ──
-    // Mirrors ChannelDetailViewModel: each action schedules/cancels a timer on
-    // the currently-airing program then re-fetches the program window so the
-    // Record ↔ Cancel sheet state follows the server, emitting a one-shot
-    // message on [messages] (the legacy UserMessageBus posts). No-op without
-    // a current program.
+    // The shared [RecordActions] choreography (livetv conveyor's ONE record
+    // flow), adapted to this screen's feedback surface exactly as
+    // ChannelDetailViewModel does it: one-shot messages on [messageChannel]
+    // (Resource success/canceled, Raw failure with the legacy fallback
+    // literals) and a re-fetch of the current channel's program window after
+    // every successful action so the Record ↔ Cancel sheet state follows the
+    // server. The funnels below stay no-op without a current program (and,
+    // for cancels, without the matching timer id — [RecordActions] guards).
+
+    private val recordActions = RecordActions(liveTvRepository, viewModelScope) { outcome ->
+        when (outcome) {
+            is RecordOutcome.Success -> {
+                messageChannel.trySend(outcome.request.action.successMessage())
+                viewModelScope.launch { refreshProgramsForCurrentChannel() }
+            }
+            is RecordOutcome.Error ->
+                messageChannel.trySend(
+                    LivePlayerMessage.Raw(outcome.message ?: outcome.request.action.failureFallback())
+                )
+            is RecordOutcome.Requesting, RecordOutcome.Idle -> Unit
+        }
+    }
 
     /** Schedules a single-episode timer for the current program. */
     fun recordCurrentProgramOnce() {
-        val program = _state.value.currentProgram ?: return
-        viewModelScope.launch {
-            liveTvRepository.createTimer(program.id)
-                .onSuccess {
-                    messageChannel.trySend(LivePlayerMessage.Resource(Res.string.live_record_success))
-                    refreshProgramsForCurrentChannel()
-                }
-                .onFailure { e ->
-                    messageChannel.trySend(LivePlayerMessage.Raw(e.message ?: "Failed to set recording"))
-                }
-        }
+        _state.value.currentProgram?.let(recordActions::recordOnce)
     }
 
     /** Schedules a series timer rooted at the current program. */
     fun recordCurrentProgramSeries() {
-        val program = _state.value.currentProgram ?: return
-        viewModelScope.launch {
-            liveTvRepository.createSeriesTimer(program.id)
-                .onSuccess {
-                    messageChannel.trySend(LivePlayerMessage.Resource(Res.string.live_record_success))
-                    refreshProgramsForCurrentChannel()
-                }
-                .onFailure { e ->
-                    messageChannel.trySend(LivePlayerMessage.Raw(e.message ?: "Failed to set recording"))
-                }
-        }
+        _state.value.currentProgram?.let(recordActions::recordSeries)
     }
 
     /** Cancels the single timer on the current program (if one is set). */
     fun cancelCurrentProgramTimer() {
-        val program = _state.value.currentProgram ?: return
-        val timerId = program.timerId ?: return
-        viewModelScope.launch {
-            liveTvRepository.cancelTimer(timerId)
-                .onSuccess {
-                    messageChannel.trySend(LivePlayerMessage.Resource(Res.string.live_record_canceled))
-                    refreshProgramsForCurrentChannel()
-                }
-                .onFailure { e ->
-                    messageChannel.trySend(LivePlayerMessage.Raw(e.message ?: "Failed to cancel recording"))
-                }
-        }
+        _state.value.currentProgram?.let { recordActions.cancelTimer(it) }
     }
 
     /** Cancels the series timer on the current program (if one is set). */
     fun cancelCurrentProgramSeries() {
-        val program = _state.value.currentProgram ?: return
-        val seriesTimerId = program.seriesTimerId ?: return
-        viewModelScope.launch {
-            liveTvRepository.cancelSeriesTimer(seriesTimerId)
-                .onSuccess {
-                    messageChannel.trySend(LivePlayerMessage.Resource(Res.string.live_record_canceled))
-                    refreshProgramsForCurrentChannel()
-                }
-                .onFailure { e ->
-                    messageChannel.trySend(LivePlayerMessage.Raw(e.message ?: "Failed to cancel recording"))
-                }
-        }
+        _state.value.currentProgram?.let { recordActions.cancelSeries(it) }
     }
 
     /**
@@ -1046,3 +1024,18 @@ class LiveTvPlayerViewModel(
         PlayMethod.TRANSCODE -> LivePlayMethod.TRANSCODE
     }
 }
+
+/** Timer creations announce success; cancels announce cancellation. */
+private fun RecordAction.startsTimer(): Boolean =
+    this == RecordAction.RECORD_ONCE || this == RecordAction.RECORD_SERIES
+
+private fun RecordAction.successMessage(): LivePlayerMessage =
+    if (startsTimer()) {
+        LivePlayerMessage.Resource(Res.string.live_record_success)
+    } else {
+        LivePlayerMessage.Resource(Res.string.live_record_canceled)
+    }
+
+/** The failure fallback literals, kept byte-identical from the legacy inline arms. */
+private fun RecordAction.failureFallback(): String =
+    if (startsTimer()) "Failed to set recording" else "Failed to cancel recording"

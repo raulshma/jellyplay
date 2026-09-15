@@ -48,7 +48,6 @@ import com.raulshma.jellyplay.core.datastore.reader.ReaderFontFamily
 import com.raulshma.jellyplay.core.datastore.reader.ReadingDirection
 import com.raulshma.jellyplay.core.datastore.reader.ReaderStore
 import com.raulshma.jellyplay.core.datastore.reader.ReaderTheme
-import com.raulshma.jellyplay.core.model.BookProgressPolicy
 import com.raulshma.jellyplay.feature.book.epub.EpubSearchResult
 import com.raulshma.jellyplay.feature.book.epub.EpubTocItem
 import com.raulshma.jellyplay.feature.book.generated.resources.Res
@@ -114,7 +113,8 @@ import org.jetbrains.compose.resources.stringResource
 /**
  * The reflowable typography bundle the settings sheet edits as one copy-on-
  * change value (chips/switches commit immediately; sliders commit on settle).
- * The VM's individual setters stay the write surface — the caller diffs.
+ * [ReaderPreferences.applyTypography] owns the which-axis-changed diff; the
+ * individual setters remain the write surface.
  */
 internal data class ReaderTypographyState(
     val fontFamily: ReaderFontFamily,
@@ -127,13 +127,30 @@ internal data class ReaderTypographyState(
 /**
  * The behavior bundle (volume-key paging, animated page turns, the chapter
  * tick rail, reading speed) — same copy-on-change edit contract as
- * [ReaderTypographyState].
+ * [ReaderTypographyState]; [ReaderPreferences.applyBehavior] owns the diff.
  */
 internal data class ReaderBehaviorState(
     val volumeKeyPaging: Boolean,
     val animatedPageTurns: Boolean,
     val readingSpeedWpm: Int,
     val tocRailVisible: Boolean = false,
+)
+
+/** Projects the snapshot's global axes into the typography sheet bundle. */
+internal fun ReaderPrefsSnapshot.typographyState() = ReaderTypographyState(
+    fontFamily = global.fontFamily,
+    lineHeightPct = global.lineHeightPct,
+    marginPct = global.marginPct,
+    justify = global.justify,
+    scrollMode = global.scrollMode,
+)
+
+/** Projects the snapshot's global axes into the behavior sheet bundle. */
+internal fun ReaderPrefsSnapshot.behaviorState() = ReaderBehaviorState(
+    volumeKeyPaging = global.volumeKeyPaging,
+    animatedPageTurns = global.animatedPageTurns,
+    readingSpeedWpm = global.readingSpeedWpm,
+    tocRailVisible = global.tocRailVisible,
 )
 
 /** The section label the settings sheets repeat between groups. */
@@ -176,13 +193,14 @@ internal fun PagedSettingsSheet(
     direction: ReadingDirection,
     tocAvailable: Boolean,
     fitMode: ReaderFitMode,
-    behavior: ReaderBehaviorState,
+    prefs: ReaderPrefsSnapshot,
     onSetDirection: (ReadingDirection) -> Unit,
     onSetFitMode: (ReaderFitMode) -> Unit,
     onBehaviorChange: (ReaderBehaviorState) -> Unit,
     onOpenToc: () -> Unit,
     onDismissRequest: () -> Unit,
 ) {
+    val behavior = prefs.behaviorState()
     ModalBottomSheet(onDismissRequest = onDismissRequest) {
         Column(
             modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
@@ -270,15 +288,8 @@ internal fun PagedSettingsSheet(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun ReflowableSettingsSheet(
-    theme: ReaderTheme,
-    fontSizePx: Int,
-    perBook: Boolean,
-    typography: ReaderTypographyState,
-    behavior: ReaderBehaviorState,
-    speechRate: Int,
-    speechPitch: Int,
+    prefs: ReaderPrefsSnapshot,
     speechAvailable: Boolean,
-    autoScrollSpeedPx: Int,
     onSetTheme: (ReaderTheme) -> Unit,
     onAdjustFontSize: (Int) -> Unit,
     onSetPerBook: (Boolean) -> Unit,
@@ -290,6 +301,17 @@ internal fun ReflowableSettingsSheet(
     onOpenToc: () -> Unit,
     onDismissRequest: () -> Unit,
 ) {
+    // Selection states read the snapshot's own folds: theme/font size the
+    // EFFECTIVE values (what the reader renders with), typography/behavior
+    // the global axes.
+    val theme = prefs.effective.theme
+    val fontSizePx = prefs.effective.fontSizePx
+    val perBook = prefs.perBookActive
+    val typography = prefs.typographyState()
+    val behavior = prefs.behaviorState()
+    val speechRate = prefs.global.speechRate
+    val speechPitch = prefs.global.speechPitch
+    val autoScrollSpeedPx = prefs.global.autoScrollSpeedPxPerSec
     ModalBottomSheet(onDismissRequest = onDismissRequest) {
         Column(
             modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
@@ -805,16 +827,14 @@ internal fun BookmarksSheet(
  */
 @Composable
 private fun BookmarkLocationText(bookmark: ReaderBookmark) {
-    val label = if (bookmark.cfi == null) {
-        stringResource(
-            Res.string.book_reader_bookmark_page,
-            BookProgressPolicy.ticksToPage(bookmark.positionTicks) + 1,
-        )
-    } else {
-        stringResource(
-            Res.string.book_reader_bookmark_percent,
-            (BookProgressPolicy.ticksToPercent(bookmark.positionTicks) * 100).roundToInt().coerceIn(0, 100),
-        )
+    // The paged-vs-reflowable branch + display math live in the codec (the
+    // single decode the writer, matcher and jumper also use); only the
+    // localization is local.
+    val label = when (val decoded = ReaderBookmarkCodec.decode(bookmark)) {
+        is ReaderBookmarkCodec.DecodedPosition.Paged ->
+            stringResource(Res.string.book_reader_bookmark_page, decoded.page + 1)
+        is ReaderBookmarkCodec.DecodedPosition.Reflowable ->
+            stringResource(Res.string.book_reader_bookmark_percent, decoded.percent)
     }
     Text(
         text = label,
@@ -834,23 +854,22 @@ internal sealed interface ReaderSearchState {
 
 /**
  * The in-book search sheet (EPUB only): a debounced query field over the
- * WebView host's full-text scan. The 400 ms debounce, the incrementing token
- * and the result filtering all live HERE so the parent only supplies the
- * raw host plumbing (`onSearch` → `host.search(query, token)`, results
- * arriving back through `state`).
+ * WebView host's full-text scan. The 400 ms debounce lives HERE; the token
+ * and the result state machine are [ReaderSearchSession]'s (the parent
+ * supplies `onSearch` → the session's launchSearch, results arriving back
+ * through `state`).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun SearchSheet(
     state: ReaderSearchState,
-    onSearch: (query: String, token: Int) -> Unit,
+    onSearch: (query: String) -> Unit,
     onResultTap: (EpubSearchResult) -> Unit,
     onDismissRequest: () -> Unit,
 ) {
     ModalBottomSheet(onDismissRequest = onDismissRequest) {
         SheetTitle(text = stringResource(Res.string.book_reader_search))
         var query by remember { mutableStateOf("") }
-        var token by remember { mutableStateOf(0) }
         OutlinedTextField(
             value = query,
             onValueChange = { query = it },
@@ -858,14 +877,13 @@ internal fun SearchSheet(
             singleLine = true,
             modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp),
         )
-        // Debounce: only a query that survives 400 ms fires a scan; each
-        // fired scan increments the token so late results of older queries
-        // are dropped (host-side token guard mirrors this).
+        // Debounce: only a query that survives 400 ms fires a scan. The
+        // token stamping (and the late-result drop it buys) is the session's,
+        // mirrored host-side in reader.js.
         LaunchedEffect(query) {
             if (query.isBlank()) return@LaunchedEffect
             delay(SEARCH_DEBOUNCE_MS)
-            token += 1
-            onSearch(query, token)
+            onSearch(query)
         }
         when (state) {
             is ReaderSearchState.Searching -> Column(

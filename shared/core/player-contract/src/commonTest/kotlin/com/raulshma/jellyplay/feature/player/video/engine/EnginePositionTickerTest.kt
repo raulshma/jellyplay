@@ -39,12 +39,15 @@ class EnginePositionTickerTest {
         var playing: Boolean = true
         val tickTimes = mutableListOf<Long>()
 
+        var ready: Boolean = true
+
         fun ticker(scope: TestScope): EnginePositionTicker = EnginePositionTicker(
             scope = scope,
             pollingIntervalMs = interval,
             isPlayingFlow = playingFlow,
             isCurrentlyPlaying = { playing },
             onActive = { tickTimes.add(scheduler.currentTime) },
+            isReady = { ready },
         )
 
         fun pause() {
@@ -225,5 +228,39 @@ class EnginePositionTickerTest {
         harness.scheduler.advanceTimeBy(POSITION_PAUSED_RECHECK_MS * 4)
         harness.scheduler.runCurrent()
         assertEquals(listOf(500L), harness.tickTimes, "cancelled ticker must never tick again")
+    }
+    @Test
+    fun notReadyConsumer_backsOffExponentially_andResumesAtPollRateOnceReady() = runTest {
+        val harness = Harness(this)
+        harness.pause() // readiness is the gate under test; keep playback stopped
+        harness.ready = false
+        val job = harness.ticker(this).launch()
+
+        // Backoff ladder from the 250ms floor: waits at 250, 500, 1000 (doubling,
+        // capped at the paused re-check band). Not one tick may fire while
+        // nothing is ready — the audio manager's player-less stretch used to
+        // wake its hand-rolled loop at the poll rate here.
+        harness.scheduler.advanceTimeBy(POSITION_NOT_READY_MIN_WAIT_MS * 7)
+        harness.scheduler.runCurrent()
+        assertEquals(emptyList(), harness.tickTimes)
+
+        // Becoming ready resets the backoff; since playback is paused, the
+        // bounded paused-wait takes over — still no work, and the loop is alive.
+        harness.ready = true
+        harness.scheduler.advanceTimeBy(POSITION_PAUSED_RECHECK_MS * 2)
+        harness.scheduler.runCurrent()
+        assertEquals(emptyList(), harness.tickTimes)
+
+        harness.resume()
+        val resumedAt = harness.scheduler.currentTime
+        harness.scheduler.advanceTimeBy(500L)
+        harness.scheduler.runCurrent()
+        assertEquals(
+            listOf(resumedAt + 500L),
+            harness.tickTimes,
+            "first ready tick lands one interval after resume",
+        )
+
+        job.cancel()
     }
 }
