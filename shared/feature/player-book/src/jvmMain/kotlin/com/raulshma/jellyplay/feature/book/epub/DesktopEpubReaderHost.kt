@@ -101,12 +101,46 @@ internal actual fun rememberEpubReaderHost(
 ): EpubReaderHandle {
     val env = koinInject<EpubDesktopEnv>()
     val kcef = koinInject<KcefRuntime>()
-    val callbacksRef = rememberUpdatedState(callbacks)
-    val downloadProgress = kcef.progress
-    var readerFileUrl by remember { mutableStateOf<String?>(null) }
     var bookBase64 by remember { mutableStateOf<String?>(null) }
     var pageLoaded by remember { mutableStateOf(false) }
-    var bookSent by remember { mutableStateOf(false) }
+    /*
+     * Boot-transfer tracking — see AndroidEpubReaderHost for the full story:
+     * [pageGeneration] increments on every finished page load (a reload wipes
+     * reader.js and the book with it); the first reader.js status event is
+     * the delivery receipt for the current generation and releases the
+     * payload. Unreceived generations re-encode and re-send, so a reload can
+     * never strand the reader on the boot veil.
+     */
+    var pageGeneration by remember { mutableStateOf(0) }
+    var deliveredGeneration by remember { mutableStateOf(Int.MIN_VALUE) }
+
+    // Reader.js posts its first status only from decodeAndOpen — i.e. after
+    // loadBookEnd assembled OUR bytes — so any status event is a delivery
+    // receipt for the current page generation. Everything else delegates
+    // untouched.
+    val receivingCallbacks = remember(callbacks) {
+        EpubReaderCallbacks(
+            onPercentChanged = callbacks.onPercentChanged,
+            onStatusChanged = { status ->
+                deliveredGeneration = pageGeneration
+                callbacks.onStatusChanged(status)
+            },
+            onDirectionReported = callbacks.onDirectionReported,
+            onTocReady = callbacks.onTocReady,
+            onRelocated = callbacks.onRelocated,
+            onTap = callbacks.onTap,
+            onSwipe = callbacks.onSwipe,
+            onSelection = callbacks.onSelection,
+            onSelectionCleared = callbacks.onSelectionCleared,
+            onSearchResults = callbacks.onSearchResults,
+            onSpeechContext = callbacks.onSpeechContext,
+            onAutoScrollStopped = callbacks.onAutoScrollStopped,
+            onDisplayError = callbacks.onDisplayError,
+        )
+    }
+    val callbacksRef = rememberUpdatedState(receivingCallbacks)
+    val downloadProgress = kcef.progress
+    var readerFileUrl by remember { mutableStateOf<String?>(null) }
     val navigatorRef = remember { mutableStateOf<WebViewNavigator?>(null) }
     val scope = rememberCoroutineScope()
 
@@ -127,7 +161,11 @@ internal actual fun rememberEpubReaderHost(
         }
         readerFileUrl = file.toURI().toString()
     }
-    LaunchedEffect(bookFile) {
+    LaunchedEffect(bookFile, pageGeneration, deliveredGeneration) {
+        val current = bookBase64
+        if (current != null) return@LaunchedEffect
+        // The live page already holds the book — don't re-encode for it.
+        if (pageGeneration <= deliveredGeneration) return@LaunchedEffect
         bookBase64 = withContext(Dispatchers.IO) { EpubBookCodec.encodeBase64(bookFile) }
     }
 
@@ -148,24 +186,36 @@ internal actual fun rememberEpubReaderHost(
         )
 
         LaunchedEffect(state.loadingState) {
-            if (state.loadingState is LoadingState.Finished) pageLoaded = true
+            if (state.loadingState is LoadingState.Finished) {
+                pageLoaded = true
+                pageGeneration++
+            }
         }
 
-        LaunchedEffect(state.loadingState, bookBase64) {
+        // The book rides the chunked loadBookBegin/loadBookChunk/loadBookEnd
+        // protocol once the page's JS is reachable. Re-runs per page
+        // generation until the JS side confirms; loadBookBegin resets
+        // reader.js's assembly state, so a resend is idempotent.
+        LaunchedEffect(pageGeneration, bookBase64) {
             val base64 = bookBase64 ?: return@LaunchedEffect
-            if (bookSent || state.loadingState !is LoadingState.Finished) return@LaunchedEffect
-            bookSent = true
+            if (pageGeneration <= deliveredGeneration) return@LaunchedEffect
+            if (state.loadingState !is LoadingState.Finished) return@LaunchedEffect
             sendBookChunks(base64, resumePercent, appearance) { navigator.evaluateJavaScript(it, null) }
-            // The book now lives in the WebView — the composition-held copy
-            // would otherwise pin the whole base64 payload for the session.
-            // The effect re-enters on the null and returns early; bookSent
-            // bars a re-send.
-            bookBase64 = null
+        }
+        // The transfer confirmed — the composition no longer needs to pin the
+        // whole base64 payload (a later page reload re-encodes via the effect
+        // above).
+        LaunchedEffect(deliveredGeneration) {
+            if (deliveredGeneration >= 0) bookBase64 = null
         }
 
         // Appearance push for CHANGES after load — see pushAppearanceScripts.
-        LaunchedEffect(pageLoaded, bookSent, appearance) {
-            if (!pageLoaded || !bookSent) return@LaunchedEffect
+        // Gated on the CURRENT page generation actually holding the book: a
+        // push before loadBookBegin would be a silent no-op (reader.js
+        // defaults would win), and the boot bundle already carries the saved
+        // appearance.
+        LaunchedEffect(pageGeneration, deliveredGeneration, appearance) {
+            if (deliveredGeneration < pageGeneration) return@LaunchedEffect
             pushAppearanceScripts(appearance) { navigator.evaluateJavaScript(it, null) }
         }
 

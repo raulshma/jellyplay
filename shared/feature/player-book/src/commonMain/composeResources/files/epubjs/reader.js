@@ -620,29 +620,44 @@
         createRendition();
         applyAppearance();
         status('locations');
-        book.locations.generate(1024).then(function () {
-            locationsReady = true;
-            status('locationsReady');
-            var target;
-            if (pending.resume > 0) {
-                target = book.locations.cfiFromPercentage(pending.resume);
-            }
-            rendition.display(target).then(function () {
-                readyShown = true;
-                status('ready');
-                reportPercent();
+        /*
+         * locations.generate walks the spine synchronously: called before the
+         * container finishes unpacking (book.opened unresolved), the spine is
+         * still empty, so generate "finishes" instantly with zero locations
+         * and total = -1. A percentage resume then computes cfiFromLocation →
+         * -1, whose display() rejects ("No Section Found") into the error
+         * veil — a black screen right after "preparing reading locations".
+         * Gating on opened makes the boot deterministic: real spine, real
+         * locations (this is the slow, seconds-long pass), a resolvable
+         * resume target.
+         */
+        book.opened.then(function () {
+            book.locations.generate(1024).then(function () {
+                locationsReady = true;
+                status('locationsReady');
+                var target;
+                // Empty locations (book epub.js cannot anchor) must fall back
+                // to the first page — cfiFromPercentage would return -1.
+                if (pending.resume > 0 && book.locations.length() > 0) {
+                    target = book.locations.cfiFromPercentage(pending.resume);
+                }
+                rendition.display(target).then(function () {
+                    readyShown = true;
+                    status('ready');
+                    reportPercent();
+                }).catch(function () {
+                    status('error');
+                });
             }).catch(function () {
-                status('error');
-            });
-        }).catch(function () {
-            // Locations failed — display without percent precision rather
-            // than leaving the reader stuck on the veil.
-            locationsReady = false;
-            rendition.display().then(function () {
-                readyShown = true;
-                status('ready');
-            }).catch(function () {
-                status('error');
+                // Locations failed — display without percent precision rather
+                // than leaving the reader stuck on the veil.
+                locationsReady = false;
+                rendition.display().then(function () {
+                    readyShown = true;
+                    status('ready');
+                }).catch(function () {
+                    status('error');
+                });
             });
         });
     }
