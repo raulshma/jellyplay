@@ -24,6 +24,7 @@ import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Download
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.DownloadStatus
+import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.hasWatchProgress
 import com.raulshma.jellyplay.core.model.toMediaItem
@@ -99,6 +100,10 @@ fun OfflineMediaCard(
             sharedElementKey = sharedElementKey,
             showProgress = hasProgress,
             progressPercent = progressFraction,
+            // Forward the row's TOC-accurate book fraction so the footer's
+            // "% complete" label matches the progress bar above.
+            bookProgressFractionOverride =
+                progressFractionOverride?.takeIf { mediaItem.mediaType == MediaType.BOOK && it > 0f },
             clipToShape = clipToShape,
             gradientBrush = gradientBrush,
         )

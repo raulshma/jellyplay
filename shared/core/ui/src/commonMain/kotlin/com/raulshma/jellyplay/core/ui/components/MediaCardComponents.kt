@@ -64,6 +64,8 @@ import coil3.compose.LocalPlatformContext
 import coil3.size.Size as CoilSize
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.bookProgressFraction
+import kotlin.math.roundToInt
 
 import com.raulshma.jellyplay.core.ui.animation.fastEffectsSpec
 import com.raulshma.jellyplay.core.ui.animation.pressScale
@@ -270,6 +272,15 @@ fun PosterCard(
     clipToShape: Boolean = false,
     showEpisodeSeriesBadge: Boolean = false,
     gradientBrush: Brush? = null,
+    /**
+     * Reading-progress override for BOOK footer labels: rows that decoded the
+     * item's fraction against the TOC cache's page count (Continue Reading)
+     * pass it here so the "% complete" label agrees with the card's progress
+     * bar. Null (default) falls back to the item's own percent decode
+     * ([bookProgressFraction]) — exact for EPUB percent ticks, approximate
+     * for paged books.
+     */
+    bookProgressFractionOverride: Float? = null,
 ) {
     val isTv = LocalJellyPlayUi.current.isTv
     val cardPrefs = LocalCardDisplayPreferences.current
@@ -451,7 +462,15 @@ fun PosterCard(
                     )
                 }
                 val isSeries = item.mediaType == MediaType.SERIES
-                val hasValidDuration = item.runTimeTicks != null && item.runTimeTicks!! > 0 && !isSeries
+                // Books never render runtime/time-left meta: RunTimeTicks is
+                // absent or meaningless for them, and their position ticks
+                // encode reading progress (page index or percent), not time —
+                // the video runtime math on that data produced bogus "0m left"
+                // labels. A book in progress shows "% complete" from the
+                // BookProgressPolicy decode instead; an unstarted book shows
+                // nothing at all.
+                val isBook = item.mediaType == MediaType.BOOK
+                val hasValidDuration = item.runTimeTicks != null && item.runTimeTicks!! > 0 && !isSeries && !isBook
                 val hasWatchProgress =
                     item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0 && !item.isPlayed
                 val remainingTime =
@@ -465,17 +484,39 @@ fun PosterCard(
                         formatRuntimeLabelFromTicks(item.runTimeTicks)
                     } else null
                 }
+                val bookPercent =
+                    remember(isBook, item.isPlayed, bookProgressFractionOverride, item.playbackPositionTicks) {
+                        if (!isBook || item.isPlayed) {
+                            null
+                        } else {
+                            val fraction = bookProgressFractionOverride ?: item.bookProgressFraction()
+                            fraction?.takeIf { it > 0f }
+                                ?.let { (it * 100).roundToInt().coerceIn(0, 100) }
+                                ?.takeIf { it > 0 }
+                        }
+                    }
 
                 val timeText = remainingTime ?: totalTime
-                if (timeText != null) {
+                if (bookPercent != null) {
                     Text(
                         text = "•",
-                        style = if (isTv) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelSmall,
+                        style = footerStyle,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        text = "$bookPercent% complete",
+                        style = footerStyle,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                } else if (timeText != null) {
+                    Text(
+                        text = "•",
+                        style = footerStyle,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Text(
                         text = if (remainingTime != null) "$timeText left" else timeText,
-                        style = if (isTv) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelSmall,
+                        style = footerStyle,
                         color = if (remainingTime != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }

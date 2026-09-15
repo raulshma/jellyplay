@@ -17,6 +17,8 @@ import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.hasWatchProgress
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.bookProgressFraction
+import kotlin.math.roundToInt
 import com.raulshma.jellyplay.core.ui.adaptive.LocalJellyPlayUi
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -112,7 +114,12 @@ fun WideMediaCard(
         },
         footer = {
             val isSeries = item.mediaType == MediaType.SERIES
-            val hasValidDuration = item.runTimeTicks != null && item.runTimeTicks!! > 0 && !isSeries
+            // Books never render runtime/time-left meta — their position ticks
+            // encode reading progress, not time, so the video runtime math
+            // produced bogus "0m left". A book in progress shows "% complete";
+            // an unstarted book shows nothing.
+            val isBook = item.mediaType == MediaType.BOOK
+            val hasValidDuration = item.runTimeTicks != null && item.runTimeTicks!! > 0 && !isSeries && !isBook
             val hasWatchProgress = item.hasWatchProgress
             val remainingTime =
                 remember(hasValidDuration, hasWatchProgress, item.runTimeTicks, item.playbackPositionTicks) {
@@ -125,6 +132,17 @@ fun WideMediaCard(
                     formatRuntimeLabelFromTicks(item.runTimeTicks)
                 } else null
             }
+            val bookPercent =
+                remember(isBook, item.isPlayed, item.playbackPositionTicks) {
+                    if (!isBook || item.isPlayed) {
+                        null
+                    } else {
+                        item.bookProgressFraction()
+                            ?.takeIf { it > 0f }
+                            ?.let { (it * 100).roundToInt().coerceIn(0, 100) }
+                            ?.takeIf { it > 0 }
+                    }
+                }
 
             val timeText = remainingTime ?: totalTime
 
@@ -160,7 +178,20 @@ fun WideMediaCard(
                     )
                 }
 
-                if (timeText != null) {
+                if (bookPercent != null) {
+                    if (subtitleText.isNotEmpty() || item.year != null) {
+                        Text(
+                            text = "•",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.outlineVariant,
+                        )
+                    }
+                    Text(
+                        text = "$bookPercent% complete",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                } else if (timeText != null) {
                     if (subtitleText.isNotEmpty() || item.year != null) {
                         Text(
                             text = "•",
