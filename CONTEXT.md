@@ -1521,18 +1521,23 @@ NOT extend `LyricsRepository`: `AudioLyricsManager` and
 extends `LiveTvRepository` / `SyncPlayRepository` / `NewsletterRepository` /
 `PlaylistRepository` — its interface is its own 42 members (the former
 86-member union forced every media consumer to learn four unrelated
-families). `MediaRepositoryImpl` implements all five interfaces explicitly
-and `DataKoinModule` binds the SAME single under each family type (the
-`MediaRepositoryCacheInvalidation` same-single-narrow-view pattern), so the
-family seams now have two adapters each: the production single and test
-doubles. Single-family consumers inject the narrow type (the livetv VMs,
-`LiveTvPlayerViewModel`, `NewsletterViewModel`, `SyncPlayViewModel`,
-`WatchPartyActions`, `PlaylistTargets`); mixed consumers inject BOTH
-`MediaRepository` and `PlaylistRepository` (music browse/playlist VMs,
-`AudioPlayerViewModel`, `LibraryLayoutViewModel`, `AudioLibraryBrowser`) —
-same instance behind the seam, no body moved. The wasm
-`WebMediaRepositoryNarrow` implements `MediaRepository` only (42 overrides,
-~196 lines, down from 86/358 — the family throw stubs are gone).
+families). `MediaRepositoryImpl` implements `MediaRepository` +
+`SyncPlayRepository` plus the two cache-invalidation seams
+(`MediaRepositoryCacheInvalidation`, `MediaCacheInvalidator`) and is bound
+as the `MediaRepository` single; the three family surfaces have their own
+jvmShared impls and singles (`LiveTvRepositoryImpl` / `NewsletterRepositoryImpl` /
+`PlaylistRepositoryImpl` over the shared `MediaRepositoryInternals` — see
+"MediaRepository facade split" below), so each family seam has its own
+production single and test doubles. Single-family consumers inject the
+narrow type (the livetv VMs, `LiveTvPlayerViewModel`, `NewsletterViewModel`,
+`SyncPlayViewModel`, `WatchPartyActions`, `PlaylistTargets`); mixed
+consumers inject BOTH `MediaRepository` and `PlaylistRepository` (music
+browse/playlist VMs, `AudioPlayerViewModel`, `LibraryLayoutViewModel`,
+`AudioLibraryBrowser`) — different singles since the facade split, with
+cross-surface cache invalidation carried by the shared internals single.
+The wasm `WebMediaRepositoryNarrow` implements `MediaRepository` only
+(42 overrides, ~196 lines, down from 86/358 — the family throw stubs are
+gone).
 
 `MediaRepositoryImpl`'s test surface lives beside it in
 `shared/core/data/src/jvmTest/.../repository/`: `MediaRepositoryImplTest`
@@ -2305,7 +2310,7 @@ groups). Every item is a
 `SettingsSearchItem(id, titleRes, subtitleRes, categoryRes, keywords, route,
 icon, isAdvanced, platforms)` (the `*Res` fields are Compose `StringResource`s —
 locale resolves lazily at render/match time); `SettingsSearchCatalog`
-aggregates the per-screen lists in one curated flat order (257 items — the
+aggregates the per-screen lists in one curated flat order (258 items — the
 matcher's stable sort uses that order as the tiebreaker, so keep additions
 deliberate). The `ss_<id>_title`/`ss_<id>_subtitle` strings live in
 feature/settings' Compose resources; the 14 `ss_cat_*` category strings stay
@@ -2350,15 +2355,16 @@ resources, + one line in `SettingsSearchCatalog`). No core/ui edit, no new
 callback field. `SettingsSearchCatalogTest` (feature/settings `jvmTest`,
 kotlin.test — resource resolvability is compile-time-guaranteed by the
 generated `StringResource` accessors, so the suite pins id uniqueness,
-resource/category cardinality, keywords and the 257-item aggregation);
+resource/category cardinality, keywords and the 258-item aggregation);
 `SettingsSearchMatcherTest` (shared/core/ui `jvmTest`) is synthetic and pins
 matching only.
 
 The settings **icon prewarmer** derives its workload from the same catalog:
-the 257 catalog rows × 3 resource slots (title/subtitle/category
-`StringResource` accessors) = 771 reads over 528 distinct resources — the
+the 258 catalog rows × 3 resource slots (title/subtitle/category
+`StringResource` accessors) = 774 reads over 530 distinct resources — the
 dedup happens at the generated-accessor level, so the prewarmer warms the
-528 distinct entries and the count is pinned by the catalog test.
+530 distinct entries; the catalog test pins the 258-item aggregation, and
+the distinct count is derivable from it (14 shared category strings).
 
 ## Settings platform visibility
 
@@ -2369,7 +2375,8 @@ is an expect val with an androidMain and a jvmMain actual, and each flag
 answers "can this binary's settings surface offer this row?" — hidden means
 structurally absent, never rendered-then-disabled. The ownership rule is the
 module's KDoc: capabilities own VISIBILITY; the behavior seams
-(`BiometricGate`, `LogCollector`, `PlatformIntents`, `SettingsMessenger`)
+(`BiometricGate`, `LogCollector`, `PlatformIntents`, and the shared
+`LocalUserMessageBus` — the Messenger family's replacement)
 own BEHAVIOR (a seam may be refactored to expose its truth for pinning —
 never re-behaviored). Flags with a queryable desktop seam
 (`supportsSystemNotificationSettings`, `supportsLogSharing`,

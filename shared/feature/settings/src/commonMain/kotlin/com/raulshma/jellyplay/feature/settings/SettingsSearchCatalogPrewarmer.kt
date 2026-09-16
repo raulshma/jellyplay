@@ -20,8 +20,8 @@ import kotlin.concurrent.Volatile
  * resource file and, on Android, inflates a DEFLATE-compressed APK asset
  * from byte 0 to the entry offset. Settings carries the app's largest table
  * (1,583 entries; 105-137 KB per locale), and its search surfaces resolve
- * the entire catalog (257 items × title/subtitle/category = 771 reads over
- * 528 distinct entries — the 14 category strings are shared) on first use:
+ * the entire catalog (258 items × title/subtitle/category = 774 reads over
+ * 530 distinct entries — the 14 category strings are shared) on first use:
  * cold, that is seconds of blocking reads — the filed
  * settings-open ANR (docs/e2e/device-locale-pass.md). Warming at app start
  * turns every later read — first composition of the settings screen
@@ -41,7 +41,7 @@ import kotlin.concurrent.Volatile
 
 /**
  * Defers the default warm pass out of the t=0 first-frame window. The Koin single is eager and fires [SettingsSearchCatalogPrewarmer.warm]
- * inside startKoin, so the 771 blocking per-entry reads (each an APK-asset
+ * inside startKoin, so the 774 blocking per-entry reads (each an APK-asset
  * DEFLATE inflation on Android) were contending the Default/IO threads
  * against first-frame classloading and rendering for the first seconds of
  * every cold start, on both platforms. Two seconds in, the first frame has

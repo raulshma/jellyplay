@@ -7,35 +7,11 @@ import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.TrickplayInfo
 
 /**
- * The offline-artifact-write surface of a download: start the transfer, enqueue
- * the worker, and persist every sibling artifact (offline metadata row, local
- * images, trickplay, subtitles, intro/outro segments) that makes a download
- * usable offline.
- *
- * **Why this seam exists.** `DownloadDelegate` owns the per-item recipe (build a
- * [com.raulshma.jellyplay.core.data.util.DownloadRequest], start it, then
- * bundle its artifacts) and previously depended on the full 25-method
- * [DownloadRepository] interface to execute it — coupling the artifact writer to
- * lifecycle actions (pause/resume/cancel), series-batch orchestration, and
- * status queries it never calls. That god-interface coupling was the real cost
- * of the `DownloadRepositoryImpl ↔ DownloadDelegate` edge; this port narrows it
- * to exactly the 8 methods the writer needs.
- *
- * [DownloadRepository] extends this interface so every existing consumer keeps
- * compiling unchanged; only `DownloadDelegate` narrows to this type. The
- * implementation lives in [DownloadRepositoryImpl].
- *
- * **Depth**: a focused write surface behind a narrow interface. The artifact
- * bundle recipe sits one layer up in `DownloadDelegate`; the writers themselves
- * (directory policy, sanitization, network fetch, persistence) sit behind this
- * port — one place to test the write contract without dragging in lifecycle.
- */
-/**
  * The start-a-download value object — the inputs the former 15-positional-
- * parameter `startDownload` signature declared THREE times (this interface,
- * the impl's override + internal forwarding twin, and the delegate call site
- * unpacking its request into named args). Building it is the caller's ONE
- * decision point; consumers read fields.
+ * parameter `startDownload` signature declared THREE times (the writer
+ * interface, the impl's override + internal forwarding twin, and the delegate
+ * call site unpacking its request into named args). Building it is the
+ * caller's ONE decision point; consumers read fields.
  *
  * **Series linkage is non-null only for episodes:** [seriesId]/[seasonId]/
  * [seriesName]/[seasonName]/[episodeNumber]/[seasonNumber] propagate the
@@ -71,6 +47,30 @@ data class DownloadStartRequest(
     val precomputedCurrentBytes: Long? = null,
 )
 
+/**
+ * The offline-artifact-write surface of a download: start the transfer, enqueue
+ * the worker, and persist every sibling artifact (offline metadata row, local
+ * images, trickplay, subtitles, intro/outro segments) that makes a download
+ * usable offline.
+ *
+ * **Why this seam exists.** `DownloadDelegate` owns the per-item recipe (build a
+ * [com.raulshma.jellyplay.core.data.util.DownloadRequest], start it, then
+ * bundle its artifacts) and previously depended on the full 25-method
+ * [DownloadRepository] interface to execute it — coupling the artifact writer to
+ * lifecycle actions (pause/resume/cancel), series-batch orchestration, and
+ * status queries it never calls. That god-interface coupling was the real cost
+ * of the `DownloadRepositoryImpl ↔ DownloadDelegate` edge; this port narrows it
+ * to exactly the 8 methods the writer needs.
+ *
+ * [DownloadRepository] extends this interface so every existing consumer keeps
+ * compiling unchanged; only `DownloadDelegate` narrows to this type. The
+ * implementation lives in [DownloadRepositoryImpl].
+ *
+ * **Depth**: a focused write surface behind a narrow interface. The artifact
+ * bundle recipe sits one layer up in `DownloadDelegate`; the writers themselves
+ * (directory policy, sanitization, network fetch, persistence) sit behind this
+ * port — one place to test the write contract without dragging in lifecycle.
+ */
 interface OfflineDownloadWriter {
 
     suspend fun startDownload(request: DownloadStartRequest): Result<DownloadItem>

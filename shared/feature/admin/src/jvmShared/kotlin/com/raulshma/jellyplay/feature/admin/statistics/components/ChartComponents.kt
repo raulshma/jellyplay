@@ -55,14 +55,12 @@ import com.raulshma.jellyplay.feature.admin.generated.resources.admin_unit_minut
 import com.raulshma.jellyplay.feature.admin.generated.resources.admin_watched_less
 import com.raulshma.jellyplay.feature.admin.generated.resources.admin_watched_more
 
-/**
- * Statistics chart composables: Canvas drawing, color assignment, and the
- * animation shells. Every pure decision they render — label-admission
- * ladders, value normalizations, pie sweep/start-angle accumulation, the
- * top-5 legend, and the number/duration formatters — lives in the
- * Compose-free [ChartGeometry] core beside this file (HeatmapGridModel
- * precedent) and is pinned by ChartGeometryTest.
- */
+// Statistics chart composables: Canvas drawing, color assignment, and the
+// animation shells. Every pure decision they render — label-admission
+// ladders, value normalizations, pie sweep/start-angle accumulation, the
+// top-5 legend, and the number/duration formatters — lives in the
+// Compose-free ChartGeometry core beside this file (HeatmapGridModel
+// precedent) and is pinned by ChartGeometryTest.
 
 @Composable
 fun ActivityBarChart(

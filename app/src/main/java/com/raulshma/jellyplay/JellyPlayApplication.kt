@@ -352,8 +352,9 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                 // V3 arrqueue conveyor: ArrRepository (dataJvmModule) and
                 // ExperimentalStore (datastoreCommonModule) were already
                 // Koin-owned — zero Hilt interop; message feedback flows
-                // through the ArrQueueMessenger seam instead of the legacy
-                // UserMessageBus ctor dep.
+                // through the shared UserMessageBus (the ArrQueueMessenger
+                // seam is retired — screens read LocalUserMessageBus
+                // directly).
                 arrqueueModule,
 
                 // Home conveyor (desktop landing screen):

@@ -159,10 +159,13 @@ class SessionCoordinator(
                 // FIRST connect (the collector starts before the auth fan-out
                 // above connects), and that first post is load-bearing — it is
                 // what arms capabilities once the server session truly exists.
-                // That first-connect arm is kept explicitly here: an already-up
-                // socket at collector start does NOT re-post (a previous
-                // coordinator instance already armed it; RestartableJob cancels
-                // the old collector but the socket survives), and every
+                // That first-connect arm is kept explicitly here: the
+                // immediate [postCapabilitiesIfAuthenticated] covers BOTH the
+                // first connect and an already-up socket at collector start
+                // (RestartableJob cancels the old collector but the socket
+                // survives — the re-post is an idempotent re-assert, and
+                // [RealtimeConnection.reconnects] carries no replay, so this
+                // immediate post is the only already-up arm); every
                 // subsequent drop+reopen rides [RealtimeConnection.reconnects].
                 if (!realtimeConnection.isConnected.value) {
                     realtimeConnection.isConnected.first { it }
