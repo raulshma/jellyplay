@@ -4,6 +4,8 @@ import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueSnapshot
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.download.DownloadRequestResult
+import com.raulshma.jellyplay.core.data.download.QuickDownloadActions
+import com.raulshma.jellyplay.core.data.download.SeriesEpisodeDownloads
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
@@ -124,7 +126,7 @@ class HomeViewModelEventsTest {
     private lateinit var photoFolderPrefetcher: PhotoFolderPrefetcher
     private lateinit var seriesDownloads: SeriesEpisodeDownloads
     private lateinit var downloadIntake: DownloadIntake
-    private lateinit var mediaDownloadActions: HomeDownloadActions
+    private lateinit var quickDownloadActions: QuickDownloadActions
     private lateinit var userMessageBus: UserMessageBus
     private lateinit var offlineRepository: OfflineRepository
     private lateinit var offlineModeManager: OfflineModeManager
@@ -199,8 +201,8 @@ class HomeViewModelEventsTest {
         photoFolderPrefetcher = mockk(relaxed = true)
         seriesDownloads = mockk(relaxed = true)
         downloadIntake = mockk(relaxed = true)
-        mediaDownloadActions = mockk(relaxed = true)
-        every { mediaDownloadActions.downloadedIds } returns MutableStateFlow(emptySet())
+        quickDownloadActions = mockk(relaxed = true)
+        every { quickDownloadActions.downloadedIds } returns MutableStateFlow(emptySet())
         userMessageBus = mockk(relaxed = true)
         offlineRepository = mockk(relaxed = true)
         offlineModeManager = mockk(relaxed = true)
@@ -259,7 +261,7 @@ class HomeViewModelEventsTest {
         photoFolderPrefetcher = photoFolderPrefetcher,
         seriesDownloads = seriesDownloads,
         downloadIntake = downloadIntake,
-        mediaDownloadActions = mediaDownloadActions,
+        quickDownloadActions = quickDownloadActions,
         offlineRepository = offlineRepository,
         offlineModeManager = offlineModeManager,
         newsletterTriggerManager = newsletterTriggerManager,

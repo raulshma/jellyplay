@@ -276,8 +276,8 @@ internal fun PixelSecondaryControls(
             },
         )
         // gate: platforms without a download pipeline (web) hide the
-        // CTA structurally — the AudioTrackDownloads seam's isSupported false
-        // means a press could only ever fail.
+        // CTA structurally — the TrackDownloadStatusWindow seam's
+        // isSupported false means a press could only ever fail.
         if (showDownload) {
             IconButtonWithPressAnimation(
                 onClick = onDownloadClick,

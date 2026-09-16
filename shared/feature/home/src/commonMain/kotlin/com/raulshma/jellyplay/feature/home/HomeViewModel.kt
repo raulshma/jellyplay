@@ -14,6 +14,8 @@ import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.SearchHistoryItem
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.download.DownloadRequestResult
+import com.raulshma.jellyplay.core.data.download.QuickDownloadActions
+import com.raulshma.jellyplay.core.data.download.SeriesEpisodeDownloads
 import com.raulshma.jellyplay.core.ui.message.UiText
 import com.raulshma.jellyplay.feature.home.generated.resources.Res
 import com.raulshma.jellyplay.feature.home.generated.resources.home_download_started
@@ -69,7 +71,7 @@ internal class HomeViewModel(
     private val photoFolderPrefetcher: PhotoFolderPrefetcher,
     private val seriesDownloads: SeriesEpisodeDownloads,
     private val downloadIntake: DownloadIntake,
-    private val mediaDownloadActions: HomeDownloadActions,
+    private val quickDownloadActions: QuickDownloadActions,
     private val offlineRepository: OfflineRepository,
     /**
      * Local TOC cache — passed straight through to [offlineHomeGate] for the
@@ -117,7 +119,7 @@ internal class HomeViewModel(
      * Ids whose quick actions must flip to "Remove download" — completed
      * downloads ∪ series ids (a series card flips once any episode of it is
      * downloaded; REMOVE_DOWNLOAD then opens the delete-episodes sheet). Read
-     * from the shared [MediaDownloadActions.downloadedIds] flow (same union
+     * from the shared [QuickDownloadActions.downloadedIds] flow (same union
      * contract on [DownloadRepository.observeDownloadedIdsIncludingSeries])
      * that every quick-action host consumes — one eagerly-shared collector
      * serves all screens instead of a per-VM one. Collected unconditionally —
@@ -126,7 +128,7 @@ internal class HomeViewModel(
      * ONLINE home's action sheet needs this set too. The repository collapses
      * equal id sets, so transfers don't churn it.
      */
-    val downloadedIds: StateFlow<Set<String>> = mediaDownloadActions.downloadedIds
+    val downloadedIds: StateFlow<Set<String>> = quickDownloadActions.downloadedIds
 
     /**
      * The home screen's pending-sync surface — outbox badge count, sync
@@ -731,13 +733,13 @@ internal class HomeViewModel(
     /**
      * Deletes a downloaded item from the offline home's quick-action menu.
      * Delegates the series-vs-item routing to
-     * [MediaDownloadActions.removeDownload] (the shared plumbing every
+     * [QuickDownloadActions.removeDownload] (the shared plumbing every
      * quick-action host uses); the reactive [HomeUiState.offlineLibrary] flow
      * refreshes on its own once the row is gone, so no manual state update is
      * needed here.
      */
     private fun deleteOfflineMedia(item: MediaItem) {
-        mediaDownloadActions.removeDownload(item)
+        quickDownloadActions.removeDownload(item)
     }
 
     /**

@@ -3,7 +3,6 @@ package com.raulshma.jellyplay.feature.music
 import com.raulshma.jellyplay.core.data.playback.AudioQueueItem
 import com.raulshma.jellyplay.core.data.playback.InstantMixOutcome
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
-import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.PlaylistItem
 import kotlinx.coroutines.flow.Flow
@@ -16,7 +15,7 @@ import kotlinx.coroutines.flow.Flow
  * [com.raulshma.jellyplay.core.data.playback.AudioQueueManager] impl, the
  * `Dispatchers.Main` Looper contract), so commonMain cannot name the class —
  * nor the [AudioQueueOutcome]/[MusicTrackWithAlbumFallback] result vocabulary it
- * returns, which lives in the same jvmShared file. AudioTrackDownloads
+ * returns, which lives in the same jvmShared file. QuickDownloadActions
  * template: this interface carries exactly the host-facing surface, the
  * jvmShared actual delegates to the process-wide `AudioQueueFacade` single
  * and maps the outcome 1:1 onto the [MusicQueueOutcome] mirror
@@ -136,36 +135,3 @@ fun MusicQueueOutcome.toInstantMixOutcome(): InstantMixOutcome = when (this) {
     is MusicQueueOutcome.Failed -> InstantMixOutcome.Failed(cause)
 }
 
-/**
- * Web seam over core:data's jvmShared `DownloadRepository` —
- * the two reads + one delete the music screens make against the download
- * pipeline (AlbumDetail's per-track status window + delete, MusicHome's
- * active-download badge). The repository's constructor closure is the JVM
- * download engine (OkHttp streaming + Room writes), so commonMain cannot
- * name the class. AudioTrackDownloads template: the interface carries
- * exactly the host-facing surface, the jvmShared actual delegates to the
- * process-wide `DownloadRepository` single (android/desktop behavior
- * unchanged), and the wasmJs actual is an honest no-op.
- *
- * Web behavior: the browser has no local download pipeline, so the wasm
- * actual reports [isSupported] = false — screens hide the download surfaces
- * — while the status/count flows stay empty and [remove] is inert.
- */
-interface MusicTrackDownloads {
-
-    /** Whether this platform has a download pipeline; gates download surfaces. */
-    val isSupported: Boolean
-
-    /**
-     * Downloads for the given media item ids — the scoped per-screen window
-     * (AlbumDetail reads only its ~10-20 tracks so the 2 s progress tick
-     * re-reads a handful of rows, never the whole table).
-     */
-    fun downloadsForIds(mediaItemIds: List<String>): Flow<List<DownloadItem>>
-
-    /** Removes [downloadId]'s local download (artifacts + offline rows). */
-    suspend fun remove(downloadId: String): Result<Unit>
-
-    /** Live count of in-flight downloads (the music-home badge). */
-    fun activeDownloadCount(): Flow<Int>
-}

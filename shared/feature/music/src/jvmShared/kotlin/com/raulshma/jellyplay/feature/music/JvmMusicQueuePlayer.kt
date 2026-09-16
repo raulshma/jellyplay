@@ -3,20 +3,23 @@ package com.raulshma.jellyplay.feature.music
 import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
 import com.raulshma.jellyplay.core.data.playback.AudioQueueOutcome
 import com.raulshma.jellyplay.core.data.playback.TrackWithAlbumFallback
-import com.raulshma.jellyplay.core.data.repository.DownloadRepository
-import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.PlaylistItem
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
 /**
- * The JVM adapters over core:data's `AudioQueueFacade` and
- * `DownloadRepository` singles — the music VMs' play/enqueue/mix calls and
- * download reads delegate verbatim; the only added motion is the 1:1 outcome
- * and fallback-pair mapping between core:data's jvmShared result vocabulary
- * and the feature-local [MusicQueueOutcome]/[MusicTrackWithAlbumFallback]
+ * The JVM adapter over core:data's `AudioQueueFacade` single — the music VMs'
+ * play/enqueue/mix calls delegate verbatim; the only added motion is the 1:1
+ * outcome and fallback-pair mapping between core:data's jvmShared result
+ * vocabulary and the feature-local [MusicQueueOutcome]/[MusicTrackWithAlbumFallback]
  * mirrors (android/desktop behavior unchanged).
+ *
+ * The former JvmMusicTrackDownloads adapter (over the `DownloadRepository`
+ * single) was deleted with the download-actions seam consolidation: the
+ * music screens' download reads resolve from core:data's own seams now
+ * (TrackDownloadStatusWindow for the album rows, ActiveDownloadCount for the
+ * home badge — both bound in dataJvmModule).
  */
 internal class JvmMusicQueuePlayer(
     private val facade: AudioQueueFacade,
@@ -68,16 +71,6 @@ internal class JvmMusicQueuePlayer(
     override suspend fun enqueuePlaylistItem(item: PlaylistItem) {
         facade.enqueuePlaylistItem(item)
     }
-}
-
-internal class JvmMusicTrackDownloads(
-    private val downloadRepository: DownloadRepository,
-) : MusicTrackDownloads {
-    override val isSupported: Boolean = true
-    override fun downloadsForIds(mediaItemIds: List<String>): Flow<List<DownloadItem>> =
-        downloadRepository.getDownloadsByMediaItemIdsFlow(mediaItemIds)
-    override suspend fun remove(downloadId: String): Result<Unit> = downloadRepository.deleteDownload(downloadId)
-    override fun activeDownloadCount(): Flow<Int> = downloadRepository.getActiveDownloadCount()
 }
 
 /** Field-identical 1:1 map — see the [MusicQueueOutcome] mirror KDoc. */

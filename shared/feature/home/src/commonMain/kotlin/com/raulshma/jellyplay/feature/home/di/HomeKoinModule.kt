@@ -18,10 +18,12 @@ import org.koin.dsl.module
  *    MediaRepository/UserDataMutator/MediaSearchEngine) plus the platform
  *    data modules (ImageUrlProvider, OfflineModeManager) and the settings
  *    feature's SettingsSearchProvider single;
- *  - the web seams (HomeClock, HomeDownloadActions, SeriesEpisodeDownloads,
- *    HomeSyncStatusFactory, HomeNewsletterGate) resolve from
- *    [platformHomeModule] — jvmShared adapters over the core:data jvmShared
- *    singles, honest web actuals on wasmJs;
+ *  - the web seams (HomeClock, HomeSyncStatusFactory, HomeNewsletterGate)
+ *    resolve from [platformHomeModule] — jvmShared adapters over the core:data
+ *    jvmShared singles, honest web actuals on wasmJs — while the download
+ *    reads (QuickDownloadActions, SeriesEpisodeDownloads) resolve from
+ *    core:data's own seams on both platforms (dataJvmModule here,
+ *    dataWasmModule on web;
  *  - the refresher's pure-DI collaborators
  *    (PlaybackSyncScheduler — WorkManager worker; ContinueWatchingBroadcaster,
  *    LibrarySyncHook — app widget broadcast receivers) are Android-shaped:
@@ -57,7 +59,7 @@ val homeModule: Module = module {
             photoFolderPrefetcher = get(),
             seriesDownloads = get(),
             downloadIntake = get(),
-            mediaDownloadActions = get(),
+            quickDownloadActions = get(),
             offlineRepository = get(),
             bookTocCacheRepository = get(),
             offlineModeManager = get(),

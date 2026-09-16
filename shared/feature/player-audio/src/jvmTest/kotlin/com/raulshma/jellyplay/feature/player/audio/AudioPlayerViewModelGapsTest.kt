@@ -1,10 +1,10 @@
 package com.raulshma.jellyplay.feature.player.audio
 
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
+import com.raulshma.jellyplay.core.data.download.TrackDownloadStatusWindow
 import com.raulshma.jellyplay.core.data.playback.AudioEffectsManager
 import com.raulshma.jellyplay.core.data.playback.AudioQueueManager
 import com.raulshma.jellyplay.core.data.playback.AudioSleepTimerManager
-import com.raulshma.jellyplay.feature.player.audio.AudioTrackDownloads
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.datastore.audio.AudioSlice
@@ -33,6 +33,8 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
@@ -79,7 +81,7 @@ class AudioPlayerViewModelGapsTest {
     private lateinit var mediaRepository: MediaRepository
     private lateinit var playlistRepository: PlaylistRepository
     private lateinit var userDataMutator: com.raulshma.jellyplay.core.data.repository.UserDataMutator
-    private lateinit var downloads: AudioTrackDownloads
+    private lateinit var downloads: TrackDownloadStatusWindow
     private lateinit var downloadIntake: DownloadIntake
     private lateinit var sleepTimerManager: AudioSleepTimerManager
     private lateinit var cast: AudioPlayerCast
@@ -127,7 +129,7 @@ class AudioPlayerViewModelGapsTest {
         mediaRepository = mockk(relaxed = true)
         playlistRepository = mockk(relaxed = true)
         userDataMutator = mockk(relaxed = true)
-        downloads = mockk<AudioTrackDownloads>(relaxed = true).apply { every { isSupported } returns true }
+        downloads = mockk<TrackDownloadStatusWindow>(relaxed = true).apply { every { isSupported } returns true }
         downloadIntake = mockk(relaxed = true)
         sleepTimerManager = mockk<AudioSleepTimerManager>(relaxed = true)
         cast = mockk(relaxed = true)
@@ -165,9 +167,19 @@ class AudioPlayerViewModelGapsTest {
         every { engine.getImageUrl(any()) } returns "https://srv/Items/x/Images/Primary"
         every { engine.undoLastQueueOperation() } returns false
         every {
-            downloads.trackStatus(any())
+            downloads.downloadsFor(any())
         } answers {
-            downloadFlows.getOrPut(firstArg()) { MutableStateFlow(null) }
+            // The same per-item flows the real JvmTrackDownloadStatusWindow
+            // combines (the window's id-honesty shape — one flow per id,
+            // nulls filtered), so per-item state changes propagate as before.
+            val ids = firstArg<List<String>>()
+            if (ids.isEmpty()) {
+                flowOf(emptyList())
+            } else {
+                combine(
+                    ids.map { downloadFlows.getOrPut(it) { MutableStateFlow(null) } },
+                ) { rows -> rows.filterNotNull() }
+            }
         }
 
         viewModel = AudioPlayerViewModel(
@@ -534,11 +546,14 @@ class AudioPlayerViewModelGapsTest {
         verify(exactly = 0) { engine.togglePlayPause() }
     }
 
-    // ── 6. Effects persistence sources the manager, not the uiState mirror ──
+    // ── 6. Effects persistence sources the manager, not the state mirror ──
 
     @Test
     fun toggleNightMode_persistsTheManagerComputedValue_evenWhenTheMirrorHasNotCaughtUp() {
         val nightMode = MutableStateFlow(false)
+        // Swap the flow instance AFTER the controller's collectors subscribed
+        // (they captured the stubbed one at construction): the mirror keeps
+        // collecting a flow that never flips — dispatch lag, deterministic.
         every { effectsManager.nightModeEnabled } returns nightMode
         every { effectsManager.toggleNightMode() } answers { nightMode.value = !nightMode.value }
 
@@ -549,7 +564,7 @@ class AudioPlayerViewModelGapsTest {
         // and silently undo the toggle (the pre-controller behaviour, correct
         // only by dispatch-order luck).
         assertTrue(nightMode.value)
-        assertFalse(viewModel.uiState.value.effects.nightModeEnabled)
+        assertFalse(viewModel.effectsState.value.nightModeEnabled)
         coVerify(exactly = 1) { audioEffectsStore.setNightModeEnabled(true) }
     }
 

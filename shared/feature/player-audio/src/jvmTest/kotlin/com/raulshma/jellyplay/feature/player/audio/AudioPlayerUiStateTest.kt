@@ -18,8 +18,10 @@ import kotlin.test.assertTrue
 
 /**
  * Pins the default/initial shape of [AudioPlayerUiState] and its nested
- * [Immutable] blocks ([AudioEffectsState], [LyricsState], [SleepTimerState],
- * [QueueState]).
+ * [Immutable] blocks ([LyricsState], [SleepTimerState], [QueueState]) plus
+ * the module-local effects slice [AudioEffectsState] (controller-owned — not
+ * a uiState field — but its default shape is pinned here alongside the other
+ * slice types).
  *
  * Two invariants matter beyond field values:
  *
@@ -58,7 +60,6 @@ class AudioPlayerUiStateTest {
     @Test
     fun `nested blocks default to their own defaults`() {
         val state = AudioPlayerUiState()
-        assertEquals(AudioEffectsState(), state.effects)
         assertEquals(LyricsState(), state.lyrics)
         assertEquals(SleepTimerState(), state.sleepTimer)
         assertEquals(QueueState(), state.queue)
@@ -171,21 +172,9 @@ class AudioPlayerUiStateTest {
         val state = AudioPlayerUiState(title = "Song A")
         val retimed = state.copy(sleepTimer = SleepTimerState(active = true, lastUsedDurationMs = 90_000L))
         assertEquals(SleepTimerState(active = true, lastUsedDurationMs = 90_000L), retimed.sleepTimer)
-        assertEquals(state.effects, retimed.effects, "effects must not move with a sleep-timer update")
         assertEquals(state.lyrics, retimed.lyrics)
         assertEquals(state.queue, retimed.queue)
         assertEquals("Song A", retimed.title)
-    }
-
-    @Test
-    fun `effects block passes whole to its sheet owner`() {
-        // The effects sheet receives [AudioPlayerUiState.effects] directly,
-        // decoupled from the ViewModel — a customized block must be value-
-        // identical when read back off the state.
-        val customized = AudioEffectsState(equalizerEnabled = true, preAmpDb = 3.5f)
-        val state = AudioPlayerUiState(effects = customized)
-        assertEquals(customized, state.effects)
-        assertTrue(state.effects.equalizerEnabled)
     }
 
     // ── position lives OUTSIDE the UiState (high-frequency contract) ───

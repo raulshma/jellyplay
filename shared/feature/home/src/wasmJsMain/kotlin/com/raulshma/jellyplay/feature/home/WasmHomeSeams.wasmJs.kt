@@ -3,7 +3,6 @@ package com.raulshma.jellyplay.feature.home
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEntry
 import com.raulshma.jellyplay.core.data.repository.ResolvedMediaRef
-import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.wallNowMillis
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
@@ -23,32 +22,21 @@ import kotlin.time.Clock
  *    is the same "current calendar day in the device's system zone" the JVM
  *    TimeSource produced, read from the browser clock (see the seam KDoc for
  *    the locale split).
- *  - [WasmHomeDownloadActions] / [WasmSeriesEpisodeDownloads]: the browser
- *    has no local download pipeline — isSupported = false gates the download
- *    CTAs, the downloaded-ids set stays empty and removal is inert; episode
- *    id reads return an honest empty set (nothing was ever downloaded here).
  *  - [WasmHomeSyncStatusFactory]: the browser has no offline playback outbox,
  *    so the holder is genuinely idle — count 0, empty entries/details, inert
  *    syncNow, trivially-true drain gate. Never a fabricated pending set.
  *  - [WasmHomeNewsletterGate]: the web shell has no newsletter notification
  *    pipeline — the banner never shows (genuinely false, not a fabricated
  *    due-state).
+ *
+ * The former WasmHomeDownloadActions / WasmSeriesEpisodeDownloads stubs were
+ * deleted with the download-actions seam consolidation: home consumes
+ * core:data's own QuickDownloadActions / SeriesEpisodeDownloads seams now
+ * (their honest web no-op actuals are core:data's, bound in dataWasmModule).
  */
 internal object WasmHomeClock : HomeClock {
     override fun nowEpochMillis(): Long = wallNowMillis()
     override fun today(): LocalDate = Clock.System.todayIn(TimeZone.currentSystemDefault())
-}
-
-internal object WasmHomeDownloadActions : HomeDownloadActions {
-    override val isSupported: Boolean = false
-    override val downloadedIds: StateFlow<Set<String>> = MutableStateFlow(emptySet())
-    override fun removeDownload(item: MediaItem) {
-        // Inert: nothing to remove (see the seam KDoc).
-    }
-}
-
-internal object WasmSeriesEpisodeDownloads : SeriesEpisodeDownloads {
-    override suspend fun downloadedEpisodeIds(seriesId: String): Set<String> = emptySet()
 }
 
 internal class WasmHomeSyncStatusFactory : HomeSyncStatusFactory {

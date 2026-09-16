@@ -10,15 +10,11 @@ import kotlinx.coroutines.flow.StateFlow
  * false — web hosts should hide/disable the download CTAs — while
  * downloadedIds stays empty and download/remove calls are inert (download
  * resolves to [DownloadRequestResult.Failed]). Hoisted from the byte-identical
- * twins that shipped in feature:library and feature:search; the feature
- * platform fragments (platformLibraryModule / platformSearchModule) bind it
- * because the dataWasmModule graph carries no download pipeline.
+ * twins that shipped in feature:library and feature:search; bound in
+ * dataWasmModule (core:data owns the seam on both platforms — see
+ * [QuickDownloadActions]' IDIOM RULE note).
  */
-// Public: the feature platform fragments (feature:library / feature:search
-// wasmJsMain) bind this single — internal would hide it from the only
-// modules that reference it (core:data's own wasm graph has no download
-// pipeline to gate).
-object WasmQuickDownloadActions : QuickDownloadActions {
+internal object WasmQuickDownloadActions : QuickDownloadActions {
     override val isSupported: Boolean = false
     override val downloadedIds: StateFlow<Set<String>> = MutableStateFlow(emptySet())
     override suspend fun download(item: MediaItem): DownloadRequestResult =

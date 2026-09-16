@@ -2,10 +2,16 @@ package com.raulshma.jellyplay.core.data.di
 
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueImpl
+import com.raulshma.jellyplay.core.data.download.ActiveDownloadCount
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
+import com.raulshma.jellyplay.core.data.download.JvmActiveDownloadCount
 import com.raulshma.jellyplay.core.data.download.JvmQuickDownloadActions
+import com.raulshma.jellyplay.core.data.download.JvmSeriesEpisodeDownloads
+import com.raulshma.jellyplay.core.data.download.JvmTrackDownloadStatusWindow
 import com.raulshma.jellyplay.core.data.download.MediaDownloadActions
 import com.raulshma.jellyplay.core.data.download.QuickDownloadActions
+import com.raulshma.jellyplay.core.data.download.SeriesEpisodeDownloads
+import com.raulshma.jellyplay.core.data.download.TrackDownloadStatusWindow
 import com.raulshma.jellyplay.core.data.download.sniffContainerFile
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.data.network.OkHttpConfigProviderImpl
@@ -41,6 +47,7 @@ import com.raulshma.jellyplay.core.data.repository.DownloadStorageLayoutContract
 import com.raulshma.jellyplay.core.data.repository.ItemPlaybackPreferenceRepository
 import com.raulshma.jellyplay.core.data.repository.ItemPlaybackPreferenceRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
+import com.raulshma.jellyplay.core.data.repository.LiveTvRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.LyricsRepository
 import com.raulshma.jellyplay.core.data.repository.LyricsRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
@@ -48,11 +55,13 @@ import com.raulshma.jellyplay.core.data.repository.MediaRepositoryAccess
 import com.raulshma.jellyplay.core.data.repository.MediaCacheInvalidator
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryCacheInvalidation
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryImpl
+import com.raulshma.jellyplay.core.data.repository.MediaRepositoryInternals
 import com.raulshma.jellyplay.core.data.repository.MetadataEditorRepository
 import com.raulshma.jellyplay.core.data.repository.MetadataEditorRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.MoodPlaylistRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.NewsletterRepository
+import com.raulshma.jellyplay.core.data.repository.NewsletterRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.OfflineDownloadWriter
 import com.raulshma.jellyplay.core.data.repository.OfflineFirstItemResolver
 import com.raulshma.jellyplay.core.data.repository.OfflineFirstItemResolverImpl
@@ -67,6 +76,7 @@ import com.raulshma.jellyplay.core.data.repository.PlaybackRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.PlayedStateSync
 import com.raulshma.jellyplay.core.data.repository.PlayedStateSyncImpl
 import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
+import com.raulshma.jellyplay.core.data.repository.PlaylistRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.ReaderAnnotationsRepository
 import com.raulshma.jellyplay.core.data.repository.BookTocCacheRepository
 import com.raulshma.jellyplay.core.data.repository.BookTocCacheRepositoryImpl
@@ -455,6 +465,19 @@ val dataJvmModule: Module = module {
     }
     single<PlayedStateSync> { get<PlayedStateSyncImpl>() }
 
+    // Facade split: the ONE shared-state holder for the media repository
+    // family — a Koin single ctor-injected into MediaRepositoryImpl AND
+    // PlaylistRepositoryImpl below, so the detail-cache cluster stays ONE
+    // instance across the split (a playlist edit self-invalidates through
+    // the same epoch-guarded group the media repo's detail reads go
+    // through). Scope rule on the holder: only what an extracted surface
+    // actually observes — today the detail cluster only.
+    single {
+        MediaRepositoryInternals(
+            apiClient = get(),
+            homeSession = get(),
+        )
+    }
     single {
         MediaRepositoryImpl(
             apiClient = get(),
@@ -465,6 +488,7 @@ val dataJvmModule: Module = module {
             timeSource = get(),
             homeSession = get(),
             sessionCacheRegistry = get(),
+            internals = get(),
         )
     }
     single<MediaRepository> { get<MediaRepositoryImpl>() }
@@ -475,14 +499,33 @@ val dataJvmModule: Module = module {
     // MediaRepositoryCacheInvalidation pattern): keeps the background sync
     // workers in legacy :core:data off the concrete MediaRepositoryImpl type.
     single<MediaCacheInvalidator> { get<MediaRepositoryImpl>() }
-    // Family-repository views (same single, narrow seam — same pattern as the
-    // MediaRepositoryCacheInvalidation binding above): MediaRepositoryImpl
-    // implements each family directly, and single-family consumers now inject
-    // the family type instead of the 86-member MediaRepository union.
-    single<LiveTvRepository> { get<MediaRepositoryImpl>() }
+    // Family-repository split: SyncPlay stays a VIEW of the media single by
+    // decision (its 11 members interleave with the user-data channel's
+    // invalidation choreography). LiveTv / Newsletter / Playlist moved to
+    // their own impls over the narrow API family clients (the
+    // PlaybackRepositoryImpl ctor precedent — the family singles compose the
+    // same impls the JellyfinApiClient union delegates to, so the wire
+    // behavior is unchanged); single-family consumers keep injecting the
+    // family type instead of the MediaRepository union.
     single<SyncPlayRepository> { get<MediaRepositoryImpl>() }
-    single<NewsletterRepository> { get<MediaRepositoryImpl>() }
-    single<PlaylistRepository> { get<MediaRepositoryImpl>() }
+    single {
+        LiveTvRepositoryImpl(
+            liveTvApiClient = get(),
+            // deleteRecording goes through the generic item delete — the
+            // one route this family uses that MediaInfoApiClient owns.
+            mediaInfoApiClient = get(),
+        )
+    }
+    single<LiveTvRepository> { get<LiveTvRepositoryImpl>() }
+    single { NewsletterRepositoryImpl(apiClient = get()) }
+    single<NewsletterRepository> { get<NewsletterRepositoryImpl>() }
+    single {
+        PlaylistRepositoryImpl(
+            libraryApiClient = get(),
+            internals = get(),
+        )
+    }
+    single<PlaylistRepository> { get<PlaylistRepositoryImpl>() }
     // Lyrics engine: its own impl (the LRC/LRCLIB fetch-parse-cache chain)
     // since the extraction from MediaRepositoryImpl — no longer a view of the
     // media single.
@@ -686,10 +729,26 @@ val dataJvmModule: Module = module {
     // The quick-download seam the library/favorites/studio/search hosts
     // inject (hoisted from the features' internal JvmQuickDownloadActions
     // twins): delegates to the MediaDownloadActions single above. Web binds
-    // the honest no-op stub (WasmQuickDownloadActions) in the feature
-    // platform fragments — the dataWasmModule graph carries no download
-    // pipeline.
+    // the honest no-op stub (WasmQuickDownloadActions) in dataWasmModule.
     single<QuickDownloadActions> { JvmQuickDownloadActions(get<MediaDownloadActions>()) }
+
+    // ── download-actions seams (consolidated core:data-side) ─────────────
+    // The remaining wall-crossing download seams the features consume, all
+    // declared/implemented/bound by core:data on both platforms (web binds
+    // the honest no-op stubs in dataWasmModule — features never grow their
+    // own wall-crossing template):
+    //  - TrackDownloadStatusWindow: the audio player's and the album
+    //    screen's row window over this module's DownloadRepository single
+    //    (replaces the former feature-local AudioTrackDownloads /
+    //    MusicTrackDownloads seams);
+    //  - ActiveDownloadCount: the music-home transfer badge
+    //    (getActiveDownloadCount, the one MusicTrackDownloads read that is
+    //    process-scoped rather than an id-scoped window);
+    //  - SeriesEpisodeDownloads: the home series-download sheet's
+    //    episode-id read (getDownloadedEpisodeIdsForSeries).
+    single<TrackDownloadStatusWindow> { JvmTrackDownloadStatusWindow(get<DownloadRepository>()) }
+    single<ActiveDownloadCount> { JvmActiveDownloadCount(get<DownloadRepository>()) }
+    single<SeriesEpisodeDownloads> { JvmSeriesEpisodeDownloads(get<DownloadRepository>()) }
 
     single {
         SeerrRepositoryImpl(

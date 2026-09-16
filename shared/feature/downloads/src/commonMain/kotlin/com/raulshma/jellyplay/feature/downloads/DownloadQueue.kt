@@ -11,7 +11,7 @@ import kotlinx.coroutines.flow.Flow
  * engine (OkHttp streaming, WorkManager coupling, Room writes), so
  * commonMain cannot name the class — nor the jvmShared `DownloadProgress`
  * projection it returns, mirrored here field-for-field as
- * [DownloadRowProgress]. AudioTrackDownloads template: the interface carries
+ * [DownloadRowProgress]. QuickDownloadActions template: the interface carries
  * exactly the host-facing surface, the jvmShared actual delegates to the
  * process-wide `DownloadRepository` single (android/desktop behavior
  * unchanged), and the wasmJs actual is an honest no-op.

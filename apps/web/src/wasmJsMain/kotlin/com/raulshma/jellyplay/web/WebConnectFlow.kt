@@ -36,11 +36,11 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
-import com.raulshma.jellyplay.core.model.ActiveSession
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
+import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
-import com.raulshma.jellyplay.core.network.api.AuthApiClient
 import kotlinx.browser.window
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
@@ -51,50 +51,59 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /**
- * Connect/sign-in orchestration for the web shell (slice 2). The web
- * module has NO AuthRepository and no core:data on wasm (Room cut), so this
- * controller talks to [AuthApiClient] directly — the same client the desktop
- * pane drives through the repository, with the session publish/restore spine
- * (capture/adopt/try/publish/restore) living inside the client's atomicLogin.
+ * Connect/sign-in orchestration for the web shell. The establishment
+ * choreography — probe/adopt, authenticate, session persistence, boot
+ * restore, revoke/logout — lives in the shared [AuthRepository] seam now
+ * (`WasmAuthRepository` in core:data's wasmJs slice, bound by
+ * `dataWasmModule`), so this controller is construction + capability notes
+ * only: every establishment call delegates, and the landing UI observes the
+ * repository's flows ([isAuthenticated]/[currentServer]/[currentUser]).
+ * The hand-mirrored "call order mirrors AuthRepositoryImpl" body this file
+ * used to carry is deleted — the mirror is the shared implementation.
  *
- * Call order mirrors `AuthRepositoryImpl`/`JellyfinApiEngine` semantics:
- *  - probe: [getServerInfo] — single-shot GET /System/Info/Public, NO session
- *    adoption and NO retry backoff (the retry-wrapped connectToServer would
- *    stall a dead/CORS-blocked host behind ~4s of backoff before surfacing a
- *    first error).
- *  - sign in: [authenticateUser] — adopts the probed server pre-auth,
- *    publishes the authenticated (server, user) pair atomically on success,
- *    restores the captured session on failure; on success capability
- *    declaration is fired via [declareCapabilitiesAfterSignIn] (login-time
- *    concern only — nothing is posted on logout, the repository logout path
- *    doesn't either).
- *
- * SIDE-EFFECT OWNERSHIP (the one non-obvious rule): publishing the session
- * swaps the signed-in card in immediately, which DISPOSES the pane coroutine
- * scope that made the call — anything still running there would be cancelled
- * mid-flight. Post-success work with real effects (the capabilities POST that
- * gates playback features server-side; the last-server-url DataStore write)
- * therefore runs on this controller's own [sideEffectScope], not any pane's,
- * and surfaces outcomes through [capabilityNote] instead of pane-local
- * message state.
- *  - logout: revokeServerSession best-effort (server-side token revocation),
- *    then disconnect() clears the local pair unconditionally — same shape as
- *    `AuthRepositoryImpl.revokeServerSession` minus the Room/identity-store
- *    writes that have no wasm counterpart yet.
- *
- * last-server-url persistence rides the shared "user_prefs" DataStore the web
- * module already resolves from datastoreCommonModule names
- * ([DatastoreQualifiers.userPreferencesDataStore]), under its own key. Every
- * read/write is try-caught so storage failures degrade silently to an empty
- * field (the wasm localStorage storage adapter already degrades internally;
- * these catches cover the DataStore plumbing itself).
+ * What remains HERE (and why):
+ *  - PROBE DISCIPLINE: the landing probe rides [AuthRepository.probeServer]
+ *    (single-shot `GET /System/Info/Public`, NO session adoption, NO retry
+ *    backoff — `addServer`/`login`'s connectToServer paths adopt and would
+ *    stall a dead/CORS-blocked host behind backoff before surfacing a first
+ *    error).
+ *  - SIDE-EFFECT OWNERSHIP (the one non-obvious rule): publishing the
+ *    session swaps the signed-in card in immediately, which DISPOSES the
+ *    pane coroutine scope that made the call — anything still running there
+ *    would be cancelled mid-flight. Post-success work with real effects
+ *    (the capabilities POST that gates playback features server-side; the
+ *    boot-time restore; the URL-seed read) therefore runs on this
+ *    controller's own [WebSideEffectScope], not any pane's, and surfaces
+ *    outcomes through [capabilityNote] instead of pane-local message state.
+ *  - BOOT RESTORE: `restoreSession()` fires once per page on construction
+ *    (the desktop shell does the same at its root) — a persisted
+ *    (server, user) pair in the OPFS Room database re-establishes across
+ *    reloads; no identity / broken storage / second-tab OPFS lock degrades
+ *    fail-closed to the sign-in pane (restore's stages are timeout-bounded
+ *    inside the repository).
+ *  - URL SEED: the sign-in field prefills from the repository's server rows
+ *    (Room, most-recently-connected first). The pre-repository
+ *    `web_last_server_url` DataStore key is a ONE-TIME migration source —
+ *    read only when no server row exists yet, consumed (removed) after the
+ *    read either way; nothing ever writes it again.
+ *  - LOGOUT: [AuthRepository.revokeServerSession] verbatim — server-side
+ *    revocation best-effort, then user-row removal, local disconnect and
+ *    identity-store clear. (The old controller returned whether the revoke
+ *    succeeded; the UI never rendered it — documented v1 gap, now gone with
+ *    the delegation.)
  */
 internal class WebConnectController(
-    private val auth: AuthApiClient,
+    private val authRepository: AuthRepository,
     private val userPrefs: DataStore<Preferences>,
 ) {
     private companion object {
-        val LAST_SERVER_URL_KEY = stringPreferencesKey("web_last_server_url")
+        /**
+         * The pre-repository persistence key in the shared "user_prefs"
+         * DataStore — read ONCE for migration (only when no Room server row
+         * exists), then consumed. Never written again: server rows own the
+         * memory now.
+         */
+        val LEGACY_LAST_SERVER_URL_KEY = stringPreferencesKey("web_last_server_url")
     }
 
     // Post-success work that must OUTLIVE the pane which started it (see
@@ -109,29 +118,49 @@ internal class WebConnectController(
      * Post-sign-in capability outcome for the connected card to render.
      * Non-null once the latest declaration attempt finished badly; reset to
      * null at each new sign-in's declaration start. Lives here rather than in
-     * pane state precisely because the declaration outlives the swap — the
-     * old "signed in, but capability registration failed" line was written to
-     * sign-in-form state and could never be seen after the swap.
+     * pane state precisely because the declaration outlives the swap.
      */
     private val _capabilityNote = MutableStateFlow<String?>(null)
     val capabilityNote: StateFlow<String?> = _capabilityNote.asStateFlow()
 
     /**
-     * The client's atomic session flow — the UI's single truth source for
-     * signed-in-vs-not (context.md atomic rule: read the combined session,
-     * never a combine of the two side flows).
+     * The URL-field seed for the sign-in card — resolves once per page on
+     * [sideEffectScope]: the most-recently-connected Room server row's
+     * address, else the one-time legacy-key migration read, else "" (no
+     * seed). Terminal value guaranteed non-null so the card's one-shot
+     * collector never parks forever.
      */
-    val session: Flow<ActiveSession?> get() = auth.session
+    private val _serverUrlSeed = MutableStateFlow<String?>(null)
+    val serverUrlSeed: StateFlow<String?> = _serverUrlSeed.asStateFlow()
+
+    /** The repository's atomic-session-derived gate (never a side-flow combine). */
+    val isAuthenticated: StateFlow<Boolean> get() = authRepository.isAuthenticated
+
+    /** The repository's session fact flows, for the connected card's lines. */
+    val currentServer: Flow<ServerInfo?> get() = authRepository.currentServer
+    val currentUser: Flow<UserInfo?> get() = authRepository.currentUser
+
+    init {
+        // Boot choreography (desktop-shell precedent: restore fires once at
+        // the root, failures degrade fail-closed to the sign-in pane).
+        sideEffectScope.launchDegrading { authRepository.restoreSession() }
+        sideEffectScope.launchDegrading { resolveServerUrlSeed() }
+    }
 
     /** Probes a server WITHOUT adopting anything into the session state. */
-    suspend fun probeServer(address: String): Result<ServerInfo> = auth.getServerInfo(address)
+    suspend fun probeServer(address: String): Result<ServerInfo> =
+        authRepository.probeServer(address)
 
     /**
-     * Signs into [server]; success means the authenticated session is already
-     * published by the time this Result succeeds.
+     * Signs into the probed [server] through [AuthRepository.login]. First
+     * sign-in against a server with no Room row takes login's raw-address
+     * path (the client connect+authenticates in one round — one extra probe
+     * vs the desktop addServer-then-login two-screen flow); success persists
+     * the server + user rows and the active-session identity exactly as on
+     * android/desktop, which is also what makes the next boot's restore work.
      */
     suspend fun signIn(server: ServerInfo, username: String, password: String): Result<UserInfo> =
-        auth.authenticateUser(serverInfo = server, username = username, password = password)
+        authRepository.login(serverAddress = server.address, username = username, password = password)
 
     /**
      * Fires capability declaration on [sideEffectScope] and returns
@@ -144,7 +173,7 @@ internal class WebConnectController(
         _capabilityNote.value = null
         sideEffectScope.launchDegrading {
             val failed = try {
-                auth.postCapabilities().isFailure
+                authRepository.postCapabilities().isFailure
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
@@ -161,50 +190,43 @@ internal class WebConnectController(
     }
 
     /**
-     * Revokes the server-side session best-effort, then always clears the
-     * local atomic session pair — same shape as
-     * `AuthRepositoryImpl.revokeServerSession` minus the Room/identity-store
-     * writes that have no wasm counterpart yet.
-     *
-     * Returns whether the server call succeeded. Deliberately unused by the UI
-     * today: disconnect() unmounts the connected card either way, so there is
-     * nothing left in place to render such a note into (documented v1 gap).
+     * Full repository logout: best-effort server-side revocation, user-row
+     * removal, atomic local disconnect, identity-store clear (the same
+     * choreography android/desktop run).
      */
-    suspend fun logout(): Boolean {
-        val revoked = try {
-            auth.revokeServerSession().isSuccess
-        } catch (e: CancellationException) {
-            throw e
-        } catch (_: Exception) {
-            false
-        }
-        auth.disconnect()
-        return revoked
-    }
-
-    /** Last successfully-probed server URL; null when never saved/unavailable. */
-    suspend fun lastServerUrl(): String? = try {
-        userPrefs.data.first()[LAST_SERVER_URL_KEY]
-    } catch (_: Exception) {
-        null
-    }
-
-    /** Persists a just-probed URL on [sideEffectScope]; fire-and-forget. */
-    fun rememberServerUrlLater(url: String) {
-        sideEffectScope.launchDegrading { rememberServerUrl(url) }
+    suspend fun logout() {
+        authRepository.revokeServerSession()
     }
 
     /**
-     * Persists a just-probed URL; failures degrade silently (session-only).
-     * Private: callers must go through [rememberServerUrlLater] so the write
-     * cannot be orphaned by pane disposal (same rule as capability
-     * declaration above).
+     * Resolves [serverUrlSeed] once per page. Room read failures (e.g. the
+     * second tab's OPFS pool lock — web ships single-tab) and DataStore
+     * failures both degrade to "" (empty field), never a crash: this runs on
+     * the side-effect scope precisely so a broken store cannot take the
+     * landing pane down.
      */
-    private suspend fun rememberServerUrl(url: String) {
-        try {
-            userPrefs.edit { prefs -> prefs[LAST_SERVER_URL_KEY] = url }
-        } catch (_: Exception) {
-            // Storage unavailable/quota/corruption: keep the field usable anyway.
+    private suspend fun resolveServerUrlSeed() {
+        val fromDb = runCatchingRethrowingCancellation {
+            // servers orders by lastConnected DESC (the DAO query); first
+            // row = most recently connected server.
+            authRepository.servers.first().firstOrNull()?.address
+        }.getOrNull()
+        if (fromDb != null) {
+            _serverUrlSeed.value = fromDb
+            consumeLegacySeedKey()
+            return
+        }
+        val legacy = runCatchingRethrowingCancellation {
+            userPrefs.data.first()[LEGACY_LAST_SERVER_URL_KEY]
+        }.getOrNull()
+        _serverUrlSeed.value = legacy ?: ""
+        if (legacy != null) consumeLegacySeedKey()
+    }
+
+    /** One-time migration close-out: remove the legacy key, degrade silently. */
+    private suspend fun consumeLegacySeedKey() {
+        runCatchingRethrowingCancellation {
+            userPrefs.edit { prefs -> prefs.remove(LEGACY_LAST_SERVER_URL_KEY) }
         }
     }
 }
@@ -233,11 +255,18 @@ internal data class WebLandingAffordance(
  * Landing-pane connect/auth flow: replaces the placeholder
  * readout when signed out — server probe → inline name result → username /
  * password sign-in — and collapses to a minimal connected card (server, user,
- * online/offline chip, logout) once the auth client's atomic session publishes.
+ * online/offline chip, logout) once the repository's session publishes.
  *
  * All feedback is plain inline Text on purpose: the shell has no Scaffold, so
  * there is no snackbar host, and window.alert is banned. This is connect/auth
  * browsing status ONLY — not a feature browser.
+ *
+ * GATE DISCIPLINE: the signed-in swap is keyed on the repository's
+ * [WebConnectController.isAuthenticated] — the atomic-session-derived
+ * StateFlow — never a `combine` of the server/user side flows (the
+ * synthetic `(newServer, oldUser)` intermediate rule). The server/user fact
+ * collectors additionally null-guard so the card can never render a
+ * half-published pair even for one frame.
  *
  * RUNTIME HONESTY: verified in a real browser (2026-08-27) — the
  * headless-Edge CDP lane (tools/e2e/web-verify.mjs) clicked through this
@@ -246,7 +275,8 @@ internal data class WebLandingAffordance(
  * probe (Connect) → sign-in fields, credentials entered,
  * Sign in → ConnectedCard, with zero console errors. Autoplay-muted
  * HtmlVideoEngine playback from the connected session was verified one level
- * deeper in WebDiagnosticsPane the same run.
+ * deeper in WebDiagnosticsPane the same run. (That pass predates the
+ * AuthRepository delegation; the texts/order pinned below are unchanged.)
  *
  * Cut from v1 (documented deltas vs the shared auth screens the desktop shell
  * hosts since then): QuickConnect,
@@ -262,16 +292,21 @@ internal fun WebConnectFlow(
     modifier: Modifier = Modifier,
     affordances: List<WebLandingAffordance> = emptyList(),
 ) {
-    // initial = null is honest on wasm v1: nothing restores a session at
-    // boot (no persisted identity), so the flow genuinely starts empty. If a
-    // boot-time restore ever lands, swap the accessor for the StateFlow.
-    val activeSession by controller.session.collectAsState(initial = null)
-    val active: ActiveSession? = activeSession
+    // isAuthenticated is a StateFlow (no initial param needed); the fact
+    // flows are cold, hence the explicit initial null.
+    val authenticated by controller.isAuthenticated.collectAsState()
+    val server by controller.currentServer.collectAsState(initial = null)
+    val user by controller.currentUser.collectAsState(initial = null)
+    // Local captures: delegated State values do not smart-cast (the same
+    // rule WebStatusPane's healthValue follows).
+    val serverInfo = server
+    val userInfo = user
 
-    if (active != null) {
+    if (authenticated && serverInfo != null && userInfo != null) {
         ConnectedCard(
             controller = controller,
-            session = active,
+            server = serverInfo,
+            user = userInfo,
             networkStatus = networkStatus,
             affordances = affordances,
             modifier = modifier,
@@ -285,15 +320,15 @@ internal fun WebConnectFlow(
 @Composable
 private fun ConnectedCard(
     controller: WebConnectController,
-    session: ActiveSession,
+    server: ServerInfo,
+    user: UserInfo,
     networkStatus: NetworkStatus,
     affordances: List<WebLandingAffordance>,
-    modifier: Modifier = Modifier,
+    modifier: Modifier,
 ) {
     var loggingOut by remember { mutableStateOf(false) }
     // Declaration result lives on the controller (it outlives this card's
-    // composition); collected here so a failure is actually SEEABLE — the v1
-    // line for this was written into the disposed sign-in form instead.
+    // composition); collected here so a failure is actually SEEABLE.
     val capabilityNote by controller.capabilityNote.collectAsState()
     val scope = rememberCoroutineScope()
 
@@ -313,12 +348,12 @@ private fun ConnectedCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                text = "${session.server.name} — ${session.server.address}",
+                text = "${server.name} — ${server.address}",
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                text = "Signed in as ${session.user.name}.",
+                text = "Signed in as ${user.name}.",
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -330,8 +365,8 @@ private fun ConnectedCard(
                 )
             }
             // Connectivity pill: Surface (not AssistChip) — a disabled m3 chip
-            // renders at reduced opacity, which reads as broken rather than as
-            // a status badge.
+            // renders at reduced opacity, which reads as broken rather than as a
+            // status badge.
             Surface(
                 shape = RoundedCornerShape(8.dp),
                 color = if (networkStatus.hasNetwork) {
@@ -368,11 +403,10 @@ private fun ConnectedCard(
                         loggingOut = true
                         scope.launch {
                             try {
-                                // controller.logout() clears the atomic pair
-                                // unconditionally after the best-effort revoke, so
-                                // this card unmounts either way — a revoke-failure
-                                // note rendered HERE could never actually be seen
-                                // (v1 honesty gap, not surfaced anywhere).
+                                // The repository's revokeServerSession clears
+                                // the atomic pair unconditionally after the
+                                // best-effort revoke, so this card unmounts
+                                // either way.
                                 controller.logout()
                             } finally {
                                 loggingOut = false
@@ -420,11 +454,13 @@ private fun SignInCard(
     var corsHintVisible by remember { mutableStateOf(false) }
     var signInLine by remember { mutableStateOf<String?>(null) }
 
-    // Seed from the persisted last URL once; leaves the field fully editable.
+    // One-shot seed fill: waits for the controller's terminal seed emission
+    // (Room row address / legacy migration / ""), then fills a blank field.
+    // Leaves the field fully editable either way. The non-null terminal
+    // value is a controller contract; the elvis is the fail-closed escape.
     LaunchedEffect(controller) {
-        if (serverUrl.isBlank()) {
-            controller.lastServerUrl()?.let { serverUrl = it }
-        }
+        val seed = controller.serverUrlSeed.first { it != null } ?: return@LaunchedEffect
+        if (seed.isNotBlank() && serverUrl.isBlank()) serverUrl = seed
     }
     val scope = rememberCoroutineScope()
 
@@ -503,7 +539,9 @@ private fun SignInCard(
                                     probedServer = info
                                     probeLine = "Found \"${info.name}\" at ${info.address}."
                                     probeIsError = false
-                                    controller.rememberServerUrlLater(info.address)
+                                    // No persistence at probe time: the probe
+                                    // is pure by contract; server rows are
+                                    // written by sign-in (AuthRepository.login).
                                 }
                                 .onFailure { failure ->
                                     if (failure is CancellationException) return@onFailure
@@ -574,15 +612,15 @@ private fun SignInCard(
                                 signingIn = false
                                 result
                                     .onSuccess { _ ->
-                                        // Session already published by the client's
-                                        // atomicLogin. Declaration fires on the
-                                        // CONTROLLER's scope, deliberately not this
-                                        // pane's: the ConnectedCard swap that this
-                                        // success triggers disposes the pane scope and
-                                        // would kill an in-flight capabilities POST.
+                                        // Session already published by the
+                                        // client's atomicLogin inside
+                                        // AuthRepository.login. Declaration
+                                        // fires on the CONTROLLER's scope,
+                                        // deliberately not this pane's: the
+                                        // ConnectedCard swap that this success
+                                        // triggers disposes the pane scope and
+                                        // would kill an in-flight POST.
                                         controller.declareCapabilitiesAfterSignIn()
-                                        // Swap-out happens via the session flow; a failed
-                                        // declaration is surfaced IN the connected card.
                                     }
                                     .onFailure { failure ->
                                         if (failure is CancellationException) return@onFailure

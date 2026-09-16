@@ -102,6 +102,9 @@ class MediaRepositoryHomeSectionsCacheTest {
             fakeTimeSource,
             homeSession,
             sessionCacheRegistry,
+            // Facade split: the detail cluster now lives on the shared
+            // internals holder (construction-only ctor re-point).
+            MediaRepositoryInternals(apiClient, homeSession),
         )
     }
 

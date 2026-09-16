@@ -4,12 +4,11 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.stringPreferencesKey
-import com.raulshma.jellyplay.core.model.ActiveSession
+import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.model.QuickConnectInfo
 import com.raulshma.jellyplay.core.model.QuickConnectState
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
-import com.raulshma.jellyplay.core.network.api.AuthApiClient
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -21,88 +20,118 @@ import kotlin.time.TimeSource
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.runTest
 
 /**
  * Browser-free unit cover for the web connect controller's DECISION logic
- * ([WebConnectController] —  slice 2). The controller is the web
- * shell's entire auth spine (no AuthRepository on wasm), and the behaviors
- * pinned here are exactly the ones whose mistakes only show up in a real
- * browser session:
+ * ([WebConnectController] — the AuthRepository-delegation shape). The
+ * establishment choreography itself lives in the shared repository seam now
+ * (WasmAuthRepository — pinned source-side by the core:data mirror tests);
+ * what is pinned HERE is the controller's own contract:
  *
- *  - LOGOUT SHAPE: revoke is BEST-EFFORT (failure and throw both degrade to
- *    `false`, never an error), the local disconnect happens UNCONDITIONALLY
- *    and AFTER the revoke attempt (the connected card unmounts either way —
- *    the documented v1 gap), and a successful revoke reports true.
+ *  - BOOT CHOREOGRAPHY: construction fires restoreSession exactly once on
+ *    the side-effect scope (the desktop-shell boot precedent), and the URL
+ *    seed resolves there too — Room server rows first, else the one-time
+ *    legacy `web_last_server_url` migration read, else "" (terminal value,
+ *    never left unresolved), with the legacy key CONSUMED (removed) after
+ *    the read either way.
+ *  - DELEGATION: probe/sign-in/logout route to repository
+ *    probeServer/login/revokeServerSession with the probed server's ADDRESS
+ *    (login normalizes internally — the controller must not pre-normalize).
  *  - CAPABILITY DECLARATION: the failure note is the load-bearing copy the
  *    connected card renders; a fresh declaration resets it SYNCHRONOUSLY
  *    (the swap-out race the SIDE-EFFECT OWNERSHIP KDoc describes), success
  *    never sets a note, and outcomes land on the controller's own
  *    sideEffectScope (asserted here by awaiting on the event loop, never by
  *    blocking).
- *  - LAST-SERVER-URL PERSISTENCE: the exact storage key is a wire contract
- *    with the shared "user_prefs" DataStore; reads AND fire-and-forget
- *    writes degrade silently when the store is broken.
+ *  - FAIL-CLOSED SEED: a broken servers flow (the second-tab OPFS reality)
+ *    and a broken prefs store both degrade to "" / no crash.
+ *  - FLOW CONTRACT: isAuthenticated/currentServer/currentUser expose the
+ *    repository's own flows (assertSame — no recombination wrapper).
  *
  * The tests wrap their bodies in [runTest] (kotlin.test rejects `suspend`
- * test functions on wasmJs; runTest's single-threaded dispatcher keeps the
- * controller's sideEffectScope jobs on Dispatchers.Default interleaving
- * against real time, which the polling helper awaits). Honesty note: the
- * transport-failure classifier (`isLikelyCorsOrTransport`) and the
- * friendly-error mappers used to be private to WebConnectFlow.kt and thus out
- * of reach here — they now live in WebConnectFailurePolicy.kt and are pinned
- * by WebConnectFailurePolicyTest. No browser, no fetch: hand-rolled fakes for
- * [AuthApiClient] and [DataStore].
+ * test functions on wasmJs; runTest keeps the controller's sideEffectScope
+ * jobs on Dispatchers.Default interleaving against real time, which the
+ * polling helper awaits). No browser, no fetch: hand-rolled fakes for
+ * [AuthRepository] and [DataStore].
  */
 class WebConnectControllerTest {
 
     // ── fakes ──────────────────────────────────────────────────────────────
 
     /**
-     * Records the revoke/disconnect call ORDER (the logout contract is
-     * "revoke attempt, THEN unconditional disconnect") and lets each test
-     * script the capabilities and revoke outcomes.
+     * The repository fake: scriptable outcomes for the delegated members,
+     * counters for the choreography calls, `throw` stubs for everything the
+     * landing flow never routes through the controller. Open for the one
+     * test that scripts a failing restoreSession.
      */
-    private class FakeAuthApiClient : AuthApiClient {
+    private open class FakeAuthRepository : AuthRepository {
         val events = mutableListOf<String>()
 
-        var capabilitiesResult: Result<Unit> = Result.success(Unit)
-        var revokeResult: Result<Unit> = Result.success(Unit)
-        var revokeThrows: Throwable? = null
+        var serversFlow: Flow<List<ServerInfo>> = MutableStateFlow(emptyList())
+        val currentServerFlow: MutableStateFlow<ServerInfo?> = MutableStateFlow(null)
+        val currentUserFlow: MutableStateFlow<UserInfo?> = MutableStateFlow(null)
+        override val isAuthenticated: StateFlow<Boolean> = MutableStateFlow(false)
+        override val currentServerUsers: StateFlow<List<UserInfo>> = MutableStateFlow(emptyList())
 
-        var disconnectCount = 0
+        var restoreCount = 0
+            private set
+        var revokeCount = 0
+            private set
+        var loginAddress: String? = null
+            private set
+        var loginUsername: String? = null
+            private set
+        var loginPassword: String? = null
+            private set
+        var probeArg: String? = null
             private set
 
-        override val currentServer: Flow<ServerInfo?> = MutableStateFlow(null)
-        override val currentUser: Flow<UserInfo?> = MutableStateFlow(null)
-        override val session: Flow<ActiveSession?> = MutableStateFlow(null)
+        var capabilitiesResult: Result<Unit> = Result.success(Unit)
 
-        override suspend fun connectToServer(address: String): Result<ServerInfo> =
+        override val servers: Flow<List<ServerInfo>> get() = serversFlow
+        override val currentServer: Flow<ServerInfo?> get() = currentServerFlow
+        override val currentUser: Flow<UserInfo?> get() = currentUserFlow
+
+        override suspend fun addServer(address: String): Result<ServerInfo> =
             throw UnsupportedOperationException("unused in WebConnectControllerTest")
 
-        override suspend fun getServerInfo(address: String): Result<ServerInfo> =
-            throw UnsupportedOperationException("unused in WebConnectControllerTest")
-
-        override suspend fun selectReachableAddress(): String? =
-            throw UnsupportedOperationException("unused in WebConnectControllerTest")
-
-        override suspend fun authenticateUser(serverAddress: String, username: String, password: String): Result<UserInfo> =
-            throw UnsupportedOperationException("unused in WebConnectControllerTest")
-
-        override suspend fun authenticateUser(serverInfo: ServerInfo, username: String, password: String): Result<UserInfo> =
-            throw UnsupportedOperationException("unused in WebConnectControllerTest")
-
-        override suspend fun setServer(serverInfo: ServerInfo) =
-            throw UnsupportedOperationException("unused in WebConnectControllerTest")
-
-        override suspend fun setUser(userInfo: UserInfo) =
-            throw UnsupportedOperationException("unused in WebConnectControllerTest")
-
-        override suspend fun disconnect() {
-            disconnectCount += 1
-            events += "disconnect"
+        override suspend fun probeServer(address: String): Result<ServerInfo> {
+            probeArg = address
+            events += "probe"
+            return Result.success(probeResult)
         }
+
+        var probeResult: ServerInfo = ServerInfo(id = "s1", name = "Media", address = "http://media.example.com")
+
+        override suspend fun removeServer(serverId: String) =
+            throw UnsupportedOperationException("unused in WebConnectControllerTest")
+
+        override suspend fun switchServer(serverId: String): Result<Unit> =
+            throw UnsupportedOperationException("unused in WebConnectControllerTest")
+
+        override suspend fun addServerAddress(serverId: String, address: String): Result<Unit> =
+            throw UnsupportedOperationException("unused in WebConnectControllerTest")
+
+        override suspend fun removeServerAddress(serverId: String, address: String): Result<Unit> =
+            throw UnsupportedOperationException("unused in WebConnectControllerTest")
+
+        override suspend fun switchServerAddress(serverId: String, address: String): Result<Unit> =
+            throw UnsupportedOperationException("unused in WebConnectControllerTest")
+
+        override suspend fun login(serverAddress: String, username: String, password: String): Result<UserInfo> {
+            loginAddress = serverAddress
+            loginUsername = username
+            loginPassword = password
+            events += "login"
+            return loginResult
+        }
+
+        var loginResult: Result<UserInfo> = Result.success(
+            UserInfo(id = "u1", name = "alice", serverAddress = "http://media.example.com", accessToken = "t"),
+        )
 
         override suspend fun isQuickConnectEnabled(): Result<Boolean> =
             throw UnsupportedOperationException("unused in WebConnectControllerTest")
@@ -110,29 +139,46 @@ class WebConnectControllerTest {
         override suspend fun initiateQuickConnect(): Result<QuickConnectInfo> =
             throw UnsupportedOperationException("unused in WebConnectControllerTest")
 
-        override suspend fun getQuickConnectState(secret: String): Result<QuickConnectState> =
+        override suspend fun pollQuickConnect(secret: String): Result<QuickConnectState> =
             throw UnsupportedOperationException("unused in WebConnectControllerTest")
 
-        override suspend fun authenticateWithQuickConnect(serverInfo: ServerInfo, secret: String): Result<UserInfo> =
+        override suspend fun loginWithQuickConnect(serverAddress: String, secret: String): Result<UserInfo> =
             throw UnsupportedOperationException("unused in WebConnectControllerTest")
 
         override suspend fun authorizeQuickConnect(code: String): Result<Boolean> =
+            throw UnsupportedOperationException("unused in WebConnectControllerTest")
+
+        override suspend fun restoreSession(): Result<Unit> {
+            restoreCount += 1
+            events += "restore"
+            return Result.success(Unit)
+        }
+
+        override suspend fun refreshCurrentUser(): Result<UserInfo> =
+            throw UnsupportedOperationException("unused in WebConnectControllerTest")
+
+        override suspend fun logout() {
+            events += "logout"
+        }
+
+        override suspend fun revokeServerSession() {
+            revokeCount += 1
+            events += "revoke"
+        }
+
+        override suspend fun switchUser(userId: String): Result<Unit> =
+            throw UnsupportedOperationException("unused in WebConnectControllerTest")
+
+        override suspend fun removeUser(userId: String) =
+            throw UnsupportedOperationException("unused in WebConnectControllerTest")
+
+        override suspend fun getUsersForServer(serverId: String): List<UserInfo> =
             throw UnsupportedOperationException("unused in WebConnectControllerTest")
 
         override suspend fun postCapabilities(): Result<Unit> {
             events += "capabilities"
             return capabilitiesResult
         }
-
-        override suspend fun revokeServerSession(): Result<Unit> {
-            events += "revoke"
-            revokeThrows?.let { throw it }
-            return revokeResult
-        }
-
-        override fun getServerUrl(): String? = null
-
-        override fun getAccessToken(): String? = null
     }
 
     /** In-memory user_prefs store with per-test break switches for degradation. */
@@ -153,9 +199,15 @@ class WebConnectControllerTest {
         }
     }
 
-    /** Fresh controller per test: the sideEffectScope is instance-owned, so tests never share jobs. */
-    private fun controller(auth: FakeAuthApiClient = FakeAuthApiClient(), prefs: FakePrefsDataStore = FakePrefsDataStore()) =
-        WebConnectController(auth, prefs)
+    /**
+     * Fresh controller per test: the sideEffectScope is instance-owned and
+     * construction fires the boot jobs (restore + seed), so tests never
+     * share jobs — they await the outcomes through the polling helper.
+     */
+    private fun controller(
+        auth: FakeAuthRepository = FakeAuthRepository(),
+        prefs: FakePrefsDataStore = FakePrefsDataStore(),
+    ) = WebConnectController(authRepository = auth, userPrefs = prefs)
 
     /** Polls [condition] on the event loop until true or [timeoutMs] elapses. */
     private suspend fun awaitUntil(timeoutMs: Long = 5_000L, condition: () -> Boolean) {
@@ -166,42 +218,57 @@ class WebConnectControllerTest {
         }
     }
 
-    // ── logout: best-effort revoke + unconditional disconnect ──────────────
+    private val legacyKey = stringPreferencesKey("web_last_server_url")
+
+    // ── boot choreography: restore fires once at construction ──────────────
 
     @Test
-    fun `logout reports success and disconnects after the revoke`() = runTest {
-        val auth = FakeAuthApiClient()
+    fun `construction restores the persisted session exactly once`() = runTest {
+        val auth = FakeAuthRepository()
+        controller(auth = auth)
+        awaitUntil { auth.restoreCount >= 1 }
+        delay(200)
+        assertEquals(1, auth.restoreCount, "restoreSession fires exactly once per page, on the side-effect scope")
+    }
+
+    // ── delegation: probe / sign-in / logout route to the repository ───────
+
+    @Test
+    fun `probeServer delegates to the repository probe verbatim`() = runTest {
+        val auth = FakeAuthRepository()
         val controller = controller(auth = auth)
-        assertTrue(controller.logout(), "a successful revoke must report true")
-        assertEquals(listOf("revoke", "disconnect"), auth.events, "disconnect must follow the revoke attempt")
-        assertEquals(1, auth.disconnectCount, "exactly one disconnect — no double-clear of the session pair")
+        val result = controller.probeServer("http://media.example.com")
+        assertEquals("http://media.example.com", auth.probeArg, "the raw field text routes through untouched")
+        assertTrue(result.isSuccess)
+        assertEquals(auth.probeResult, result.getOrNull())
     }
 
     @Test
-    fun `logout degrades to false on a refused revoke but still disconnects`() = runTest {
-        val auth = FakeAuthApiClient()
+    fun `signIn delegates to repository login with the probed server address`() = runTest {
+        val auth = FakeAuthRepository()
         val controller = controller(auth = auth)
-        auth.revokeResult = Result.failure(RuntimeException("server refused"))
-        assertFalse(controller.logout(), "a failed revoke must report false")
-        assertEquals(listOf("revoke", "disconnect"), auth.events)
-        assertEquals(1, auth.disconnectCount, "the local pair clears even when the server revocation failed")
+        val probed = ServerInfo(id = "s1", name = "Media", address = "http://media.example.com")
+        val result = controller.signIn(probed, username = "alice", password = "pw")
+        assertEquals("http://media.example.com", auth.loginAddress, "login receives the probed server's address")
+        assertEquals("alice", auth.loginUsername)
+        assertEquals("pw", auth.loginPassword)
+        assertTrue(result.isSuccess)
     }
 
     @Test
-    fun `logout degrades to false on a throwing revoke but still disconnects`() = runTest {
-        val auth = FakeAuthApiClient()
+    fun `logout delegates to repository revokeServerSession`() = runTest {
+        val auth = FakeAuthRepository()
         val controller = controller(auth = auth)
-        auth.revokeThrows = RuntimeException("transport exploded")
-        assertFalse(controller.logout(), "a thrown revoke must degrade to false, never propagate")
-        assertEquals(listOf("revoke", "disconnect"), auth.events)
-        assertEquals(1, auth.disconnectCount)
+        controller.logout()
+        assertEquals(1, auth.revokeCount, "the full revoke/remove/disconnect/clear choreography is the repository's")
+        assertEquals(listOf("revoke"), auth.events.filter { it == "revoke" })
     }
 
     // ── capability declaration (sideEffectScope outcomes) ──────────────────
 
     @Test
     fun `failed capability declaration surfaces the exact connected-card note`() = runTest {
-        val auth = FakeAuthApiClient()
+        val auth = FakeAuthRepository()
         val controller = controller(auth = auth)
         auth.capabilitiesResult = Result.failure(RuntimeException("503"))
         controller.declareCapabilitiesAfterSignIn()
@@ -211,12 +278,12 @@ class WebConnectControllerTest {
             controller.capabilityNote.value,
             "the note copy is load-bearing UI text on the connected card",
         )
-        assertEquals(listOf("capabilities"), auth.events)
+        assertEquals(listOf("capabilities"), auth.events.filter { it == "capabilities" })
     }
 
     @Test
     fun `a new declaration resets the note synchronously and success keeps it null`() = runTest {
-        val auth = FakeAuthApiClient()
+        val auth = FakeAuthRepository()
         val controller = controller(auth = auth)
         auth.capabilitiesResult = Result.failure(RuntimeException("503"))
         controller.declareCapabilitiesAfterSignIn()
@@ -232,61 +299,104 @@ class WebConnectControllerTest {
         assertNull(controller.capabilityNote.value, "a successful declaration never sets a note")
     }
 
-    // ── last-server-url persistence (shared user_prefs DataStore) ──────────
+    // ── URL seed: Room rows first, legacy migration second, terminal "" ────
 
     @Test
-    fun `lastServerUrl reads the exact web_last_server_url storage key`() = runTest {
-        val key = stringPreferencesKey("web_last_server_url")
-        val prefs: Preferences = emptyPreferences().toMutablePreferences().apply {
-            this[key] = "http://media.example.com"
-        }.toPreferences()
-        val controller = controller(prefs = FakePrefsDataStore(prefs))
-        assertEquals("http://media.example.com", controller.lastServerUrl())
+    fun `serverUrlSeed takes the first server row the repository reports`() = runTest {
+        val auth = FakeAuthRepository()
+        // The servers flow arrives in the DAO's lastConnected-DESC order (the
+        // repository never re-sorts) — the seed takes that FIRST row.
+        auth.serversFlow = MutableStateFlow(
+            listOf(
+                ServerInfo(id = "s2", name = "Recent", address = "http://recent.example.com"),
+                ServerInfo(id = "s1", name = "Old", address = "http://old.example.com"),
+            ),
+        )
+        val prefs = FakePrefsDataStore(
+            emptyPreferences().toMutablePreferences().apply { this[legacyKey] = "http://legacy.example.com" }.toPreferences(),
+        )
+        val controller = controller(auth = auth, prefs = prefs)
+        awaitUntil { controller.serverUrlSeed.value != null }
+        assertEquals("http://recent.example.com", controller.serverUrlSeed.value, "the first row of the lastConnected-DESC flow wins")
+        awaitUntil { prefs.backing.value[legacyKey] == null }
+        assertNull(prefs.backing.value[legacyKey], "the legacy key is consumed even when a Room row won")
     }
 
     @Test
-    fun `lastServerUrl is null when nothing was persisted`() = runTest {
+    fun `serverUrlSeed migrates the legacy web_last_server_url once, then consumes it`() = runTest {
+        val prefs = FakePrefsDataStore(
+            emptyPreferences().toMutablePreferences().apply { this[legacyKey] = "http://media.example.com" }.toPreferences(),
+        )
+        val controller = controller(prefs = prefs)
+        awaitUntil { controller.serverUrlSeed.value != null }
+        assertEquals("http://media.example.com", controller.serverUrlSeed.value)
+        awaitUntil { prefs.backing.value[legacyKey] == null }
+        assertNull(prefs.backing.value[legacyKey], "the migration read is one-time — the key must be gone")
+    }
+
+    @Test
+    fun `serverUrlSeed resolves terminal empty when nothing is persisted`() = runTest {
         val controller = controller()
-        assertNull(controller.lastServerUrl())
+        awaitUntil { controller.serverUrlSeed.value != null }
+        assertEquals("", controller.serverUrlSeed.value, "terminal emission — the one-shot collector must never park")
     }
 
     @Test
-    fun `lastServerUrl degrades to null when the store read fails`() = runTest {
+    fun `serverUrlSeed degrades to empty when the Room read fails`() = runTest {
+        val auth = FakeAuthRepository()
+        auth.serversFlow = flow { throw RuntimeException("OPFS pool locked (second tab)") }
+        val controller = controller(auth = auth)
+        awaitUntil { controller.serverUrlSeed.value != null }
+        assertEquals("", controller.serverUrlSeed.value, "a broken DB read must yield an empty field, not a crash")
+    }
+
+    @Test
+    fun `serverUrlSeed degrades to empty when the prefs read fails`() = runTest {
         val prefs = FakePrefsDataStore()
         prefs.failReads = true
         val controller = controller(prefs = prefs)
-        assertNull(controller.lastServerUrl(), "a broken store must yield an empty field, not a crash")
+        awaitUntil { controller.serverUrlSeed.value != null }
+        assertEquals("", controller.serverUrlSeed.value, "a broken store must yield an empty field, not a crash")
     }
 
     @Test
-    fun `rememberServerUrlLater persists the probed URL on the side-effect scope`() = runTest {
-        val key = stringPreferencesKey("web_last_server_url")
-        val prefs = FakePrefsDataStore()
-        val controller = controller(prefs = prefs)
-        controller.rememberServerUrlLater("http://media.example.com")
-        awaitUntil { prefs.backing.value[key] == "http://media.example.com" }
-    }
-
-    @Test
-    fun `rememberServerUrlLater swallows a broken store instead of crashing the scope`() = runTest {
-        val key = stringPreferencesKey("web_last_server_url")
-        val prefs = FakePrefsDataStore()
+    fun `consuming the legacy key swallows a broken store instead of crashing the scope`() = runTest {
+        val prefs = FakePrefsDataStore(
+            emptyPreferences().toMutablePreferences().apply { this[legacyKey] = "http://media.example.com" }.toPreferences(),
+        )
         prefs.failWrites = true
         val controller = controller(prefs = prefs)
-        // Fire-and-forget: the write failure must be contained inside the
-        // side-effect job (reaching the assertion IS the crash-freedom proof;
-        // an uncaught throw would tear down the surrounding job tree).
-        controller.rememberServerUrlLater("http://media.example.com")
+        // Fire-and-forget: the consume-write failure must be contained inside
+        // the side-effect job (reaching the assertion IS the crash-freedom
+        // proof; an uncaught throw would tear down the surrounding job tree).
+        awaitUntil { controller.serverUrlSeed.value != null }
+        assertEquals("http://media.example.com", controller.serverUrlSeed.value, "the seed still lands from the read")
         delay(300)
-        assertNull(prefs.backing.value[key], "no half-write may land from a failing store")
+        assertEquals(
+            "http://media.example.com",
+            prefs.backing.value[legacyKey],
+            "no half-write may land from a failing store — the key simply stays for the next boot",
+        )
     }
 
-    // ── the session flow contract ───────────────────────────────────────────
+    // ── the flow contract ───────────────────────────────────────────────────
 
     @Test
-    fun `session exposes the client atomic session flow, not a recombination`() {
-        val auth = FakeAuthApiClient()
+    fun `observability flows expose the repository's own flows, not recombinations`() {
+        val auth = FakeAuthRepository()
         val controller = controller(auth = auth)
-        assertSame(auth.session, controller.session, "the UI must read the client's combined atomic pair")
+        assertSame(auth.isAuthenticated, controller.isAuthenticated, "the gate is the repository's atomic-derived StateFlow")
+        assertSame(auth.currentServer, controller.currentServer)
+        assertSame(auth.currentUser, controller.currentUser)
+    }
+
+    @Test
+    fun `construction is safe when restore throws`() = runTest {
+        val auth = object : FakeAuthRepository() {
+            override suspend fun restoreSession(): Result<Unit> = Result.failure(RuntimeException("no identity"))
+        }
+        val controller = controller(auth = auth)
+        awaitUntil { controller.serverUrlSeed.value != null }
+        assertFalse(controller.isAuthenticated.value, "a failed restore degrades fail-closed to the sign-in pane")
     }
 }

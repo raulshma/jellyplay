@@ -1,13 +1,16 @@
 package com.raulshma.jellyplay.feature.player.audio.di
 
-import com.raulshma.jellyplay.feature.player.audio.AudioTrackDownloads
-import com.raulshma.jellyplay.feature.player.audio.JvmAudioTrackDownloads
 import org.koin.core.module.Module
 import org.koin.dsl.module
 
-internal actual fun platformPlayerAudioModule(): Module = org.koin.dsl.module {
-    // The audio player VM resolves `AudioTrackDownloads` via get() — without
-    // this binding android/desktop crash with NoDefinitionException at first
-    // VM creation. Mirrors SettingsPlatformModule.jvm.
-    single<AudioTrackDownloads> { JvmAudioTrackDownloads(get()) }
+// Empty since the download-actions seam consolidation: the sleep-timer
+// binding stays in dataJvmModule (the interface is aliased onto the
+// SleepTimerManager single there), and the VM's download window —
+// TrackDownloadStatusWindow, which replaced the former feature-local
+// AudioTrackDownloads seam — is core:data's own binding in dataJvmModule
+// (JvmTrackDownloadStatusWindow over the DownloadRepository single). This
+// fragment stays so commonMain's includes(platformPlayerAudioModule()) keeps
+// a jvmShared counterpart to merge with the wasmJs actual's sleep-timer
+// binding.
+internal actual fun platformPlayerAudioModule(): Module = module {
 }

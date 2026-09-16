@@ -1,10 +1,10 @@
 package com.raulshma.jellyplay.feature.player.audio
 
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
+import com.raulshma.jellyplay.core.data.download.TrackDownloadStatusWindow
 import com.raulshma.jellyplay.core.data.playback.AudioEffectsManager
 import com.raulshma.jellyplay.core.data.playback.AudioQueueManager
 import com.raulshma.jellyplay.core.data.playback.AudioSleepTimerManager
-import com.raulshma.jellyplay.feature.player.audio.AudioTrackDownloads
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.datastore.audio.AudioSlice
@@ -50,7 +50,7 @@ class AudioPlayerViewModelTest {
     private lateinit var mediaRepository: MediaRepository
     private lateinit var playlistRepository: PlaylistRepository
     private lateinit var userDataMutator: com.raulshma.jellyplay.core.data.repository.UserDataMutator
-    private lateinit var downloads: AudioTrackDownloads
+    private lateinit var downloads: TrackDownloadStatusWindow
     private lateinit var downloadIntake: DownloadIntake
     private lateinit var sleepTimerManager: AudioSleepTimerManager
     private lateinit var cast: AudioPlayerCast
@@ -69,7 +69,7 @@ class AudioPlayerViewModelTest {
         mediaRepository = mockk(relaxed = true)
         playlistRepository = mockk(relaxed = true)
         userDataMutator = mockk(relaxed = true)
-        downloads = mockk<AudioTrackDownloads>(relaxed = true).apply { every { isSupported } returns true }
+        downloads = mockk<TrackDownloadStatusWindow>(relaxed = true).apply { every { isSupported } returns true }
         downloadIntake = mockk(relaxed = true)
         sleepTimerManager = mockk<AudioSleepTimerManager>(relaxed = true)
         cast = mockk(relaxed = true)
@@ -203,14 +203,14 @@ class AudioPlayerViewModelTest {
     @Test
     fun setDialogueBoostStrength_updatesStateAndDelegates() {
         viewModel.setDialogueBoostStrength(EffectStrength.HIGH)
-        assertEquals(EffectStrength.HIGH, viewModel.uiState.value.effects.dialogueBoostStrength)
+        assertEquals(EffectStrength.HIGH, viewModel.effectsState.value.dialogueBoostStrength)
         verify { effectsManager.setDialogueBoostStrength(EffectStrength.HIGH) }
     }
 
     @Test
     fun setNightModeStrength_updatesStateAndDelegates() {
         viewModel.setNightModeStrength(EffectStrength.LOW)
-        assertEquals(EffectStrength.LOW, viewModel.uiState.value.effects.nightModeStrength)
+        assertEquals(EffectStrength.LOW, viewModel.effectsState.value.nightModeStrength)
         verify { effectsManager.setNightModeStrength(EffectStrength.LOW) }
     }
 
@@ -301,7 +301,7 @@ class AudioPlayerViewModelTest {
     @Test
     fun setBassBoostStrength_updatesStateDelegatesAndPersists() {
         viewModel.setBassBoostStrength(EffectStrength.HIGH)
-        assertEquals(EffectStrength.HIGH, viewModel.uiState.value.effects.bassBoostStrength)
+        assertEquals(EffectStrength.HIGH, viewModel.effectsState.value.bassBoostStrength)
         verify { effectsManager.setBassBoostStrength(EffectStrength.HIGH) }
         coVerify { audioEffectsStore.setBassBoostStrength(EffectStrength.HIGH) }
     }
@@ -524,15 +524,16 @@ class AudioPlayerViewModelTest {
             assertEquals(1.0f, speed)
             assertFalse(isPlaying)
             assertEquals(0L, duration)
-            with(effects) {
-                assertEquals(EffectStrength.MODERATE, dialogueBoostStrength)
-                assertEquals(EffectStrength.MODERATE, nightModeStrength)
-                assertEquals(EffectStrength.MODERATE, bassBoostStrength)
-                assertEquals(500, virtualizerStrength)
-                assertEquals(ReverbPreset.NONE, reverbPreset)
-                assertEquals(AudioNormalizationMode.NONE, normalizationMode)
-                assertEquals(EqualizerPreset.FLAT, equalizerPreset)
-            }
+        }
+        // The effects slice is controller-owned state, re-exposed by the VM.
+        with(viewModel.effectsState.value) {
+            assertEquals(EffectStrength.MODERATE, dialogueBoostStrength)
+            assertEquals(EffectStrength.MODERATE, nightModeStrength)
+            assertEquals(EffectStrength.MODERATE, bassBoostStrength)
+            assertEquals(500, virtualizerStrength)
+            assertEquals(ReverbPreset.NONE, reverbPreset)
+            assertEquals(AudioNormalizationMode.NONE, normalizationMode)
+            assertEquals(EqualizerPreset.FLAT, equalizerPreset)
         }
     }
 

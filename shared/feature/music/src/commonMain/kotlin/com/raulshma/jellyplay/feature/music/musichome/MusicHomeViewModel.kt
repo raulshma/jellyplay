@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.music.musichome
 
 import com.raulshma.jellyplay.core.concurrency.DEFAULT_FANOUT_PARALLELISM
 import com.raulshma.jellyplay.core.concurrency.mapConcurrent
+import com.raulshma.jellyplay.core.data.download.ActiveDownloadCount
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
@@ -18,7 +19,6 @@ import com.raulshma.jellyplay.core.ui.viewmodel.LegacyDeferredFetchCoordinator
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.feature.music.feedback.MusicMessageBus
 import com.raulshma.jellyplay.feature.music.MusicQueuePlayer
-import com.raulshma.jellyplay.feature.music.MusicTrackDownloads
 import com.raulshma.jellyplay.feature.music.MusicTrackWithAlbumFallback
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -32,7 +32,7 @@ class MusicHomeViewModel(
     private val mediaRepository: MediaRepository,
     private val imageUrlProvider: ImageUrlProvider,
     private val audioQueueFacade: MusicQueuePlayer,
-    private val trackDownloads: MusicTrackDownloads,
+    private val activeDownloads: ActiveDownloadCount,
     private val homeDiscoveryStore: HomeDiscoveryStore,
     private val offlineModeManager: OfflineModeManager,
     private val userMessageBus: MusicMessageBus,
@@ -86,7 +86,7 @@ class MusicHomeViewModel(
 
     val deferredRefresher: DeferredUserDataRefresher get() = fetchCoordinator.deferredRefresher
 
-    val activeDownloadCount = trackDownloads.activeDownloadCount()
+    val activeDownloadCount = activeDownloads.activeDownloadCount()
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), 0)
 
     init {

@@ -26,11 +26,13 @@ import org.koin.dsl.module
  * ways:
  *  - MediaRepository / DownloadIntake are still Hilt-owned in the legacy
  *    data shim and reach Koin through the app composition root's Hilt
- *    interop module (dies at ); the web seams
- *    MusicQueuePlayer/MusicTrackDownloads resolve from
- *    [platformMusicModule] (jvmShared: adapters over the process-wide
- *    AudioQueueFacade/DownloadRepository singles; wasmJs: honest
- *    unsupported no-ops);
+ *    interop module (dies at ); the queue-player seam
+ *    MusicQueuePlayer resolves from
+ *    [platformMusicModule] (jvmShared: adapter over the process-wide
+ *    AudioQueueFacade single; wasmJs: honest unsupported no-op), while the
+ *    download reads resolve from core:data's own seams
+ *    (TrackDownloadStatusWindow for the album rows, ActiveDownloadCount for
+ *    the home badge — both bound by core:data on both platforms);
  *  - ImageUrlProvider / MoodPlaylistRepository / SmartPlaylistRepository
  *    (shared data), HomeDiscoveryStore (shared datastore) and
  *    OfflineModeManager resolve from the C4 shared-module graph;
@@ -53,7 +55,7 @@ val musicModule: Module = module {
             mediaRepository = get(),
             imageUrlProvider = get(),
             audioQueueFacade = get(),
-            trackDownloads = get(),
+            activeDownloads = get(),
             homeDiscoveryStore = get(),
             offlineModeManager = get(),
             userMessageBus = get(),
@@ -131,7 +133,7 @@ val musicModule: Module = module {
             mediaRepository = get(),
             imageUrlProvider = get(),
             audioQueueFacade = get(),
-            musicTrackDownloads = get(),
+            downloads = get(),
             downloadIntake = get(),
         )
     }

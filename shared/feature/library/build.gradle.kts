@@ -30,8 +30,9 @@ kotlin {
     // web breadth: the target compiles — the repository seams the
     // ViewModels bind (MediaRepository, UserDataMutator) are commonMain since
     //, and the one jvmShared type they consumed (MediaDownloadActions)
-    // moved behind the commonMain QuickDownloadActions seam (no-op actions on
-    // web; its per-platform Koin binding rides the platformLibraryModule()
+    // moved behind core:data's commonMain QuickDownloadActions seam
+    // (declared, implemented AND bound by core:data on both platforms —
+    // no-op actions on web via dataWasmModule; the feature needs no platform
     // fragment). The karma/Chrome browser run stays off like
     // core:ui/core:network/requests — jvmTest pins the semantics.
     wasmJs {
@@ -50,10 +51,10 @@ kotlin {
     applyDefaultHierarchyTemplate()
 
     sourceSets {
-        // The jvmShared actual for the seams (QuickDownloadActions wrapper
-        // over core:data's jvmShared MediaDownloadActions single), shared
-        // verbatim by android + desktop like the newsletter/requests
-        // jvmShared source sets.
+        // The jvmShared slice (now empty of Kotlin — the QuickDownloadActions
+        // wrapper/fragment actuals were deleted when core:data took over the
+        // seam), kept so android + desktop share any future JVM-only Kotlin
+        // like the newsletter/requests jvmShared source sets.
         val jvmShared = create("jvmShared")
         jvmShared.dependsOn(getByName("commonMain"))
         getByName("androidMain") { dependsOn(jvmShared) }

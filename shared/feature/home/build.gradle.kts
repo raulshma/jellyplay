@@ -27,13 +27,16 @@ kotlin {
     }
 
     // web breadth: the target compiles. The ViewModel/refresher's
-    // jvmShared core:data handles went behind five feature-local seams
+    // jvmShared core:data handles went behind feature-local seams
     // (AudioTrackDownloads/QuickDownloadActions templates, plus the livetv
     // clock-narrowing and locale-split precedents):
     //  - HomeClock over TimeSource (the java.time today(zone) surface stays
     //    JVM; wasm derives the same system-zone calendar day via kotlinx);
-    //  - HomeDownloadActions over MediaDownloadActions + SeriesEpisodeDownloads
-    //    over DownloadRepository (wasm: no download pipeline, honest empty);
+    //  - the download reads (QuickDownloadActions over MediaDownloadActions,
+    //    SeriesEpisodeDownloads over DownloadRepository) folded onto
+    //    core:data's own seams with the download-actions seam consolidation —
+    //    core:data declares/implements/binds them on both platforms
+    //    (dataJvmModule here, dataWasmModule's honest web no-ops);
     //  - HomeSyncStatus(+Factory) over SyncStatusStateHolder (wasm: the
     //    outbox is genuinely idle — no downloads exist to queue watch events);
     //  - HomeNewsletterGate over NewsletterTriggerManager (wasm: no

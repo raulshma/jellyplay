@@ -2,7 +2,7 @@ package com.raulshma.jellyplay.feature.music.musichome
 
 import com.raulshma.jellyplay.feature.music.MusicQueueOutcome
 import com.raulshma.jellyplay.feature.music.MusicQueuePlayer
-import com.raulshma.jellyplay.feature.music.MusicTrackDownloads
+import com.raulshma.jellyplay.core.data.download.ActiveDownloadCount
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.feature.music.MusicTrackWithAlbumFallback
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
@@ -68,7 +68,7 @@ class MusicHomeViewModelTest {
     private val mediaRepository: MediaRepository = mockk()
     private val imageUrlProvider: ImageUrlProvider = mockk(relaxed = true)
     private val audioQueueFacade: MusicQueuePlayer = mockk()
-    private val trackDownloads: MusicTrackDownloads = mockk()
+    private val activeDownloads: ActiveDownloadCount = mockk()
     private val homeDiscoveryStore: HomeDiscoveryStore = mockk()
     private val offlineModeManager: OfflineModeManager = mockk()
     private val userMessageBus: MusicMessageBus = mockk()
@@ -86,7 +86,7 @@ class MusicHomeViewModelTest {
         Dispatchers.setMain(mainDispatcher)
         every { homeDiscoveryStore.homeDiscovery } returns homeModeFlow
         every { offlineModeManager.offlineMode } returns offlineModeFlow
-        every { trackDownloads.activeDownloadCount() } returns flowOf(0)
+        every { activeDownloads.activeDownloadCount() } returns flowOf(0)
         every { userMessageBus.error(any()) } just Runs
         every { offlineModeManager.toggleManualOffline() } just Runs
         // The deferred refresher collects this for the whole VM lifetime.
@@ -122,7 +122,7 @@ class MusicHomeViewModelTest {
             mediaRepository = mediaRepository,
             imageUrlProvider = imageUrlProvider,
             audioQueueFacade = audioQueueFacade,
-            trackDownloads = trackDownloads,
+            activeDownloads = activeDownloads,
             homeDiscoveryStore = homeDiscoveryStore,
             offlineModeManager = offlineModeManager,
             userMessageBus = userMessageBus,

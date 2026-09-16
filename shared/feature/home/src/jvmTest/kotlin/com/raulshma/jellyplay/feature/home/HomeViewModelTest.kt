@@ -2,6 +2,8 @@ package com.raulshma.jellyplay.feature.home
 
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueSnapshot
+import com.raulshma.jellyplay.core.data.download.QuickDownloadActions
+import com.raulshma.jellyplay.core.data.download.SeriesEpisodeDownloads
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
@@ -125,7 +127,7 @@ class HomeViewModelTest {
     private lateinit var photoFolderPrefetcher: PhotoFolderPrefetcher
     private lateinit var seriesDownloads: SeriesEpisodeDownloads
     private lateinit var downloadIntake: com.raulshma.jellyplay.core.data.download.DownloadIntake
-    private lateinit var mediaDownloadActions: HomeDownloadActions
+    private lateinit var quickDownloadActions: QuickDownloadActions
     private lateinit var userMessageBus: com.raulshma.jellyplay.core.ui.message.UserMessageBus
     private lateinit var offlineRepository: OfflineRepository
     private lateinit var offlineModeManager: OfflineModeManager
@@ -244,9 +246,9 @@ class HomeViewModelTest {
         photoFolderPrefetcher = mockk(relaxed = true)
         seriesDownloads = mockk(relaxed = true)
         downloadIntake = mockk(relaxed = true)
-        mediaDownloadActions = mockk(relaxed = true)
+        quickDownloadActions = mockk(relaxed = true)
         // The VM's downloadedIds delegates to this flow at construction.
-        every { mediaDownloadActions.downloadedIds } returns MutableStateFlow(emptySet())
+        every { quickDownloadActions.downloadedIds } returns MutableStateFlow(emptySet())
         userMessageBus = mockk(relaxed = true)
         offlineRepository = mockk(relaxed = true)
         offlineModeManager = mockk(relaxed = true)
@@ -304,7 +306,7 @@ class HomeViewModelTest {
         photoFolderPrefetcher = photoFolderPrefetcher,
         seriesDownloads = seriesDownloads,
         downloadIntake = downloadIntake,
-        mediaDownloadActions = mediaDownloadActions,
+        quickDownloadActions = quickDownloadActions,
         offlineRepository = offlineRepository,
         offlineModeManager = offlineModeManager,
         newsletterTriggerManager = newsletterTriggerManager,

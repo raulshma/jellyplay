@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.music.albumdetail
 
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.download.TrackDownloadActions
+import com.raulshma.jellyplay.core.data.download.TrackDownloadStatusWindow
 import com.raulshma.jellyplay.core.data.playback.InstantMixState
 import com.raulshma.jellyplay.core.data.playback.InstantMixStateHolder
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
@@ -15,8 +16,6 @@ import com.raulshma.jellyplay.core.ui.viewmodel.DeferredUserDataRefresher
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.feature.music.MixErrorMessage
 import com.raulshma.jellyplay.feature.music.MusicQueuePlayer
-import com.raulshma.jellyplay.feature.music.MusicTrackDownloadStatusWindow
-import com.raulshma.jellyplay.feature.music.MusicTrackDownloads
 import com.raulshma.jellyplay.feature.music.toInstantMixOutcome
 import com.raulshma.jellyplay.feature.music.toMixErrorMessage
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -39,7 +38,7 @@ class AlbumDetailViewModel(
     private val mediaRepository: MediaRepository,
     private val imageUrlProvider: ImageUrlProvider,
     private val audioQueueFacade: MusicQueuePlayer,
-    private val musicTrackDownloads: MusicTrackDownloads,
+    private val downloads: TrackDownloadStatusWindow,
     private val downloadIntake: DownloadIntake,
 ) : JellyPlayViewModel() {
 
@@ -190,33 +189,33 @@ class AlbumDetailViewModel(
             if (tracks.isEmpty()) {
                 flowOf(emptyMap())
             } else {
-                musicTrackDownloads.downloadsForIds(tracks.map { it.id })
-                    .map { downloads -> downloads.associateBy { it.mediaItemId } }
+                downloads.downloadsFor(tracks.map { it.id })
+                    .map { rows -> rows.associateBy { it.mediaItemId } }
             }
         }
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
     // ── Track downloads (scoped per-track lifecycle) ─────────────────────────
     // The shared core:data TrackDownloadActions choreography (detail fetch →
-    // intake start, bulk admission under a semaphore) over this feature's
-    // MusicTrackDownloads seam via the window adapter. The REMOVE decisions
+    // intake start, bulk admission under a semaphore) over core:data's own
+    // TrackDownloadStatusWindow (the seam the former feature-local
+    // MusicTrackDownloads interface was folded onto). The REMOVE decisions
     // stay at the call sites — they genuinely differ: the track row removes
     // a COMPLETED download directly (no confirm), downloadAlbum skips such
     // rows, and deleteAlbumDownloads removes every existing row.
 
-    private val trackStatusWindow = MusicTrackDownloadStatusWindow(musicTrackDownloads)
     private val trackDownloadActions = TrackDownloadActions(
         scope = scope,
         intake = downloadIntake,
         mediaRepository = mediaRepository,
-        statusWindow = trackStatusWindow,
+        statusWindow = downloads,
     )
 
     fun downloadTrack(track: MediaItem) {
         val existing = trackDownloads.value[track.id]
         if (existing != null && existing.status == DownloadStatus.COMPLETED) {
             launch {
-                trackStatusWindow.remove(existing.id)
+                downloads.remove(existing.id)
             }
             return
         }
@@ -238,7 +237,7 @@ class AlbumDetailViewModel(
                 val existing = currentDownloads[track.id]
                 if (existing != null) {
                     launch {
-                        trackStatusWindow.remove(existing.id)
+                        downloads.remove(existing.id)
                     }
                 }
             }

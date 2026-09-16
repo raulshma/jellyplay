@@ -100,7 +100,9 @@ fun AudioPlayerScreen(
     val animatedVisibilityScope = com.raulshma.jellyplay.core.ui.components.LocalAnimatedVisibilityScope.current
 
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val effects = uiState.effects
+    // The effects slice is controller-owned state (AudioEffectsController's
+    // EffectsCommandCore), re-exposed by the VM — not a uiState field.
+    val effects by viewModel.effectsState.collectAsStateWithLifecycle()
     val lyricsState = uiState.lyrics
     val sleepTimer = uiState.sleepTimer
     val queueState = uiState.queue

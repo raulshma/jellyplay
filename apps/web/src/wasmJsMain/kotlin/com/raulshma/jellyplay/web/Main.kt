@@ -17,6 +17,7 @@ import coil3.request.Options
 import coil3.request.SuccessResult
 import coil3.request.crossfade
 import com.raulshma.jellyplay.core.data.di.dataWasmModule
+import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.database.di.databaseDaosModule
 import com.raulshma.jellyplay.core.database.di.webDatabaseModule
@@ -26,8 +27,6 @@ import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
 import com.raulshma.jellyplay.core.datastore.di.datastoreCommonModule
 import com.raulshma.jellyplay.core.datastore.di.webDatastoreModule
 import com.raulshma.jellyplay.core.designsystem.theme.JellyPlayTheme
-import com.raulshma.jellyplay.core.network.api.AuthApiClient
-import com.raulshma.jellyplay.core.network.auth.AtomicSessionState
 import com.raulshma.jellyplay.core.network.di.networkWasmModule
 import androidx.navigation3.runtime.NavKey
 import com.raulshma.jellyplay.core.ui.navigation.Route
@@ -84,12 +83,16 @@ import org.koin.core.context.startKoin
  *    resolves too, but no web surface pushes Route.SeerrSettings (the
  *    shell's own WebSeerrPane covers the credentials function), so it stays
  *    latent like the rest of the module's defs — the detailsModule
- *    precedent. LATENT ON WEB (never resolved in the browser):
+ *    precedent. LATENT ON WEB (never resolved in the browser): the wasm
+ *    AuthRepository binding EXISTS since the session-seam port
+ *    (dataWasmModule's WasmAuthRepository — the web landing drives it), but
  *    SettingsViewModel/ServerManagementViewModel/SecuritySettingsViewModel/
- *    AboutViewModel all take the jvmShared AuthRepository, whose impl needs
- *    Room + the WebSocket client + TokenCipher — there is deliberately no
- *    wasm AuthRepository binding (the rule that kept feature/auth
- *    target-only); SubtitleProviderSettingsViewModel needs
+ *    AboutViewModel stay latent on their OTHER ctor deps:
+ *    SettingsBackupIo/AppMetaProvider/LogCollector are androidMain/jvmMain
+ *    platform defs with no wasm actuals (ServerAdminActions does have one —
+ *    WasmServerAdminActions — yet each of those four VMs pulls at least one
+ *    actual-less dep).
+ *    SubtitleProviderSettingsViewModel needs
  *    networkJvmModule's Map<SubtitleProviderKind, SubtitleProvider>;
  *    LibraryLayout/NotificationSettingsViewModel need the real Room-backed
  *    MediaRepository/PlaylistRepository cluster (the web MediaRepository is
@@ -117,10 +120,11 @@ internal val webFeatureModules = listOf(
  * primitives over the JB fork's NavDisplay.
  *
  * W.1 chunk 3: `networkWasmModule` registers the Ktor wasm clients
- * (auth/library/playback over ONE shared [AtomicSessionState]).:
- * [WebAppRoot] now DRIVES the auth client — connect probe, sign-in,
- * capabilities, logout — through WebConnectController, so the shell observes
- * published sessions it actually created end-to-end.
+ * (auth/library/playback over ONE shared [AtomicSessionState][com.raulshma.jellyplay.core.network.auth.AtomicSessionState]).:
+ * [WebAppRoot] drives the shared session seam — connect probe, sign-in,
+ * capabilities, logout, boot restore — through WebConnectController over
+ * the shared AuthRepository (dataWasmModule's WasmAuthRepository), so the
+ * shell observes published sessions it actually created end-to-end.
  *
  * W.4: boots the Coil image singleton (see main() below). Wired against the
  * repo-wide coil 3.4.0 pin — the last release line whose wasmJs klibs are
@@ -325,16 +329,18 @@ fun main() {
             // WebShellPlatformOwners.kt) — wraps the whole shell so the
             // requests entry's koinViewModel() resolves, desktop-style.
             ProvideWebShellViewModelOwners {
-                // The one shared session state the three wasm API clients are
-                // built around — passed in directly rather than via a compose
-                // Koin scope (koin-compose is not a web-shell dep yet). A later pass
-                // adds the auth client (the session's writer) and the shared
-                // "user_prefs" DataStore (last-server-url persistence for the
-                // connect form); WebAppRoot provisions the core/ui composition
-                // locals around its NavDisplay and renders the web-only panes.
+                // The session seam the shell drives (WasmAuthRepository from
+                // dataWasmModule — resolved here, passed down; the shared
+                // "user_prefs" DataStore rides along for the landing form's
+                // one-time legacy URL-seed migration). The Seerr deps follow
+                // the same resolved-here pattern. All UNNAMED singles
+                // (DatastoreQualifiers qualify only the raw DataStores):
+                // datastoreCommonModule → SeerrPreferencesStore,
+                // webDatastoreModule → SeerrSecureCredentialsStore
+                // (localStorage-backed), dataWasmModule → AuthRepository +
+                // SeerrRepository.
                 WebAppRoot(
-                    sessionState = koinApp.koin.get(),
-                    authApiClient = koinApp.koin.get(),
+                    authRepository = koinApp.koin.get(),
                     userPrefs = koinApp.koin.get(DatastoreQualifiers.userPreferencesDataStore),
                     // The WebSeerrController deps (same pattern as
                     // userPrefs above — resolved here, passed down). All

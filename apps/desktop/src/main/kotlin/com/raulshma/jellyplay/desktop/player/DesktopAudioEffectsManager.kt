@@ -16,9 +16,9 @@ import com.raulshma.jellyplay.feature.player.video.engine.AudioEffectsConfig
  * (Android effect → mpv filter parity table there).
  *
  * Why the core still flips the flows (rather than freezing them): the audio
- * player's ViewModel persists `uiState.effects.<flag>` right after calling
- * a setter — a frozen flow would write the PREVIOUS value back to the
- * store, silently undoing every toggle.
+ * player's effects controller persists the manager's `StateFlow.value`
+ * right after the apply leg — a frozen flow would write the PREVIOUS value
+ * back to the store, silently undoing every toggle.
  *
  * Declared desktop divergences (state-level, encoded in the core):
  *  - out-of-range equalizer band indices no-op (the core's

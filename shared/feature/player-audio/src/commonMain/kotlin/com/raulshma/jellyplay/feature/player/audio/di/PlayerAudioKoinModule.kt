@@ -23,9 +23,13 @@ import org.koin.dsl.module
  *  - AudioSleepTimerManager (dataJvmModule aliases the interface onto the
  *    SleepTimerManager single; the wasm fragment binds the wall-clock impl),
  *    MediaRepository /
- *    UserDataMutator / DownloadRepository / DownloadIntake (shared data
- *    cluster) and PreferenceProjections / AudioStore / AudioEffectsStore
- *    (shared datastore) resolve from the shared-module graph;
+ *    UserDataMutator / DownloadIntake (shared data
+ *    cluster) and the download window TrackDownloadStatusWindow (core:data's
+ *    own seam since the download-actions consolidation — jvmShared adapter
+ *    over the DownloadRepository single in dataJvmModule, no-op stub in
+ *    dataWasmModule) plus PreferenceProjections / AudioStore /
+ *    AudioEffectsStore (shared datastore) resolve from the shared-module
+ *    graph;
  *  - desktop: LIVE since the real-audio engine — apps/desktop's
  *    desktopPlayerModule binds all four playback/cast deps:
  *    [com.raulshma.jellyplay.core.data.playback.AudioQueueManager] +

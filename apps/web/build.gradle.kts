@@ -97,9 +97,11 @@ kotlin {
                 // `entry<Route.Onboarding>` (onboardingModule; datastore
                 // stores resolve from datastoreCommonModule/webDatastoreModule).
                 // shortcuts + auth also gained wasmJs targets but stay
-                // unrouted/unregistered on web for now (no wasm
-                // AuthRepository binding; the grid's targets are mostly
-                // non-wasm; web drives sign-in via KtorWasmAuthApiClient).
+                // unrouted/unregistered on web for now (the auth feature's
+                // screens duplicate what the landing pane covers; the
+                // shortcuts grid's targets are mostly non-wasm; the web
+                // landing drives sign-in through the shared AuthRepository
+                // — dataWasmModule's WasmAuthRepository — not the feature).
                 implementation(project(":shared:feature:arrqueue"))
                 implementation(project(":shared:feature:onboarding"))
                 // the settings feature's first web-routed slice —
@@ -109,11 +111,12 @@ kotlin {
                 // Store/ArrSecureCredentialsStore — resolves from
                 // dataWasmModule + datastoreCommonModule/webDatastoreModule).
                 // The settings ROOT (Route.Settings) stays unrouted on web:
-                // SettingsViewModel's AuthRepository ctor dep has no wasm
-                // binding (AuthRepositoryImpl is jvmShared — Room + WebSocket
-                // + TokenCipher — the same reason auth stayed target-only),
-                //), so every AuthRepository/MediaRepository-backed VM def
-                // settingsModule registers stays latent exactly like
+                // the wasm AuthRepository binding exists (dataWasmModule's
+                // WasmAuthRepository — the session-seam port), but the
+                // settings-root VM closure needs more than the repository
+                // (SettingsBackupIo/AppMetaProvider/LogCollector have no
+                // wasm actuals), so every settings-root/MediaRepository-backed
+                // VM def settingsModule registers stays latent exactly like
                 // detailsModule's MediaDetail cluster. player-audio also
                 // gained a wasmJs target but gets NO edge here (nothing
                 // on web consumes it): all four playback/cast ctor seams of

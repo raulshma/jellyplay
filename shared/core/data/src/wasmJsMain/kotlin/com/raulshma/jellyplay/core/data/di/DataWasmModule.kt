@@ -1,7 +1,16 @@
 package com.raulshma.jellyplay.core.data.di
 
+import com.raulshma.jellyplay.core.data.download.ActiveDownloadCount
+import com.raulshma.jellyplay.core.data.download.QuickDownloadActions
+import com.raulshma.jellyplay.core.data.download.SeriesEpisodeDownloads
+import com.raulshma.jellyplay.core.data.download.TrackDownloadStatusWindow
+import com.raulshma.jellyplay.core.data.download.WasmActiveDownloadCount
+import com.raulshma.jellyplay.core.data.download.WasmQuickDownloadActions
+import com.raulshma.jellyplay.core.data.download.WasmSeriesEpisodeDownloads
+import com.raulshma.jellyplay.core.data.download.WasmTrackDownloadStatusWindow
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.ArrRepositoryImpl
+import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.ItemPlaybackPreferenceRepository
 import com.raulshma.jellyplay.core.data.repository.ItemPlaybackPreferenceRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.MoodPlaylistRepository
@@ -19,6 +28,7 @@ import com.raulshma.jellyplay.core.data.repository.SearchHistoryRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.SmartPlaylistRepository
+import com.raulshma.jellyplay.core.data.repository.WasmAuthRepository
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
 import com.raulshma.jellyplay.core.data.session.SessionIdentityProvider
@@ -75,6 +85,29 @@ import org.koin.dsl.module
  * Nothing else on web resolves these yet — the bindings make the Room-backed
  * graph available to the web modules; unresolved-consumer parity with the JVM
  * graph grows with each module.
+ *
+ * DOWNLOAD-ACTIONS SEAMS: the wall-crossing download seams the features
+ * consume (QuickDownloadActions, TrackDownloadStatusWindow,
+ * ActiveDownloadCount, SeriesEpisodeDownloads) are declared, implemented AND
+ * bound by core:data on both platforms — the honest web no-op stubs here
+ * (WasmQuickDownloadActions & co., see their KDocs), the real jvmShared
+ * adapters in dataJvmModule on android/desktop. The feature platform
+ * fragments that used to bind these on web (search/library's
+ * platformSearchModule/platformLibraryModule) were deleted with the seam
+ * consolidation — features never grow their own wall-crossing template.
+ *
+ * AUTH SLICE: [WasmAuthRepository] — the web shell's [AuthRepository]
+ * binding, a faithful port of the jvmShared AuthRepositoryImpl establishment
+ * choreography over the same OPFS Room database + ServerIdentityStore the
+ * android/desktop graph uses (every declared divergence lives on the class's
+ * KDoc; the ONE structural rule: it implements AuthRepository only — no
+ * RealtimeConnection, the websocket client stays jvmShared). Its api-client
+ * deps resolve from `networkWasmModule` (the AuthApiClient + UserApiClient
+ * Ktor singles share one AtomicSessionState), the TokenCipher from
+ * `webDatabaseModule` (the web pass-through), and the clock from the
+ * EpochMillisSource binding below. The web landing flow
+ * (apps/web WebConnectController) drives this repository instead of
+ * hand-mirroring the choreography over the raw client.
  */
 val dataWasmModule: Module = module {
 
@@ -92,6 +125,33 @@ val dataWasmModule: Module = module {
             scope = get(DatastoreQualifiers.applicationScope),
         )
     }
+
+    // ── auth slice (the web shell's session seam) ──────────────────────
+    // The establishment choreography port — see WasmAuthRepository's KDoc
+    // for the declared divergences vs the jvmShared AuthRepositoryImpl. The
+    // two API-client singles (AuthApiClient for connect/authenticate/
+    // quick-connect/revocation, UserApiClient for the getCurrentUser token
+    // check behind restore/refresh) both publish into the ONE shared
+    // AtomicSessionState networkWasmModule owns. DAOs/database resolve from
+    // databaseDaosModule/webDatabaseModule, ServerIdentityStore from
+    // datastoreCommonModule over the web "user_prefs" store, TokenCipher
+    // from webDatabaseModule (the pass-through), Json + EpochMillisSource
+    // from this module's bindings below.
+    single {
+        WasmAuthRepository(
+            apiClient = get(),
+            userApiClient = get(),
+            database = get(),
+            serverDao = get(),
+            userDao = get(),
+            serverIdentityStore = get(),
+            tokenCipher = get(),
+            json = get(),
+            externalScope = get(DatastoreQualifiers.applicationScope),
+            timeSource = get(),
+        )
+    }
+    single<AuthRepository> { get<WasmAuthRepository>() }
 
     // ──: the commonMain-promoted Room-backed slice ─────────────────────
 
@@ -163,6 +223,18 @@ val dataWasmModule: Module = module {
     }
 
     single { QueuePersistenceHelper(audioQueueDao = get()) }
+
+    // ── download-actions seams (web no-op actuals) ───────────────────────
+    // The honest web stubs for the wall-crossing download seams — the same
+    // bindings the deleted search/library platform fragments used to make on
+    // web, plus the window/count/series-episode reads the player, music and
+    // home features resolve. No download pipeline exists on web, so every
+    // actual is a no-op gated by isSupported = false (see each stub's KDoc).
+
+    single<QuickDownloadActions> { WasmQuickDownloadActions }
+    single<TrackDownloadStatusWindow> { WasmTrackDownloadStatusWindow }
+    single<ActiveDownloadCount> { WasmActiveDownloadCount }
+    single<SeriesEpisodeDownloads> { WasmSeriesEpisodeDownloads }
 
     // ── requests slice (pre-) ───────────────────────────────────────────
 

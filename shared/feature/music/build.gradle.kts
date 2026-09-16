@@ -38,8 +38,12 @@ kotlin {
     //    facade single; the wasmJs actual fails start/mix operations with
     //    an explicit cause and drops enqueues inertly — no fabricated
     //    playback;
-    //  - MusicTrackDownloads over DownloadRepository: jvmShared adapter,
-    //    wasm no-op with isSupported gating the download surfaces.
+    //  - the download reads formerly behind MusicTrackDownloads over
+    //    DownloadRepository folded onto core:data's own seams with the
+    //    download-actions seam consolidation (TrackDownloadStatusWindow for
+    //    the album rows, ActiveDownloadCount for the home badge):
+    //    core:data declares/implements/binds them on both platforms
+    //    (dataJvmModule's adapters here, dataWasmModule's honest web no-ops).
     // The web stack still registers no music bindings — web wiring stays
     // with the orchestrator's shared-wiring pass. java.util.UUID (mood/
     // smart playlist ids) ported to the stdlib kotlin.uuid.Uuid (same v4
@@ -62,9 +66,10 @@ kotlin {
 
     sourceSets {
         // The JVM-side bindings (MusicQueuePlayer -> JvmMusicQueuePlayer over
-        // the AudioQueueFacade single; MusicTrackDownloads ->
-        // JvmMusicTrackDownloads over the DownloadRepository single) — the
-        // player-audio jvmShared platform-module pattern.
+        // the AudioQueueFacade single) — the player-audio jvmShared
+        // platform-module pattern. The former MusicTrackDownloads binding
+        // moved to core:data (TrackDownloadStatusWindow / ActiveDownloadCount)
+        // with the download-actions seam consolidation.
         val jvmShared = create("jvmShared")
         jvmShared.dependsOn(getByName("commonMain"))
         getByName("androidMain") { dependsOn(jvmShared) }

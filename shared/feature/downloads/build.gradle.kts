@@ -29,7 +29,7 @@ kotlin {
 
     // web breadth: the target compiles. The two jvmShared engine
     // handles the screen drives went behind feature-local seams
-    // (AudioTrackDownloads template):
+    // (QuickDownloadActions template):
     //  - DownloadQueue over DownloadRepository (list reads, live
     //    byte/speed progress — mirrored field-for-field as
     //    DownloadRowProgress — and the pause/resume/enqueue/cancel/retry/

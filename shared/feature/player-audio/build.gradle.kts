@@ -38,10 +38,13 @@ kotlin {
     //    AudioSleepTimerManager interface — the JVM graph already binds the
     //    interface to that single, and the wasm fragment binds a wall-clock
     //    impl (honest for a sleep timer);
-    //  - the jvmShared DownloadRepository went behind the feature-local
-    //    AudioTrackDownloads seam (QuickDownloadActions template): jvmShared
-    //    adapter over the real single, honest no-op on web with isSupported
-    //    gating the download CTA in the screen.
+    //  - the jvmShared DownloadRepository read went behind core:data's
+    //    commonMain TrackDownloadStatusWindow seam (download-actions seam
+    //    consolidation: the former feature-local AudioTrackDownloads seam
+    //    was folded onto it): core:data binds the jvmShared adapter over the
+    //    real single in dataJvmModule and the honest no-op on web in
+    //    dataWasmModule, with isSupported gating the download CTA in the
+    //    screen.
     // The karma/Chrome browser run stays off like core:ui/core:network —
     // jvmTest pins the semantics.
     wasmJs {
@@ -60,10 +63,11 @@ kotlin {
     applyDefaultHierarchyTemplate()
 
     sourceSets {
-        // The JVM-side bindings (AudioSleepTimerManager → the SleepTimerManager
-        // single stays in dataJvmModule; the AudioTrackDownloads adapter over
-        // the DownloadRepository single) — the newsletter/requests jvmShared
-        // pattern.
+        // The JVM-side bindings (the AudioSleepTimerManager → the
+        // SleepTimerManager single stays in dataJvmModule) — the
+        // newsletter/requests jvmShared pattern. Empty of Kotlin since the
+        // download-actions seam consolidation moved the AudioTrackDownloads
+        // adapter/fragment actuals into core:data.
         val jvmShared = create("jvmShared")
         jvmShared.dependsOn(getByName("commonMain"))
         getByName("androidMain") { dependsOn(jvmShared) }

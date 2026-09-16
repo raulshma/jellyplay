@@ -28,9 +28,13 @@ import org.koin.dsl.module
  * LocalViewModelStoreOwner current at the call site (nav3 1.1.5 installs no
  * per-entry ViewModelStoreOwner, so that owner is the Activity — the exact
  * same extras source the Hilt factory consumed at HEAD).
+ *
+ * QuickDownloadActions is core:data's own wall-crossing seam (declared,
+ * implemented and bound there on both platforms — jvmShared adapter in
+ * dataJvmModule, no-op stub in dataWasmModule), so this module needs no
+ * platform fragment for it.
  */
 val libraryModule: Module = module {
-    includes(platformLibraryModule())
     viewModel {
         LibraryViewModel(
             mediaRepository = get(),

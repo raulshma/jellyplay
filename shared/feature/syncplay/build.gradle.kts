@@ -30,7 +30,7 @@ kotlin {
     // web breadth: the target compiles. The manager the feature
     // rides (SyncPlayManager — OkHttp api client + WebSocket + TimeSync, all
     // JVM-bound in core:data's jvmShared half) went behind the feature-local
-    // SyncPlaySession seam (AudioTrackDownloads template): the jvmShared
+    // SyncPlaySession seam (QuickDownloadActions template): the jvmShared
     // fragment binds a 1:1 adapter over the process-wide manager single
     // (android/desktop behavior unchanged), the wasmJs fragment binds the
     // honest unsupported session — join/leave fail with an explicit cause,

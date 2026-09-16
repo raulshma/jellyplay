@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.feature.music
 
-import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.PlaylistItem
 import kotlinx.coroutines.flow.Flow
@@ -17,10 +16,12 @@ import kotlinx.coroutines.flow.flowOf
  *    inert enqueue drops silently. A user-visible message only surfaces if a
  *    web shell ever binds this object and routes music; today nothing does
  *    (web wiring stays with the orchestrator's shared-wiring pass).
- *  - [WasmMusicTrackDownloads]: no local download pipeline either —
- *    [MusicTrackDownloads.isSupported] is false (screens hide the download
- *    surfaces), the status/count flows stay empty and [MusicTrackDownloads.remove]
- *    is inert.
+ *
+ * The former WasmMusicTrackDownloads no-op stub was deleted with the
+ * download-actions seam consolidation: the music screens' download reads
+ * resolve from core:data's own seams now (TrackDownloadStatusWindow for the
+ * album rows, ActiveDownloadCount for the home badge — their honest web
+ * no-op actuals are core:data's, bound in dataWasmModule).
  */
 internal object WasmMusicQueuePlayer : MusicQueuePlayer {
     private val unsupported: MusicQueueOutcome =
@@ -60,10 +61,3 @@ internal object WasmMusicQueuePlayer : MusicQueuePlayer {
     }
 }
 
-internal object WasmMusicTrackDownloads : MusicTrackDownloads {
-    override val isSupported: Boolean = false
-    override fun downloadsForIds(mediaItemIds: List<String>): Flow<List<DownloadItem>> = flowOf(emptyList())
-    override suspend fun remove(downloadId: String): Result<Unit> =
-        Result.failure(UnsupportedOperationException("downloads are not supported on web"))
-    override fun activeDownloadCount(): Flow<Int> = flowOf(0)
-}

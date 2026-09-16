@@ -6,6 +6,7 @@ import androidx.compose.runtime.setValue
 import com.raulshma.jellyplay.core.data.playback.AudioEffectsManager
 import com.raulshma.jellyplay.core.data.playback.AudioQueueManager
 import com.raulshma.jellyplay.core.data.playback.AudioSleepTimerManager
+import com.raulshma.jellyplay.core.data.download.TrackDownloadStatusWindow
 import com.raulshma.jellyplay.core.datastore.audio.AudioStore
 import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
@@ -48,7 +49,7 @@ class AudioPlayerViewModel(
     private val mediaRepository: com.raulshma.jellyplay.core.data.repository.MediaRepository,
     private val playlistRepository: com.raulshma.jellyplay.core.data.repository.PlaylistRepository,
     private val userDataMutator: com.raulshma.jellyplay.core.data.repository.UserDataMutator,
-    private val downloads: AudioTrackDownloads,
+    private val downloads: TrackDownloadStatusWindow,
     private val downloadIntake: com.raulshma.jellyplay.core.data.download.DownloadIntake,
     private val sleepTimerManager: AudioSleepTimerManager,
 ) : JellyPlayViewModel() {
@@ -102,15 +103,15 @@ class AudioPlayerViewModel(
 
     /** Mirrors [AudioEffectsState.dialogueBoostStrength] for callers that read it directly. */
     val dialogueBoostStrength: EffectStrength
-        get() = _uiState.value.effects.dialogueBoostStrength
+        get() = effects.state.value.dialogueBoostStrength
 
     /** Mirrors [AudioEffectsState.nightModeStrength] for callers that read it directly. */
     val nightModeStrength: EffectStrength
-        get() = _uiState.value.effects.nightModeStrength
+        get() = effects.state.value.nightModeStrength
 
     /** Mirrors [AudioEffectsState.bassBoostStrength] for callers that read it directly. */
     val bassBoostStrength: EffectStrength
-        get() = _uiState.value.effects.bassBoostStrength
+        get() = effects.state.value.bassBoostStrength
 
     val hasKaraokeLyrics: Boolean
         get() = _uiState.value.lyrics.hasKaraokeLyrics
@@ -130,11 +131,9 @@ class AudioPlayerViewModel(
     //    player-video pattern, applied to the audio player) ──────────────────
     // The effects setters' apply→persist choreography and the sleep-timer
     // workflow live in the two controllers below; the VM funs are one-line
-    // delegates. The [updateEffects]/[updateState] lambdas are the
-    // SettingsProjector-style seam over this VM's uiState slices — the mirror
-    // collectors above keep flowing manager state INTO uiState; the seam is
-    // only the write path (and it never feeds persistence: the controllers
-    // read the manager's StateFlow values, not this mirror).
+    // delegates. Each controller owns its state slice as its own StateFlow
+    // (the SettingsProjector-style uiState seams are gone); the VM re-exposes
+    // the slices the screen collects and keeps only real orchestration.
 
     /** Owns the effects setters' apply→mirror→persist choreography + play() seeding. */
     internal val effects = AudioEffectsController(
@@ -143,8 +142,11 @@ class AudioPlayerViewModel(
         engine = engine,
         audioStore = audioStore,
         audioEffectsStore = audioEffectsStore,
-        updateEffects = { transform -> _uiState.update { it.copy(effects = transform(it.effects)) } },
     )
+
+    /** The audio-effects slice — re-exposed from [AudioEffectsController.state]. */
+    val effectsState: StateFlow<AudioEffectsState>
+        get() = effects.state
 
     /** Owns the sleep-timer starts/cancel/expiry + store writes + slice updates. */
     internal val sleepTimer = AudioSleepTimerController(
@@ -181,9 +183,13 @@ class AudioPlayerViewModel(
                 downloadJob?.cancel()
                 if (itemId != null) {
                     downloadJob = launch {
-                        downloads.trackStatus(itemId).collect { download ->
-                            _currentDownloadItem.set(download)
-                        }
+                        // The single-id window read (the former seam's
+                        // trackStatus): rows → the one row, null when none.
+                        downloads.downloadsFor(listOf(itemId))
+                            .map { rows -> rows.firstOrNull() }
+                            .collect { download ->
+                                _currentDownloadItem.set(download)
+                            }
                     }
                 } else {
                     _currentDownloadItem.set(null)
@@ -297,70 +303,14 @@ class AudioPlayerViewModel(
                 _uiState.update { it.copy(lyrics = it.lyrics.copy(lyricsOffsetMs = value)) }
             }
         }
+        // The effects-slice mirror collectors died with the uiState effects
+        // field — [AudioEffectsController] mirrors the manager flows into its
+        // own state slice now (see its init). Only the crossfade field (a
+        // uiState resident, not an effects-slice field) keeps its collector.
         launch {
-            combine(
-                effectsManager.nightModeEnabled,
-                effectsManager.dialogueBoostEnabled,
-                effectsManager.equalizerEnabled,
-                effectsManager.equalizerSettings,
-                effectsManager.equalizerPreset,
-            ) { night, dialogue, eqEn, eqSet, eqPre ->
-                _uiState.update {
-                    it.copy(
-                        effects = it.effects.copy(
-                            nightModeEnabled = night,
-                            dialogueBoostEnabled = dialogue,
-                            equalizerEnabled = eqEn,
-                            equalizerSettings = eqSet,
-                            equalizerPreset = eqPre,
-                        ),
-                    )
-                }
-            }.collect {}
-        }
-        launch {
-            combine(
-                effectsManager.bassBoostEnabled,
-                effectsManager.virtualizerEnabled,
-                effectsManager.virtualizerStrength,
-                effectsManager.reverbPresetState,
-            ) { bass, virtEn, virtStr, rev ->
-                _uiState.update {
-                    it.copy(
-                        effects = it.effects.copy(
-                            bassBoostEnabled = bass,
-                            virtualizerEnabled = virtEn,
-                            virtualizerStrength = virtStr,
-                            reverbPreset = rev,
-                        ),
-                    )
-                }
-            }.collect {}
-        }
-        launch {
-            combine(
-                effectsManager.lrBalance,
-                effectsManager.pitchSemitones,
-                effectsManager.autoEqByGenre,
-            ) { lr, pitch, autoEq ->
-                _uiState.update {
-                    it.copy(effects = it.effects.copy(lrBalance = lr, pitchSemitones = pitch, autoEqByGenre = autoEq))
-                }
-            }.collect {}
-        }
-        launch {
-            combine(
-                engine.crossfadeDurationMs,
-                effectsManager.replayGainMode,
-                effectsManager.replayGainPreAmpDb,
-            ) { cross, rg, pre ->
-                _uiState.update {
-                    it.copy(
-                        crossfadeDurationMs = cross,
-                        effects = it.effects.copy(normalizationMode = rg, preAmpDb = pre),
-                    )
-                }
-            }.collect {}
+            engine.crossfadeDurationMs.collect { cross ->
+                _uiState.update { it.copy(crossfadeDurationMs = cross) }
+            }
         }
         launch {
             combine(
@@ -629,18 +579,18 @@ class AudioPlayerViewModel(
 
     // ── Track download flip ────────────────────────────────────────────────
     // The shared core:data TrackDownloadActions choreography (detail fetch →
-    // intake start) over this feature's AudioTrackDownloads seam via the
-    // window adapter. The REMOVE half stays HERE: a COMPLETED download flips
-    // the CTA to remove only after the screen's confirm dialog — the module
-    // must not swallow that policy.
+    // intake start) over core:data's own TrackDownloadStatusWindow (the seam
+    // the former feature-local AudioTrackDownloads interface was folded
+    // onto). The REMOVE half stays HERE: a COMPLETED download flips the CTA
+    // to remove only after the screen's confirm dialog — the module must not
+    // swallow that policy.
 
-    private val trackStatusWindow = AudioTrackDownloadStatusWindow(downloads)
     private val trackDownloadActions =
         com.raulshma.jellyplay.core.data.download.TrackDownloadActions(
             scope = scope,
             intake = downloadIntake,
             mediaRepository = mediaRepository,
-            statusWindow = trackStatusWindow,
+            statusWindow = downloads,
         )
 
     fun downloadCurrentTrack() {
@@ -648,7 +598,7 @@ class AudioPlayerViewModel(
         val existing = _currentDownloadItem.value
         if (existing != null && existing.status == com.raulshma.jellyplay.core.model.DownloadStatus.COMPLETED) {
             launch {
-                trackStatusWindow.remove(existing.id)
+                downloads.remove(existing.id)
             }
             return
         }

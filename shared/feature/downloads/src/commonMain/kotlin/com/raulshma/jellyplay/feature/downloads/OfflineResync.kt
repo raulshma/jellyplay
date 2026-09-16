@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.StateFlow
  * the update-check / metadata-resync surface the downloads screen drives
  * (batch progress sheet, check-for-updates, resync). The manager is the JVM
  * offline-sync engine (IO-dispatched Room reads + network fan-out), so
- * commonMain cannot name the class. AudioTrackDownloads template: the
+ * commonMain cannot name the class. QuickDownloadActions template: the
  * interface carries exactly the host-facing surface, the jvmShared actual
  * delegates to the process-wide `OfflineSyncManager` single (android/desktop
  * behavior unchanged), and the wasmJs actual is an honest no-op.

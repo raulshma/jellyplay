@@ -13,12 +13,12 @@ import org.koin.dsl.module
  * legacy data shim (MediaRepository, UserDataMutator, MediaSearchEngine,
  * pending the DownloadRepository flip) reach Koin through the app
  * composition root's Hilt interop module; the rest resolve from the C4
- * shared-module graph. The wasmJs target moved the MediaDownloadActions
- * ctor dep behind the QuickDownloadActions seam; its per-platform binding
- * rides the platformSearchModule() fragment included below.
+ * shared-module graph. QuickDownloadActions is core:data's own wall-crossing
+ * seam (declared, implemented and bound there on both platforms — jvmShared
+ * adapter in dataJvmModule, no-op stub in dataWasmModule), so this module
+ * needs no platform fragment for it.
  */
 val searchModule: Module = module {
-    includes(platformSearchModule())
     viewModel {
         SearchViewModel(
             mediaRepository = get(),

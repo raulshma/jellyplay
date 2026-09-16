@@ -29,13 +29,12 @@ import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
+import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
 import com.raulshma.jellyplay.core.datastore.SeerrSecureCredentialsStore
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.ServerHealth
-import com.raulshma.jellyplay.core.network.api.AuthApiClient
-import com.raulshma.jellyplay.core.network.auth.AtomicSessionState
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLinearProgressIndicator
 import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
 import com.raulshma.jellyplay.core.ui.components.LocalServerHealth
@@ -98,9 +97,10 @@ private data object WebSeerr : NavKey
  * Web nav root (slice 2 over the web-nav v1): NavDisplay from
  * the JB fork's navigation3-ui wasm klib over the shared core/ui primitives,
  * with the landing level grown from placeholder text into the real
- * connect/sign-in flow ([WebConnectFlow] driving [KtorWasmAuthApiClient]
- * through [WebConnectController] directly — there is no AuthRepository and no
- * core:data on wasm).
+ * connect/sign-in flow ([WebConnectFlow] driving the shared [AuthRepository]
+ * — `WasmAuthRepository` via dataWasmModule — through
+ * [WebConnectController]; the landing no longer drives the raw Ktor wasm
+ * auth client itself).
  *
  * Composition-local provisioning follows DesktopAppRoot's precedent:
  * [LocalNetworkStatus] maps `navigator.onLine` into [NetworkStatus] live via
@@ -146,8 +146,7 @@ private data object WebSeerr : NavKey
  */
 @Composable
 fun WebAppRoot(
-    sessionState: AtomicSessionState,
-    authApiClient: AuthApiClient,
+    authRepository: AuthRepository,
     userPrefs: DataStore<Preferences>,
     seerrPreferencesStore: SeerrPreferencesStore,
     seerrSecureCredentialsStore: SeerrSecureCredentialsStore,
@@ -194,8 +193,8 @@ fun WebAppRoot(
     }
 
     val webBackDispatcher = remember { WebBackDispatcher() }
-    val connectController = remember(sessionState, authApiClient, userPrefs) {
-        WebConnectController(auth = authApiClient, userPrefs = userPrefs)
+    val connectController = remember(authRepository, userPrefs) {
+        WebConnectController(authRepository = authRepository, userPrefs = userPrefs)
     }
     // The Seerr credentials controller, built exactly like
     // [WebConnectController] — plain class, Koin-resolved deps passed in from
@@ -270,7 +269,7 @@ fun WebAppRoot(
         applyCommand(WebBackStackMirror.onEntryAdded(backStack.lastIndex))
     }
 
-    val entryProvider = remember(sessionState, authApiClient, userPrefs, seerrPreferencesStore, seerrSecureCredentialsStore, seerrRepository) {
+    val entryProvider = remember(authRepository, userPrefs, seerrPreferencesStore, seerrSecureCredentialsStore, seerrRepository) {
         entryProvider<NavKey> {
             entry<WebLanding> { _ ->
                 // The landing affordances ([WebLandingAffordance]): the list
@@ -411,10 +410,15 @@ fun WebAppRoot(
                 // note for everything that stays latent on web). Reachability
                 // matches desktop: the Open-*arr-Settings buttons in the
                 // calendar/arrqueue feature-disabled panes (both wired
-                // above), NOT a settings-root row — web has no settings root
-                // (Route.Settings needs AuthRepository, which has no wasm
-                // binding), so this entry is reached by pushing the real key,
-                // not through any web-native mirror. Bare composition +
+                // above), NOT a settings-root row — web has no settings
+                // root: the wasm AuthRepository binding EXISTS now
+                // (dataWasmModule's WasmAuthRepository), but the settings
+                // root's VM closure needs more than the repository
+                // (SettingsBackupIo/AppMetaProvider/LogCollector have no
+                // wasm actuals — see Main.kt's settingsModule note), so
+                // Route.Settings stays unrouted and this entry is reached
+                // by pushing the real key, not through any web-native
+                // mirror. Bare composition +
                 // shell-provided owners like every shared entry; onBack rides
                 // the SAME guarded pop path as every other pane (requestPop:
                 // root-refusing list trim + history.back()). The screen

@@ -28,11 +28,18 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * Pins [AudioEffectsController]'s single write choreography. The load-bearing
- * case is the toggle hazard the extraction fixed: the persisted value must come
- * from the manager's synchronous `StateFlow.value` (computed by the apply leg),
- * NEVER from the lagging uiState mirror — the former inline VM setters read the
- * mirror inside a `launch`, which was only correct by dispatch-order luck.
+ * Pins [AudioEffectsController]'s single write choreography (now riding the
+ * shared [com.raulshma.jellyplay.core.data.playback.EffectsCommandCore]).
+ * The load-bearing case is the toggle hazard the original extraction fixed:
+ * the persisted value must come from the manager's synchronous
+ * `StateFlow.value` (computed by the apply leg), NEVER from the state
+ * mirror — the former inline VM setters read the mirror inside a `launch`,
+ * which was only correct by dispatch-order luck. The mirror is now the
+ * controller's OWN `state` slice (manager-flow collectors live in the
+ * controller's init), so the stale case is reproduced deterministically by
+ * swapping the manager's flow instance AFTER the collectors subscribed: the
+ * mirror keeps collecting the OLD flow (dispatch lag) while the command
+ * reads the NEW one.
  *
  * Uses a hand-rolled [FakeEffectsManager] (real state, processor semantics)
  * rather than a relaxed mock so the apply leg actually mutates readable state.
@@ -47,9 +54,6 @@ class AudioEffectsControllerTest {
     private lateinit var audioStore: AudioStore
     private lateinit var audioEffectsStore: AudioEffectsStore
 
-    /** The uiState effects slice, via the same seam the VM wires in. */
-    private lateinit var mirror: AudioEffectsState
-
     private lateinit var controller: AudioEffectsController
 
     @BeforeTest
@@ -58,14 +62,12 @@ class AudioEffectsControllerTest {
         engine = mockk(relaxed = true)
         audioStore = mockk(relaxed = true)
         audioEffectsStore = mockk(relaxed = true)
-        mirror = AudioEffectsState()
         controller = AudioEffectsController(
             scope = testScope,
             effectsManager = manager,
             engine = engine,
             audioStore = audioStore,
             audioEffectsStore = audioEffectsStore,
-            updateEffects = { transform -> mirror = transform(mirror) },
         )
     }
 
@@ -73,20 +75,24 @@ class AudioEffectsControllerTest {
 
     @Test
     fun toggleNightMode_persistsTheManagerComputedValue_whileTheMirrorStaysStale() {
-        // The mirror says OFF and no collector has run — the former mirror
-        // read-back would persist `false`, silently undoing the toggle.
-        assertFalse(mirror.nightModeEnabled)
+        // The controller's collectors subscribed to the ORIGINAL flow at
+        // construction; swap the manager's instance so the mirror keeps
+        // collecting a flow that never flips (dispatch lag made
+        // deterministic) — the former mirror read-back would persist
+        // `false`, silently undoing the toggle.
+        assertFalse(controller.state.value.nightModeEnabled)
+        manager.nightModeEnabledFlow = MutableStateFlow(false)
 
         controller.toggleNightMode()
 
         assertTrue(manager.nightModeEnabled.value, "the apply leg flipped the manager")
         coVerify(exactly = 1) { audioEffectsStore.setNightModeEnabled(true) }
-        assertFalse(mirror.nightModeEnabled)
+        assertFalse(controller.state.value.nightModeEnabled)
     }
 
     @Test
-    fun toggleDialogueBoost_persistsTheManagerComputedValue_whileTheMirrorStaysStale() {
-        assertFalse(mirror.dialogueBoostEnabled)
+    fun toggleDialogueBoost_persistsTheManagerComputedValue() {
+        assertFalse(controller.state.value.dialogueBoostEnabled)
 
         controller.toggleDialogueBoost()
 
@@ -94,20 +100,20 @@ class AudioEffectsControllerTest {
     }
 
     @Test
-    fun toggleBackOff_persistsTheComputedFalse_evenThoughTheMirrorNeverCaughtUp() {
+    fun toggleBackOff_persistsTheComputedFalse() {
         controller.toggleNightMode()
         controller.toggleNightMode()
 
         coVerify(exactly = 1) { audioEffectsStore.setNightModeEnabled(true) }
         coVerify(exactly = 1) { audioEffectsStore.setNightModeEnabled(false) }
-        assertFalse(mirror.nightModeEnabled, "the mirror was never a persistence input")
+        assertFalse(controller.state.value.nightModeEnabled, "the mirror was never a persistence input")
     }
 
     @Test
     fun setEqualizerBand_persistsTheManagerFoldedSettings_notTheMirror() {
         // The manager folds band+level into a NEW settings object; the mirror
         // holds a stale default. The persist leg must write the manager's.
-        val staleMirrorSettings = mirror.equalizerSettings
+        val staleMirrorSettings = controller.state.value.equalizerSettings
 
         controller.setEqualizerBand(bandIndex = 2, levelDb = 3)
 
@@ -142,7 +148,7 @@ class AudioEffectsControllerTest {
 
         assertEquals(EffectStrength.HIGH, manager.dialogueBoostStrengthState)
         coVerify(exactly = 1) { audioEffectsStore.setDialogueBoostStrength(EffectStrength.HIGH) }
-        assertEquals(EffectStrength.HIGH, mirror.dialogueBoostStrength)
+        assertEquals(EffectStrength.HIGH, controller.state.value.dialogueBoostStrength)
     }
 
     @Test
@@ -151,7 +157,7 @@ class AudioEffectsControllerTest {
 
         assertEquals(EffectStrength.LOW, manager.nightModeStrengthState)
         coVerify(exactly = 1) { audioEffectsStore.setNightModeStrength(EffectStrength.LOW) }
-        assertEquals(EffectStrength.LOW, mirror.nightModeStrength)
+        assertEquals(EffectStrength.LOW, controller.state.value.nightModeStrength)
     }
 
     @Test
@@ -160,10 +166,10 @@ class AudioEffectsControllerTest {
 
         assertEquals(EffectStrength.NONE, manager.bassBoostStrengthState)
         coVerify(exactly = 1) { audioEffectsStore.setBassBoostStrength(EffectStrength.NONE) }
-        assertEquals(EffectStrength.NONE, mirror.bassBoostStrength)
+        assertEquals(EffectStrength.NONE, controller.state.value.bassBoostStrength)
     }
 
-    // ── Choreography ordering: apply → mirror → persist ──────────────────────
+    // ── Choreography ordering: apply → state write → persist ────────────────
 
     @Test
     fun applyAndPersist_appliesBeforePersisting() {
@@ -179,27 +185,21 @@ class AudioEffectsControllerTest {
     }
 
     @Test
-    fun applyAndPersist_runsTheMirrorSynchronouslyBetweenApplyAndPersist() {
-        val recording = AudioEffectsController(
-            scope = testScope,
-            effectsManager = manager,
-            engine = engine,
-            audioStore = audioStore,
-            audioEffectsStore = audioEffectsStore,
-            updateEffects = { transform ->
-                manager.applyLog += "mirror"
-                mirror = transform(mirror)
-            },
-        )
+    fun applyAndPersist_runsTheStateMirrorSynchronouslyBeforeThePersistCoroutine() {
+        // The persist coroutine reads the controller's OWN state slice: it
+        // must already carry the command's mirror write when the launched
+        // block runs (apply and the mirror land in the same frame; the full
+        // APPLY_FIRST leg interleaving is pinned by EffectsCommandCoreTest).
+        coEvery { audioEffectsStore.setBassBoostStrength(any()) } coAnswers {
+            manager.applyLog += "persist(state=${controller.state.value.bassBoostStrength})"
+        }
 
-        coEvery { audioEffectsStore.setBassBoostStrength(any()) } coAnswers { manager.applyLog += "persist" }
-
-        recording.setBassBoostStrength(EffectStrength.HIGH)
+        controller.setBassBoostStrength(EffectStrength.HIGH)
 
         assertEquals(
-            listOf("apply", "mirror", "persist"),
+            listOf("apply", "persist(state=HIGH)"),
             manager.applyLog,
-            "apply and mirror land in the same frame; persist is launched after them",
+            "apply and the state mirror land in the same frame; persist is launched after them",
         )
     }
 
@@ -261,9 +261,9 @@ class AudioEffectsControllerTest {
         verify(exactly = 1) { engine.setCrossfadeDurationMs(3_000L) }
         verify(exactly = 1) { engine.setGaplessEnabled(false) }
         // The strength mirror reads back through the manager accessors.
-        assertEquals(EffectStrength.LOW, mirror.dialogueBoostStrength)
-        assertEquals(EffectStrength.HIGH, mirror.nightModeStrength)
-        assertEquals(EffectStrength.NONE, mirror.bassBoostStrength)
+        assertEquals(EffectStrength.LOW, controller.state.value.dialogueBoostStrength)
+        assertEquals(EffectStrength.HIGH, controller.state.value.nightModeStrength)
+        assertEquals(EffectStrength.NONE, controller.state.value.bassBoostStrength)
         // Apply-ONLY: the values came FROM the stores; nothing round-trips.
         coVerify { audioEffectsStore wasNot Called }
         coVerify { audioStore wasNot Called }
@@ -274,8 +274,9 @@ class AudioEffectsControllerTest {
      * be accounted for by the seeding contract — either fed to the manager by
      * [AudioEffectsController.seedForPlayback] or declared deliberately-not-
      * seeded (the enabled/preset flags bind to the manager's own startup state
-     * and their flows mirror straight into uiState). A newly added field fails
-     * here until its seeding membership is decided and recorded.
+     * and their flows mirror straight into the controller's state slice). A
+     * newly added field fails here until its seeding membership is decided
+     * and recorded.
      */
     @Test
     fun everyAudioEffectsStateField_isAccountedForByTheSeedingContract() {
@@ -312,14 +313,14 @@ class AudioEffectsControllerTest {
 
     /** Fields deliberately NOT re-seeded per track (manager owns their startup state). */
     private val deliberatelyNotSeeded = mapOf(
-        "dialogueBoostEnabled" to "manager startup state; flow mirrors into uiState",
-        "nightModeEnabled" to "manager startup state; flow mirrors into uiState",
-        "equalizerEnabled" to "manager startup state; flow mirrors into uiState",
-        "equalizerSettings" to "manager startup state; flow mirrors into uiState",
-        "equalizerPreset" to "manager startup state; flow mirrors into uiState",
-        "bassBoostEnabled" to "manager startup state; flow mirrors into uiState",
-        "virtualizerEnabled" to "manager startup state; flow mirrors into uiState",
-        "reverbPreset" to "manager startup state; flow mirrors into uiState",
+        "dialogueBoostEnabled" to "manager startup state; flow mirrors into the state slice",
+        "nightModeEnabled" to "manager startup state; flow mirrors into the state slice",
+        "equalizerEnabled" to "manager startup state; flow mirrors into the state slice",
+        "equalizerSettings" to "manager startup state; flow mirrors into the state slice",
+        "equalizerPreset" to "manager startup state; flow mirrors into the state slice",
+        "bassBoostEnabled" to "manager startup state; flow mirrors into the state slice",
+        "virtualizerEnabled" to "manager startup state; flow mirrors into the state slice",
+        "reverbPreset" to "manager startup state; flow mirrors into the state slice",
     )
 }
 
@@ -337,7 +338,13 @@ private class FakeEffectsManager : AudioEffectsManager {
      */
     val applyLog = mutableListOf<String>()
 
-    val nightModeEnabledFlow = MutableStateFlow(false)
+    /**
+     * Swappable so the toggle-hazard test can simulate mirror dispatch lag:
+     * the controller's collectors subscribe at construction, so reassigning
+     * this AFTER construction leaves them on the OLD instance while the
+     * command legs read the NEW one through the [nightModeEnabled] getter.
+     */
+    var nightModeEnabledFlow = MutableStateFlow(false)
     override val nightModeEnabled: StateFlow<Boolean> get() = nightModeEnabledFlow
 
     val dialogueBoostEnabledFlow = MutableStateFlow(false)

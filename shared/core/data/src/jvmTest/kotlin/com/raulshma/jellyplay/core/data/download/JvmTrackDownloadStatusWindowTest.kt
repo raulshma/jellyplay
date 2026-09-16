@@ -1,5 +1,6 @@
-package com.raulshma.jellyplay.feature.player.audio
+package com.raulshma.jellyplay.core.data.download
 
+import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.MediaType
@@ -13,17 +14,20 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * Pins the [TrackDownloadStatusWindow] adapter's id honesty: the player's
- * window is the single now-playing track today, but `downloadsFor` must
- * answer for EVERY requested id (per-id flows combined, input order kept),
- * not just the first — a bulk admission through this window would otherwise
- * read the whole table from one track's row.
+ * Pins the [JvmTrackDownloadStatusWindow]'s id honesty — the pin the former
+ * player-audio AudioTrackDownloadStatusWindowTest carried (ported verbatim
+ * with the download-actions seam consolidation that moved the window impl
+ * from the feature adapter into core:data): the player's window is the
+ * single now-playing track today, but `downloadsFor` must answer for EVERY
+ * requested id (per-id flows combined, input order kept), not just the
+ * first — a bulk admission through this window would otherwise read the
+ * whole table from one track's row.
  */
-class AudioTrackDownloadStatusWindowTest {
+class JvmTrackDownloadStatusWindowTest {
 
-    private val downloads: AudioTrackDownloads = mockk(relaxed = true)
+    private val downloadRepository: DownloadRepository = mockk(relaxed = true)
 
-    private val window = AudioTrackDownloadStatusWindow(downloads)
+    private val window = JvmTrackDownloadStatusWindow(downloadRepository)
 
     private fun item(mediaItemId: String) = DownloadItem(
         id = "download-$mediaItemId",
@@ -41,9 +45,9 @@ class AudioTrackDownloadStatusWindowTest {
     fun downloadsFor_answersForEveryRequestedIdInOrder() = runTest {
         val a = item("a")
         val c = item("c")
-        every { downloads.trackStatus("a") } returns flowOf(a)
-        every { downloads.trackStatus("b") } returns flowOf(null)
-        every { downloads.trackStatus("c") } returns flowOf(c)
+        every { downloadRepository.getDownloadByMediaItemIdFlow("a") } returns flowOf(a)
+        every { downloadRepository.getDownloadByMediaItemIdFlow("b") } returns flowOf(null)
+        every { downloadRepository.getDownloadByMediaItemIdFlow("c") } returns flowOf(c)
 
         val rows = window.downloadsFor(listOf("a", "b", "c")).first()
 
@@ -58,7 +62,7 @@ class AudioTrackDownloadStatusWindowTest {
     @Test
     fun downloadsFor_singleId_isTheNowPlayingRow() = runTest {
         val a = item("a")
-        every { downloads.trackStatus("a") } returns flowOf(a)
+        every { downloadRepository.getDownloadByMediaItemIdFlow("a") } returns flowOf(a)
 
         assertEquals(listOf(a), window.downloadsFor(listOf("a")).first())
     }

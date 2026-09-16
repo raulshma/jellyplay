@@ -20,13 +20,21 @@ import kotlinx.coroutines.sync.Semaphore
  *
  * The natural source — core:data's jvmShared `DownloadRepository` — is
  * invisible to feature commonMain (its constructor closure is the JVM
- * download engine), which is exactly why the feature seams
- * ([com.raulshma.jellyplay.feature.player.audio.AudioTrackDownloads] /
- * [com.raulshma.jellyplay.feature.music.MusicTrackDownloads]) exist. This
- * interface is the corresponding narrow core:data-side port: feature
- * commonMain implements it with a tiny adapter over its existing seam (no DI
- * change, the wasm fail-closed actuals stay untouched), and core:data names
- * neither feature.
+ * download engine), which is exactly why this interface exists. It replaced
+ * the feature-local seams that used to bridge that wall (player-audio's
+ * AudioTrackDownloads, music's MusicTrackDownloads — both deleted with the
+ * download-actions seam consolidation): the JVM actual
+ * [JvmTrackDownloadStatusWindow] (jvmShared, bound in dataJvmModule) and the
+ * honest no-op wasmJs actual [WasmTrackDownloadStatusWindow] (wasmJsMain,
+ * bound in dataWasmModule) are core:data's own, so the hosts inject this one
+ * window directly.
+ *
+ * IDIOM RULE (declared with the download-actions seam consolidation): a seam
+ * that exists to cross the commonMain↔jvmShared visibility wall is DECLARED,
+ * IMPLEMENTED AND BOUND by core:data on both platforms. Features never grow
+ * their own wall-crossing template — the deleted AudioTrackDownloads /
+ * MusicTrackDownloads twins this interface absorbed were exactly that
+ * mistake.
  */
 interface TrackDownloadStatusWindow {
 
