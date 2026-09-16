@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.raulshma.jellyplay.core.datastore.CachedJsonNullPolicy
 import com.raulshma.jellyplay.core.datastore.ParsedCache
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
 import com.raulshma.jellyplay.core.datastore.toEnumOrNull
@@ -84,16 +85,17 @@ class AudioEffectsStore constructor(
         .stateIn(scope, SharingStarted.Eagerly, AudioEffectsSlice())
 
     internal fun read(prefs: Preferences): AudioEffectsSlice {
-        val equalizerSettingsRaw = prefs[Keys.EQUALIZER_SETTINGS]
-        val equalizerSettings = if (equalizerSettingsRaw != cachedEqualizerSettings.key) {
-            try {
-                equalizerSettingsRaw?.let { PreferenceCodec.json.decodeFromString<EqualizerSettings>(it) }
-            } catch (_: Exception) {
-                null
-            }.also { cachedEqualizerSettings = ParsedCache(equalizerSettingsRaw, it) }
-        } else {
-            cachedEqualizerSettings.value
-        }
+        // MemoizeNull (this store's pre-promotion policy): a null raw is a
+        // cacheable input — the nullable settings blob memoises its null
+        // "absent" result like any other value.
+        val equalizerSettings = PreferenceCodec.cachedJson(
+            raw = prefs[Keys.EQUALIZER_SETTINGS],
+            cache = cachedEqualizerSettings,
+            default = null,
+            parse = { PreferenceCodec.json.decodeFromString<EqualizerSettings>(it) },
+            cacheRef = { cachedEqualizerSettings = it },
+            nullPolicy = CachedJsonNullPolicy.MemoizeNull,
+        )
         return AudioEffectsSlice(
             dialogueBoostEnabled = PreferenceCodec.readBool(prefs, Keys.DIALOGUE_BOOST_ENABLED, "dialogue_boost_enabled", false),
             dialogueBoostStrength = prefs[Keys.DIALOGUE_BOOST_STRENGTH].toEnumOrNull() ?: EffectStrength.MODERATE,
@@ -187,15 +189,15 @@ class AudioEffectsStore constructor(
         dataStore.edit { it[Keys.VOLUME_BOOST_GAIN] = gain }
     }
 
-    internal val resetKeys: List<Preferences.Key<*>> = listOf(
-        Keys.DIALOGUE_BOOST_ENABLED, Keys.DIALOGUE_BOOST_STRENGTH,
-        Keys.EQUALIZER_ENABLED, Keys.EQUALIZER_SETTINGS, Keys.EQUALIZER_PRESET,
-        Keys.NIGHT_MODE_ENABLED, Keys.NIGHT_MODE_STRENGTH,
-        Keys.BASS_BOOST_ENABLED, Keys.BASS_BOOST_STRENGTH,
-        Keys.VIRTUALIZER_ENABLED, Keys.VIRTUALIZER_STRENGTH,
-        Keys.REVERB_PRESET, Keys.VOLUME_BOOST_ENABLED, Keys.VOLUME_BOOST_GAIN,
-        Keys.LR_BALANCE, Keys.AUTO_EQ_BY_GENRE, Keys.PITCH_SEMITONES,
-    )
+    /**
+     * Keys owned by this store, for factory-reset participation. Derived as the
+     * union of the [resetKeysFor] category lists (in enum declaration order) —
+     * those lists are what the facade actually resets, so deriving from them
+     * (instead of maintaining a parallel hand-written union) keeps this list
+     * from drifting out of sync.
+     */
+    internal val resetKeys: List<Preferences.Key<*>> =
+        PreferenceResetCategory.entries.flatMap(::resetKeysFor)
 
     /**
      * Category reset participation: the subset of [resetKeys] that belongs to

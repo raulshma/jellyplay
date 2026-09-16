@@ -33,8 +33,9 @@ import kotlin.test.assertTrue
  * [ScheduledTasksRealtimeChannel]:
  *  1. the first collector sends `ScheduledTasksInfoStart` with the 1 Hz data
  *     string ("0,1000") — Jellyfin pushes nothing without it;
- *  2. the Start message is re-sent after every socket false→true reconnect
- *     (the server drops per-socket subscriptions on disconnect);
+ *  2. the Start message is re-sent after every socket reconnect
+ *     ([JellyfinWebSocketClient.reconnects] — the server drops per-socket
+ *     subscriptions on disconnect);
  *  3. a `ScheduledTasksInfo` array push is parsed into task models; a push
  *     without a parseable array is skipped entirely — no emission AND no
  *     [ScheduledTasksRealtimeChannel.lastPushAtMs] stamp;
@@ -52,12 +53,14 @@ class ScheduledTasksRealtimeChannelTest {
 
     private val socketEvents = MutableSharedFlow<WebSocketEvent>(extraBufferCapacity = 64)
     private val connected = MutableStateFlow(false)
+    private val reconnects = MutableSharedFlow<Unit>(extraBufferCapacity = 64)
 
     @BeforeTest
     fun setUp() {
         webSocketClient = mockk(relaxed = true)
         every { webSocketClient.events } returns socketEvents
         every { webSocketClient.isConnected } returns connected
+        every { webSocketClient.reconnects } returns reconnects
     }
 
     private fun TestScope.createChannel(): ScheduledTasksRealtimeChannel {
@@ -129,13 +132,12 @@ class ScheduledTasksRealtimeChannelTest {
         val job = launch { channel.tasks.take(1).toList(received) }
         runCurrent()
 
-        connected.value = false
-        runCurrent()
-        connected.value = true
+        // The drop+reopen arrives from the client as a `reconnects` emission.
+        reconnects.tryEmit(Unit)
         runCurrent()
 
         // One subscribe on the first collector + one re-subscribe on the
-        // false→true reconnect transition — the server dropped the old one.
+        // reconnect — the server dropped the old subscription.
         verify(exactly = 2) {
             webSocketClient.sendMessageWithDataString("ScheduledTasksInfoStart", "0,1000")
         }

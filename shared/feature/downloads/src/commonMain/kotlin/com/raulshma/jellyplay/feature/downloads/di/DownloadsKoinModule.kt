@@ -28,8 +28,8 @@ import org.koin.dsl.module
  *
  * DownloadsViewModel's delete feedback no longer goes through the Android-only
  * UserMessageBus: it emits DownloadsUserMessage values on a messages Flow that
- * DownloadsScreen renders via the DownloadsMessenger actual (bus→flow seam,
- * same shape as the livetv conveyor's LiveTvMessenger).
+ * DownloadsScreen renders, posting the resolved text to the shared
+ * UserMessageBus.
  */
 val downloadsModule: Module = module {
     includes(platformDownloadsModule())

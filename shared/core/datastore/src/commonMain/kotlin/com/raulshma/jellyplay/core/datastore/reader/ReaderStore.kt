@@ -363,36 +363,30 @@ class ReaderStore constructor(
     }
 
     /**
-     * Clears every reader preference owned by this store. Also reachable via
-     * factory reset through [resetKeys]; this is the programmatic single-store
+     * Clears every reader preference owned by this store by removing exactly
+     * the [resetKeys] list — the store's single declaration of the keys it
+     * owns, so a future key cannot be added to one path and forgotten on the
+     * other. Reader keys share the `"user_prefs"` DataStore with the facade
+     * domain, so they are also wiped by a full settings reset
+     * (`UserPreferencesStore.clearAllPreferencesOnly`, which clears the whole
+     * DataStore); the reader domain sits in no `PreferenceResetCategory`, so
+     * no per-category reset touches it. This is the programmatic single-store
      * form.
      */
     suspend fun clearAll() {
         dataStore.edit { prefs ->
-            prefs.remove(Keys.READING_DIRECTIONS)
-            prefs.remove(Keys.READER_THEME)
-            prefs.remove(Keys.READER_FONT_SIZE_PX)
-            prefs.remove(Keys.READER_FONT_FAMILY)
-            prefs.remove(Keys.READER_LINE_HEIGHT_PCT)
-            prefs.remove(Keys.READER_MARGIN_PCT)
-            prefs.remove(Keys.READER_JUSTIFY)
-            prefs.remove(Keys.READER_SCROLL_MODE)
-            prefs.remove(Keys.READER_BRIGHTNESS_PCT)
-            prefs.remove(Keys.READER_VOLUME_KEY_PAGING)
-            prefs.remove(Keys.READER_ANIMATED_PAGE_TURNS)
-            prefs.remove(Keys.READER_TOC_RAIL)
-            prefs.remove(Keys.READER_SPEECH_RATE)
-            prefs.remove(Keys.READER_SPEECH_PITCH)
-            prefs.remove(Keys.READER_READING_SPEED_WPM)
-            prefs.remove(Keys.READER_AUTO_SCROLL_SPEED_PX)
-            prefs.remove(Keys.READER_PER_BOOK_APPEARANCE)
-            prefs.remove(Keys.READER_LAST_CFIS)
+            resetKeys.forEach { key -> prefs.remove(key) }
         }
     }
 
     /**
-     * Keys owned by this store, for factory-reset participation. Aggregated by
-     * the facade's reset-coverage guard.
+     * Keys owned by this store, removed by [clearAll]. Reader preferences sit
+     * outside the facade's category-reset machinery: they belong to no
+     * `PreferenceResetCategory` (the facade's `resetCategoryKeys` never calls
+     * into this store), and the reset-coverage guard — which reflectively
+     * enumerates the facade-owned store `Keys` objects — deliberately does not
+     * include `ReaderStore.Keys`. This list is therefore asserted directly by
+     * `ReaderStoreTest` instead of by the guard.
      */
     internal val resetKeys: List<Preferences.Key<*>> = listOf(
         Keys.READING_DIRECTIONS,

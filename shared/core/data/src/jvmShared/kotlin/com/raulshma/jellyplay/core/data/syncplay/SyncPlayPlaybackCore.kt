@@ -106,8 +106,19 @@ class SyncPlayPlaybackCore constructor(
         currentPlaylistItemId = id
     }
 
-    fun setPendingItemLoad(pending: Boolean) {
-        pendingItemLoad = pending
+    /**
+     * Arms the item-load handshake: from the moment the bridge decides a
+     * group queue update requires loading a different item (or the engine is
+     * not up yet), [applyCommand] drops all group playback commands — the
+     * server keeps broadcasting against the OLD item until the new one is
+     * ready. Only the core clears the flag again: the STATE_READY arm of
+     * [onPlaybackStateChanged] (engine finished loading the new item) and the
+     * [reset]/[onGroupLeft] teardown. Formerly exposed as a raw
+     * `setPendingItemLoad(Boolean)` flag setter; making it arm-only means no
+     * external caller can fight the READY-clear.
+     */
+    fun beginPendingItemLoad() {
+        pendingItemLoad = true
     }
 
     fun setIgnoreWait(ignore: Boolean) {
@@ -151,6 +162,59 @@ class SyncPlayPlaybackCore constructor(
         return true
     }
 
+    /**
+     * Position-reconcile lanes. The tolerances are DECLARED per-lane variants,
+     * deliberately NOT unified — they were two independent literals before the
+     * fold (500 ms inside [scheduleUnpause]'s no-op-echo gate, 300 ms inline in
+     * the bridge's PlayQueueUpdate arm) and each encodes a different policy:
+     */
+    enum class ReconcileLane(val toleranceMs: Long) {
+        /**
+         * Scheduled Unpause commands: within 500 ms while already playing, the
+         * command is a no-op echo (server re-asserting state) and nothing must
+         * move — not even the sync-chip state, or every echo visibly flashes
+         * it. See [scheduleUnpause], which keeps its unconditional seek at its
+         * own call site (a scheduled Unpause always lands the engine on the
+         * server position; it is not tolerance-gated like [QUEUE_UPDATE]).
+         */
+        SCHEDULED_UNPAUSE(500L),
+
+        /**
+         * PlayQueueUpdate-driven reconcile: 300 ms — the group's queue state
+         * arrives continuously, so only drift beyond this tighter window
+         * seeks; smaller drift is left to the periodic speed/skip-to-sync
+         * correction loop.
+         */
+        QUEUE_UPDATE(300L),
+    }
+
+    /**
+     * The one core-owned position reconcile: estimate the server's current
+     * ticks (`serverTicks` advanced by elapsed time since `whenMs`), clamp to
+     * the media duration, seek the local engine when it sits farther from the
+     * estimated position than the lane's tolerance, then mirror the group's
+     * play/pause state. Formerly inlined in the bridge's PlayQueueUpdate arm
+     * (300 ms lane); [scheduleUnpause] reuses the SCHEDULED_UNPAUSE tolerance
+     * for its no-op-echo gate but keeps its own unconditional seek.
+     *
+     * Reaches the engine through [PlaybackCoreCallbacks] — a vanished engine
+     * degrades to no-ops instead of the former bridge-side null checks.
+     */
+    fun reconcileToServerPosition(serverTicks: Long, whenMs: Long, lane: ReconcileLane, groupIsPlaying: Boolean) {
+        scope.launch {
+            val cb = callbacks ?: return@launch
+            val estimatedMs = safePositionMs(estimateCurrentTicks(serverTicks, whenMs), cb.durationMs())
+            if (Math.abs(estimatedMs - cb.currentPositionMs()) > lane.toleranceMs) {
+                cb.localSeek(estimatedMs)
+            }
+            if (groupIsPlaying && !cb.isPlaying()) {
+                cb.localPlay()
+            } else if (!groupIsPlaying && cb.isPlaying()) {
+                cb.localPause()
+            }
+        }
+    }
+
     private fun scheduleUnpause(cmd: SyncPlayPlaybackCommand) {
         scheduledCommandJob?.cancel()
         enableSyncJob?.cancel()
@@ -181,12 +245,16 @@ class SyncPlayPlaybackCore constructor(
                 scheduleEnableSync()
             }
         } else {
-            if (cb.isPlaying() && Math.abs(cb.currentPositionMs() - safePositionMs(estimateCurrentTicks(cmd.positionTicks, cmd.whenMs), cb.durationMs())) < 500) {
+            // The 500 ms gate is the SCHEDULED_UNPAUSE reconcile lane's
+            // tolerance (see [ReconcileLane] — declared variants, not unified
+            // with the 300 ms queue-update lane).
+            val echoToleranceMs = ReconcileLane.SCHEDULED_UNPAUSE.toleranceMs
+            if (cb.isPlaying() && Math.abs(cb.currentPositionMs() - safePositionMs(estimateCurrentTicks(cmd.positionTicks, cmd.whenMs), cb.durationMs())) < echoToleranceMs) {
                 // No-op echo (e.g. server re-asserting state): we're already
                 // playing in lockstep. Flip straight to synced — do NOT pulse
                 // through "syncing", or every echo command visibly flashes the
                 // status chip.
-                Log.d(TAG, "Unpause: already playing and within 500ms")
+                Log.d(TAG, "Unpause: already playing and within ${echoToleranceMs}ms")
                 cb.onSyncStateChanged(synced = true, syncing = false)
                 scheduleEnableSync()
                 return
@@ -215,7 +283,7 @@ class SyncPlayPlaybackCore constructor(
         val posTicks = if (cmd.positionTicks > 0) {
             estimateCurrentTicks(cmd.positionTicks, cmd.whenMs)
         } else {
-            cb.currentPositionMs() * 10_000
+            TimeSyncManager.msToTicks(cb.currentPositionMs())
         }
         val posMs = safePositionMs(posTicks, cb.durationMs())
 
@@ -312,7 +380,7 @@ class SyncPlayPlaybackCore constructor(
                             if (callbacks?.isBuffering() != true) return@launch
                             stopSyncCorrection()
                             val posTicks = try {
-                                cb.currentPositionMs() * 10_000
+                                TimeSyncManager.msToTicks(cb.currentPositionMs())
                             } catch (_: Exception) {
                                 return@launch
                             }
@@ -332,7 +400,7 @@ class SyncPlayPlaybackCore constructor(
                     bufferingReportJob = null
                     val posTicks: Long
                     try {
-                        posTicks = cb.currentPositionMs() * 10_000
+                        posTicks = TimeSyncManager.msToTicks(cb.currentPositionMs())
                     } catch (_: Exception) {
                         return@launch
                     }
@@ -387,7 +455,7 @@ class SyncPlayPlaybackCore constructor(
         if (!cb.isPlaying()) return
 
         val currentPosMs = cb.currentPositionMs()
-        val currentPosTicks = currentPosMs * 10_000
+        val currentPosTicks = TimeSyncManager.msToTicks(currentPosMs)
         val serverPosTicks = estimateCurrentTicks(cmd.positionTicks, cmd.whenMs)
         val diffTicks = serverPosTicks - currentPosTicks
         val diffMs = diffTicks / 10_000.0
@@ -435,7 +503,7 @@ class SyncPlayPlaybackCore constructor(
         // media playback position — different units — so the tolerance gate
         // was effectively always true and the preference had no effect.
         val serverPosTicks = estimateCurrentTicks(cmd.positionTicks, cmd.whenMs)
-        val serverPosMs = serverPosTicks / 10_000
+        val serverPosMs = TimeSyncManager.ticksToMs(serverPosTicks)
         val driftMs = kotlin.math.abs(cb.currentPositionMs() - serverPosMs)
         return driftMs >= toleranceMs
     }
@@ -491,14 +559,15 @@ class SyncPlayPlaybackCore constructor(
         reset()
     }
 
-    private fun estimateCurrentTicks(ticks: Long, whenMs: Long): Long {
-        val remoteNow = timeSyncManager.remoteNow()
-        val elapsedMs = remoteNow - whenMs
-        return ticks + elapsedMs * 10_000
-    }
+    /**
+     * Forward to the [TimeSyncManager] clock projection (pure core plus a
+     * `remoteNow` read on the injected instance).
+     */
+    private fun estimateCurrentTicks(ticks: Long, whenMs: Long): Long =
+        TimeSyncManager.projectCurrentTicks(ticks, timeSyncManager.remoteNow() - whenMs)
 
     private fun safePositionMs(ticks: Long, durationMs: Long): Long {
-        val ms = ticks / 10_000
+        val ms = TimeSyncManager.ticksToMs(ticks)
         return if (durationMs > 0) ms.coerceIn(0, durationMs) else ms.coerceAtLeast(0)
     }
 

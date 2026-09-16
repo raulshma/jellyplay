@@ -148,22 +148,42 @@ class SessionCoordinator(
                 }
             }
             launch {
-                // Re-post capabilities on every WebSocket (re)connect. The server
+                // Post capabilities on every WebSocket (re)connect. The server
                 // drops the session's WebSocketController (and thus
                 // SupportsRemoteControl) when the socket closes, so after a drop
                 // the device disappears from other clients' "Play On" lists until
                 // capabilities are re-armed. Gated on isAuthenticated so a stray
                 // connect during teardown doesn't fire a stale POST.
-                var lastConnected = realtimeConnection.isConnected.value
-                realtimeConnection.isConnected.collect { connected ->
-                    if (connected && !lastConnected && _isAuthenticated.value) {
-                        launch {
-                            runCatchingRethrowingCancellation { authRepository.postCapabilities() }
-                        }
-                    }
-                    lastConnected = connected
+                //
+                // The former hand-rolled `lastConnected` edge also fired on the
+                // FIRST connect (the collector starts before the auth fan-out
+                // above connects), and that first post is load-bearing — it is
+                // what arms capabilities once the server session truly exists.
+                // That first-connect arm is kept explicitly here: an already-up
+                // socket at collector start does NOT re-post (a previous
+                // coordinator instance already armed it; RestartableJob cancels
+                // the old collector but the socket survives), and every
+                // subsequent drop+reopen rides [RealtimeConnection.reconnects].
+                if (!realtimeConnection.isConnected.value) {
+                    realtimeConnection.isConnected.first { it }
+                }
+                postCapabilitiesIfAuthenticated()
+                realtimeConnection.reconnects.collect {
+                    postCapabilitiesIfAuthenticated()
                 }
             }
+        }
+    }
+
+    /**
+     * Posts session capabilities on [this] scope, gated on the authenticated
+     * mirror — the shared body of the first-connect arm and every
+     * [RealtimeConnection.reconnects] re-arm in [start].
+     */
+    private fun CoroutineScope.postCapabilitiesIfAuthenticated() {
+        if (!_isAuthenticated.value) return
+        launch {
+            runCatchingRethrowingCancellation { authRepository.postCapabilities() }
         }
     }
 

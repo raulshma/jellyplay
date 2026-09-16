@@ -285,18 +285,17 @@ class AppearanceStore constructor(
         dataStore.edit { it[Keys.HAND_MODE] = mode.name }
     }
 
-    internal val resetKeys: List<Preferences.Key<*>> = listOf(
-        Keys.THEME_MODE, Keys.CONTRAST_LEVEL, Keys.DYNAMIC_THEMING, Keys.OLED_MODE,
-        Keys.ACCENT_COLOR_SWATCH, Keys.COLOR_STYLE, Keys.PERFORMANCE_MODE,
-        Keys.REDUCE_MOTION_ENABLED, Keys.THEME_VARIANT,
-        Keys.SYNTHWAVE_MODE, Keys.SYNTHWAVE_ACCENT,
-        Keys.SOOTHING_MODE, Keys.SOOTHING_ACCENT, Keys.MONOCHROME_MODE,
-        Keys.VIVID_ACCENT, Keys.AURORA_ACCENT, Keys.SAKURA_ACCENT, Keys.VECTOR_POP_ACCENT,
-        Keys.BACKDROP_THEME_MUSIC_ENABLED, Keys.BLUE_LIGHT_FILTER_ENABLED,
-        Keys.BLUE_LIGHT_FILTER_STRENGTH, Keys.DATE_FORMAT_PREFERENCE, Keys.APP_FONT_SCALE,
-        Keys.SCHEDULED_THEME_START_HOUR, Keys.SCHEDULED_THEME_END_HOUR,
-        Keys.COLOR_BLIND_MODE, Keys.HAND_MODE,
-    )
+    /**
+     * Keys owned by this store, for factory-reset participation. Derived as the
+     * union of the [resetKeysFor] category lists (in enum declaration order) —
+     * those lists are what the facade actually resets, so deriving from them
+     * keeps this list from drifting (the hand-written predecessor had already
+     * lost [Keys.HAPTICS_ENABLED], which resets under `MISC_APP`).
+     * [Keys.SHOW_ADVANCED_SETTINGS] is not in this store's category lists — it
+     * resets under `EXPERIMENTAL` via ExperimentalStore's list instead.
+     */
+    internal val resetKeys: List<Preferences.Key<*>> =
+        PreferenceResetCategory.entries.flatMap(::resetKeysFor)
 
     /**
      * Category reset participation: the subset of [resetKeys] that belongs to

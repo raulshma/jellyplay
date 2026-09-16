@@ -6,7 +6,7 @@ import com.raulshma.jellyplay.core.concurrency.DEFAULT_FANOUT_PARALLELISM
 import com.raulshma.jellyplay.core.concurrency.mapConcurrent
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
-import com.raulshma.jellyplay.core.model.ExperimentalFeature
+import com.raulshma.jellyplay.core.datastore.experimental.directArrEnabled
 import com.raulshma.jellyplay.core.model.PendingConfirmation
 import com.raulshma.jellyplay.core.model.SelectionState
 import com.raulshma.jellyplay.core.model.arr.ArrQueueDeleteOptions
@@ -74,12 +74,10 @@ class ArrQueueViewModel(
 
     /**
      * One-shot action ack/failure feedback, screen-forward seam replacing the
-     * legacy UserMessageBus + Context ctor deps (the bus + string resources
-     * live in the Android-only layer and are not visible from commonMain).
-     * Same one-shot semantics as the bus: buffered, single collector, never
-     * replayed — [ArrQueueScreen] resolves the resource text (compose-resources
-     * suspend getString, args included) and forwards through the
-     * ArrQueueMessenger actual.
+     * legacy UserMessageBus + Context ctor deps. Same one-shot semantics as
+     * the bus: buffered, single collector, never replayed — [ArrQueueScreen]
+     * resolves the resource text (compose-resources suspend getString, args
+     * included) and posts it to the shared UserMessageBus.
      */
     private val messageChannel = Channel<ArrQueueMessage>(Channel.BUFFERED)
     val messages: Flow<ArrQueueMessage> = messageChannel.receiveAsFlow()
@@ -91,8 +89,7 @@ class ArrQueueViewModel(
      * to [loadQueue] / [refresh] reads via `.value`; mirrors the rationale in
      * `RequestsViewModel.directArrEnabled`.
      */
-    private val directArrEnabled: StateFlow<Boolean> = experimentalStore.experimental
-        .map { it.enabledExperimentalFeatures.contains(ExperimentalFeature.DIRECT_ARR_INTEGRATION) }
+    private val directArrEnabled: StateFlow<Boolean> = experimentalStore.directArrEnabled()
         .stateIn(scope, SharingStarted.Eagerly, false)
 
     /** Hot stream of the combined queue, mirrored into UI state. */

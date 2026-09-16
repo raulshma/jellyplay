@@ -8,9 +8,7 @@ import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.database.dao.AudioQueueDao
 import com.raulshma.jellyplay.core.database.entity.AudioQueueEntity
 import com.raulshma.jellyplay.core.database.entity.AudioQueueStateEntity
-import com.raulshma.jellyplay.core.model.CreditTimestamps
 import com.raulshma.jellyplay.core.model.CultureInfo
-import com.raulshma.jellyplay.core.model.IntroTimestamps
 import com.raulshma.jellyplay.core.model.LiveStreamOption
 import com.raulshma.jellyplay.core.model.LrcLibTrack
 import com.raulshma.jellyplay.core.model.LyricsResult
@@ -123,12 +121,6 @@ internal class FakePlaybackRepository : PlaybackRepository {
     override fun getServerUrl(): String? = null
     override fun getAccessToken(): String? = null
     override fun buildSubtitleDeliveryUrl(itemId: String, mediaSourceId: String, index: Int, codec: String?) = ""
-
-    override suspend fun getIntroTimestamps(itemId: String): Result<IntroTimestamps> =
-        Result.failure(IllegalStateException())
-
-    override suspend fun getCreditTimestamps(itemId: String): Result<CreditTimestamps> =
-        Result.failure(IllegalStateException())
 
     override suspend fun fetchActiveTranscodeReasons(itemId: String): List<String> = emptyList()
     override suspend fun getMediaSegments(itemId: String): Result<List<MediaSegment>> =

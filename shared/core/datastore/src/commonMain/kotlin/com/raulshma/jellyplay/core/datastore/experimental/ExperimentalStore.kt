@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.raulshma.jellyplay.core.datastore.CachedJsonNullPolicy
 import com.raulshma.jellyplay.core.datastore.ParsedCache
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
 import com.raulshma.jellyplay.core.model.ExperimentalFeature
@@ -114,21 +115,22 @@ class ExperimentalStore constructor(
         updateDismissPeriod = UpdateDismissPeriod.fromName(prefs[Keys.UPDATE_DISMISS_PERIOD]),
     )
 
-    private fun readEnabledExperimentalFeatures(prefs: Preferences): Set<ExperimentalFeature> {
-        val raw = prefs[Keys.ENABLED_EXPERIMENTAL_FEATURES]
-        return if (raw != cachedEnabledExperimentalFeatures.key) {
-            try {
-                raw?.let {
-                    json.decodeFromString<Set<String>>(it)
-                        .mapNotNull { name -> ExperimentalFeature.entries.find { e -> e.name == name } }
-                        .toSet()
-                } ?: emptySet()
-            } catch (_: Exception) { emptySet() }
-                .also { cachedEnabledExperimentalFeatures = ParsedCache(raw, it) }
-        } else {
-            cachedEnabledExperimentalFeatures.value
-        }
-    }
+    // MemoizeNull (this store's pre-promotion policy): a null raw is a
+    // cacheable input — the decoded value depends only on the raw string, so
+    // a memoised default is safe to serve.
+    private fun readEnabledExperimentalFeatures(prefs: Preferences): Set<ExperimentalFeature> =
+        PreferenceCodec.cachedJson(
+            raw = prefs[Keys.ENABLED_EXPERIMENTAL_FEATURES],
+            cache = cachedEnabledExperimentalFeatures,
+            default = emptySet(),
+            parse = {
+                json.decodeFromString<Set<String>>(it)
+                    .mapNotNull { name -> ExperimentalFeature.entries.find { e -> e.name == name } }
+                    .toSet()
+            },
+            cacheRef = { cachedEnabledExperimentalFeatures = it },
+            nullPolicy = CachedJsonNullPolicy.MemoizeNull,
+        )
 
     // ------------------------------------------------------------------
     // Setters
@@ -197,15 +199,21 @@ class ExperimentalStore constructor(
     }
 
     /**
-     * Keys owned by this store, for factory-reset participation. Matches
-     * `PreferenceResetCategory.EXPERIMENTAL`
-     * ({ENABLED_EXPERIMENTAL_FEATURES, SHOW_ADVANCED_SETTINGS}). The
-     * dismissed-update keys are deliberately omitted — they are one-time state.
+     * Keys owned by this store, for factory-reset participation. Derived as the
+     * union of the [resetKeysFor] category lists (in enum declaration order) —
+     * those lists are what the facade actually resets, so deriving from them
+     * keeps this list from drifting: the hand-written predecessor had already
+     * lost the five `MISC_APP` keys ([Keys.SELF_UPDATE_CHECK_ENABLED],
+     * [Keys.SELF_UPDATE_DOWNLOAD_ENABLED], [Keys.UPDATE_DISMISS_PERIOD],
+     * [Keys.SHOW_SHARE_MEDIA_OPTION], [Keys.HIDE_SEARCH_HISTORY]).
+     * The dismissed-update keys ([Keys.DISMISSED_UPDATE_VERSION] /
+     * [Keys.DISMISSED_UPDATE_AT_MS]) remain deliberately excluded — they are
+     * one-time state ([Keys.APP_LANGUAGE] and
+     * [Keys.PREFER_AUDIO_DESCRIPTION] reset under `MISC_APP` via
+     * SubtitleLanguageStore's category list).
      */
-    internal val resetKeys: List<Preferences.Key<*>> = listOf(
-        Keys.ENABLED_EXPERIMENTAL_FEATURES,
-        Keys.SHOW_ADVANCED_SETTINGS,
-    )
+    internal val resetKeys: List<Preferences.Key<*>> =
+        PreferenceResetCategory.entries.flatMap(::resetKeysFor)
 
     /**
      * Category reset participation: only the two reset-eligible keys owned here
@@ -276,3 +284,21 @@ data class ExperimentalSlice(
     val dismissedUpdateAtMs: Long = 0L,
     val updateDismissPeriod: UpdateDismissPeriod = UpdateDismissPeriod.DEFAULT,
 )
+
+/**
+ * The canonical `Direct *arr Integration` flag projection: a boolean flow that
+ * emits whether [ExperimentalFeature.DIRECT_ARR_INTEGRATION] is enabled.
+ * Shared by every *arr-gated feature site (requests / arr-queue / calendar /
+ * details) instead of a hand-copied `experimental.map { ... }` per site.
+ * Callers decide their own sharing (`stateIn`, `combine` input, ...).
+ */
+fun ExperimentalStore.directArrEnabled(): Flow<Boolean> =
+    experimental.map { it.enabledExperimentalFeatures.contains(ExperimentalFeature.DIRECT_ARR_INTEGRATION) }
+
+/**
+ * Slice-level read of the same flag, for sites that already hold an
+ * [ExperimentalSlice] (e.g. a multi-store combine collector) and must not
+ * re-collect the store flow just to test one bit.
+ */
+fun ExperimentalSlice.directArrEnabled(): Boolean =
+    enabledExperimentalFeatures.contains(ExperimentalFeature.DIRECT_ARR_INTEGRATION)

@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.music.playlists
 import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.model.Playlist
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import com.raulshma.jellyplay.core.ui.viewmodel.MutableComposeState
 import com.raulshma.jellyplay.feature.music.collection.SimpleListCollection
 import kotlinx.coroutines.flow.StateFlow
 
@@ -82,25 +83,25 @@ class PlaylistsViewModel(
     }
 
     /**
-     * The shared mutation choreography: mutate-guard flag, clear the stale
-     * command error, run [command], then close the dialog and reload on
-     * success or surface [declaredFailure] when the server sent no message.
+     * The shared mutation choreography (see [runPlaylistMutation]): mutate-guard
+     * flag, clear the stale command error, run [command], then close the dialog
+     * and reload on success or surface [declaredFailure] when the server sent
+     * no message. A failed command keeps the dialog open (KeepDialogOpen) so
+     * the user can retry in place.
      */
     private fun mutate(declaredFailure: PlaylistCommandError.Declared, command: suspend () -> Result<*>) {
         launch {
-            _isMutating.value = true
-            _commandError.value = null
-            command()
-                .onSuccess {
+            runPlaylistMutation(
+                guard = _isMutating,
+                errorState = _commandError,
+                errorOf = { it.message?.let(PlaylistCommandError::Reported) ?: declaredFailure },
+                failurePolicy = PlaylistMutationFailurePolicy.KeepDialogOpen,
+                onSuccess = {
                     _dialogState.value = PlaylistDialogState.None
                     load()
-                }
-                .onFailure {
-                    _commandError.value = it.message
-                        ?.let(PlaylistCommandError::Reported)
-                        ?: declaredFailure
-                }
-            _isMutating.value = false
+                },
+                command = command,
+            )
         }
     }
 
@@ -131,6 +132,53 @@ class PlaylistsViewModel(
     fun clearError() {
         _commandError.value = null
     }
+}
+
+/**
+ * How a failed playlist mutation settles. The arms are individually pinned and
+ * deliberately different — each call-site declares its variant instead of the
+ * ladder guessing one. [KeepDialogOpen] and [KeepOptimistic] settle identically
+ * (surface the error, touch nothing else) but name different intents: the
+ * former keeps the dialog retryable, the latter keeps an already-applied
+ * optimistic local change standing.
+ */
+internal sealed interface PlaylistMutationFailurePolicy {
+    /** Surface the error only — the create/edit/delete dialog stays open so the user can retry in place. */
+    data object KeepDialogOpen : PlaylistMutationFailurePolicy
+
+    /** Surface the error only — the optimistic local change stands (e.g. the dropped row stays dropped). */
+    data object KeepOptimistic : PlaylistMutationFailurePolicy
+
+    /** Surface the error, then roll back by reloading the server's authoritative state ([rollback]). */
+    class Reload(val rollback: () -> Unit) : PlaylistMutationFailurePolicy
+}
+
+/**
+ * The mutation ladder shared by [PlaylistsViewModel] and
+ * [PlaylistDetailViewModel]: raise the in-flight [guard], clear the stale
+ * [errorState], run [command], settle through [onSuccess] on success, and on
+ * failure surface [errorOf] under the site's declared [failurePolicy]. The
+ * guard always drops again on the way out. Callers keep their optimistic
+ * pre-state and their `launch` wiring — this owns only the choreography
+ * around the command, so the per-site settle arms stay explicit.
+ */
+internal suspend fun <E> runPlaylistMutation(
+    guard: MutableComposeState<Boolean>,
+    errorState: MutableComposeState<E?>,
+    errorOf: (Throwable) -> E,
+    failurePolicy: PlaylistMutationFailurePolicy,
+    onSuccess: () -> Unit = {},
+    command: suspend () -> Result<*>,
+) {
+    guard.value = true
+    errorState.value = null
+    command()
+        .onSuccess { onSuccess() }
+        .onFailure { throwable ->
+            errorState.value = errorOf(throwable)
+            (failurePolicy as? PlaylistMutationFailurePolicy.Reload)?.rollback?.invoke()
+        }
+    guard.value = false
 }
 
 /**

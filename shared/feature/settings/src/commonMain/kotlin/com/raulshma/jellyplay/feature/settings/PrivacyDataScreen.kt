@@ -32,6 +32,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.SettingListItem
 import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
+import com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
@@ -85,20 +86,20 @@ fun PrivacyDataScreen(
     val backgroundColorState = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState()
 
     // One-shot action confirmations (screen-forward seam): resolve the texts
-    // here, forward each emitted message through the messenger actual.
-    val messenger = rememberSettingsMessenger()
+    // here, post each emitted message through the app-wide UserMessageBus.
+    val bus = LocalUserMessageBus.current
     val cacheClearedText = stringResource(Res.string.settings_cache_cleared)
     val imageCacheClearedText = stringResource(Res.string.settings_image_cache_cleared)
     val searchHistoryClearedText = stringResource(Res.string.settings_search_history_cleared)
     val factoryResetDoneText = stringResource(Res.string.settings_factory_reset_all_done)
-    LaunchedEffect(messenger) {
+    LaunchedEffect(bus) {
         viewModel.messages.collect { message ->
             when (message) {
-                PrivacyUserMessage.CacheCleared -> messenger?.info(cacheClearedText)
-                PrivacyUserMessage.ImageCacheCleared -> messenger?.info(imageCacheClearedText)
-                PrivacyUserMessage.SearchHistoryCleared -> messenger?.info(searchHistoryClearedText)
-                PrivacyUserMessage.FactoryResetDone -> messenger?.info(factoryResetDoneText)
-                is PrivacyUserMessage.Raw -> messenger?.info(message.text)
+                PrivacyUserMessage.CacheCleared -> bus.info(cacheClearedText)
+                PrivacyUserMessage.ImageCacheCleared -> bus.info(imageCacheClearedText)
+                PrivacyUserMessage.SearchHistoryCleared -> bus.info(searchHistoryClearedText)
+                PrivacyUserMessage.FactoryResetDone -> bus.info(factoryResetDoneText)
+                is PrivacyUserMessage.Raw -> bus.info(message.text)
             }
         }
     }

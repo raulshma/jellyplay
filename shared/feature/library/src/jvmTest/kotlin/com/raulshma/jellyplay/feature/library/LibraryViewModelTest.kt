@@ -60,7 +60,7 @@ class LibraryViewModelTest {
 
     private lateinit var mediaRepository: MediaRepository
     private lateinit var offlineRepository: com.raulshma.jellyplay.core.data.repository.OfflineRepository
-    private lateinit var quickDownloadActions: com.raulshma.jellyplay.feature.library.QuickDownloadActions
+    private lateinit var quickDownloadActions: com.raulshma.jellyplay.core.data.download.QuickDownloadActions
     private lateinit var offlineModeManager: com.raulshma.jellyplay.core.data.offline.OfflineModeManager
     private lateinit var userDataMutator: UserDataMutator
     private lateinit var imageUrlProvider: ImageUrlProvider

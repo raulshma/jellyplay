@@ -127,17 +127,15 @@ class SyncPlayCastStore constructor(
     }
 
     /**
-     * Keys owned by this store, for factory-reset participation. This is the
-     * `SYNCPLAY_CASTING` reset category minus `LIVE_STREAM_OPTION` (owned by
-     * `PlaybackStore`).
+     * Keys owned by this store, for factory-reset participation. Derived as the
+     * union of the [resetKeysFor] category lists (in enum declaration order) —
+     * those lists are what the facade actually resets, so deriving from them
+     * (instead of maintaining a parallel hand-written union) keeps this list
+     * from drifting out of sync. This is the `SYNCPLAY_CASTING` reset category
+     * minus `LIVE_STREAM_OPTION` (owned by `PlaybackStore`).
      */
-    internal val resetKeys: List<Preferences.Key<*>> = listOf(
-        Keys.SYNC_PLAY_JOIN_BEHAVIOR, Keys.SYNC_PLAY_TOLERANCE_MS,
-        Keys.SYNC_PLAY_AUTO_ACCEPT_INVITES, Keys.DEFAULT_CASTING_STRATEGY,
-        Keys.BACKGROUND_CASTING_ENABLED, Keys.PREFERRED_RENDERER,
-        Keys.DVR_PRE_PADDING_MINUTES, Keys.DVR_POST_PADDING_MINUTES,
-        Keys.DVR_RECORDING_QUALITY,
-    )
+    internal val resetKeys: List<Preferences.Key<*>> =
+        PreferenceResetCategory.entries.flatMap(::resetKeysFor)
 
     /**
      * Category reset participation: the subset of [resetKeys] that belongs to

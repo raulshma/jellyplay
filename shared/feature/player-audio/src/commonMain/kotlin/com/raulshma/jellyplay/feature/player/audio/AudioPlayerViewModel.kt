@@ -155,6 +155,18 @@ class AudioPlayerViewModel(
         updateState = { transform -> _uiState.update { it.copy(sleepTimer = transform(it.sleepTimer)) } },
     )
 
+    /**
+     * Owns the add-to-playlist picker lifecycle (open guard, editable-playlist
+     * fetch, add choreography, success/failure message) as its own
+     * StateFlow snapshot — the five uiState fields it used to hand-sync are
+     * gone from [AudioPlayerUiState].
+     */
+    internal val playlistPicker = PlaylistPickerStateHolder(
+        scope = scope,
+        playlistRepository = playlistRepository,
+        currentItemId = { currentPlayingItemId },
+    )
+
     private var downloadJob: Job? = null
 
     /** At most one favorite-state fetch in flight (the favorite collector below). */
@@ -583,58 +595,18 @@ class AudioPlayerViewModel(
         get() = queueManager.currentPlayingItemId.value
 
     // ── Add to playlist ─────────────────────────────────────────────────────
+    // One-line forwards: the picker lifecycle (open guard, editable-playlist
+    // fetch, add choreography, success/failure message) lives on
+    // [playlistPicker] (PlaylistPickerStateHolder); its state is read off
+    // playlistPicker.state, not this VM's uiState.
 
     /** Opens the playlist picker and loads the user's editable playlists. */
-    fun openPlaylistPicker() {
-        if (currentPlayingItemId == null) return
-        _uiState.update { it.copy(showPlaylistPicker = true, isLoadingPlaylists = true) }
-        launch {
-            playlistRepository.getPlaylists(limit = 100)
-                .onSuccess { all ->
-                    val editable = all.filter { it.canEdit }
-                    _uiState.update {
-                        it.copy(playlists = editable, isLoadingPlaylists = false)
-                    }
-                }
-                .onFailure {
-                    _uiState.update { it.copy(isLoadingPlaylists = false) }
-                }
-        }
-    }
+    fun openPlaylistPicker() = playlistPicker.open()
 
-    fun dismissPlaylistPicker() {
-        if (!_uiState.value.isAddingToPlaylist) {
-            _uiState.update { it.copy(showPlaylistPicker = false, playlists = emptyList(), playlistMessage = null) }
-        }
-    }
+    fun dismissPlaylistPicker() = playlistPicker.dismiss()
 
-    /** Adds the current track to [playlist]; clears the message after a beat. */
-    fun addToPlaylist(playlist: com.raulshma.jellyplay.core.model.Playlist) {
-        val itemId = currentPlayingItemId ?: return
-        _uiState.update { it.copy(isAddingToPlaylist = true) }
-        launch {
-            playlistRepository.addItemsToPlaylist(playlist.id, listOf(itemId))
-                .onSuccess {
-                    _uiState.update {
-                        it.copy(
-                            isAddingToPlaylist = false,
-                            showPlaylistPicker = false,
-                            playlists = emptyList(),
-                            playlistMessage = playlist.name,
-                        )
-                    }
-                }
-                .onFailure { err ->
-                    _uiState.update {
-                        it.copy(isAddingToPlaylist = false, playlistMessage = err.message)
-                    }
-                }
-        }
-    }
-
-    fun clearPlaylistMessage() {
-        _uiState.update { it.copy(playlistMessage = null) }
-    }
+    /** Adds the current track to [playlist]; success posts its name as the message. */
+    fun addToPlaylist(playlist: com.raulshma.jellyplay.core.model.Playlist) = playlistPicker.addTo(playlist)
 
     fun setKaraokeModeEnabled(enabled: Boolean) {
         karaokeMode = enabled
@@ -655,23 +627,31 @@ class AudioPlayerViewModel(
     /** Whether this platform carries a download pipeline; gates the track CTA. */
     val isDownloadSupported: Boolean get() = downloads.isSupported
 
+    // ── Track download flip ────────────────────────────────────────────────
+    // The shared core:data TrackDownloadActions choreography (detail fetch →
+    // intake start) over this feature's AudioTrackDownloads seam via the
+    // window adapter. The REMOVE half stays HERE: a COMPLETED download flips
+    // the CTA to remove only after the screen's confirm dialog — the module
+    // must not swallow that policy.
+
+    private val trackStatusWindow = AudioTrackDownloadStatusWindow(downloads)
+    private val trackDownloadActions =
+        com.raulshma.jellyplay.core.data.download.TrackDownloadActions(
+            scope = scope,
+            intake = downloadIntake,
+            mediaRepository = mediaRepository,
+            statusWindow = trackStatusWindow,
+        )
+
     fun downloadCurrentTrack() {
         val itemId = currentPlayingItemId ?: return
         val existing = _currentDownloadItem.value
         if (existing != null && existing.status == com.raulshma.jellyplay.core.model.DownloadStatus.COMPLETED) {
             launch {
-                downloads.remove(existing.id)
+                trackStatusWindow.remove(existing.id)
             }
             return
         }
-        launch {
-            try {
-                val detail = mediaRepository.getMediaDetail(itemId).getOrNull() ?: return@launch
-                // Intake seam owns the full artifact bundle (local poster/backdrop,
-                // offline metadata row); previously this path wrote only the
-                // remote image URLs, so offline cards fell back to blurHash.
-                downloadIntake.start(detail)
-            } catch (_: Exception) {}
-        }
+        trackDownloadActions.flip(itemId)
     }
 }

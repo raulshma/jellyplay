@@ -104,6 +104,7 @@ fun AudioPlayerScreen(
     val lyricsState = uiState.lyrics
     val sleepTimer = uiState.sleepTimer
     val queueState = uiState.queue
+    val playlistPicker by viewModel.playlistPicker.state.collectAsStateWithLifecycle()
 
     var showQueue by remember { mutableStateOf(false) }
     var showSpeedPicker by remember { mutableStateOf(false) }
@@ -793,7 +794,7 @@ fun AudioPlayerScreen(
     }
 
     // Add-to-playlist picker.
-    if (uiState.showPlaylistPicker) {
+    if (playlistPicker.visible) {
         com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet(
             onDismissRequest = { viewModel.dismissPlaylistPicker() },
             sheetState = androidx.compose.material3.rememberModalBottomSheetState(),
@@ -811,7 +812,7 @@ fun AudioPlayerScreen(
                 )
                 androidx.compose.foundation.layout.Spacer(Modifier.height(16.dp))
                 when {
-                    uiState.isLoadingPlaylists -> {
+                    playlistPicker.loading -> {
                         androidx.compose.foundation.layout.Box(
                             modifier = Modifier.fillMaxWidth().padding(24.dp),
                             contentAlignment = Alignment.Center,
@@ -819,7 +820,7 @@ fun AudioPlayerScreen(
                             com.raulshma.jellyplay.core.ui.components.JellyPlayCircularProgressIndicator()
                         }
                     }
-                    uiState.playlists.isEmpty() -> {
+                    playlistPicker.playlists.isEmpty() -> {
                         androidx.compose.foundation.layout.Box(
                             modifier = Modifier.fillMaxWidth().padding(24.dp),
                             contentAlignment = Alignment.Center,
@@ -832,7 +833,7 @@ fun AudioPlayerScreen(
                     }
                     else -> {
                         androidx.compose.foundation.layout.Column {
-                            uiState.playlists.forEach { playlist ->
+                            playlistPicker.playlists.forEach { playlist ->
                                 androidx.compose.material3.ListItem(
                                     headlineContent = { Text(playlist.name) },
                                     supportingContent = playlist.itemCount.takeIf { it > 0 }?.let { count ->

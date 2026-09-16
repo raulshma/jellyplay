@@ -116,7 +116,10 @@ class OfflineWatchSyncContractTest {
         val homeSession = HomeSession(apiClient, CoroutineScope(SupervisorJob() + Dispatchers.Default))
         val sessionCacheRegistry = SessionCacheRegistry(homeSession, CoroutineScope(SupervisorJob()))
         val playbackRepository = PlaybackRepositoryImpl(
-            apiClient, outbox, offlineModeManager, homeSession, sessionCacheRegistry,
+            // One union mock covers all four narrowed family seams: the
+            // JellyfinApiClient mock implements each of them.
+            apiClient, apiClient, apiClient, apiClient,
+            outbox, offlineModeManager, homeSession, sessionCacheRegistry,
             mediaCacheInvalidation = mockk(relaxed = true),
             mediaRepository = lazy { mediaRepository },
         )

@@ -34,11 +34,9 @@ class ChannelDetailViewModel(
 
     /**
      * One-shot record/cancel feedback, screen-forward seam replacing the legacy
-     * UserMessageBus ctor dep (the bus + UiText live in the Android-only
-     * core:ui shim and are not visible from commonMain). Same one-shot
-     * semantics as the bus: buffered, single collector, never replayed —
-     * [ChannelDetailScreen] resolves the resource text and forwards through
-     * the LiveTvMessenger actual.
+     * UserMessageBus ctor dep. Same one-shot semantics as the bus: buffered,
+     * single collector, never replayed — [ChannelDetailScreen] resolves the
+     * resource text and posts it to the shared UserMessageBus.
      */
     private val messageChannel = Channel<LiveTvUserMessage>(Channel.BUFFERED)
     val messages: Flow<LiveTvUserMessage> = messageChannel.receiveAsFlow()

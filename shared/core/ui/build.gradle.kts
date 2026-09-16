@@ -83,6 +83,10 @@ kotlin {
         getByName("commonMain").dependencies {
             implementation(project(":shared:core:model"))
             implementation(project(":shared:core:designsystem"))
+            // DateLabels.kt's public seam shapes take/return kotlinx-datetime
+            // civil-date types — `api` so every feature façade consuming the
+            // seam compiles against them without redeclaring the artifact.
+            api(libs.kotlinx.datetime)
             // DeferredFetchCoordinator wraps fetch invocations in
             // runCatchingRethrowingCancellation — the repo's one
             // cancellation-safety seam (zero-dependency leaf, no cycle).

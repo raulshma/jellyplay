@@ -7,6 +7,7 @@ import androidx.compose.runtime.snapshots.Snapshot
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
+import com.raulshma.jellyplay.core.datastore.experimental.directArrEnabled
 import com.raulshma.jellyplay.core.model.ExperimentalFeature
 import com.raulshma.jellyplay.core.model.SelectionState
 import com.raulshma.jellyplay.core.model.arr.ArrDownloadSummary
@@ -101,8 +102,7 @@ class RequestsViewModel(
      * `.value` would stay `false` forever, leaving the entire *arr
      * download-progress + queue-management feature unreachable.
      */
-    private val directArrEnabled: StateFlow<Boolean> = experimentalStore.experimental
-        .map { it.enabledExperimentalFeatures.contains(ExperimentalFeature.DIRECT_ARR_INTEGRATION) }
+    private val directArrEnabled: StateFlow<Boolean> = experimentalStore.directArrEnabled()
         .stateIn(scope, SharingStarted.Eagerly, false)
 
     // Eagerly shared (not `WhileSubscribed`): [loadRequests] reads it via

@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.repository
 
+import com.raulshma.jellyplay.core.concurrency.mapConcurrentCatching
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueSnapshot
@@ -44,15 +45,12 @@ import com.raulshma.jellyplay.core.model.subtitleSidecarExtension
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
@@ -197,45 +195,15 @@ class DownloadRepositoryImpl(
     override suspend fun getDownloadName(id: String): String? =
         downloadDao.getDownloadById(id)?.name
 
-    override suspend fun startDownload(
-        mediaItemId: String,
-        name: String,
-        mediaType: String,
-        mediaSourceId: String?,
-        downloadUrl: String,
-        imageUrl: String?,
-        imageBlurHash: String?,
-        seriesId: String?,
-        seasonId: String?,
-        seriesName: String?,
-        seasonName: String?,
-        episodeNumber: Int?,
-        seasonNumber: Int?,
-        container: String?,
-        precomputedCurrentBytes: Long?,
-    ): Result<DownloadItem> = startDownloadInternal(
-        mediaItemId, name, mediaType, mediaSourceId, downloadUrl,
-        imageUrl, imageBlurHash, seriesId, seasonId, seriesName, seasonName,
-        episodeNumber, seasonNumber, container, precomputedCurrentBytes,
-    )
-
-    private suspend fun startDownloadInternal(
-        mediaItemId: String,
-        name: String,
-        mediaType: String,
-        mediaSourceId: String?,
-        downloadUrl: String,
-        imageUrl: String?,
-        imageBlurHash: String?,
-        seriesId: String?,
-        seasonId: String?,
-        seriesName: String?,
-        seasonName: String?,
-        episodeNumber: Int?,
-        seasonNumber: Int?,
-        container: String?,
-        precomputedCurrentBytes: Long?,
-    ): Result<DownloadItem> = runCatchingRethrowingCancellation {
+    /**
+     * Creates (or dedupes to) the PENDING downloads row for [request]. The
+     * former 15-positional-parameter override + internal forwarding twin
+     * collapsed into the [DownloadStartRequest] value object — the entity
+     * construction below is unchanged semantically.
+     */
+    override suspend fun startDownload(request: DownloadStartRequest): Result<DownloadItem> =
+        runCatchingRethrowingCancellation {
+        val mediaItemId = request.mediaItemId
         val existing = downloadDao.getDownloadByMediaItemId(mediaItemId)
         if (existing != null) {
             val isCompleted = existing.status == DownloadStatus.COMPLETED.name
@@ -258,7 +226,7 @@ class DownloadRepositoryImpl(
         val prefs = downloadsStore.downloads.first()
         // Storage cap (MB + GB): single owner is StoragePolicy. Previously
         // duplicated here and in downloadSeries; the two could drift.
-        storagePolicy.enforce(precomputedCurrentBytes = precomputedCurrentBytes)
+        storagePolicy.enforce(precomputedCurrentBytes = request.precomputedCurrentBytes)
 
         // Path-layout policy (internal vs external dir, filename sanitize,
         // container extension, free-space floor) lives in DownloadStorageLayout
@@ -266,38 +234,38 @@ class DownloadRepositoryImpl(
         // other call site and untestable without a full repo construction.
         val id = UUID.randomUUID().toString()
         val resolved = storageLayout.resolve(
-            mediaType = mediaType,
+            mediaType = request.mediaType,
             storageLocationPref = prefs.downloadStorageLocation,
-            name = name,
+            name = request.name,
             idHint = id.take(8),
-            container = container,
+            container = request.container,
         )
         val filePath = resolved.filePath
 
         val entity = DownloadEntity(
             id = id,
             mediaItemId = mediaItemId,
-            name = name,
-            mediaType = mediaType,
+            name = request.name,
+            mediaType = request.mediaType,
             downloadPath = filePath,
-            downloadUrl = downloadUrl,
+            downloadUrl = request.downloadUrl,
             totalSizeBytes = 0L,
             downloadedBytes = 0L,
             status = DownloadStatus.PENDING.name,
-            mediaSourceId = mediaSourceId,
-            imageUrl = imageUrl,
-            imageBlurHash = imageBlurHash,
-            seriesId = seriesId,
-            seasonId = seasonId,
-            seriesName = seriesName,
-            seasonName = seasonName,
-        episodeNumber = episodeNumber,
-        seasonNumber = seasonNumber,
-        container = container,
-    )
-    downloadDao.insertDownload(entity)
-    entity.toDownloadItem()
-}
+            mediaSourceId = request.mediaSourceId,
+            imageUrl = request.imageUrl,
+            imageBlurHash = request.imageBlurHash,
+            seriesId = request.seriesId,
+            seasonId = request.seasonId,
+            seriesName = request.seriesName,
+            seasonName = request.seasonName,
+            episodeNumber = request.episodeNumber,
+            seasonNumber = request.seasonNumber,
+            container = request.container,
+        )
+        downloadDao.insertDownload(entity)
+        entity.toDownloadItem()
+    }
 
     override suspend fun cancelDownload(id: String): Result<Unit> = runCatchingRethrowingCancellation {
         val entity = downloadDao.getDownloadById(id) ?: return@runCatchingRethrowingCancellation
@@ -447,6 +415,28 @@ class DownloadRepositoryImpl(
     }
 
     /**
+     * Fetches a series' poster (Primary @300) and backdrop (Backdrop @1280)
+     * into [artworkDir] as [DownloadArtifacts]-named sibling files, preferring
+     * the local copy; a `null` path (no dir, no such image, or a failed fetch)
+     * makes the caller fall back to the remote URL. The one home for the
+     * series-artwork grammar the two series paths previously hand-copied —
+     * the seedEpisodeParents copy even built the filenames from raw
+     * `"${seriesId}_poster.jpg"` literals, leaking the grammar out of
+     * [DownloadArtifacts] (identical strings, so this is a pure fold).
+     */
+    private suspend fun downloadSeriesArtwork(seriesId: String, artworkDir: File?): SeriesArtwork {
+        val posterPath = artworkDir?.let {
+            downloadImageToDisk(seriesId, "Primary", 300, it, DownloadArtifacts.posterFile(seriesId))
+        }
+        val backdropPath = artworkDir?.let {
+            downloadImageToDisk(seriesId, "Backdrop", 1280, it, DownloadArtifacts.backdropFile(seriesId))
+        }
+        return SeriesArtwork(posterPath, backdropPath)
+    }
+
+    private data class SeriesArtwork(val posterPath: String?, val backdropPath: String?)
+
+    /**
      * Seeds the parent series/season rows for an episode download so a lone
      * episode still has its hierarchy. Deliberately does NOT touch the episode
      * row itself: callers that already persisted the rich [MediaDetail] entity
@@ -472,15 +462,10 @@ class DownloadRepositoryImpl(
                 .getOrNull()
                 ?.getOrNull()
             if (seriesDetail != null) {
-                val localSeriesPoster = artworkDir?.let {
-                    downloadImageToDisk(seriesId, "Primary", 300, it, "${seriesId}_poster.jpg")
-                }
-                val localSeriesBackdrop = artworkDir?.let {
-                    downloadImageToDisk(seriesId, "Backdrop", 1280, it, "${seriesId}_backdrop.jpg")
-                }
-                val seriesImageUrl = localSeriesPoster
+                val seriesArtwork = downloadSeriesArtwork(seriesId, artworkDir)
+                val seriesImageUrl = seriesArtwork.posterPath
                     ?: playbackRepository.getImageUrl(seriesId, maxWidth = 300)
-                val seriesBackdropUrl = localSeriesBackdrop
+                val seriesBackdropUrl = seriesArtwork.backdropPath
                     ?: playbackRepository.getBackdropUrl(seriesId, maxWidth = 1280)
                 saveOfflineMetadataForItem(seriesDetail.item, seriesImageUrl, seriesBackdropUrl)
             } else {
@@ -617,38 +602,36 @@ class DownloadRepositoryImpl(
                     allEpisodes
                 }
 
-                val episodeResults = coroutineScope {
-                    episodes.map { episode ->
-                        async {
-                            downloadPermits.withPermit {
-                                try {
-                                    val episodeDetail = mediaRepository().getMediaDetail(episode.id).getOrNull()
-                                    // Single per-episode recipe shared with DownloadIntake.start
-                                    // via DownloadDelegate.startOne — no inline prepare/execute to
-                                    // drift out of sync. Series downloads bundle every external
-                                    // subtitle (null selection); per-item picker selection lives
-                                    // only on the single-item DownloadIntake.start path.
-                                    val result = episodeDetail?.let {
-                                        delegate.startOne(it, qualityMaxBitrate, null, budgetHint)
-                                    }
-                                    result?.downloadItem?.let { it.id to it.downloadPath }
-                                } catch (ce: CancellationException) {
-                                    // Preserve structured concurrency: if the parent
-                                    // scope (e.g. user navigated away) is cancelled,
-                                    // the cancellation must propagate instead of
-                                    // being silently turned into a null result.
-                                    throw ce
-                                } catch (e: Exception) {
-                                    // Surface the per-episode failure so the user
-                                    // has a clue why an episode is missing from the
-                                    // queue. Future: aggregate a failure count and
-                                    // expose it through the Result/uiState.
-                                    Log.w(TAG, "Failed to queue episode ${episode.id} (${episode.name})", e)
-                                    null
-                                }
-                            }
+                // The catching map drops the FAILED episodes (the transform
+                // logs each one before yielding null); the trailing
+                // filterNotNull narrows the nullable-completion type the
+                // surviving list still carries.
+                val episodeResults = downloadPermits.mapConcurrentCatching(episodes) { episode ->
+                    try {
+                        val episodeDetail = mediaRepository().getMediaDetail(episode.id).getOrNull()
+                        // Single per-episode recipe shared with DownloadIntake.start
+                        // via DownloadDelegate.startOne — no inline prepare/execute to
+                        // drift out of sync. Series downloads bundle every external
+                        // subtitle (null selection); per-item picker selection lives
+                        // only on the single-item DownloadIntake.start path.
+                        val result = episodeDetail?.let {
+                            delegate.startOne(it, qualityMaxBitrate, null, budgetHint)
                         }
-                    }.awaitAll()
+                        result?.downloadItem?.let { it.id to it.downloadPath }
+                    } catch (ce: CancellationException) {
+                        // Preserve structured concurrency: if the parent
+                        // scope (e.g. user navigated away) is cancelled,
+                        // the cancellation must propagate instead of
+                        // being silently turned into a dropped result.
+                        throw ce
+                    } catch (e: Exception) {
+                        // Surface the per-episode failure so the user
+                        // has a clue why an episode is missing from the
+                        // queue. Future: aggregate a failure count and
+                        // expose it through the Result/uiState.
+                        Log.w(TAG, "Failed to queue episode ${episode.id} (${episode.name})", e)
+                        null
+                    }
                 }
 
                 val enqueued = episodeResults.filterNotNull()
@@ -667,22 +650,15 @@ class DownloadRepositoryImpl(
                     .mapNotNull { File(it).parentFile }
                     .firstOrNull()
                 if (firstEpisodeDir != null) {
-                    val localSeriesPoster = downloadImageToDisk(
-                        seriesId, "Primary", 300, firstEpisodeDir,
-                        DownloadArtifacts.posterFile(seriesId),
-                    )
-                    val localSeriesBackdrop = downloadImageToDisk(
-                        seriesId, "Backdrop", 1280, firstEpisodeDir,
-                        DownloadArtifacts.backdropFile(seriesId),
-                    )
-                    if (localSeriesPoster != null || localSeriesBackdrop != null) {
+                    val seriesArtwork = downloadSeriesArtwork(seriesId, firstEpisodeDir)
+                    if (seriesArtwork.posterPath != null || seriesArtwork.backdropPath != null) {
                         // Re-persist without re-preloading cast images: the
                         // preloads already ran for the seed above. This only
                         // swaps the artwork columns to the local files.
                         offlineMediaDao.upsert(
                             detail.toOfflineMediaEntity(
-                                localSeriesPoster ?: imageUrl,
-                                localSeriesBackdrop ?: backdropUrl,
+                                seriesArtwork.posterPath ?: imageUrl,
+                                seriesArtwork.backdropPath ?: backdropUrl,
                             )
                         )
                     }

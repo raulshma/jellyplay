@@ -74,6 +74,7 @@ import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.components.JellyPlayCircularProgressIndicator
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
+import com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus
 import com.raulshma.jellyplay.feature.arrqueue.generated.resources.Res
 import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_blocklist_search
 import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_brand_radarr
@@ -131,17 +132,17 @@ fun ArrQueueScreen(
     // unresolved ArrQueueMessage values; this collector resolves them with the
     // suspend compose-resources getString — the args-bearing acks (release
     // title) can't be pre-resolved in composition the way livetv's two fixed
-    // strings were — and forwards through the messenger actual (Android: the
-    // app-wide UserMessageBus; desktop: null, messages drop). Collector is
-    // screen-scoped, so an ack emitted just before a quick-back is dropped
-    // (livetv-documented accepted delta).
-    val messenger = rememberArrQueueMessenger()
-    LaunchedEffect(messenger) {
+    // strings were — and posts through the app-wide UserMessageBus (the
+    // drop-by-default local simply discards the message when no host provides
+    // a bus). Collector is screen-scoped, so an ack emitted just before a
+    // quick-back is dropped (livetv-documented accepted delta).
+    val bus = LocalUserMessageBus.current
+    LaunchedEffect(bus) {
         viewModel.messages.collect { message ->
             when (message) {
-                is ArrQueueMessage.Info -> messenger?.info(getString(message.res, *message.args.toTypedArray()))
-                is ArrQueueMessage.Error -> messenger?.error(getString(message.res, *message.args.toTypedArray()))
-                is ArrQueueMessage.Raw -> messenger?.error(message.text)
+                is ArrQueueMessage.Info -> bus.info(getString(message.res, *message.args.toTypedArray()))
+                is ArrQueueMessage.Error -> bus.error(getString(message.res, *message.args.toTypedArray()))
+                is ArrQueueMessage.Raw -> bus.error(message.text)
             }
         }
     }

@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.raulshma.jellyplay.core.datastore.CachedJsonNullPolicy
 import com.raulshma.jellyplay.core.datastore.ParsedCache
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
@@ -87,28 +88,35 @@ class SubtitleLanguageStore constructor(
      * `UserPreferences` projection without duplicating the read logic.
      */
     internal fun read(prefs: Preferences): SubtitleSlice {
-        val subtitleStyleRaw = prefs[Keys.SUBTITLE_STYLE]
-        val subtitleStyle = if (subtitleStyleRaw != cachedSubtitleStyle.key) {
-            try {
-                subtitleStyleRaw?.let { PreferenceCodec.json.decodeFromString<SubtitleStyle>(it) }
-            } catch (_: Exception) { null }.also { cachedSubtitleStyle = ParsedCache(subtitleStyleRaw, it) }
-        } else cachedSubtitleStyle.value
+        // MemoizeNull (this store's pre-promotion policy at every site): a
+        // null raw is a cacheable input — the nullable style blobs memoise
+        // their null "absent" result exactly like the non-null map blob does.
+        val subtitleStyle = PreferenceCodec.cachedJson(
+            raw = prefs[Keys.SUBTITLE_STYLE],
+            cache = cachedSubtitleStyle,
+            default = null,
+            parse = { PreferenceCodec.json.decodeFromString<SubtitleStyle>(it) },
+            cacheRef = { cachedSubtitleStyle = it },
+            nullPolicy = CachedJsonNullPolicy.MemoizeNull,
+        )
 
-        val hdrSubtitleStyleRaw = prefs[Keys.HDR_SUBTITLE_STYLE]
-        val hdrSubtitleStyle = if (hdrSubtitleStyleRaw != cachedHdrSubtitleStyle.key) {
-            try {
-                hdrSubtitleStyleRaw?.let { PreferenceCodec.json.decodeFromString<SubtitleStyle>(it) }
-            } catch (_: Exception) { null }.also { cachedHdrSubtitleStyle = ParsedCache(hdrSubtitleStyleRaw, it) }
-        } else cachedHdrSubtitleStyle.value
+        val hdrSubtitleStyle = PreferenceCodec.cachedJson(
+            raw = prefs[Keys.HDR_SUBTITLE_STYLE],
+            cache = cachedHdrSubtitleStyle,
+            default = null,
+            parse = { PreferenceCodec.json.decodeFromString<SubtitleStyle>(it) },
+            cacheRef = { cachedHdrSubtitleStyle = it },
+            nullPolicy = CachedJsonNullPolicy.MemoizeNull,
+        )
 
-        val subtitleDelayByItemRaw = prefs[Keys.SUBTITLE_DELAY_BY_ITEM]
-        val subtitleDelayByItem = if (subtitleDelayByItemRaw != cachedSubtitleDelayByItem.key) {
-            try {
-                subtitleDelayByItemRaw?.let { PreferenceCodec.json.decodeFromString<Map<String, Long>>(it) }
-                    ?: emptyMap()
-            } catch (_: Exception) { emptyMap() }
-                .also { cachedSubtitleDelayByItem = ParsedCache(subtitleDelayByItemRaw, it) }
-        } else cachedSubtitleDelayByItem.value
+        val subtitleDelayByItem = PreferenceCodec.cachedJson(
+            raw = prefs[Keys.SUBTITLE_DELAY_BY_ITEM],
+            cache = cachedSubtitleDelayByItem,
+            default = emptyMap(),
+            parse = { PreferenceCodec.json.decodeFromString<Map<String, Long>>(it) },
+            cacheRef = { cachedSubtitleDelayByItem = it },
+            nullPolicy = CachedJsonNullPolicy.MemoizeNull,
+        )
 
         return SubtitleSlice(
             preferredSubtitleLanguage = prefs[Keys.PREFERRED_SUBTITLE_LANG],
@@ -201,23 +209,16 @@ class SubtitleLanguageStore constructor(
     }
 
     /**
-     * Keys owned by this store, for factory-reset participation. Aggregated by
-     * the facade's reset-coverage guard (covers
-     * `PreferenceResetCategory.SUBTITLES_LANGUAGE`).
+     * Keys owned by this store, for factory-reset participation. Derived as the
+     * union of the [resetKeysFor] category lists (in enum declaration order) —
+     * those lists are what the facade actually resets, so deriving from them
+     * (instead of maintaining a parallel hand-written union) keeps this list
+     * from drifting out of sync. Covers both
+     * `PreferenceResetCategory.SUBTITLES_LANGUAGE` and the app-wide
+     * `MISC_APP` keys ([Keys.APP_LANGUAGE], [Keys.PREFER_AUDIO_DESCRIPTION]).
      */
-    internal val resetKeys: List<Preferences.Key<*>> = listOf(
-        Keys.PREFERRED_SUBTITLE_LANG,
-        Keys.PREFERRED_AUDIO_LANG,
-        Keys.SUBTITLES_FORCED_ONLY,
-        Keys.SUBTITLE_PREVIEW_IN_SETTINGS,
-        Keys.SUBTITLE_STYLE,
-        Keys.HIGH_CONTRAST_SUBTITLES,
-        Keys.HDR_SUBTITLE_STYLE_ENABLED,
-        Keys.HDR_SUBTITLE_STYLE,
-        Keys.SUBTITLE_DELAY_BY_ITEM,
-        Keys.APP_LANGUAGE,
-        Keys.PREFER_AUDIO_DESCRIPTION,
-    )
+    internal val resetKeys: List<Preferences.Key<*>> =
+        PreferenceResetCategory.entries.flatMap(::resetKeysFor)
 
     /**
      * Category reset participation: the subset of [resetKeys] that belongs to

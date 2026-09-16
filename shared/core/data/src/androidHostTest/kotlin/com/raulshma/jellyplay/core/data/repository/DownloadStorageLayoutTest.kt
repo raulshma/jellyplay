@@ -12,7 +12,7 @@ import org.junit.Test
  * [DownloadRepositoryImplResumeTest]'s Robolectric setup); these helpers are
  * pure functions and get direct JVM tests.
  *
- * Pre-extraction these rules were inlined in `DownloadRepositoryImpl.startDownloadInternal`
+ * Pre-extraction these rules were inlined in `DownloadRepositoryImpl.startDownload`
  * and had no test surface — a malformed container string or a path-traversal
  * attempt in a media name would only surface as a corrupt filename at runtime.
  */

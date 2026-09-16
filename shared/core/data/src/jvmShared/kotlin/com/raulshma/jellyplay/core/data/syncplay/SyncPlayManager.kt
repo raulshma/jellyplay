@@ -21,8 +21,6 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.drop
-import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.sample
 import kotlinx.coroutines.launch
@@ -234,37 +232,39 @@ class SyncPlayManager(
     }
 
     /**
-     * Watches the shared [JellyfinWebSocketClient] for transient disconnects and, on
-     * every false → true transition of [JellyfinWebSocketClient.isConnected], re-asserts
-     * the user's current group membership. Without this the WS auto-reconnects but the
-     * server-side group listener never gets re-established, so a momentary network blip
-     * silently orphans the watch party.
+     * Watches the shared [JellyfinWebSocketClient] for reconnects and, on every
+     * [JellyfinWebSocketClient.reconnects] emission while a SyncPlay session is
+     * active, re-asserts the user's current group membership. Without this the
+     * WS auto-reconnects but the server-side group listener never gets
+     * re-established, so a momentary network blip silently orphans the watch
+     * party.
+     *
+     * Declared behavior change vs the former
+     * `isConnected.drop(1).filter { it }` edge derivation: that shape also
+     * fired on the FIRST join's open whenever the subscription won the race
+     * against the handshake — a duplicate of [joinGroup]'s own re-assert
+     * sequence, and it stamped [lastReconnectAtMs] on a non-reconnect. This
+     * watcher now reacts to true reconnects only (see the flow's KDoc for the
+     * vocabulary).
      */
     private fun startReconnectWatcher() {
         reconnectWatchJob?.cancel()
         reconnectWatchJob = scope.launch {
-            // StateFlow already de-duplicates consecutive equal emissions, so we only
-            // need drop(1) (skip the initial value, which on join is already `true`)
-            // and filter { it } (only react to reconnects, not disconnects). Each
-            // collected `true` therefore represents a reconnect.
-            webSocketClient.isConnected
-                .drop(1)
-                .filter { it }
-                .collect {
-                    val groupId = activeGroupIdRef.get()
-                    if (!isGroupActive.get() || groupId == null) return@collect
-                    lastReconnectAtMs.set(System.currentTimeMillis())
-                    Log.d(TAG, "WebSocket reconnected mid-session, re-asserting group membership: $groupId")
-                    try {
-                        apiClient.postCapabilities()
-                        apiClient.joinSyncPlayGroup(groupId)
-                        refreshGroupInfo()
-                    } catch (ce: CancellationException) {
-                        throw ce
-                    } catch (e: Exception) {
-                        Log.w(TAG, "Failed to re-assert SyncPlay group membership after reconnect", e)
-                    }
+            webSocketClient.reconnects.collect {
+                val groupId = activeGroupIdRef.get()
+                if (!isGroupActive.get() || groupId == null) return@collect
+                lastReconnectAtMs.set(System.currentTimeMillis())
+                Log.d(TAG, "WebSocket reconnected mid-session, re-asserting group membership: $groupId")
+                try {
+                    apiClient.postCapabilities()
+                    apiClient.joinSyncPlayGroup(groupId)
+                    refreshGroupInfo()
+                } catch (ce: CancellationException) {
+                    throw ce
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to re-assert SyncPlay group membership after reconnect", e)
                 }
+            }
         }
     }
 
@@ -319,16 +319,24 @@ class SyncPlayManager(
             val groupId = activeGroupIdRef.get() ?: return
             val info = apiClient.getSyncPlayInfo(groupId).getOrNull() ?: return
             val current = cachedGroup.get()
+            // playingItem* / positionTicks are carried over from the cached
+            // group ONLY: this manager's producer (SyncPlayApiClientImpl's
+            // getSyncPlayInfo, backed by syncPlayGetGroups) never fills the
+            // SyncPlayGroupInfo counterparts — the former `info.x ?:
+            // current?.x` merge arms always took the fallback. The model
+            // fields themselves are alive: the syncplay feature module
+            // builds SyncPlayGroupInfo locally from PlayQueueUpdate events
+            // and renders playingItemName.
             val newGroup = SyncPlayGroup(
                 groupId = info.groupId,
                 groupName = info.groupName,
                 participantCount = info.participants.size,
                 participants = info.participants.map { it.userName },
                 isPlaying = info.isPlaying,
-                playingItemId = info.playingItemId ?: current?.playingItemId,
-                playingItemName = info.playingItemName ?: current?.playingItemName,
+                playingItemId = current?.playingItemId,
+                playingItemName = current?.playingItemName,
                 playingPlaylistItemId = current?.playingPlaylistItemId,
-                positionTicks = info.positionTicks ?: current?.positionTicks,
+                positionTicks = current?.positionTicks,
                 playlistItemIds = current?.playlistItemIds ?: emptyList(),
                 playlistItemMap = current?.playlistItemMap ?: emptyMap(),
                 repeatMode = current?.repeatMode ?: SyncPlayRepeatMode.REPEAT_NONE,
@@ -343,10 +351,13 @@ class SyncPlayManager(
 
     fun remoteNow(): Long = timeSyncManager.remoteNow()
 
-    fun estimateCurrentTicks(positionTicks: Long, whenMs: Long): Long {
-        val elapsedMs = timeSyncManager.remoteNow() - whenMs
-        return positionTicks + elapsedMs * 10_000
-    }
+    /**
+     * Forward to the [TimeSyncManager] clock projection (its pure core plus a
+     * `remoteNow` read on the injected instance) — kept public because the
+     * player bridge consumes it through the manager.
+     */
+    fun estimateCurrentTicks(positionTicks: Long, whenMs: Long): Long =
+        TimeSyncManager.projectCurrentTicks(positionTicks, timeSyncManager.remoteNow() - whenMs)
 
     /**
      * How much teardown a departure from a SyncPlay group performs. The three

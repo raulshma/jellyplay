@@ -3,9 +3,7 @@ package com.raulshma.jellyplay.core.data.repository
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.session.HomeSession
 import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
-import com.raulshma.jellyplay.core.model.CreditTimestamps
 import com.raulshma.jellyplay.core.model.CultureInfo
-import com.raulshma.jellyplay.core.model.IntroTimestamps
 import com.raulshma.jellyplay.core.model.LiveStreamOption
 import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.PlaybackInfoResult
@@ -16,7 +14,10 @@ import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
 import com.raulshma.jellyplay.core.model.ResolvedPlayback
 import com.raulshma.jellyplay.core.model.TtlCache
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.api.AuthApiClient
+import com.raulshma.jellyplay.core.network.api.LibraryApiClient
+import com.raulshma.jellyplay.core.network.api.MetadataApiClient
+import com.raulshma.jellyplay.core.network.api.PlaybackApiClient
 import com.raulshma.jellyplay.core.network.playback.buildBookDownloadUrl
 import com.raulshma.jellyplay.core.network.playback.resolveDeliveryUrl
 import com.raulshma.jellyplay.core.network.playback.resolveDeliveryUrlWithApiKey
@@ -27,7 +28,14 @@ import kotlinx.coroutines.coroutineScope
 import java.util.concurrent.atomic.AtomicLong
 
 class PlaybackRepositoryImpl(
-    private val apiClient: JellyfinApiClient,
+    /** Telemetry, URL builders, PlaybackInfo, segments, subtitle delivery, trickplay. */
+    private val playbackApiClient: PlaybackApiClient,
+    /** Image URLs + the played/favorite flips the outbox drain replays. */
+    private val libraryApiClient: LibraryApiClient,
+    /** Server URL + access token for the absolute-ize URL folds. */
+    private val authApiClient: AuthApiClient,
+    /** Remote-subtitle search/upload + the subtitle-cultures metadata read. */
+    private val metadataApiClient: MetadataApiClient,
     private val outbox: PlaybackOutboxRepository,
     private val offlineModeManager: OfflineModeManager,
     /**
@@ -91,7 +99,7 @@ class PlaybackRepositoryImpl(
                 startPositionTicks = info.startPositionTicks,
             )
         },
-        send = { apiClient.reportPlaybackStart(info.itemId, info.sessionId, info.playMethod) },
+        send = { playbackApiClient.reportPlaybackStart(info.itemId, info.sessionId, info.playMethod) },
     )
 
     override suspend fun reportPlaybackProgress(progress: PlaybackProgress): Result<Unit> = reportOrStage(
@@ -106,7 +114,7 @@ class PlaybackRepositoryImpl(
             )
         },
         send = {
-            apiClient.reportPlaybackProgress(
+            playbackApiClient.reportPlaybackProgress(
                 progress.itemId,
                 progress.sessionId,
                 progress.positionTicks,
@@ -129,7 +137,7 @@ class PlaybackRepositoryImpl(
         val result = reportOrStage(
             stage = { outbox.enqueueStop(itemId, sessionId, positionTicks) },
             send = {
-                apiClient.reportPlaybackStopped(itemId, sessionId, positionTicks).onSuccess {
+                playbackApiClient.reportPlaybackStopped(itemId, sessionId, positionTicks).onSuccess {
                     // A delivered STOP supersedes any pending START/PROGRESS/STOP for
                     // this item — the server now has the authoritative final position.
                     // Scoped to telemetry only: a pending PLAYED/UNPLAYED flip is an
@@ -197,14 +205,14 @@ class PlaybackRepositoryImpl(
         if (!final) {
             reportOrStage(
                 stage = { outbox.enqueueBookProgress(itemId, positionTicks) },
-                send = { apiClient.reportBookProgress(itemId, positionTicks) },
+                send = { playbackApiClient.reportBookProgress(itemId, positionTicks) },
             )
             return Result.success(Unit)
         }
         mediaCacheInvalidation.invalidateForUserDataChange(itemId)
         reportOrStage(
             stage = { outbox.enqueueBookProgress(itemId, positionTicks) },
-            send = { apiClient.reportBookProgress(itemId, positionTicks) },
+            send = { playbackApiClient.reportBookProgress(itemId, positionTicks) },
         )
         mediaCacheInvalidation.invalidateForUserDataChange(itemId)
         if (!offlineModeManager.isOffline) {
@@ -220,9 +228,9 @@ class PlaybackRepositoryImpl(
         // drain can't drift apart.
         when (entry.eventType) {
             PlaybackOutboxEventType.START ->
-                apiClient.reportPlaybackStart(entry.itemId, entry.sessionId, entry.playMethod).isSuccess
+                playbackApiClient.reportPlaybackStart(entry.itemId, entry.sessionId, entry.playMethod).isSuccess
             PlaybackOutboxEventType.PROGRESS ->
-                apiClient.reportPlaybackProgress(
+                playbackApiClient.reportPlaybackProgress(
                     entry.itemId,
                     entry.sessionId,
                     entry.positionTicks,
@@ -230,30 +238,30 @@ class PlaybackRepositoryImpl(
                     entry.playMethod,
                 ).isSuccess
             PlaybackOutboxEventType.STOP ->
-                apiClient.reportPlaybackStopped(entry.itemId, entry.sessionId, entry.positionTicks).isSuccess
+                playbackApiClient.reportPlaybackStopped(entry.itemId, entry.sessionId, entry.positionTicks).isSuccess
             PlaybackOutboxEventType.BOOK_PROGRESS ->
-                apiClient.reportBookProgress(entry.itemId, entry.positionTicks).isSuccess
+                playbackApiClient.reportBookProgress(entry.itemId, entry.positionTicks).isSuccess
             PlaybackOutboxEventType.PLAYED ->
-                apiClient.markPlayed(entry.itemId).isSuccess
+                libraryApiClient.markPlayed(entry.itemId).isSuccess
             PlaybackOutboxEventType.UNPLAYED ->
-                apiClient.markUnplayed(entry.itemId).isSuccess
+                libraryApiClient.markUnplayed(entry.itemId).isSuccess
             PlaybackOutboxEventType.FAVORITE ->
-                apiClient.setFavorite(entry.itemId, isFavorite = true).isSuccess
+                libraryApiClient.setFavorite(entry.itemId, isFavorite = true).isSuccess
             PlaybackOutboxEventType.UNFAVORITE ->
-                apiClient.setFavorite(entry.itemId, isFavorite = false).isSuccess
+                libraryApiClient.setFavorite(entry.itemId, isFavorite = false).isSuccess
         }
 
     override fun getImageUrl(itemId: String, imageType: String, maxWidth: Int?): String =
-        apiClient.getImageUrl(itemId, imageType, maxWidth)
+        libraryApiClient.getImageUrl(itemId, imageType, maxWidth)
 
     override fun getChapterImageUrl(itemId: String, imageIndex: Int, tag: String?, maxWidth: Int?): String =
-        apiClient.getImageUrl(itemId, imageType = "Chapter", maxWidth = maxWidth, imageIndex = imageIndex, tag = tag)
+        libraryApiClient.getImageUrl(itemId, imageType = "Chapter", maxWidth = maxWidth, imageIndex = imageIndex, tag = tag)
 
     override fun getBackdropUrl(itemId: String, maxWidth: Int): String =
-        apiClient.getBackdropImageUrl(itemId, maxWidth)
+        libraryApiClient.getBackdropImageUrl(itemId, maxWidth)
 
     override suspend fun getItemImageBytes(itemId: String, imageType: String, maxWidth: Int): ByteArray? =
-        apiClient.getItemImageBytes(itemId, imageType, maxWidth)
+        playbackApiClient.getItemImageBytes(itemId, imageType, maxWidth)
 
     override fun getStreamUrl(
         itemId: String,
@@ -261,7 +269,7 @@ class PlaybackRepositoryImpl(
         startTimeTicks: Long,
         liveStreamId: String?,
     ): String =
-        apiClient.getStreamUrl(itemId, mediaSourceId, startTimeTicks, liveStreamId = liveStreamId)
+        playbackApiClient.getStreamUrl(itemId, mediaSourceId, startTimeTicks, liveStreamId = liveStreamId)
 
     override suspend fun fetchPlaybackInfo(
         itemId: String,
@@ -273,7 +281,7 @@ class PlaybackRepositoryImpl(
         mode: PlaybackMode,
         playerType: PlayerType,
         liveStreamOption: LiveStreamOption?,
-    ): Result<PlaybackInfoResult> = apiClient.fetchPlaybackInfo(
+    ): Result<PlaybackInfoResult> = playbackApiClient.fetchPlaybackInfo(
         itemId = itemId,
         mediaSourceId = mediaSourceId,
         startTimeTicks = startTimeTicks,
@@ -349,8 +357,8 @@ class PlaybackRepositoryImpl(
 
     private fun resolveTranscodeUrl(transcodeUrl: String?): String {
         if (transcodeUrl.isNullOrBlank()) return ""
-        val server = apiClient.getServerUrl() ?: return ""
-        val token = apiClient.getAccessToken()
+        val server = authApiClient.getServerUrl() ?: return ""
+        val token = authApiClient.getAccessToken()
         if (token.isNullOrBlank()) {
             // No session token: the fold's token-less half still owns the
             // absolute-ize (trailing-slash trim) — the hand-joined copy this
@@ -369,7 +377,7 @@ class PlaybackRepositoryImpl(
         maxBitrate: Int?,
         useAudioEndpoint: Boolean,
         liveStreamId: String?,
-    ): String = apiClient.getStreamUrl(
+    ): String = playbackApiClient.getStreamUrl(
         itemId = itemId,
         mediaSourceId = mediaSourceId,
         startTimeTicks = startTimeTicks,
@@ -379,41 +387,35 @@ class PlaybackRepositoryImpl(
     )
 
     override fun getSubtitleDeliveryUrl(deliveryUrl: String): String =
-        apiClient.getSubtitleDeliveryUrl(deliveryUrl)
+        playbackApiClient.getSubtitleDeliveryUrl(deliveryUrl)
 
     override fun getBookDownloadUrl(itemId: String): String {
         // Same pure-builder split as getStreamUrl: the shared
         // buildBookDownloadUrl does the string shaping and both platform
         // clients stay out of it. The session guard mirrors the URL builders'
         // null-base/-key → "" sentinel.
-        val baseUrl = apiClient.getServerUrl() ?: return ""
-        val apiKey = apiClient.getAccessToken() ?: return ""
+        val baseUrl = authApiClient.getServerUrl() ?: return ""
+        val apiKey = authApiClient.getAccessToken() ?: return ""
         return buildBookDownloadUrl(baseUrl = baseUrl, apiKey = apiKey, itemId = itemId)
     }
 
-    override fun getServerUrl(): String? = apiClient.getServerUrl()
+    override fun getServerUrl(): String? = authApiClient.getServerUrl()
 
-    override fun getAccessToken(): String? = apiClient.getAccessToken()
+    override fun getAccessToken(): String? = authApiClient.getAccessToken()
 
     override fun buildSubtitleDeliveryUrl(
         itemId: String,
         mediaSourceId: String,
         index: Int,
         codec: String?,
-    ): String = apiClient.buildSubtitleDeliveryUrl(itemId, mediaSourceId, index, codec)
-
-    override suspend fun getIntroTimestamps(itemId: String): Result<IntroTimestamps> =
-        apiClient.getIntroTimestamps(itemId)
-
-    override suspend fun getCreditTimestamps(itemId: String): Result<CreditTimestamps> =
-        apiClient.getCreditTimestamps(itemId)
+    ): String = playbackApiClient.buildSubtitleDeliveryUrl(itemId, mediaSourceId, index, codec)
 
     override suspend fun fetchActiveTranscodeReasons(itemId: String): List<String> =
-        apiClient.fetchActiveTranscodeReasons(itemId).getOrDefault(emptyList())
+        playbackApiClient.fetchActiveTranscodeReasons(itemId).getOrDefault(emptyList())
 
     override suspend fun getMediaSegments(itemId: String): Result<List<MediaSegment>> =
         segmentsFetcher.getOrFetchStorable({ homeSession.cacheIdentity() }, itemId) {
-            val segmentsResult = apiClient.getMediaSegments(itemId)
+            val segmentsResult = playbackApiClient.getMediaSegments(itemId)
             val segments = segmentsResult.getOrDefault(emptyList())
             if (segments.isNotEmpty()) {
                 return@getOrFetchStorable Result.success(segments) to true
@@ -427,8 +429,8 @@ class PlaybackRepositoryImpl(
             val cacheFallback = segmentsResult.isSuccess
 
             coroutineScope {
-                val introDeferred = async { apiClient.getIntroTimestamps(itemId).getOrNull() }
-                val creditDeferred = async { apiClient.getCreditTimestamps(itemId).getOrNull() }
+                val introDeferred = async { playbackApiClient.getIntroTimestamps(itemId).getOrNull() }
+                val creditDeferred = async { playbackApiClient.getCreditTimestamps(itemId).getOrNull() }
                 val introResult = introDeferred.await()
                 val creditResult = creditDeferred.await()
 
@@ -454,13 +456,13 @@ class PlaybackRepositoryImpl(
     }
 
     override suspend fun getRemoteSubtitles(itemId: String): Result<List<RemoteSubtitleInfo>> =
-        apiClient.getRemoteSubtitles(itemId)
+        playbackApiClient.getRemoteSubtitles(itemId)
 
     override suspend fun downloadSubtitle(itemId: String, subtitleId: String): Result<Unit> =
-        apiClient.downloadRemoteSubtitle(itemId, subtitleId)
+        playbackApiClient.downloadRemoteSubtitle(itemId, subtitleId)
 
     override suspend fun searchRemoteSubtitles(itemId: String, language: String): Result<List<RemoteSubtitleInfo>> =
-        apiClient.searchRemoteSubtitles(itemId, language)
+        metadataApiClient.searchRemoteSubtitles(itemId, language)
 
     override suspend fun uploadSubtitle(
         itemId: String,
@@ -470,13 +472,13 @@ class PlaybackRepositoryImpl(
         isForced: Boolean,
         isHearingImpaired: Boolean,
     ): Result<Unit> =
-        apiClient.uploadSubtitle(itemId, data, fileName, language, isForced, isHearingImpaired)
+        metadataApiClient.uploadSubtitle(itemId, data, fileName, language, isForced, isHearingImpaired)
 
     override suspend fun getSubtitleCultures(itemId: String): Result<List<CultureInfo>> =
-        apiClient.getMetadataEditorInfo(itemId).map { it.cultures }
+        metadataApiClient.getMetadataEditorInfo(itemId).map { it.cultures }
 
     override suspend fun getTrickplayTileImage(itemId: String, width: Int, index: Int): ByteArray? =
-        apiClient.getTrickplayTileImage(itemId, width, index)
+        playbackApiClient.getTrickplayTileImage(itemId, width, index)
 
     companion object {
         private const val TAG = "PlaybackRepository"

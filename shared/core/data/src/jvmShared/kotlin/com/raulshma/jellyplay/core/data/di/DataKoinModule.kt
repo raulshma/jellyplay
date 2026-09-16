@@ -3,7 +3,9 @@ package com.raulshma.jellyplay.core.data.di
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueImpl
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
+import com.raulshma.jellyplay.core.data.download.JvmQuickDownloadActions
 import com.raulshma.jellyplay.core.data.download.MediaDownloadActions
+import com.raulshma.jellyplay.core.data.download.QuickDownloadActions
 import com.raulshma.jellyplay.core.data.download.sniffContainerFile
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.data.network.OkHttpConfigProviderImpl
@@ -119,6 +121,10 @@ import com.raulshma.jellyplay.core.database.dao.SyncBaselineDao
 import com.raulshma.jellyplay.core.database.migration.ContainerProbe
 import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind
+import com.raulshma.jellyplay.core.network.api.AuthApiClient
+import com.raulshma.jellyplay.core.network.api.LibraryApiClient
+import com.raulshma.jellyplay.core.network.api.MetadataApiClient
+import com.raulshma.jellyplay.core.network.api.PlaybackApiClient
 import com.raulshma.jellyplay.core.network.config.OkHttpConfigProvider
 import com.raulshma.jellyplay.core.network.di.NetworkQualifiers
 import com.raulshma.jellyplay.core.network.subtitle.SubtitleProvider
@@ -677,6 +683,14 @@ val dataJvmModule: Module = module {
         )
     }
 
+    // The quick-download seam the library/favorites/studio/search hosts
+    // inject (hoisted from the features' internal JvmQuickDownloadActions
+    // twins): delegates to the MediaDownloadActions single above. Web binds
+    // the honest no-op stub (WasmQuickDownloadActions) in the feature
+    // platform fragments — the dataWasmModule graph carries no download
+    // pipeline.
+    single<QuickDownloadActions> { JvmQuickDownloadActions(get<MediaDownloadActions>()) }
+
     single {
         SeerrRepositoryImpl(
             seerrApiClient = get(),
@@ -700,7 +714,13 @@ val dataJvmModule: Module = module {
 
     single {
         PlaybackRepositoryImpl(
-            apiClient = get(),
+            // Narrow family seams, not the JellyfinApiClient union: the impl
+            // only touches playback/library/auth/metadata, and the family
+            // singles below compose the same impls JellyfinApiClientImpl does.
+            playbackApiClient = get<PlaybackApiClient>(),
+            libraryApiClient = get<LibraryApiClient>(),
+            authApiClient = get<AuthApiClient>(),
+            metadataApiClient = get<MetadataApiClient>(),
             outbox = get(),
             offlineModeManager = get(),
             homeSession = get(),

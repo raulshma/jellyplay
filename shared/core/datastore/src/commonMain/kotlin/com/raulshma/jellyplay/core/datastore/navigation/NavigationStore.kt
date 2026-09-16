@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.raulshma.jellyplay.core.datastore.CachedJsonNullPolicy
 import com.raulshma.jellyplay.core.datastore.ParsedCache
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
@@ -65,25 +66,28 @@ class NavigationStore constructor(
         navItemOrder = readNavItemOrder(prefs),
     )
 
-    private fun readHiddenNavItems(prefs: Preferences): Set<String> {
-        val raw = prefs[Keys.HIDDEN_NAV_ITEMS]
-        return if (raw != cachedHiddenNavItems.key) {
-            try {
-                raw?.let { json.decodeFromString<Set<String>>(it) } ?: emptySet()
-            } catch (_: Exception) { emptySet() }
-                .also { cachedHiddenNavItems = ParsedCache(raw, it) }
-        } else cachedHiddenNavItems.value
-    }
+    // MemoizeNull (this store's pre-promotion policy at every site): a null
+    // raw is a cacheable input — the decoded value depends only on the raw
+    // string, so a memoised default is safe to serve.
+    private fun readHiddenNavItems(prefs: Preferences): Set<String> =
+        PreferenceCodec.cachedJson(
+            raw = prefs[Keys.HIDDEN_NAV_ITEMS],
+            cache = cachedHiddenNavItems,
+            default = emptySet(),
+            parse = { json.decodeFromString<Set<String>>(it) },
+            cacheRef = { cachedHiddenNavItems = it },
+            nullPolicy = CachedJsonNullPolicy.MemoizeNull,
+        )
 
-    private fun readNavItemOrder(prefs: Preferences): List<String> {
-        val raw = prefs[Keys.NAV_ITEM_ORDER]
-        return if (raw != cachedNavItemOrder.key) {
-            try {
-                raw?.let { json.decodeFromString<List<String>>(it) } ?: emptyList()
-            } catch (_: Exception) { emptyList() }
-                .also { cachedNavItemOrder = ParsedCache(raw, it) }
-        } else cachedNavItemOrder.value
-    }
+    private fun readNavItemOrder(prefs: Preferences): List<String> =
+        PreferenceCodec.cachedJson(
+            raw = prefs[Keys.NAV_ITEM_ORDER],
+            cache = cachedNavItemOrder,
+            default = emptyList(),
+            parse = { json.decodeFromString<List<String>>(it) },
+            cacheRef = { cachedNavItemOrder = it },
+            nullPolicy = CachedJsonNullPolicy.MemoizeNull,
+        )
 
     // ------------------------------------------------------------------
     // Setters
@@ -106,13 +110,15 @@ class NavigationStore constructor(
     }
 
     /**
-     * Keys owned by this store, for factory-reset participation. These are the
-     * nav keys split out of the legacy `HOME_DISCOVERY` reset category.
+     * Keys owned by this store, for factory-reset participation. Derived as the
+     * union of the [resetKeysFor] category lists (in enum declaration order) —
+     * those lists are what the facade actually resets, so deriving from them
+     * (instead of maintaining a parallel hand-written union) keeps this list
+     * from drifting out of sync. These are the nav keys split out of the
+     * legacy `HOME_DISCOVERY` reset category.
      */
-    internal val resetKeys: List<Preferences.Key<*>> = listOf(
-        Keys.NAV_BAR_SHOW_LABELS, Keys.HIDE_BOTTOM_NAV_ON_SCROLL,
-        Keys.NAV_ITEM_ORDER, Keys.HIDDEN_NAV_ITEMS,
-    )
+    internal val resetKeys: List<Preferences.Key<*>> =
+        PreferenceResetCategory.entries.flatMap(::resetKeysFor)
 
     /**
      * Category reset participation: the subset of [resetKeys] that belongs to

@@ -8,6 +8,7 @@ import androidx.media3.common.Player
 import com.raulshma.jellyplay.core.data.cast.CastDevice
 import com.raulshma.jellyplay.core.data.cast.CastMediaOptions
 import com.raulshma.jellyplay.core.data.cast.CastStrategy
+import com.raulshma.jellyplay.core.data.syncplay.TimeSyncManager
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.model.SessionInfo
@@ -289,8 +290,8 @@ class JellyfinRemotePlayCastStrategy(
     private fun applySessionState(session: SessionInfo) {
         val playState = session.playState
         val nowPlaying = session.nowPlayingItem
-        _positionMs.value = (playState?.positionTicks ?: 0L) / 10000L
-        _durationMs.value = (nowPlaying?.runTimeTicks ?: 0L) / 10000L
+        _positionMs.value = TimeSyncManager.ticksToMs(playState?.positionTicks ?: 0L)
+        _durationMs.value = TimeSyncManager.ticksToMs(nowPlaying?.runTimeTicks ?: 0L)
         _isPlaying.value = if (nowPlaying != null) !(playState?.isPaused ?: true) else false
         _volume.value = (playState?.volumeLevel ?: 100) / 100f
         _nowPlayingTitle.value = nowPlaying?.name.orEmpty()
@@ -317,7 +318,7 @@ class JellyfinRemotePlayCastStrategy(
     override fun seekTo(positionMs: Long) {
         val sessionId = connectedSessionId ?: return
         scope.launch {
-            val ticks = positionMs * 10000L
+            val ticks = TimeSyncManager.msToTicks(positionMs)
             adminApiClient.sendPlaystateCommand(sessionId, "Seek", seekPositionTicks = ticks)
             _positionMs.value = positionMs
         }
@@ -383,7 +384,7 @@ class JellyfinRemotePlayCastStrategy(
     ) {
         val sessionId = connectedSessionId ?: return
         scope.launch {
-            val startTicks = startPositionMs * 10000L
+            val startTicks = TimeSyncManager.msToTicks(startPositionMs)
             adminApiClient.play(
                 sessionId = sessionId,
                 playCommand = "PlayNow",

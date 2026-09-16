@@ -43,6 +43,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
+import com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
@@ -82,7 +83,7 @@ fun ImportPreviewScreen(
 ) {
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
-    val messenger = rememberSettingsMessenger()
+    val bus = LocalUserMessageBus.current
 
     val current = viewModel.currentPrefs
     val incoming = viewModel.incomingPrefs
@@ -123,7 +124,7 @@ fun ImportPreviewScreen(
                 is ImportPreviewViewModel.ImportEvent.ExtrasImported -> "App state imported"
                 is ImportPreviewViewModel.ImportEvent.Failed -> "Import failed: ${event.message}"
             }
-            messenger?.info(msg)
+            bus.info(msg)
             viewModel.clearImportEvent()
             // Terminal import event: settle the All arm's in-flight flag —
             // the sole reset path (the VM's onDone callback only fires on

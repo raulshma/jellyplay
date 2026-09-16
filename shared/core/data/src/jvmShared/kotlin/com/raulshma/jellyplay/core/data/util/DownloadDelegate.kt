@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.data.util
 
 import com.raulshma.jellyplay.core.data.log.Log
+import com.raulshma.jellyplay.core.data.repository.DownloadStartRequest
 import com.raulshma.jellyplay.core.data.repository.OfflineDownloadWriter
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.model.DownloadItem
@@ -147,26 +148,29 @@ class DownloadDelegate(
         // For episodes, propagate the parent series/season ids so the downloads
         // row is linked to its series. Without these, deleteOfflineSeries
         // (WHERE seriesId = :seriesId) finds no rows and leaves episode files +
-        // download rows orphaned behind a deleted series.
-        val detailItem = request.detail?.item
-        val isEpisode = detailItem?.mediaType == MediaType.EPISODE
+        // download rows orphaned behind a deleted series. THE single episode
+        // guard (the former six per-field if-checks): the linkage fields are
+        // non-null only when the originating detail item is an episode — the
+        // writer consumes them verbatim.
+        val episode = request.detail?.item?.takeIf { it.mediaType == MediaType.EPISODE }
         val result = writer.startDownload(
-            mediaItemId = request.mediaItemId,
-            name = request.name,
-            mediaType = request.mediaType,
-            mediaSourceId = request.mediaSourceId,
-            downloadUrl = request.downloadUrl,
-            imageUrl = request.imageUrl,
-            imageBlurHash = request.imageBlurHash,
-            container = request.container,
-            // detailItem is guaranteed non-null when isEpisode is true.
-            seriesId = if (isEpisode && detailItem != null) detailItem.seriesId else null,
-            seasonId = if (isEpisode && detailItem != null) detailItem.seasonId else null,
-            seriesName = if (isEpisode && detailItem != null) detailItem.seriesName else null,
-            seasonName = if (isEpisode && detailItem != null) detailItem.seasonName else null,
-            episodeNumber = if (isEpisode && detailItem != null) detailItem.episodeNumber else null,
-            seasonNumber = if (isEpisode && detailItem != null) detailItem.seasonNumber else null,
-            precomputedCurrentBytes = precomputedCurrentBytes,
+            DownloadStartRequest(
+                mediaItemId = request.mediaItemId,
+                name = request.name,
+                mediaType = request.mediaType,
+                mediaSourceId = request.mediaSourceId,
+                downloadUrl = request.downloadUrl,
+                imageUrl = request.imageUrl,
+                imageBlurHash = request.imageBlurHash,
+                container = request.container,
+                seriesId = episode?.seriesId,
+                seasonId = episode?.seasonId,
+                seriesName = episode?.seriesName,
+                seasonName = episode?.seasonName,
+                episodeNumber = episode?.episodeNumber,
+                seasonNumber = episode?.seasonNumber,
+                precomputedCurrentBytes = precomputedCurrentBytes,
+            )
         )
         return result.fold(
             onSuccess = { downloadItem ->
@@ -207,7 +211,7 @@ class DownloadDelegate(
                             writer.downloadOfflineImage(
                                 request.mediaItemId, "Backdrop", 1280, parentDir,
                                 com.raulshma.jellyplay.core.data.repository.DownloadArtifacts.backdropFile(request.mediaItemId),
-                            ) ?: if (isEpisode) null else backdropUrl
+                            ) ?: if (episode != null) null else backdropUrl
                         } else {
                             null
                         }

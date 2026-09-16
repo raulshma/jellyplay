@@ -210,6 +210,26 @@ internal class WebConnectController(
 }
 
 /**
+ * One optional landing affordance rendered by [ConnectedCard] after the
+ * logout row — a button that opens a shell level (connection details, a
+ * shared feature screen, the diagnostics tooling).
+ *
+ * The list IS the optionality contract (web-nav v1): [WebConnectFlow] stays
+ * renderable without a nav root behind it — an empty list renders no buttons,
+ * exactly like the old nullable per-hook lambdas. The nav root
+ * ([WebAppRoot]'s `entry<WebLanding>`) builds the list with the entries it
+ * can push; label and order are load-bearing (tools/e2e/web-verify.mjs finds
+ * these buttons by accessible name), and [isOutlined] marks the secondary
+ * tooling entry (Diagnostics) so it reads as outlined next to the primary
+ * feature buttons.
+ */
+internal data class WebLandingAffordance(
+    val label: String,
+    val isOutlined: Boolean = false,
+    val onOpen: () -> Unit,
+)
+
+/**
  * Landing-pane connect/auth flow: replaces the placeholder
  * readout when signed out — server probe → inline name result → username /
  * password sign-in — and collapses to a minimal connected card (server, user,
@@ -240,26 +260,7 @@ internal fun WebConnectFlow(
     controller: WebConnectController,
     networkStatus: NetworkStatus,
     modifier: Modifier = Modifier,
-    onOpenConnectionDetails: (() -> Unit)? = null,
-    // Opens the gated E2E diagnostics pane (WebDiagnosticsPane)
-    // — deliberately optional so nothing renders until the nav root wires it.
-    onOpenDiagnostics: (() -> Unit)? = null,
-    // Opens the first shared feature screen (Route.Requests →
-    // RequestsScreen). Optional like the other hooks so WebConnectFlow stays
-    // renderable without a nav root behind it.
-    onOpenRequests: (() -> Unit)? = null,
-    // Opens the second shared feature screen (Route.UpcomingCalendar
-    // → UpcomingCalendarScreen). Same optionality contract as onOpenRequests.
-    onOpenCalendar: (() -> Unit)? = null,
-    // Opens the Seerr credentials pane (WebSeerrPane) — the entry
-    // point that makes the requests feature usable on web (API-key creds).
-    onOpenSeerr: (() -> Unit)? = null,
-    // Opens the ARR download-queue screen (Route.ArrQueue →
-    // ArrQueueScreen). Same optionality contract as onOpenRequests.
-    onOpenArrQueue: (() -> Unit)? = null,
-    // Opens the onboarding wizard (Route.Onboarding →
-    // OnboardingScreen). Same optionality contract as onOpenRequests.
-    onOpenOnboarding: (() -> Unit)? = null,
+    affordances: List<WebLandingAffordance> = emptyList(),
 ) {
     // initial = null is honest on wasm v1: nothing restores a session at
     // boot (no persisted identity), so the flow genuinely starts empty. If a
@@ -272,13 +273,7 @@ internal fun WebConnectFlow(
             controller = controller,
             session = active,
             networkStatus = networkStatus,
-            onOpenConnectionDetails = onOpenConnectionDetails,
-            onOpenDiagnostics = onOpenDiagnostics,
-            onOpenRequests = onOpenRequests,
-            onOpenCalendar = onOpenCalendar,
-            onOpenSeerr = onOpenSeerr,
-            onOpenArrQueue = onOpenArrQueue,
-            onOpenOnboarding = onOpenOnboarding,
+            affordances = affordances,
             modifier = modifier,
         )
     } else {
@@ -292,13 +287,7 @@ private fun ConnectedCard(
     controller: WebConnectController,
     session: ActiveSession,
     networkStatus: NetworkStatus,
-    onOpenConnectionDetails: (() -> Unit)?,
-    onOpenDiagnostics: (() -> Unit)?,
-    onOpenRequests: (() -> Unit)?,
-    onOpenCalendar: (() -> Unit)?,
-    onOpenSeerr: (() -> Unit)?,
-    onOpenArrQueue: (() -> Unit)?,
-    onOpenOnboarding: (() -> Unit)?,
+    affordances: List<WebLandingAffordance>,
     modifier: Modifier = Modifier,
 ) {
     var loggingOut by remember { mutableStateOf(false) }
@@ -394,61 +383,20 @@ private fun ConnectedCard(
                     Text("Logout")
                 }
             }
-            if (onOpenConnectionDetails != null) {
-                Button(onClick = onOpenConnectionDetails) {
-                    Text("Connection details")
-                }
-            }
-            // The first SHARED feature screen. A primary Button
-            // (real feature, unlike the diagnostics tooling below) placed
-            // before it. The screen itself renders the honest "Seerr not
-            // configured" error state until Seerr credentials exist on web —
-            // see Main.kt's SEERR-ON-WEB HONESTY note.
-            if (onOpenRequests != null) {
-                Button(onClick = onOpenRequests) {
-                    Text("Requests")
-                }
-            }
-            // The second SHARED feature screen, same primary-Button
-            // treatment right next to Requests. The screen renders the honest
-            // feature-disabled pane on web (flag off, no settings UI — see
-            // WebAppRoot's Route.UpcomingCalendar entry note).
-            if (onOpenCalendar != null) {
-                Button(onClick = onOpenCalendar) {
-                    Text("Calendar")
-                }
-            }
-            // The Seerr credentials pane — the make-requests-work
-            // entry (server URL + API key, persist + test + disconnect).
-            // Primary Button like Requests (real feature), placed beside it.
-            if (onOpenSeerr != null) {
-                Button(onClick = onOpenSeerr) {
-                    Text("Seerr")
-                }
-            }
-            // The third SHARED feature screen: the ARR download
-            // queue. Primary Button like the other shared features.
-            if (onOpenArrQueue != null) {
-                Button(onClick = onOpenArrQueue) {
-                    Text("Arr queue")
-                }
-            }
-            // The fourth SHARED feature screen: the onboarding
-            // wizard. Primary Button; completing pops back here (no
-            // persisted first-run gate exists on web — see the
-            // Route.Onboarding entry note in WebAppRoot).
-            if (onOpenOnboarding != null) {
-                Button(onClick = onOpenOnboarding) {
-                    Text("Onboarding")
-                }
-            }
-            //  E2E hook: gated entry into WebDiagnosticsPane. An
-            // OutlinedButton so it reads as secondary tooling next to the
-            // primary actions — the pane is a verification surface, not a
-            // user-facing feature.
-            if (onOpenDiagnostics != null) {
-                OutlinedButton(onClick = onOpenDiagnostics) {
-                    Text("Diagnostics")
+            // The shell-supplied affordances ([WebLandingAffordance]): one
+            // button per shell level, in the order the list carries — the
+            // shared feature screens first (primary Buttons), the gated
+            // diagnostics tooling last as an OutlinedButton so it reads as
+            // secondary. Empty list (no nav root) renders nothing.
+            affordances.forEach { affordance ->
+                if (affordance.isOutlined) {
+                    OutlinedButton(onClick = affordance.onOpen) {
+                        Text(affordance.label)
+                    }
+                } else {
+                    Button(onClick = affordance.onOpen) {
+                        Text(affordance.label)
+                    }
                 }
             }
         }

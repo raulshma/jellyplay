@@ -55,6 +55,15 @@ import com.raulshma.jellyplay.feature.admin.generated.resources.admin_unit_minut
 import com.raulshma.jellyplay.feature.admin.generated.resources.admin_watched_less
 import com.raulshma.jellyplay.feature.admin.generated.resources.admin_watched_more
 
+/**
+ * Statistics chart composables: Canvas drawing, color assignment, and the
+ * animation shells. Every pure decision they render — label-admission
+ * ladders, value normalizations, pie sweep/start-angle accumulation, the
+ * top-5 legend, and the number/duration formatters — lives in the
+ * Compose-free [ChartGeometry] core beside this file (HeatmapGridModel
+ * precedent) and is pinned by ChartGeometryTest.
+ */
+
 @Composable
 fun ActivityBarChart(
     data: List<PlaybackActivityPoint>,
@@ -77,7 +86,7 @@ fun ActivityBarChart(
         return
     }
 
-    val maxValue = data.maxOfOrNull { it.value }?.coerceAtLeast(1L) ?: 1L
+    val maxValue = ChartGeometry.maxValueOrOne(data.map { it.value })
     val animatable = remember { Animatable(if (animateEntrance) 0f else 1f) }
     val textMeasurer = rememberTextMeasurer()
     val labelStyle = MaterialTheme.typography.labelSmall
@@ -105,9 +114,7 @@ fun ActivityBarChart(
             val animProgress = animatable.value
 
             data.forEachIndexed { index, point ->
-                val barHeight = if (maxValue > 0) {
-                    (point.value.toFloat() / maxValue.toFloat()) * chartHeight * animProgress
-                } else 0f
+                val barHeight = ChartGeometry.barHeight(point.value, maxValue, chartHeight, animProgress)
 
                 val x = index * (barWidth + spacing) + spacing / 2
                 val y = chartHeight - barHeight
@@ -121,18 +128,13 @@ fun ActivityBarChart(
             }
         }
 
-        val labelStep = when {
-            data.size <= 7 -> 1
-            data.size <= 15 -> 2
-            data.size <= 31 -> 5
-            else -> data.size / 6
-        }
+        val labelStep = ChartGeometry.activityLabelStep(data.size)
         Row(
             modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             data.forEachIndexed { index, point ->
-                if (index == 0 || index % labelStep == 0 || index == data.lastIndex) {
+                if (ChartGeometry.admitsLabel(index, labelStep, data.lastIndex)) {
                     Text(
                         text = point.date.takeLast(5),
                         style = labelStyle,
@@ -174,7 +176,7 @@ fun HorizontalBreakdownChart(
         MaterialTheme.colorScheme.secondaryContainer,
         MaterialTheme.colorScheme.tertiaryContainer,
     )
-    val maxValue = data.maxOfOrNull { it.value }?.coerceAtLeast(1L) ?: 1L
+    val maxValue = ChartGeometry.maxValueOrOne(data.map { it.value })
 
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         data.forEachIndexed { index, item ->
@@ -260,7 +262,7 @@ fun SummaryStatCard(
                 Spacer(Modifier.height(8.dp))
             }
             Text(
-                text = formatNumber(displayValue),
+                text = ChartGeometry.formatNumber(displayValue),
                 style = MaterialTheme.typography.headlineMedium,
                 color = MaterialTheme.colorScheme.onSurface,
             )
@@ -327,12 +329,6 @@ fun CompletionRing(
     }
 }
 
-private fun formatNumber(value: Long): String = when {
-    value >= 1_000_000 -> String.format("%.1fM", value / 1_000_000.0)
-    value >= 1_000 -> String.format("%.1fK", value / 1_000.0)
-    else -> value.toString()
-}
-
 @Composable
 fun PieChart(
     data: List<com.raulshma.jellyplay.core.model.ContentBreakdown>,
@@ -363,7 +359,7 @@ fun PieChart(
         MaterialTheme.colorScheme.surfaceVariant,
     )
     val trackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.05f)
-    val total = data.sumOf { it.value }.coerceAtLeast(1L)
+    val total = ChartGeometry.pieTotal(data)
     val animatedProgress = remember { Animatable(0f) }
     val entranceSpec = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
 
@@ -394,20 +390,17 @@ fun PieChart(
                     center = center,
                 )
 
-                var startAngle = -90f
-                data.forEachIndexed { index, item ->
-                    val sweepAngle = (item.value.toFloat() / total.toFloat()) * 360f * animatedProgress.value
-                    val color = colors[item.colorIndex % colors.size]
+                val slices = ChartGeometry.pieSlices(data, total, animatedProgress.value)
+                slices.forEachIndexed { index, slice ->
                     drawArc(
-                        color = color,
-                        startAngle = startAngle,
-                        sweepAngle = sweepAngle,
+                        color = colors[data[index].colorIndex % colors.size],
+                        startAngle = slice.startAngle,
+                        sweepAngle = slice.sweepAngle,
                         useCenter = false,
                         topLeft = Offset(strokeWidth / 2, strokeWidth / 2),
                         size = Size(size.width - strokeWidth, size.height - strokeWidth),
                         style = androidx.compose.ui.graphics.drawscope.Stroke(width = strokeWidth),
                     )
-                    startAngle += sweepAngle
                 }
             }
         }
@@ -416,9 +409,8 @@ fun PieChart(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            data.take(5).forEachIndexed { index, item ->
-                val color = colors[item.colorIndex % colors.size]
-                val percentage = (item.value.toFloat() / total.toFloat()) * 100
+            ChartGeometry.topLegendEntries(data, total).forEach { entry ->
+                val color = colors[entry.item.colorIndex % colors.size]
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -430,14 +422,14 @@ fun PieChart(
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        text = item.label,
+                        text = entry.item.label,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
                         modifier = Modifier.weight(1f),
                     )
                     Text(
-                        text = String.format(java.util.Locale.getDefault(), "%.0f%%", percentage),
+                        text = ChartGeometry.formatPercentage(entry.percentage),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -467,7 +459,7 @@ fun TrendLineChart(
         return
     }
 
-    val maxValue = data.maxOfOrNull { it.value }?.coerceAtLeast(1L) ?: 1L
+    val maxValue = ChartGeometry.maxValueOrOne(data.map { it.value })
     val animatedProgress = remember { Animatable(0f) }
     val entranceSpec = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
     val fillPath = remember { androidx.compose.ui.graphics.Path() }
@@ -490,13 +482,10 @@ fun TrendLineChart(
             val chartHeight = size.height - 24f
             val progress = animatedProgress.value
 
-            fun xAt(index: Int): Float =
-                if (data.size > 1) {
-                    (index.toFloat() / (data.size - 1)) * chartWidth
-                } else chartWidth / 2
+            fun xAt(index: Int): Float = ChartGeometry.trendX(index, data.size, chartWidth)
 
             fun yAt(index: Int): Float =
-                chartHeight - (data[index].value.toFloat() / maxValue.toFloat()) * chartHeight * progress
+                ChartGeometry.trendY(data[index].value, maxValue, chartHeight, progress)
 
             if (data.size > 1) {
                 val fillColor = lineColor.copy(alpha = 0.1f)
@@ -537,18 +526,13 @@ fun TrendLineChart(
             }
         }
 
-        val labelStep = when {
-            data.size <= 7 -> 1
-            data.size <= 15 -> 3
-            data.size <= 31 -> 7
-            else -> data.size / 5
-        }
+        val labelStep = ChartGeometry.trendLabelStep(data.size)
         Row(
             modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             data.forEachIndexed { index, point ->
-                if (index == 0 || index % labelStep == 0 || index == data.lastIndex) {
+                if (ChartGeometry.admitsLabel(index, labelStep, data.lastIndex)) {
                     Text(
                         text = point.date.takeLast(5),
                         style = MaterialTheme.typography.labelSmall,
@@ -800,7 +784,11 @@ fun ComparisonCard(
                     fontWeight = FontWeight.SemiBold,
                 )
                 Text(
-                    stringResource(Res.string.admin_duration_vs_last, formatDuration(currentMinutes), formatDuration(previousMinutes)),
+                    stringResource(
+                        Res.string.admin_duration_vs_last,
+                        ChartGeometry.formatDuration(currentMinutes),
+                        ChartGeometry.formatDuration(previousMinutes),
+                    ),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -808,6 +796,3 @@ fun ComparisonCard(
         }
     }
 }
-
-private fun formatDuration(totalMinutes: Long): String =
-    com.raulshma.jellyplay.core.ui.components.formatDurationFromMinutes(totalMinutes)

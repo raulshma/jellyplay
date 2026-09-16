@@ -273,21 +273,35 @@ fun WebAppRoot(
     val entryProvider = remember(sessionState, authApiClient, userPrefs, seerrPreferencesStore, seerrSecureCredentialsStore, seerrRepository) {
         entryProvider<NavKey> {
             entry<WebLanding> { _ ->
+                // The landing affordances ([WebLandingAffordance]): the list
+                // built here IS the optionality contract — every level this
+                // nav root can push appears as one button, in this order
+                // (e2e-verified by tools/e2e/web-verify.mjs via accessible
+                // name). The shared feature routes are pushed AS THEMSELVES,
+                // NOT as web-only mirror keys (see the route-keys KDoc);
+                // Requests renders the honest "Seerr not configured" error
+                // state until Seerr credentials exist (Main.kt's SEERR-ON-WEB
+                // HONESTY note), Calendar/ArrQueue render the honest
+                // feature-disabled panes (DIRECT_ARR_INTEGRATION boots off),
+                // and completing onboarding pops back here (no persisted
+                // first-run gate on web).
                 WebConnectFlow(
                     controller = connectController,
                     networkStatus = currentNetworkStatus,
-                    onOpenConnectionDetails = { addEntry(WebStatus) },
-                    onOpenDiagnostics = { addEntry(WebDiag) },
-                    // The shared feature route — pushed as itself,
-                    // NOT as a web-only mirror key (see the route-keys KDoc).
-                    onOpenRequests = { addEntry(Route.Requests) },
-                    // The second shared feature route, same shape.
-                    onOpenCalendar = { addEntry(Route.UpcomingCalendar) },
-                    // The Seerr credentials pane.
-                    onOpenSeerr = { addEntry(WebSeerr) },
-                    // shared feature routes — same push-the-real-key shape.
-                    onOpenArrQueue = { addEntry(Route.ArrQueue) },
-                    onOpenOnboarding = { addEntry(Route.Onboarding) },
+                    affordances = listOf(
+                        WebLandingAffordance("Connection details") { addEntry(WebStatus) },
+                        WebLandingAffordance("Requests") { addEntry(Route.Requests) },
+                        WebLandingAffordance("Calendar") { addEntry(Route.UpcomingCalendar) },
+                        // The Seerr credentials pane — the entry that makes
+                        // the requests feature usable on web (API-key creds).
+                        WebLandingAffordance("Seerr") { addEntry(WebSeerr) },
+                        WebLandingAffordance("Arr queue") { addEntry(Route.ArrQueue) },
+                        WebLandingAffordance("Onboarding") { addEntry(Route.Onboarding) },
+                        // GATED E2E hook into WebDiagnosticsPane — outlined
+                        // so it reads as secondary tooling next to the
+                        // primary feature actions.
+                        WebLandingAffordance("Diagnostics", isOutlined = true) { addEntry(WebDiag) },
+                    ),
                 )
             }
             entry<WebStatus> { _ ->

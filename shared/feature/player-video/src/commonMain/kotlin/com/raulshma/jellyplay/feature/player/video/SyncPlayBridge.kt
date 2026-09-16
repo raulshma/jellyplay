@@ -4,8 +4,8 @@ import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.data.syncplay.PlaybackCoreCallbacks
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayEvent
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
-import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
-import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
+import com.raulshma.jellyplay.core.data.syncplay.SyncPlayPlaybackCore
+import com.raulshma.jellyplay.core.data.syncplay.TimeSyncManager
 import com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import com.raulshma.jellyplay.feature.player.video.state.SyncPlayUiState
@@ -87,13 +87,7 @@ internal class SyncPlayBridge(
         syncPlayManager.playbackCore.setCallbacks(this)
         if (syncPlayManager.isInSyncPlaySession) {
             val group = syncPlayManager.currentGroup
-            _state.update { it.copy(
-                isInSyncPlaySession = true,
-                syncPlayGroupName = group?.groupName,
-                syncPlayParticipantCount = group?.participantCount ?: 0,
-                syncPlayRepeatMode = group?.repeatMode ?: SyncPlayRepeatMode.REPEAT_NONE,
-                syncPlayShuffleMode = group?.shuffleMode ?: SyncPlayShuffleMode.SORTED,
-            ) }
+            _state.update { it.from(group) }
             currentPlaylistItemId = group?.playingPlaylistItemId
             syncPlayManager.playbackCore.setCurrentPlaylistItemId(currentPlaylistItemId)
         }
@@ -104,26 +98,16 @@ internal class SyncPlayBridge(
         scope.launch {
             syncPlayManager.joinGroup(groupId)
             val group = syncPlayManager.currentGroup
-            _state.update { it.copy(
-                syncPlayGroupName = group?.groupName ?: groupId,
-                isInSyncPlaySession = true,
-                syncPlayParticipantCount = group?.participantCount ?: 0,
-                syncPlayRepeatMode = group?.repeatMode ?: SyncPlayRepeatMode.REPEAT_NONE,
-                syncPlayShuffleMode = group?.shuffleMode ?: SyncPlayShuffleMode.SORTED,
-            ) }
+            // groupNameFallback: before the server confirms the group, the
+            // requested id is the best name the UI can show.
+            _state.update { it.from(group, groupNameFallback = groupId) }
         }
     }
 
     fun leaveGroup() {
         scope.launch {
             syncPlayManager.leaveGroup()
-            _state.update { it.copy(
-                syncPlayGroupName = null,
-                syncPlayParticipantCount = 0,
-                isSyncPlaySynced = false,
-                isInSyncPlaySession = false,
-                isSyncPlaySyncing = false,
-            ) }
+            _state.update { it.cleared() }
             currentPlaylistItemId = null
             syncPlayManager.playbackCore.reset()
         }
@@ -137,13 +121,7 @@ internal class SyncPlayBridge(
         syncPlayManager.playbackCore.clearCallbacks()
         syncPlayManager.playbackCore.setCallbacks(this)
         val group = syncPlayManager.currentGroup
-        _state.update { it.copy(
-            isInSyncPlaySession = true,
-            syncPlayGroupName = group?.groupName,
-            syncPlayParticipantCount = group?.participantCount ?: 0,
-            syncPlayRepeatMode = group?.repeatMode ?: SyncPlayRepeatMode.REPEAT_NONE,
-            syncPlayShuffleMode = group?.shuffleMode ?: SyncPlayShuffleMode.SORTED,
-        ) }
+        _state.update { it.from(group) }
         currentPlaylistItemId = group?.playingPlaylistItemId
         syncPlayManager.playbackCore.setCurrentPlaylistItemId(currentPlaylistItemId)
     }
@@ -252,7 +230,7 @@ internal class SyncPlayBridge(
     fun seekTo(positionMs: Long) {
         scope.launch {
             getMediaEngine()?.seekTo(positionMs)
-            syncPlayManager.syncPlayController.seek(positionMs * 10_000)
+            syncPlayManager.syncPlayController.seek(TimeSyncManager.msToTicks(positionMs))
         }
     }
 
@@ -269,7 +247,7 @@ internal class SyncPlayBridge(
                         val currentItemId = getCurrentItemId()
                         when {
                             currentItemId == null || currentItemId != event.data.playingItemId -> {
-                                syncPlayManager.playbackCore.setPendingItemLoad(true)
+                                syncPlayManager.playbackCore.beginPendingItemLoad()
                                 _state.update { it.copy(isSyncPlaySyncing = true, isSyncPlaySynced = false) }
                                 val posTicks = syncPlayManager.queueCore.getStartPositionTicks(
                                     syncPlayManager.playbackCore.lastCommand
@@ -277,31 +255,18 @@ internal class SyncPlayBridge(
                                 onLoadItem(event.data.playingItemId, posTicks)
                             }
                             getMediaEngine() == null -> {
-                                syncPlayManager.playbackCore.setPendingItemLoad(true)
+                                syncPlayManager.playbackCore.beginPendingItemLoad()
                                 _state.update { it.copy(isSyncPlaySyncing = true, isSyncPlaySynced = false) }
                             }
                             else -> {
-                                val engine = getMediaEngine()
-                                if (engine == null) {
-                                    syncPlayManager.playbackCore.setPendingItemLoad(true)
-                                    _state.update { it.copy(isSyncPlaySyncing = true, isSyncPlaySynced = false) }
-                                } else {
-                                    val posTicks = syncPlayManager.estimateCurrentTicks(
-                                        event.data.startPositionTicks, event.data.whenMs
-                                    )
-                                    val posMs = posTicks / 10_000
-                                    val durationMs = engine.durationMs
-                                    val safePosMs = if (durationMs > 0) posMs.coerceIn(0, durationMs) else posMs.coerceAtLeast(0)
-                                    val currentPosMs = engine.currentPositionMs
-                                    if (Math.abs(safePosMs - currentPosMs) > 300) {
-                                        engine.seekTo(safePosMs)
-                                    }
-                                    if (event.data.isPlaying && !engine.isPlaying.value) {
-                                        engine.play()
-                                    } else if (!event.data.isPlaying && engine.isPlaying.value) {
-                                        engine.pause()
-                                    }
-                                }
+                                // Core-owned estimate → clamp → tolerance →
+                                // seek/play-pause-mirror (300 ms lane).
+                                syncPlayManager.playbackCore.reconcileToServerPosition(
+                                    serverTicks = event.data.startPositionTicks,
+                                    whenMs = event.data.whenMs,
+                                    lane = SyncPlayPlaybackCore.ReconcileLane.QUEUE_UPDATE,
+                                    groupIsPlaying = event.data.isPlaying,
+                                )
                             }
                         }
                         // A queue update while the group is actively playing
@@ -316,13 +281,7 @@ internal class SyncPlayBridge(
                     is SyncPlayEvent.GroupUpdate -> {
                         if (event.groupName.isBlank() && event.participantCount == 0) {
                             Log.d(TAG, "GroupUpdate empty: clearing session display state")
-                            _state.update { it.copy(
-                                syncPlayGroupName = null,
-                                syncPlayParticipantCount = 0,
-                                isSyncPlaySynced = false,
-                                isInSyncPlaySession = false,
-                                isSyncPlaySyncing = false,
-                            ) }
+                            _state.update { it.cleared() }
                         }
                         updateGroupState()
                     }
@@ -350,13 +309,7 @@ internal class SyncPlayBridge(
                         updateGroupState()
                     }
                     is SyncPlayEvent.GroupLeft -> {
-                        _state.update { it.copy(
-                            syncPlayGroupName = null,
-                            syncPlayParticipantCount = 0,
-                            isSyncPlaySynced = false,
-                            isInSyncPlaySession = false,
-                            isSyncPlaySyncing = false,
-                        ) }
+                        _state.update { it.cleared() }
                     }
                 }
             }

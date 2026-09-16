@@ -587,9 +587,12 @@ interface HighlightableRoute {
  * The registry unifies on the desktop set — a visual-only change on the
  * phone bar/drawer.
  *
- * Per-mode bar labels and order (the video vs music bottom-bar maps below)
- * stay separate: their vocabulary is legitimately context-specific ("Browse"
- * on the music bar, "Music" on the rail).
+ * Per-mode bar MEMBERSHIP and order (the video vs music bottom-bar maps below)
+ * stay separate — that is per-shell policy — but their labels are no longer a
+ * second vocabulary: both maps resolve through [NAV_DESTINATION_BY_ROUTE], and
+ * the one deliberate wording divergence ("Browse" on the music bar, "Music" on
+ * the rail) is recorded in [TOP_LEVEL_LABEL_OVERRIDES] instead of being
+ * hand-copied per table.
  */
 data class NavDestination(
     val route: Route,
@@ -728,26 +731,86 @@ fun <T> applyNavCustomization(
     return ordered
 }
 
-val VIDEO_TOP_LEVEL_ROUTES: Map<Route, String> = linkedMapOf(
-    Route.Home to "Home",
-    Route.Library to "Library",
-    Route.Search to "Search",
-    Route.LiveTv to "Live TV",
+/**
+ * Recorded per-surface label divergences from the [NAV_DESTINATIONS] registry:
+ * the ONLY place a top-level route may render a different label than its
+ * registry [NavDestination.railLabel].
+ *
+ * This is a recorded product divergence, not a parallel label vocabulary —
+ * `MusicBrowse` reads "Browse" wherever labels resolve through
+ * [topLevelLabel] (the music bottom bar / TV drawer) while the desktop rail
+ * reads the registry row directly and keeps showing "Music". Unifying the two
+ * wordings is a flagged product decision; until it is made, the drift lives
+ * HERE, explicitly named and contract-tested (NavDestinationRegistryTest),
+ * instead of hiding in a hand-copied route→label map.
+ */
+val TOP_LEVEL_LABEL_OVERRIDES: Map<Route, String> = linkedMapOf(
+    Route.MusicBrowse to "Browse",
 )
 
-val MUSIC_TOP_LEVEL_ROUTES: Map<Route, String> = linkedMapOf(
-    Route.Home to "Home",
-    Route.MusicBrowse to "Browse",
-    Route.Search to "Search",
+/**
+ * Resolves the label a top-level surface renders for [route]: the
+ * [NAV_DESTINATIONS] registry row's [NavDestination.railLabel], replaced by
+ * any recorded [TOP_LEVEL_LABEL_OVERRIDES] entry. A route without a registry
+ * row cannot be labeled at all — this fails loudly rather than inventing a
+ * fallback, so an unregistered route breaks at init (and in
+ * NavDestinationRegistryTest), never as a silently blank tab.
+ */
+fun topLevelLabel(route: Route): String {
+    val registryLabel = NAV_DESTINATION_BY_ROUTE[route]?.railLabel
+        ?: error(
+            "No NAV_DESTINATIONS row for ${route::class.simpleName}: a top-level route must " +
+                "register its facts exactly once (NavKey.kt NAV_DESTINATIONS).",
+        )
+    return TOP_LEVEL_LABEL_OVERRIDES[route] ?: registryLabel
+}
+
+/**
+ * Turns a shell's top-level membership/order policy into the route→label map
+ * every browse shell renders. Labels are never hand-written per shell — they
+ * resolve through [topLevelLabel] (registry row first, then the recorded
+ * overrides), so the only label literals in these tables are the ones in
+ * [TOP_LEVEL_LABEL_OVERRIDES].
+ */
+private fun deriveTopLevelRoutes(vararg membership: Route): LinkedHashMap<Route, String> {
+    val routes = LinkedHashMap<Route, String>()
+    for (route in membership) {
+        routes[route] = topLevelLabel(route)
+    }
+    return routes
+}
+
+/**
+ * Video-mode top-level destinations, in bar/drawer order. Membership and order
+ * are this table's whole policy — labels derive from the registry.
+ */
+val VIDEO_TOP_LEVEL_ROUTES: Map<Route, String> = deriveTopLevelRoutes(
+    Route.Home,
+    Route.Library,
+    Route.Search,
+    Route.LiveTv,
+)
+
+/**
+ * Music-mode top-level destinations, in bar/drawer order. Same contract as
+ * [VIDEO_TOP_LEVEL_ROUTES]; the music tab's "Browse" wording is the one
+ * recorded [TOP_LEVEL_LABEL_OVERRIDES] entry.
+ */
+val MUSIC_TOP_LEVEL_ROUTES: Map<Route, String> = deriveTopLevelRoutes(
+    Route.Home,
+    Route.MusicBrowse,
+    Route.Search,
 )
 
 val TOP_LEVEL_ROUTES = VIDEO_TOP_LEVEL_ROUTES
 
-// The two maps above carry explicit Map<Route, String> annotations — without
-// them the wasmJs frontend unifies the vararg Pair keys up to `out Any` (a
-// first attempt at an explicit union type argument failed differently) and
-// every downstream Set<Route> use breaks. JVM/android inference is
-// unaffected. class E.
+// The two maps above keep explicit Map<Route, String> annotations: the
+// previous hand-written form put Pair varargs inline, and without the
+// annotations the wasmJs frontend unified the vararg keys up to `out Any`
+// (a first attempt at an explicit union type argument failed differently)
+// and every downstream Set<Route> use broke. JVM/android inference was
+// unaffected (class E). The derivation helper removes the Pair shape
+// entirely, but the annotations stay as a guard against reintroducing one.
 val ALL_TOP_LEVEL_ROUTE_KEYS: Set<Route> =
     VIDEO_TOP_LEVEL_ROUTES.keys.union(MUSIC_TOP_LEVEL_ROUTES.keys)
 

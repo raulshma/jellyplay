@@ -77,11 +77,12 @@ class SyncPlayQueueCore constructor(
         return estimateCurrentTicks(update.startPositionTicks, update.lastUpdateMs)
     }
 
-    fun estimateCurrentTicks(ticks: Long, whenMs: Long): Long {
-        val remoteNow = timeSyncManager.remoteNow()
-        val elapsedMs = remoteNow - whenMs
-        return ticks + elapsedMs * 10_000
-    }
+    /**
+     * Forward to the [TimeSyncManager] clock projection (pure core plus a
+     * `remoteNow` read on the injected instance).
+     */
+    fun estimateCurrentTicks(ticks: Long, whenMs: Long): Long =
+        TimeSyncManager.projectCurrentTicks(ticks, timeSyncManager.remoteNow() - whenMs)
 
     fun clear() {
         cachedPlaylistItemMap = null

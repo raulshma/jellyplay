@@ -421,50 +421,74 @@ class Migration24To25(
     }
 
     private suspend fun encryptUserTokens(db: SQLiteConnection) {
-        db.prepare("SELECT userId, accessToken FROM users").use { cursor ->
-            while (cursor.step()) {
-                val userId = cursor.getText(0)
-                val rawToken = if (cursor.isNull(1)) null else cursor.getText(1)
-                val encrypted = try {
-                    tokenCipher.encrypt(rawToken)
-                } catch (e: Exception) {
-                    throw IllegalStateException(
-                        "Migration 24→25: failed to encrypt token for user $userId. " +
-                            "Aborting migration so Room can retry on next launch.",
-                        e,
-                    )
-                }
-                if (encrypted != rawToken) {
-                    db.execSQL(
-                        "UPDATE users SET accessToken = ? WHERE userId = ?",
-                        arrayOf(encrypted ?: "", userId),
-                    )
-                }
+        collectRowsThenUpdate(db, "SELECT userId, accessToken FROM users") { userId, rawToken ->
+            val encrypted = try {
+                tokenCipher.encrypt(rawToken)
+            } catch (e: Exception) {
+                throw IllegalStateException(
+                    "Migration 24→25: failed to encrypt token for user $userId. " +
+                        "Aborting migration so Room can retry on next launch.",
+                    e,
+                )
+            }
+            if (encrypted != rawToken) {
+                db.execSQL(
+                    "UPDATE users SET accessToken = ? WHERE userId = ?",
+                    arrayOf(encrypted ?: "", userId),
+                )
             }
         }
     }
 
     private suspend fun encryptServerTokens(db: SQLiteConnection) {
-        db.prepare("SELECT id, accessToken FROM servers").use { cursor ->
-            while (cursor.step()) {
-                val serverId = cursor.getText(0)
-                val rawToken = if (cursor.isNull(1)) null else cursor.getText(1)
-                val encrypted = try {
-                    tokenCipher.encrypt(rawToken)
-                } catch (e: Exception) {
-                    throw IllegalStateException(
-                        "Migration 24→25: failed to encrypt token for server $serverId.",
-                        e,
-                    )
-                }
-                if (encrypted != rawToken) {
-                    db.execSQL(
-                        "UPDATE servers SET accessToken = ? WHERE id = ?",
-                        arrayOf(encrypted, serverId),
-                    )
-                }
+        collectRowsThenUpdate(db, "SELECT id, accessToken FROM servers") { serverId, rawToken ->
+            val encrypted = try {
+                tokenCipher.encrypt(rawToken)
+            } catch (e: Exception) {
+                throw IllegalStateException(
+                    "Migration 24→25: failed to encrypt token for server $serverId.",
+                    e,
+                )
+            }
+            if (encrypted != rawToken) {
+                db.execSQL(
+                    "UPDATE servers SET accessToken = ? WHERE id = ?",
+                    arrayOf(encrypted, serverId),
+                )
             }
         }
+    }
+}
+
+/**
+ * Collect-then-update scan shared by the row-rewriting migrations
+ * ([Migration24To25], [Migration53To54]): fully drains [select] — a
+ * two-column query shaped `SELECT <key>, <payload> FROM …` with a non-null
+ * TEXT key in position 0 and a nullable TEXT payload in position 1 — into
+ * memory, and only then runs [updateRow] for each collected row.
+ *
+ * The row's UPDATE must never be issued while the SELECT cursor is still
+ * stepping: the UPDATE writes the very column the open cursor scans (v24→v25
+ * rewrites `users.accessToken` / `servers.accessToken`; v53→v54 filters on
+ * `downloads.container IS NULL`), and SQLite may revisit or skip rows whose
+ * scanned columns change mid-scan — a skipped row would silently keep its
+ * stale value (for 24→25, a plaintext token). Collecting the pending rows
+ * first is the safe pattern; this helper exists so that rule is enforced and
+ * documented in exactly one place.
+ */
+private suspend fun collectRowsThenUpdate(
+    db: SQLiteConnection,
+    select: String,
+    updateRow: suspend (key: String, payload: String?) -> Unit,
+) {
+    val rows = mutableListOf<Pair<String, String?>>()
+    db.prepare(select).use { cursor ->
+        while (cursor.step()) {
+            rows.add(cursor.getText(0) to if (cursor.isNull(1)) null else cursor.getText(1))
+        }
+    }
+    for ((key, payload) in rows) {
+        updateRow(key, payload)
     }
 }
 
@@ -1078,26 +1102,20 @@ class Migration53To54(
     private val containerProbe: ContainerProbe,
 ) : Migration(53, 54) {
     override suspend fun migrate(db: SQLiteConnection) {
-        // Collect the pending rows first, then UPDATE: the update writes the
-        // very column the SELECT filters on (container IS NULL), and SQLite
-        // may revisit or skip rows when a cursor's WHERE columns change
-        // mid-scan.
-        val pending = mutableListOf<Pair<String, String>>()
-        db.prepare(
-            "SELECT id, downloadPath FROM downloads WHERE container IS NULL"
-        ).use { cursor ->
-            while (cursor.step()) {
-                pending.add(cursor.getText(0) to cursor.getText(1))
-            }
-        }
-        for ((id, downloadPath) in pending) {
+        collectRowsThenUpdate(
+            db,
+            "SELECT id, downloadPath FROM downloads WHERE container IS NULL",
+        ) { id, downloadPath ->
+            // downloadPath is NOT NULL in every downloads schema since the
+            // table's creation; the elvis only satisfies the helper's
+            // nullable payload type.
             val container = try {
-                containerProbe.probe(downloadPath)
+                containerProbe.probe(downloadPath ?: return@collectRowsThenUpdate)
             } catch (_: Exception) {
                 // Unreadable/failed probe — the row stays NULL and the
                 // migration proceeds.
                 null
-            } ?: continue
+            } ?: return@collectRowsThenUpdate
             db.execSQL(
                 "UPDATE downloads SET container = ? WHERE id = ?",
                 arrayOf(container, id),

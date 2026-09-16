@@ -21,6 +21,7 @@ import com.raulshma.jellyplay.core.data.util.TimeSource
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
@@ -634,6 +635,9 @@ class AuthRepositoryImpl constructor(
 
     override val isConnected: StateFlow<Boolean>
         get() = webSocketClient.isConnected
+
+    override val reconnects: SharedFlow<Unit>
+        get() = webSocketClient.reconnects
 
     override fun connect(credentials: ConnectionCredentials) = webSocketClient.connect(credentials)
 

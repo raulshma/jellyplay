@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.util
 
+import com.raulshma.jellyplay.core.data.repository.DownloadStartRequest
 import com.raulshma.jellyplay.core.data.repository.OfflineDownloadWriter
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.model.DownloadItem
@@ -53,29 +54,19 @@ class DownloadDelegateTest {
         // Per-image-type result override for downloadOfflineImage: an absent
         // key yields the default local path, an explicit null a failed fetch.
         val imageResults = mutableMapOf<String, String?>()
+        // Captures the value object handed to startDownload so tests can pin
+        // the single episode-context guard (series linkage non-null only for
+        // episodes).
+        var lastStartRequest: DownloadStartRequest? = null
+            private set
         // Last backdropUrl persisted via saveOfflineMediaDetail/Item.
         var lastSavedBackdrop: String? = null
             private set
         private fun result(): Result<DownloadItem> = startResult!!
 
-        override suspend fun startDownload(
-            mediaItemId: String,
-            name: String,
-            mediaType: String,
-            mediaSourceId: String?,
-            downloadUrl: String,
-            imageUrl: String?,
-            imageBlurHash: String?,
-            seriesId: String?,
-            seasonId: String?,
-            seriesName: String?,
-            seasonName: String?,
-            episodeNumber: Int?,
-            seasonNumber: Int?,
-            container: String?,
-            precomputedCurrentBytes: Long?,
-        ): Result<DownloadItem> {
-            calls += "startDownload($mediaItemId)"
+        override suspend fun startDownload(request: DownloadStartRequest): Result<DownloadItem> {
+            calls += "startDownload(${request.mediaItemId})"
+            lastStartRequest = request
             return result()
         }
 
@@ -389,7 +380,81 @@ class DownloadDelegateTest {
         }
     }
 
+    @Test
+    fun `startDownload request carries the series linkage for episodes`() = runTest {
+        // The downloads row must link to its parent series/season — without
+        // the link, deleteOfflineSeries (WHERE seriesId = :seriesId) finds no
+        // rows and orphans episode files behind a deleted series.
+        coEvery { playbackRepository.getBackdropUrl(any(), any()) } returns "https://backdrop"
+        val request = episodeRequest()
+
+        delegate.executeDownload(request)
+
+        val start = writer.lastStartRequest
+        assertNotNull(start)
+        assertEquals("ser-1", start.seriesId)
+        assertEquals("sea-1", start.seasonId)
+        assertEquals("Test Series", start.seriesName)
+        assertEquals("Season 2", start.seasonName)
+        assertEquals(3, start.episodeNumber)
+        assertEquals(2, start.seasonNumber)
+    }
+
+    @Test
+    fun `startDownload request nulls the series linkage for non-episodes even when the detail item carries it`() = runTest {
+        // The single episode-context guard: a detail item that happens to
+        // carry series fields must NOT leak them into a non-episode's
+        // download row.
+        coEvery { playbackRepository.getBackdropUrl(any(), any()) } returns "https://backdrop"
+        val request = episodeRequest().copy(
+            mediaType = MediaType.MOVIE.name,
+            detail = requestDetail(MediaType.MOVIE),
+        )
+
+        delegate.executeDownload(request)
+
+        val start = writer.lastStartRequest
+        assertNotNull(start)
+        assertNull(start.seriesId)
+        assertNull(start.seasonId)
+        assertNull(start.seriesName)
+        assertNull(start.seasonName)
+        assertNull(start.episodeNumber)
+        assertNull(start.seasonNumber)
+    }
+
     // --- helpers -------------------------------------------------------------
+
+    /** A detail whose item carries the full series/season linkage context. */
+    private fun requestDetail(mediaType: MediaType) = MediaDetail(
+        item = MediaItem(
+            id = "item-1",
+            name = "Test",
+            mediaType = mediaType,
+            seriesId = "ser-1",
+            seasonId = "sea-1",
+            seriesName = "Test Series",
+            seasonName = "Season 2",
+            episodeNumber = 3,
+            seasonNumber = 2,
+        ),
+        mediaSources = listOf(MediaSource(id = "src-1", name = "Source", container = "mkv")),
+    )
+
+    private fun episodeRequest(): DownloadRequest {
+        val detail = requestDetail(MediaType.EPISODE)
+        return DownloadRequest(
+            mediaItemId = "item-1",
+            name = "Test",
+            mediaType = MediaType.EPISODE.name,
+            mediaSourceId = "src-1",
+            downloadUrl = "https://stream",
+            imageUrl = "https://img",
+            imageBlurHash = null,
+            detail = detail,
+            container = "mkv",
+        )
+    }
 
     private fun buildRequest(
         detailWithStreams: Boolean,

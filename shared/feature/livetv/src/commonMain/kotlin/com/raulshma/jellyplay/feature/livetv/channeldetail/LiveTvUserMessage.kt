@@ -4,8 +4,9 @@ import androidx.compose.runtime.Immutable
 
 /**
  * One-shot record/cancel feedback emitted by [ChannelDetailViewModel] and
- * rendered by [ChannelDetailScreen] through the LiveTvMessenger seam — the
- * commonMain-safe replacement for the legacy `UiText.Resource(...)` values the
+ * rendered by [ChannelDetailScreen], which posts the resolved text to the
+ * shared UserMessageBus — the commonMain-safe replacement for the legacy
+ * `UiText.Resource(...)` values the
  * ViewModel used to post through the Android-only UserMessageBus. The screen
  * resolves the resource text (compose-resources), so no R class or UiText
  * machinery leaks into shared code.

@@ -1,12 +1,7 @@
 package com.raulshma.jellyplay.feature.editor
 
-internal actual fun formatOneDecimal(value: Double): String {
-    // HALF_UP at the first decimal through integer math ("%.1f" replacement,
-    // core:ui PlatformTime shape), sign applied symmetrically.
-    val magnitude = kotlin.math.round(kotlin.math.abs(value) * 10).toLong()
-    val rendered = "${magnitude / 10}.${magnitude % 10}"
-    return if (value < 0) "-$rendered" else rendered
-}
+// formatOneDecimal folded onto core/ui's DateLabels seam (PlatformFormats.kt
+// façade); only the editor-specific resource-pattern reads keep actuals.
 
 // The editor's resource patterns carry a single positional slot ("%1$d downloads"
 // / "%1$sfps"), so literal slot substitution stands in for java.text formatting.

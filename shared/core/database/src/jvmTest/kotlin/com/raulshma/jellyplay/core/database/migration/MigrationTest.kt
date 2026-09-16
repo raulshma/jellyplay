@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.database.migration
 
 import androidx.room3.Room
+import androidx.room3.testing.MigrationTestHelper
 import androidx.sqlite.SQLiteConnection
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import com.raulshma.jellyplay.core.database.JELLY_PLAY_DATABASE_VERSION
@@ -31,6 +32,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.io.File
+import java.nio.file.Path
 import kotlin.io.path.createTempDirectory
 
 class MigrationTest {
@@ -60,18 +62,11 @@ class MigrationTest {
     @Test
     fun migrateAllFromV1() = runTest {
         createDatabase(1) { db ->
-            db.execSQL(
-                """
-                CREATE TABLE servers (
-                    id TEXT PRIMARY KEY NOT NULL,
-                    name TEXT NOT NULL,
-                    address TEXT NOT NULL,
-                    userId TEXT,
-                    accessToken TEXT,
-                    lastConnected INTEGER NOT NULL
-                )
-                """.trimIndent()
-            )
+            // `servers` predates the migration chain (Room created it with the
+            // initial v1 schema on fresh installs; no MIGRATION_x_y step owns
+            // it), so the hand fixture below is the only record of its v1
+            // shape — see createServersTable.
+            createServersTable(db)
             db.execSQL(
                 "INSERT INTO servers (id, name, address, lastConnected) VALUES (?, ?, ?, ?)",
                 arrayOf<Any>("server-1", "Test Server", "https://test.example.com", 1700000000000L)
@@ -471,53 +466,26 @@ class MigrationTest {
      * `users` and `servers` tables. After the migration, the DB columns hold ciphertext that
      * round-trips through [TokenCipher.decrypt].
      *
-     * Invokes [Migration24To25.migrate] directly against a fresh SQLite database rather than
-     * going through Room's full schema-validation path, so we don't have to recreate every
-     * v24 index/column just to test the token-encryption logic.
+     * Invokes [Migration24To25.migrate] directly against a raw SQLite database rather than
+     * going through Room's full schema-validation path, so the token-encryption logic is tested
+     * without dragging the rest of the chain in. The starting schema is executed from the
+     * exported `24.json` (see [execSchema]) — the exact tables and indices Room generated at
+     * v24 — so the fixture cannot drift from the real v24 shape.
      */
     @Test
     fun migrateV24_encryptsExistingPlaintextTokens() = runTest {
         val db = openRawDatabase(24) { db ->
-
-                db.execSQL(
-                    """
-                    CREATE TABLE servers (
-                        id TEXT PRIMARY KEY NOT NULL,
-                        name TEXT NOT NULL,
-                        address TEXT NOT NULL,
-                        userId TEXT,
-                        accessToken TEXT,
-                        lastConnected INTEGER NOT NULL,
-                        alternateAddresses TEXT
-                    )
-                    """.trimIndent()
-                )
-                db.execSQL(
-                    """
-                    CREATE TABLE users (
-                        userId TEXT PRIMARY KEY NOT NULL,
-                        serverId TEXT NOT NULL,
-                        name TEXT NOT NULL,
-                        accessToken TEXT NOT NULL,
-                        primaryImageTag TEXT,
-                        maxParentalAgeRating INTEGER,
-                        enabledFolderIds TEXT,
-                        isAdmin INTEGER NOT NULL DEFAULT 0,
-                        lastConnected INTEGER NOT NULL DEFAULT 0
-                    )
-                    """.trimIndent()
-                )
-                db.execSQL(
-                    "INSERT INTO servers (id, name, address, userId, accessToken, lastConnected, alternateAddresses) " +
-                        "VALUES (?, ?, ?, ?, ?, ?, ?)",
-                    arrayOf<Any?>("srv-1", "Server One", "https://s1.example", "u1", "plaintext-server-token", 0L, null)
-                )
-                db.execSQL(
-                    "INSERT INTO users (userId, serverId, name, accessToken, isAdmin, lastConnected) " +
-                        "VALUES (?, ?, ?, ?, ?, ?)",
-                    arrayOf<Any>("u1", "srv-1", "alice", "plaintext-user-token", 0, 0L)
-                )
-            
+            execSchema(db, 24)
+            db.execSQL(
+                "INSERT INTO servers (id, name, address, userId, accessToken, lastConnected, alternateAddresses) " +
+                    "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                arrayOf<Any?>("srv-1", "Server One", "https://s1.example", "u1", "plaintext-server-token", 0L, null)
+            )
+            db.execSQL(
+                "INSERT INTO users (userId, serverId, name, accessToken, isAdmin, lastConnected) " +
+                    "VALUES (?, ?, ?, ?, ?, ?)",
+                arrayOf<Any>("u1", "srv-1", "alice", "plaintext-user-token", 0, 0L)
+            )
         }
 
         val tokenCipher = JvmTokenCipher.forTestingWithPersistentKey()
@@ -541,46 +509,20 @@ class MigrationTest {
 
     /**
      * Regression: re-running the migration on already-encrypted rows must NOT change
-     * them (cipher is idempotent) and must NOT corrupt the data.
+     * them (cipher is idempotent) and must NOT corrupt the data. Starting schema
+     * from the exported `24.json` (see [execSchema]), same as the encryption test
+     * above — this also pins that the collect-then-update scan in
+     * [Migration24To25] observes every row on re-runs.
      */
     @Test
     fun migrateV24_isIdempotentWhenRunTwice() = runTest {
         val db = openRawDatabase(24) { db ->
-
-                db.execSQL(
-                    """
-                    CREATE TABLE servers (
-                        id TEXT PRIMARY KEY NOT NULL,
-                        name TEXT NOT NULL,
-                        address TEXT NOT NULL,
-                        userId TEXT,
-                        accessToken TEXT,
-                        lastConnected INTEGER NOT NULL,
-                        alternateAddresses TEXT
-                    )
-                    """.trimIndent()
-                )
-                db.execSQL(
-                    """
-                    CREATE TABLE users (
-                        userId TEXT PRIMARY KEY NOT NULL,
-                        serverId TEXT NOT NULL,
-                        name TEXT NOT NULL,
-                        accessToken TEXT NOT NULL,
-                        primaryImageTag TEXT,
-                        maxParentalAgeRating INTEGER,
-                        enabledFolderIds TEXT,
-                        isAdmin INTEGER NOT NULL DEFAULT 0,
-                        lastConnected INTEGER NOT NULL DEFAULT 0
-                    )
-                    """.trimIndent()
-                )
-                db.execSQL(
-                    "INSERT INTO users (userId, serverId, name, accessToken, isAdmin, lastConnected) " +
-                        "VALUES (?, ?, ?, ?, ?, ?)",
-                    arrayOf<Any>("u1", "srv-1", "alice", "plaintext-user-token", 0, 0L)
-                )
-            
+            execSchema(db, 24)
+            db.execSQL(
+                "INSERT INTO users (userId, serverId, name, accessToken, isAdmin, lastConnected) " +
+                    "VALUES (?, ?, ?, ?, ?, ?)",
+                arrayOf<Any>("u1", "srv-1", "alice", "plaintext-user-token", 0, 0L)
+            )
         }
 
         val tokenCipher = JvmTokenCipher.forTestingWithPersistentKey()
@@ -647,6 +589,29 @@ class MigrationTest {
             db.execSQL(v["createSql"]!!.jsonPrimitive.content.replace("\${VIEW_NAME}", v["viewName"]!!.jsonPrimitive.content))
         }
     }
+
+    /**
+     * room3's [MigrationTestHelper] pointed at the tracked `schemas/`
+     * directory (Gradle's jvmTest working directory is the module directory, so
+     * the relative path resolves to the same tree the KSP `room.schemaLocation`
+     * arg writes to) and a fresh database file inside this test's temp dir.
+     * Used by the single-step migration tests that anchor at a version with a
+     * tracked schema JSON (v50/52/53): `createDatabase` replays the historical
+     * DDL through room3's own schema reader, and `runMigrationsAndValidate`
+     * checks the migrated database against the tracked target JSON with the
+     * same TableInfo comparison Room 3 itself performs when opening a migrated
+     * database on device — a strictly stronger fixture than [execSchema] for
+     * those steps. Connections it returns are closed by each caller (the
+     * helper's JUnit-rule auto-close only applies when registered as a Rule,
+     * which kotlin.test here does not do).
+     */
+    private fun room3Helper(dbFileName: String): MigrationTestHelper =
+        MigrationTestHelper(
+            schemaDirectoryPath = Path.of("schemas"),
+            databasePath = dbDir.resolve(dbFileName).toPath(),
+            driver = BundledSQLiteDriver(),
+            databaseClass = JellyPlayDatabase::class,
+        )
 
     @Test
     fun migrateAllFromV12_addsOfflineSyncColumns() = runTest {
@@ -976,115 +941,119 @@ class MigrationTest {
      * composite badge — while genuine other-axis badges survive. See
      * [MIGRATION_50_51]'s KDoc for the full rationale.
      *
-     * The starting schema is executed from the exported `50.json` (see
-     * [execSchema]) — the exact tables, indices and view Room generated at
-     * v50 — so a drift between [MIGRATION_50_51]'s SQL and the real v50 shape
-     * (a renamed column, a NOT NULL column without default) fails loudly here
-     * instead of only on device.
+     * The starting schema is created from the tracked `50.json` via room3's
+     * [MigrationTestHelper] (see [room3Helper]) — the exact tables, indices
+     * and view Room generated at v50, replayed by room3's own schema reader —
+     * and the migrated result is validated against the tracked `51.json` with
+     * the same TableInfo comparison Room 3 itself runs when opening a migrated
+     * database, so a drift between [MIGRATION_50_51]'s SQL and the real v50/v51
+     * shapes fails loudly here instead of only on device.
      */
     @Test
     fun migrateV50_51_retiresLegacyMetadataSignatures() = runTest {
-        openRawDatabase(50) { db ->
-            execSchema(db, 50)
-            // Seed against the REAL v50 schema: one row whose v50-format
-            // comparison already left a stale metadata flag + lit composite
-            // badge, one already-first-contact row, one with a genuine
-            // other-axis (images) change whose badge must survive, and one
-            // with only a pending subtitle bundle (the subtitle axis counts
-            // pending as changed, so its badge must survive too).
-            db.execSQL("INSERT INTO offline_media (id, name, mediaType) VALUES ('item-1', 'Test', 'MOVIE')")
-            db.execSQL("INSERT INTO offline_media (id, name, mediaType) VALUES ('item-2', 'Test 2', 'MOVIE')")
-            db.execSQL("INSERT INTO offline_media (id, name, mediaType) VALUES ('item-3', 'Test 3', 'MOVIE')")
-            db.execSQL("INSERT INTO offline_media (id, name, mediaType) VALUES ('item-4', 'Test 4', 'MOVIE')")
-            db.execSQL(
-                "INSERT INTO sync_baseline (id, syncedPosterTag, syncedBackdropTag, syncedMetadataSignature, " +
-                    "syncUpdateAvailable, syncMetadataChanged) " +
-                    "VALUES ('item-1', 'poster-1', 'backdrop-1', 'legacy-format-hash', 1, 1)"
-            )
-            db.execSQL("INSERT INTO sync_baseline (id) VALUES ('item-2')")
-            db.execSQL(
-                "INSERT INTO sync_baseline (id, syncedMetadataSignature, syncUpdateAvailable, syncImagesChanged) " +
-                    "VALUES ('item-3', 'legacy-format-hash-3', 1, 1)"
-            )
-            db.execSQL(
-                "INSERT INTO sync_baseline (id, syncedMetadataSignature, syncUpdateAvailable, " +
-                    "syncSubtitlesPending) VALUES ('item-4', 'legacy-format-hash-4', 1, 1)"
-            )
+        val helper = room3Helper("migrate-v50-51.db")
+        // Seed against the REAL v50 schema: one row whose v50-format
+        // comparison already left a stale metadata flag + lit composite
+        // badge, one already-first-contact row, one with a genuine
+        // other-axis (images) change whose badge must survive, and one
+        // with only a pending subtitle bundle (the subtitle axis counts
+        // pending as changed, so its badge must survive too).
+        val v50 = helper.createDatabase(50)
+        v50.execSQL("INSERT INTO offline_media (id, name, mediaType) VALUES ('item-1', 'Test', 'MOVIE')")
+        v50.execSQL("INSERT INTO offline_media (id, name, mediaType) VALUES ('item-2', 'Test 2', 'MOVIE')")
+        v50.execSQL("INSERT INTO offline_media (id, name, mediaType) VALUES ('item-3', 'Test 3', 'MOVIE')")
+        v50.execSQL("INSERT INTO offline_media (id, name, mediaType) VALUES ('item-4', 'Test 4', 'MOVIE')")
+        v50.execSQL(
+            "INSERT INTO sync_baseline (id, syncedPosterTag, syncedBackdropTag, syncedMetadataSignature, " +
+                "syncUpdateAvailable, syncMetadataChanged) " +
+                "VALUES ('item-1', 'poster-1', 'backdrop-1', 'legacy-format-hash', 1, 1)"
+        )
+        v50.execSQL("INSERT INTO sync_baseline (id) VALUES ('item-2')")
+        v50.execSQL(
+            "INSERT INTO sync_baseline (id, syncedMetadataSignature, syncUpdateAvailable, syncImagesChanged) " +
+                "VALUES ('item-3', 'legacy-format-hash-3', 1, 1)"
+        )
+        v50.execSQL(
+            "INSERT INTO sync_baseline (id, syncedMetadataSignature, syncUpdateAvailable, " +
+                "syncSubtitlesPending) VALUES ('item-4', 'legacy-format-hash-4', 1, 1)"
+        )
+        v50.close()
 
-            MIGRATION_50_51.migrate(db)
+        // Migrate v50 → v51, validating the resulting schema against the
+        // tracked 51.json before the data asserts below run.
+        val db = helper.runMigrationsAndValidate(51, listOf(MIGRATION_50_51))
 
-            // Every stored metadata signature is gone; other baseline data survives.
-            db.prepare(
-                "SELECT id, syncedPosterTag, syncedBackdropTag, syncedMetadataSignature FROM sync_baseline ORDER BY id"
-            ).use { c ->
-                assertTrue(c.step())
-                assertEquals("item-1", c.getText(0))
-                assertEquals("poster-1", c.getText(1))
-                assertEquals("backdrop-1", c.getText(2))
-                assertTrue(c.isNull(3))
-                assertTrue(c.step())
-                assertEquals("item-2", c.getText(0))
-                assertTrue(c.isNull(1))
-                assertTrue(c.isNull(2))
-                assertTrue(c.isNull(3))
-                assertTrue(c.step())
-                assertEquals("item-3", c.getText(0))
-                assertTrue(c.isNull(1))
-                assertTrue(c.isNull(2))
-                assertTrue(c.isNull(3))
-                assertTrue(c.step())
-                assertEquals("item-4", c.getText(0))
-                assertTrue(c.isNull(1))
-                assertTrue(c.isNull(2))
-                assertTrue(c.isNull(3))
-                assertFalse(c.step())
-            }
-            // The retired format's fallout is cleared at upgrade time instead of
-            // lingering until each row's next TTL-gated check: item-1's stale
-            // metadata flag and composite badge go dark immediately, item-2 stays
-            // clean, and item-3/item-4's genuine non-metadata badges survive.
-            db.prepare(
-                "SELECT id, syncMetadataChanged, syncImagesChanged, syncSubtitlesChanged, " +
-                    "syncSubtitlesPending, syncUpdateAvailable FROM sync_baseline ORDER BY id"
-            ).use { c ->
-                assertTrue(c.step())
-                assertEquals("item-1", c.getText(0))
-                assertEquals(0L, c.getLong(1))
-                assertEquals(0L, c.getLong(2))
-                assertEquals(0L, c.getLong(3))
-                assertEquals(0L, c.getLong(4))
-                assertEquals(0L, c.getLong(5))
-                assertTrue(c.step())
-                assertEquals("item-2", c.getText(0))
-                assertEquals(0L, c.getLong(1))
-                assertEquals(0L, c.getLong(2))
-                assertEquals(0L, c.getLong(3))
-                assertEquals(0L, c.getLong(4))
-                assertEquals(0L, c.getLong(5))
-                assertTrue(c.step())
-                assertEquals("item-3", c.getText(0))
-                assertEquals(0L, c.getLong(1))
-                assertEquals(1L, c.getLong(2))
-                assertEquals(0L, c.getLong(3))
-                assertEquals(0L, c.getLong(4))
-                assertEquals(1L, c.getLong(5))
-                assertTrue(c.step())
-                assertEquals("item-4", c.getText(0))
-                assertEquals(0L, c.getLong(1))
-                assertEquals(0L, c.getLong(2))
-                assertEquals(0L, c.getLong(3))
-                assertEquals(1L, c.getLong(4))
-                assertEquals(1L, c.getLong(5))
-                assertFalse(c.step())
-            }
-            // The new column exists and pre-existing rows pick up null chapters.
-            db.prepare("SELECT id, chaptersJson FROM offline_media").use { c ->
-                assertTrue(c.step())
-                assertEquals("item-1", c.getText(0))
-                assertTrue(c.isNull(1))
-            }
-            db.close()
+        // Every stored metadata signature is gone; other baseline data survives.
+        db.prepare(
+            "SELECT id, syncedPosterTag, syncedBackdropTag, syncedMetadataSignature FROM sync_baseline ORDER BY id"
+        ).use { c ->
+            assertTrue(c.step())
+            assertEquals("item-1", c.getText(0))
+            assertEquals("poster-1", c.getText(1))
+            assertEquals("backdrop-1", c.getText(2))
+            assertTrue(c.isNull(3))
+            assertTrue(c.step())
+            assertEquals("item-2", c.getText(0))
+            assertTrue(c.isNull(1))
+            assertTrue(c.isNull(2))
+            assertTrue(c.isNull(3))
+            assertTrue(c.step())
+            assertEquals("item-3", c.getText(0))
+            assertTrue(c.isNull(1))
+            assertTrue(c.isNull(2))
+            assertTrue(c.isNull(3))
+            assertTrue(c.step())
+            assertEquals("item-4", c.getText(0))
+            assertTrue(c.isNull(1))
+            assertTrue(c.isNull(2))
+            assertTrue(c.isNull(3))
+            assertFalse(c.step())
         }
+        // The retired format's fallout is cleared at upgrade time instead of
+        // lingering until each row's next TTL-gated check: item-1's stale
+        // metadata flag and composite badge go dark immediately, item-2 stays
+        // clean, and item-3/item-4's genuine non-metadata badges survive.
+        db.prepare(
+            "SELECT id, syncMetadataChanged, syncImagesChanged, syncSubtitlesChanged, " +
+                "syncSubtitlesPending, syncUpdateAvailable FROM sync_baseline ORDER BY id"
+        ).use { c ->
+            assertTrue(c.step())
+            assertEquals("item-1", c.getText(0))
+            assertEquals(0L, c.getLong(1))
+            assertEquals(0L, c.getLong(2))
+            assertEquals(0L, c.getLong(3))
+            assertEquals(0L, c.getLong(4))
+            assertEquals(0L, c.getLong(5))
+            assertTrue(c.step())
+            assertEquals("item-2", c.getText(0))
+            assertEquals(0L, c.getLong(1))
+            assertEquals(0L, c.getLong(2))
+            assertEquals(0L, c.getLong(3))
+            assertEquals(0L, c.getLong(4))
+            assertEquals(0L, c.getLong(5))
+            assertTrue(c.step())
+            assertEquals("item-3", c.getText(0))
+            assertEquals(0L, c.getLong(1))
+            assertEquals(1L, c.getLong(2))
+            assertEquals(0L, c.getLong(3))
+            assertEquals(0L, c.getLong(4))
+            assertEquals(1L, c.getLong(5))
+            assertTrue(c.step())
+            assertEquals("item-4", c.getText(0))
+            assertEquals(0L, c.getLong(1))
+            assertEquals(0L, c.getLong(2))
+            assertEquals(0L, c.getLong(3))
+            assertEquals(1L, c.getLong(4))
+            assertEquals(1L, c.getLong(5))
+            assertFalse(c.step())
+        }
+        // The new column exists and pre-existing rows pick up null chapters.
+        db.prepare("SELECT id, chaptersJson FROM offline_media").use { c ->
+            assertTrue(c.step())
+            assertEquals("item-1", c.getText(0))
+            assertTrue(c.isNull(1))
+        }
+        db.close()
     }
 
     /**
@@ -1094,37 +1063,30 @@ class MigrationTest {
      * `mediaType = 'EPISODE'`, order by seriesId/seasonNumber/episodeNumber) —
      * under Room's generated index name and with the exact column order the
      * ORDER BY needs, so Room's post-migration schema validation accepts the
-     * migrated database. The starting schema is executed from the exported
-     * `52.json` (see [execSchema]) — the exact tables, indices and view Room
-     * generated at v52 — so a drift between [MIGRATION_52_53]'s SQL and the
-     * real v52 shape fails loudly here instead of only on device.
+     * migrated database. The starting schema is created from the tracked
+     * `52.json` via room3's [MigrationTestHelper] (see [room3Helper]), and
+     * the migrated result is validated against the tracked `53.json` with the
+     * same TableInfo comparison Room 3 itself runs when opening a migrated
+     * database — that check includes indices, so a missing or misnamed index
+     * fails loudly here; the explicit pragma_index_info probe below then
+     * documents the exact column order the query's ORDER BY needs.
      */
     @Test
     fun migrateV52_53_addsEpisodeOrderingCoveringIndex() = runTest {
-        openRawDatabase(52) { db ->
-            execSchema(db, 52)
+        val helper = room3Helper("migrate-v52-53.db")
+        helper.createDatabase(52).close()
 
-            MIGRATION_52_53.migrate(db)
+        val db = helper.runMigrationsAndValidate(53, listOf(MIGRATION_52_53))
 
-            // The index exists under Room's generated name.
-            db.prepare(
-                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' " +
-                    "AND tbl_name = 'offline_media' " +
-                    "AND name = 'index_offline_media_mediaType_seriesId_seasonNumber_episodeNumber'"
-            ).use { c ->
-                assertTrue(c.step())
-                assertEquals(1L, c.getLong(0))
-            }
-            // …with the exact column order the query's ORDER BY needs.
-            db.prepare(
-                "SELECT name FROM pragma_index_info('index_offline_media_mediaType_seriesId_seasonNumber_episodeNumber')"
-            ).use { c ->
-                val columns = mutableListOf<String>()
-                while (c.step()) columns.add(c.getText(0))
-                assertEquals(listOf("mediaType", "seriesId", "seasonNumber", "episodeNumber"), columns)
-            }
-            db.close()
+        // …with the exact column order the query's ORDER BY needs.
+        db.prepare(
+            "SELECT name FROM pragma_index_info('index_offline_media_mediaType_seriesId_seasonNumber_episodeNumber')"
+        ).use { c ->
+            val columns = mutableListOf<String>()
+            while (c.step()) columns.add(c.getText(0))
+            assertEquals(listOf("mediaType", "seriesId", "seasonNumber", "episodeNumber"), columns)
         }
+        db.close()
     }
 
     /**
@@ -1133,11 +1095,14 @@ class MigrationTest {
      * [ContainerProbe] (file header magic bytes) persisted, while rows whose
      * file is missing stay NULL (no error — the runtime playback fallback
      * keeps covering them) and rows that already carry a container are left
-     * untouched. The starting schema is executed from the exported `53.json`
-     * (see [execSchema]) so the fixture matches the real v53 shape. The probe
-     * is a real temp-file implementation because this module cannot see
-     * shared:core:data's ContainerSniffer (downstream module) — exactly the
-     * seam the migration itself runs against.
+     * untouched. The starting schema is created from the tracked `53.json`
+     * via room3's [MigrationTestHelper] (see [room3Helper]), and the migrated
+     * result is validated against the tracked `54.json` — the step is a
+     * schema-unchanged version bump, so validation proves the backfill left
+     * the schema untouched. The probe is a real temp-file implementation
+     * because this module cannot see shared:core:data's ContainerSniffer
+     * (downstream module) — exactly the seam the migration itself runs
+     * against.
      */
     @Test
     fun migrateV53_54_backfillsLegacyNullContainerRows() = runTest {
@@ -1152,39 +1117,39 @@ class MigrationTest {
             )
             val vanishedFile = File(backfillDir.toFile(), "deleted-episode.mp4")
 
-            openRawDatabase(53) { db ->
-                execSchema(db, 53)
-                suspend fun insertDownload(id: String, downloadPath: String, container: String?) {
-                    db.execSQL(
-                        "INSERT INTO downloads (id, mediaItemId, name, mediaType, downloadPath, downloadUrl, " +
-                            "totalSizeBytes, downloadedBytes, status, container) " +
-                            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                        arrayOf<Any?>(id, "item-$id", "Download $id", "MOVIE", downloadPath, "https://u", 1000L, 1000L, "COMPLETED", container),
-                    )
-                }
-                insertDownload("dl-known", "/downloads/already-set.mp4", "mp4")
-                insertDownload("dl-missing", vanishedFile.absolutePath, null)
-                insertDownload("dl-sniff", misnamedFile.absolutePath, null)
-
-                Migration53To54(testContainerProbe()).migrate(db)
-
-                db.prepare("SELECT id, container FROM downloads ORDER BY id").use { c ->
-                    // Already-set row is untouched.
-                    assertTrue(c.step())
-                    assertEquals("dl-known", c.getText(0))
-                    assertEquals("mp4", c.getText(1))
-                    // Missing file: stays NULL, migration did not fail.
-                    assertTrue(c.step())
-                    assertEquals("dl-missing", c.getText(0))
-                    assertTrue(c.isNull(1))
-                    // Sniffable file: backfilled from the magic bytes.
-                    assertTrue(c.step())
-                    assertEquals("dl-sniff", c.getText(0))
-                    assertEquals("mkv", c.getText(1))
-                    assertFalse(c.step())
-                }
-                db.close()
+            val helper = room3Helper("migrate-v53-54.db")
+            val v53 = helper.createDatabase(53)
+            suspend fun insertDownload(id: String, downloadPath: String, container: String?) {
+                v53.execSQL(
+                    "INSERT INTO downloads (id, mediaItemId, name, mediaType, downloadPath, downloadUrl, " +
+                        "totalSizeBytes, downloadedBytes, status, container) " +
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    arrayOf<Any?>(id, "item-$id", "Download $id", "MOVIE", downloadPath, "https://u", 1000L, 1000L, "COMPLETED", container),
+                )
             }
+            insertDownload("dl-known", "/downloads/already-set.mp4", "mp4")
+            insertDownload("dl-missing", vanishedFile.absolutePath, null)
+            insertDownload("dl-sniff", misnamedFile.absolutePath, null)
+            v53.close()
+
+            val db = helper.runMigrationsAndValidate(54, listOf(Migration53To54(testContainerProbe())))
+
+            db.prepare("SELECT id, container FROM downloads ORDER BY id").use { c ->
+                // Already-set row is untouched.
+                assertTrue(c.step())
+                assertEquals("dl-known", c.getText(0))
+                assertEquals("mp4", c.getText(1))
+                // Missing file: stays NULL, migration did not fail.
+                assertTrue(c.step())
+                assertEquals("dl-missing", c.getText(0))
+                assertTrue(c.isNull(1))
+                // Sniffable file: backfilled from the magic bytes.
+                assertTrue(c.step())
+                assertEquals("dl-sniff", c.getText(0))
+                assertEquals("mkv", c.getText(1))
+                assertFalse(c.step())
+            }
+            db.close()
         } finally {
             backfillDir.toFile().deleteRecursively()
         }
@@ -1230,6 +1195,22 @@ class MigrationTest {
         return db
     }
 
+    // ---- Hand-written fixtures for the pre-export era ----------------------
+    // Room schema export (`room.schemaLocation`) was first enabled when the
+    // database was already at v13 — the same commit checked in 13.json — and
+    // an exhaustive search of git history (every commit, including the
+    // pre-KMP `core/database/schemas` tree) found no 1.json..12.json ever
+    // committed. Anchor versions 1, 2, 4, 5, 8, 10 and 12 therefore have no
+    // tracked schema to replay via [execSchema] or room3's MigrationTestHelper
+    // (see [room3Helper]), and these helpers — copying the corresponding
+    // MIGRATION_x_y DDL verbatim — remain the recorded fixture for that era.
+    // Every anchor >= 13 uses the tracked-JSON fixtures instead.
+
+    /**
+     * Hand fixture (versions 1–12 lack tracked schemas — see the block
+     * comment above): the v1 `servers` shape, predating the migration chain;
+     * used by the v1/v2/v4/v5/v8/v10/v12 anchors.
+     */
     private suspend fun createServersTable(db: SQLiteConnection) {
         db.execSQL(
             """
@@ -1245,6 +1226,11 @@ class MigrationTest {
         )
     }
 
+    /**
+     * Hand fixture (versions 1–12 lack tracked schemas — see the block
+     * comment above): [MIGRATION_1_2]'s `downloads` DDL verbatim; used by the
+     * v2/v4 anchors.
+     */
     private suspend fun createDownloadsTableBase(db: SQLiteConnection) {
         db.execSQL(
             """
@@ -1269,11 +1255,22 @@ class MigrationTest {
         db.execSQL("CREATE INDEX IF NOT EXISTS index_downloads_status ON downloads(status)")
     }
 
+    /**
+     * Hand fixture (versions 1–12 lack tracked schemas — see the block
+     * comment above): [MIGRATION_1_2] + [MIGRATION_4_5]'s `speedBytesPerSec`;
+     * used by the v5/v8/v10 anchors.
+     */
     private suspend fun createDownloadsTableV5(db: SQLiteConnection) {
         createDownloadsTableBase(db)
         db.execSQL("ALTER TABLE downloads ADD COLUMN speedBytesPerSec INTEGER NOT NULL DEFAULT 0")
     }
 
+    /**
+     * Hand fixture (versions 1–12 lack tracked schemas — see the block
+     * comment above): v5 shape + [MIGRATION_8_9]'s createdAt index +
+     * [MIGRATION_10_11]'s series columns + [MIGRATION_11_12]'s series
+     * indices; used by the v12 anchors.
+     */
     private suspend fun createDownloadsTableV11(db: SQLiteConnection) {
         createDownloadsTableV5(db)
         db.execSQL("ALTER TABLE downloads ADD COLUMN seriesId TEXT")
@@ -1287,6 +1284,11 @@ class MigrationTest {
         db.execSQL("CREATE INDEX IF NOT EXISTS index_downloads_seasonId ON downloads(seasonId)")
     }
 
+    /**
+     * Hand fixture (versions 1–12 lack tracked schemas — see the block
+     * comment above): [MIGRATION_2_3]'s `users` DDL verbatim; used by the
+     * v4/v5/v8 anchors.
+     */
     private suspend fun createUsersTable(db: SQLiteConnection) {
         db.execSQL(
             """
@@ -1305,12 +1307,22 @@ class MigrationTest {
         db.execSQL("CREATE INDEX IF NOT EXISTS index_users_serverId ON users(serverId)")
     }
 
+    /**
+     * Hand fixture (versions 1–12 lack tracked schemas — see the block
+     * comment above): v3 shape + [MIGRATION_8_9]'s composite index +
+     * [MIGRATION_9_10]'s `isAdmin`; used by the v10/v12 anchors.
+     */
     private suspend fun createUsersTableV10(db: SQLiteConnection) {
         createUsersTable(db)
         db.execSQL("CREATE INDEX IF NOT EXISTS index_users_serverId_lastConnected ON users(serverId, lastConnected)")
         db.execSQL("ALTER TABLE users ADD COLUMN isAdmin INTEGER NOT NULL DEFAULT 0")
     }
 
+    /**
+     * Hand fixture (versions 1–12 lack tracked schemas — see the block
+     * comment above): [MIGRATION_7_8]'s `lyrics_cache` DDL verbatim; used by
+     * the v8/v10/v12 anchors.
+     */
     private suspend fun createLyricsCacheTable(db: SQLiteConnection) {
         db.execSQL(
             """
@@ -1330,6 +1342,11 @@ class MigrationTest {
         db.execSQL("CREATE INDEX IF NOT EXISTS index_lyrics_cache_fetchedAt ON lyrics_cache(fetchedAt)")
     }
 
+    /**
+     * Hand fixture (versions 1–12 lack tracked schemas — see the block
+     * comment above): [MIGRATION_10_11]'s `offline_media` DDL verbatim; used
+     * by the v12 anchors.
+     */
     private suspend fun createOfflineMediaTable(db: SQLiteConnection) {
         db.execSQL(
             """

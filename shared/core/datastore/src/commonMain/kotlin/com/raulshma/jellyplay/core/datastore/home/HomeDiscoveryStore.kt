@@ -12,6 +12,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.raulshma.jellyplay.core.datastore.CachedJsonNullPolicy
 import com.raulshma.jellyplay.core.datastore.ParsedCache
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
@@ -115,7 +116,8 @@ class HomeDiscoveryStore constructor(
      * Decode-or-default read for the read-modify-write setters: a missing key
      * OR an undecodable value (shape drift after a model change) yields
      * [fallback], so a corrupt entry can't wedge the write path — the same
-     * tolerance the read projection's `cachedJson` applies, in-edition.
+     * tolerance the read projection's [PreferenceCodec.cachedJson] applies,
+     * in-edition.
      */
     private inline fun <reified T> decodeOrDefault(
         prefs: Preferences,
@@ -485,7 +487,7 @@ class HomeDiscoveryStore constructor(
             // member) under the new stamp. Keyed on raw alone, that write
             // would serve the stale unioned value until process restart.
             val version = prefs[enabledSectionTypesVersionKey] ?: 0
-            return cachedJson(
+            return PreferenceCodec.cachedJson(
                 raw = raw,
                 cacheKey = "v$version:$raw",
                 cache = cachedEnabledHomeSectionTypes,
@@ -499,10 +501,11 @@ class HomeDiscoveryStore constructor(
                         .map { (_, section) -> section }
                 },
                 cacheRef = { cachedEnabledHomeSectionTypes = it },
+                nullPolicy = CachedJsonNullPolicy.MemoizeNull,
             )
         }
 
-        private fun readHomeSectionOrder(prefs: Preferences): List<HomeSectionType> = cachedJson(
+        private fun readHomeSectionOrder(prefs: Preferences): List<HomeSectionType> = PreferenceCodec.cachedJson(
             raw = prefs[sectionOrderKey],
             cache = cachedHomeSectionOrder,
             default = HomeSectionType.CONFIGURABLE,
@@ -519,6 +522,7 @@ class HomeDiscoveryStore constructor(
                 )
             },
             cacheRef = { cachedHomeSectionOrder = it },
+            nullPolicy = CachedJsonNullPolicy.MemoizeNull,
         )
 
         /**
@@ -553,78 +557,65 @@ class HomeDiscoveryStore constructor(
          * and inside [ensureNamespacedMigration]; this read just decodes the
          * typed override map.
          */
-        private fun readLibraryHomeSectionOverrides(prefs: Preferences): Map<String, Set<HomeSectionType>> = cachedJson(
-            raw = prefs[librarySectionOverridesKey],
-            cache = cachedLibraryHomeSectionOverrides,
-            default = emptyMap(),
-            parse = { json.decodeFromString<Map<String, Set<HomeSectionType>>>(it) },
-            cacheRef = { cachedLibraryHomeSectionOverrides = it },
-        )
+        private fun readLibraryHomeSectionOverrides(prefs: Preferences): Map<String, Set<HomeSectionType>> =
+            PreferenceCodec.cachedJson(
+                raw = prefs[librarySectionOverridesKey],
+                cache = cachedLibraryHomeSectionOverrides,
+                default = emptyMap(),
+                parse = { json.decodeFromString<Map<String, Set<HomeSectionType>>>(it) },
+                cacheRef = { cachedLibraryHomeSectionOverrides = it },
+                nullPolicy = CachedJsonNullPolicy.MemoizeNull,
+            )
 
-        private fun readPinnedHomeSections(prefs: Preferences): List<PinnedHomeSection> = cachedJson(
-            raw = prefs[pinnedSectionsKey],
-            cache = cachedPinnedHomeSections,
-            default = emptyList(),
-            parse = { json.decodeFromString<List<PinnedHomeSection>>(it) },
-            cacheRef = { cachedPinnedHomeSections = it },
-        )
+        private fun readPinnedHomeSections(prefs: Preferences): List<PinnedHomeSection> =
+            PreferenceCodec.cachedJson(
+                raw = prefs[pinnedSectionsKey],
+                cache = cachedPinnedHomeSections,
+                default = emptyList(),
+                parse = { json.decodeFromString<List<PinnedHomeSection>>(it) },
+                cacheRef = { cachedPinnedHomeSections = it },
+                nullPolicy = CachedJsonNullPolicy.MemoizeNull,
+            )
 
-        private fun readHomeLayoutPresets(prefs: Preferences): List<HomeLayoutPreset> = cachedJson(
-            raw = prefs[layoutPresetsKey],
-            cache = cachedHomeLayoutPresets,
-            default = emptyList(),
-            parse = { json.decodeFromString<List<HomeLayoutPreset>>(it) },
-            cacheRef = { cachedHomeLayoutPresets = it },
-        )
+        private fun readHomeLayoutPresets(prefs: Preferences): List<HomeLayoutPreset> =
+            PreferenceCodec.cachedJson(
+                raw = prefs[layoutPresetsKey],
+                cache = cachedHomeLayoutPresets,
+                default = emptyList(),
+                parse = { json.decodeFromString<List<HomeLayoutPreset>>(it) },
+                cacheRef = { cachedHomeLayoutPresets = it },
+                nullPolicy = CachedJsonNullPolicy.MemoizeNull,
+            )
 
-        private fun readNextUpExcludedSeriesIds(prefs: Preferences): Set<String> = cachedJson(
-            raw = prefs[nextUpExcludedSeriesIdsKey],
-            cache = cachedNextUpExcludedSeriesIds,
-            default = emptySet(),
-            parse = { json.decodeFromString<Set<String>>(it) },
-            cacheRef = { cachedNextUpExcludedSeriesIds = it },
-        )
+        private fun readNextUpExcludedSeriesIds(prefs: Preferences): Set<String> =
+            PreferenceCodec.cachedJson(
+                raw = prefs[nextUpExcludedSeriesIdsKey],
+                cache = cachedNextUpExcludedSeriesIds,
+                default = emptySet(),
+                parse = { json.decodeFromString<Set<String>>(it) },
+                cacheRef = { cachedNextUpExcludedSeriesIds = it },
+                nullPolicy = CachedJsonNullPolicy.MemoizeNull,
+            )
 
-        private fun readHiddenCwItemIds(prefs: Preferences): Set<String> = cachedJson(
-            raw = prefs[hiddenCwItemIdsKey],
-            cache = cachedHiddenCwItemIds,
-            default = emptySet(),
-            parse = { json.decodeFromString<Set<String>>(it) },
-            cacheRef = { cachedHiddenCwItemIds = it },
-        )
+        private fun readHiddenCwItemIds(prefs: Preferences): Set<String> =
+            PreferenceCodec.cachedJson(
+                raw = prefs[hiddenCwItemIdsKey],
+                cache = cachedHiddenCwItemIds,
+                default = emptySet(),
+                parse = { json.decodeFromString<Set<String>>(it) },
+                cacheRef = { cachedHiddenCwItemIds = it },
+                nullPolicy = CachedJsonNullPolicy.MemoizeNull,
+            )
 
-        private fun readLastViewedSeasonBySeries(prefs: Preferences): Map<String, String> = cachedJson(
-            raw = prefs[lastViewedSeasonBySeriesKey],
-            cache = cachedLastViewedSeasonBySeries,
-            default = emptyMap(),
-            parse = { json.decodeFromString<Map<String, String>>(it) },
-            cacheRef = { cachedLastViewedSeasonBySeries = it },
-        )
-    }
-
-    /**
-     * Shared cached JSON decode for the simple map/set readers. Returns the
-     * cached value when [cacheKey] (the raw string by default) is unchanged;
-     * otherwise decodes via [parse] (falling back to [default] on null or
-     * decode failure), publishes the new [ParsedCache] through [cacheRef],
-     * and returns the value. Collapses the per-key "compare-raw →
-     * try/decode → update-cache" boilerplate that the JSON list/map readers
-     * would otherwise each repeat verbatim. Readers whose decoded value
-     * depends on MORE than the raw string (the version-unioned enabled-set)
-     * fold every input into [cacheKey].
-     */
-    private fun <T : Any> cachedJson(
-        raw: String?,
-        cache: ParsedCache<T>,
-        default: T,
-        parse: (String) -> T,
-        cacheRef: (ParsedCache<T>) -> Unit,
-        cacheKey: String? = raw,
-    ): T {
-        if (cacheKey == cache.key) return cache.value
-        val value = try { raw?.let(parse) ?: default } catch (_: Exception) { default }
-        cacheRef(ParsedCache(cacheKey, value))
-        return value
+        private fun readLastViewedSeasonBySeries(prefs: Preferences): Map<String, String> =
+            PreferenceCodec.cachedJson(
+                raw = prefs[lastViewedSeasonBySeriesKey],
+                cache = cachedLastViewedSeasonBySeries,
+                default = emptyMap(),
+                parse = { json.decodeFromString<Map<String, String>>(it) },
+                cacheRef = { cachedLastViewedSeasonBySeries = it },
+                nullPolicy = CachedJsonNullPolicy.MemoizeNull,
+            )
     }
 
     // ------------------------------------------------------------------

@@ -43,6 +43,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.expressiveListShape
 import com.raulshma.jellyplay.core.designsystem.theme.groupedItemContainerColor
 import com.raulshma.jellyplay.core.designsystem.theme.lightModeHairlineBorder
 import com.raulshma.jellyplay.core.ui.animation.pressScaleValue
+import com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.composables.icons.tabler.Tabler
@@ -225,7 +226,7 @@ internal fun SettingInfoItem(
 ) {
     val shape = expressiveListShape(index, count, innerRadius = 0.dp)
     val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
-    val messenger = rememberSettingsMessenger()
+    val bus = LocalUserMessageBus.current
 
     ListItem(
         headlineContent = {
@@ -261,7 +262,7 @@ internal fun SettingInfoItem(
                         // Plain-text copy so it pastes into any field;
                         // surface a snackbar so the tap isn't silent.
                         clipboard.setText(AnnotatedString(copyableValue))
-                        messenger?.info(copiedLabel)
+                        bus.info(copiedLabel)
                     },
                     modifier = Modifier
                         .focusIndicator(focusShape)
@@ -295,7 +296,7 @@ internal fun AdvancedSettingsToggleButton(
     modifier: Modifier = Modifier,
 ) {
     val isTv = LocalTvMode.current
-    val messenger = rememberSettingsMessenger()
+    val bus = LocalUserMessageBus.current
     val tooltipText = stringResource(
         if (showAdvanced) Res.string.settings_hide_advanced else Res.string.settings_show_advanced,
     )
@@ -304,7 +305,7 @@ internal fun AdvancedSettingsToggleButton(
     )
     val onClickAction: () -> Unit = {
         onToggle()
-        messenger?.info(toastMessage)
+        bus.info(toastMessage)
     }
 
     TooltipBox(

@@ -20,7 +20,7 @@ import java.io.File
  * goes, what it's named, and whether the destination has room.
  *
  * **Why this lives here.** Previously this policy was inlined in the middle of
- * [DownloadRepositoryImpl.startDownloadInternal] (~40 LOC of dir resolution +
+ * [DownloadRepositoryImpl.startDownload] (~40 LOC of dir resolution +
  * filename sanitization + extension derivation + StatFs free-space check),
  * tangled with the download-row lifecycle and unreachable from any other call
  * site. The [StoragePolicy] neighbour owns the *byte-cap* rule; this module

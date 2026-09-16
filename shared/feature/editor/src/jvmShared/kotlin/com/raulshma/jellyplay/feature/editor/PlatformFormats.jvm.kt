@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.editor
 
-internal actual fun formatOneDecimal(value: Double): String = "%.1f".format(value)
+// formatOneDecimal folded onto core/ui's DateLabels seam (PlatformFormats.kt
+// façade); only the editor-specific resource-pattern reads keep actuals.
 
 internal actual fun formatIntPattern(pattern: String, value: Int): String = pattern.format(value)
 

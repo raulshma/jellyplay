@@ -4,7 +4,9 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.edit
+import com.raulshma.jellyplay.core.datastore.CachedJsonNullPolicy
 import com.raulshma.jellyplay.core.datastore.ParsedCache
+import com.raulshma.jellyplay.core.datastore.PreferenceCodec
 import com.raulshma.jellyplay.core.model.LibraryWidgetItem
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.SeerrWidgetItem
@@ -41,8 +43,20 @@ class WidgetDataStore constructor(
     private val sharedPrefs: Flow<Preferences> = dataStore.data
     private val json = Json { ignoreUnknownKeys = true }
 
+    // Per-flow JSON memo fields — one per eager widget-item flow, replacing
+    // the old function-local `var cached` inside [decodedListStateFlow]
+    // (behavior-identical memoisation, but inspectable/ownable like every
+    // other store's cache field).
+    private var cachedContinueWatching: ParsedCache<List<MediaItem>> = ParsedCache(null, emptyList())
+    private var cachedLibraryWidgetItems: ParsedCache<List<LibraryWidgetItem>> = ParsedCache(null, emptyList())
+    private var cachedSeerrWidgetItems: ParsedCache<List<SeerrWidgetItem>> = ParsedCache(null, emptyList())
+
     val continueWatching: StateFlow<List<MediaItem>> =
-        decodedListStateFlow(Keys.CONTINUE_WATCHING)
+        decodedListStateFlow(
+            Keys.CONTINUE_WATCHING,
+            cache = { cachedContinueWatching },
+            cacheRef = { cachedContinueWatching = it },
+        )
 
     val widgetConfig: Flow<WidgetConfig> =
         sharedPrefs.map { prefs ->
@@ -52,10 +66,18 @@ class WidgetDataStore constructor(
         }
 
     val libraryWidgetItems: StateFlow<List<LibraryWidgetItem>> =
-        decodedListStateFlow(Keys.LIBRARY_WIDGET_ITEMS)
+        decodedListStateFlow(
+            Keys.LIBRARY_WIDGET_ITEMS,
+            cache = { cachedLibraryWidgetItems },
+            cacheRef = { cachedLibraryWidgetItems = it },
+        )
 
     val seerrWidgetItems: StateFlow<List<SeerrWidgetItem>> =
-        decodedListStateFlow(Keys.SEERR_WIDGET_ITEMS)
+        decodedListStateFlow(
+            Keys.SEERR_WIDGET_ITEMS,
+            cache = { cachedSeerrWidgetItems },
+            cacheRef = { cachedSeerrWidgetItems = it },
+        )
 
     suspend fun setWidgetConfig(config: WidgetConfig) {
         dataStore.edit { it[Keys.WIDGET_CONFIG] = json.encodeToString(config) }
@@ -68,21 +90,29 @@ class WidgetDataStore constructor(
      * Snapshot of (per-widget configs, legacy global config) eagerly cached so
      * [getWidgetConfigForIdSync] can return a value without suspending. Used by
      * AppWidget providers which must render synchronously in `onUpdate`.
+     *
+     * MemoizeNull (this store's pre-promotion policy at both sites): a null raw
+     * is a cacheable input — the decoded value depends only on the raw string,
+     * so a memoised default (empty map / null config) is safe to serve.
      */
     private val widgetConfigSnapshot: StateFlow<Pair<Map<Int, WidgetConfig>, WidgetConfig?>> =
         sharedPrefs.map { prefs ->
-            val perWidgetRaw = prefs[Keys.WIDGET_CONFIGS]
-            val perWidget = if (perWidgetRaw == cachedPerWidgetConfigs.key) {
-                cachedPerWidgetConfigs.value
-            } else {
-                decodeWidgetConfigs(perWidgetRaw).also { cachedPerWidgetConfigs = ParsedCache(perWidgetRaw, it) }
-            }
-            val legacyRaw = prefs[Keys.WIDGET_CONFIG]
-            val legacy = if (legacyRaw == cachedLegacyWidgetConfig.key) {
-                cachedLegacyWidgetConfig.value
-            } else {
-                decodeWidgetConfig(legacyRaw).also { cachedLegacyWidgetConfig = ParsedCache(legacyRaw, it) }
-            }
+            val perWidget = PreferenceCodec.cachedJson(
+                raw = prefs[Keys.WIDGET_CONFIGS],
+                cache = cachedPerWidgetConfigs,
+                default = emptyMap(),
+                parse = { json.decodeFromString<Map<Int, WidgetConfig>>(it) },
+                cacheRef = { cachedPerWidgetConfigs = it },
+                nullPolicy = CachedJsonNullPolicy.MemoizeNull,
+            )
+            val legacy = PreferenceCodec.cachedJson(
+                raw = prefs[Keys.WIDGET_CONFIG],
+                cache = cachedLegacyWidgetConfig,
+                default = null,
+                parse = { json.decodeFromString<WidgetConfig>(it) },
+                cacheRef = { cachedLegacyWidgetConfig = it },
+                nullPolicy = CachedJsonNullPolicy.MemoizeNull,
+            )
             perWidget to legacy
         }.stateIn(scope, SharingStarted.Eagerly, emptyMap<Int, WidgetConfig>() to null)
 
@@ -177,17 +207,28 @@ class WidgetDataStore constructor(
      * The shape every eager widget-item flow shares: leniently decode the JSON
      * column (a corrupt blob degrades to the empty placeholder, never throws)
      * and hot-start in the application scope.
+     *
+     * The memo stays a hand-rolled compare instead of
+     * [PreferenceCodec.cachedJson] because the decode is `reified` — a parse
+     * closure using `T` cannot cross into the helper's non-inline lambda — so
+     * each flow instead owns a proper [ParsedCache] field (passed as
+     * [cache]/[cacheRef]). The semantics are deliberately the helper's
+     * [CachedJsonNullPolicy.MemoizeNull] policy, unchanged from the
+     * function-local `var cached` this replaced: a null raw memoises the empty
+     * placeholder like any other input, and a decode failure caches the
+     * placeholder under the raw key.
      */
     private inline fun <reified T> decodedListStateFlow(
         key: Preferences.Key<String>,
+        crossinline cache: () -> ParsedCache<List<T>>,
+        crossinline cacheRef: (ParsedCache<List<T>>) -> Unit,
     ): StateFlow<List<T>> {
-        var cached = ParsedCache(null, emptyList<T>())
         return sharedPrefs.map { prefs ->
             val raw = prefs[key]
-            if (raw == cached.key) {
-                cached.value
+            if (raw == cache().key) {
+                cache().value
             } else {
-                decodeList<T>(raw).also { cached = ParsedCache(raw, it) }
+                decodeList<T>(raw).also { cacheRef(ParsedCache(raw, it)) }
             }
         }.stateIn(scope, SharingStarted.Eagerly, emptyList())
     }
@@ -197,17 +238,6 @@ class WidgetDataStore constructor(
             try { json.decodeFromString<List<T>>(it) }
             catch (_: Exception) { emptyList() }
         } ?: emptyList()
-
-    private fun decodeWidgetConfigs(raw: String?): Map<Int, WidgetConfig> =
-        raw?.let {
-            try { json.decodeFromString<Map<Int, WidgetConfig>>(it) }
-            catch (_: Exception) { null }
-        } ?: emptyMap()
-
-    private fun decodeWidgetConfig(raw: String?): WidgetConfig? =
-        raw?.let {
-            try { json.decodeFromString<WidgetConfig>(it) } catch (_: Exception) { null }
-        }
 
     private object Keys {
         val CONTINUE_WATCHING = stringPreferencesKey("continue_watching")

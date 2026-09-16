@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.feature.search
 
-import com.raulshma.jellyplay.feature.search.QuickDownloadActions
+import com.raulshma.jellyplay.core.data.download.QuickDownloadActions
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository

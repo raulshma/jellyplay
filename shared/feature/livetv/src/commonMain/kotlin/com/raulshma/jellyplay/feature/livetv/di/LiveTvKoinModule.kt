@@ -29,8 +29,8 @@ import org.koin.dsl.module
  *
  * ChannelDetailViewModel's record/cancel feedback no longer goes through the
  * Android-only UserMessageBus: it emits LiveTvUserMessage values on a
- * messages Flow that ChannelDetailScreen renders via the LiveTvMessenger
- * actual (bus→flow seam, same shape as the library conveyor's UserMessenger).
+ * messages Flow that ChannelDetailScreen renders, posting the resolved text
+ * to the shared UserMessageBus.
  */
 val liveTvModule: Module = module {
     viewModel {

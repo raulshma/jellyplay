@@ -85,6 +85,7 @@ import com.raulshma.jellyplay.core.ui.components.DelayedLoadingScreen
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.LoadingScreen
 import com.raulshma.jellyplay.core.ui.image.MediaImage
+import com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKeyEvent
@@ -122,7 +123,7 @@ fun PhotoViewerScreen(
     viewModel: PhotoViewerViewModel = koinViewModel(),
 ) {
     val isTv = LocalTvMode.current
-    val userMessenger = rememberUserMessenger()
+    val bus = LocalUserMessageBus.current
     // Resolved in the composable body — the save-result LaunchedEffect below is
     // not a composable scope (the legacy code deferred this via UiText instead).
     val photoSavedMessage = stringResource(Res.string.library_photo_saved_to_gallery)
@@ -169,11 +170,11 @@ fun PhotoViewerScreen(
     LaunchedEffect(saveResult) {
         when (val result = saveResult) {
             is SaveResult.Success -> {
-                userMessenger?.info(photoSavedMessage)
+                bus.info(photoSavedMessage)
                 viewModel.clearSaveResult()
             }
             is SaveResult.Error -> {
-                userMessenger?.error(result.message)
+                bus.error(result.message)
                 viewModel.clearSaveResult()
             }
             else -> {}
@@ -361,7 +362,7 @@ fun PhotoViewerScreen(
                                         OverlayActionButton(
                                             onClick = {
                                                 viewModel.sharePhoto { errorMsg ->
-                                                    userMessenger?.error(errorMsg)
+                                                    bus.error(errorMsg)
                                                 }
                                             },
                                         ) {

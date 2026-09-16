@@ -7,9 +7,11 @@ import com.raulshma.jellyplay.core.model.QuickConnectState
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.model.normalizeServerAddress
-import com.raulshma.jellyplay.core.model.stripLegacyRoutePrefix
 import com.raulshma.jellyplay.core.network.NetworkLog
 import com.raulshma.jellyplay.core.network.RetryPolicy
+import com.raulshma.jellyplay.core.network.failover.ProbeOutcome
+import com.raulshma.jellyplay.core.network.failover.probeResolvedAddress
+import com.raulshma.jellyplay.core.network.failover.selectPreferredAddress
 import com.raulshma.jellyplay.core.network.auth.AtomicSessionState
 import com.raulshma.jellyplay.core.network.auth.AuthenticateByNameRequestDto
 import com.raulshma.jellyplay.core.network.auth.AuthenticationResultDto
@@ -59,9 +61,11 @@ import kotlinx.coroutines.withContext
  *
  * wasm v1 deltas vs the JVM impl (all documented, none affect JVM):
  *  - No failover router: `getServerUrl` returns the server's primary address;
- *    `selectReachableAddress` probes primary then alternates sequentially and
- *    falls back to the primary when nothing answers (the router's concurrent
- *    probe/failover machinery is OkHttp-bound jvmShared code).
+ *    `selectReachableAddress` runs the SAME primary-then-alternates-keep-
+ *    primary decision as the JVM router through the commonMain FailoverPolicy
+ *    core, but probes strictly sequentially (the router's primary-alone-first
+ *    + concurrent alternate fan-out is an OkHttp-bound jvmShared transport —
+ *    a declared divergence; see FailoverPolicy.kt for the full list).
  *  - No API-client object to swap on auth transitions — requests derive the
  *    base URL + token from the session state per call, so `setUser`'s
  *    build-client-before-publish ordering collapses to publish-inside-lock.
@@ -101,70 +105,52 @@ class KtorWasmAuthApiClient(
     // ── Probe / discovery ─────────────────────────────────────────────────
 
     /**
-     * Outcome of a reachability probe against one address, mirroring
-     * `ServerAddressRouter.AddressProbeResult` (minus the latency the JVM
-     * router tracks for its own scoring). Any HTTP response — including a
-     * non-2xx — means reachable; only transport failures mean unreachable.
+     * The Ktor transport of ONE reachability probe, producing the common
+     * failover core's [ProbeOutcome] (the latency the JVM router tracks is a
+     * declared JVM divergence — nothing on wasm scores it). Any HTTP response
+     * — including a non-2xx — means reachable; only transport failures mean
+     * unreachable. Cancellation is NOT classified: caller cancellation must
+     * keep propagating through the retry path (transport-side contract — the
+     * decision core never catches).
      */
-    private data class ProbeResult(
-        val reachable: Boolean,
-        val serverId: String? = null,
-        val serverName: String? = null,
-        val error: Exception? = null,
-    )
-
-    private suspend fun probeHttp(address: String): ProbeResult = try {
+    private suspend fun probeHttp(address: String): ProbeOutcome = try {
         val response: HttpResponse = probeHttpClient.get("$address/System/Info/Public")
         val bodyText = if (response.status.isSuccess()) response.bodyAsText() else null
         val dto = bodyText?.let {
             runCatching { wireJson.decodeFromString<PublicSystemInfoDto>(it) }.getOrNull()
         }
-        ProbeResult(reachable = true, serverId = dto?.id, serverName = dto?.serverName)
+        ProbeOutcome(reachable = true, serverId = dto?.id, serverName = dto?.serverName)
     } catch (e: CancellationException) {
-        // Caller cancellation must keep propagating through the retry path —
-        // never classified as an unreachable endpoint.
         throw e
     } catch (e: Exception) {
-        ProbeResult(reachable = false, error = e)
+        ProbeOutcome(reachable = false, error = e)
     }
 
     /**
-     * Probes exactly [address]. Semantics mirror
+     * Probes exactly [address] through the common
+     * [probeResolvedAddress][com.raulshma.jellyplay.core.network.failover.probeResolvedAddress]
+     * ladder — the identical normalize → probe → legacy `/emby`/`/mediabrowser`
+     * strip-retry-once → adopt-the-stripped-address-only-on-a-real-identity
+     * table the JVM router's `probe` runs (formerly a prose-mirrored private
+     * ladder here; the mirror is the shared core now). Semantics mirror
      * `AuthApiClientImpl.probeServerInfo`: unreachable → throw the transport
      * error (retryable via the wasm classifier; a synthetic retryable
      * ApiException when there is no cause), reachable → [ServerInfo] with the
-     * public id/name or their fallbacks. A legacy `/emby` (or
-     * `/mediabrowser`) address that answers only without its prefix is
-     * adopted in the resolved form — the wasm mirror of
-     * `ServerAddressRouter.probe`'s strip-retry.
+     * public id/name or their fallbacks, persisted in the RESOLVED address
+     * form when the probe had to strip a legacy prefix.
      */
     private suspend fun probeServerInfo(address: String): ServerInfo {
-        val probe = probeHttp(address)
-        if (probe.reachable && probe.serverId != null) {
-            return infoFrom(probe, address)
-        }
-        // Jellyfin 12 removed the legacy route prefixes: a 10.x server
-        // upgraded in place 404s them (any HTTP response still counts
-        // "reachable", hence the identity check). Adopt the bare address
-        // only when a real server identity answers; reverse proxies that
-        // consume the prefix answer with one on the original address and
-        // never reach here.
-        stripLegacyRoutePrefix(address)?.let { stripped ->
-            val retried = probeHttp(stripped)
-            if (retried.reachable && retried.serverId != null) {
-                return infoFrom(retried, stripped)
-            }
-        }
+        val probe = probeResolvedAddress(address, ::probeHttp)
         if (!probe.reachable) {
             throw probe.error ?: ApiException(
                 isRetryable = true,
                 message = "Server at $address is unreachable",
             )
         }
-        return infoFrom(probe, address)
+        return infoFrom(probe, probe.resolvedAddress ?: address)
     }
 
-    private fun infoFrom(probe: ProbeResult, address: String): ServerInfo =
+    private fun infoFrom(probe: ProbeOutcome, address: String): ServerInfo =
         PublicSystemInfoDto(id = probe.serverId, serverName = probe.serverName)
             .toServerInfo(address = address, fallbackServerId = randomUuidV4())
 
@@ -198,19 +184,18 @@ class KtorWasmAuthApiClient(
     override suspend fun selectReachableAddress(): String? {
         val server = sessionState.currentServer.value ?: return null
         if (server.alternateAddresses.isEmpty()) return server.address
-        // Mirror the router's selection order: prefer the (healthy common
-        // case) primary; only when it is down try the alternates; keep the
-        // primary when nothing answers. Sequential on wasm — no probe fan-out.
-        // The primary is normalized like the alternates — a stored address
+        // The common primary-then-alternates selection (prefer the healthy
+        // primary; keep the primary when nothing answers) — shared with the
+        // JVM router. Sequential probing on wasm is the declared divergence;
+        // the primary is normalized like the alternates — a stored address
         // with a trailing '/' or missing scheme must not fail fetch and
         // wrongly skip to the alternates.
         val normalizedPrimary = normalizeServerAddress(server.address)
-        if (probeHttp(normalizedPrimary).reachable) return normalizedPrimary
-        for (alternate in server.alternateAddresses) {
-            val normalized = normalizeServerAddress(alternate)
-            if (probeHttp(normalized).reachable) return normalized
-        }
-        return normalizedPrimary
+        return selectPreferredAddress(
+            primary = normalizedPrimary,
+            alternates = server.alternateAddresses.map(::normalizeServerAddress),
+            probe = ::probeHttp,
+        )
     }
 
     // ── Login / session management ────────────────────────────────────────

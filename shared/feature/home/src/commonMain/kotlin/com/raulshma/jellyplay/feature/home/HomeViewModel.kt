@@ -31,6 +31,7 @@ import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
 import com.raulshma.jellyplay.core.datastore.appearance.AppearanceSlice
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalSlice
+import com.raulshma.jellyplay.core.datastore.experimental.directArrEnabled
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoverySlice
 import com.raulshma.jellyplay.core.datastore.home.toSectionPrefs
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice
@@ -428,7 +429,7 @@ internal class HomeViewModel(
                 hasSeenHomePreferences = true
                 sectionPrefs = newSectionPrefs
                 androidTvWatchNextEnabled = prefs.playback.androidTvWatchNextEnabled
-                directArrEnabled = ExperimentalFeature.DIRECT_ARR_INTEGRATION in prefs.experimental.enabledExperimentalFeatures
+                directArrEnabled = prefs.experimental.directArrEnabled()
                 _uiState.update { it.copy(
                     homeMode = prefs.home.homeMode,
                     // The appearance quintet as one embedded slice (the
@@ -448,7 +449,7 @@ internal class HomeViewModel(
                     hideTopHeaderOnScroll = prefs.home.hideTopHeaderOnScroll,
                     continueWatchingClickBehavior = prefs.home.continueWatchingClickBehavior,
                     experimentalCardClippingEnabled = ExperimentalFeature.HOME_CARD_CLIPPING in prefs.experimental.enabledExperimentalFeatures,
-                    directArrEnabled = ExperimentalFeature.DIRECT_ARR_INTEGRATION in prefs.experimental.enabledExperimentalFeatures,
+                    directArrEnabled = prefs.experimental.directArrEnabled(),
                     // The section-config sheet's mirrors, likewise one slice.
                     sectionConfig = SectionConfigState(
                         enabledHomeSectionTypes = prefs.home.enabledHomeSectionTypes,

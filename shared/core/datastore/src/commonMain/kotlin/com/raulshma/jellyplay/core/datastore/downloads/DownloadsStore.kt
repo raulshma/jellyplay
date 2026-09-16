@@ -154,20 +154,16 @@ class DownloadsStore constructor(
     }
 
     /**
-     * Keys owned by this store, for factory-reset participation. This is the
-     * downloads subset of the legacy `DOWNLOADS_NETWORK` reset category — the
-     * network/offline keys now belong to
-     * [com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore].
+     * Keys owned by this store, for factory-reset participation. Derived as the
+     * union of the [resetKeysFor] category lists (in enum declaration order) —
+     * those lists are what the facade actually resets, so deriving from them
+     * (instead of maintaining a parallel hand-written union) keeps this list
+     * from drifting out of sync. This is the downloads subset of the legacy
+     * `DOWNLOADS_NETWORK` reset category — the network/offline keys now belong
+     * to [com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore].
      */
-    internal val resetKeys: List<Preferences.Key<*>> = listOf(
-        Keys.WIFI_ONLY_DOWNLOADS, Keys.DOWNLOAD_CONNECTIONS, Keys.MAX_CONCURRENT_DOWNLOADS,
-        Keys.DOWNLOAD_QUALITY, Keys.SMART_DOWNLOADS_ENABLED, Keys.AUTO_DOWNLOAD_NEW_EPISODES,
-        Keys.MAX_DOWNLOAD_STORAGE_GB, Keys.DOWNLOAD_STORAGE_LOCATION,
-        Keys.AUTO_DELETE_AFTER_WATCH,
-        Keys.CELLULAR_DOWNLOAD_SIZE_WARNING_MB,
-        Keys.DOWNLOAD_SCHEDULE_ENABLED, Keys.DOWNLOAD_SCHEDULE_START,
-        Keys.DOWNLOAD_SCHEDULE_END, Keys.DOWNLOAD_SCHEDULE_WIFI_ONLY,
-    )
+    internal val resetKeys: List<Preferences.Key<*>> =
+        PreferenceResetCategory.entries.flatMap(::resetKeysFor)
 
     /**
      * Category reset participation: the subset of [resetKeys] that belongs to

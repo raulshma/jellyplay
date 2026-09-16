@@ -23,6 +23,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
+import com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
@@ -63,7 +64,7 @@ fun FactoryResetScreen(
 ) {
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
-    val messenger = rememberSettingsMessenger()
+    val bus = LocalUserMessageBus.current
     val prefs = viewModel.preferences
     val factory = viewModel.factory
 
@@ -184,7 +185,7 @@ fun FactoryResetScreen(
     message?.let { res ->
         val text = stringResource(res)
         LaunchedEffect(res) {
-            messenger?.info(text)
+            bus.info(text)
             message = null
         }
     }

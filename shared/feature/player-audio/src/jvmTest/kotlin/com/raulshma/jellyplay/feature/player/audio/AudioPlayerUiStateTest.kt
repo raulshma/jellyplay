@@ -56,16 +56,6 @@ class AudioPlayerUiStateTest {
     }
 
     @Test
-    fun `playlist picker defaults are hidden and idle`() {
-        val state = AudioPlayerUiState()
-        assertFalse(state.showPlaylistPicker)
-        assertTrue(state.playlists.isEmpty())
-        assertFalse(state.isLoadingPlaylists)
-        assertFalse(state.isAddingToPlaylist)
-        assertNull(state.playlistMessage)
-    }
-
-    @Test
     fun `nested blocks default to their own defaults`() {
         val state = AudioPlayerUiState()
         assertEquals(AudioEffectsState(), state.effects)

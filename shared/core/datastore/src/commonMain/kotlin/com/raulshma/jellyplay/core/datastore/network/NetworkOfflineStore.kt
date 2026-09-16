@@ -164,22 +164,20 @@ class NetworkOfflineStore constructor(
     }
 
     /**
-     * Keys owned by this store, for factory-reset participation. This is the
-     * network/offline subset of the legacy `DOWNLOADS_NETWORK` reset category —
-     * the download keys now belong to
-     * [com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore].
+     * Keys owned by this store, for factory-reset participation. Derived as the
+     * union of the [resetKeysFor] category lists (in enum declaration order) —
+     * those lists are what the facade actually resets, so deriving from them
+     * (instead of maintaining a parallel hand-written union) keeps this list
+     * from drifting out of sync. This is the network/offline subset of the
+     * legacy `DOWNLOADS_NETWORK` reset category — the download keys now belong
+     * to [com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore].
+     * [Keys.SELF_SIGNED_TRUST_HOSTS] is included: trust grants are
+     * security-relevant, so every reset lane that touches the network domain
+     * clears them (fail closed — a wiped grant simply re-prompts on the next
+     * TLS failure).
      */
-    internal val resetKeys: List<Preferences.Key<*>> = listOf(
-        Keys.MAX_CACHE_SIZE_MB, Keys.AUTO_DELETE_CACHE,
-        Keys.MANUAL_OFFLINE_ENABLED, Keys.AUTO_OFFLINE_ENABLED,
-        Keys.MANUAL_BANDWIDTH_CAP, Keys.METERED_NETWORK_BEHAVIOR,
-        Keys.ADAPTIVE_BITRATE_ENABLED, Keys.DATA_SAVER_ENABLED,
-        Keys.VERBOSE_NETWORK_LOGGING, Keys.NETWORK_TIMEOUT_PRESET,
-        // Trust grants are security-relevant: every reset lane that touches
-        // the network domain clears them (fail closed — a wiped grant simply
-        // re-prompts on the next TLS failure).
-        Keys.SELF_SIGNED_TRUST_HOSTS,
-    )
+    internal val resetKeys: List<Preferences.Key<*>> =
+        PreferenceResetCategory.entries.flatMap(::resetKeysFor)
 
     /**
      * Category reset participation: the subset of [resetKeys] that belongs to

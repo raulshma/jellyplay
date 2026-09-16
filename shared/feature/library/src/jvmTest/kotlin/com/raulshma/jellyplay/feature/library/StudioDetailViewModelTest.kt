@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.feature.library
 
 import androidx.lifecycle.SavedStateHandle
-import com.raulshma.jellyplay.feature.library.QuickDownloadActions
+import com.raulshma.jellyplay.core.data.download.QuickDownloadActions
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider

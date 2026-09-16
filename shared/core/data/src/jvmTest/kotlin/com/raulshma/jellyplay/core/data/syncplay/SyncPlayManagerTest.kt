@@ -2,10 +2,12 @@ package com.raulshma.jellyplay.core.data.syncplay
 
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
+import com.raulshma.jellyplay.core.model.SyncPlayGroupInfo
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.network.websocket.JellyfinWebSocketClient
 import com.raulshma.jellyplay.core.network.websocket.WebSocketEvent
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -159,5 +161,71 @@ class SyncPlayManagerTest {
         withTimeout(5_000L) { while (received.size < 2) delay(10) }
 
         collector.cancel()
+    }
+
+    // ── reconnect watcher (JellyfinWebSocketClient.reconnects) ────────────────
+
+    /**
+     * Joins a group with the watcher's inputs stubbed and every re-assert
+     * call recorded in order. Returns the recording queue and the stubbed
+     * reconnect flow (the manager's watcher subscribes it on its own scope —
+     * wait for [MutableSharedFlow.subscriptionCount] before emitting).
+     */
+    private fun armReconnectWatcher(calls: ConcurrentLinkedQueue<String>): MutableSharedFlow<Unit> {
+        val reconnects = MutableSharedFlow<Unit>(extraBufferCapacity = 8)
+        every { webSocketClient.reconnects } returns reconnects
+        every { webSocketClient.events } returns MutableSharedFlow()
+        // No persisted server: connectWebSocket() returns early, isolating
+        // the watcher from real socket lifecycle.
+        every { authRepository.currentServer } returns MutableStateFlow(null)
+        coEvery { apiClient.postCapabilities() } answers {
+            calls += "postCapabilities"; Result.success(Unit)
+        }
+        coEvery { apiClient.joinSyncPlayGroup("g1") } answers {
+            calls += "join"; Result.success(Unit)
+        }
+        coEvery { apiClient.getSyncPlayInfo("g1") } answers {
+            calls += "info"
+            Result.success(SyncPlayGroupInfo(groupId = "g1", groupName = "Party"))
+        }
+        return reconnects
+    }
+
+    @Test
+    fun `a reconnect emission re-asserts group membership in order`() = runBlocking {
+        val calls = ConcurrentLinkedQueue<String>()
+        val reconnects = armReconnectWatcher(calls)
+
+        assertTrue(manager.joinGroup("g1").isSuccess)
+        // joinGroup itself ran one postCapabilities → join → refresh pass.
+        assertEquals(listOf("postCapabilities", "join", "info"), calls.toList())
+
+        withTimeout(5_000L) { reconnects.subscriptionCount.first { it > 0 } }
+        reconnects.emit(Unit)
+        withTimeout(5_000L) { while (calls.count { it == "info" } < 2) delay(10) }
+
+        assertEquals(
+            listOf("postCapabilities", "join", "info"),
+            calls.toList().takeLast(3),
+            "the reconnect re-assert keeps the postCapabilities → join → refresh order",
+        )
+        assertTrue(manager.lastReconnectMs > 0L, "the reconnect is stamped mid-session")
+    }
+
+    @Test
+    fun `a reconnect after full teardown does not re-assert`() = runBlocking {
+        val calls = ConcurrentLinkedQueue<String>()
+        val reconnects = armReconnectWatcher(calls)
+
+        assertTrue(manager.joinGroup("g1").isSuccess)
+        withTimeout(5_000L) { reconnects.subscriptionCount.first { it > 0 } }
+
+        // FULL teardown (leaveGroup/reset level) cancels the watcher job.
+        manager.reset()
+        reconnects.emit(Unit)
+        delay(100)
+
+        coVerify(exactly = 1) { apiClient.joinSyncPlayGroup("g1") }
+        assertEquals(0L, manager.lastReconnectMs)
     }
 }

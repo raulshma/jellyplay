@@ -45,7 +45,7 @@ class SearchViewModelHistoryTest {
     private val mediaSearchEngine: MediaSearchEngine = mockk(relaxed = true)
     private val offlineRepository: OfflineRepository = mockk(relaxed = true)
     private val searchFiltersStore: SearchFiltersStore = mockk(relaxed = true)
-    private val quickDownloadActions: com.raulshma.jellyplay.feature.search.QuickDownloadActions = mockk(relaxed = true)
+    private val quickDownloadActions: com.raulshma.jellyplay.core.data.download.QuickDownloadActions = mockk(relaxed = true)
 
     private lateinit var viewModel: SearchViewModel
 

@@ -95,14 +95,15 @@ fun LocalDate.isInMonth(month: YearMonth): Boolean =
 
 /**
  * Day-of-week + day-of-month label, e.g. "Mon, Jul 14". Locale resolution
- * lives behind the [CalendarDateLabels] expect/actual seam: JVM/android keep
- * the host-locale behavior, wasmJs serves fixed-English headers (documented
- * degrade on the actual).
+ * lives behind the core/ui date-label seam (via the [CalendarDateLabels]
+ * façade): JVM/android keep the host-locale behavior, wasmJs serves
+ * fixed-English headers — the degrade documented once on core:ui's
+ * DateLabels.
  */
 fun LocalDate.toDayHeaderLabel(): String = calendarDayHeaderLabel(this)
 
 /**
  * Full month + year label, e.g. "July 2026", used by the month nav header.
- * Same [CalendarDateLabels] seam as [toDayHeaderLabel].
+ * Same core/ui seam as [toDayHeaderLabel].
  */
 fun YearMonth.toMonthYearLabel(): String = calendarMonthYearLabel(this)

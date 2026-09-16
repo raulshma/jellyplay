@@ -18,6 +18,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.SettingListItem
+import com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import androidx.compose.ui.focus.FocusRequester
@@ -48,7 +49,7 @@ fun BackupSettingsScreen(
 ) {
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
-    val messenger = rememberSettingsMessenger()
+    val bus = LocalUserMessageBus.current
 
     // SAF/native pickers behind the platform seam: Android returns the SAF
     // launcher facade, desktop an AWT FileDialog facade — both
@@ -157,7 +158,7 @@ fun BackupSettingsScreen(
 
                 LaunchedEffect(viewModel.backupRestoreStatus) {
                     viewModel.backupRestoreStatus?.let { msg ->
-                        messenger?.info(msg)
+                        bus.info(msg)
                         viewModel.clearBackupRestoreStatus()
                     }
                 }

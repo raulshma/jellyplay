@@ -1,20 +1,21 @@
 package com.raulshma.jellyplay.feature.calendar
 
+import com.raulshma.jellyplay.core.ui.components.monthYear
+import com.raulshma.jellyplay.core.ui.components.weekdayShortMonthDay
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.YearMonth
 
 /**
- * Locale seam for the calendar's human-readable date labels: the
- * two reads that have no multiplatform formatter in kotlinx-datetime —
- * java.text-style pattern formatting ("EEE, MMM d" / "MMMM yyyy") — moved
- * behind expect/actual so commonMain stays wasm-clean. Same template as
- * requests' RequestTime.kt seam:
- *  - jvmShared actual: the verbatim java.time DateTimeFormatter bodies with
- *    Locale.getDefault() (android + desktop behavior unchanged; jvmTest pins).
- *  - wasmJs actual: fixed-English formatting through hand-rolled arrays —
- *    documented locale degrade (see the actual's KDoc).
+ * Thin façade over the core/ui date-label seam — the module-internal names
+ * the calendar's call sites use, kept so churn stays at the seams' edges.
+ * The formatting bodies (java.time DateTimeFormatter on android/desktop,
+ * fixed-English tables on wasm) and the month/day tables live ONLY in
+ * core:ui's DateLabels; the documented locale degrade is stated once there.
  */
-internal expect fun calendarDayHeaderLabel(date: LocalDate): String
+internal fun calendarDayHeaderLabel(date: LocalDate): String = weekdayShortMonthDay(date)
 
 /** Full month + year label, e.g. "July 2026" — see [calendarDayHeaderLabel]. */
-internal expect fun calendarMonthYearLabel(month: YearMonth): String
+internal fun calendarMonthYearLabel(month: YearMonth): String =
+    // Month is an enum, JANUARY-first — ordinal + 1 is its 1-based number
+    // (kotlinx keeps `number` internal in this version line).
+    monthYear(year = month.year, monthNumber = month.month.ordinal + 1)

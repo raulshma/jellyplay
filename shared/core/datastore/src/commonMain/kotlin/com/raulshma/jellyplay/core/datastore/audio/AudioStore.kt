@@ -183,14 +183,15 @@ class AudioStore constructor(
         dataStore.edit { it[Keys.SLEEP_TIMER_END_OF_EPISODE] = enabled }
     }
 
-    internal val resetKeys: List<Preferences.Key<*>> = listOf(
-        Keys.AUDIO_DEFAULT_SPEED, Keys.AUDIO_NIGHT_MODE_VOLUME, Keys.AUDIO_NIGHT_MODE_GAIN,
-        Keys.AUDIO_SKIP_PREVIOUS_THRESHOLD_MS, Keys.AUDIO_AUTOPLAY_NEXT, Keys.AUDIO_PRELOAD_BUFFER_SIZE,
-        Keys.AUDIO_NORMALIZATION_MODE, Keys.AUDIO_NORMALIZATION_ENABLED, Keys.REPLAYGAIN_PRE_AMP_DB,
-        Keys.CHANNEL_MIX_MODE, Keys.CHANNEL_MIX_ENABLED, Keys.AUDIO_GAPLESS_ENABLED,
-        Keys.AUDIO_CROSSFADE_DURATION_MS, Keys.AUDIO_DELAY_MS, Keys.AUDIO_LYRICS_VISIBLE,
-        Keys.AUDIO_VISUALIZER_ENABLED, Keys.SLEEP_TIMER_DURATION_MS, Keys.SLEEP_TIMER_END_OF_EPISODE,
-    )
+    /**
+     * Keys owned by this store, for factory-reset participation. Derived as the
+     * union of the [resetKeysFor] category lists (in enum declaration order) —
+     * those lists are what the facade actually resets, so deriving from them
+     * (instead of maintaining a parallel hand-written union) keeps this list
+     * from drifting out of sync.
+     */
+    internal val resetKeys: List<Preferences.Key<*>> =
+        PreferenceResetCategory.entries.flatMap(::resetKeysFor)
 
     /**
      * Category reset participation: the subset of [resetKeys] that belongs to

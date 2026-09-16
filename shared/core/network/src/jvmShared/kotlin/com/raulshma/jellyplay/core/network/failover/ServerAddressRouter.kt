@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.core.network.failover
 
 import com.raulshma.jellyplay.core.model.ServerInfo
-import com.raulshma.jellyplay.core.model.stripLegacyRoutePrefix
 import com.raulshma.jellyplay.core.network.config.OkHttpConfig
 import com.raulshma.jellyplay.core.network.config.OkHttpConfigProvider
 import com.raulshma.jellyplay.core.network.config.applySelfSignedTrust
@@ -34,6 +33,13 @@ import okhttp3.Request
  * dedicated [OkHttpClient] with short timeouts. Any HTTP response — including
  * a non-2xx status — means the endpoint is reachable (something answering HTTP
  * is there); only transport failures (DNS, connect, timeout) mean unreachable.
+ *
+ * The decision tables (identity bar, strip-retry, adoption, selection order)
+ * live in the commonMain [FailoverPolicy] core ([ProbeOutcome] is its
+ * latency-free value twin — see `toProbeOutcome`); this JVM type stays
+ * platform-side solely because of [latencyMs], the DECLARED JVM DIVERGENCE:
+ * every probe records its wall-clock cost here for health checks/validation,
+ * which the wasm transport has no equivalent for.
  */
 data class AddressProbeResult(
     val reachable: Boolean,
@@ -48,6 +54,15 @@ data class AddressProbeResult(
      * null when the probed address answered unchanged — or nothing answered.
      */
     val resolvedAddress: String? = null,
+)
+
+/** Projects onto the common decision core — [latencyMs] is the dropped field. */
+private fun AddressProbeResult.toProbeOutcome() = ProbeOutcome(
+    reachable = reachable,
+    serverId = serverId,
+    serverName = serverName,
+    error = error,
+    resolvedAddress = resolvedAddress,
 )
 
 /**
@@ -76,6 +91,15 @@ data class AddressProbeResult(
  * router would classify the server "unreachable" even though the user granted
  * its certificate — and `connectToServer` (which probes through this router)
  * would then never offer the trust dialog a second time.
+ *
+ * The pure decision tables (probe identity bar, legacy-prefix strip-retry,
+ * resolved-address adoption, primary-then-alternates selection) live in the
+ * commonMain [FailoverPolicy] core, shared with the wasmJs Ktor transport
+ * (`KtorWasmAuthApiClient`). What stays JVM-side by declaration: the
+ * per-probe latency capture on [AddressProbeResult] (the common [ProbeOutcome]
+ * carries none), the primary-alone-first + concurrent-alternates probe
+ * fan-out, and the all-down behavior of keeping the CURRENT active address
+ * instead of the common fall-back-to-primary.
  *
  * @param okHttpConfigProvider source of the granted self-signed trust set.
  *   Production (Koin) always passes the real provider. The default exists so
@@ -255,7 +279,10 @@ class ServerAddressRouter @Inject constructor(
      * The primary is probed alone first (the healthy common case costs one
      * cheap probe); only when it is down are the alternates probed
      * concurrently, so a black-holed network costs one probe window rather
-     * than the sum of every endpoint's timeout.
+     * than the sum of every endpoint's timeout. Both fan-out shapes are the
+     * router's transport (a DECLARED divergence — the wasm transport probes
+     * sequentially); the primary-then-alternates ORDER they serve is the
+     * common [selectPreferredAddress] decision.
      *
      * Returns true when the active address changed.
      *
@@ -285,31 +312,46 @@ class ServerAddressRouter @Inject constructor(
                 val address = addressString(endpoint.url)
                 async { address to prober(address) }
             }.awaitAll()
-        }
-        val firstReachable = results.firstOrNull { it.second.reachable } ?: return false
-        val address = firstReachable.first
-        val changed = _activeAddress.value != address
-        setActive(address)
+        }.toMap()
+        // Common selection order. Its all-down fallback (the primary) maps
+        // back to the router's own divergence: keep the CURRENT active
+        // address — no state change — rather than snapping to the primary.
+        val chosen = selectPreferredAddress(
+            primary = primaryAddress,
+            alternates = alternates.map { addressString(it.url) },
+            results = results.mapValues { it.value.toProbeOutcome() },
+        )
+        if (chosen == primaryAddress) return false
+        val changed = _activeAddress.value != chosen
+        setActive(chosen)
         changed
     }
 
-    /** Probes one specific address. Exposed for health checks / validation. */
+    /**
+     * Probes one specific address. Exposed for health checks / validation.
+     *
+     * The ladder decisions (when to strip-retry, which answer is adopted and
+     * what [AddressProbeResult.resolvedAddress] becomes) are the common
+     * FailoverPolicy tables — the wasm transport runs the identical ladder
+     * through [probeResolvedAddress]. The orchestration stays here so the
+     * latency-carrying [AddressProbeResult] values never flatten through the
+     * latency-free [ProbeOutcome].
+     */
     suspend fun probe(address: String): AddressProbeResult {
         val normalized = address.trim().trimEnd('/')
         if (normalized.isEmpty()) {
             return AddressProbeResult(reachable = false, error = IllegalArgumentException("Blank address"))
         }
         val result = prober(normalized)
-        if (result.reachable && result.serverId != null) return result
         // Jellyfin 12 removed the legacy /emby and /mediabrowser route
         // prefixes: a 10.x server upgraded in place 404s them (any HTTP
         // response still counts "reachable", hence the identity check).
         // Retry the bare address once and adopt it only when a real server
         // identity answers; reverse proxies that consume the prefix answer
         // with one on the original address and never reach here.
-        val stripped = stripLegacyRoutePrefix(normalized) ?: return result
+        val stripped = legacyPrefixRetryCandidate(normalized, result.toProbeOutcome()) ?: return result
         val retried = prober(stripped)
-        return if (retried.reachable && retried.serverId != null) {
+        return if (answersWithIdentity(retried.toProbeOutcome())) {
             retried.copy(resolvedAddress = stripped)
         } else {
             result

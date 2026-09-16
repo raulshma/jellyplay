@@ -43,6 +43,73 @@ import kotlinx.browser.document
 import org.koin.core.context.startKoin
 
 /**
+ * The shared FEATURE modules the web shell registers, exactly — the single
+ * declaration both the startKoin call below and
+ * KoinModuleRegistrationGuardTest's web check derive from (the test reads
+ * this list out of this file's source text; the old hand-kept test-side
+ * allowlist — and its lockstep comment — are gone). When the next feature
+ * gains a wasmJs target and a web nav entry, register it here; the guard
+ * test follows automatically.
+ *
+ * Per-module notes (registration is graph-shaped, routing is per-screen):
+ *  - [requestsModule]: the first feature slice on web — the shared
+ *    RequestsViewModel registration; its repository slice rides
+ *    `dataWasmModule`.
+ *  - [calendarModule]: the second feature slice — the calendar VM (its ctor
+ *    deps ArrRepository/SeerrRepository/ExperimentalStore all resolve from
+ *    the modules above; the module registers nothing new).
+ *  - [detailsModule]: the SeerrDetail slice. The wasm-clean module (the
+ *    MediaDetail cluster's VM/factory defs moved to the jvm platform modules
+ *    the android/desktop apps register); its only def the browser ever
+ *    resolves is SeerrDetailViewModel, whose ctor deps — SeerrRepository +
+ *    SeerrRequestDelegate (dataWasmModule), PreferenceProjections +
+ *    SeerrPreferencesStore (datastoreCommonModule), and the narrow
+ *    MediaRepository (webDetailsPlatformModule below, over networkWasmModule's
+ *    LibraryApiClient) — all resolve on web.
+ *  - [arrqueueModule]: the ARR download queue (third shared feature screen —
+ *    WebAppRoot's entry<Route.ArrQueue>). ArrRepository resolves from
+ *    dataWasmModule; ExperimentalStore from datastoreCommonModule.
+ *  - [onboardingModule]: the onboarding wizard (fourth shared feature
+ *    screen — entry<Route.Onboarding>). All four VM deps resolve from
+ *    datastoreCommonModule + webDatastoreModule.
+ *  - [settingsModule]: the settings feature's first wasm-resolvable slice —
+ *    entry<Route.ArrSettings> (the direct *arr integration settings;
+ *    WebAppRoot wires the two documented calendar/arrqueue no-op stubs to
+ *    it). ArrSettingsViewModel's whole closure resolves on web:
+ *    ArrRepository (dataWasmModule), ArrPreferencesStore (datastoreCommonModule
+ *    over webDatastoreModule's arr_prefs DataStore) and
+ *    ArrSecureCredentialsStore (webDatastoreModule's session-memory
+ *    WasmSecureKeyValueStorage — the same process-lifetime cut every
+ *    non-Seerr web credential store keeps). SeerrSettingsViewModel's closure
+ *    resolves too, but no web surface pushes Route.SeerrSettings (the
+ *    shell's own WebSeerrPane covers the credentials function), so it stays
+ *    latent like the rest of the module's defs — the detailsModule
+ *    precedent. LATENT ON WEB (never resolved in the browser):
+ *    SettingsViewModel/ServerManagementViewModel/SecuritySettingsViewModel/
+ *    AboutViewModel all take the jvmShared AuthRepository, whose impl needs
+ *    Room + the WebSocket client + TokenCipher — there is deliberately no
+ *    wasm AuthRepository binding (the rule that kept feature/auth
+ *    target-only); SubtitleProviderSettingsViewModel needs
+ *    networkJvmModule's Map<SubtitleProviderKind, SubtitleProvider>;
+ *    LibraryLayout/NotificationSettingsViewModel need the real Room-backed
+ *    MediaRepository/PlaylistRepository cluster (the web MediaRepository is
+ *    WebMediaRepositoryNarrow — the SeerrDetail cross-link that loudly
+ *    throws on every other member). The module's two eager defs are
+ *    boot-safe here: SettingsSearchCatalogPrewarmer(createdAtStart) needs
+ *    only the application scope and swallows its own failures; the platform
+ *    fragment is the wasm actual (honest no-op seams + the all-false
+ *    SettingsCapabilities).
+ */
+internal val webFeatureModules = listOf(
+    requestsModule,
+    calendarModule,
+    detailsModule,
+    arrqueueModule,
+    onboardingModule,
+    settingsModule,
+)
+
+/**
  *  web shell entry (docs/kmp-migration-plan.md §): boots the
  * shared datastore + wasm network DI stacks and renders the navigation
  * shell. The W.1/W.4 boot-proof placeholder grew up with:
@@ -104,72 +171,15 @@ fun main() {
     // DI first: everything composable resolves lazily through Koin, so the
     // container must exist before the first composition. Same module shape
     // as the desktop shell's startKoin, minus the jvm-only stacks. The
-    // requests slice (feature VM + data repositories) — exactly the
-    // set the KoinModuleRegistrationGuardTest's web allowlist pins.
+    // shared feature slices come from [webFeatureModules] — the single
+    // declaration KoinModuleRegistrationGuardTest's web check derives from.
     val koinApp = startKoin {
         modules(
             datastoreCommonModule,
             webDatastoreModule(),
             networkWasmModule,
             dataWasmModule,
-            requestsModule,
-            // The second feature slice on web — the calendar VM
-            // (its ctor deps ArrRepository/SeerrRepository/ExperimentalStore
-            // all resolve from the modules above, calendarModule registers
-            // nothing new). KoinModuleRegistrationGuardTest's web allowlist
-            // pins this registration in the same change.
-            calendarModule,
-            // The SeerrDetail slice. detailsModule is now the
-            // wasm-clean module (the MediaDetail cluster's VM/factory defs
-            // moved to the jvm platform modules the android/desktop apps
-            // register); its only def the browser ever resolves is
-            // SeerrDetailViewModel, whose ctor deps — SeerrRepository +
-            // SeerrRequestDelegate (dataWasmModule), PreferenceProjections +
-            // SeerrPreferencesStore (datastoreCommonModule), and the narrow
-            // MediaRepository (webDetailsPlatformModule below, over
-            // networkWasmModule's LibraryApiClient) — all resolve on web.
-            detailsModule,
-            // the ARR download queue (third shared feature screen —
-            // WebAppRoot's entry<Route.ArrQueue>). ArrRepository resolves
-            // from dataWasmModule; ExperimentalStore from datastoreCommonModule.
-            arrqueueModule,
-            // the onboarding wizard (fourth shared feature screen —
-            // entry<Route.Onboarding>). All four VM deps resolve from
-            // datastoreCommonModule + webDatastoreModule.
-            onboardingModule,
-            // the settings feature, registered for its first
-            // wasm-resolvable slice — entry<Route.ArrSettings> (the direct
-            // *arr integration settings; WebAppRoot wires the two documented
-            // calendar/arrqueue no-op stubs to it). ArrSettingsViewModel's
-            // whole closure resolves on web: ArrRepository (dataWasmModule),
-            // ArrPreferencesStore (datastoreCommonModule over
-            // webDatastoreModule's arr_prefs DataStore) and
-            // ArrSecureCredentialsStore (webDatastoreModule's session-memory
-            // WasmSecureKeyValueStorage — the same process-lifetime cut every
-            // non-Seerr web credential store keeps). SeerrSettingsViewModel's
-            // closure resolves too, but no web surface pushes
-            // Route.SeerrSettings (the shell's own WebSeerrPane covers the
-            // credentials function), so it stays latent like the rest of the
-            // module's defs — the detailsModule precedent: registration is
-            // graph-shaped, routing is per-screen. LATENT ON WEB (never
-            // resolved in the browser): SettingsViewModel/ServerManagement
-            // ViewModel/SecuritySettingsViewModel/AboutViewModel all take the
-            // jvmShared AuthRepository, whose impl needs Room + the WebSocket
-            // client + TokenCipher — there is deliberately no wasm
-            // AuthRepository binding (the rule that kept feature/auth
-            // target-only); SubtitleProviderSettingsViewModel needs
-            // networkJvmModule's Map<SubtitleProviderKind, SubtitleProvider>;
-            // LibraryLayout/NotificationSettingsViewModel need the real
-            // Room-backed MediaRepository/PlaylistRepository cluster (the web
-            // MediaRepository is WebMediaRepositoryNarrow — the SeerrDetail
-            // cross-link that loudly throws on every other member). The
-            // module's two eager defs are boot-safe here:
-            // SettingsSearchCatalogPrewarmer(createdAtStart) needs only the
-            // application scope and swallows its own failures; the platform
-            // fragment is the wasm actual (honest no-op seams + the all
-            // false SettingsCapabilities). KoinModuleRegistrationGuardTest's
-            // web allowlist pins this registration in the same change.
-            settingsModule,
+            *webFeatureModules.toTypedArray(),
             webDetailsPlatformModule(),
             // infrastructure registration: the OPFS-backed Room database
             // (WebWorkerSQLiteDriver over the vendored worker — see

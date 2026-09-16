@@ -182,8 +182,10 @@ fun desktopDataModule(dataDir: Path): Module {
         // androidAppModule).
         //  - PlaybackSyncScheduler: REAL since the playback-outbox drainer
         //    moved into shared jvmShared — DesktopPlaybackSyncScheduler runs
-        //    drainer.drainOnce(0) at startup, on every Offline→Online
-        //    transition, and on SyncStatusStateHolder's manual "sync now"
+        //    drainer.drainOnce(0) at startup, on every going-online edge
+        //    (network Offline→Online OR the app-level Offline Mode toggling
+        //    back online — the shared ReconnectTrigger), and on
+        //    SyncStatusStateHolder's manual "sync now"
         //    (see its class KDoc for the declared behaviour delta: desktop
         //    staged outbox rows now actually drain; no periodic backstop).
         //    Android overrides the interface with the WorkManager-backed
@@ -222,6 +224,7 @@ fun desktopDataModule(dataDir: Path): Module {
             DesktopPlaybackSyncScheduler(
                 drainer = get(),
                 networkMonitor = get(),
+                offlineModeManager = get(),
                 scope = get(DatastoreQualifiers.applicationScope),
             )
         }

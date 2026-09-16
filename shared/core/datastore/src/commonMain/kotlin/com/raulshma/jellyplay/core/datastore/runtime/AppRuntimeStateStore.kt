@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.raulshma.jellyplay.core.datastore.CachedJsonNullPolicy
 import com.raulshma.jellyplay.core.datastore.ParsedCache
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
 import com.raulshma.jellyplay.core.model.DlnaDeviceRef
@@ -177,25 +178,28 @@ class AppRuntimeStateStore constructor(
         }
     }
 
-    private fun readFavoriteChannels(prefs: Preferences): Set<String> {
-        val raw = prefs[Keys.FAVORITE_CHANNELS]
-        if (raw == cachedFavoriteChannels.key) return cachedFavoriteChannels.value
-        val value = raw?.let {
-            try { json.decodeFromString<Set<String>>(it) } catch (_: Exception) { null }
-        } ?: emptySet()
-        cachedFavoriteChannels = ParsedCache(raw, value)
-        return value
-    }
+    // MemoizeNull (this store's pre-promotion policy at every site): a null
+    // raw is a cacheable input — the decoded value depends only on the raw
+    // string, so a memoised default is safe to serve.
+    private fun readFavoriteChannels(prefs: Preferences): Set<String> =
+        PreferenceCodec.cachedJson(
+            raw = prefs[Keys.FAVORITE_CHANNELS],
+            cache = cachedFavoriteChannels,
+            default = emptySet(),
+            parse = { json.decodeFromString<Set<String>>(it) },
+            cacheRef = { cachedFavoriteChannels = it },
+            nullPolicy = CachedJsonNullPolicy.MemoizeNull,
+        )
 
-    private fun readRecentDlnaDevices(prefs: Preferences): List<DlnaDeviceRef> {
-        val raw = prefs[Keys.RECENT_DLNA_DEVICES]
-        if (raw == cachedRecentDlnaDevices.key) return cachedRecentDlnaDevices.value
-        val value = raw?.let {
-            try { json.decodeFromString<List<DlnaDeviceRef>>(it) } catch (_: Exception) { null }
-        } ?: emptyList()
-        cachedRecentDlnaDevices = ParsedCache(raw, value)
-        return value
-    }
+    private fun readRecentDlnaDevices(prefs: Preferences): List<DlnaDeviceRef> =
+        PreferenceCodec.cachedJson(
+            raw = prefs[Keys.RECENT_DLNA_DEVICES],
+            cache = cachedRecentDlnaDevices,
+            default = emptyList(),
+            parse = { json.decodeFromString<List<DlnaDeviceRef>>(it) },
+            cacheRef = { cachedRecentDlnaDevices = it },
+            nullPolicy = CachedJsonNullPolicy.MemoizeNull,
+        )
 }
 
 /**

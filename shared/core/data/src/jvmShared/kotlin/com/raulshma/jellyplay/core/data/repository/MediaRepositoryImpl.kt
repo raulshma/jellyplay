@@ -815,24 +815,11 @@ class MediaRepositoryImpl(
     override suspend fun getSyncPlayGroups(): Result<List<SyncPlayGroup>> =
         apiClient.getSyncPlayGroups()
 
-    override suspend fun joinSyncPlayGroup(groupId: String): Result<Unit> =
-        apiClient.joinSyncPlayGroup(groupId)
-
-    override suspend fun leaveSyncPlayGroup(): Result<Unit> =
-        apiClient.leaveSyncPlayGroup()
-
     override suspend fun createSyncPlayGroup(groupName: String): Result<Unit> =
         apiClient.createSyncPlayGroup(groupName)
 
     override suspend fun getSyncPlayInfo(groupId: String?): Result<SyncPlayGroupInfo> =
         apiClient.getSyncPlayInfo(groupId)
-
-    override suspend fun syncPlayReady(
-        positionTicks: Long,
-        isPlaying: Boolean,
-        playlistItemId: String?,
-    ): Result<Unit> =
-        apiClient.syncPlayReady(positionTicks, isPlaying, playlistItemId)
 
     override suspend fun syncPlayPause(): Result<Unit> =
         apiClient.syncPlayPause()
@@ -845,12 +832,6 @@ class MediaRepositoryImpl(
 
     override suspend fun syncPlayStop(): Result<Unit> =
         apiClient.syncPlayStop()
-
-    override suspend fun syncPlayNextItem(playlistItemId: String): Result<Unit> =
-        apiClient.syncPlayNextItem(playlistItemId)
-
-    override suspend fun syncPlayPreviousItem(playlistItemId: String): Result<Unit> =
-        apiClient.syncPlayPreviousItem(playlistItemId)
 
     override suspend fun syncPlaySetRepeatMode(mode: SyncPlayRepeatMode): Result<Unit> =
         apiClient.syncPlaySetRepeatMode(mode)
@@ -868,12 +849,6 @@ class MediaRepositoryImpl(
 
     override suspend fun syncPlaySetIgnoreWait(ignore: Boolean): Result<Unit> =
         apiClient.syncPlaySetIgnoreWait(ignore)
-
-    override suspend fun syncPlayRemoveFromPlaylist(playlistItemId: String): Result<Unit> =
-        apiClient.syncPlayRemoveFromPlaylist(playlistItemId)
-
-    override suspend fun syncPlayMovePlaylistItem(playlistItemId: String, newIndex: Int): Result<Unit> =
-        apiClient.syncPlayMovePlaylistItem(playlistItemId, newIndex)
 
     private val syntheticUserDataChanges = MutableSharedFlow<UserDataChange>(
         extraBufferCapacity = SYNTHETIC_CHANGES_BUFFER,

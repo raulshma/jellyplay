@@ -73,6 +73,7 @@ import com.raulshma.jellyplay.core.ui.components.LocalServerHealth
 import com.raulshma.jellyplay.core.ui.components.LocalSurpriseOnLaunch
 import com.raulshma.jellyplay.core.ui.components.PullToRefreshRegistry
 import com.raulshma.jellyplay.core.ui.components.SurpriseLaunchController
+import com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus
 import com.raulshma.jellyplay.core.ui.message.UiText
 import com.raulshma.jellyplay.core.ui.message.UserMessage
 import com.raulshma.jellyplay.core.ui.message.UserMessageBus
@@ -715,6 +716,12 @@ private fun DesktopNavScaffold(
             LocalServerHealth provides serverHealth,
             LocalSurpriseOnLaunch provides surpriseController,
             LocalPullToRefreshRegistry provides refreshRegistry,
+            // The shared screens post one-shot messages through the commonMain
+            // message.LocalUserMessageBus; provide the SAME bus instance the
+            // UserMessageHost above collects, so those messages reach this
+            // shell's snackbar (desktop's severity semantics are unchanged —
+            // everything still flows through the shared host's policy).
+            LocalUserMessageBus provides sharedUserMessageBus,
         ) {
             Box(Modifier.weight(1f).fillMaxHeight()) {
                 NavDisplay(
@@ -759,8 +766,14 @@ private fun UpdateCheckMessage.desktopUpdateText(openedReleasePage: Boolean = fa
  * group come from the one destination-facts table in core/ui (the former
  * per-shell `DesktopRailDescriptor` list is gone). Only the rail's OWN
  * display order stays here; it is per-shell policy, not a destination fact.
+ *
+ * Every listed route MUST have a registry row: resolution below fails loudly
+ * at class-init. The former silent `mapNotNull` drop let a route that lost
+ * its row just vanish off the rail with no failure anywhere.
+ * DesktopRailRegistryContractTest pins this (internal visibility exists for
+ * that test — nothing else in the module may depend on the rail internals).
  */
-private val DESKTOP_RAIL_ITEMS: List<NavDestination> = listOf(
+internal val DESKTOP_RAIL_ROUTES: List<Route> = listOf(
     Route.Home,
     Route.Search,
     Route.Library,
@@ -776,7 +789,14 @@ private val DESKTOP_RAIL_ITEMS: List<NavDestination> = listOf(
     Route.Shortcuts,
     Route.Settings,
     Route.AdminDashboard,
-).mapNotNull(NAV_DESTINATION_BY_ROUTE::get)
+)
+
+internal val DESKTOP_RAIL_ITEMS: List<NavDestination> = DESKTOP_RAIL_ROUTES.map { route ->
+    checkNotNull(NAV_DESTINATION_BY_ROUTE[route]) {
+        "DESKTOP_RAIL_ROUTES lists ${route::class.simpleName} but the NAV_DESTINATIONS registry " +
+            "has no row for it — register the destination or drop it from the rail list."
+    }
+}
 
 /** Rail + tab-switch destinations; Home is the start tab (same as the Android shell). */
 private val DESKTOP_TOP_LEVEL_ROUTES: Set<Route> = DESKTOP_RAIL_ITEMS.map { it.route }.toSet()

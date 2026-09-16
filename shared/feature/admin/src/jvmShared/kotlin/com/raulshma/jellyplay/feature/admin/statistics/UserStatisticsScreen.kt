@@ -62,6 +62,7 @@ import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
+import com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus
 import com.raulshma.jellyplay.core.ui.components.AnimatedSectionEntrance
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
@@ -90,7 +91,7 @@ fun UserStatisticsScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val adaptiveInfo = LocalAdaptiveInfo.current
     val statisticsExport = rememberStatisticsExport()
-    val adminMessenger = rememberAdminMessenger()
+    val bus = LocalUserMessageBus.current
     var showSortMenu by remember { mutableStateOf(false) }
 
     // TV focus-on-launch: focus the first user card once data arrives so D-pad input lands on
@@ -106,7 +107,7 @@ fun UserStatisticsScreen(
         val exportSharedMessage = stringResource(Res.string.user_stats_export_shared)
         LaunchedEffect(state.shareRequested) {
             statisticsExport.shareUserStatsCsv(state.users)
-            adminMessenger?.info(exportSharedMessage)
+            bus.info(exportSharedMessage)
             viewModel.consumeExportRequest()
         }
     }

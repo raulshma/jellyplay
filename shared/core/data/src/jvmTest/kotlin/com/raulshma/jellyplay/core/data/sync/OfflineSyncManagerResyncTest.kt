@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.data.sync
 
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
+import com.raulshma.jellyplay.core.data.repository.DownloadStartRequest
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineDownloadWriter
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
@@ -470,12 +471,8 @@ class OfflineSyncManagerResyncTest {
         var trickplayResult = true
         var segmentsResult = true
 
-        override suspend fun startDownload(
-            mediaItemId: String, name: String, mediaType: String, mediaSourceId: String?,
-            downloadUrl: String, imageUrl: String?, imageBlurHash: String?, seriesId: String?,
-            seasonId: String?, seriesName: String?, seasonName: String?, episodeNumber: Int?,
-            seasonNumber: Int?, container: String?, precomputedCurrentBytes: Long?,
-        ): Result<DownloadItem> = error("not used in resync tests")
+        override suspend fun startDownload(request: DownloadStartRequest): Result<DownloadItem> =
+            error("not used in resync tests")
 
         override suspend fun saveOfflineMediaItem(item: MediaItem, imageUrl: String?, backdropUrl: String?, downloadPath: String?) {
             calls += "saveOfflineMediaItem"

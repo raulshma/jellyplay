@@ -250,29 +250,14 @@ class PlaybackStore constructor(
     }
 
     /**
-     * Keys owned by this store, for factory-reset participation. Aggregated by
-     * the facade's reset-coverage guard.
+     * Keys owned by this store, for factory-reset participation. Derived as the
+     * union of the [resetKeysFor] category lists (in enum declaration order) —
+     * those lists are what the facade actually resets, so deriving from them
+     * (instead of maintaining a parallel hand-written union) keeps this list
+     * from drifting out of sync.
      */
-    internal val resetKeys: List<Preferences.Key<*>> = listOf(
-        Keys.PREFERRED_PLAYER,
-        Keys.STREAMING_QUALITY,
-        Keys.CELLULAR_STREAMING_QUALITY,
-        Keys.FORCE_DIRECT_PLAY,
-        Keys.PLAYBACK_MODE,
-        Keys.DECODER_MODE,
-        Keys.AUDIO_PASSTHROUGH,
-        Keys.FRAME_RATE_MATCHING,
-        Keys.REFRESH_RATE_MODE,
-        Keys.LIVE_STREAM_OPTION,
-        Keys.KEEP_SCREEN_ON_DURING_VIDEO,
-        Keys.PAUSE_ON_AUDIO_FOCUS_LOSS,
-        Keys.DUCK_ON_TRANSIENT_FOCUS_LOSS,
-        Keys.AUTO_PLAY_COUNTDOWN_SEC,
-        Keys.BACKGROUND_VIDEO_AUDIO_ENABLED,
-        Keys.PGS_SUBTITLE_DIRECT_PLAY,
-        Keys.USER_DATA_SYNC_ENABLED,
-        Keys.ANDROID_TV_WATCH_NEXT_ENABLED,
-    )
+    internal val resetKeys: List<Preferences.Key<*>> =
+        PreferenceResetCategory.entries.flatMap(::resetKeysFor)
 
     /**
      * Category reset participation: the subset of [resetKeys] that belongs to

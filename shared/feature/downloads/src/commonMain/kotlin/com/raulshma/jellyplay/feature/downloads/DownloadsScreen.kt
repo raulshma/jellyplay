@@ -88,6 +88,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.image.MediaImage
+import com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
@@ -195,14 +196,14 @@ fun DownloadsScreen(
     val resyncProgress by viewModel.resyncProgress.collectAsStateWithLifecycle()
 
     // One-shot delete feedback (screen-forward seam): resolve the texts here,
-    // forward each emitted message through the messenger actual.
-    val messenger = rememberDownloadsMessenger()
+    // post each emitted message through the app-wide UserMessageBus.
+    val bus = LocalUserMessageBus.current
     val deletedText = stringResource(Res.string.downloads_deleted_message)
-    LaunchedEffect(messenger) {
+    LaunchedEffect(bus) {
         viewModel.messages.collect { message ->
             when (message) {
-                DownloadsUserMessage.Deleted -> messenger?.info(deletedText)
-                is DownloadsUserMessage.Raw -> messenger?.error(message.text)
+                DownloadsUserMessage.Deleted -> bus.info(deletedText)
+                is DownloadsUserMessage.Raw -> bus.error(message.text)
             }
         }
     }

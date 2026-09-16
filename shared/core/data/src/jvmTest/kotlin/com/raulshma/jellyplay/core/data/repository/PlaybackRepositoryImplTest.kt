@@ -70,7 +70,10 @@ class PlaybackRepositoryImplTest {
             kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob()),
         )
         repository = PlaybackRepositoryImpl(
-            apiClient, outbox, offlineModeManager, homeSession, sessionCacheRegistry,
+            // One union mock covers all four narrowed family seams: the
+            // JellyfinApiClient mock implements each of them.
+            apiClient, apiClient, apiClient, apiClient,
+            outbox, offlineModeManager, homeSession, sessionCacheRegistry,
             mediaCacheInvalidation = mediaCacheInvalidation,
             mediaRepository = lazy { mediaRepository },
         )
@@ -344,7 +347,10 @@ class PlaybackRepositoryImplTest {
             CoroutineScope(SupervisorJob() + Dispatchers.Unconfined),
         )
         val repo = PlaybackRepositoryImpl(
-            apiClient, outbox, offlineModeManager, homeSession, sessionCacheRegistry,
+            // One union mock covers all four narrowed family seams: the
+            // JellyfinApiClient mock implements each of them.
+            apiClient, apiClient, apiClient, apiClient,
+            outbox, offlineModeManager, homeSession, sessionCacheRegistry,
             mediaCacheInvalidation = mediaCacheInvalidation,
             mediaRepository = lazy { mediaRepository },
         )

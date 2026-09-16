@@ -18,11 +18,11 @@ import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.model.HomeFreshness
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestStateHolder
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
+import com.raulshma.jellyplay.core.datastore.experimental.directArrEnabled
 import com.raulshma.jellyplay.core.model.DetailCapabilities
 import com.raulshma.jellyplay.core.model.DetailContext
 import com.raulshma.jellyplay.core.model.DetailOrigin
 import com.raulshma.jellyplay.core.model.DetailPreferences
-import com.raulshma.jellyplay.core.model.ExperimentalFeature
 import com.raulshma.jellyplay.core.model.BookFormat
 import com.raulshma.jellyplay.core.model.BookTocEntry
 import com.raulshma.jellyplay.core.model.CollectionSummary
@@ -188,7 +188,7 @@ class DetailViewModel internal constructor(
                 sonarrResolved = it.sonarrServersResolved,
             )
         }.distinctUntilChanged(),
-        stores.experimentalStore.experimental.map { it.enabledExperimentalFeatures.contains(ExperimentalFeature.DIRECT_ARR_INTEGRATION) },
+        stores.experimentalStore.directArrEnabled(),
     ) { inputs, flagEnabled ->
         if (!flagEnabled || inputs.identity == null) false
         else if (inputs.identity.mediaType != MediaType.SERIES) false

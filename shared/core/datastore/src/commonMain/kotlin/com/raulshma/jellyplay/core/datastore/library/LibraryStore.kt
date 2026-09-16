@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.raulshma.jellyplay.core.datastore.CachedJsonNullPolicy
 import com.raulshma.jellyplay.core.datastore.ParsedCache
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
 import com.raulshma.jellyplay.core.datastore.toEnumOrNull
@@ -95,35 +96,38 @@ class LibraryStore constructor(
     private fun readGroupBy(prefs: Preferences): GroupBy =
         prefs[Keys.LIBRARY_GROUP_BY].toEnumOrNull() ?: GroupBy.NONE
 
-    private fun readDefaultLibrarySortOrders(prefs: Preferences): Map<String, String> {
-        val raw = prefs[Keys.DEFAULT_LIBRARY_SORT_ORDERS]
-        return if (raw != cachedDefaultLibrarySortOrders.key) {
-            try {
-                raw?.let { json.decodeFromString<Map<String, String>>(it) } ?: emptyMap()
-            } catch (_: Exception) { emptyMap() }
-                .also { cachedDefaultLibrarySortOrders = ParsedCache(raw, it) }
-        } else cachedDefaultLibrarySortOrders.value
-    }
+    // MemoizeNull (this store's pre-promotion policy at every site): a null
+    // raw is a cacheable input — the decoded value depends only on the raw
+    // string, so a memoised empty map is safe to serve.
+    private fun readDefaultLibrarySortOrders(prefs: Preferences): Map<String, String> =
+        PreferenceCodec.cachedJson(
+            raw = prefs[Keys.DEFAULT_LIBRARY_SORT_ORDERS],
+            cache = cachedDefaultLibrarySortOrders,
+            default = emptyMap(),
+            parse = { json.decodeFromString<Map<String, String>>(it) },
+            cacheRef = { cachedDefaultLibrarySortOrders = it },
+            nullPolicy = CachedJsonNullPolicy.MemoizeNull,
+        )
 
-    private fun readLibraryViewModes(prefs: Preferences): Map<String, String> {
-        val raw = prefs[Keys.LIBRARY_VIEW_MODES]
-        return if (raw != cachedLibraryViewModes.key) {
-            try {
-                raw?.let { json.decodeFromString<Map<String, String>>(it) } ?: emptyMap()
-            } catch (_: Exception) { emptyMap() }
-                .also { cachedLibraryViewModes = ParsedCache(raw, it) }
-        } else cachedLibraryViewModes.value
-    }
+    private fun readLibraryViewModes(prefs: Preferences): Map<String, String> =
+        PreferenceCodec.cachedJson(
+            raw = prefs[Keys.LIBRARY_VIEW_MODES],
+            cache = cachedLibraryViewModes,
+            default = emptyMap(),
+            parse = { json.decodeFromString<Map<String, String>>(it) },
+            cacheRef = { cachedLibraryViewModes = it },
+            nullPolicy = CachedJsonNullPolicy.MemoizeNull,
+        )
 
-    private fun readLibraryFilters(prefs: Preferences): Map<String, String> {
-        val raw = prefs[Keys.LIBRARY_FILTERS]
-        return if (raw != cachedLibraryFilters.key) {
-            try {
-                raw?.let { json.decodeFromString<Map<String, String>>(it) } ?: emptyMap()
-            } catch (_: Exception) { emptyMap() }
-                .also { cachedLibraryFilters = ParsedCache(raw, it) }
-        } else cachedLibraryFilters.value
-    }
+    private fun readLibraryFilters(prefs: Preferences): Map<String, String> =
+        PreferenceCodec.cachedJson(
+            raw = prefs[Keys.LIBRARY_FILTERS],
+            cache = cachedLibraryFilters,
+            default = emptyMap(),
+            parse = { json.decodeFromString<Map<String, String>>(it) },
+            cacheRef = { cachedLibraryFilters = it },
+            nullPolicy = CachedJsonNullPolicy.MemoizeNull,
+        )
 
     // ------------------------------------------------------------------
     // Setters
@@ -196,18 +200,15 @@ class LibraryStore constructor(
     }
 
     /**
-     * Keys owned by this store, for factory-reset participation. These are the
-     * library-view/sort/filter + episode keys split out of the legacy
-     * `HOME_DISCOVERY` reset category.
+     * Keys owned by this store, for factory-reset participation. Derived as the
+     * union of the [resetKeysFor] category lists (in enum declaration order) —
+     * those lists are what the facade actually resets, so deriving from them
+     * (instead of maintaining a parallel hand-written union) keeps this list
+     * from drifting out of sync. These are the library-view/sort/filter +
+     * episode keys split out of the legacy `HOME_DISCOVERY` reset category.
      */
-    internal val resetKeys: List<Preferences.Key<*>> = listOf(
-        Keys.LIBRARY_VIEW_MODE,
-        Keys.DEFAULT_LIBRARY_SORT_ORDERS, Keys.LIBRARY_VIEW_MODES, Keys.LIBRARY_FILTERS,
-        Keys.HIDE_EPISODE_THUMBNAILS, Keys.EPISODES_DESCENDING, Keys.SKIP_SPECIALS,
-        Keys.COMPACT_EPISODE_LIST, Keys.SHOW_DETAIL_UP_NEXT,
-        Keys.LIBRARY_POSTER_SIZE, Keys.LIBRARY_GROUP_BY,
-        Keys.CONFIRM_LIBRARY_RESET,
-    )
+    internal val resetKeys: List<Preferences.Key<*>> =
+        PreferenceResetCategory.entries.flatMap(::resetKeysFor)
 
     /**
      * Category reset participation: all seven keys owned here sit in the legacy

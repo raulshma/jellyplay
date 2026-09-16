@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.music.albumdetail
 
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
+import com.raulshma.jellyplay.core.data.download.TrackDownloadActions
 import com.raulshma.jellyplay.core.data.playback.InstantMixState
 import com.raulshma.jellyplay.core.data.playback.InstantMixStateHolder
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
@@ -14,6 +15,7 @@ import com.raulshma.jellyplay.core.ui.viewmodel.DeferredUserDataRefresher
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.feature.music.MixErrorMessage
 import com.raulshma.jellyplay.feature.music.MusicQueuePlayer
+import com.raulshma.jellyplay.feature.music.MusicTrackDownloadStatusWindow
 import com.raulshma.jellyplay.feature.music.MusicTrackDownloads
 import com.raulshma.jellyplay.feature.music.toInstantMixOutcome
 import com.raulshma.jellyplay.feature.music.toMixErrorMessage
@@ -194,50 +196,37 @@ class AlbumDetailViewModel(
         }
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
+    // ── Track downloads (scoped per-track lifecycle) ─────────────────────────
+    // The shared core:data TrackDownloadActions choreography (detail fetch →
+    // intake start, bulk admission under a semaphore) over this feature's
+    // MusicTrackDownloads seam via the window adapter. The REMOVE decisions
+    // stay at the call sites — they genuinely differ: the track row removes
+    // a COMPLETED download directly (no confirm), downloadAlbum skips such
+    // rows, and deleteAlbumDownloads removes every existing row.
+
+    private val trackStatusWindow = MusicTrackDownloadStatusWindow(musicTrackDownloads)
+    private val trackDownloadActions = TrackDownloadActions(
+        scope = scope,
+        intake = downloadIntake,
+        mediaRepository = mediaRepository,
+        statusWindow = trackStatusWindow,
+    )
+
     fun downloadTrack(track: MediaItem) {
-        val currentDownloads = trackDownloads.value
-        val existing = currentDownloads[track.id]
+        val existing = trackDownloads.value[track.id]
         if (existing != null && existing.status == DownloadStatus.COMPLETED) {
             launch {
-                musicTrackDownloads.remove(existing.id)
+                trackStatusWindow.remove(existing.id)
             }
             return
         }
-
-        launch {
-            try {
-                val detail = mediaRepository.getMediaDetail(track.id).getOrNull() ?: return@launch
-                // Intake seam owns the artifact bundle; previously this path
-                // wrote only remote image URLs, so offline cards fell back to
-                // blurHash. Local poster/backdrop are now persisted.
-                downloadIntake.start(detail)
-            } catch (_: Exception) {}
-        }
+        trackDownloadActions.flip(track.id)
     }
-
-    private val downloadSemaphore = kotlinx.coroutines.sync.Semaphore(3)
 
     fun downloadAlbum() {
         val albumTracks = tracks
         if (albumTracks.isEmpty()) return
-        val currentDownloads = trackDownloads.value
-        launch {
-            albumTracks.forEach { track ->
-                val existing = currentDownloads[track.id]
-                if (existing == null || existing.status == DownloadStatus.FAILED || existing.status == DownloadStatus.CANCELLED) {
-                    launch {
-                        downloadSemaphore.acquire()
-                        try {
-                            val detail = mediaRepository.getMediaDetail(track.id).getOrNull() ?: return@launch
-                            downloadIntake.start(detail)
-                        } catch (_: Exception) {
-                        } finally {
-                            downloadSemaphore.release()
-                        }
-                    }
-                }
-            }
-        }
+        trackDownloadActions.bulk(albumTracks)
     }
 
     fun deleteAlbumDownloads() {
@@ -249,7 +238,7 @@ class AlbumDetailViewModel(
                 val existing = currentDownloads[track.id]
                 if (existing != null) {
                     launch {
-                        musicTrackDownloads.remove(existing.id)
+                        trackStatusWindow.remove(existing.id)
                     }
                 }
             }

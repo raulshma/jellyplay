@@ -9,7 +9,7 @@ package com.raulshma.jellyplay.feature.settings
  * **Ownership rule (the seam split):** capabilities own VISIBILITY; the
  * behavior seams own BEHAVIOR. A flag must exist iff some row's visibility
  * depends on the platform; the [BiometricGate] / [LogCollector] /
- * [PlatformIntents] / [SettingsMessenger] seams keep doing the actual work.
+ * [PlatformIntents] seams keep doing the actual work.
  * Every flag mirrors a desktop seam's null-ness / query, and those
  * equalities are pinned beside the seam actuals in
  * `DesktopPlatformActualsTest` — one review home for the platform's truth.

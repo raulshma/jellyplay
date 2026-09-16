@@ -1,8 +1,6 @@
 package com.raulshma.jellyplay.core.data.repository
 
-import com.raulshma.jellyplay.core.model.CreditTimestamps
 import com.raulshma.jellyplay.core.model.CultureInfo
-import com.raulshma.jellyplay.core.model.IntroTimestamps
 import com.raulshma.jellyplay.core.model.LiveStreamOption
 import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.PlaybackInfoResult
@@ -143,10 +141,6 @@ interface PlaybackRepository {
         index: Int,
         codec: String?,
     ): String
-
-    suspend fun getIntroTimestamps(itemId: String): Result<IntroTimestamps>
-
-    suspend fun getCreditTimestamps(itemId: String): Result<CreditTimestamps>
 
     /**
      * Server-reported reasons the current session is transcoding [itemId]

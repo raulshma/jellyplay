@@ -26,14 +26,17 @@ import kotlin.test.fail
  * the exact fix.
  *
  * apps/web/Main.kt is covered per-site: the web shell registers only the
- * slice of the feature graph that has a wasmJs target — requestsModule, more
- * as features
- * land web targets — so its forward check runs against an explicit
- * ALLOWLIST ([webForwardAllowlist]) with set-equality in BOTH directions:
- * an allowlisted module missing from the web startKoin fails, and a feature
- * module registered on web but absent from the allowlist fails too, so the
- * allowlist can only grow by a conscious test edit (the same ratchet spirit
- * as the desktop floor below). Desktop forward check + floor stay untouched.
+ * slice of the feature graph that has a wasmJs target — requestsModule first,
+ * more as features land web targets. Its web check DERIVES the expected set
+ * from that file's own `val webFeatureModules = listOf(...)` declaration —
+ * the same list the startKoin block consumes via a spread, so there is no
+ * hand-kept test-side copy to drift — with set-equality in BOTH directions
+ * between the declaration and the feature modules the file actually names:
+ * a feature module registered/imported on web but absent from the
+ * declaration fails (conscious Main.kt edit required), a declared module
+ * that no longer resolves fails (rename/typo), and the startKoin block must
+ * consume the declaration rather than a divergent hand-copied list. Desktop
+ * forward check + floor stay untouched.
  *
  * Source-scanning on plain text (no PSI) — deliberately cheap, but executable.
  */
@@ -46,33 +49,17 @@ class KoinModuleRegistrationGuardTest {
     )
 
     /**
-     * Registration files whose forward check runs against a per-site
-     * allowlist instead of the full feature graph. The reverse (typo/rename)
-     * check still applies to them in full.
+     * Registration files whose forward check derives from the file's own
+     * `val <name> = listOf(...)` feature-module declaration instead of the
+     * full feature graph. The reverse (typo/rename) check still applies to
+     * them in full.
      */
     private val forwardAllowlistedRegistrationFiles = listOf(
         "Web app" to "apps/web/src/wasmJsMain/kotlin/com/raulshma/jellyplay/web/Main.kt",
     )
 
-    /**
-     * The web shell's forward allowlist: every shared feature module the web
-     * startKoin is EXPECTED to register, exactly. apps/web depends on six
-     * features ([requestsModule] put Route.Requests on the browser;
-     * [calendarModule] put Route.UpcomingCalendar there; [detailsModule] put
-     * Route.SeerrDetail there, the SeerrDetail slice of details' split
-     * commonMain module, the MediaDetail cluster's VM/factory defs living in
-     * the per-platform androidDetailsModule / desktopDetailsPlatformModule
-     * the android/desktop apps register; added [arrqueueModule] +
-     * [onboardingModule]; added [settingsModule] for the
-     * Route.ArrSettings slice — most of its VM defs stay latent on web, the
-     * AuthRepository-backed ones deliberately so); when the next feature
-     * gains a wasmJs target and a web nav entry, register it in Main.kt AND
-     * add it here in the same commit.
-     */
-    private val webForwardAllowlist = setOf(
-        "calendarModule", "requestsModule", "detailsModule", "arrqueueModule", "onboardingModule",
-        "settingsModule",
-    )
+    /** The declaration identifier the web check derives the expected set from. */
+    private val webFeatureModulesDeclaration = "webFeatureModules"
 
     /**
      * Module-variant prefixes that are intentionally platform-/core-scoped:
@@ -139,44 +126,62 @@ class KoinModuleRegistrationGuardTest {
     }
 
     /**
-     * Web-site forward ratchet (set-equality, both directions):
-     *  - every allowlisted module MUST appear in the web startKoin block
-     *    (the arrqueue/shortcuts lesson, web edition);
-     *  - every feature module appearing in the web block MUST be allowlisted
-     *    (a web target + registration for a new feature must update the
-     *    allowlist consciously, never silently).
+     * Web-site forward ratchet, derived (set-equality, both directions):
+     *  - the web Main.kt must declare `val webFeatureModules = listOf(…)`
+     *    and its startKoin block must consume that declaration (a spread —
+     *    no divergent hand-copied module list);
+     *  - every declared module MUST resolve to a discovered shared feature
+     *    module (the arrqueue/shortcuts rename/typo lesson);
+     *  - every feature module named in the file (declaration, startKoin
+     *    block, import) MUST be declared — a web registration for a new
+     *    feature is a conscious Main.kt list edit, never silent.
      */
     @Test
-    fun webStartKoin_matchesItsForwardAllowlistExactly() {
+    fun webStartKoin_matchesItsDeclaredFeatureModulesExactly() {
         val root = repoRoot()
         val features = discoverFeatureModules(root)
-        val staleAllowlistEntries = webForwardAllowlist.filter { it !in features.keys }
+        val (site, path) = forwardAllowlistedRegistrationFiles.single()
+        val file = root.resolve(path)
+        val text = stripComments(file.readText())
+
+        val declared = declaredFeatureModuleList(text, webFeatureModulesDeclaration).toSet()
         assertTrue(
-            staleAllowlistEntries.isEmpty(),
-            "web forward allowlist names module(s) no longer declared in any shared " +
-                "feature commonMain: $staleAllowlistEntries — rename or removal? Update " +
-                "webForwardAllowlist alongside Main.kt.",
+            declared.isNotEmpty(),
+            "$site's `$webFeatureModulesDeclaration` declaration is empty — web registers no " +
+                "feature modules anymore? Restore the list.",
         )
 
-        val (site, path) = forwardAllowlistedRegistrationFiles.single()
-        val block = startKoinModulesBlock(root.resolve(path))
-        val registered = features.keys.filter { name ->
-            Regex("\\b$name\\b").containsMatchIn(block)
-        }.toSet()
+        val stale = declared.filter { it !in features.keys }
+        assertTrue(
+            stale.isEmpty(),
+            "$site's `$webFeatureModulesDeclaration` names module(s) no longer declared in any " +
+                "shared feature commonMain/jvmShared: $stale — rename or removal? Update " +
+                "webFeatureModules in ${file.name}.",
+        )
 
-        val missing = webForwardAllowlist - registered
-        val unlisted = registered - webForwardAllowlist
-        if (missing.isNotEmpty() || unlisted.isNotEmpty()) {
+        val block = startKoinModulesBlock(file)
+        assertTrue(
+            block.contains(webFeatureModulesDeclaration),
+            "$site's startKoin must register its feature modules via " +
+                "`*$webFeatureModulesDeclaration` (the declaration this test derives from), " +
+                "not a hand-copied module list.",
+        )
+
+        val named = features.keys.filter { name ->
+            Regex("\\b$name\\b").containsMatchIn(text)
+        }.toSet()
+        val undeclared = named - declared
+        if (undeclared.isNotEmpty()) {
             fail(
-                "$site's startKoin does not match its forward allowlist " +
-                    "(expected exactly $webForwardAllowlist):\n" +
-                    missing.joinToString("\n") { "  - '$it' allowlisted but NOT registered in $path" } +
-                    unlisted.joinToString("\n") {
-                        "  - '$it' registered in $path but NOT allowlisted (feature module — " +
-                            "add it to webForwardAllowlist in the same commit)"
+                "$site names feature module(s) its `$webFeatureModulesDeclaration` declaration " +
+                    "does not list (expected exactly $declared):\n" +
+                    undeclared.joinToString("\n") {
+                        "  - '$it' registered/imported in $path but NOT in " +
+                            "$webFeatureModulesDeclaration (feature module — add it to the " +
+                            "declaration in the same commit)"
                 } +
-                    "\nFix: keep apps/web/src/wasmJsMain/kotlin/com/raulshma/jellyplay/web/" +
-                    "Main.kt's modules(...) and webForwardAllowlist in lockstep.",
+                    "\nFix: keep ${file.name}'s modules(...) consuming " +
+                    "`*$webFeatureModulesDeclaration` and grow the declaration itself.",
             )
         }
     }
@@ -302,6 +307,40 @@ class KoinModuleRegistrationGuardTest {
             }
         }
         fail("${file.path}: unbalanced parentheses in modules(...)")
+    }
+
+    /**
+     * Parses `val <name> = listOf(<module>, …)` out of already-stripped
+     * source text — the declaration a forward-allowlisted site's startKoin
+     * consumes, and the single place this test derives that site's expected
+     * feature-module set from.
+     */
+    private fun declaredFeatureModuleList(text: String, declarationName: String): List<String> {
+        val declarationStart = text.indexOf("val $declarationName")
+        assertTrue(
+            declarationStart >= 0,
+            "expected a `val $declarationName = listOf(...)` declaration — the derivation " +
+                "source for this site's feature-module set is gone",
+        )
+        val listOfStart = text.indexOf("listOf(", declarationStart)
+        assertTrue(listOfStart >= 0, "$declarationName must be declared as a listOf(...) literal")
+        val openParen = listOfStart + "listOf".length
+        var depth = 0
+        for (i in openParen until text.length) {
+            when (text[i]) {
+                '(' -> depth++
+                ')' -> {
+                    depth--
+                    if (depth == 0) {
+                        return Regex("\\b(\\w+Module)\\b")
+                            .findAll(text.substring(openParen + 1, i))
+                            .map { it.groupValues[1] }
+                            .toList()
+                    }
+                }
+            }
+        }
+        fail("$declarationName declaration has unbalanced parentheses")
     }
 
     private fun stripComments(text: String): String {

@@ -54,7 +54,8 @@ import kotlin.test.assertTrue
  *  2. the cast happy path (fling the current track at the live position,
  *     pause the local engine);
  *  3. the add-to-playlist picker lifecycle (editable filter, failure, the
- *     dismiss guard while a add is in flight);
+ *     dismiss guard while a add is in flight) — read off the
+ *     [PlaylistPickerStateHolder] snapshot the VM forwards to;
  *  4. `downloadCurrentTrack`'s three-way routing (completed → re-download via
  *     delete, not-completed → detail + intake, no item → no-op) and the
  *     current-download mirror;
@@ -321,9 +322,10 @@ class AudioPlayerViewModelGapsTest {
 
         viewModel.openPlaylistPicker()
 
-        assertTrue(viewModel.uiState.value.showPlaylistPicker)
-        assertFalse(viewModel.uiState.value.isLoadingPlaylists)
-        assertEquals(listOf(editable), viewModel.uiState.value.playlists)
+        val picker = viewModel.playlistPicker.state.value
+        assertTrue(picker.visible)
+        assertFalse(picker.loading)
+        assertEquals(listOf(editable), picker.playlists)
     }
 
     @Test
@@ -332,7 +334,7 @@ class AudioPlayerViewModelGapsTest {
 
         viewModel.openPlaylistPicker()
 
-        assertFalse(viewModel.uiState.value.showPlaylistPicker)
+        assertFalse(viewModel.playlistPicker.state.value.visible)
         coVerify(exactly = 0) { playlistRepository.getPlaylists(any()) }
     }
 
@@ -343,9 +345,10 @@ class AudioPlayerViewModelGapsTest {
 
         viewModel.openPlaylistPicker()
 
-        assertTrue(viewModel.uiState.value.showPlaylistPicker, "the picker still opens on failure")
-        assertFalse(viewModel.uiState.value.isLoadingPlaylists)
-        assertTrue(viewModel.uiState.value.playlists.isEmpty())
+        val picker = viewModel.playlistPicker.state.value
+        assertTrue(picker.visible, "the picker still opens on failure")
+        assertFalse(picker.loading)
+        assertTrue(picker.playlists.isEmpty())
     }
 
     @Test
@@ -356,11 +359,11 @@ class AudioPlayerViewModelGapsTest {
 
         viewModel.addToPlaylist(playlist)
 
-        with(viewModel.uiState.value) {
-            assertFalse(isAddingToPlaylist)
-            assertFalse(showPlaylistPicker)
+        with(viewModel.playlistPicker.state.value) {
+            assertFalse(adding)
+            assertFalse(visible)
             assertTrue(playlists.isEmpty())
-            assertEquals("Road Trip", playlistMessage)
+            assertEquals("Road Trip", message)
         }
     }
 
@@ -375,9 +378,10 @@ class AudioPlayerViewModelGapsTest {
 
         viewModel.addToPlaylist(playlist)
 
-        assertFalse(viewModel.uiState.value.isAddingToPlaylist)
-        assertTrue(viewModel.uiState.value.showPlaylistPicker, "a failed add leaves the picker open")
-        assertEquals("server rejected", viewModel.uiState.value.playlistMessage)
+        val picker = viewModel.playlistPicker.state.value
+        assertFalse(picker.adding)
+        assertTrue(picker.visible, "a failed add leaves the picker open")
+        assertEquals("server rejected", picker.message)
     }
 
     @Test
@@ -394,28 +398,30 @@ class AudioPlayerViewModelGapsTest {
 
         // The add is in flight: a scrim tap must not close the picker.
         viewModel.dismissPlaylistPicker()
-        assertTrue(viewModel.uiState.value.showPlaylistPicker)
+        assertTrue(viewModel.playlistPicker.state.value.visible)
 
         gate.complete(Unit)
         // The completed add closes the picker itself; a post-add dismiss is a
         // harmless no-op reset.
-        assertFalse(viewModel.uiState.value.showPlaylistPicker)
+        assertFalse(viewModel.playlistPicker.state.value.visible)
         viewModel.dismissPlaylistPicker()
-        assertFalse(viewModel.uiState.value.showPlaylistPicker)
-        assertTrue(viewModel.uiState.value.playlists.isEmpty())
-        assertNull(viewModel.uiState.value.playlistMessage)
+        with(viewModel.playlistPicker.state.value) {
+            assertFalse(visible)
+            assertTrue(playlists.isEmpty())
+            assertNull(message)
+        }
     }
 
     @Test
-    fun clearPlaylistMessage_clearsOnlyTheMessage() {
+    fun clearMessage_clearsOnlyTheMessage() {
         currentItemIdFlow.value = "track-1"
         coEvery { playlistRepository.addItemsToPlaylist(any(), any()) } returns Result.success(Unit)
         viewModel.addToPlaylist(Playlist(id = "p1", name = "Road Trip"))
-        assertEquals("Road Trip", viewModel.uiState.value.playlistMessage)
+        assertEquals("Road Trip", viewModel.playlistPicker.state.value.message)
 
-        viewModel.clearPlaylistMessage()
+        viewModel.playlistPicker.clearMessage()
 
-        assertNull(viewModel.uiState.value.playlistMessage)
+        assertNull(viewModel.playlistPicker.state.value.message)
     }
 
     // ── 4. downloadCurrentTrack routing + current-download mirror ────────────

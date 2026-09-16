@@ -5,18 +5,24 @@ import androidx.media3.common.C
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.exoplayer.ExoPlayer
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
-import com.raulshma.jellyplay.core.model.ChannelMixMode
-import com.raulshma.jellyplay.core.model.EffectStrength
-import com.raulshma.jellyplay.core.model.EqualizerPreset
-import com.raulshma.jellyplay.core.model.EqualizerSettings
 import com.raulshma.jellyplay.core.model.ReverbPreset
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlin.math.pow
 
-class AudioEffectsProcessor() : AudioEffectsManager {
+/**
+ * Android half of the audio-effects manager: media3/audiofx DSP attach +
+ * apply + Android lifecycle. The state machine (flows, strengths, night-mode
+ * params, per-track ReplayGain computation, setter interplay) lives in the
+ * shared [AudioEffectsStateCore] (core:data commonMain) — this class extends
+ * it, so every flow, strength accessor and command is inherited unchanged
+ * (same instances, same source surface for [AudioEffectsManager] consumers,
+ * [AudioPlaybackManager], [AudioCrossfader] and the widget/visualizer taps).
+ * Each hook override below performs exactly the DSP write the pre-extraction
+ * setter performed after flipping state; the declared state-level
+ * divergences (unconditional hook fire, the CUSTOM-preset `levelsRewritten`
+ * flag, the null-context ReplayGain shims) are pinned in the core's KDoc.
+ */
+class AudioEffectsProcessor() : AudioEffectsStateCore(rejectOutOfRangeEqualizerBands = false) {
     private lateinit var scope: CoroutineScope
 
     var playerProvider: (() -> ExoPlayer?)? = null
@@ -47,124 +53,115 @@ class AudioEffectsProcessor() : AudioEffectsManager {
     val crossfadeDynamicsProcessor = DynamicsCompressorAudioProcessor()
     val crossfadeHighPassProcessor = HighPassFilterAudioProcessor()
 
-    private var _dialogueBoostStrength = EffectStrength.MODERATE
-    private var _nightModeStrength = EffectStrength.MODERATE
-
-    private val _nightModeEnabled = MutableStateFlow(false)
-    override val nightModeEnabled: StateFlow<Boolean> = _nightModeEnabled.asStateFlow()
-
-    private val _dialogueBoostEnabled = MutableStateFlow(false)
-    override val dialogueBoostEnabled: StateFlow<Boolean> = _dialogueBoostEnabled.asStateFlow()
-
-    private val _equalizerEnabled = MutableStateFlow(false)
-    override val equalizerEnabled: StateFlow<Boolean> = _equalizerEnabled.asStateFlow()
-
-    private val _equalizerSettings = MutableStateFlow(EqualizerSettings())
-    override val equalizerSettings: StateFlow<EqualizerSettings> = _equalizerSettings.asStateFlow()
-
-    private val _equalizerPreset = MutableStateFlow(EqualizerPreset.FLAT)
-    override val equalizerPreset: StateFlow<EqualizerPreset> = _equalizerPreset.asStateFlow()
-
-    private val _bassBoostEnabled = MutableStateFlow(false)
-    override val bassBoostEnabled: StateFlow<Boolean> = _bassBoostEnabled.asStateFlow()
-
-    private var _bassBoostStrength = EffectStrength.MODERATE
-    override val bassBoostStrengthState: EffectStrength get() = _bassBoostStrength
-
-    override val dialogueBoostStrengthState: EffectStrength get() = _dialogueBoostStrength
-    override val nightModeStrengthState: EffectStrength get() = _nightModeStrength
-
-    private val _virtualizerEnabled = MutableStateFlow(false)
-    override val virtualizerEnabled: StateFlow<Boolean> = _virtualizerEnabled.asStateFlow()
-
-    private val _virtualizerStrength = MutableStateFlow(500)
-    override val virtualizerStrength: StateFlow<Int> = _virtualizerStrength.asStateFlow()
-
-    private val _reverbPreset = MutableStateFlow(ReverbPreset.NONE)
-    override val reverbPresetState: StateFlow<ReverbPreset> = _reverbPreset.asStateFlow()
-
-    private val _lrBalance = MutableStateFlow(0f)
-    override val lrBalance: StateFlow<Float> = _lrBalance.asStateFlow()
-
-    private val _pitchSemitones = MutableStateFlow(0f)
-    override val pitchSemitones: StateFlow<Float> = _pitchSemitones.asStateFlow()
-
-    private val _autoEqByGenre = MutableStateFlow(false)
-    override val autoEqByGenre: StateFlow<Boolean> = _autoEqByGenre.asStateFlow()
-
+    /** Session-id PCM taps (overrides the core's permanently-empty defaults). */
     override val fftData: StateFlow<ByteArray> = visualizerHelper.fftData
     override val waveformData: StateFlow<ByteArray> = visualizerHelper.waveformData
-
-    private val _replayGainMode = MutableStateFlow(AudioNormalizationMode.NONE)
-    override val replayGainMode: StateFlow<AudioNormalizationMode> = _replayGainMode.asStateFlow()
-
-    private val _replayGainPreAmpDb = MutableStateFlow(0f)
-    override val replayGainPreAmpDb: StateFlow<Float> = _replayGainPreAmpDb.asStateFlow()
-
-    private val _channelMixMode = MutableStateFlow(ChannelMixMode.AUTO)
-    override val channelMixMode: StateFlow<ChannelMixMode> = _channelMixMode.asStateFlow()
-
-    private val _channelMixEnabled = MutableStateFlow(false)
-    override val channelMixEnabled: StateFlow<Boolean> = _channelMixEnabled.asStateFlow()
-
-    val nightModeVolumeForStrength: Float
-        get() = EffectStrengthMapping.nightModeVolumeAttenuation(_nightModeStrength)
-
-    val nightModeGainForStrength: Int
-        get() = EffectStrengthMapping.nightModeGainMb(_nightModeStrength)
-
-    var nightModeVolume = 0.4f
-    var nightModeGain = 1200
 
     fun initialize(scope: CoroutineScope) {
         this.scope = scope
     }
 
-    override fun toggleNightMode() {
-        _nightModeEnabled.value = !_nightModeEnabled.value
+    // ── DSP half of the core's apply hooks ──────────────────────────────────
+
+    override fun onNightModeEnabledChanged() {
         applyNightMode()
     }
 
-    override fun toggleDialogueBoost() {
-        _dialogueBoostEnabled.value = !_dialogueBoostEnabled.value
+    override fun onNightModeStrengthChanged() {
+        // Named divergence vs the desktop funnel: Android historically
+        // re-applied night mode here ONLY while it is enabled.
+        if (_nightModeEnabled.value) applyNightMode()
+    }
+
+    override fun onNightModeParamsChanged() {
+        if (_nightModeEnabled.value) applyNightMode()
+    }
+
+    override fun onDialogueBoostEnabledChanged() {
         applyDialogueBoost()
     }
 
-    override fun setDialogueBoostStrength(strength: EffectStrength) {
-        _dialogueBoostStrength = strength
-        dialogueBoost.setStrength(strength)
+    override fun onDialogueBoostStrengthChanged() {
+        // Historical shape: push the strength unconditionally, re-apply the
+        // effect stack only while the boost is on.
+        dialogueBoost.setStrength(_dialogueBoostStrength)
         if (_dialogueBoostEnabled.value) applyDialogueBoost()
     }
 
-    override fun setNightModeStrength(strength: EffectStrength) {
-        _nightModeStrength = strength
-        if (_nightModeEnabled.value) applyNightMode()
-    }
-
-    override fun toggleEqualizer() {
-        _equalizerEnabled.value = !_equalizerEnabled.value
+    override fun onEqualizerEnabledChanged() {
         applyEqualizer()
     }
 
-    override fun setEqualizerBand(bandIndex: Int, levelDb: Int) {
-        val newLevels = _equalizerSettings.value.bandLevels.toMutableList()
-        newLevels[bandIndex] = levelDb
-        _equalizerSettings.value = EqualizerSettings(newLevels)
-        _equalizerPreset.value = EqualizerPreset.CUSTOM
-        equalizerHelper.setSettings(_equalizerSettings.value)
+    override fun onEqualizerSettingsChanged(levelsRewritten: Boolean) {
+        // CUSTOM keeps the user's curve and historically pushed NOTHING here.
+        if (levelsRewritten) equalizerHelper.setSettings(_equalizerSettings.value)
     }
 
-    override fun resetEqualizer() {
-        _equalizerSettings.value = EqualizerSettings()
-        _equalizerPreset.value = EqualizerPreset.FLAT
-        equalizerHelper.setSettings(_equalizerSettings.value)
+    override fun onBassBoostEnabledChanged() {
+        applyBassBoost()
     }
 
-    override fun setNightModeParams(volume: Float, gain: Int) {
-        nightModeVolume = volume
-        nightModeGain = gain
-        if (_nightModeEnabled.value) applyNightMode()
+    override fun onBassBoostStrengthChanged() {
+        // Historical shape: strength push only — no attach, no re-enable.
+        bassBoostHelper.setStrength(_bassBoostStrength)
     }
+
+    override fun onVirtualizerEnabledChanged() {
+        applyVirtualizer()
+    }
+
+    override fun onVirtualizerStrengthChanged() {
+        // Historical shape: strength push only — no attach, no re-enable.
+        virtualizerHelper.setStrength(_virtualizerStrength.value)
+    }
+
+    override fun onReverbPresetChanged() {
+        val player = playerProvider?.invoke() ?: return
+        val audioSessionId = player.audioSessionId
+        if (audioSessionId == C.AUDIO_SESSION_ID_UNSET) return
+        if (_reverbPreset.value == ReverbPreset.NONE) {
+            reverbHelper.setEnabled(false)
+            reverbHelper.detach()
+        } else {
+            reverbHelper.detach()
+            reverbHelper.attach(audioSessionId)
+            reverbHelper.setPreset(_reverbPreset.value)
+        }
+    }
+
+    override fun onLrBalanceChanged() {
+        balanceProcessor.setBalance(_lrBalance.value)
+    }
+
+    override fun onPitchSemitonesChanged() {
+        // Interface-shim semantics: the context-free overload applies at
+        // normal speed (AudioPlaybackManager uses the speed-aware overload).
+        playerProvider?.invoke()?.playbackParameters = PlaybackParameters(1f, pitchMultiplier)
+    }
+
+    override fun onReplayGainModeChanged() {
+        // Named divergence vs the desktop funnel: the historical interface
+        // shim recomputed with a NULL track context (gain = pre-amp only).
+        applyReplayGain(trackGain = null, isShuffled = false)
+    }
+
+    override fun onReplayGainPreAmpDbChanged() {
+        applyReplayGain(trackGain = null, isShuffled = false)
+    }
+
+    override fun onChannelMixChanged() {
+        // Primary + crossfade sinks each need their own processor state.
+        channelMixProcessor.setMode(_channelMixMode.value)
+        channelMixProcessor.setEnabled(_channelMixEnabled.value)
+        crossfadeChannelMixProcessor.setMode(_channelMixMode.value)
+        crossfadeChannelMixProcessor.setEnabled(_channelMixEnabled.value)
+    }
+
+    override fun onVisualizerEnabledChanged(enabled: Boolean) {
+        visualizerHelper.setEnabled(enabled)
+    }
+
+    // ── DSP apply implementations + Android lifecycle ───────────────────────
 
     fun applyNightMode() {
         val player = playerProvider?.invoke() ?: return
@@ -218,39 +215,23 @@ class AudioEffectsProcessor() : AudioEffectsManager {
         equalizerHelper.setSettings(_equalizerSettings.value)
     }
 
+    /**
+     * Push the per-track ReplayGain context and apply it to the in-sink DSP:
+     * TRACK/ALBUM set the computed gain on both sinks (ALBUM + shuffled pins
+     * it at exactly 0), DYNAMIC zeroes it and enables the compressor (it is
+     * mutually exclusive with per-track loudness normalization), NONE zeroes
+     * it and disables everything. The computation itself is the core's
+     * [AudioEffectsStateCore.effectiveReplayGainDb] over the just-stored
+     * context.
+     */
     fun applyReplayGain(trackGain: Float?, isShuffled: Boolean = false) {
-        val mode = _replayGainMode.value
-        when (mode) {
-            AudioNormalizationMode.TRACK,
-            AudioNormalizationMode.ALBUM -> {
-                // DYNAMIC compressor is mutually exclusive with per-track
-                // loudness normalization; disable it while ReplayGain runs.
-                dynamicsProcessor.setEnabled(false)
-                crossfadeDynamicsProcessor.setEnabled(false)
-                if (mode == AudioNormalizationMode.ALBUM && isShuffled) {
-                    replayGainProcessor.setGainDb(0f)
-                    crossfadeReplayGainProcessor.setGainDb(0f)
-                    return
-                }
-                val preAmp = _replayGainPreAmpDb.value
-                val gain = (trackGain ?: 0f) + preAmp
-                replayGainProcessor.setGainDb(gain)
-                crossfadeReplayGainProcessor.setGainDb(gain)
-            }
-            AudioNormalizationMode.DYNAMIC -> {
-                // No per-track gain; drive the DSP compressor instead.
-                replayGainProcessor.setGainDb(0f)
-                crossfadeReplayGainProcessor.setGainDb(0f)
-                dynamicsProcessor.setEnabled(true)
-                crossfadeDynamicsProcessor.setEnabled(true)
-            }
-            AudioNormalizationMode.NONE -> {
-                replayGainProcessor.setGainDb(0f)
-                crossfadeReplayGainProcessor.setGainDb(0f)
-                dynamicsProcessor.setEnabled(false)
-                crossfadeDynamicsProcessor.setEnabled(false)
-            }
-        }
+        setReplayGainContext(trackGain, isShuffled)
+        val compressorActive = _replayGainMode.value == AudioNormalizationMode.DYNAMIC
+        dynamicsProcessor.setEnabled(compressorActive)
+        crossfadeDynamicsProcessor.setEnabled(compressorActive)
+        val gain = replayGainContextEffectiveDb()
+        replayGainProcessor.setGainDb(gain ?: 0f)
+        crossfadeReplayGainProcessor.setGainDb(gain ?: 0f)
     }
 
     fun setReplayGainMode(mode: AudioNormalizationMode, normalizationGain: Float?, isShuffled: Boolean) {
@@ -263,33 +244,9 @@ class AudioEffectsProcessor() : AudioEffectsManager {
         applyReplayGain(normalizationGain, isShuffled)
     }
 
-    // Interface-conformance shims over the context-taking overloads above:
-    // the manager (the interface's queue-owning adapter) overrides all three
-    // with queue-aware arguments and never reaches these defaults — they exist
-    // so context-free consumers of AudioEffectsManager compile against the
-    // processor directly ("no current track, normal speed").
-    override fun setReplayGainMode(mode: AudioNormalizationMode) =
-        setReplayGainMode(mode, normalizationGain = null, isShuffled = false)
-
-    override fun setReplayGainPreAmpDb(db: Float) =
-        setReplayGainPreAmpDb(db, normalizationGain = null, isShuffled = false)
-
-    override fun setPitchSemitones(semitones: Float) = setPitchSemitones(semitones, currentSpeed = 1f)
-
-    /**
-     * Push the channel-mix mode + enabled flag to the DSP
-     * [channelMixProcessor]. Drives real downmix/upmix/mono via ITU
-     * BS.775 coefficients; on the audio/music path this replaces the
-     * previously unwired [ChannelMixMode] preference.
-     */
-    override fun setChannelMix(mode: ChannelMixMode, enabled: Boolean) {
-        _channelMixMode.value = mode
-        _channelMixEnabled.value = enabled
-        // Primary + crossfade sinks each need their own processor state.
-        channelMixProcessor.setMode(mode)
-        channelMixProcessor.setEnabled(enabled)
-        crossfadeChannelMixProcessor.setMode(mode)
-        crossfadeChannelMixProcessor.setEnabled(enabled)
+    fun setPitchSemitones(semitones: Float, currentSpeed: Float) {
+        setPitchSemitonesState(semitones)
+        playerProvider?.invoke()?.playbackParameters = PlaybackParameters(currentSpeed, pitchMultiplier)
     }
 
     fun attachLoudnessEnhancer(audioSessionId: Int, gain: Int) {
@@ -305,29 +262,22 @@ class AudioEffectsProcessor() : AudioEffectsManager {
         }
     }
 
-    fun setEqualizerEnabled(enabled: Boolean) {
-        _equalizerEnabled.value = enabled
-        applyEqualizer()
+    fun applyBassBoost() {
+        val player = playerProvider?.invoke() ?: return
+        val audioSessionId = player.audioSessionId
+        if (audioSessionId == C.AUDIO_SESSION_ID_UNSET) return
+        bassBoostHelper.attach(audioSessionId)
+        bassBoostHelper.setStrength(_bassBoostStrength)
+        bassBoostHelper.setEnabled(_bassBoostEnabled.value)
     }
 
-    fun setBassBoostEnabled(enabled: Boolean) {
-        _bassBoostEnabled.value = enabled
-        applyBassBoost()
-    }
-
-    fun setVirtualizerEnabled(enabled: Boolean) {
-        _virtualizerEnabled.value = enabled
-        applyVirtualizer()
-    }
-
-    fun setDialogueBoostEnabled(enabled: Boolean) {
-        _dialogueBoostEnabled.value = enabled
-        applyDialogueBoost()
-    }
-
-    fun setNightModeEnabled(enabled: Boolean) {
-        _nightModeEnabled.value = enabled
-        applyNightMode()
+    fun applyVirtualizer() {
+        val player = playerProvider?.invoke() ?: return
+        val audioSessionId = player.audioSessionId
+        if (audioSessionId == C.AUDIO_SESSION_ID_UNSET) return
+        virtualizerHelper.attach(audioSessionId)
+        virtualizerHelper.setStrength(_virtualizerStrength.value)
+        virtualizerHelper.setEnabled(_virtualizerEnabled.value)
     }
 
     fun attachAudioEffects(audioSessionId: Int) {
@@ -368,100 +318,6 @@ class AudioEffectsProcessor() : AudioEffectsManager {
         if (visualizerHelper.isEnabled) {
             visualizerHelper.setEnabled(true)
         }
-    }
-
-    override fun setEqualizerPreset(preset: EqualizerPreset) {
-        _equalizerPreset.value = preset
-        if (preset != EqualizerPreset.CUSTOM) {
-            val settings = EqualizerSettings(preset.bandLevels())
-            _equalizerSettings.value = settings
-            equalizerHelper.setSettings(settings)
-        }
-    }
-
-    override fun toggleBassBoost() {
-        _bassBoostEnabled.value = !_bassBoostEnabled.value
-        applyBassBoost()
-    }
-
-    override fun setBassBoostStrength(strength: EffectStrength) {
-        _bassBoostStrength = strength
-        bassBoostHelper.setStrength(strength)
-    }
-
-    fun applyBassBoost() {
-        val player = playerProvider?.invoke() ?: return
-        val audioSessionId = player.audioSessionId
-        if (audioSessionId == C.AUDIO_SESSION_ID_UNSET) return
-        bassBoostHelper.attach(audioSessionId)
-        bassBoostHelper.setStrength(_bassBoostStrength)
-        bassBoostHelper.setEnabled(_bassBoostEnabled.value)
-    }
-
-    override fun toggleVirtualizer() {
-        _virtualizerEnabled.value = !_virtualizerEnabled.value
-        applyVirtualizer()
-    }
-
-    override fun setVirtualizerStrength(strength: Int) {
-        _virtualizerStrength.value = strength
-        virtualizerHelper.setStrength(strength)
-    }
-
-    fun applyVirtualizer() {
-        val player = playerProvider?.invoke() ?: return
-        val audioSessionId = player.audioSessionId
-        if (audioSessionId == C.AUDIO_SESSION_ID_UNSET) return
-        virtualizerHelper.attach(audioSessionId)
-        virtualizerHelper.setStrength(_virtualizerStrength.value)
-        virtualizerHelper.setEnabled(_virtualizerEnabled.value)
-    }
-
-    override fun setReverbPreset(preset: ReverbPreset) {
-        _reverbPreset.value = preset
-        val player = playerProvider?.invoke() ?: return
-        val audioSessionId = player.audioSessionId
-        if (audioSessionId == C.AUDIO_SESSION_ID_UNSET) return
-        if (preset == ReverbPreset.NONE) {
-            reverbHelper.setEnabled(false)
-            reverbHelper.detach()
-        } else {
-            reverbHelper.detach()
-            reverbHelper.attach(audioSessionId)
-            reverbHelper.setPreset(preset)
-        }
-    }
-
-    override fun setLrBalance(balance: Float) {
-        _lrBalance.value = balance
-        balanceProcessor.setBalance(balance)
-    }
-
-    fun setPitchSemitones(semitones: Float, currentSpeed: Float) {
-        _pitchSemitones.value = semitones
-        val multiplier = if (semitones == 0f) 1.0f else {
-            2.0f.pow(semitones / 12.0f)
-        }
-        playerProvider?.invoke()?.playbackParameters = PlaybackParameters(currentSpeed, multiplier)
-    }
-
-    override fun setAutoEqByGenre(enabled: Boolean) {
-        _autoEqByGenre.value = enabled
-    }
-
-    override fun applyAutoEqForGenre(genres: List<String>?) {
-        if (!_autoEqByGenre.value) return
-        if (genres.isNullOrEmpty()) return
-        val matchedPreset = genres.firstNotNullOfOrNull { genre ->
-            EqualizerPreset.fromGenre(genre)
-        } ?: return
-        if (matchedPreset != _equalizerPreset.value) {
-            setEqualizerPreset(matchedPreset)
-        }
-    }
-
-    override fun enableVisualizer(enabled: Boolean) {
-        visualizerHelper.setEnabled(enabled)
     }
 
     fun reattachForCrossfade(audioSessionId: Int) {
