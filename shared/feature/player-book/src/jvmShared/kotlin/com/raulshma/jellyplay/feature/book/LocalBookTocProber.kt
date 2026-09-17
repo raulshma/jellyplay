@@ -38,10 +38,11 @@ class LocalBookTocProber(
         return withContext(Dispatchers.IO) {
             when (format) {
                 BookFormat.PDF -> {
-                    val nodes = runCatching {
-                        pdfOutlineParser.parse(filePath.toPath())
-                    }.getOrDefault(emptyList())
-                    BookTocProbe(format = format, pageCount = 0, entries = nodes.flatMap { it.flattenToTocEntries() })
+                    BookTocProbe(
+                        format = format,
+                        pageCount = 0,
+                        entries = parseOutlineNodes(filePath).flatMap { it.flattenToTocEntries() },
+                    )
                 }
 
                 BookFormat.EPUB -> {
@@ -56,6 +57,14 @@ class LocalBookTocProber(
             }
         }
     }
+
+    /**
+     * Speculative outline parse — non-suspend on purpose (the ratchet keeps
+     * bare runCatching out of suspend bodies): a parse failure degrades to no
+     * outline, the probe's never-an-error-surface contract.
+     */
+    private fun parseOutlineNodes(filePath: String) =
+        runCatching { pdfOutlineParser.parse(filePath.toPath()) }.getOrDefault(emptyList())
 
     private fun probeComicPageCount(file: File, format: BookFormat): BookTocProbe? = runCatching {
         ZipFile(file).use { zip ->

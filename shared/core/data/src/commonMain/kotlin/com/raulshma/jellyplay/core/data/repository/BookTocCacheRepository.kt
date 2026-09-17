@@ -102,7 +102,12 @@ class BookTocCacheRepositoryImpl(
         )
     }
 
-    override suspend fun deleteToc(itemId: String) = dao.deleteByItemId(itemId)
+    // Block-bodied on purpose: the ratchet's suspend-fun window scan skips
+    // expression bodies only when no brace follows, and an expression body
+    // here would swallow the private toDomain helper below into the window.
+    override suspend fun deleteToc(itemId: String) {
+        dao.deleteByItemId(itemId)
+    }
 
     private fun BookTocCacheEntity.toDomain(): BookTocCache? {
         val format = BookFormat.entries.firstOrNull { it.name == format } ?: return null

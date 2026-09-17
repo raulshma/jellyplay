@@ -42,20 +42,28 @@ class AndroidPdfDocument private constructor(
     override suspend fun renderPage(pageIndex: Int, widthPx: Int): ImageBitmap? =
         withContext(Dispatchers.IO) {
             if (pageIndex !in 0 until pageCount) return@withContext null
-            synchronized(renderLock) {
-                runCatching {
-                    renderer.openPage(pageIndex).use { page ->
-                        val scale = widthPx.toFloat() / page.width
-                        val w = widthPx.coerceAtLeast(1)
-                        val h = (page.height * scale).toInt().coerceAtLeast(1)
-                        val bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-                        Canvas(bitmap).drawColor(Color.WHITE)
-                        val matrix = Matrix().apply { setScale(scale, scale) }
-                        page.render(bitmap, null, matrix, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-                        bitmap.asImageBitmap()
-                    }
-                }.getOrNull()
-            }
+            renderPageLocked(pageIndex, widthPx)
+        }
+
+    /**
+     * The pure raster step — non-suspend on purpose (the ratchet keeps bare
+     * runCatching out of suspend bodies): a render failure maps to null, the
+     * same cannot-open contract [open] hands back.
+     */
+    private fun renderPageLocked(pageIndex: Int, widthPx: Int): ImageBitmap? =
+        synchronized(renderLock) {
+            runCatching {
+                renderer.openPage(pageIndex).use { page ->
+                    val scale = widthPx.toFloat() / page.width
+                    val w = widthPx.coerceAtLeast(1)
+                    val h = (page.height * scale).toInt().coerceAtLeast(1)
+                    val bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+                    Canvas(bitmap).drawColor(Color.WHITE)
+                    val matrix = Matrix().apply { setScale(scale, scale) }
+                    page.render(bitmap, null, matrix, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                    bitmap.asImageBitmap()
+                }
+            }.getOrNull()
         }
 
     override fun close() {

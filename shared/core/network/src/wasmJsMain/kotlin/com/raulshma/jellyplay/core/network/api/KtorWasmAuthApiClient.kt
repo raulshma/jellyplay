@@ -116,15 +116,21 @@ class KtorWasmAuthApiClient(
     private suspend fun probeHttp(address: String): ProbeOutcome = try {
         val response: HttpResponse = probeHttpClient.get("$address/System/Info/Public")
         val bodyText = if (response.status.isSuccess()) response.bodyAsText() else null
-        val dto = bodyText?.let {
-            runCatching { wireJson.decodeFromString<PublicSystemInfoDto>(it) }.getOrNull()
-        }
+        val dto = bodyText?.let { decodePublicInfo(it) }
         ProbeOutcome(reachable = true, serverId = dto?.id, serverName = dto?.serverName)
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
         ProbeOutcome(reachable = false, error = e)
     }
+
+    /**
+     * Pure JSON decode guard — non-suspend on purpose (the ratchet keeps bare
+     * runCatching out of suspend bodies): an unparseable public-info body
+     * degrades to a reachable-without-identity outcome, same as the JVM probe.
+     */
+    private fun decodePublicInfo(bodyText: String): PublicSystemInfoDto? =
+        runCatching { wireJson.decodeFromString<PublicSystemInfoDto>(bodyText) }.getOrNull()
 
     /**
      * Probes exactly [address] through the common

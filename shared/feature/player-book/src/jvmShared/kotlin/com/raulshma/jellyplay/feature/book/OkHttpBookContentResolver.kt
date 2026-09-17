@@ -68,10 +68,19 @@ class OkHttpBookContentResolver(
             fetcher.downloadToFile(downloadUrl, accessToken, part, onProgress)
             fileSystem.atomicMove(part, target)
         } catch (t: Throwable) {
-            runCatching { fileSystem.delete(part) }
+            deletePartQuietly(part)
             throw t
         }
         return ResolvedBook.ReaderCache(target, downloadedNow = true)
+    }
+
+    /**
+     * Best-effort `.part` cleanup — non-suspend on purpose (the ratchet keeps
+     * bare runCatching out of suspend bodies): a failed delete leaves a stray
+     * part file but never masks the original failure the caller rethrows.
+     */
+    private fun deletePartQuietly(part: Path) {
+        runCatching { fileSystem.delete(part) }
     }
 
     companion object {

@@ -65,6 +65,9 @@ kotlin {
             implementation(project(":shared:core:data"))
             // AppRuntimeStateStore/PlaybackStore/VideoPlayerAggregateStore.
             implementation(project(":shared:core:datastore"))
+            // Cancellation-safe suspend wrappers — the live player VM's
+            // record/refresh paths must not mask cancellation.
+            implementation(project(":shared:core:concurrency"))
             implementation(project(":shared:core:ui"))
             // RecordActions — livetv's ONE record/cancel choreography the
             // in-player record quartet delegates to (the VM used to hand-copy

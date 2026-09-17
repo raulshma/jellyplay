@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.awt.ComposeWindow
 import androidx.navigation3.runtime.NavKey
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.MetadataEditorRepository
 import com.raulshma.jellyplay.core.model.StreamType
@@ -621,7 +622,7 @@ object DesktopFlowHarness {
                     .filter { it.isShowing && it !is java.awt.FileDialog }
                     .lastOrNull()
                 ?: run { diag("screenshot '$name' skipped: no window"); return }
-            runCatching {
+            runCatchingRethrowingCancellation {
                 window.toFront()
                 delay(250)
                 val image: BufferedImage = r.createScreenCapture(window.bounds)

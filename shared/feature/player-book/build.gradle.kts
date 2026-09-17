@@ -68,6 +68,9 @@ kotlin {
             // NetworkQualifiers.streamingHttpClient — the reader-cache fetcher
             // rides the same streaming client the players use.
             implementation(project(":shared:core:network"))
+            // Cancellation-safe suspend wrappers for the book session loader
+            // and the platform document/prober back-ends.
+            implementation(project(":shared:core:concurrency"))
             // okio.Path is the commonMain file handle the document/opener
             // seams pass around.
             implementation(libs.okio)

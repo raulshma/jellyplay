@@ -103,6 +103,9 @@ jobs:
         # blank-line bug above was fixed.
         run: >
           ./gradlew
+          :shared:core:concurrency:jvmJar
+          :shared:core:concurrency:compileKotlinWasmJs
+          :shared:core:concurrency:compileAndroidMain
           :shared:core:model:jvmJar
           :shared:core:model:compileKotlinWasmJs
           :shared:core:model:compileAndroidMain
@@ -206,6 +209,7 @@ jobs:
       - name: Shared tests (JVM)
         run: >
           ./gradlew
+          :shared:core:concurrency:jvmTest
           :shared:core:model:jvmTest
           :shared:core:designsystem:jvmTest
           :shared:core:datastore:jvmTest

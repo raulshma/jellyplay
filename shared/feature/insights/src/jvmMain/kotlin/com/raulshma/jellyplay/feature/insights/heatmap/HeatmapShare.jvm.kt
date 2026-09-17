@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.toAwtImage
 import androidx.compose.ui.graphics.layer.GraphicsLayer
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import java.awt.Desktop
 import java.awt.image.BufferedImage
 import java.io.File
@@ -32,9 +33,11 @@ internal class DesktopHeatmapShare(
         // Snapshot on the calling (UI) thread — the layer is owned by the
         // composition — then hand the immutable pixels to IO for encode+write,
         // mirroring the Android split (capture + file IO inside IO context).
-        val bitmap = runCatching { captureLayer.toImageBitmap() }.getOrNull() ?: return
+        // Rethrowing-Cancellation guards: a cancelled share must not surface
+        // as a silent "nothing happened" while the coroutine keeps running.
+        val bitmap = runCatchingRethrowingCancellation { captureLayer.toImageBitmap() }.getOrNull() ?: return
         withContext(Dispatchers.IO) {
-            runCatching {
+            runCatchingRethrowingCancellation {
                 val file = writeHeatmapPng(bitmap.toAwtImage())
                 openInSystemViewer(file)
             }

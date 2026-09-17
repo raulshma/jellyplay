@@ -152,9 +152,7 @@ class AuthRepositoryImpl constructor(
         if (serverEntity.address == normalizedAddress) {
             return Result.failure(Exception("Address is already the primary address"))
         }
-        val currentAlternates = serverEntity.alternateAddresses?.let {
-            runCatching { json.decodeFromString<List<String>>(it) }.getOrDefault(emptyList())
-        } ?: emptyList()
+        val currentAlternates = decodeAlternateAddresses(serverEntity.alternateAddresses)
         if (normalizedAddress in currentAlternates) {
             return Result.failure(Exception("Address is already an alternate"))
         }
@@ -173,9 +171,7 @@ class AuthRepositoryImpl constructor(
     override suspend fun removeServerAddress(serverId: String, address: String): Result<Unit> = runCatchingRethrowingCancellation {
         val serverEntity = serverDao.getServerById(serverId)
             ?: return Result.failure(Exception("Server not found"))
-        val currentAlternates = serverEntity.alternateAddresses?.let {
-            runCatching { json.decodeFromString<List<String>>(it) }.getOrDefault(emptyList())
-        } ?: emptyList()
+        val currentAlternates = decodeAlternateAddresses(serverEntity.alternateAddresses)
         val updated = currentAlternates - address
         serverDao.updateServer(
             serverEntity.copy(
@@ -190,9 +186,7 @@ class AuthRepositoryImpl constructor(
         // No scheme defaulting here, unlike [normalizeServerAddress]: the
         // address must match a stored (already-schemed) alternate as written.
         val normalizedAddress = address.trim().trimEnd('/')
-        val currentAlternates = serverEntity.alternateAddresses?.let {
-            runCatching { json.decodeFromString<List<String>>(it) }.getOrDefault(emptyList())
-        } ?: emptyList()
+        val currentAlternates = decodeAlternateAddresses(serverEntity.alternateAddresses)
         if (normalizedAddress !in currentAlternates) {
             return Result.failure(Exception("Address not found in alternate addresses"))
         }
@@ -360,6 +354,16 @@ class AuthRepositoryImpl constructor(
      * a late rejection swaps shell → login a few frames later instead of
      * holding the splash hostage to it.
      */
+    /**
+     * The stored alternate-address JSON is best-effort: an unparseable blob
+     * degrades to "no alternates" (legacy rows). Pure decode — no suspension,
+     * so the bare runCatching is safe here; extracted into a non-suspend fun
+     * so the suspend-fun call sites stay ratchet-clean.
+     */
+    private fun decodeAlternateAddresses(raw: String?): List<String> =
+        raw?.let { runCatching { json.decodeFromString<List<String>>(it) }.getOrDefault(emptyList()) }
+            ?: emptyList()
+
     private fun launchDeferredRestoreValidation(addressSelected: Boolean, validationCompleted: Boolean) {
         externalScope.launch {
             if (!addressSelected) {
@@ -691,9 +695,7 @@ class AuthRepositoryImpl constructor(
         userId = userId,
         accessToken = tokenCipher.decrypt(accessToken),
         isConnected = accessToken != null,
-        alternateAddresses = alternateAddresses?.let {
-            runCatching { json.decodeFromString<List<String>>(it) }.getOrDefault(emptyList())
-        } ?: emptyList(),
+        alternateAddresses = decodeAlternateAddresses(alternateAddresses),
     )
 
     private fun UserEntity.toUserInfo(serverAddress: String = "") = UserInfo(

@@ -28,5 +28,15 @@ suspend fun Call.awaitResponse(): Response = suspendCancellableCoroutine { conti
             continuation.resume(response)
         }
     })
-    continuation.invokeOnCancellation { runCatching { cancel() } }
+    continuation.invokeOnCancellation { cancelQuietly() }
+}
+
+/**
+ * Best-effort cooperative cancel. Deliberately NOT
+ * [runCatchingRethrowingCancellation]-shaped and deliberately a non-suspend
+ * fun: invokeOnCancellation handlers run BECAUSE cancellation happened and
+ * must never throw — a failed cancel() (call already done) is swallowed.
+ */
+private fun Call.cancelQuietly() {
+    runCatching { cancel() }
 }

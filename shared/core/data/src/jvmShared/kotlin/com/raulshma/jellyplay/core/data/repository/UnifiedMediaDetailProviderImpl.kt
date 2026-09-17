@@ -628,6 +628,14 @@ class UnifiedMediaDetailProviderImpl(
     }
 
     /**
+     * Pure file-stat read — non-suspend on purpose (the ratchet keeps bare
+     * runCatching out of suspend bodies); `-1L` mirrors File.lastModified's
+     * own error contract for a failed stat.
+     */
+    private fun fileMtime(path: String): Long =
+        runCatching { java.io.File(path).lastModified() }.getOrDefault(-1L)
+
+    /**
      * Probes the downloaded file's audio/video tracks, memoized per file
      * `lastModified` so re-resolves (refresh, expand) don't re-probe an
      * unchanged file. Returns `emptyList()` when there is no path or the probe
@@ -635,7 +643,7 @@ class UnifiedMediaDetailProviderImpl(
      */
     private suspend fun Session.probeStreamInfo(downloadPath: String?): List<MediaStream> {
         if (downloadPath.isNullOrEmpty()) return emptyList()
-        val mtime = runCatching { java.io.File(downloadPath).lastModified() }.getOrDefault(-1L)
+        val mtime = fileMtime(downloadPath)
         probedStreamsCache?.let { (cachedMtime, cached) ->
             if (cachedMtime == mtime && mtime >= 0L) return cached
         }

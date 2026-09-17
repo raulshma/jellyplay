@@ -67,6 +67,9 @@ kotlin {
             implementation(project(":shared:core:model"))
             implementation(project(":shared:core:designsystem"))
             implementation(project(":shared:core:data"))
+            // Cancellation-safe suspend wrappers — HeatmapShare's share fan-out
+            // must not swallow cancellation on either platform.
+            implementation(project(":shared:core:concurrency"))
             implementation(project(":shared:core:ui"))
             // JetBrains CMP distribution (see catalog note): Android targets
             // redirect to the androidx artifacts.

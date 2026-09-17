@@ -40,13 +40,21 @@ class DesktopPdfDocument private constructor(
     override suspend fun renderPage(pageIndex: Int, widthPx: Int): ImageBitmap? =
         withContext(Dispatchers.IO) {
             if (pageIndex !in 0 until pageCount) return@withContext null
-            synchronized(renderLock) {
-                runCatching {
-                    val pageWidth = document.getPage(pageIndex).mediaBox.width
-                    val scale = if (pageWidth > 0f) widthPx / pageWidth else 1f
-                    renderer.renderImage(pageIndex, scale).toImageBitmap()
-                }.getOrNull()
-            }
+            renderPageLocked(pageIndex, widthPx)
+        }
+
+    /**
+     * The pure raster step — non-suspend on purpose (the ratchet keeps bare
+     * runCatching out of suspend bodies): a render failure maps to null, the
+     * same cannot-open contract [open] hands back.
+     */
+    private fun renderPageLocked(pageIndex: Int, widthPx: Int): ImageBitmap? =
+        synchronized(renderLock) {
+            runCatching {
+                val pageWidth = document.getPage(pageIndex).mediaBox.width
+                val scale = if (pageWidth > 0f) widthPx / pageWidth else 1f
+                renderer.renderImage(pageIndex, scale).toImageBitmap()
+            }.getOrNull()
         }
 
     override fun close() {

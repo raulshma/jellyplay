@@ -32,6 +32,26 @@ class MetadataApiClientImpl @Inject constructor(
     /** The item-id guard every endpoint opens with: an unparseable UUID fails the call. */
     private fun requireItemUuid(itemId: String) = runCatching { itemId.toUUID() }.getOrThrow()
 
+    // Parse guards for the updateItem DTO builder. They live in non-suspend
+    // funs (BareRunCatchingRatchetTest: a bare runCatching inside a suspend
+    // body is flagged; these parses cannot throw CancellationException, so
+    // the extraction keeps the guard semantics without touching the seam).
+    private fun itemIdOrRandom(itemId: String) =
+        runCatching { itemId.toUUID() }.getOrNull() ?: java.util.UUID.randomUUID()
+
+    private fun baseItemKindOrMovie(type: String) =
+        runCatching { org.jellyfin.sdk.model.api.BaseItemKind.valueOf(toBaseItemKindName(type)) }
+            .getOrNull() ?: org.jellyfin.sdk.model.api.BaseItemKind.MOVIE
+
+    private fun parseDateTimeOrNull(raw: String?) =
+        raw?.let { runCatching { java.time.LocalDateTime.parse(it) }.getOrNull() }
+
+    private fun dayOfWeekOrNull(dayName: String) =
+        runCatching { org.jellyfin.sdk.model.api.DayOfWeek.valueOf(dayName.uppercase()) }.getOrNull()
+
+    private fun metadataFieldOrNull(fieldName: String) =
+        runCatching { org.jellyfin.sdk.model.api.MetadataField.valueOf(fieldName) }.getOrNull()
+
     /** The image-type guard: an unknown wire name fails the call. */
     private fun requireImageType(imageType: String) = ImageType.fromNameOrNull(imageType)
         ?: throw IllegalArgumentException("Unknown image type: $imageType")
@@ -52,9 +72,9 @@ class MetadataApiClientImpl @Inject constructor(
     ): Result<Unit> = engine.apiResultWithRetry {
         val api = engine.requireApi()
         val dto = BaseItemDto(
-            id = runCatching { itemId.toUUID() }.getOrNull() ?: java.util.UUID.randomUUID(),
+            id = itemIdOrRandom(itemId),
             name = name,
-            type = runCatching { org.jellyfin.sdk.model.api.BaseItemKind.valueOf(toBaseItemKindName(type)) }.getOrNull() ?: org.jellyfin.sdk.model.api.BaseItemKind.MOVIE,
+            type = baseItemKindOrMovie(type),
             originalTitle = originalTitle,
             forcedSortName = sortName,
             overview = overview,
@@ -67,26 +87,26 @@ class MetadataApiClientImpl @Inject constructor(
             officialRating = officialRating,
             customRating = customRating,
             productionYear = productionYear,
-            premiereDate = premiereDate?.let { runCatching { java.time.LocalDateTime.parse(it) }.getOrNull() },
-            endDate = endDate?.let { runCatching { java.time.LocalDateTime.parse(it) }.getOrNull() },
+            premiereDate = parseDateTimeOrNull(premiereDate),
+            endDate = parseDateTimeOrNull(endDate),
             runTimeTicks = runtimeTicks,
             indexNumber = indexNumber,
             parentIndexNumber = parentIndexNumber,
             displayOrder = displayOrder,
             status = status,
             airDays = airDays.takeIf { it.isNotEmpty() }?.mapNotNull { dayName ->
-                runCatching { org.jellyfin.sdk.model.api.DayOfWeek.valueOf(dayName.uppercase()) }.getOrNull()
+                dayOfWeekOrNull(dayName)
             },
             airTime = airTime,
             people = people.takeIf { it.isNotEmpty() }?.map { it.toBaseItemPerson() },
             providerIds = providerIds.takeIf { it.isNotEmpty() },
             lockedFields = lockedFields.takeIf { it.isNotEmpty() }?.mapNotNull { fieldName ->
-                runCatching { org.jellyfin.sdk.model.api.MetadataField.valueOf(fieldName) }.getOrNull()
+                metadataFieldOrNull(fieldName)
             },
             preferredMetadataLanguage = preferredMetadataLanguage,
             preferredMetadataCountryCode = preferredMetadataCountryCode,
             productionLocations = productionLocations.takeIf { it.isNotEmpty() },
-            dateCreated = dateCreated?.let { runCatching { java.time.LocalDateTime.parse(it) }.getOrNull() },
+            dateCreated = parseDateTimeOrNull(dateCreated),
             lockData = lockData,
         )
         api.itemUpdateApi.updateItem(itemId = requireItemUuid(itemId), data = dto)

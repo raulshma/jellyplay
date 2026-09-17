@@ -826,8 +826,8 @@ class LiveTvPlayerViewModel(
         val parsed = programs.map { p ->
             Triple(
                 p,
-                p.startDate?.let { runCatching { Instant.parse(it) }.getOrNull() },
-                p.endDate?.let { runCatching { Instant.parse(it) }.getOrNull() },
+                parseInstantOrNull(p.startDate),
+                parseInstantOrNull(p.endDate),
             )
         }
         val current = parsed.firstOrNull { (_, start, finish) ->
@@ -838,6 +838,14 @@ class LiveTvPlayerViewModel(
         }?.first
         _state.value = _state.value.copy(currentProgram = current, nextProgram = next)
     }
+
+    /**
+     * Pure ISO-8601 parse guard — non-suspend on purpose (the ratchet keeps
+     * bare runCatching out of suspend bodies): an unparseable program instant
+     * degrades to null and that program can't be picked as current/next.
+     */
+    private fun parseInstantOrNull(raw: String?): Instant? =
+        raw?.let { runCatching { Instant.parse(it) }.getOrNull() }
 
     fun togglePlayPause() {
         engine?.let { if (it.isPlaying.value) it.pause() else it.play() }

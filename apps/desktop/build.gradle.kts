@@ -40,6 +40,9 @@ dependencies {
     implementation(project(":shared:core:database"))
     implementation(project(":shared:core:network"))
     implementation(project(":shared:core:data"))
+    // Cancellation-safe suspend wrappers — the desktop flow harness's
+    // suspend bodies use them instead of bare runCatching.
+    implementation(project(":shared:core:concurrency"))
     // MediaEngine contract for the desktop player engine.
     implementation(project(":shared:core:player-contract"))
 

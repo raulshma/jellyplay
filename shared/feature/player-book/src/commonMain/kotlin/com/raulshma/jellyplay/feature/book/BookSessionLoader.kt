@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.book
 
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.repository.BookTocCacheRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
@@ -78,7 +79,7 @@ internal class BookSessionLoader(
             ?: return BookSessionOutcome.Failed(
                 BookOpenError.UnsupportedFormat(unsupportedFormatFileExtension(detail.path)),
             )
-        val resolved = runCatching {
+        val resolved = runCatchingRethrowingCancellation {
             contentResolver.resolve(
                 itemId = itemId,
                 // The resolver's sanitize owns path stripping — pass the
@@ -105,7 +106,7 @@ internal class BookSessionLoader(
                 jumpHref = jump?.href,
             )
         }
-        val doc = runCatching { documentOpener.open(resolved.path, format) }.getOrNull()
+        val doc = runCatchingRethrowingCancellation { documentOpener.open(resolved.path, format) }.getOrNull()
             ?: return BookSessionOutcome.Failed(BookOpenError.CannotOpen)
         // A deep-link page outranks the server resume position; both clamp
         // to the document's real page count.
@@ -144,7 +145,7 @@ internal class BookSessionLoader(
         } else {
             scope.launch {
                 val nodes = withContext(parseDispatcher) {
-                    runCatching { pdfOutlineParser.parse(file) }.getOrDefault(emptyList())
+                    runCatchingRethrowingCancellation { pdfOutlineParser.parse(file) }.getOrDefault(emptyList())
                 }
                 onOutlineParsed(nodes)
                 if (nodes.isNotEmpty()) {
@@ -168,7 +169,7 @@ internal class BookSessionLoader(
     fun cacheToc(itemId: String, format: BookFormat, pageCount: Int, entries: List<BookTocEntry>) {
         if (entries.isEmpty() && pageCount <= 0) return
         scope.launch {
-            runCatching { tocCacheRepository.putToc(itemId, format, pageCount, entries) }
+            runCatchingRethrowingCancellation { tocCacheRepository.putToc(itemId, format, pageCount, entries) }
         }
     }
 
@@ -180,7 +181,7 @@ internal class BookSessionLoader(
      * null and the caller reports the precise unsupported-format error.
      */
     private suspend fun probeDownloadFormat(downloadUrl: String, accessToken: String?): BookFormat? {
-        val metadata = runCatching { formatProbe.probe(downloadUrl, accessToken) }.getOrNull() ?: return null
+        val metadata = runCatchingRethrowingCancellation { formatProbe.probe(downloadUrl, accessToken) }.getOrNull() ?: return null
         return BookFormat.fromDownloadMetadata(metadata.contentType, metadata.fileName)
     }
 }

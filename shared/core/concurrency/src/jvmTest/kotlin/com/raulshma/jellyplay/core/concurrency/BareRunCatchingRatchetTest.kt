@@ -52,7 +52,7 @@ import java.io.File
  */
 class BareRunCatchingRatchetTest {
 
-    private val maxBareRunCatchingInSuspendFuns = 22
+    private val maxBareRunCatchingInSuspendFuns = 2
 
     /**
      * The hand-maintained guard list this test used before root discovery, kept as
