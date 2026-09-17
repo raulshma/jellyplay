@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.core.data.download
 
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -23,18 +22,23 @@ import kotlinx.coroutines.sync.Semaphore
  * download engine), which is exactly why this interface exists. It replaced
  * the feature-local seams that used to bridge that wall (player-audio's
  * AudioTrackDownloads, music's MusicTrackDownloads — both deleted with the
- * download-actions seam consolidation): the JVM actual
- * [JvmTrackDownloadStatusWindow] (jvmShared, bound in dataJvmModule) and the
- * honest no-op wasmJs actual [WasmTrackDownloadStatusWindow] (wasmJsMain,
- * bound in dataWasmModule) are core:data's own, so the hosts inject this one
- * window directly.
+ * download-actions seam consolidation): since the promoted-interface pass,
+ * the JVM actual is the repository itself — jvmShared
+ * `DownloadRepositoryImpl` implements this interface directly (its
+ * `downloadsFor` IS the repository's one
+ * `getDownloadsByMediaItemIdsFlow` IN-query read) and dataJvmModule binds it
+ * over the repository single; the honest no-op wasmJs actual
+ * [WasmTrackDownloadStatusWindow] (wasmJsMain, bound in dataWasmModule)
+ * completes the pair — the hosts inject this one window directly.
  *
- * IDIOM RULE (declared with the download-actions seam consolidation): a seam
- * that exists to cross the commonMain↔jvmShared visibility wall is DECLARED,
- * IMPLEMENTED AND BOUND by core:data on both platforms. Features never grow
- * their own wall-crossing template — the deleted AudioTrackDownloads /
- * MusicTrackDownloads twins this interface absorbed were exactly that
- * mistake.
+ * IDIOM RULE (declared with the download-actions seam consolidation,
+ * tightened by the promoted-interface pass): a download read a feature needs
+ * is DECLARED here in core:data commonMain and IMPLEMENTED AND BOUND by
+ * core:data on both platforms — directly by the owning jvmShared
+ * single/engine where the surface crosses verbatim, per the DownloadIntake
+ * precedent. Features never grow their own wall-crossing template — the
+ * deleted AudioTrackDownloads / MusicTrackDownloads twins this interface
+ * absorbed were exactly that mistake.
  */
 interface TrackDownloadStatusWindow {
 
@@ -55,12 +59,13 @@ interface TrackDownloadStatusWindow {
 /**
  * The ONE music/track download "flip" choreography behind the audio player
  * and the album screen, replacing the per-ViewModel copies that had drifted
- * into paste: fetch the item's detail (silently skipping unresolvable items —
- * the [MediaRepository] fetch is commonMain, so it is a direct constructor
- * dep here) and hand the detail to the [DownloadIntake] seam, which owns the
- * full artifact bundle. Constructed over the intake, the repository, the
- * owning screen's [CoroutineScope] (RecordActions pattern) and the host's
- * [TrackDownloadStatusWindow] adapter.
+ * into paste: hand the item id to [DownloadIntake.flipTrack], which owns the
+ * whole resolve→start leg (detail resolution included — this class used to
+ * re-implement that resolve leg with a [com.raulshma.jellyplay.core.data.repository.MediaRepository]
+ * fetch beside the intake; the fold into the intake removed the repository
+ * from the constructor). Constructed over the intake, the owning screen's
+ * [CoroutineScope] (RecordActions pattern) and the host's
+ * [TrackDownloadStatusWindow] window.
  *
  * Deliberately the START half only. The REMOVE half — an existing COMPLETED
  * download flips the CTA to "remove" — stays at the call sites, because the
@@ -69,9 +74,10 @@ interface TrackDownloadStatusWindow {
  * directly, and the album's bulk delete removes every existing row. Folding
  * that decision in here would have swallowed a real product difference.
  *
- * Failure envelope: a failed detail fetch or a failed intake start is
- * swallowed (both hosts treat a flip failure as silent — there is no error
- * surface on a track row), but CANCELLATION RETHROWS
+ * Failure envelope: [DownloadIntake.flipTrack] already folds an unresolvable
+ * detail or a failed start into a silent [TrackFlipResult.Skipped]; a flip
+ * that THROWS is swallowed here (both hosts treat a flip failure as silent —
+ * there is no error surface on a track row), but CANCELLATION RETHROWS
  * ([runCatchingRethrowingCancellation] — the hand-copied `catch (_:
  * Exception)` this class replaced also caught CancellationException, masking
  * scope teardown as a "failed" flip; that bug class is the concurrency
@@ -80,14 +86,13 @@ interface TrackDownloadStatusWindow {
 class TrackDownloadActions(
     private val scope: CoroutineScope,
     private val intake: DownloadIntake,
-    private val mediaRepository: MediaRepository,
     private val statusWindow: TrackDownloadStatusWindow,
 ) {
 
     /**
-     * Starts a download for [itemId] — detail fetch (null result aborts
-     * silently), then [DownloadIntake.start]. One flip in flight per call;
-     * the returned [Job] is the caller's cancellation handle.
+     * Starts a download for [itemId] via [DownloadIntake.flipTrack] (which
+     * folds an unresolvable detail into a silent skip). One flip in flight
+     * per call; the returned [Job] is the caller's cancellation handle.
      */
     fun flip(itemId: String): Job = scope.launch {
         startAfterDetail(itemId)
@@ -122,13 +127,10 @@ class TrackDownloadActions(
         }
     }
 
-    /** The shared flip body: detail fetch → intake start, failures swallowed. */
+    /** The shared flip body: intake flipTrack, throws swallowed. */
     private suspend fun startAfterDetail(itemId: String) {
         runCatchingRethrowingCancellation {
-            val detail = mediaRepository.getMediaDetail(itemId).getOrNull()
-            // Null detail (fetch failure) aborts the flip silently — the
-            // original copies' `?: return` without an error surface.
-            if (detail != null) intake.start(detail)
+            intake.flipTrack(itemId)
         }
     }
 }

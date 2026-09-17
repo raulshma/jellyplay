@@ -36,41 +36,45 @@ class PlaylistRepositoryImpl internal constructor(
     override suspend fun getPlaylistItems(playlistId: String, startIndex: Int, limit: Int): Result<List<PlaylistItem>> =
         libraryApiClient.getPlaylistItems(playlistId, startIndex, limit)
 
+    /**
+     * The edits' shared invalidation suffix (Plan 08): playlist edits
+     * self-invalidate the playlist's ONE cached projection — its detail
+     * entry — through [MediaRepositoryInternals.detailCaches], the Koin
+     * single shared with [MediaRepositoryImpl] (one instance, not two
+     * hand-synced caches). getPlaylistItems above is an uncached passthrough,
+     * so the detail entry is the only thing to drop
+     * (PlaylistDetailViewModel used to drop it by hand on refresh).
+     */
+    private suspend fun <T> editing(playlistId: String, block: suspend () -> Result<T>): Result<T> =
+        block().onSuccess { internals.detailCaches.invalidateItem(playlistId) }
+
+    /** [editing] for [createPlaylist], whose invalidation key is the CREATED id — the success value, not a parameter. */
+    private suspend fun creating(block: suspend () -> Result<String>): Result<String> =
+        block().onSuccess { internals.detailCaches.invalidateItem(it) }
+
     override suspend fun createPlaylist(
         name: String,
         overview: String?,
         itemIds: List<String>,
         mediaType: MediaType,
-    ): Result<String> =
-        // Plan 08: playlist edits self-invalidate. getPlaylistItems is an
-        // uncached passthrough, so the one cached projection of a playlist is
-        // its detail entry — one detailCaches.invalidateItem(playlistId) per edit
-        // (PlaylistDetailViewModel used to drop it by hand on refresh).
-        libraryApiClient.createPlaylist(name, overview, itemIds, mediaType)
-            .onSuccess { internals.detailCaches.invalidateItem(it) }
+    ): Result<String> = creating { libraryApiClient.createPlaylist(name, overview, itemIds, mediaType) }
 
     override suspend fun updatePlaylist(
         playlistId: String,
         name: String?,
         overview: String?,
         isPublic: Boolean?,
-    ): Result<Unit> =
-        libraryApiClient.updatePlaylist(playlistId, name, overview, isPublic)
-            .onSuccess { internals.detailCaches.invalidateItem(playlistId) }
+    ): Result<Unit> = editing(playlistId) { libraryApiClient.updatePlaylist(playlistId, name, overview, isPublic) }
 
     override suspend fun deletePlaylist(playlistId: String): Result<Unit> =
-        libraryApiClient.deletePlaylist(playlistId)
-            .onSuccess { internals.detailCaches.invalidateItem(playlistId) }
+        editing(playlistId) { libraryApiClient.deletePlaylist(playlistId) }
 
     override suspend fun addItemsToPlaylist(playlistId: String, itemIds: List<String>): Result<Unit> =
-        libraryApiClient.addItemsToPlaylist(playlistId, itemIds)
-            .onSuccess { internals.detailCaches.invalidateItem(playlistId) }
+        editing(playlistId) { libraryApiClient.addItemsToPlaylist(playlistId, itemIds) }
 
     override suspend fun removeItemsFromPlaylist(playlistId: String, entryIds: List<String>): Result<Unit> =
-        libraryApiClient.removeItemsFromPlaylist(playlistId, entryIds)
-            .onSuccess { internals.detailCaches.invalidateItem(playlistId) }
+        editing(playlistId) { libraryApiClient.removeItemsFromPlaylist(playlistId, entryIds) }
 
     override suspend fun movePlaylistItem(playlistId: String, entryId: String, newIndex: Int): Result<Unit> =
-        libraryApiClient.movePlaylistItem(playlistId, entryId, newIndex)
-            .onSuccess { internals.detailCaches.invalidateItem(playlistId) }
+        editing(playlistId) { libraryApiClient.movePlaylistItem(playlistId, entryId, newIndex) }
 }

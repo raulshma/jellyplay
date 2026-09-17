@@ -5,11 +5,11 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
+import com.raulshma.jellyplay.core.datastore.sliceStateFlow
 import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.model.AppFontScale
 import com.raulshma.jellyplay.core.model.ColorBlindMode
@@ -20,10 +20,8 @@ import com.raulshma.jellyplay.core.model.HandMode
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.ThemeMode
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -89,13 +87,8 @@ class AppearanceStore constructor(
         val SHOW_ADVANCED_SETTINGS = booleanPreferencesKey("show_advanced_settings")
     }
 
-    private val sharedPrefs: Flow<Preferences> = dataStore.data
-        .catch { _ -> emptyPreferences() }
-
-    val appearance: StateFlow<AppearanceSlice> = sharedPrefs
-        .map { read(it) }
-        .distinctUntilChanged()
-        .stateIn(scope, SharingStarted.Eagerly, AppearanceSlice())
+    val appearance: StateFlow<AppearanceSlice> =
+        dataStore.sliceStateFlow(scope, seed = AppearanceSlice(), read = ::read)
 
     /**
      * Whether the settings screens expose their advanced sections. An

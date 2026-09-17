@@ -138,7 +138,11 @@ class SonarrApiClientTest {
 
     @Test
     fun `getQueue maps 500 to failure`() = runBlocking {
-        mockWebServer.enqueue(MockResponse().setResponseCode(500).setBody("oops"))
+        // 500 is retryable and retry now lives in the request funnel: fill the
+        // budget so the mapped failure is the 500 itself, not a queue stall.
+        repeat(com.raulshma.jellyplay.core.network.api.HttpExecutor.MAX_RETRIES + 1) {
+            mockWebServer.enqueue(MockResponse().setResponseCode(500).setBody("oops"))
+        }
         val result = apiClient.getQueue(mockWebServer.url("/").toString().trimEnd('/'), "k")
         assertTrue(result.isFailure)
     }

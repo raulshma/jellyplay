@@ -23,6 +23,14 @@ import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregate
  * Engine + session access is via lambdas so this class stays ViewModel-agnostic.
  * The `getItemId` / `getMediaStreams` reads feed the per-item audio/subtitle
  * override + HDR-aware subtitle-style resolution.
+ *
+ * The *load-time* counterpart of this *change-time* projection is
+ * [PlayerPrefsSeed]: the single home of which pref feeds which uiState leaf at
+ * session start (one unguarded copy per load). Seven leaves are mapped in both
+ * places (showPlaybackMetadata, showClock, showTimeRemaining, tvZoomModePercent,
+ * keepScreenOnDuringVideo, passOutProtectionHours, autoPlayCountdownSec) — when
+ * moving or adding a leaf, update both or drop one side deliberately. This
+ * class's guarded-diff semantics are intentionally NOT merged into the seed.
  */
 internal class SettingsProjector(
     private val getUiState: () -> VideoPlayerUiState,

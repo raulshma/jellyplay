@@ -79,6 +79,7 @@ import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.raulshma.jellyplay.core.data.repository.DownloadProgress
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.PendingConfirmation
@@ -607,7 +608,7 @@ private fun DownloadItemRow(
      * progressById) — present while this row is in flight, null otherwise,
      * in which case the item's own (already current) fields render.
      */
-    liveProgress: DownloadRowProgress?,
+    liveProgress: DownloadProgress?,
     formatBytes: (Long) -> String,
     formatSpeed: (Long) -> String,
     formatEta: (Long, Long, Long) -> String,

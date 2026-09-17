@@ -9,17 +9,15 @@ import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.raulshma.jellyplay.core.datastore.PinHasher
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
+import com.raulshma.jellyplay.core.datastore.dataDegradingToDefaults
+import com.raulshma.jellyplay.core.datastore.sliceStateFlow
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 
@@ -61,13 +59,10 @@ class SecurityStore constructor(
         val REMOTE_CONTROL_ENABLED = booleanPreferencesKey("remote_control_enabled")
     }
 
-    private val sharedPrefs: Flow<Preferences> = dataStore.data
-        .catch { _ -> androidx.datastore.preferences.core.emptyPreferences() }
+    private val sharedPrefs: Flow<Preferences> = dataStore.dataDegradingToDefaults()
 
-    val security: StateFlow<SecuritySlice> = sharedPrefs
-        .map { read(it) }
-        .distinctUntilChanged()
-        .stateIn(scope, SharingStarted.Eagerly, SecuritySlice())
+    val security: StateFlow<SecuritySlice> =
+        dataStore.sliceStateFlow(scope, seed = SecuritySlice(), read = ::read)
 
     /**
      * The FIRST **persisted** slice — suspends until DataStore's initial read

@@ -207,7 +207,6 @@ class AlbumDetailViewModel(
     private val trackDownloadActions = TrackDownloadActions(
         scope = scope,
         intake = downloadIntake,
-        mediaRepository = mediaRepository,
         statusWindow = downloads,
     )
 

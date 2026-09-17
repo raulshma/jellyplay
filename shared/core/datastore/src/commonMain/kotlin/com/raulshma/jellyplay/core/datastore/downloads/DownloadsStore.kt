@@ -5,22 +5,16 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
+import com.raulshma.jellyplay.core.datastore.sliceStateFlow
 import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.model.DownloadQuality
 import com.raulshma.jellyplay.core.model.DownloadScheduleWindow
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.serialization.Serializable
 
 /**
@@ -66,13 +60,8 @@ class DownloadsStore constructor(
         val DOWNLOAD_SCHEDULE_WIFI_ONLY = booleanPreferencesKey("download_schedule_wifi_only")
     }
 
-    private val sharedPrefs: Flow<Preferences> = dataStore.data
-        .catch { _ -> emptyPreferences() }
-
-    val downloads: StateFlow<DownloadsSlice> = sharedPrefs
-        .map { read(it) }
-        .distinctUntilChanged()
-        .stateIn(scope, SharingStarted.Eagerly, DownloadsSlice())
+    val downloads: StateFlow<DownloadsSlice> =
+        dataStore.sliceStateFlow(scope, seed = DownloadsSlice(), read = ::read)
 
     internal fun read(prefs: Preferences): DownloadsSlice = DownloadsSlice(
         wifiOnlyDownloads = PreferenceCodec.readBool(prefs, Keys.WIFI_ONLY_DOWNLOADS, "wifi_only_downloads", true),

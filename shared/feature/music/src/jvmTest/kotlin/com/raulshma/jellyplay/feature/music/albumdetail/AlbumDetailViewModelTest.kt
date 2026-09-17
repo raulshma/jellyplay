@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.music.albumdetail
 
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
+import com.raulshma.jellyplay.core.data.download.TrackFlipResult
 import com.raulshma.jellyplay.core.data.download.TrackDownloadStatusWindow
 import com.raulshma.jellyplay.core.data.playback.AudioQueueItem
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
@@ -553,37 +554,36 @@ class AlbumDetailViewModelTest {
     }
 
     @Test
-    fun downloadTrack_notYetDownloaded_resolvesDetailAndStartsIntake() = runTest(mainDispatcher) {
+    fun downloadTrack_notYetDownloaded_flipsThroughTheIntakeSeam() = runTest(mainDispatcher) {
         loadAlbum()
         advanceUntilIdle()
         every { trackDownloads.downloadsFor(any()) } returns flowOf(emptyList())
         subscribeTrackDownloads()
         advanceUntilIdle()
-        coEvery { mediaRepository.getMediaDetail("t1") } returns Result.success(
-            MediaDetail(item = MediaItem(id = "t1", name = "Track 1", mediaType = MediaType.AUDIO)),
-        )
 
         viewModel.downloadTrack(albumTracks[0])
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { mediaRepository.getMediaDetail("t1") }
-        coVerify(exactly = 1) { downloadIntake.start(any()) }
+        // The resolve-detail leg lives inside DownloadIntake.flipTrack (pinned
+        // in core:data); at this seam the VM only routes the track id through.
+        coVerify(exactly = 1) { downloadIntake.flipTrack("t1") }
         coVerify(exactly = 0) { trackDownloads.remove(any()) }
     }
 
     @Test
-    fun downloadTrack_unresolvableDetail_startsNothing() = runTest(mainDispatcher) {
+    fun downloadTrack_skippedByTheIntake_startsNothing() = runTest(mainDispatcher) {
         loadAlbum()
         advanceUntilIdle()
         every { trackDownloads.downloadsFor(any()) } returns flowOf(emptyList())
         subscribeTrackDownloads()
         advanceUntilIdle()
-        coEvery { mediaRepository.getMediaDetail("t1") } returns Result.failure(RuntimeException("gone"))
+        coEvery { downloadIntake.flipTrack("t1") } returns TrackFlipResult.Skipped
 
         viewModel.downloadTrack(albumTracks[0])
         advanceUntilIdle()
 
         coVerify(exactly = 0) { downloadIntake.start(any()) }
+        coVerify(exactly = 0) { trackDownloads.remove(any()) }
     }
 
     @Test
@@ -594,16 +594,14 @@ class AlbumDetailViewModelTest {
             flowOf(listOf(download("d1", "t1", DownloadStatus.COMPLETED)))
         subscribeTrackDownloads()
         advanceUntilIdle()
-        coEvery { mediaRepository.getMediaDetail("t2") } returns Result.success(
-            MediaDetail(item = MediaItem(id = "t2", name = "Track 2", mediaType = MediaType.AUDIO)),
-        )
 
         viewModel.downloadAlbum()
         advanceUntilIdle()
 
-        // t1 is COMPLETED → skipped; t2 missing → started via the intake seam.
-        coVerify(exactly = 0) { mediaRepository.getMediaDetail("t1") }
-        coVerify(exactly = 1) { downloadIntake.start(any()) }
+        // t1 is COMPLETED → skipped by the bulk admission; t2 missing →
+        // flipped through the intake seam (detail resolution pinned in core:data).
+        coVerify(exactly = 0) { downloadIntake.flipTrack("t1") }
+        coVerify(exactly = 1) { downloadIntake.flipTrack("t2") }
         coVerify(exactly = 0) { trackDownloads.remove(any()) }
     }
 
@@ -613,7 +611,7 @@ class AlbumDetailViewModelTest {
         advanceUntilIdle()
 
         coVerify(exactly = 0) { mediaRepository.getMediaDetail(any()) }
-        coVerify(exactly = 0) { downloadIntake.start(any()) }
+        coVerify(exactly = 0) { downloadIntake.flipTrack(any()) }
     }
 
     @Test

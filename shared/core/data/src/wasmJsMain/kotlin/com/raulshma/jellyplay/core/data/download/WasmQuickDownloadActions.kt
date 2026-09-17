@@ -12,7 +12,8 @@ import kotlinx.coroutines.flow.StateFlow
  * resolves to [DownloadRequestResult.Failed]). Hoisted from the byte-identical
  * twins that shipped in feature:library and feature:search; bound in
  * dataWasmModule (core:data owns the seam on both platforms — see
- * [QuickDownloadActions]' IDIOM RULE note).
+ * [QuickDownloadActions]' IDIOM RULE note; the JVM actual is
+ * [MediaDownloadActions] itself since the promoted-interface pass).
  */
 internal object WasmQuickDownloadActions : QuickDownloadActions {
     override val isSupported: Boolean = false

@@ -5,7 +5,11 @@
   `FocusAudioAttributes` — matrix rows via `PlaybackFocusMatrix.attributesOf`;
   `DesktopFocusArbiter` + `DesktopAudioQueueManagerSurface` give both ports
   their second production adapters; desktop binds `DefaultPlaybackFocus`.
-  Android music's OS-leg migration remains the open slice)
+  2026-09-17 music OS-leg migration: `handleAudioFocus` off on BOTH Android
+  music players, MUSIC in `osLegClaimants` with the MUSIC attributes row,
+  and the enforcement leg — an OS loss on the holder commands its surface
+  pause (displaced claimants still pause by observation). Music has no open
+  slice; video remains outside the closed world)
 - **Scope:** `shared/core/data`, `shared/feature/player-book`, `shared/core/data/androidMain`
 - **Supersedes:** nothing (the policy previously did not exist as code)
 
@@ -89,3 +93,10 @@ pause whom" had NO owner:
   attributes or onto a second `AudioFocusRequest`, breaking the
   "one AudioFocusRequest owned here" invariant. The "one-line change"
   claim in decision 5 understates this prerequisite.
+- Landed-migration addendum (2026-09-17): the migration needed more than
+  the one line even past the attributes prerequisite — `handleAudioFocus`
+  had to go off on BOTH Android music players (the crossfade secondary's
+  built-in GAIN request would focus-loss-pause the primary mid-fade), and
+  the holder side needed an enforcement leg (an OS loss now commands the
+  suspended holder's surface pause, because only displaced claimants have
+  a `claimState` observer).

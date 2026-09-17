@@ -12,6 +12,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import com.raulshma.jellyplay.core.datastore.CachedJsonNullPolicy
 import com.raulshma.jellyplay.core.datastore.ParsedCache
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
+import com.raulshma.jellyplay.core.datastore.sliceStateFlow
 import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.model.GestureIndicatorSide
 import com.raulshma.jellyplay.core.model.MediaSegmentType
@@ -20,13 +21,7 @@ import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.PreloadBufferSize
 import com.raulshma.jellyplay.core.model.SegmentBehavior
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.serialization.Serializable
 
 /**
@@ -106,9 +101,6 @@ class VideoPlayerStore constructor(
         val AUTO_SKIP_OUTRO = stringPreferencesKey("auto_skip_outro")
     }
 
-    private val sharedPrefs: Flow<Preferences> = dataStore.data
-        .catch { _ -> androidx.datastore.preferences.core.emptyPreferences() }
-
     private var cachedSegmentBehaviors: ParsedCache<Map<MediaSegmentType, SegmentBehavior>> =
         ParsedCache(null, SegmentBehavior.DEFAULT_BEHAVIORS)
 
@@ -117,10 +109,8 @@ class VideoPlayerStore constructor(
      * DataStore (not mapped through the whole-`UserPreferences` aggregate), so a
      * write to an unrelated preference does not re-derive these fields.
      */
-    val videoPlayer: StateFlow<VideoPlayerSlice> = sharedPrefs
-        .map { read(it) }
-        .distinctUntilChanged()
-        .stateIn(scope, SharingStarted.Eagerly, VideoPlayerSlice())
+    val videoPlayer: StateFlow<VideoPlayerSlice> =
+        dataStore.sliceStateFlow(scope, seed = VideoPlayerSlice(), read = ::read)
 
     /**
      * Pure read of the in-player video fields from a raw [Preferences] snapshot.

@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.feature.player.audio
 
-import com.raulshma.jellyplay.core.data.download.DownloadIntake
+import com.raulshma.jellyplay.core.data.download.TrackDownloadActions
 import com.raulshma.jellyplay.core.data.download.TrackDownloadStatusWindow
 import com.raulshma.jellyplay.core.data.playback.AudioEffectsManager
 import com.raulshma.jellyplay.core.data.playback.AudioQueueManager
@@ -59,8 +59,10 @@ import kotlin.test.assertTrue
  *     dismiss guard while a add is in flight) — read off the
  *     [PlaylistPickerStateHolder] snapshot the VM forwards to;
  *  4. `downloadCurrentTrack`'s three-way routing (completed → re-download via
- *     delete, not-completed → detail + intake, no item → no-op) and the
- *     current-download mirror;
+ *     delete, not-completed → the Koin-injected TrackDownloadActions flip,
+ *     no item → no-op) and the current-download mirror. The flip's
+ *     resolve→start choreography lives in core:data (DownloadIntake.flipTrack,
+ *     pinned there) — the VM only routes;
  *  5. the blurHash LRU cache (one detail fetch per item, including the
  *     negative-result sentinel) and the sleep-timer expiry pause contract;
  *  6. effects persistence sourcing: a toggle persists the value computed from
@@ -82,7 +84,7 @@ class AudioPlayerViewModelGapsTest {
     private lateinit var playlistRepository: PlaylistRepository
     private lateinit var userDataMutator: com.raulshma.jellyplay.core.data.repository.UserDataMutator
     private lateinit var downloads: TrackDownloadStatusWindow
-    private lateinit var downloadIntake: DownloadIntake
+    private lateinit var trackDownloadActions: TrackDownloadActions
     private lateinit var sleepTimerManager: AudioSleepTimerManager
     private lateinit var cast: AudioPlayerCast
 
@@ -130,7 +132,7 @@ class AudioPlayerViewModelGapsTest {
         playlistRepository = mockk(relaxed = true)
         userDataMutator = mockk(relaxed = true)
         downloads = mockk<TrackDownloadStatusWindow>(relaxed = true).apply { every { isSupported } returns true }
-        downloadIntake = mockk(relaxed = true)
+        trackDownloadActions = mockk(relaxed = true)
         sleepTimerManager = mockk<AudioSleepTimerManager>(relaxed = true)
         cast = mockk(relaxed = true)
 
@@ -169,9 +171,9 @@ class AudioPlayerViewModelGapsTest {
         every {
             downloads.downloadsFor(any())
         } answers {
-            // The same per-item flows the real JvmTrackDownloadStatusWindow
-            // combines (the window's id-honesty shape — one flow per id,
-            // nulls filtered), so per-item state changes propagate as before.
+            // Per-id state flows behind the window's single IN-query read, so
+            // per-item state changes propagate to the fake like a live Room
+            // invalidation would through getDownloadsByMediaItemIdsFlow.
             val ids = firstArg<List<String>>()
             if (ids.isEmpty()) {
                 flowOf(emptyList())
@@ -193,7 +195,7 @@ class AudioPlayerViewModelGapsTest {
             playlistRepository = playlistRepository,
             userDataMutator = userDataMutator,
             downloads = downloads,
-            downloadIntake = downloadIntake,
+            trackDownloadActions = trackDownloadActions,
             sleepTimerManager = sleepTimerManager,
             cast = cast,
         )
@@ -446,32 +448,18 @@ class AudioPlayerViewModelGapsTest {
         viewModel.downloadCurrentTrack()
 
         coVerify(exactly = 1) { downloads.remove("dl-1") }
-        coVerify(exactly = 0) { downloadIntake.start(any()) }
+        coVerify(exactly = 0) { trackDownloadActions.flip(any()) }
     }
 
     @Test
-    fun downloadCurrentTrack_notCompleted_startsIntakeWithTheFetchedDetail() {
+    fun downloadCurrentTrack_notCompleted_delegatesToTrackDownloadActions() {
         currentItemIdFlow.value = "track-1"
         downloadFlows["track-1"] = MutableStateFlow(downloadItem("dl-1", DownloadStatus.DOWNLOADING))
-        coEvery { mediaRepository.getMediaDetail("track-1", any()) } returns Result.success(detail("track-1"))
-        coEvery { downloadIntake.start(any(), any(), any()) } returns
-            com.raulshma.jellyplay.core.data.util.DownloadResult(downloadItem = null, error = null)
 
         viewModel.downloadCurrentTrack()
 
         coVerify(exactly = 0) { downloads.remove(any()) }
-        coVerify(exactly = 1) { downloadIntake.start(detail("track-1")) }
-    }
-
-    @Test
-    fun downloadCurrentTrack_detailFailure_startsNothing() {
-        currentItemIdFlow.value = "track-1"
-        coEvery { mediaRepository.getMediaDetail("track-1", any()) } returns
-            Result.failure(RuntimeException("offline"))
-
-        viewModel.downloadCurrentTrack()
-
-        coVerify(exactly = 0) { downloadIntake.start(any()) }
+        coVerify(exactly = 1) { trackDownloadActions.flip("track-1") }
     }
 
     @Test
@@ -481,7 +469,7 @@ class AudioPlayerViewModelGapsTest {
         viewModel.downloadCurrentTrack()
 
         coVerify(exactly = 0) { downloads.remove(any()) }
-        coVerify(exactly = 0) { downloadIntake.start(any()) }
+        coVerify(exactly = 0) { trackDownloadActions.flip(any()) }
     }
 
     @Test

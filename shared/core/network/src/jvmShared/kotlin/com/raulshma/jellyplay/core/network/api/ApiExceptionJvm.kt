@@ -2,11 +2,8 @@ package com.raulshma.jellyplay.core.network.api
 
 import org.jellyfin.sdk.api.client.exception.InvalidStatusException
 import org.jellyfin.sdk.api.client.exception.TimeoutException
-import java.io.IOException
-import java.net.ConnectException
-import java.net.SocketTimeoutException
-import java.net.UnknownHostException
 import com.raulshma.jellyplay.core.network.config.isTlsTrustFailure
+import com.raulshma.jellyplay.core.network.isRetryableNetworkError
 
 /**
  * JVM-side throwable classifiers for [ApiException] (docs/kmp-migration-plan.md):
@@ -32,9 +29,12 @@ fun ApiException.Companion.fromJellyfin(throwable: Throwable): ApiException {
  * HTTP-status failures should use [ApiException.fromHttp] instead.
  *
  * Service-agnostic; the `fromSeerrNetwork` alias below delegates here.
+ * Retryability rides the module's ONE classifier,
+ * [isRetryableNetworkError] (the same seam [RetryPolicy] uses — the former
+ * `classifyNetwork` copy was folded onto it).
  */
 fun ApiException.Companion.fromNetwork(throwable: Throwable, friendlyMessage: String): ApiException {
-    val retryable = classifyNetwork(throwable)
+    val retryable = isRetryableNetworkError(throwable)
     return ApiException(
         isRetryable = retryable,
         message = friendlyMessage,
@@ -70,18 +70,5 @@ internal fun ApiException.Companion.classifyJellyfin(throwable: Throwable): Pair
     }
     // Jellyfin SDK TimeoutException is its own type (distinct from java.util.concurrent).
     if (throwable is TimeoutException) return true to null
-    return classifyNetwork(throwable) to null
-}
-
-internal fun ApiException.Companion.classifyNetwork(throwable: Throwable): Boolean {
-    return when (throwable) {
-        is SocketTimeoutException -> true
-        is ConnectException -> true
-        is UnknownHostException -> true
-        // NOTE: java.io.IOException is a supertype of the above; deliberately listed
-        // last so the more specific cases above take precedence. Treats generic IO
-        // failures (reset, broken pipe, SSL handshake) as retryable.
-        is IOException -> true
-        else -> false
-    }
+    return isRetryableNetworkError(throwable) to null
 }

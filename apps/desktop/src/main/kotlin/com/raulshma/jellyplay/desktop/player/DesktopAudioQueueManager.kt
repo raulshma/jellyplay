@@ -208,9 +208,13 @@ class DesktopAudioQueueManager(
      * crosses — the engine observer below; see [onPlayingEdge]) and pauses
      * when the matrix commands it (read-aloud took the floor;
      * [DesktopAudioQueueManagerSurface] forwards that pause back here).
-     * MUSIC claims publish state only at slices 1-2 (osLegClaimants stays
-     * READ_ALOUD-only — the migration slice is Android-scoped), so the
-     * desktop arbiter's grant is vacuous but the claim-state PUBLICATION is
+     * MUSIC claims publish state at slices 1-2 and, since the ADR-0004
+     * migration slice landed in core:data (osLegClaimants is now
+     * READ_ALOUD + MUSIC), they also request the OS seat — which on desktop
+     * still degrades to vacuous arbitration (this module's binding is the
+     * [DesktopFocusArbiter], whose grant is vacuously true and whose
+     * listener is never invoked, so no OS seat is actually held and the
+     * behavior here is unchanged) while the claim-state PUBLICATION is
      * live: a desktop reader observing claimState sees Held(MUSIC) for
      * real. Defaulted Noop so plain constructions (tests) keep
      * single-player semantics.

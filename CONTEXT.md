@@ -388,16 +388,22 @@ fetches the live session's `TranscodingInfo` reasons; they land in
 - **Trickplay**: `TrickplayInfo` (`shared/core/model/src/commonMain/kotlin/.../TrickplayInfo.kt`)
   is the server's thumbnail manifest descriptor (tile geometry, count,
   interval, bandwidth) carried on `MediaSource.trickplayInfo`. On load, the
-  pipeline's `initializeTrickplay` hook runs the VM's three-way selection:
+  pipeline's `initializeTrickplay` hook runs `TrickplayPreparation`
+  (`…/trickplay/TrickplayPreparation.kt`, the fold of the VM's former
+  ~45-line inline selection): the mutually-exclusive three-way pick of
   server info cached into the download dir, a local bundle shipped with the
-  download (`OfflineTrickplayHelper`), or a fresh server manifest — the
-  chosen info is stored in `uiPrefs.trickplayInfo` and the tile cache
-  initialized in `TrickplayManager`
+  download (`OfflineTrickplayHelper`), or a fresh server manifest whose
+  fetched tiles cache into the download's trickplay dir (so the next
+  offline session resolves through the local-bundle arm) — exactly one
+  uiState write per successful arm, and the download's trickplay-dir
+  derivation (the three former inline copies disagreed) has its single
+  home there. The chosen info is stored in `uiPrefs.trickplayInfo` and
+  the tile cache initialized in `TrickplayManager`
   (`shared/feature/player-video/src/androidMain/.../trickplay/`). The prefs
   `trickplayEnabled` and `trickplayOnSeekGesture` live in the `uiPrefs` slice;
   when gesture previews are on, the seek overlay calls
-`VideoPlayerViewModel.getTrickplayThumbnail(positionMs)` to render
-thumbnails while scrubbing.
+  `VideoPlayerViewModel.getTrickplayThumbnail(positionMs)` to render
+  thumbnails while scrubbing.
 
 `SubtitleManager.openSubtitleHub(resetFirst)` is the one hub-open
 command (optional reset → `loadRemoteSubtitles` →
@@ -1078,12 +1084,19 @@ failure swallow).
 
 `AlphabetRailGeometry` (beside `LibraryScreen`, the `HeatmapGridModel`
 precedent) is the alphabet rail's Compose-free math — `indexAt(y)`,
-`fisheyeScaleAt` (with its peak/sigma constants), the tap/drag jump-target
-letter fold, rail-end clamps — extracted from private functions inside the
-~1900-line screen file; the composable keeps dp/px conversion, drawing and
-pointer wiring. `groupByLabel` stays in the screen deliberately (it resolves
+the tap/drag jump-target letter fold, rail-end clamps — extracted from
+private functions inside the ~1900-line screen file; the composable keeps
+dp/px conversion, drawing and pointer wiring. The fisheye lens itself
+(`fisheyeScaleAt`'s peak/sigma constants and the gaussian falloff) moved
+one level down into `FisheyeRailMath` (`shared/core/ui/components`, the
+`BackExitConfirmation` precedent) when the reader's `TocRailGeometry`
+turned out to hand-copy the same math: both rails adapt it — the library
+clamps to its rail ends, the reader keeps a beyond-the-ends extrapolation
+fold for drag-scrubbing — with the lens constants in ONE place.
+`groupByLabel` stays in the screen deliberately (it resolves
 `stringResource` display labels). Pinned by `AlphabetRailGeometryTest`
-(fisheye edges, `#`-bucket targets, clamps, degenerate rail height).
+and `FisheyeRailMathTest` (fisheye edges, `#`-bucket targets, clamps,
+degenerate rail height).
 
 `ShortcutListPolicy` (beside `ShortcutsScreen`): the screen's query filter
 (with the unresolved-labels false-"No results" guard), category fold, and
@@ -1329,31 +1342,38 @@ delegates.
   outcome mapping (WorkManager result vs desktop retry re-kick) plus ONE
   notification adapter each.
 - **Track/quick download actions** (commonMain `download/`). The IDIOM
-  RULE: a seam that exists to cross the commonMain↔jvmShared visibility
-  wall is declared, implemented AND bound by core:data on both platforms
-  — features never grow their own wall-crossing template.
+  RULE: a download read a feature needs is declared in core:data
+  commonMain and implemented AND bound by core:data on both platforms —
+  features never grow their own wall-crossing template. Since the
+  promoted-interface pass (the `DownloadIntake` precedent: a surface that
+  is core:model-only crosses commonMain verbatim) there are NO per-read
+  adapters: the jvmShared engine implements the interfaces directly and
+  dataJvmModule binds them over the engine singles, wasmJs binds the
+  honest no-op stubs in dataWasmModule. The seams:
+  `QuickDownloadActions` (implemented by `MediaDownloadActions` itself;
+  replaced the byte-identical library/search twins, `HomeDownloadActions`
+  folded), `TrackDownloadStatusWindow` /
+  `ActiveDownloadCount` (the former process-scoped
+  `MusicTrackDownloads.activeDownloadCount()`) / `SeriesEpisodeDownloads`
+  (all three implemented by `DownloadRepositoryImpl` — the window's
+  `downloadsFor` IS the single `getDownloadsByMediaItemIdsFlow` IN-query,
+  the deleted adapter's N-per-id-flow divergence reverted), and the
+  downloads screen's `DownloadQueue` + `OfflineResync` (moved from
+  feature:downloads — `DownloadRepositoryImpl` / `OfflineSyncManager`
+  implement them, the field-identical `DownloadRowProgress` mirror died
+  with `DownloadProgress` promoted to commonMain).
   **`TrackDownloadActions`** is the music/track download flip's START
   half — `flip(itemId)` (detail fetch → `intake.start`, failures
   swallowed via `runCatchingRethrowingCancellation`: cancellation now
   propagates where the pasted `catch (_: Exception)` masked it) and
   `bulk(items, concurrency = 3)` (the album admission table
-  null‖FAILED‖CANCELLED + per-call Semaphore, absorbed verbatim). The
-  status window is the small commonMain `TrackDownloadStatusWindow`
-  (`isSupported` / `downloadsFor` / `remove`), bound as
-  `JvmTrackDownloadStatusWindow` (one DECLARED divergence: the album
-  screen's single IN-query became N combined per-id flows, same
-  rows/emissions) + `WasmTrackDownloadStatusWindow`;
-  `AudioPlayerViewModel`/`AlbumDetailViewModel` inject it directly.
-  **`QuickDownloadActions`** (jvmShared `JvmQuickDownloadActions` over
-  the `MediaDownloadActions` single + wasmJs stub) replaces the
-  byte-identical library/search twins; home injects it too
-  (`HomeDownloadActions` folded). **`SeriesEpisodeDownloads`** and
-  **`ActiveDownloadCount`** (the former process-scoped
-  `MusicTrackDownloads.activeDownloadCount()`) follow the same idiom.
-  The COMPLETED→remove half STAYS at the call sites: the player confirms
-  before removing, the album row removes directly — distinct policies
-  the module must not swallow. Pinned by `TrackDownloadActionsTest`
-  (8) + `JvmTrackDownloadStatusWindowTest`.
+  null‖FAILED‖CANCELLED + per-call Semaphore, absorbed verbatim);
+  `AudioPlayerViewModel`/`AlbumDetailViewModel` inject the window
+  directly. The COMPLETED→remove half STAYS at the call sites: the player
+  confirms before removing, the album row removes directly — distinct
+  policies the module must not swallow. Pinned by `TrackDownloadActionsTest`
+  (8) + `DownloadRepositoryStatusWindowTest` (the window's id-honesty, at
+  repository level).
 - **`ReconnectTrigger`** (jvmShared; the `onReady` guard rides
   `runCatchingRethrowingCancellation`) is the shared reconnect
   vocabulary; the desktop downloads watcher and its character-identical
@@ -2763,6 +2783,18 @@ re-absorbed (persistence stays pinned by its own suite); `Main.kt` is
 wiring-only. All five rules pinned in the existing `:apps:desktop:test`
 lane, incl. a replay→restore→persist session sequence.
 
+**`desktopBackKeyDecision`** (apps/desktop `DesktopBackKey.kt`,
+internal, pure): the one desktop back-key decision the two handlers that
+hand-copied it — `DesktopAppRoot`'s scaffold Row (signed-in shell) and
+`DesktopSignedOutAuthHost` — now share. **Esc** or **Alt+Left** pops the
+current back stack, but only above the root (`stackDepth > 1` — every
+stack is seeded with its tab root, so that IS "not at the root"); at the
+root every key returns `false` and falls through unconsumed (no
+quit-on-Esc convention — the window closes via titlebar/tray Quit).
+Call sites keep the KeyDown gate and, in the shell, the video-player
+media-key fallback on their side of the line. Truth table pinned by
+`DesktopBackKeyDecisionTest` (jvmTest).
+
 ## Book reader (`shared/feature/player-book`)
 
 The reader (CBZ/CBR/PDF/EPUB; `docs/book-reader.md` is the user-facing
@@ -2809,6 +2841,16 @@ doc). Shape notes:
   `BookFormatProbe` Koin pattern; the controller takes the
   `() -> EpubReaderHandle?` seam directly — no VM hop). `ReaderSleepTimer`
   ticks countdown or end-of-chapter. Both jvmTest-pinned with value fakes.
+- **Utterance decisions live in commonMain**: `SpeechUtteranceMachine`
+  (beside the speech controller) owns the read-aloud policies —
+  park-until-ready, the single-active completion guard, stop clears /
+  error-completes, the INITIALIZING → AVAILABLE/UNAVAILABLE fold — behind
+  the tiny `TtsBinding` seam (ensureStarted / default-language probe /
+  speak(text, id) / stop / completion callbacks). The Android engine is a
+  dumb `TextToSpeech` translator over it; desktop binds the shared
+  `NoopBookSpeechEngine` directly (the verbatim `DesktopBookSpeechEngine`
+  duplicate is gone). Pinned by `SpeechUtteranceMachineTest` over a fake
+  binding — the seam's second adapter.
 
 **Reader modules (jvmTest-pinned):**
 
@@ -2885,6 +2927,20 @@ doc). Shape notes:
   `tapZoneFor` (`EpubEventParser.kt`) is the single geometry→zone
   resolver both input worlds share (`ReaderInputTest` pins the dead
   tap/swipe wiring bug family).
+- **`PagedPagerCoordinator`** (`PagedPagerCoordinator.kt`, beside the
+  paged renderer it serves; the `ReflowableReaderSession` controller
+  convention — Compose-free, fakeable in jvmTest over its `PagerHandle`
+  seam): the paged reader's ONE page-turn protocol — the animate-vs-snap
+  ladder (`animatedPageTurns` read at dispatch, user swipes always
+  animate) and the two named landing orderings that previously lived as
+  three hand-copied ladders in `PagedReaderContent`. `turnTo` is
+  VM-first (keyboard/tap-zone/volume-key turns and the outline/bookmark
+  sheets move uiState; the sync effect re-offers the page, the same-page/
+  in-flight guard keeps the round trip idempotent); `jumpTo` is
+  pager-first (TOC tick-rail + slider seek scroll immediately without
+  drowning the VM, which learns through the settle collector `attach`
+  installs — the only swipe-reporting path there is, seed emission
+  dropped). Pinned by `PagedPagerCoordinatorTest`.
 
 ## Playback focus (ADR-0004)
 
@@ -2897,13 +2953,15 @@ The matrix (`PlaybackFocusMatrix`) is pure and total over the closed
 `PlaybackSurfaceId` world; rulings: newest-wins, pause-not-duck (no duck
 vocabulary exists), manual-resume (the `playWhenReady` guard makes that
 true at the OS level: the music surface's `pause()` clears playWhenReady,
-so the focus-stack regain at release cannot resurrect it).
+and since the migration slice music has no media3 focus stack of its own —
+the module's seat is abandoned at release and `Regained` is ignored, so
+nothing can resurrect it).
 `DefaultPlaybackFocus` is the commonMain executor; `FocusArbiter` (OS
 seat — `AndroidFocusArbiter`, one AudioFocusRequest per attributes
 identity, AUDIOFOCUS_GAIN, no delayed gain) and `PlaybackSurface`
-(commandable victims) are the two ports, EACH with two production
-adapters: `FocusArbiter.request(attributes, listener)` takes the
-claimant's `FocusAudioAttributes` (matrix rows via
+(commandable victims AND suspended holders) are the two ports, EACH with
+two production adapters: `FocusArbiter.request(attributes, listener)`
+takes the claimant's `FocusAudioAttributes` (matrix rows via
 `PlaybackFocusMatrix.attributesOf` — READ_ALOUD keeps
 USAGE_MEDIA+CONTENT_TYPE_SPEECH, MUSIC→MUSIC, VIDEO→MOVIE), the desktop
 in-process `DesktopFocusArbiter` grants vacuously, and
@@ -2914,14 +2972,17 @@ for wasmJs and tests. Music's play edge HONORS `acquire()`'s outcome: on
 `FocusOutcome.Denied` (a displaced holder Suspended under an OS loss —
 e.g. read-aloud during a phone call) the manager pauses instead of
 producing audio the interface forbade. The reader claims/releases around
-the read-aloud session and pauses its loop on a displaced `Held`. Slice 1
-= TTS-over-music; video is denied until its slice adds a matrix row (the
-exhaustive `when` makes it a build error, not a silent overlap). Still
-pending (the ADR's migration slice): Android music's OS leg
-(`handleAudioFocus`) has NOT moved into the module, and
-`AndroidFocusArbiter` hardcodes speech audio attributes — the MUSIC
-migration needs a per-claimant attributes parameter on `FocusArbiter`
-first. See docs/adr/0004-playback-focus.md.
+the read-aloud session and pauses its loop on a displaced `Held`. The
+migration slice LANDED (2026-09-17): Android music's OS leg is the
+module's — `handleAudioFocus` is off on BOTH music players (primary and
+crossfade secondary; built-in handling would fight the seat and let the
+secondary's GAIN request focus-loss-pause the primary mid-fade), MUSIC
+claims the seat on the play edge with the MUSIC attributes row, and OS
+losses on the holder are ENFORCED (the holder has no `claimState`
+observer, so the module commands its surface pause; `Regained` stays
+ignored — resume is manual). Video is denied until its slice adds a
+matrix row (the exhaustive `when` makes it a build error, not a silent
+overlap). See docs/adr/0004-playback-focus.md.
 
 ## Audio playback, effects & cast cores (core/data)
 
@@ -2941,18 +3002,31 @@ first. See docs/adr/0004-playback-focus.md.
   `DesktopAudioQueueManager` are thin policy callers; the desktop KDoc
   parity table points at this module as the pin.
   `AudioQueuePolicyTest` pins it.
-- **`AudioProgressReporter`** (commonMain; the only Android member became
-  `positionMsProvider`/`isPlayingProvider` lambdas) owns the
-  progress-report choreography for both platforms (the load-bearing stop
-  ordering: stop launched NEVER awaited, session id rotated
-  SYNCHRONOUSLY). **`stopAndCancel()`** is the teardown entry both
-  managers' hand-rolled tails collapsed into: cancels the loop, launches
-  the final stop report fire-and-forget, rotates the session id even when
-  no report fires (a declared delta vs `reportStopped`'s early return).
-  Must run BEFORE the adapter releases its engine (it snapshots through
-  the constructor providers). `DesktopAudioQueueManager` constructs
-  `EnginePositionTicker` for its position loop — its plain-`delay` loop
-  held resumes up to 2.5 s where the ticker wakes reactively.
+- **`PeriodicProgressReportLoop`** (commonMain `playback/`, beside the
+  reporters) is the ONE periodic progress loop, shared by both local
+  players: `AudioProgressReporter` (local audio) and player-video's
+  `PlaybackProgressReporter` (video; keeps its position-tracking /
+  auto-skip / watched-threshold half) are thin shells over it. The
+  loop's invariants live — and are virtual-time-pinned
+  (`PeriodicProgressReportLoopTest`) — there, once: CADENCE (every
+  `PROGRESS_REPORT_INTERVAL_MS`), PAUSED DEDUP (exactly one paused row
+  per unmoving position; a seek while paused reports again), START GATE
+  (audio's remote-session check — a gated start still cancels the prior
+  loop and re-seeds the dedup) and CYCLE GATE (video's incognito check
+  skips a cycle without touching dedup), plus the null-position /
+  null-item skips. **`AudioProgressReporter`** (commonMain; the only
+  Android member became `positionMsProvider`/`isPlayingProvider`
+  lambdas) owns the local-session bookkeeping the loop core deliberately
+  does not (the load-bearing stop ordering: stop launched NEVER awaited,
+  session id rotated SYNCHRONOUSLY). **`stopAndCancel()`** is the
+  teardown entry both managers' hand-rolled tails collapsed into:
+  cancels the loop, launches the final stop report fire-and-forget,
+  rotates the session id even when no report fires (a declared delta vs
+  `reportStopped`'s early return). Must run BEFORE the adapter releases
+  its engine (it snapshots through the constructor providers).
+  `DesktopAudioQueueManager` constructs `EnginePositionTicker` for its
+  position loop — its plain-`delay` loop held resumes up to 2.5 s where
+  the ticker wakes reactively.
 - **`NowPlayingTracker`** (commonMain, beside `AudioPreferencesReducer`)
   is the sole writer of the six now-playing metadata flows: three publish
   shapes — `publishDetail` / `publishQueueItem` / `publishLocalFile` —
@@ -3113,9 +3187,53 @@ first. See docs/adr/0004-playback-focus.md.
   startKoin consumes it; the desktop guard test parses the declared list
   and keeps set-equality in both directions. The full webSections table
   stays deferred (LOC-neutral per the feasibility study).
+- **The web pane table**: `WebAppRoot`'s landing affordances and
+  `entry<…>` registrations used to be twin hand-mirrored lists (the
+  hand-mirror class the desktop `ShellSectionRegistry` killed; adopting
+  the shared appSections machinery stays a recorded deferral and is NOT
+  this). One `WebPane` row per level the nav root can push as a landing
+  affordance — label (load-bearing copy: `tools/e2e/web-verify.mjs`
+  finds the buttons by accessible name), outlined flag, pushed key, and
+  the content render closure — declared once in `buildWebPanes`;
+  `toLandingAffordance` projects the buttons and `registerWebPanes`
+  derives the entry registrations from the SAME rows via the scope's
+  class-keyed `addEntryProvider` overload (resolution semantics
+  identical to the former reified `entry<WebX>` blocks; no reflection),
+  threading the shell's guarded pop path in as `onBack` once.
+  Deliberately NOT rows: `WebLanding` itself (renders the table) and
+  Route.ArrSettings / Route.SeerrDetail (pushed programmatically, never
+  landing buttons — their entries stay hand-written). Adding a level =
+  adding one row; button and registration cannot drift. Pinned by
+  `WebPaneTableTest` (browser-free provider-resolution lane, the
+  `WebBackStackMirrorTest` precedent).
 
 ## Preference stores (core:datastore)
 
+- **`sliceStateFlow` / `dataDegradingToDefaults`** (`SliceStateFlow.kt`,
+  internal): the ONE store read-chassis —
+  `data.catch{emit(emptyPreferences())}.map(read).distinctUntilChanged()
+  .stateIn(Eagerly, seed)` — replacing the ~22 per-store hand copies whose
+  corrupt-read arm had drifted into three spellings and two semantics. The
+  16+ stores spelling it `.catch { _ -> emptyPreferences() }` (lambda value
+  coerces to `Unit`) silently completed, freezing their eager StateFlow at
+  its seed with the read projection never running — latent only because
+  every seed equals the defaults. Declared policy (KDoc'd): a corrupt read
+  degrades to the all-defaults snapshot run through the same read
+  projection (per-key clamping/derivation still applies); never throws at
+  collectors, never freezes at the seed. 22 stores migrated wholesale
+  (21 slice stores + `AppRuntimeStateStore`, which previously had NO arm —
+  a failed read propagated uncaught into its eager collector);
+  `ArrPreferencesStore` / `SubtitleProviderPreferencesStore` (encrypted-side
+  combine/tick shapes) and `HomeDiscoveryStore` (per-user combine) keep
+  their projections but ride `dataDegradingToDefaults()`;
+  `ExperimentalStore`/`SecurityStore` keep a `sharedPrefs` arm for knob /
+  first-persisted reads over the same helper. Unchanged (not preference
+  stores, no corrupt-read arm added): `ServerIdentityStore` (session
+  state), `WidgetDataStore` (widget I/O buffer), `PinRateLimiter`. The
+  facade's dead `sharedPrefs` copy was deleted. Pinned by
+  `SliceStateFlowTest` (fake DataStore with a throwing `data` flow:
+  degrades to the defaults projection — not the seed — never throws, still
+  collectable; store-level via `NavigationStore`).
 - **`String?.toEnumOrNull()`** (`EnumPreferenceParsing.kt`, public reified
   inline, never-throws) is the repo-wide seam for persisted-string →
   enum: ~50 former `valueOf` / try-catch / `runCatching{}.getOrDefault`
@@ -3363,15 +3481,24 @@ re-derives the designs nor lands them casually.
   table; specs become plain-value tests. Deferred: ~7k lines of surface
   across both platforms — land per family (arr first, piggybacking
   `ArrServiceClient`), in a dedicated session.
-- **`WebSeerrController` routing**: apps/web's
-  `WebSeerrController`/`WebSeerrPane` hand-mirror `SeerrSettingsViewModel`'s
-  persist-then-test call order ("mirrors … exactly", unpinned), while
-  `Main.kt` records the shared `SeerrSettingsScreen` resolving on web but
-  staying latent because the pane covers the credentials function.
-  Deliberately KEPT (API-key-only carve-out; no runnable web test lane to
-  catch the routing swap's visual regressions). Revisit: route the shared
-  screen when the next web batch touches Seerr, or record the pane as the
-  permanent narrower surface.
+- **`WebSeerrController` routing** (re-homed 2026-09-17): apps/web's Seerr
+  credentials pane is the permanent WEB-VIABLE narrower surface — API-key
+  only, because a browser tab cannot set the `Cookie` request header
+  (fetch-forbidden) nor read `Set-Cookie`, so the ViewModel's cookie login
+  paths are ABSENT from it, not hidden (SeerrWireSupport's WASM BROWSER
+  CAVEAT; `Main.kt` keeps the shared `SeerrSettingsScreen` latent). The
+  former drift is dead: the pane no longer hand-mirrors
+  `SeerrSettingsViewModel`'s status algebra — the probe board is the
+  SHARED `ConnectionProbe` machine (the same board behind the Seerr
+  ViewModel, *arr settings and the subtitle providers), with the web pane
+  constructed on the declared `SingleFlight.CALLER_GATED` arm (the pane's
+  buttons-disabled UX owns probe concurrency — the opposite of the
+  ViewModel's RESTART discipline; the machine's job-identity guard still
+  prevents double-landing). Refusal pre-flight and failure texts ride the
+  machine's localized `FallbackText`s, and the persist-then-test call
+  order (byte-identical to the former hand-rolled `persist` +
+  `testApiKeyConnection`'s API-key slice) is pinned event-by-event by
+  `WebSeerrControllerTest` on the browser-free kotlin.test lane.
 - **Feature-VM load-ladder fold**: the `isLoading = true, error = null`
   suspend-guard ladder remains hand-copied across requests, calendar,
   editor, syncplay (the livetv slice landed as `LiveTvLoad`, the admin
@@ -3433,15 +3560,12 @@ re-derives the designs nor lands them casually.
   and calendar guard with "have content". Deferred: pixel-visible product
   decision (the livetv cold-load spinner is probably wrong, but that's a
   call, not a fold).
-- **Mood/Smart generated-playlist state idiom** (`shared/feature/music`):
-  `MoodPlaylistsViewModel` + `SmartPlaylistsViewModel` hand-sync four
-  loose compose states through every generate call, duplicate the
-  `"custom-" + UUID` id convention + delete guard, and use raw compose
-  state fields where the rest of the module uses one `UiState` flow —
-  two state idioms in one module. Design: one `GeneratedPlaylistState`
-  snapshot holder (pipeline + id convention + playAll), per-kind
-  filter/sort functions stay pure adapters. Deferred: no churn pressure;
-  land with the next music-feature change.
+- **Mood/Smart generated-playlist state idiom** (landed 2026-09-17): the
+  recorded `GeneratedPlaylistState` design shipped — one snapshot holder
+  (generate pipeline + `"custom-"` id convention + clearGenerated/playAll)
+  now owned by both VMs, per-kind filter/sort staying pure adapters; state
+  is snapshot-backed, not flows, and errors stay `String?` (screens read
+  plain getters in composition and render the error verbatim).
 - **`DetailContentBody` section admission** (`MediaDetailBody.kt`): which
   sections render in what order is an inline mediaType × origin ×
   capabilities decision table inside a ~935-line composable — the last
@@ -3467,27 +3591,40 @@ re-derives the designs nor lands them casually.
   a feature whose screen already defers to `UserMessageHost`; needs a
   per-shell presentation mapping decision first — deserves the grilling
   loop, not an autonomous batch.
-- **Settings row-admission functions**: "which rows render" is decided
-  2–3× per screen — Playback's inline count `when` + id-prefix engine
-  totals (`startsWith("mpv_")` against catalog ids), Storage's ~30
-  hand-incremented index counters, Appearance's count — while Audio
-  already has the intended idiom (`audioScreenRowTotal`,
-  contract-test-pinned). Design: pure per-group admission functions
-  beside `SettingsScreenGroups`; counts and index sequences derive.
-  Deferred: pure testability win with zero behaviour — do with the next
-  settings-screen touch, never bundled with the section-host item.
-- **`Resilient*` wrapper deletion**: five pass-through wrapper modules
-  (~504 lines — Seerr/Sonarr/Radarr/Tmdb/SubtitleProvider) exist only to
-  force hand-forwarding `RetryPolicy.executeWithRetry`; retry sits
-  outside the impls (direct construction silently loses it), 4 wrappers
-  retry 4× vs Subtitle's 3× (unpinned divergence), and the wasm twins
-  apply retry inside their base — two idioms for one policy. Design:
-  move retry into each family's single request funnel
-  (`SeerrApiClientImpl.executeRequest`, `ArrClientSupport`, Tmdb's
-  helper, `SubtitleHttp`) and delete the wrappers + their DI indirection.
-  Deferred: one semantic check first (method-level vs HTTP-call-level
-  retry equivalence for the login/cookie paths) and it touches five
-  network families at once — its own session.
+- **Settings row-admission functions** (landed 2026-09-17): the recorded
+  design shipped — pure per-group admission totals beside
+  `SettingsScreenGroups` (`SettingsScreenRowAdmission.kt`: storage cache/
+  downloads, playback player/advanced-video/engine-prefix, notification,
+  language trio/subtitles, appearance library, security; the audio
+  `audioScreenRowTotal` idiom extended), each screen feeding
+  `SettingsItemList(total = …)` from them while the core container's
+  auto-index owns the per-row index — the hand-incremented `*Idx++`
+  counters and inline predicate counts are gone, rendered output
+  byte-identical, per-function totals + retired-counter ratchet pinned in
+  `SettingsCatalogScreenContractTest`.
+- **`Resilient*` wrapper deletion** (landed 2026-09-17): the five
+  pass-through wrapper modules (~504 lines — Seerr/Sonarr/Radarr/Tmdb/
+  SubtitleProvider) and their DI indirection are deleted; retry moved
+  into each family's request funnel on BOTH platforms. jvmShared rides
+  one execute chassis — `HttpExecutor` (`core/network/api/`, internal;
+  the JVM counterpart of the wasmJsMain `ArrSeerrApiSupport`/
+  `WasmApiSupport` bases) with the member vocabulary `parseJson` /
+  `parseUnit` / `executeForText` / `executeForCookie` over an `Options`
+  record that carries the genuine per-family divergences (error shapers,
+  Retry-After capture, empty-body shape) as declared data — it also
+  absorbed the former `ApiResponseParsing` ladder. Retry is one
+  declared count, `HttpExecutor.MAX_RETRIES` (4): Arr/Seerr set
+  `Options.retryHttpCalls` on the chassis, `SubtitleHttp` wraps its own
+  funnel (moving UP from 3 — the former unpinned divergence resolved by
+  declaring it), TMDB wraps `tmdbFetch`, and the wasm twins re-document
+  their const as the same shared count — in-funnel retry is now one
+  idiom on both platforms. GitHub/LrcLib never had wrappers: their
+  executors leave the flag off, keeping direct-construction semantics.
+  The formerly deferred semantic check held — every Seerr funnel
+  (parse/text/cookie) is a single HTTP call per attempt, so call-level
+  retry IS method-level there. Pinned by `HttpExecutorTest` + the
+  per-impl retry suites (`TmdbApiClientImplTest`,
+  `RadarrApiClientImplTest`).
 - **Small folds (opportunistic only)**: `SearchScreen`'s paged-item
   access re-derives the bounds-check + peek three times — fold onto
   core/ui's `safeItemKey` with the next SearchScreen touch. The three

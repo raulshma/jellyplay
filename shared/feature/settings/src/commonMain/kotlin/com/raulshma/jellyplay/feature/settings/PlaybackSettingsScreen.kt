@@ -487,20 +487,13 @@ fun PlaybackSettingsScreen(
                     modifier = Modifier.padding(vertical = 8.dp),
                     initiallyExpanded = true,
                 ) {
-                    // Derived from the player group declaration: the platform-
-                    // gated rows drop where the capability is missing, the TV
-                    // rows need the TV form factor, and isAdvanced rows only
-                    // render behind the advanced toggle — the declared total
-                    // tracks the rows instead of a hand-bumped count.
+                    // Derived from the player group declaration via the
+                    // admission total beside SettingsScreenGroups: the
+                    // platform-gated rows drop where the capability is
+                    // missing, the TV rows need the TV form factor, and
+                    // isAdvanced rows only render behind the advanced toggle.
                     SettingsItemList(
-                        total = SettingsScreenGroups.playbackPlayer.items.count { item ->
-                            when (item.id) {
-                                "orientation" -> settingsCapabilities.supportsScreenOrientation
-                                "seek_duration", "gestures", "gesture_indicator_side" -> settingsCapabilities.supportsTouchGestures
-                                "android_tv_watch_next", "tv_zoom_mode" -> isTv
-                                else -> showAdvanced || !item.isAdvanced
-                            }
-                        },
+                        total = playbackPlayerScreenRowTotal(isTv = isTv, showAdvanced = showAdvanced),
                     ) {
                     val preferredPlayerTitle = stringResource(Res.string.settings_preferred_player)
                     SettingListItem(
@@ -981,9 +974,7 @@ fun PlaybackSettingsScreen(
                     initiallyExpanded = highlightSettingId in SettingsScreenGroups.playbackAdvancedVideo.itemIdSet,
                 ) {
                     SettingsItemList(
-                        total = SettingsScreenGroups.playbackAdvancedVideo.items.count { item ->
-                            item.id != "dialogue_boost_strength" || preferences.dialogueBoostEnabled
-                        },
+                        total = playbackAdvancedVideoScreenRowTotal(preferences.dialogueBoostEnabled),
                     ) {
                     SettingToggleItem(
                         icon = Tabler.Outline.Microphone2,
@@ -1150,9 +1141,10 @@ fun PlaybackSettingsScreen(
                             val mpvDefault = MpvEngineConfig()
                             // The branch's declared rows plus the one reset row —
                             // the declared reset_engine_defaults item renders as
-                            // that row in every engine branch.
+                            // that row in every engine branch (the admission
+                            // total beside SettingsScreenGroups).
                             SettingsItemList(
-                                total = SettingsScreenGroups.playbackEngine.items.count { it.id.startsWith("mpv_") } + 1,
+                                total = playbackEngineScreenRowTotal("mpv_"),
                             ) {
                             val videoOutputTitle = stringResource(Res.string.settings_video_output)
                             SettingListItem(
@@ -1354,8 +1346,7 @@ fun PlaybackSettingsScreen(
                             val vlcDefault = LibVlcEngineConfig()
                             // Same branch-shape as MPV: declared VLC rows (which
                             // include vlc_video_output) plus the reset row.
-                            val vlcTotal = SettingsScreenGroups.playbackEngine.items.count { it.id.startsWith("vlc_") } + 1
-                            var vlcIdx = 0
+                            SettingsItemList(total = playbackEngineScreenRowTotal("vlc_")) {
 
                             val networkCachingTitle = stringResource(Res.string.settings_network_caching)
                             val networkCachingAuto = stringResource(Res.string.settings_auto_device_based)
@@ -1371,7 +1362,6 @@ fun PlaybackSettingsScreen(
                                 subtitle = "${vlcCfg.audioOutput.displayName} (${vlcCfg.audioOutput.key})",
                                 trailingText = vlcCfg.audioOutput.key,
                                 highlighted = highlightSettingId == "vlc_audio_output",
-                                index = vlcIdx++, count = vlcTotal,
                                 onClick = {
                                     activePicker = PickerState.List(
                                         title = vlcAudioOutputTitle,
@@ -1389,7 +1379,6 @@ fun PlaybackSettingsScreen(
                                 subtitle = if (vlcCfg.audioTimeStretch) stringResource(Res.string.settings_audio_time_stretch_on) else stringResource(Res.string.settings_audio_time_stretch_off),
                                 checked = vlcCfg.audioTimeStretch,
                                 highlighted = highlightSettingId == "vlc_audio_time_stretch",
-                                index = vlcIdx++, count = vlcTotal,
                                 onCheckedChange = { viewModel.edit { scope -> scope.engine.setLibVlcConfig(vlcCfg.copy(audioTimeStretch = it)) } },
                             )
                             val vlcVideoOutputTitle = stringResource(Res.string.settings_video_output)
@@ -1399,7 +1388,6 @@ fun PlaybackSettingsScreen(
                                 subtitle = "${vlcCfg.videoOutput.displayName} (${vlcCfg.videoOutput.key})",
                                 trailingText = vlcCfg.videoOutput.key,
                                 highlighted = highlightSettingId == "vlc_video_output",
-                                index = vlcIdx++, count = vlcTotal,
                                 onClick = {
                                     activePicker = PickerState.List(
                                         title = vlcVideoOutputTitle,
@@ -1417,7 +1405,6 @@ fun PlaybackSettingsScreen(
                                 subtitle = if (vlcCfg.networkCaching == 0) networkCachingAuto else "${vlcCfg.networkCaching}ms",
                                 trailingText = if (vlcCfg.networkCaching == 0) stringResource(Res.string.settings_streaming_quality_auto) else "${vlcCfg.networkCaching}ms",
                                 highlighted = highlightSettingId == "vlc_network_caching",
-                                index = vlcIdx++, count = vlcTotal,
                                 onClick = {
                                     val options = listOf(0, 500, 1000, 1500, 2000, 3000, 5000)
                                     activePicker = PickerState.List(
@@ -1436,7 +1423,6 @@ fun PlaybackSettingsScreen(
                                 subtitle = skipLoopFilterLabels[vlcCfg.skipLoopFilter] ?: vlcCfg.skipLoopFilter.toString(),
                                 trailingText = stringResource(Res.string.settings_b_frames_level, vlcCfg.skipLoopFilter),
                                 highlighted = highlightSettingId == "vlc_skip_loop_filter",
-                                index = vlcIdx++, count = vlcTotal,
                                 onClick = {
                                     val options = (0..4).toList()
                                     activePicker = PickerState.List(
@@ -1455,7 +1441,6 @@ fun PlaybackSettingsScreen(
                                 subtitle = if (vlcCfg.skipFrames) stringResource(Res.string.settings_skip_frames_on) else stringResource(Res.string.settings_skip_frames_off),
                                 checked = vlcCfg.skipFrames,
                                 highlighted = highlightSettingId == "vlc_skip_frames",
-                                index = vlcIdx++, count = vlcTotal,
                                 onCheckedChange = { viewModel.edit { scope -> scope.engine.setLibVlcConfig(vlcCfg.copy(skipFrames = it)) } },
                                 onClick = {
                                     val options = (0..4).toList()
@@ -1477,7 +1462,6 @@ fun PlaybackSettingsScreen(
                                 subtitle = if (vlcCfg.decoderThreads == 0) autoLabel else "${vlcCfg.decoderThreads} $threadsSuffix",
                                 trailingText = if (vlcCfg.decoderThreads == 0) autoLabel else "${vlcCfg.decoderThreads}",
                                 highlighted = highlightSettingId == "vlc_decoder_threads",
-                                index = vlcIdx++, count = vlcTotal,
                                 onClick = {
                                     val options = listOf(0, 1, 2, 4, 6, 8)
                                     activePicker = PickerState.List(
@@ -1496,22 +1480,20 @@ fun PlaybackSettingsScreen(
                                 subtitle = if (vlcCfg.dropLateFrames) stringResource(Res.string.settings_drop_late_frames_on) else stringResource(Res.string.settings_drop_late_frames_off),
                                 checked = vlcCfg.dropLateFrames,
                                 highlighted = highlightSettingId == "vlc_drop_late_frames",
-                                index = vlcIdx++, count = vlcTotal,
                                 onCheckedChange = { viewModel.edit { scope -> scope.engine.setLibVlcConfig(vlcCfg.copy(dropLateFrames = it)) } },
                             )
                             SettingListItem(
                                 icon = Tabler.Outline.Refresh,
                                 title = stringResource(Res.string.settings_reset_to_defaults),
                                 subtitle = stringResource(Res.string.settings_reset_libvlc),
-                                index = vlcIdx, count = vlcTotal,
                                 onClick = { viewModel.edit { it.engine.setLibVlcConfig(vlcDefault) } },
                             )
+                            }
                         }
                         PlayerType.EXO_PLAYER -> {
                             val exoCfg = preferences.exoPlayerConfig
                             val exoDefault = ExoPlayerEngineConfig()
-                            val exoTotal = SettingsScreenGroups.playbackEngine.items.count { it.id.startsWith("exo_") } + 1
-                            var exoIdx = 0
+                            SettingsItemList(total = playbackEngineScreenRowTotal("exo_")) {
 
                             val videoScalingTitle = stringResource(Res.string.settings_video_scaling)
                             val frameRateStrategyTitle = stringResource(Res.string.settings_frame_rate_strategy)
@@ -1525,7 +1507,6 @@ fun PlaybackSettingsScreen(
                                 subtitle = "${exoCfg.videoScalingMode.displayName} (${exoCfg.videoScalingMode.key})",
                                 trailingText = exoCfg.videoScalingMode.key,
                                 highlighted = highlightSettingId == "exo_video_scaling",
-                                index = exoIdx++, count = exoTotal,
                                 onClick = {
                                     activePicker = PickerState.List(
                                         title = videoScalingTitle,
@@ -1543,7 +1524,6 @@ fun PlaybackSettingsScreen(
                                 subtitle = "${exoCfg.frameRateStrategy.displayName} (${exoCfg.frameRateStrategy.key})",
                                 trailingText = exoCfg.frameRateStrategy.key,
                                 highlighted = highlightSettingId == "exo_frame_rate_strategy",
-                                index = exoIdx++, count = exoTotal,
                                 onClick = {
                                     activePicker = PickerState.List(
                                         title = frameRateStrategyTitle,
@@ -1561,7 +1541,6 @@ fun PlaybackSettingsScreen(
                                 subtitle = if (exoCfg.skipSilence) stringResource(Res.string.settings_skip_silence_on) else stringResource(Res.string.settings_skip_silence_off),
                                 checked = exoCfg.skipSilence,
                                 highlighted = highlightSettingId == "exo_skip_silence",
-                                index = exoIdx++, count = exoTotal,
                                 onCheckedChange = { viewModel.edit { scope -> scope.engine.setExoPlayerConfig(exoCfg.copy(skipSilence = it)) } },
                             )
                             SettingListItem(
@@ -1570,7 +1549,6 @@ fun PlaybackSettingsScreen(
                                 subtitle = "${exoCfg.audioOffloadMode.displayName} (${exoCfg.audioOffloadMode.key})",
                                 trailingText = exoCfg.audioOffloadMode.key,
                                 highlighted = highlightSettingId == "exo_audio_offload",
-                                index = exoIdx++, count = exoTotal,
                                 onClick = {
                                     activePicker = PickerState.List(
                                         title = audioOffloadTitle,
@@ -1588,7 +1566,6 @@ fun PlaybackSettingsScreen(
                                 subtitle = if (exoCfg.enableDecoderFallback) stringResource(Res.string.settings_decoder_fallback_on) else stringResource(Res.string.settings_decoder_fallback_off),
                                 checked = exoCfg.enableDecoderFallback,
                                 highlighted = highlightSettingId == "exo_decoder_fallback",
-                                index = exoIdx++, count = exoTotal,
                                 onCheckedChange = { viewModel.edit { scope -> scope.engine.setExoPlayerConfig(exoCfg.copy(enableDecoderFallback = it)) } },
                             )
                             SettingListItem(
@@ -1597,7 +1574,6 @@ fun PlaybackSettingsScreen(
                                 subtitle = if (exoCfg.backBufferDurationMs == 0) disabledLabel else stringResource(Res.string.settings_back_buffer_value, exoCfg.backBufferDurationMs / 1000),
                                 trailingText = if (exoCfg.backBufferDurationMs == 0) offLabel2 else "${exoCfg.backBufferDurationMs / 1000}s",
                                 highlighted = highlightSettingId == "exo_back_buffer",
-                                index = exoIdx++, count = exoTotal,
                                 onClick = {
                                     val options = listOf(0, 5000, 10000, 15000, 20000, 30000)
                                     activePicker = PickerState.List(
@@ -1624,7 +1600,6 @@ fun PlaybackSettingsScreen(
                                 subtitle = if (exoCfg.preferredVideoMimeTypes.isEmpty()) allCodecs else exoCfg.preferredVideoMimeTypes.joinToString(", "),
                                 trailingText = if (exoCfg.preferredVideoMimeTypes.isEmpty()) stringResource(Res.string.settings_all) else customLabel,
                                 highlighted = highlightSettingId == "exo_preferred_codecs",
-                                index = exoIdx++, count = exoTotal,
                                 onClick = {
                                     val presets = listOf(
                                         emptyList<String>(),
@@ -1646,9 +1621,9 @@ fun PlaybackSettingsScreen(
                                 icon = Tabler.Outline.Refresh,
                                 title = stringResource(Res.string.settings_reset_to_defaults),
                                 subtitle = stringResource(Res.string.settings_reset_exoplayer),
-                                index = exoIdx, count = exoTotal,
                                 onClick = { viewModel.edit { it.engine.setExoPlayerConfig(exoDefault) } },
                             )
+                            }
                         }
                         else -> {}
                     }
@@ -1709,8 +1684,7 @@ fun PlaybackSettingsScreen(
                     modifier = Modifier.padding(vertical = 8.dp),
                     initiallyExpanded = highlightSettingId in SettingsScreenGroups.playbackSyncPlay.itemIdSet,
                 ) {
-                    val syncTotal = SettingsScreenGroups.playbackSyncPlay.items.size
-                    var syncIdx = 0
+                    SettingsItemList(total = SettingsScreenGroups.playbackSyncPlay.items.size) {
                     val joinBehaviorDescs = SyncPlayJoinBehavior.entries.associateWith {
                         when (it) {
                             SyncPlayJoinBehavior.ALWAYS_JOIN -> stringResource(Res.string.settings_join_always)
@@ -1726,7 +1700,6 @@ fun PlaybackSettingsScreen(
                         subtitle = stringResource(Res.string.settings_join_behavior_subtitle),
                         trailingText = preferences.syncPlayJoinBehavior.displayName,
                         highlighted = highlightSettingId == "syncplay_join_behavior",
-                        index = syncIdx++, count = syncTotal,
                         onClick = {
                             activePicker = PickerState.List(
                                 title = joinBehaviorTitle,
@@ -1752,7 +1725,6 @@ fun PlaybackSettingsScreen(
                         subtitle = stringResource(Res.string.settings_sync_tolerance_subtitle),
                         trailingText = "${preferences.syncPlayToleranceMs}ms",
                         highlighted = highlightSettingId == "syncplay_tolerance",
-                        index = syncIdx++, count = syncTotal,
                         onClick = {
                             val options = listOf(50L, 100L, 200L, 300L, 500L, 1000L)
                             activePicker = PickerState.List(
@@ -1772,9 +1744,9 @@ fun PlaybackSettingsScreen(
                         subtitle = stringResource(Res.string.settings_auto_accept_invites_subtitle),
                         checked = preferences.syncPlayAutoAcceptInvites,
                         highlighted = highlightSettingId == "syncplay_auto_accept_invites",
-                        index = syncIdx++, count = syncTotal,
                         onCheckedChange = { viewModel.edit { scope -> scope.syncPlayCast.setSyncPlayAutoAcceptInvites(it) } },
                     )
+                    }
                 }
             }
 
@@ -1786,8 +1758,7 @@ fun PlaybackSettingsScreen(
                     modifier = Modifier.padding(vertical = 8.dp),
                     initiallyExpanded = highlightSettingId in SettingsScreenGroups.playbackCasting.itemIdSet,
                 ) {
-                    val castTotal = SettingsScreenGroups.playbackCasting.items.size
-                    var castIdx = 0
+                    SettingsItemList(total = SettingsScreenGroups.playbackCasting.items.size) {
                     val castingStrategyDescs = CastingStrategy.entries.associateWith {
                         when (it) {
                             CastingStrategy.PREFER_CAST -> stringResource(Res.string.settings_casting_prefer_cast)
@@ -1803,7 +1774,6 @@ fun PlaybackSettingsScreen(
                         subtitle = stringResource(Res.string.settings_casting_strategy_subtitle),
                         trailingText = preferences.defaultCastingStrategy.displayName,
                         highlighted = highlightSettingId == "casting_strategy",
-                        index = castIdx++, count = castTotal,
                         onClick = {
                             activePicker = PickerState.List(
                                 title = castingStrategyTitle,
@@ -1822,7 +1792,6 @@ fun PlaybackSettingsScreen(
                         subtitle = stringResource(Res.string.settings_background_casting_subtitle),
                         checked = preferences.backgroundCastingEnabled,
                         highlighted = highlightSettingId == "background_casting",
-                        index = castIdx++, count = castTotal,
                         onCheckedChange = { viewModel.edit { scope -> scope.syncPlayCast.setBackgroundCastingEnabled(it) } },
                     )
 
@@ -1835,7 +1804,6 @@ fun PlaybackSettingsScreen(
                         subtitle = stringResource(Res.string.settings_preferred_renderer_subtitle),
                         trailingText = rendererText,
                         highlighted = highlightSettingId == "preferred_renderer",
-                        index = castIdx++, count = castTotal,
                         onClick = {
                             if (preferences.preferredRenderer != null) {
                                 viewModel.edit { it.syncPlayCast.setPreferredRenderer(null) }
@@ -1844,6 +1812,7 @@ fun PlaybackSettingsScreen(
                             }
                         },
                     )
+                    }
                 }
             }
 
@@ -1855,8 +1824,7 @@ fun PlaybackSettingsScreen(
                     modifier = Modifier.padding(vertical = 8.dp),
                     initiallyExpanded = highlightSettingId in SettingsScreenGroups.playbackDvr.itemIdSet,
                 ) {
-                    val dvrTotal = SettingsScreenGroups.playbackDvr.items.size
-                    var dvrIdx = 0
+                    SettingsItemList(total = SettingsScreenGroups.playbackDvr.items.size) {
                     val noneLabel = stringResource(Res.string.settings_none)
 
                     val dvrPrePaddingTitle = stringResource(Res.string.settings_dvr_pre_padding)
@@ -1869,7 +1837,6 @@ fun PlaybackSettingsScreen(
                         subtitle = stringResource(Res.string.settings_dvr_pre_padding_subtitle),
                         trailingText = stringResource(Res.string.settings_x_minutes, preferences.dvrPrePaddingMinutes),
                         highlighted = highlightSettingId == "dvr_pre_padding",
-                        index = dvrIdx++, count = dvrTotal,
                         onClick = {
                             val options = listOf(0, 1, 2, 5, 10, 15)
                             activePicker = PickerState.List(
@@ -1892,7 +1859,6 @@ fun PlaybackSettingsScreen(
                         subtitle = stringResource(Res.string.settings_dvr_post_padding_subtitle),
                         trailingText = stringResource(Res.string.settings_x_minutes, preferences.dvrPostPaddingMinutes),
                         highlighted = highlightSettingId == "dvr_post_padding",
-                        index = dvrIdx++, count = dvrTotal,
                         onClick = {
                             val options = listOf(0, 1, 2, 5, 10, 15, 30)
                             activePicker = PickerState.List(
@@ -1919,7 +1885,6 @@ fun PlaybackSettingsScreen(
                         subtitle = stringResource(Res.string.settings_dvr_recording_quality_subtitle),
                         trailingText = preferences.dvrRecordingQuality,
                         highlighted = highlightSettingId == "dvr_recording_quality",
-                        index = dvrIdx++, count = dvrTotal,
                         onClick = {
                             val options = listOf("AUTO", "HIGH", "MEDIUM", "LOW")
                             activePicker = PickerState.List(
@@ -1932,6 +1897,7 @@ fun PlaybackSettingsScreen(
                             )
                         },
                     )
+                    }
                 }
             }
 

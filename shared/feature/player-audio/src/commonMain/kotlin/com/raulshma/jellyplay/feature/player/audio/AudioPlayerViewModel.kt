@@ -6,6 +6,7 @@ import androidx.compose.runtime.setValue
 import com.raulshma.jellyplay.core.data.playback.AudioEffectsManager
 import com.raulshma.jellyplay.core.data.playback.AudioQueueManager
 import com.raulshma.jellyplay.core.data.playback.AudioSleepTimerManager
+import com.raulshma.jellyplay.core.data.download.TrackDownloadActions
 import com.raulshma.jellyplay.core.data.download.TrackDownloadStatusWindow
 import com.raulshma.jellyplay.core.datastore.audio.AudioStore
 import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
@@ -36,7 +37,11 @@ import kotlinx.coroutines.flow.update
  * ctor dep is split across the two shared playback contracts
  * ([AudioQueueManager], [AudioEffectsManager] — the legacy Hilt single
  * implements both) plus the module-local [AudioPlayerEngine] /
- * [AudioPlayerCast] seams over the Hilt-owned Android impls.
+ * [AudioPlayerCast] seams over the Hilt-owned Android impls. The track
+ * download flip is the shared core:data [TrackDownloadActions] (Koin-bound
+ * in di/PlayerAudioKoinModule.kt) — the former inline construction with its
+ * own DownloadIntake/MediaRepository pair folded away when the resolve→start
+ * leg moved into DownloadIntake.flipTrack.
  */
 class AudioPlayerViewModel(
     private val queueManager: AudioQueueManager,
@@ -50,7 +55,7 @@ class AudioPlayerViewModel(
     private val playlistRepository: com.raulshma.jellyplay.core.data.repository.PlaylistRepository,
     private val userDataMutator: com.raulshma.jellyplay.core.data.repository.UserDataMutator,
     private val downloads: TrackDownloadStatusWindow,
-    private val downloadIntake: com.raulshma.jellyplay.core.data.download.DownloadIntake,
+    private val trackDownloadActions: TrackDownloadActions,
     private val sleepTimerManager: AudioSleepTimerManager,
 ) : JellyPlayViewModel() {
 
@@ -578,20 +583,13 @@ class AudioPlayerViewModel(
     val isDownloadSupported: Boolean get() = downloads.isSupported
 
     // ── Track download flip ────────────────────────────────────────────────
-    // The shared core:data TrackDownloadActions choreography (detail fetch →
-    // intake start) over core:data's own TrackDownloadStatusWindow (the seam
-    // the former feature-local AudioTrackDownloads interface was folded
-    // onto). The REMOVE half stays HERE: a COMPLETED download flips the CTA
-    // to remove only after the screen's confirm dialog — the module must not
-    // swallow that policy.
-
-    private val trackDownloadActions =
-        com.raulshma.jellyplay.core.data.download.TrackDownloadActions(
-            scope = scope,
-            intake = downloadIntake,
-            mediaRepository = mediaRepository,
-            statusWindow = downloads,
-        )
+    // The shared core:data TrackDownloadActions choreography (id → intake
+    // flipTrack → resolve detail → start) arrives via Koin like the other
+    // collaborators — the former hand-rolled inline construction (with its
+    // DownloadIntake + MediaRepository pair) is gone: the resolve→start leg
+    // exists once, in DownloadIntake.flipTrack. The REMOVE half stays HERE:
+    // a COMPLETED download flips the CTA to remove only after the screen's
+    // confirm dialog — the module must not swallow that policy.
 
     fun downloadCurrentTrack() {
         val itemId = currentPlayingItemId ?: return

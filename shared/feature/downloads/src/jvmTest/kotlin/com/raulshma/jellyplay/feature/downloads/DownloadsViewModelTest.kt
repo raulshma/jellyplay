@@ -1,5 +1,8 @@
 package com.raulshma.jellyplay.feature.downloads
 
+import com.raulshma.jellyplay.core.data.download.DownloadQueue
+import com.raulshma.jellyplay.core.data.download.OfflineResync
+import com.raulshma.jellyplay.core.data.repository.DownloadProgress
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
@@ -47,7 +50,7 @@ class DownloadsViewModelTest {
     private lateinit var downloadsFlow: MutableStateFlow<List<DownloadItem>>
 
     /** Backing flow behind getActiveDownloadProgress so tests can push ticks. */
-    private lateinit var progressFlow: MutableStateFlow<Map<String, DownloadRowProgress>>
+    private lateinit var progressFlow: MutableStateFlow<Map<String, DownloadProgress>>
 
     @BeforeTest
     fun setUp() {
@@ -121,7 +124,7 @@ class DownloadsViewModelTest {
         // emission is suppressed downstream of the change filter, and the
         // moving values surface through progressById instead.
         pushItems(listOf(downloading.copy(downloadedBytes = 180)))
-        progressFlow.value = mapOf("d1" to DownloadRowProgress("d1", 180, 40))
+        progressFlow.value = mapOf("d1" to DownloadProgress("d1", 180, 40))
         advanceUntilIdle()
 
         assertEquals(100L, viewModel.uiState.value.downloads.single().downloadedBytes)
@@ -136,7 +139,7 @@ class DownloadsViewModelTest {
         backgroundScope.launch { viewModel.progressById.collect { /* warm */ } }
         backgroundScope.launch { viewModel.totalStorageBytes.collect { /* warm */ } }
         pushItems(listOf(item("d1", downloadedBytes = 200, totalBytes = 200, status = DownloadStatus.DOWNLOADING)))
-        progressFlow.value = mapOf("d1" to DownloadRowProgress("d1", 150, 40))
+        progressFlow.value = mapOf("d1" to DownloadProgress("d1", 150, 40))
         advanceUntilIdle()
 
         // Completion: the row leaves the in-flight projection and the status

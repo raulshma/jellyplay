@@ -11,8 +11,8 @@ import kotlinx.coroutines.flow.Flow
  * The manager's constructor closure is the JVM SyncPlay stack (OkHttp
  * `JellyfinApiClient` + `JellyfinWebSocketClient` + `TimeSyncManager` +
  * `java.util.concurrent` mirrors), so commonMain cannot name the class.
- * QuickDownloadActions template: the interface carries exactly the
- * host-facing surface, the jvmShared actual delegates to the process-wide
+ * Promoted-interface precedent (DownloadIntake/DownloadQueue): the interface
+ * carries exactly the host-facing surface, the jvmShared actual delegates to the process-wide
  * `SyncPlayManager` single (same DI graph — android/desktop behavior
  * unchanged), and the wasmJs actual is an honest "unsupported" session.
  *

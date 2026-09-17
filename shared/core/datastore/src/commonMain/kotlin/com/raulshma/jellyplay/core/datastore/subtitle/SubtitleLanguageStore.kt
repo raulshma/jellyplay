@@ -9,17 +9,12 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import com.raulshma.jellyplay.core.datastore.CachedJsonNullPolicy
 import com.raulshma.jellyplay.core.datastore.ParsedCache
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
+import com.raulshma.jellyplay.core.datastore.sliceStateFlow
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.SubtitleEdgeType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.serialization.Serializable
 
 /**
@@ -62,9 +57,6 @@ class SubtitleLanguageStore constructor(
         val HDR_SUBTITLE_STYLE = stringPreferencesKey("hdr_subtitle_style")
     }
 
-    private val sharedPrefs: Flow<Preferences> = dataStore.data
-        .catch { _ -> androidx.datastore.preferences.core.emptyPreferences() }
-
     /** Memoised decode of the SDR subtitle style blob. */
     private var cachedSubtitleStyle: ParsedCache<SubtitleStyle?> = ParsedCache(null, null)
     /** Memoised decode of the HDR subtitle style blob. */
@@ -77,10 +69,8 @@ class SubtitleLanguageStore constructor(
      * DataStore (not mapped through the whole-`UserPreferences` aggregate), so
      * a write to an unrelated preference does not re-derive these fields.
      */
-    val subtitle: StateFlow<SubtitleSlice> = sharedPrefs
-        .map { read(it) }
-        .distinctUntilChanged()
-        .stateIn(scope, SharingStarted.Eagerly, SubtitleSlice())
+    val subtitle: StateFlow<SubtitleSlice> =
+        dataStore.sliceStateFlow(scope, seed = SubtitleSlice(), read = ::read)
 
     /**
      * Pure read of the subtitle &amp; language fields from a raw [Preferences]

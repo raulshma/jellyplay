@@ -8,9 +8,9 @@ import org.koin.dsl.module
 // SleepTimerManager single there), and the VM's download window —
 // TrackDownloadStatusWindow, which replaced the former feature-local
 // AudioTrackDownloads seam — is core:data's own binding in dataJvmModule
-// (JvmTrackDownloadStatusWindow over the DownloadRepository single). This
-// fragment stays so commonMain's includes(platformPlayerAudioModule()) keeps
-// a jvmShared counterpart to merge with the wasmJs actual's sleep-timer
-// binding.
+// (since the promoted-interface pass, over DownloadRepositoryImpl itself,
+// which implements the window directly). This fragment stays so commonMain's
+// includes(platformPlayerAudioModule()) keeps a jvmShared counterpart to
+// merge with the wasmJs actual's sleep-timer binding.
 internal actual fun platformPlayerAudioModule(): Module = module {
 }

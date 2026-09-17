@@ -1,5 +1,7 @@
 package com.raulshma.jellyplay.feature.downloads
 
+import com.raulshma.jellyplay.core.data.download.DownloadQueue
+import com.raulshma.jellyplay.core.data.download.OfflineResync
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus

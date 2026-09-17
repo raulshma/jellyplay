@@ -3,16 +3,10 @@ package com.raulshma.jellyplay.core.datastore.search
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.raulshma.jellyplay.core.datastore.sliceStateFlow
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
@@ -48,18 +42,13 @@ class SettingsRecentsStore constructor(
     }
     private val listSerializer = ListSerializer(String.serializer())
 
-    private val sharedPrefs: Flow<Preferences> = dataStore.data
-        .catch { _ -> emptyPreferences() }
-
     /**
      * The persisted setting ids, most-recent first (capped at [MAX_RECENTS]).
      * Decoding is lenient: a missing or corrupt blob resolves to an empty list
      * rather than throwing, so a bad value can never break the settings screen.
      */
-    val recents: StateFlow<List<String>> = sharedPrefs
-        .map { prefs -> decode(prefs[Keys.SETTINGS_RECENTS]) }
-        .distinctUntilChanged()
-        .stateIn(scope, SharingStarted.Eagerly, emptyList())
+    val recents: StateFlow<List<String>> =
+        dataStore.sliceStateFlow(scope, seed = emptyList(), read = { decode(it[Keys.SETTINGS_RECENTS]) })
 
     /**
      * Records that the setting with [id] was used: removes any prior occurrence

@@ -105,11 +105,11 @@ val networkWasmModule: Module = module {
     // Seerr / *arr / TMDB (chunk 4): stateless per-call
     // (baseUrl, credentials) clients over the shared app HttpClient — they
     // hold NO session state and take their own `ArrSeerrApiSupport` base.
-    // DELTA vs the JVM graph: networkJvmModule binds each interface through a
-    // DI-level `Resilient*` wrapper (OkHttp-side jvmShared classes); on wasm
-    // the clients fold the identical retry budget in themselves
-    // (`apiResultWithRetry`, max 4 = the wrappers' MAX_RETRIES), so the
-    // interface binds straight to the Ktor client with no wrapper.
+    // The former DELTA vs the JVM graph (DI-level `Resilient*` wrappers)
+    // is gone since the wrapper deletion: both platforms now fold the same
+    // retry budget in-funnel (wasm `apiResultWithRetry`, jvmShared
+    // `HttpExecutor.MAX_RETRIES`, max 4) and bind the interface straight
+    // to the client with no wrapper.
     single {
         KtorWasmSeerrApiClient(
             httpClient = get(),

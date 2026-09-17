@@ -5,20 +5,14 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.raulshma.jellyplay.core.datastore.CachedJsonNullPolicy
 import com.raulshma.jellyplay.core.datastore.ParsedCache
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
+import com.raulshma.jellyplay.core.datastore.sliceStateFlow
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.serialization.Serializable
 
 /**
@@ -51,13 +45,8 @@ class NavigationStore constructor(
     private var cachedHiddenNavItems = ParsedCache<Set<String>>(null, emptySet())
     private var cachedNavItemOrder = ParsedCache<List<String>>(null, emptyList())
 
-    private val sharedPrefs: Flow<Preferences> = dataStore.data
-        .catch { _ -> emptyPreferences() }
-
-    val navigation: StateFlow<NavigationSlice> = sharedPrefs
-        .map { read(it) }
-        .distinctUntilChanged()
-        .stateIn(scope, SharingStarted.Eagerly, NavigationSlice())
+    val navigation: StateFlow<NavigationSlice> =
+        dataStore.sliceStateFlow(scope, seed = NavigationSlice(), read = ::read)
 
     internal fun read(prefs: Preferences): NavigationSlice = NavigationSlice(
         navBarShowLabels = PreferenceCodec.readBool(prefs, Keys.NAV_BAR_SHOW_LABELS, "nav_bar_show_labels", true),

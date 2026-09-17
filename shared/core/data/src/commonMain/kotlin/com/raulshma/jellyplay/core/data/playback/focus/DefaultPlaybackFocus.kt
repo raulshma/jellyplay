@@ -12,12 +12,11 @@ import kotlinx.coroutines.flow.asStateFlow
  * main-confined by its own contract.
  *
  * The OS seat is taken only for claims whose OS leg belongs to this module
- * ([osLegClaimants]): slice 1 that is READ_ALOUD only — music's OS focus
- * stays on ExoPlayer's built-in handling until the migration slice, so
- * `acquire(MUSIC)` publishes state without touching the arbiter. Seat
- * requests carry the claimant's [PlaybackFocusMatrix.attributesOf] audio
- * attributes (slice-2 checklist: the port takes them per claimant, so the
- * migration slice changes no plumbing when music moves onto this seat).
+ * ([osLegClaimants]): since the migration slice that is READ_ALOUD and MUSIC
+ * — music's seat request carries the [PlaybackFocusMatrix.attributesOf]
+ * MUSIC row (the per-claimant-attributes port landed first precisely so this
+ * slice changes no plumbing). VIDEO still sits outside (its OS focus lives in
+ * PlayerAudioLifecycle; `acquire(VIDEO)` is denied by the closed world).
  */
 class DefaultPlaybackFocus(
     private val arbiter: FocusArbiter,
@@ -77,20 +76,40 @@ class DefaultPlaybackFocus(
         if (holder !in osLegClaimants) return
         when (event) {
             FocusEvent.Regained -> Unit // resume is manual — a regain never restarts audio
-            FocusEvent.LostTransient ->
-                _claimState.value = FocusClaimState.Suspended(holder, FocusLossReason.Transient)
-            FocusEvent.LostPermanent ->
-                _claimState.value = FocusClaimState.Suspended(holder, FocusLossReason.Permanent)
+            FocusEvent.LostTransient -> suspendHolder(holder, FocusLossReason.Transient)
+            FocusEvent.LostPermanent -> suspendHolder(holder, FocusLossReason.Permanent)
         }
+    }
+
+    /**
+     * The suspension-enforcement leg (migration slice). An OS loss on the
+     * holder must actually stop the audio: displaced claimants pause
+     * themselves by observing [claimState], but the HOLDER has no such
+     * observer — MUSIC's engine would keep producing audio unfocused. So the
+     * holder's commandable surface is paused here, synchronously after the
+     * state publish (the same command path a victim pause rides; for
+     * READ_ALOUD there is deliberately no surface — its reader observes
+     * [FocusClaimState.Suspended] and pauses its own loop). The command is
+     * the manual-resume guarantee made real: the surface's `pause()` drops
+     * playWhenReady, and since [FocusEvent.Regained] is ignored and the seat
+     * dies with the release edge, nothing resurrects the surface — the
+     * user's resume re-acquires ([acquire] from Suspended or the Idle the
+     * release edge lands on).
+     */
+    private fun suspendHolder(holder: PlaybackSurfaceId, reason: FocusLossReason) {
+        _claimState.value = FocusClaimState.Suspended(holder, reason)
+        commandable[holder]?.pause()
     }
 
     private companion object {
         /**
-         * Claims whose OS audio-focus seat THIS module owns. Slice 1: the
-         * read-aloud request only; music still rides ExoPlayer's built-in
-         * focus (the migration slice flips `handleAudioFocus` off and adds
-         * MUSIC here — a one-line change, which is the point).
+         * Claims whose OS audio-focus seat THIS module owns. READ_ALOUD since
+         * slice 1; MUSIC since the migration slice (ExoPlayer's built-in
+         * handling is off — BOTH Android music players, primary and crossfade
+         * secondary, ship `setAudioAttributes(..., false)`, or a second
+         * request would fight this seat).
          */
-        val osLegClaimants: Set<PlaybackSurfaceId> = setOf(PlaybackSurfaceId.READ_ALOUD)
+        val osLegClaimants: Set<PlaybackSurfaceId> =
+            setOf(PlaybackSurfaceId.READ_ALOUD, PlaybackSurfaceId.MUSIC)
     }
 }

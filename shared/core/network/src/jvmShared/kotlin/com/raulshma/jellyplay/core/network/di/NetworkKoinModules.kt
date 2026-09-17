@@ -25,7 +25,6 @@ import com.raulshma.jellyplay.core.network.api.PlaybackApiClient
 import com.raulshma.jellyplay.core.network.api.PlaybackApiClientImpl
 import com.raulshma.jellyplay.core.network.api.PluginApiClient
 import com.raulshma.jellyplay.core.network.api.PluginApiClientImpl
-import com.raulshma.jellyplay.core.network.api.ResilientTmdbApiClient
 import com.raulshma.jellyplay.core.network.api.SyncPlayApiClient
 import com.raulshma.jellyplay.core.network.api.SyncPlayApiClientImpl
 import com.raulshma.jellyplay.core.network.api.TmdbApiClient
@@ -34,8 +33,6 @@ import com.raulshma.jellyplay.core.network.api.UserApiClient
 import com.raulshma.jellyplay.core.network.api.UserApiClientImpl
 import com.raulshma.jellyplay.core.network.arr.RadarrApiClient
 import com.raulshma.jellyplay.core.network.arr.RadarrApiClientImpl
-import com.raulshma.jellyplay.core.network.arr.ResilientRadarrApiClient
-import com.raulshma.jellyplay.core.network.arr.ResilientSonarrApiClient
 import com.raulshma.jellyplay.core.network.arr.SonarrApiClient
 import com.raulshma.jellyplay.core.network.arr.SonarrApiClientImpl
 import com.raulshma.jellyplay.core.network.config.OkHttpConfigProvider
@@ -49,11 +46,9 @@ import com.raulshma.jellyplay.core.network.interceptor.BandwidthInterceptor
 import com.raulshma.jellyplay.core.network.realtime.ActivityLogRealtimeChannel
 import com.raulshma.jellyplay.core.network.realtime.ScheduledTasksRealtimeChannel
 import com.raulshma.jellyplay.core.network.realtime.UserDataRealtimeChannel
-import com.raulshma.jellyplay.core.network.seerr.ResilientSeerrApiClient
 import com.raulshma.jellyplay.core.network.seerr.SeerrApiClient
 import com.raulshma.jellyplay.core.network.seerr.SeerrApiClientImpl
 import com.raulshma.jellyplay.core.network.subtitle.OpenSubtitlesSubtitleProvider
-import com.raulshma.jellyplay.core.network.subtitle.ResilientSubtitleProvider
 import com.raulshma.jellyplay.core.network.subtitle.SubtitleProvider
 import com.raulshma.jellyplay.core.network.subtitle.WyzieSubtitleProvider
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind
@@ -135,17 +130,13 @@ val networkJvmModule: Module = module {
     single<PluginApiClient> { get<PluginApiClientImpl>() }
 
     single { SeerrApiClientImpl(get()) }
-    single { ResilientSeerrApiClient(get()) }
-    single<SeerrApiClient> { get<ResilientSeerrApiClient>() }
+    single<SeerrApiClient> { get<SeerrApiClientImpl>() }
     single { TmdbApiClientImpl(get()) }
-    single { ResilientTmdbApiClient(get()) }
-    single<TmdbApiClient> { get<ResilientTmdbApiClient>() }
+    single<TmdbApiClient> { get<TmdbApiClientImpl>() }
     single { RadarrApiClientImpl(get()) }
-    single { ResilientRadarrApiClient(get()) }
-    single<RadarrApiClient> { get<ResilientRadarrApiClient>() }
+    single<RadarrApiClient> { get<RadarrApiClientImpl>() }
     single { SonarrApiClientImpl(get()) }
-    single { ResilientSonarrApiClient(get()) }
-    single<SonarrApiClient> { get<ResilientSonarrApiClient>() }
+    single<SonarrApiClient> { get<SonarrApiClientImpl>() }
 
     single {
         GitHubReleasesApiImpl(
@@ -161,18 +152,16 @@ val networkJvmModule: Module = module {
     single { ServerDiscoveryService(get(), get()) }
 
     // ── Subtitle provider fan-out (C4 part 2: the @IntoMap Hilt
-    // multibinding flipped to Koin). Each raw impl is wrapped in a
-    // ResilientSubtitleProvider so RetryPolicy applies to every call —
-    // byte-for-byte the map the legacy SubtitleProviderModule built. Adding
-    // a new provider = a new enum value, one impl, and one entry here.
+    // multibinding flipped to Koin). The raw impls bind straight into the
+    // map — retry rides SubtitleHttp's execute funnel since the
+    // ResilientSubtitleProvider wrapper was folded away. Adding a new
+    // provider = a new enum value, one impl, and one entry here.
     single { WyzieSubtitleProvider(get()) }
     single { OpenSubtitlesSubtitleProvider(get(), get()) }
     single<Map<SubtitleProviderKind, SubtitleProvider>> {
         mapOf(
-            SubtitleProviderKind.WYZIE to
-                ResilientSubtitleProvider(get<WyzieSubtitleProvider>()),
-            SubtitleProviderKind.OPENSUBTITLES to
-                ResilientSubtitleProvider(get<OpenSubtitlesSubtitleProvider>()),
+            SubtitleProviderKind.WYZIE to get<WyzieSubtitleProvider>(),
+            SubtitleProviderKind.OPENSUBTITLES to get<OpenSubtitlesSubtitleProvider>(),
         )
     }
 

@@ -15,13 +15,14 @@ package com.raulshma.jellyplay.core.data.download
  * download engine), which is exactly why this interface exists. Moved from
  * feature:home (where it shipped beside the now-deleted HomeDownloadActions
  * twin that DID fold onto [QuickDownloadActions]) so the wall-crossing seam
- * is declared, implemented and bound by core:data on both platforms.
+ * is declared, implemented and bound by core:data on both platforms. Since
+ * the promoted-interface pass the JVM actual is the repository itself —
+ * jvmShared `DownloadRepositoryImpl` implements this interface directly and
+ * dataJvmModule binds it over the repository single.
  *
- * The JVM actual — [JvmSeriesEpisodeDownloads] in jvmShared, bound in
- * DataKoinModule — maps the repository read verbatim (android/desktop
- * behavior unchanged). The wasmJs actual — [WasmSeriesEpisodeDownloads] in
- * wasmJsMain, bound in dataWasmModule — is an honest empty read: nothing was
- * ever downloaded in this browser, so it never fabricates episode ids.
+ * The wasmJs actual — [WasmSeriesEpisodeDownloads] in wasmJsMain, bound in
+ * dataWasmModule — is an honest empty read: nothing was ever downloaded in
+ * this browser, so it never fabricates episode ids.
  */
 interface SeriesEpisodeDownloads {
 

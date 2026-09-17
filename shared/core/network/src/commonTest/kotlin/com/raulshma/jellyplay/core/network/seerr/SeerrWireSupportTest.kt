@@ -57,7 +57,7 @@ class SeerrWireSupportTest {
 
     @Test
     fun `seerr error message with an empty body degrades to the trailing colon`() {
-        // parseJsonRequest feeds body.orEmpty() on the error path; "" fails
+        // the JVM parse funnel feeds body.orEmpty() on the error path; "" fails
         // JSON parsing, so the JVM text is "HTTP $code: " with nothing after.
         assertEquals("HTTP 403: ", seerrHttpErrorMessage(403, ""))
     }

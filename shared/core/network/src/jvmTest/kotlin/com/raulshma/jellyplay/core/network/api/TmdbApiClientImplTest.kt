@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.network.api
 
 import com.raulshma.jellyplay.core.model.MediaType
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -125,8 +126,12 @@ class TmdbApiClientImplTest {
     }
 
     @Test
-    fun `an HTTP 503 maps to a retryable typed failure`() = runBlocking {
-        server.enqueue(MockResponse().setResponseCode(503).setBody("{}"))
+    fun `an HTTP 503 maps to a retryable typed failure`() = runTest {
+        // The 503 is retryable, so the funnel burns its full retry budget
+        // before surfacing the typed failure (delays run on virtual time).
+        repeat(HttpExecutor.MAX_RETRIES + 1) {
+            server.enqueue(MockResponse().setResponseCode(503).setBody("{}"))
+        }
 
         val result = client.getReviews(tmdbId = 1, mediaType = MediaType.MOVIE)
 
@@ -134,6 +139,7 @@ class TmdbApiClientImplTest {
         assertTrue(error != null)
         assertEquals(503, error!!.httpCode)
         assertTrue(error.isRetryable)
+        assertEquals(HttpExecutor.MAX_RETRIES + 1, server.requestCount)
     }
 
     @Test
@@ -146,5 +152,61 @@ class TmdbApiClientImplTest {
         assertTrue(error != null)
         assertTrue(error!!.message.orEmpty().startsWith("TMDB parse error"))
         assertFalse(error.isRetryable)
+    }
+
+    // ----- retry funnel (the ResilientTmdbApiClient replacement) -----
+
+    @Test
+    fun `retries a retryable 503 and the first success wins`() = runTest {
+        server.enqueue(MockResponse().setResponseCode(503).setBody("{}"))
+        server.enqueue(
+            MockResponse().setResponseCode(200).setBody("""{"results":[{"key":"k","site":"YouTube"}]}"""),
+        )
+
+        val result = client.getVideos(tmdbId = 1, mediaType = MediaType.MOVIE)
+
+        assertTrue(result.isSuccess)
+        assertEquals(1, result.getOrThrow().size)
+        assertEquals(2, server.requestCount)
+    }
+
+    @Test
+    fun `gives up after MAX_RETRIES extra attempts on persistent 500s`() = runTest {
+        repeat(HttpExecutor.MAX_RETRIES + 1) {
+            server.enqueue(MockResponse().setResponseCode(500).setBody("{}"))
+        }
+
+        val result = client.getReviews(tmdbId = 1, mediaType = MediaType.MOVIE)
+
+        assertTrue(result.isFailure)
+        assertEquals(HttpExecutor.MAX_RETRIES + 1, server.requestCount)
+    }
+
+    @Test
+    fun `does not retry a non-retryable 404`() = runTest {
+        server.enqueue(MockResponse().setResponseCode(404).setBody("{}"))
+
+        client.getVideos(tmdbId = 1, mediaType = MediaType.MOVIE)
+
+        assertEquals(1, server.requestCount, "404 must fail fast")
+    }
+
+    @Test
+    fun `the HTTP failure carries a parsed Retry-After when the server advises one`() = runTest {
+        // Declared chassis delta: TMDB now captures Retry-After so the retry
+        // policy can floor its backoff at the server's advice. The 429 is
+        // retryable, so the budget burns out before the failure surfaces.
+        repeat(HttpExecutor.MAX_RETRIES + 1) {
+            server.enqueue(
+                MockResponse().setResponseCode(429).setHeader("Retry-After", "30").setBody("{}"),
+            )
+        }
+
+        val error = client.getVideos(tmdbId = 1, mediaType = MediaType.MOVIE)
+            .exceptionOrNull() as? ApiException
+
+        assertTrue(error != null)
+        assertEquals(429, error!!.httpCode)
+        assertEquals(30_000L, error.retryAfterMs)
     }
 }

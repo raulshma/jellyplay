@@ -3,16 +3,10 @@ package com.raulshma.jellyplay.core.datastore.search
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.raulshma.jellyplay.core.datastore.sliceStateFlow
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
 
 /**
  * Persists the search feature's active filter set (media types, genres, years,
@@ -39,19 +33,14 @@ class SearchFiltersStore constructor(
         val SEARCH_FILTERS = stringPreferencesKey("search_filters")
     }
 
-    private val sharedPrefs: Flow<Preferences> = dataStore.data
-        .catch { _ -> emptyPreferences() }
-
     /**
      * The persisted filter blob as a raw JSON string, or `null` when no filters
      * have ever been saved. Decoded by the caller (the search ViewModel) with its
      * own lenient kotlinx.serialization codec so forward-compatible field
      * additions don't break older snapshots.
      */
-    val searchFiltersJson: StateFlow<String?> = sharedPrefs
-        .map { it[Keys.SEARCH_FILTERS] }
-        .distinctUntilChanged()
-        .stateIn(scope, SharingStarted.Eagerly, null)
+    val searchFiltersJson: StateFlow<String?> =
+        dataStore.sliceStateFlow(scope, seed = null, read = { it[Keys.SEARCH_FILTERS] })
 
     /**
      * Persists the [filtersJson] snapshot (the caller-encoded JSON of the search

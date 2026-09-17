@@ -3,21 +3,26 @@ package com.raulshma.jellyplay.feature.player.video
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayPlaybackCore
 import com.raulshma.jellyplay.core.model.SyncPlayGroup
+import com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import io.mockk.verifyOrder
 import io.mockk.coVerify
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 
@@ -44,6 +49,12 @@ class SyncPlayBridgeTest {
         syncPlayManager = mockk(relaxed = true)
         every { syncPlayManager.playbackCore } returns playbackCore
         every { syncPlayManager.isInSyncPlaySession } returns false
+        // start() launches the event listener on the Unconfined scope; a
+        // RELAXED mock for `events` makes that collector throw
+        // KotlinNothingValueException inside the launched coroutine, which
+        // surfaces as UncaughtExceptionsBeforeTest in a LATER test class.
+        // A real never-emitting flow parks the collector until teardown cancels it.
+        every { syncPlayManager.events } returns MutableSharedFlow()
         engine = mockk(relaxed = true)
         every { engine.isPlaying } returns MutableStateFlow(false)
         every { engine.currentPositionMs } returns 0L
@@ -57,6 +68,16 @@ class SyncPlayBridgeTest {
             setIsPlaying = { isPlayingWrites += it },
             scope = scope,
         )
+    }
+
+    /**
+     * start()/reattachSession() spawn the event-listener collector on the
+     * class-level Unconfined scope; without this teardown a leaked collector
+     * can throw into the NEXT test class in the same JVM (UncaughtExceptionsBeforeTest).
+     */
+    @AfterTest
+    fun tearDown() {
+        scope.cancel()
     }
 
     // ─── PlaybackCoreCallbacks ────────────────────────────────────────────────
@@ -218,6 +239,60 @@ class SyncPlayBridgeTest {
         assertFalse(bridge.state.value.isSyncPlaySyncing)
     }
 
+    // ─── start / reattachSession: shared attach core ──────────────────────────
+
+    /**
+     * Pins the folded attach core: defensive clear → setCallbacks → group
+     * display population → core playlist id, in that order (the former
+     * byte-identical start()/reattachSession() bodies).
+     */
+    @Test
+    fun start_clearsThenSetsCallbacksAndPopulatesLiveGroup() {
+        every { syncPlayManager.isInSyncPlaySession } returns true
+        every { syncPlayManager.currentGroup } returns SyncPlayGroup(
+            groupId = "g",
+            groupName = "grp",
+            participantCount = 2,
+            isPlaying = false,
+        )
+        bridge.start()
+        verifyOrder {
+            playbackCore.clearCallbacks()
+            playbackCore.setCallbacks(bridge)
+            playbackCore.setCurrentPlaylistItemId(null)
+        }
+        assertEquals("grp", bridge.state.value.syncPlayGroupName)
+        assertEquals(2, bridge.state.value.syncPlayParticipantCount)
+    }
+
+    @Test
+    fun reattachSession_whenInSession_reRegistersAndPopulates() {
+        every { syncPlayManager.isInSyncPlaySession } returns true
+        every { syncPlayManager.currentGroup } returns SyncPlayGroup(
+            groupId = "g",
+            groupName = "grp",
+            participantCount = 3,
+            isPlaying = true,
+            playingPlaylistItemId = "pl-1",
+        )
+        bridge.reattachSession()
+        verifyOrder {
+            playbackCore.clearCallbacks()
+            playbackCore.setCallbacks(bridge)
+            playbackCore.setCurrentPlaylistItemId("pl-1")
+        }
+        assertEquals("grp", bridge.state.value.syncPlayGroupName)
+        assertEquals(3, bridge.state.value.syncPlayParticipantCount)
+    }
+
+    @Test
+    fun reattachSession_whenNotInSession_isNoOp() {
+        every { syncPlayManager.isInSyncPlaySession } returns false
+        bridge.reattachSession()
+        verify(exactly = 0) { playbackCore.clearCallbacks() }
+        verify(exactly = 0) { playbackCore.setCallbacks(any()) }
+    }
+
     // ─── setIgnoreWait ────────────────────────────────────────────────────────
 
     @Test
@@ -324,7 +399,7 @@ class SyncPlayBridgeTest {
     @Test
     fun onPlaybackStateChanged_whenNotInSession_isNoOp() {
         every { syncPlayManager.isInSyncPlaySession } returns false
-        bridge.onPlaybackStateChanged(3)
+        bridge.onPlaybackStateChanged(EnginePlaybackState.READY)
         verify(exactly = 0) { playbackCore.onPlaybackStateChanged(any()) }
     }
 
@@ -332,14 +407,48 @@ class SyncPlayBridgeTest {
     fun onPlaybackStateChanged_whenNoEngine_isNoOp() {
         every { syncPlayManager.isInSyncPlaySession } returns true
         engineProvider = { null }
-        bridge.onPlaybackStateChanged(3)
+        bridge.onPlaybackStateChanged(EnginePlaybackState.READY)
         verify(exactly = 0) { playbackCore.onPlaybackStateChanged(any()) }
     }
 
     @Test
     fun onPlaybackStateChanged_whenInSessionWithEngine_delegatesToCore() {
         every { syncPlayManager.isInSyncPlaySession } returns true
-        bridge.onPlaybackStateChanged(3)
+        bridge.onPlaybackStateChanged(EnginePlaybackState.READY)
         verify { playbackCore.onPlaybackStateChanged(3) }
+    }
+
+    /**
+     * Pin of the engine→core fold's non-obvious arms: ENDED encodes to the
+     * core's `4` (an arm the core's `when` deliberately ignores) and ERROR to
+     * `1` (the core's stopped/idle no-op arm) — both previously encoded
+     * inline in the ViewModel.
+     */
+    @Test
+    fun onPlaybackStateChanged_ended_foldsToCoreEndedCode() {
+        every { syncPlayManager.isInSyncPlaySession } returns true
+        bridge.onPlaybackStateChanged(EnginePlaybackState.ENDED)
+        verify { playbackCore.onPlaybackStateChanged(4) }
+    }
+
+    @Test
+    fun onPlaybackStateChanged_error_foldsToCoreStoppedCode() {
+        every { syncPlayManager.isInSyncPlaySession } returns true
+        bridge.onPlaybackStateChanged(EnginePlaybackState.ERROR)
+        verify { playbackCore.onPlaybackStateChanged(1) }
+    }
+
+    @Test
+    fun onPlaybackStateChanged_buffering_foldsToCoreBufferingCode() {
+        every { syncPlayManager.isInSyncPlaySession } returns true
+        bridge.onPlaybackStateChanged(EnginePlaybackState.BUFFERING)
+        verify { playbackCore.onPlaybackStateChanged(2) }
+    }
+
+    @Test
+    fun onPlaybackStateChanged_idle_foldsToCoreIdleCode() {
+        every { syncPlayManager.isInSyncPlaySession } returns true
+        bridge.onPlaybackStateChanged(EnginePlaybackState.IDLE)
+        verify { playbackCore.onPlaybackStateChanged(1) }
     }
 }

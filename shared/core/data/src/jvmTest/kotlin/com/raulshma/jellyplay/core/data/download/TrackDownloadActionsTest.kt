@@ -1,14 +1,11 @@
 package com.raulshma.jellyplay.core.data.download
 
 import com.raulshma.jellyplay.core.data.util.DownloadResult
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
-import io.mockk.coEvery
-import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -28,9 +25,12 @@ import kotlin.test.assertTrue
  * (formerly hand-copied in AudioPlayerViewModel.downloadCurrentTrack and
  * AlbumDetailViewModel.downloadTrack/downloadAlbum):
  *
- *  - the START half: detail fetch → intake start, in that order, with the
- *    failure envelope the hosts rely on (a failed fetch or failed start is
- *    swallowed — a track row has no error surface) EXCEPT cancellation,
+ *  - the START half is a pure DELEGATION to [DownloadIntake.flipTrack] — the
+ *    intake owns the whole resolve→start leg (the detail fetch this suite
+ *    used to pin against a MediaRepository moved there with the fold, and is
+ *    pinned ONCE against the real intake in DesktopDownloadIntakeTest);
+ *  - the failure envelope the hosts rely on (an intake that skips or throws
+ *    is swallowed — a track row has no error surface) EXCEPT cancellation,
  *    which rethrows ([runCatchingRethrowingCancellation] — the copied
  *    `catch (_: Exception)` bodies masked scope teardown; this is the
  *    deliberate improvement);
@@ -41,8 +41,6 @@ import kotlin.test.assertTrue
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class TrackDownloadActionsTest {
-
-    private val mediaRepository: MediaRepository = mockk()
 
     /** Recording window — a StateFlow stands in for the repository's Room flow. */
     private class RecordingStatusWindow : TrackDownloadStatusWindow {
@@ -59,25 +57,27 @@ class TrackDownloadActionsTest {
         }
     }
 
-    /** Recording intake with an optional per-start interference hook. */
+    /** Recording intake with a configurable flip result + interference hook. */
     private class RecordingIntake : DownloadIntake {
-        val startedIds = mutableListOf<String>()
-        var onStart: (suspend (MediaDetail) -> Unit)? = null
+        val flippedIds = mutableListOf<String>()
+        var flipResult: TrackFlipResult = TrackFlipResult.Started
+        var onFlip: (suspend (String) -> Unit)? = null
         override suspend fun start(
             detail: MediaDetail,
             maxBitrate: Int?,
             selectedSubtitleIndices: Set<Int>?,
-        ): DownloadResult {
-            startedIds += detail.item.id
-            onStart?.invoke(detail)
-            return DownloadResult(downloadItem = null, error = null)
-        }
+        ): DownloadResult = DownloadResult(downloadItem = null, error = null)
         override suspend fun startSeries(
             seriesId: String,
             episodeIds: Map<String, List<String>>?,
         ): Result<List<String>> = Result.success(emptyList())
         override suspend fun startFromItem(item: MediaItem): DownloadRequestResult =
             DownloadRequestResult.Started
+        override suspend fun flipTrack(itemId: String): TrackFlipResult {
+            flippedIds += itemId
+            onFlip?.invoke(itemId)
+            return flipResult
+        }
     }
 
     private val window = RecordingStatusWindow()
@@ -86,13 +86,10 @@ class TrackDownloadActionsTest {
     private fun CoroutineScope.actions() = TrackDownloadActions(
         scope = this,
         intake = intake,
-        mediaRepository = mediaRepository,
         statusWindow = window,
     )
 
     private fun item(id: String) = MediaItem(id = id, name = "Track $id", mediaType = MediaType.AUDIO)
-
-    private fun detail(id: String) = MediaDetail(item = item(id))
 
     private fun row(downloadId: String, mediaItemId: String, status: DownloadStatus) = DownloadItem(
         id = downloadId,
@@ -106,48 +103,46 @@ class TrackDownloadActionsTest {
         status = status,
     )
 
-    // ── flip: the START half ─────────────────────────────────────────────────
+    // ── flip: pure delegation to the intake ──────────────────────────────────
 
     @Test
-    fun `flip fetches the detail then starts the intake with it`() = runTest {
-        coEvery { mediaRepository.getMediaDetail("track-1") } returns Result.success(detail("track-1"))
-
+    fun `flip delegates the id to the intake's flipTrack`() = runTest {
         actions().flip("track-1")
         advanceUntilIdle()
 
-        assertEquals(listOf("track-1"), intake.startedIds)
+        assertEquals(listOf("track-1"), intake.flippedIds)
         assertTrue(window.removedIds.isEmpty())
     }
 
     @Test
-    fun `flip with an unresolvable detail starts nothing`() = runTest {
-        coEvery { mediaRepository.getMediaDetail("track-1") } returns Result.failure(RuntimeException("offline"))
+    fun `flip with a skipped intake keeps the scope healthy`() = runTest {
+        // The intake folds an unresolvable detail into Skipped; the actions
+        // layer must not retry, remove, or crash on it.
+        intake.flipResult = TrackFlipResult.Skipped
 
         actions().flip("track-1")
         advanceUntilIdle()
 
-        assertTrue(intake.startedIds.isEmpty())
+        assertEquals(listOf("track-1"), intake.flippedIds)
         assertTrue(window.removedIds.isEmpty())
     }
 
     @Test
     fun `flip swallows an intake failure instead of crashing the scope`() = runTest {
-        coEvery { mediaRepository.getMediaDetail("track-1") } returns Result.success(detail("track-1"))
-        intake.onStart = { throw RuntimeException("disk full") }
+        intake.onFlip = { throw RuntimeException("disk full") }
 
         // If the failure escaped, the TestScope child fails and runTest
         // reports it — the hosts' silent-flip contract.
         actions().flip("track-1")
         advanceUntilIdle()
 
-        assertEquals(listOf("track-1"), intake.startedIds, "the start was attempted, its failure swallowed")
+        assertEquals(listOf("track-1"), intake.flippedIds, "the flip was attempted, its failure swallowed")
     }
 
     @Test
-    fun `flip cancellation during the intake start propagates instead of being masked`() = runTest {
+    fun `flip cancellation during the intake flip propagates instead of being masked`() = runTest {
         val gate = CompletableDeferred<Unit>()
-        coEvery { mediaRepository.getMediaDetail("track-1") } returns Result.success(detail("track-1"))
-        intake.onStart = { gate.await() }
+        intake.onFlip = { gate.await() }
 
         val job: Job = actions().flip("track-1")
         advanceUntilIdle()
@@ -173,7 +168,6 @@ class TrackDownloadActionsTest {
             row("d-6", "t-failed", DownloadStatus.FAILED),
             row("d-7", "t-cancelled", DownloadStatus.CANCELLED),
         )
-        coEvery { mediaRepository.getMediaDetail(any()) } answers { Result.success(detail(firstArg())) }
 
         val items = listOf("t-pending", "t-queued", "t-downloading", "t-paused", "t-completed", "t-failed", "t-cancelled", "t-missing")
             .map(::item)
@@ -182,8 +176,8 @@ class TrackDownloadActionsTest {
 
         assertEquals(
             listOf("t-failed", "t-cancelled", "t-missing").sorted(),
-            intake.startedIds.sorted(),
-            "only no-row, FAILED and CANCELLED items start",
+            intake.flippedIds.sorted(),
+            "only no-row, FAILED and CANCELLED items flip",
         )
     }
 
@@ -191,8 +185,7 @@ class TrackDownloadActionsTest {
     fun `bulk respects the concurrency bound`() = runTest {
         val inFlight = AtomicInteger(0)
         val maxInFlight = AtomicInteger(0)
-        coEvery { mediaRepository.getMediaDetail(any()) } answers { Result.success(detail(firstArg())) }
-        intake.onStart = {
+        intake.onFlip = {
             val now = inFlight.incrementAndGet()
             maxInFlight.updateAndGet { current -> maxOf(current, now) }
             delay(1_000)
@@ -202,7 +195,7 @@ class TrackDownloadActionsTest {
         actions().bulk((1..9).map { item("t$it") })
         advanceUntilIdle()
 
-        assertEquals(9, intake.startedIds.size, "every admitted item started")
+        assertEquals(9, intake.flippedIds.size, "every admitted item flipped")
         assertEquals(3, maxInFlight.get(), "at most 3 transfers in flight (the default admission concurrency)")
     }
 
@@ -212,7 +205,6 @@ class TrackDownloadActionsTest {
             row("d-5", "t-completed", DownloadStatus.COMPLETED),
             row("d-6", "t-failed", DownloadStatus.FAILED),
         )
-        coEvery { mediaRepository.getMediaDetail(any()) } answers { Result.success(detail(firstArg())) }
 
         actions().bulk(listOf(item("t-completed"), item("t-failed"), item("t-missing")))
         advanceUntilIdle()
@@ -226,6 +218,6 @@ class TrackDownloadActionsTest {
         advanceUntilIdle()
 
         assertEquals(0, window.windowReads)
-        assertTrue(intake.startedIds.isEmpty())
+        assertTrue(intake.flippedIds.isEmpty())
     }
 }

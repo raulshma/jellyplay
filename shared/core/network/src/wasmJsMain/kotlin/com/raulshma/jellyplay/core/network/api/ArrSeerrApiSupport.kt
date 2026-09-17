@@ -25,8 +25,9 @@ import kotlinx.serialization.json.Json
 /**
  * Request plumbing base for the wasm Seerr / Radarr / Sonarr / TMDB
  * clients — the wasm counterpart of the jvmShared OkHttp
- * `JsonRequestClient`/`parseJsonRequest`/`parseUnitRequest` plumbing
- * (`ApiResponseParsing.kt`), re-shaped for these seams' stateless per-call
+ * `HttpExecutor` plumbing (the funnel that absorbed the former
+ * `JsonRequestClient`/`parseJsonRequest`/`parseUnitRequest` ladder),
+ * re-shaped for these seams' stateless per-call
  * `(baseUrl, credentials)` contract. Deliberately a SIBLING of
  * [WasmApiSupport], not an extension: that base derives URL + token from the
  * shared Jellyfin [com.raulshma.jellyplay.core.network.auth.AtomicSessionState],
@@ -78,10 +79,10 @@ import kotlinx.serialization.json.Json
  *    dependent — OkHttp wrote a bare `application/json`; servers treat all
  *    the forms identically).
  *  - Retry is folded into the clients ([apiResultWithRetry], default
- *    maxRetries = 4 = the Resilient* wrappers' `MAX_RETRIES`), replacing the
- *    DI-level `Resilient*` wrappers the JVM graph binds the interfaces to
- *    (those are OkHttp-side jvmShared classes; on wasm the interface binding
- *    is the Ktor client itself).
+ *    maxRetries = 4 = jvmShared `HttpExecutor.MAX_RETRIES`) — both platforms
+ *    apply retry inside the family's request funnel since the former DI-level
+ *    `Resilient*` wrappers were deleted (on wasm the interface binding is the
+ *    Ktor client itself).
  *
  * Timeouts are the [com.raulshma.jellyplay.core.network.createWasmHttpClient]
  * best-effort windows (the fetch engine's HttpTimeout support is limited —
@@ -243,7 +244,7 @@ open class ArrSeerrApiSupport(
     }
 
     /**
-     * CancellationException propagates (JVM Resilient-wrapper/OkHttp parity
+     * CancellationException propagates (JVM HttpExecutor/OkHttp parity
      * — the JVM seams these clients replace rethrow CE, unlike the Jellyfin
      * engine's recoverCatching wrapper whose failure-value parity note does
      * NOT apply here); transport failures map to [ApiException].
@@ -258,14 +259,14 @@ open class ArrSeerrApiSupport(
         }
     }
 
-    /** [apiResult] under [RetryPolicy] — the wasm stand-in for the DI-level Resilient* wrappers. */
+    /** [apiResult] under [RetryPolicy] — the wasm twin of the JVM in-funnel retry (`HttpExecutor`). */
     protected suspend fun <T> apiResultWithRetry(
         maxRetries: Int = RESILIENT_MAX_RETRIES,
         block: suspend () -> T,
     ): Result<T> = RetryPolicy.executeWithRetry(maxRetries = maxRetries) { apiResult(block) }
 
     companion object {
-        /** The Resilient* wrappers' `MAX_RETRIES` on jvmShared (Seerr, Radarr, Sonarr, TMDB all use 4). */
+        /** The shared retry count (jvmShared `HttpExecutor.MAX_RETRIES`; Seerr, Radarr, Sonarr, TMDB, Subtitle all use 4). */
         protected const val RESILIENT_MAX_RETRIES = 4
 
         /** The `"{}"` POST body the JVM impls send for body-less mutations. */

@@ -1,6 +1,9 @@
 package com.raulshma.jellyplay.feature.downloads
 
 import androidx.compose.runtime.Immutable
+import com.raulshma.jellyplay.core.data.download.DownloadQueue
+import com.raulshma.jellyplay.core.data.download.OfflineResync
+import com.raulshma.jellyplay.core.data.repository.DownloadProgress
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
@@ -121,10 +124,10 @@ class DownloadsViewModel(
      * forgets a row once its structural status moves on (or it leaves the
      * list).
      */
-    val progressById: StateFlow<Map<String, DownloadRowProgress>> =
+    val progressById: StateFlow<Map<String, DownloadProgress>> =
         queue.activeDownloadProgress()
             .combine(structuralItems) { live, items -> live to items }
-            .scan(emptyMap<String, DownloadRowProgress>()) { retained, (live, structural) ->
+            .scan(emptyMap<String, DownloadProgress>()) { retained, (live, structural) ->
                 val stillDownloading = structural
                     .asSequence()
                     .filter { it.status == DownloadStatus.DOWNLOADING }

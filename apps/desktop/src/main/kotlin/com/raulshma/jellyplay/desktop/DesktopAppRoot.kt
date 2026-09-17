@@ -32,7 +32,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isAltPressed
 import androidx.compose.ui.input.key.key
@@ -627,15 +626,11 @@ private fun DesktopNavScaffold(
             // deterministically.
             .onPreviewKeyEvent { event ->
                 if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
-                val isBack = event.key == Key.Escape ||
-                    (event.key == Key.DirectionLeft && event.isAltPressed)
-                if (isBack) {
-                    if (backStack.size <= 1) {
-                        false
-                    } else {
-                        guardedNavigator.goBack()
-                        true
-                    }
+                // desktopBackKeyDecision folds the Esc/Alt+Left test AND the
+                // root-refuse; the same fold runs in DesktopSignedOutAuthHost.
+                if (desktopBackKeyDecision(event.key, event.isAltPressed, backStack.size)) {
+                    guardedNavigator.goBack()
+                    true
                 } else {
                     backStack.lastOrNull() is Route.VideoPlayer &&
                         DesktopPlayerKeyBridge.deliver(event)

@@ -95,8 +95,9 @@ class AudioPlaybackManager(
      * The cross-player exclusivity owner (PlaybackFocus). Music claims the
      * floor on the is-playing edge (the ONE chokepoint every play path
      * crosses) and pauses when the matrix commands it (read-aloud took the
-     * floor). Defaulted Noop so plain constructions (tests, previews) keep
-     * single-player semantics.
+     * floor; since the OS-leg migration an OS loss on the MUSIC seat lands
+     * here too, as the suspended-holder command). Defaulted Noop so plain
+     * constructions (tests, previews) keep single-player semantics.
      */
     private val playbackFocus: PlaybackFocus = NoopPlaybackFocus,
     /**
@@ -529,7 +530,12 @@ class AudioPlaybackManager(
             .setRenderersFactory(renderersFactory)
             .setLoadControl(loadControl)
             .setMediaSourceFactory(mediaSourceFactory)
-            .setAudioAttributes(audioAttributes, true)
+            // ADR-0004 music OS-leg migration: the attributes still describe
+            // the stream for routing, but the OS focus seat is NOT taken here
+            // anymore — PlaybackFocus owns it (FocusArbiter, claimed on the
+            // is-playing edge). Built-in handling would fight the module's
+            // seat: two requests for one surface.
+            .setAudioAttributes(audioAttributes, false)
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(C.WAKE_MODE_LOCAL)
             .setPauseAtEndOfMediaItems(false)
@@ -1174,10 +1180,17 @@ class AudioPlaybackManager(
 
     /**
      * Pause the audio player if a session is active.
+     *
+     * Also pauses the crossfade secondary when one is in flight: the matrix's
+     * suspended-holder command (OS loss on the MUSIC holder) and the
+     * read-aloud victim pause both land here, and with built-in focus off the
+     * unpromoted secondary has nothing else to stop it mid-fade (see
+     * [AudioCrossfader.pause]).
      */
     fun pause() {
         assertMainThread("pause")
         exoPlayer?.takeIf { it.isPlaying }?.pause()
+        crossfader.pause()
     }
 
     /**

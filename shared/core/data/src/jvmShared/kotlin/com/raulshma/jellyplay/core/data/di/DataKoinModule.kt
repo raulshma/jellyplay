@@ -4,11 +4,9 @@ import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueImpl
 import com.raulshma.jellyplay.core.data.download.ActiveDownloadCount
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
-import com.raulshma.jellyplay.core.data.download.JvmActiveDownloadCount
-import com.raulshma.jellyplay.core.data.download.JvmQuickDownloadActions
-import com.raulshma.jellyplay.core.data.download.JvmSeriesEpisodeDownloads
-import com.raulshma.jellyplay.core.data.download.JvmTrackDownloadStatusWindow
+import com.raulshma.jellyplay.core.data.download.DownloadQueue
 import com.raulshma.jellyplay.core.data.download.MediaDownloadActions
+import com.raulshma.jellyplay.core.data.download.OfflineResync
 import com.raulshma.jellyplay.core.data.download.QuickDownloadActions
 import com.raulshma.jellyplay.core.data.download.SeriesEpisodeDownloads
 import com.raulshma.jellyplay.core.data.download.TrackDownloadStatusWindow
@@ -727,28 +725,37 @@ val dataJvmModule: Module = module {
     }
 
     // The quick-download seam the library/favorites/studio/search hosts
-    // inject (hoisted from the features' internal JvmQuickDownloadActions
-    // twins): delegates to the MediaDownloadActions single above. Web binds
-    // the honest no-op stub (WasmQuickDownloadActions) in dataWasmModule.
-    single<QuickDownloadActions> { JvmQuickDownloadActions(get<MediaDownloadActions>()) }
+    // inject. Since the promoted-interface pass its JVM actual IS the
+    // MediaDownloadActions single (the class implements QuickDownloadActions
+    // directly — the DownloadIntake precedent, no verbatim-forward adapter).
+    // Web binds the honest no-op stub (WasmQuickDownloadActions) in
+    // dataWasmModule.
+    single<QuickDownloadActions> { get<MediaDownloadActions>() }
 
-    // ── download-actions seams (consolidated core:data-side) ─────────────
-    // The remaining wall-crossing download seams the features consume, all
-    // declared/implemented/bound by core:data on both platforms (web binds
+    // ── download-actions seams (promoted core:data interfaces) ───────────
+    // The feature-facing download reads, all declared in core:data
+    // commonMain and implemented DIRECTLY by this module's engine singles
+    // (DownloadRepositoryImpl implements TrackDownloadStatusWindow +
+    // ActiveDownloadCount + SeriesEpisodeDownloads + DownloadQueue;
+    // OfflineSyncManager implements OfflineResync — the former jvmShared /
+    // feature:downloads verbatim-forward adapters are deleted). Web binds
     // the honest no-op stubs in dataWasmModule — features never grow their
-    // own wall-crossing template):
+    // own wall-crossing template.
     //  - TrackDownloadStatusWindow: the audio player's and the album
-    //    screen's row window over this module's DownloadRepository single
-    //    (replaces the former feature-local AudioTrackDownloads /
-    //    MusicTrackDownloads seams);
-    //  - ActiveDownloadCount: the music-home transfer badge
-    //    (getActiveDownloadCount, the one MusicTrackDownloads read that is
-    //    process-scoped rather than an id-scoped window);
+    //    screen's row window over the DownloadRepository single (its
+    //    downloadsFor IS the single getDownloadsByMediaItemIdsFlow IN-query
+    //    — the N per-id-flow divergence of the deleted adapter is reverted);
+    //  - ActiveDownloadCount: the music-home transfer badge;
     //  - SeriesEpisodeDownloads: the home series-download sheet's
-    //    episode-id read (getDownloadedEpisodeIdsForSeries).
-    single<TrackDownloadStatusWindow> { JvmTrackDownloadStatusWindow(get<DownloadRepository>()) }
-    single<ActiveDownloadCount> { JvmActiveDownloadCount(get<DownloadRepository>()) }
-    single<SeriesEpisodeDownloads> { JvmSeriesEpisodeDownloads(get<DownloadRepository>()) }
+    //    episode-id read;
+    //  - DownloadQueue: the downloads screen's queue reads and transfer
+    //    controls;
+    //  - OfflineResync: the downloads screen's check-for-updates / resync.
+    single<TrackDownloadStatusWindow> { get<DownloadRepositoryImpl>() }
+    single<ActiveDownloadCount> { get<DownloadRepositoryImpl>() }
+    single<SeriesEpisodeDownloads> { get<DownloadRepositoryImpl>() }
+    single<DownloadQueue> { get<DownloadRepositoryImpl>() }
+    single<OfflineResync> { get<OfflineSyncManager>() }
 
     single {
         SeerrRepositoryImpl(

@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.data.sync
 
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
+import com.raulshma.jellyplay.core.data.download.OfflineResync
 import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.DownloadArtifacts
@@ -68,6 +69,13 @@ import java.io.File
  * baseline row. The first check treats a missing baseline as "first sync": it
  * records the fresh baseline and reports CURRENT (no spurious update flag on
  * first contact), so users aren't prompted to resync items they just opened.
+ *
+ * The batch-check/resync half ([checkForUpdatesBatch] / [resyncBatch] /
+ * [batchProgress] / [clearBatchProgress]) is also the JVM actual of the
+ * promoted commonMain [OfflineResync] seam the downloads screen drives —
+ * implemented directly here (the DownloadIntake precedent; the former
+ * feature:downloads verbatim-forward adapter is deleted), bound in
+ * dataJvmModule over this single.
  */
 class OfflineSyncManager(
     private val mediaRepository: MediaRepository,
@@ -85,11 +93,18 @@ class OfflineSyncManager(
      * write stamps the same clock — a fake pins the TTL ladder in tests.
      */
     private val timeSource: TimeSource,
-) {
+) : OfflineResync {
+    // The promoted feature-facing resync seam (commonMain `download/`) — the
+    // DownloadIntake precedent: the surface is core:model-only, so the engine
+    // implements it DIRECTLY (the deleted JvmOfflineResync verbatim-forward
+    // adapter is gone); dataJvmModule binds the interface over this single.
+    // The interface carries the parameter defaults; the overrides inherit
+    // them.
+
     private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private val _batchProgress = MutableStateFlow(ResyncBatchProgress())
-    val batchProgress: StateFlow<ResyncBatchProgress> = _batchProgress.asStateFlow()
+    override val batchProgress: StateFlow<ResyncBatchProgress> = _batchProgress.asStateFlow()
 
     init {
         // Clear any `syncChecking=1` markers left by a process death mid-check
@@ -191,9 +206,9 @@ class OfflineSyncManager(
      * prefetched in one batched read so the all-fresh common case costs a
      * single query instead of one per item.
      */
-    suspend fun checkForUpdatesBatch(
+    override suspend fun checkForUpdatesBatch(
         itemIds: List<String>,
-        force: Boolean = false,
+        force: Boolean,
     ): List<ResyncCheckResult> = withContext(Dispatchers.IO) {
         if (itemIds.isEmpty()) return@withContext emptyList()
         // Chunked like SeenMediaRepositoryImpl's IN queries: Android SQLite caps
@@ -417,7 +432,7 @@ class OfflineSyncManager(
      * progress flows through [batchProgress]. Fire-and-forget on [appScope].
      * [options] is applied to every item in the batch.
      */
-    fun resyncBatch(itemIds: List<String>, options: ResyncOptions = ResyncOptions.ALL) {
+    override fun resyncBatch(itemIds: List<String>, options: ResyncOptions) {
         if (itemIds.isEmpty()) return
         _batchProgress.value = ResyncBatchProgress(
             items = itemIds.associateWith { ResyncItemProgress(it, ResyncPhase.PENDING) },
@@ -429,7 +444,7 @@ class OfflineSyncManager(
     }
 
     /** Resets batch progress once the UI no longer needs it (e.g. sheet dismissed). */
-    fun clearBatchProgress() {
+    override fun clearBatchProgress() {
         _batchProgress.value = ResyncBatchProgress()
     }
 

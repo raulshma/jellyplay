@@ -160,6 +160,14 @@ androidx-activity-compose = { group = "androidx.activity", name = "activity-comp
 # Compose BOM
 compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
 jb-compose-runtime = { group = "org.jetbrains.compose.runtime", name = "runtime", version.ref = "composeMultiplatform" }
+# The compose-resources runtime (stringResource/StringResource — package
+# org.jetbrains.compose.resources, artifact components-resources) — a direct
+# edge for app shells that resolve another module's probe-status resources at
+# render time (apps/web's Seerr pane renders ConnectionProbe.FallbackText via
+# FallbackText.resource(); the artifact reaches feature modules only as a
+# transitive implementation dep, which does not leak to consumer compile
+# classpaths).
+jb-compose-resources = { group = "org.jetbrains.compose.components", name = "components-resources", version.ref = "composeMultiplatform" }
 jb-compose-ui = { group = "org.jetbrains.compose.ui", name = "ui", version.ref = "composeMultiplatform" }
 # Desktop-only compose ui surface (SwingPanel & friends) for shared modules'
 # jvmMain actuals. Same version family

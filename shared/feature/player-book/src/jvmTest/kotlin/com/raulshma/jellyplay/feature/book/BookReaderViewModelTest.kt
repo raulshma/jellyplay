@@ -817,6 +817,103 @@ class BookReaderViewModelTest {
         assertTrue(claims.contains("release:READ_ALOUD"), "the floor is released with the session")
     }
 
+    /**
+     * Pins the init collector wiring the availability flow to the speech
+     * controller: an engine that reports UNAVAILABLE while the loop is live
+     * (service died, language vanished) ends the session — and a later
+     * recovery never resurrects it (resume is the user's tap).
+     */
+    @Test
+    fun `engine going UNAVAILABLE mid session ends the speech session`() = runTest(mainDispatcher) {
+        stubDetail("novel.epub", positionTicks = 0L)
+        val engine = FakeBookSpeechEngine()
+        val vm = viewModel(speechEngine = engine)
+        val host = FakeEpubHost()
+        val port = FakeReaderSession(host)
+        vm.attachReaderSession(port)
+        vm.load("item-1")
+        advanceUntilIdle()
+        vm.onEpubEvent(
+            com.raulshma.jellyplay.feature.book.epub.EpubEvent.Relocated(
+                com.raulshma.jellyplay.feature.book.epub.EpubRelocation(0.1, "One", null, cfi = "epubcfi(/6/4)"),
+            ),
+        )
+        vm.startReadAloud()
+        advanceUntilIdle()
+        vm.onEpubEvent(
+            com.raulshma.jellyplay.feature.book.epub.EpubEvent.SpeechContext(
+                listOf(com.raulshma.jellyplay.feature.book.epub.EpubSpeechParagraph("epubcfi(/6/4!/4/1)", "para")),
+            ),
+        )
+        advanceUntilIdle()
+        assertTrue(vm.speechState.value.active, "session is live before the engine loss")
+
+        engine.availability.value = BookSpeechAvailability.UNAVAILABLE
+        advanceUntilIdle()
+        assertFalse(vm.speechState.value.active, "engineLost ended the session")
+
+        engine.availability.value = BookSpeechAvailability.AVAILABLE
+        advanceUntilIdle()
+        assertFalse(vm.speechState.value.active, "recovery never resurrects the session")
+    }
+
+    /**
+     * Pins the displaced-claimant collector: music claiming the floor while
+     * read-aloud plays pauses the loop, and the claim releasing does NOT
+     * auto-resume — the user's next play tap is the only way back (ADR-0004).
+     */
+    @Test
+    fun `a displaced focus claimant pauses read aloud and release never auto resumes`() =
+        runTest(mainDispatcher) {
+            stubDetail("novel.epub", positionTicks = 0L)
+            val engine = FakeBookSpeechEngine()
+            val claimState = MutableStateFlow<com.raulshma.jellyplay.core.data.playback.focus.FocusClaimState>(
+                com.raulshma.jellyplay.core.data.playback.focus.FocusClaimState.Idle,
+            )
+            val focus = object : com.raulshma.jellyplay.core.data.playback.focus.PlaybackFocus {
+                override val claimState = claimState
+                override fun acquire(
+                    claimant: com.raulshma.jellyplay.core.data.playback.focus.PlaybackSurfaceId,
+                ) = com.raulshma.jellyplay.core.data.playback.focus.FocusOutcome.Granted
+                override fun release(
+                    claimant: com.raulshma.jellyplay.core.data.playback.focus.PlaybackSurfaceId,
+                ) {}
+            }
+            val vm = viewModel(speechEngine = engine, playbackFocus = focus)
+            val host = FakeEpubHost()
+            val port = FakeReaderSession(host)
+            vm.attachReaderSession(port)
+            vm.load("item-1")
+            advanceUntilIdle()
+            vm.onEpubEvent(
+                com.raulshma.jellyplay.feature.book.epub.EpubEvent.Relocated(
+                    com.raulshma.jellyplay.feature.book.epub.EpubRelocation(0.1, "One", null, cfi = "epubcfi(/6/4)"),
+                ),
+            )
+            vm.startReadAloud()
+            advanceUntilIdle()
+            vm.onEpubEvent(
+                com.raulshma.jellyplay.feature.book.epub.EpubEvent.SpeechContext(
+                    listOf(com.raulshma.jellyplay.feature.book.epub.EpubSpeechParagraph("epubcfi(/6/4!/4/1)", "para")),
+                ),
+            )
+            advanceUntilIdle()
+            assertTrue(vm.speechState.value.active)
+            assertFalse(vm.speechState.value.paused)
+
+            claimState.value =
+                com.raulshma.jellyplay.core.data.playback.focus.FocusClaimState.Held(
+                    com.raulshma.jellyplay.core.data.playback.focus.PlaybackSurfaceId.MUSIC,
+                )
+            advanceUntilIdle()
+            assertTrue(vm.speechState.value.active, "the session survives the displacement")
+            assertTrue(vm.speechState.value.paused, "but the loop pauses")
+
+            claimState.value = com.raulshma.jellyplay.core.data.playback.focus.FocusClaimState.Idle
+            advanceUntilIdle()
+            assertTrue(vm.speechState.value.paused, "release never auto-resumes the loop")
+        }
+
     @Test
     fun `timed sleep timer fires after the countdown`() = runTest(mainDispatcher) {
         stubDetail("novel.epub", positionTicks = 0L)

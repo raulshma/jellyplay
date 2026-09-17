@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import com.raulshma.jellyplay.core.datastore.CachedJsonNullPolicy
 import com.raulshma.jellyplay.core.datastore.ParsedCache
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
+import com.raulshma.jellyplay.core.datastore.sliceStateFlow
 import com.raulshma.jellyplay.core.model.ExoPlayerEngineConfig
 import com.raulshma.jellyplay.core.model.LibVlcEngineConfig
 import com.raulshma.jellyplay.core.model.MediaStreamSelection
@@ -15,13 +16,7 @@ import com.raulshma.jellyplay.core.model.MpvEngineConfig
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.VideoEffectsConfig
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 
@@ -67,9 +62,6 @@ class PlayerEngineStore constructor(
         val VIDEO_EFFECTS_SELECTIONS = stringPreferencesKey("video_effects_selections")
     }
 
-    private val sharedPrefs: Flow<Preferences> = dataStore.data
-        .catch { _ -> androidx.datastore.preferences.core.emptyPreferences() }
-
     // Memoisation holders for the JSON-decoded engine-config blobs, keyed on the
     // raw string so the decode is skipped when the underlying key has not
     // changed on a given `dataStore.data` emission.
@@ -79,10 +71,8 @@ class PlayerEngineStore constructor(
     private var cachedMediaStreamSelections: ParsedCache<Map<String, MediaStreamSelection>> = ParsedCache(null, emptyMap())
     private var cachedVideoEffectsByItem: ParsedCache<Map<String, VideoEffectsConfig>> = ParsedCache(null, emptyMap())
 
-    val playerEngine: StateFlow<PlayerEngineSlice> = sharedPrefs
-        .map { read(it) }
-        .distinctUntilChanged()
-        .stateIn(scope, SharingStarted.Eagerly, PlayerEngineSlice())
+    val playerEngine: StateFlow<PlayerEngineSlice> =
+        dataStore.sliceStateFlow(scope, seed = PlayerEngineSlice(), read = ::read)
 
     /**
      * Pure read of the engine-config fields from a raw [Preferences] snapshot,

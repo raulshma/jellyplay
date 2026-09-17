@@ -1,9 +1,9 @@
 package com.raulshma.jellyplay.feature.player.video
 
+import com.raulshma.jellyplay.core.data.playback.PeriodicProgressReportLoop
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.PlayMethod
-import com.raulshma.jellyplay.core.model.PlaybackProgress
 import com.raulshma.jellyplay.core.model.SegmentBehavior
 import com.raulshma.jellyplay.core.ui.viewmodel.StateFlowHandle
 
@@ -13,8 +13,6 @@ import com.raulshma.jellyplay.feature.player.video.engine.SegmentCalculator
 import com.raulshma.jellyplay.feature.player.video.engine.SegmentCalculatorInput
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 internal class PlaybackProgressReporter(
@@ -39,7 +37,6 @@ internal class PlaybackProgressReporter(
     private val onEnginePositionUpdate: (positionMs: Long, durationMs: Long, bufferedPositionMs: Long, videoStats: EngineVideoStats) -> Unit,
 ) {
     private var positionJob: Job? = null
-    private var progressJob: Job? = null
     private val autoSkippedSegments = mutableSetOf<String>()
     private var endedNoNextTriggered = false
     private var watchedThresholdTriggered = false
@@ -128,36 +125,32 @@ internal class PlaybackProgressReporter(
         onAutoSkip(seg)
     }
 
-    private var lastPausedPositionTicks: Long = -1L
+    /**
+     * The 10 s server-progress loop, delegated to the shared
+     * [PeriodicProgressReportLoop] core (the audio reporter's loop): the
+     * CADENCE and PAUSED DEDUP invariants and the `ms * 10_000` tick math
+     * live THERE, once. This class keeps only the wiring — incognito mode as
+     * the per-cycle CYCLE GATE (a gated cycle skips before any snapshot),
+     * the engine as the position/play-state source and the resolved play
+     * method on every row. The `?: true` play-state fallback is dead by
+     * construction: with a null engine the position provider already skipped
+     * the cycle, so the play state is only ever read with an engine present.
+     */
+    private val progressLoop = PeriodicProgressReportLoop(
+        scope = scope,
+        playbackRepository = playbackRepository,
+        positionMsProvider = { getMediaEngine()?.currentPositionMs },
+        isPlayingProvider = { getMediaEngine()?.isPlaying?.value ?: true },
+        itemIdProvider = getCurrentItemId,
+        sessionIdProvider = getPlaySessionId,
+        cycleGate = getIncognitoModeEnabled,
+        playMethodProvider = { getResolvedPlayMethod() },
+    )
 
-    fun startProgressReporting() {
-        progressJob?.cancel()
-        lastPausedPositionTicks = -1L
-        progressJob = scope.launch {
-            while (isActive) {
-                delay(10_000)
-                if (getIncognitoModeEnabled()) continue
-                val engine = getMediaEngine() ?: continue
-                val itemId = getCurrentItemId() ?: continue
-                val positionTicks = engine.currentPositionMs * 10_000
-                val isPaused = !engine.isPlaying.value
-                if (isPaused && positionTicks == lastPausedPositionTicks) continue
-                if (isPaused) lastPausedPositionTicks = positionTicks else lastPausedPositionTicks = -1L
-                playbackRepository.reportPlaybackProgress(
-                    PlaybackProgress(
-                        itemId = itemId,
-                        sessionId = getPlaySessionId(),
-                        positionTicks = positionTicks,
-                        isPaused = isPaused,
-                        playMethod = getResolvedPlayMethod(),
-                    )
-                )
-            }
-        }
-    }
+    fun startProgressReporting() = progressLoop.start()
 
     fun cancelJobs() {
-        progressJob?.cancel()
+        progressLoop.cancel()
         positionJob?.cancel()
         autoSkippedSegments.clear()
         endedNoNextTriggered = false

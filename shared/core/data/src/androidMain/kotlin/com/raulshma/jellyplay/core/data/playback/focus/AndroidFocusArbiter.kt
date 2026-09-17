@@ -10,22 +10,25 @@ import android.os.Looper
 /**
  * The Android [FocusArbiter]: ONE outstanding AudioFocusRequest owned here,
  * so this module's seat can never fight PlayerAudioLifecycle's (which stays
- * engine-bound to video/live) or ExoPlayer's built-in handling (music's
- * slice-1 OS leg). The request's audio attributes come from the CALLER's
- * [FocusAudioAttributes] (slice-2 checklist: previously hardcoded
- * USAGE_MEDIA + CONTENT_TYPE_SPEECH — correct for read-aloud, wrong for
- * music/video, whose OS routing and ducking policy read the content type).
- * Attributes are constant per claimant, so an attributes-identical
- * re-request reuses the SAME request object (a suspended claimant resuming
- * never rebuilds the seat), and an attributes change — only possible once a
- * second claimant joins this module's OS leg — abandons the stale request
- * before building the fresh one: exactly one outstanding request, always.
+ * engine-bound to video/live). Since the music OS-leg migration the music
+ * players carry `setAudioAttributes(..., handleAudioFocus = false)` — no
+ * ExoPlayer-side request is left to race this seat. The request's audio
+ * attributes come from the CALLER's [FocusAudioAttributes] (slice-2
+ * checklist: previously hardcoded USAGE_MEDIA + CONTENT_TYPE_SPEECH —
+ * correct for read-aloud, wrong for music/video, whose OS routing and
+ * ducking policy read the content type). Attributes are constant per
+ * claimant, so an attributes-identical re-request reuses the SAME request
+ * object (a suspended claimant resuming never rebuilds the seat), and an
+ * attributes change — only possible once a second claimant joins this
+ * module's OS leg — abandons the stale request before building the fresh
+ * one: exactly one outstanding request, always.
  *
  * AUDIOFOCUS_GAIN, not GAIN_TRANSIENT: a transient grant would auto-resume
  * the displaced victim when the claim releases (the media3 focus stack
  * re-grants on abandon), which would break the module's pinned manual-resume
- * decision at the OS level. Long-form read-aloud is a GAIN-shaped claim.
- * No delayed focus gain — the executor's synchronous contract.
+ * decision at the OS level. Long-form read-aloud and music are both
+ * GAIN-shaped claims. No delayed focus gain — the executor's synchronous
+ * contract.
  *
  * Listener events are marshalled to the main looper (the executor and every
  * surface command are main-confined); events after [abandon] are dropped.

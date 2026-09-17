@@ -72,7 +72,6 @@ data class PlayerSessionState(
      */
     val playSessionId: String? = null,
     val isReady: Boolean = false,
-    val offlineTrickplayDir: java.io.File? = null,
     val streamUrl: String? = null,
     /**
      * True when the current item is playing from a local download (resolved
@@ -198,8 +197,7 @@ class PlayerSessionManager(
         // same item must not inherit the previous session's in-flight fetch.
         transcodeReasonsRefresher.cancel()
         _engine.value = engine
-        playerLifecycleManager.activeCallbacks = engine
-        pipController.requestAutoEnterPip(engine.capabilities.supportsPip)
+        activateEngine(engine)
         _sessionState.update {
             it.copy(
                 currentItemId = itemId,
@@ -429,13 +427,9 @@ class PlayerSessionManager(
             }
         }
 
-        val trickplayDir = com.raulshma.jellyplay.feature.player.video.trickplay.OfflineTrickplayHelper
-            .getLocalTrickplayDir(downloadPath, itemId)
-
         _sessionState.update { it.copy(
             isReady = true,
             mediaDetail = detail,
-            offlineTrickplayDir = trickplayDir,
             isOffline = true,
         ) }
     }
@@ -591,36 +585,20 @@ class PlayerSessionManager(
         // setMediaItem+prepare instead of a full teardown/rebuild — keeping the
         // media-session wiring and audio-effect chain attached and avoiding a
         // rebuffer at every episode boundary. First creation, an engine
-        // switch, or a released engine takes the original release+create path.
+        // switch, or a released engine takes the release+create path.
         val existingEngine = _engine.value
         val eng = if (existingEngine != null && playerType == lastPlayerType) {
             existingEngine
         } else {
-            // Release the outgoing engine and null the reference before creating
-            // the replacement, so a failure in create()/setup can never leave the
-            // field pointing at an already-released engine.
-            try {
-                _engine.value?.release()
-            } finally {
-                _engine.value = null
-            }
-            playerEngineFactory.create(playerType).also { created ->
-                _engine.value = created
-            }
+            createReplacementEngine(playerType)
         }
-        lastPlayerType = playerType
-
-        playerLifecycleManager.activeCallbacks = eng
-        pipController.requestAutoEnterPip(eng.capabilities.supportsPip)
-
-        val config = EngineConfigBuilder.buildFromPreferences(
+        adoptEngine(
+            playerType = playerType,
+            eng = eng,
             agg = agg,
-            mediaStreams = _sessionState.value.mediaStreams,
             itemId = detail.item.id,
-            engineSpecific = resolveEngineConfig(playerType, agg),
+            playbackSpeed = agg.videoPlayer.videoDefaultSpeed,
         )
-        eng.updateConfig(config)
-        eng.setPlaybackSpeed(agg.videoPlayer.videoDefaultSpeed)
 
         val externalSubtitles = buildExternalSubtitles(detail, source, playMethod)
 
@@ -670,6 +648,66 @@ class PlayerSessionManager(
     }
 
     /**
+     * The release-null-create half of an engine swap: releases the live engine
+     * (if any) and nulls the reference BEFORE creating the replacement, so a
+     * failure in create()/setup can never leave the field pointing at an
+     * already-released engine. Shared by the first-creation/switch branch of
+     * [initializeEngine] and [reloadWithEngine]'s unconditional swap.
+     */
+    private suspend fun createReplacementEngine(playerType: PlayerType): MediaEngine {
+        try {
+            _engine.value?.release()
+        } finally {
+            _engine.value = null
+        }
+        return playerEngineFactory.create(playerType).also { created ->
+            _engine.value = created
+        }
+    }
+
+    /**
+     * Wires [eng] in as THE engine of the active session: lifecycle callbacks
+     * re-route to it and the PiP auto-enter capability is re-armed from its
+     * capabilities. The one piece of the adoption ritual that
+     * [bindReclaimedEngine] shares with [adoptEngine] — it binds an engine it
+     * did not create and must not reconfigure.
+     */
+    private fun activateEngine(eng: MediaEngine) {
+        playerLifecycleManager.activeCallbacks = eng
+        pipController.requestAutoEnterPip(eng.capabilities.supportsPip)
+    }
+
+    /**
+     * The engine-adoption ritual shared by [initializeEngine] and
+     * [reloadWithEngine]: record [playerType] as the live one, wire callbacks
+     * + PiP ([activateEngine]), then push the preference-derived
+     * [EngineConfig] and [playbackSpeed] into the engine before it loads.
+     * [agg] is the caller's aggregate snapshot — the initial-load path awaits
+     * the hydrated raw flow (a `.value` point read there would be the empty
+     * cold-start default), while the reload path reads the live value — and
+     * [itemId] keys the per-item video effects.
+     */
+    private fun adoptEngine(
+        playerType: PlayerType,
+        eng: MediaEngine,
+        agg: VideoPlayerAggregate,
+        itemId: String?,
+        playbackSpeed: Float,
+    ) {
+        lastPlayerType = playerType
+        activateEngine(eng)
+        eng.updateConfig(
+            EngineConfigBuilder.buildFromPreferences(
+                agg = agg,
+                mediaStreams = _sessionState.value.mediaStreams,
+                itemId = itemId,
+                engineSpecific = resolveEngineConfig(playerType, agg),
+            )
+        )
+        eng.setPlaybackSpeed(playbackSpeed)
+    }
+
+    /**
      * Re-resolves playback for the current item under [mode] and reloads the
      * engine with the resulting URL at [currentPositionMs]. Used when the
      * user toggles [PlaybackMode] or [com.raulshma.jellyplay.core.model.StreamingQuality]
@@ -694,57 +732,16 @@ class PlayerSessionManager(
         currentPositionMs: Long,
         selection: MediaStreamSelection? = null,
     ): ResolvedPlayback? {
-        val itemId = _sessionState.value.currentItemId ?: return null
-        val sourceId = _sessionState.value.currentMediaSource?.id ?: ""
-        val agg = aggregateStore.aggregate.value
-        val playerType = lastPlayerType ?: agg.playback.preferredPlayer
-        val maxBitrate = adaptiveBitrateManager.resolveMaxBitrate(quality)
-
-        val resolved = playbackRepository.resolvePlayback(
-            itemId = itemId,
-            mediaSourceId = sourceId,
-            startTimeTicks = currentPositionMs * 10_000,
-            audioStreamIndex = selection?.audioStreamIndex,
-            subtitleStreamIndex = selection?.subtitleStreamIndex,
-            maxStreamingBitrateBits = maxBitrate,
+        if (_sessionState.value.currentItemId == null) return null
+        return reresolveAndSwap(
             mode = mode,
-            playerType = playerType,
+            maxBitrate = adaptiveBitrateManager.resolveMaxBitrate(quality),
+            selection = selection,
+            startPositionMs = currentPositionMs,
+            // The mode/quality reload owns the forced-direct-play badge: it is
+            // re-evaluated from the requested mode on every re-resolve.
+            markForced = true,
         )
-        val url = resolved?.streamUrl
-            ?: playbackRepository.getStreamUrl(itemId, sourceId, currentPositionMs * 10_000)
-        val playMethod = resolved?.playMethod ?: PlayMethod.DIRECT_PLAY
-
-        _sessionState.update {
-            it.copy(
-                playMethodString = playMethod.displayName(),
-                playMethod = playMethod,
-                isDirectPlayForced = mode == PlaybackMode.FORCE_DIRECT_PLAY,
-                playSessionId = resolved?.playSessionId,
-                streamUrl = url,
-            )
-        }
-        scheduleTranscodeReasonsRefresh(itemId, playMethod)
-
-        // Swap the engine onto the freshly resolved URL. The engine-level
-        // bitrate cap is only meaningful for AUTO (server-side cap drives
-        // transcode; direct play is uncapped). Rebuild the side-loaded
-        // subtitle set for the new play method so the subtitle picker stays
-        // populated when switching to/from a transcode.
-        val engineMaxBitrate = if (mode == PlaybackMode.AUTO) maxBitrate?.toInt() else null
-        val state = _sessionState.value
-        val rebuiltSubtitles = state.mediaDetail?.let { detail ->
-            buildExternalSubtitles(detail, state.currentMediaSource, playMethod)
-        } ?: emptyList()
-        reloadWithEngine(
-            playerType = playerType,
-            currentPositionMs = currentPositionMs,
-            playbackSpeed = agg.videoPlayer.videoDefaultSpeed,
-            maxVideoBitrate = engineMaxBitrate,
-            uriOverride = url,
-            externalSubtitlesOverride = rebuiltSubtitles,
-            playMethodOverride = playMethod,
-        )
-        return resolved
     }
 
     /**
@@ -765,37 +762,81 @@ class PlayerSessionManager(
         selection: MediaStreamSelection,
         currentPositionMs: Long,
     ): ResolvedPlayback? {
+        if (_sessionState.value.currentItemId == null) return null
+        return reresolveAndSwap(
+            mode = aggregateStore.aggregate.value.playback.playbackMode,
+            maxBitrate = adaptiveBitrateManager.resolveEffectiveMaxBitrate(),
+            selection = selection,
+            startPositionMs = currentPositionMs,
+            // A stream-index re-POST is orthogonal to the forced-direct-play
+            // badge — the reload must not touch it (historical behaviour:
+            // only [reloadPlayback] ever wrote it).
+            markForced = false,
+        )
+    }
+
+    /**
+     * The shared re-resolve-and-swap ladder behind [reloadPlayback] and
+     * [reloadForStreamChange]: item/source extraction → PlaybackInfo re-POST
+     * → stream-URL / play-method fallback → session-state publish →
+     * transcode-reasons re-arm → engine reload at [startPositionMs] with the
+     * rebuilt side-loaded subtitle set.
+     *
+     * The callers contribute only the inputs that genuinely differ: [mode]
+     * (the requested mode vs. the persisted preference), [maxBitrate]
+     * (quality-derived vs. network-effective) and [markForced] — the declared
+     * form of the historical divergence where only the mode/quality reload
+     * wrote [PlayerSessionState.isDirectPlayForced]
+     * (`mode == PlaybackMode.FORCE_DIRECT_PLAY`) while the stream-index reload
+     * silently preserved it. `markForced = true` re-evaluates the badge from
+     * [mode]; `false` leaves the current value untouched.
+     *
+     * Returns the resolved [ResolvedPlayback] (or `null` when no item is
+     * loaded or the resolution failed) — see [reloadPlayback].
+     */
+    private suspend fun reresolveAndSwap(
+        mode: PlaybackMode,
+        maxBitrate: Long?,
+        selection: MediaStreamSelection?,
+        startPositionMs: Long,
+        markForced: Boolean,
+    ): ResolvedPlayback? {
         val itemId = _sessionState.value.currentItemId ?: return null
         val sourceId = _sessionState.value.currentMediaSource?.id ?: ""
         val agg = aggregateStore.aggregate.value
         val playerType = lastPlayerType ?: agg.playback.preferredPlayer
-        val maxBitrate = adaptiveBitrateManager.resolveEffectiveMaxBitrate()
-        val mode = agg.playback.playbackMode
 
         val resolved = playbackRepository.resolvePlayback(
             itemId = itemId,
             mediaSourceId = sourceId,
-            startTimeTicks = currentPositionMs * 10_000,
-            audioStreamIndex = selection.audioStreamIndex,
-            subtitleStreamIndex = selection.subtitleStreamIndex,
+            startTimeTicks = startPositionMs * 10_000,
+            audioStreamIndex = selection?.audioStreamIndex,
+            subtitleStreamIndex = selection?.subtitleStreamIndex,
             maxStreamingBitrateBits = maxBitrate,
             mode = mode,
             playerType = playerType,
         )
         val url = resolved?.streamUrl
-            ?: playbackRepository.getStreamUrl(itemId, sourceId, currentPositionMs * 10_000)
+            ?: playbackRepository.getStreamUrl(itemId, sourceId, startPositionMs * 10_000)
         val playMethod = resolved?.playMethod ?: PlayMethod.DIRECT_PLAY
 
         _sessionState.update {
             it.copy(
                 playMethodString = playMethod.displayName(),
                 playMethod = playMethod,
+                isDirectPlayForced =
+                    if (markForced) mode == PlaybackMode.FORCE_DIRECT_PLAY else it.isDirectPlayForced,
                 playSessionId = resolved?.playSessionId,
                 streamUrl = url,
             )
         }
         scheduleTranscodeReasonsRefresh(itemId, playMethod)
 
+        // Swap the engine onto the freshly resolved URL. The engine-level
+        // bitrate cap is only meaningful for AUTO (server-side cap drives
+        // transcode; direct play is uncapped). Rebuild the side-loaded
+        // subtitle set for the new play method so the subtitle picker stays
+        // populated when switching to/from a transcode.
         val engineMaxBitrate = if (mode == PlaybackMode.AUTO) maxBitrate?.toInt() else null
         val state = _sessionState.value
         val rebuiltSubtitles = state.mediaDetail?.let { detail ->
@@ -803,7 +844,7 @@ class PlayerSessionManager(
         } ?: emptyList()
         reloadWithEngine(
             playerType = playerType,
-            currentPositionMs = currentPositionMs,
+            currentPositionMs = startPositionMs,
             playbackSpeed = agg.videoPlayer.videoDefaultSpeed,
             maxVideoBitrate = engineMaxBitrate,
             uriOverride = url,
@@ -823,30 +864,17 @@ class PlayerSessionManager(
         playMethodOverride: PlayMethod? = null,
     ) {
         val last = lastPlaybackRequest ?: return
-        val agg = aggregateStore.aggregate.value
 
-        try {
-            _engine.value?.release()
-        } finally {
-            _engine.value = null
-        }
-
-        val eng = playerEngineFactory.create(playerType)
-        _engine.value = eng
-        lastPlayerType = playerType
-
-        playerLifecycleManager.activeCallbacks = eng
-        pipController.requestAutoEnterPip(eng.capabilities.supportsPip)
-
-        val state = _sessionState.value
-        val config = EngineConfigBuilder.buildFromPreferences(
-            agg = agg,
-            mediaStreams = state.mediaStreams,
-            itemId = state.currentItemId,
-            engineSpecific = resolveEngineConfig(playerType, agg),
+        // A URL swap never reuses the live engine: always release+create (the
+        // re-resolve may have changed the player type), then re-adopt.
+        val eng = createReplacementEngine(playerType)
+        adoptEngine(
+            playerType = playerType,
+            eng = eng,
+            agg = aggregateStore.aggregate.value,
+            itemId = _sessionState.value.currentItemId,
+            playbackSpeed = playbackSpeed,
         )
-        eng.updateConfig(config)
-        eng.setPlaybackSpeed(playbackSpeed)
 
         val request = last.copy(
             startPositionMs = currentPositionMs,

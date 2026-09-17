@@ -54,7 +54,7 @@ private fun seerrUnclassifiedFailureMessage(e: Throwable): String =
 
 /**
  * The wasmJs [SeerrApiClient] — a hand-rolled Ktor replacement for the
- * jvmShared `SeerrApiClientImpl` + `ResilientSeerrApiClient` pair (OkHttp).
+ * jvmShared `SeerrApiClientImpl` (OkHttp; retry in-funnel via `HttpExecutor`).
  * Endpoint paths, query-string assembly, request bodies, `parseErrorMessage`
  * and `formatNetworkError` texts, and the login Set-Cookie capture mirror the
  * JVM implementation request-for-request, string-for-string; the decode path
@@ -62,9 +62,9 @@ private fun seerrUnclassifiedFailureMessage(e: Throwable): String =
  * the JVM impl does (it has no intermediate wire DTOs for this seam).
  *
  * Structure deltas vs the JVM pair (all documented):
- *  - Retry lives HERE (`apiResultWithRetry`, max 4 =
- *    `ResilientSeerrApiClient.MAX_RETRIES`) instead of in a DI-level
- *    Resilient wrapper; the wasm DI module binds the interface straight to
+ *  - Retry lives HERE (`apiResultWithRetry`, max 4 = jvmShared
+ *    `HttpExecutor.MAX_RETRIES`) — in-funnel on both platforms since the
+ *    wrapper deletion; the wasm DI module binds the interface straight to
  *    this class.
  *  - Per-call credentials replace OkHttp's `withAuth` request decorator
  *    ([seerrAuthHeaders] is that `when` as data). Browsers strip the `Cookie`

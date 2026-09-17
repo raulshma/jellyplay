@@ -68,7 +68,6 @@ class PlayerSessionStateDefaultsTest {
         assertNull(state.currentItemId)
         assertNull(state.mediaDetail)
         assertNull(state.playSessionId)
-        assertNull(state.offlineTrickplayDir)
         assertNull(state.streamUrl)
         assertFalse(state.isReady)
         assertFalse(state.isOffline)

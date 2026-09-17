@@ -55,6 +55,7 @@ import com.raulshma.jellyplay.feature.player.video.state.ReadySubtitleHint
 import com.raulshma.jellyplay.feature.player.video.state.SegmentState
 import com.raulshma.jellyplay.feature.player.video.state.VideoFxState
 import com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider
+import com.raulshma.jellyplay.feature.player.video.trickplay.TrickplayPreparation
 import com.raulshma.jellyplay.core.model.VideoEffectsConfig
 
 import kotlinx.coroutines.Job
@@ -341,6 +342,20 @@ class VideoPlayerViewModel(
     // releaseInternalsVmPart at exactly its old slot.
 
     private val trickplayManager = platform.createTrickplayController(playbackRepository)
+
+    /**
+     * The trickplay three-way selection for the session load spine (server
+     * manifest cached into the download dir → locally bundled meta.json →
+     * live server fetch cached for the next offline session). Owns the dir
+     * derivations, the download-path probe, the precedence and the
+     * controller dispatch; this VM keeps only the uiState write.
+     */
+    private val trickplayPreparation = TrickplayPreparation(
+        controller = trickplayManager,
+        offlinePlaybackFacade = offlinePlaybackFacade,
+        mediaRepository = mediaRepository,
+    )
+
     internal val subtitles = SubtitleManager(
         contentGateway = platform,
         playbackRepository = playbackRepository,
@@ -699,7 +714,15 @@ class VideoPlayerViewModel(
                 createVideoMediaSession(itemId, title, subtitle)
             },
             applyMediaDetail = { detail -> applyMediaDetail(detail) },
-            initializeTrickplay = { itemId, source -> initializeTrickplayForItem(itemId, source) },
+            initializeTrickplay = { itemId, source ->
+                // Trickplay selection + dispatch live in [TrickplayPreparation];
+                // a non-null result means exactly one arm initialized the
+                // controller, so this is the single uiState write the former
+                // three inline arms produced between them.
+                trickplayPreparation.prepare(itemId, source)?.let { info ->
+                    _uiState.update { it.copy(uiPrefs = it.uiPrefs.copy(trickplayInfo = info)) }
+                }
+            },
             reportPlaybackStart = { itemId, source, playMethod ->
                 if (!cachedAggregate.videoPlayer.incognitoModeEnabled) {
                     playbackRepository.reportPlaybackStart(
@@ -950,59 +973,6 @@ class VideoPlayerViewModel(
     fun playPreviousEpisode() = episodeNavigator.previous()
 
     fun playNextEpisode() = episodeNavigator.next()
-
-    /**
-     * Trickplay three-way selection for the session load spine:
-     * server trickplay cached into the download dir, a local bundle shipped
-     * with the download, or the server manifest fetched on demand and cached
-     * for the next offline session.
-     */
-    private suspend fun initializeTrickplayForItem(itemId: String, source: com.raulshma.jellyplay.core.model.MediaSource?) {
-        source?.trickplayInfo?.let { info ->
-            val downloadPath = offlinePlaybackFacade.getDownloadPath(itemId)
-            if (downloadPath != null) {
-                val cacheDir = java.io.File(java.io.File(downloadPath).parentFile, "trickplay")
-                trickplayManager.initializeWithCache(itemId, info, cacheDir)
-            } else {
-                trickplayManager.initialize(itemId, info)
-            }
-            _uiState.update { it.copy(uiPrefs = it.uiPrefs.copy(trickplayInfo = info)) }
-        }
-
-        if (source?.trickplayInfo == null) {
-            val downloadPath = offlinePlaybackFacade.getDownloadPath(itemId)
-            if (downloadPath != null) {
-                val localInfo = com.raulshma.jellyplay.feature.player.video.trickplay.OfflineTrickplayHelper
-                    .loadLocalTrickplayInfo(downloadPath, itemId)
-                if (localInfo != null) {
-                    val cacheDir = com.raulshma.jellyplay.feature.player.video.trickplay.OfflineTrickplayHelper
-                        .getLocalTrickplayDir(downloadPath, itemId)
-                    if (cacheDir != null) {
-                        trickplayManager.initializeLocal(itemId, localInfo, cacheDir)
-                        _uiState.update { it.copy(uiPrefs = it.uiPrefs.copy(trickplayInfo = localInfo)) }
-                    }
-                } else {
-                    // No local trickplay bundled with the download (the
-                    // detached trickplay fetch failed or the server didn't
-                    // have it at download time). Fall back to the server's
-                    // trickplay manifest and cache fetched tiles into the
-                    // download's trickplay dir, so the next offline session
-                    // reads them locally via [initializeLocal] above.
-                    val cacheDir = java.io.File(java.io.File(downloadPath).parentFile, "trickplay")
-                    val serverInfo = mediaRepository.getMediaDetail(itemId)
-                        .getOrNull()
-                        ?.mediaSources
-                        ?.firstOrNull()
-                        ?.trickplayInfo
-                    if (serverInfo != null) {
-                        cacheDir.mkdirs()
-                        trickplayManager.initializeWithCache(itemId, serverInfo, cacheDir)
-                        _uiState.update { it.copy(uiPrefs = it.uiPrefs.copy(trickplayInfo = serverInfo)) }
-                    }
-                }
-            }
-        }
-    }
 
     private var engineCollectionJob: Job? = null
 
@@ -1428,8 +1398,8 @@ class VideoPlayerViewModel(
                         // [EngineEventCoordinator]; the session executes its
                         // decisions (see startEngineEventCoordinatorOutputs
                         // for the mirrors this VM keeps). What remains here
-                        // are the adapter fan-outs this VM owns: the
-                        // SyncPlay int mapping, the PiP auto-exit, track
+                        // are the adapter fan-outs this VM owns: the SyncPlay
+                        // state forward, the PiP auto-exit, track
                         // fan-out and the cue-preview gate.
                         launch { engine.availableTracks.collect { trackSelectionHelper.updateTracksFromEngine() } }
                         // G10: accumulate embedded-subtitle cues from the engine
@@ -1444,15 +1414,13 @@ class VideoPlayerViewModel(
                                 subtitlePreview.onEngineCues(engineCues)
                             }
                         }
+                        // SyncPlay: typed forward — the engine→core Int
+                        // encoding lives in the bridge ([SyncPlayBridge
+                        // .toCoreStateInt]), the only module owning both
+                        // vocabularies. PiP auto-exit, track fan-out and the
+                        // cue-preview gate are below/beside.
                         launch { engine.playbackState.collect { state ->
-                            val stateInt = when (state) {
-                                EnginePlaybackState.IDLE -> 1
-                                EnginePlaybackState.BUFFERING -> 2
-                                EnginePlaybackState.READY -> 3
-                                EnginePlaybackState.ENDED -> 4
-                                EnginePlaybackState.ERROR -> 1
-                            }
-                            syncPlay.onPlaybackStateChanged(stateInt)
+                            syncPlay.onPlaybackStateChanged(state)
                             // Auto-exit PiP when playback ends or errors so the
                             // window does not linger on a frozen frame. Pause is
                             // intentionally excluded — users pause to read.

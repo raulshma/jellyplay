@@ -54,7 +54,7 @@ private fun radarrUnclassifiedFailureMessage(e: Throwable): String =
 
 /**
  * The wasmJs [RadarrApiClient] — a hand-rolled Ktor replacement for the
- * jvmShared `RadarrApiClientImpl` + `ResilientRadarrApiClient` pair (OkHttp).
+ * jvmShared `RadarrApiClientImpl` (OkHttp; retry in-funnel via `HttpExecutor`).
  * The `/api/v3` paths, query params (`includeMovie`, the wanted/blocklist
  * sort keys, the queue-delete option trio), request bodies, the 2-step
  * manualimport flow, the `{ records }` envelope unwrapping, and every
@@ -63,10 +63,11 @@ private fun radarrUnclassifiedFailureMessage(e: Throwable): String =
  * wire DTOs — field-for-field transcriptions of the JVM impl's private
  * nested DTOs.
  *
- * Retry lives HERE (`apiResultWithRetry`, max 4 =
- * `ResilientRadarrApiClient.MAX_RETRIES`) instead of in a DI-level Resilient
- * wrapper. See [ArrSeerrApiSupport] for the full wasm delta list (transport
- * taxonomy collapse, Retry-After honoring, decode-failure wrapping).
+ * Retry lives HERE (`apiResultWithRetry`, max 4 = jvmShared
+ * `HttpExecutor.MAX_RETRIES`) — in-funnel on both platforms since the
+ * wrapper deletion. See [ArrSeerrApiSupport] for the full wasm delta list
+ * (transport taxonomy collapse, Retry-After honoring, decode-failure
+ * wrapping).
  */
 class KtorWasmRadarrApiClient(
     httpClient: HttpClient,
@@ -131,8 +132,9 @@ class KtorWasmRadarrApiClient(
         }
 
     override suspend fun importQueueItem(baseUrl: String, apiKey: String, downloadId: String): Result<Unit> =
-        // The JVM Resilient wrapper retries the WHOLE two-step flow as one
-        // unit — one retry block around both steps, not one per step.
+        // Declared wasm divergence: the JVM funnel retries each HTTP call
+        // independently (HttpExecutor); wasm keeps one retry block around the
+        // WHOLE two-step flow — a failing step 2 restarts from step 1.
         apiResultWithRetry {
             // 2-step manualimport flow (the *arr v3 spec has no queue/import/{id}):
             // 1) GET the candidate import rows for this download-client guid.

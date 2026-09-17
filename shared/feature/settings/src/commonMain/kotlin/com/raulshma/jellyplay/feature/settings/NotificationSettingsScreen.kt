@@ -44,6 +44,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.SettingListItem
 import com.raulshma.jellyplay.core.ui.components.SettingToggleItem
+import com.raulshma.jellyplay.core.ui.components.SettingsItemList
 import com.raulshma.jellyplay.core.ui.components.SheetHeader
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -173,20 +174,18 @@ fun NotificationSettingsScreen(
                     modifier = Modifier.padding(vertical = 8.dp),
                     initiallyExpanded = true,
                 ) {
-                    var notifIdx = 0
-                    val notifBaseTotal = run {
-                        var c = 1
-                        if (notifPrefs.enabled) {
-                            c += 4 // Check Frequency, Sound, Vibrate, Lights
-                            if (showAdvanced) {
-                                // Quiet Hours, Max Per Check, Libraries, Respect System DND (+ System Notification Settings where the platform has one)
-                                c += 4 + if (canOpenSystemNotificationSettings) 1 else 0
-                                if (notifPrefs.quietHoursEnabled) c += 2
-                            }
-                        }
-                        c
-                    }
-                    val notifTotal = notifBaseTotal
+                    // Derived from the notifications group declaration via the
+                    // admission total beside SettingsScreenGroups (the hand-run
+                    // `1 + 4 + 4 + cap + 2` arithmetic this replaces never
+                    // drifted from these gates — now it cannot).
+                    SettingsItemList(
+                        total = notificationScreenRowTotal(
+                            enabled = notifPrefs.enabled,
+                            showAdvanced = showAdvanced,
+                            quietHoursEnabled = notifPrefs.quietHoursEnabled,
+                            canOpenSystemNotificationSettings = canOpenSystemNotificationSettings,
+                        ),
+                    ) {
 
                     SettingToggleItem(
                         icon = Tabler.Outline.Bell,
@@ -194,7 +193,6 @@ fun NotificationSettingsScreen(
                         subtitle = stringResource(Res.string.settings_enable_notifications_subtitle),
                         checked = notifPrefs.enabled,
                         highlighted = highlightSettingId == "notifications_enable",
-                        index = notifIdx++, count = notifTotal,
                         onCheckedChange = { enabled ->
                             viewModel.updateNotificationPreferences { it.copy(enabled = enabled) }
                         },
@@ -207,7 +205,6 @@ fun NotificationSettingsScreen(
                             subtitle = stringResource(Res.string.settings_check_frequency_subtitle),
                             trailingText = notifPrefs.checkFrequency.displayName,
                             highlighted = highlightSettingId == "notification_check_frequency",
-                            index = notifIdx++, count = notifTotal,
                             onClick = {
                                 activePicker = PickerState.List(
                                     title = frequencyTitle,
@@ -229,7 +226,6 @@ fun NotificationSettingsScreen(
                                 subtitle = stringResource(Res.string.settings_quiet_hours_subtitle),
                                 checked = notifPrefs.quietHoursEnabled,
                                 highlighted = highlightSettingId == "quiet_hours",
-                                index = notifIdx++, count = notifTotal,
                                 onCheckedChange = { enabled ->
                                     viewModel.updateNotificationPreferences { it.copy(quietHoursEnabled = enabled) }
                                 },
@@ -241,7 +237,6 @@ fun NotificationSettingsScreen(
                                     subtitle = stringResource(Res.string.settings_quiet_start_subtitle),
                                     trailingText = formatMinutes(notifPrefs.quietHoursStart),
                                     highlighted = highlightSettingId == "quiet_start",
-                                    index = notifIdx++, count = notifTotal,
                                     onClick = { activeDialog = NotificationSettingsDialog.QuietStartPicker },
                                 )
                                 SettingListItem(
@@ -250,7 +245,6 @@ fun NotificationSettingsScreen(
                                     subtitle = stringResource(Res.string.settings_quiet_end_subtitle),
                                     trailingText = formatMinutes(notifPrefs.quietHoursEnd),
                                     highlighted = highlightSettingId == "quiet_end",
-                                    index = notifIdx++, count = notifTotal,
                                     onClick = { activeDialog = NotificationSettingsDialog.QuietEndPicker },
                                 )
                             }
@@ -260,7 +254,6 @@ fun NotificationSettingsScreen(
                                 subtitle = stringResource(Res.string.settings_respect_system_dnd_subtitle),
                                 checked = notifPrefs.respectSystemDnd,
                                 highlighted = highlightSettingId == "respect_system_dnd",
-                                index = notifIdx++, count = notifTotal,
                                 onCheckedChange = { enabled ->
                                     viewModel.updateNotificationPreferences { it.copy(respectSystemDnd = enabled) }
                                 },
@@ -271,7 +264,6 @@ fun NotificationSettingsScreen(
                                     title = stringResource(Res.string.settings_system_notification_settings),
                                     subtitle = stringResource(Res.string.settings_system_notification_settings_subtitle),
                                     highlighted = highlightSettingId == "system_notification_settings",
-                                    index = notifIdx++, count = notifTotal,
                                     onClick = platformIntents::openSystemNotificationSettings,
                                 )
                             }
@@ -282,7 +274,6 @@ fun NotificationSettingsScreen(
                             subtitle = stringResource(Res.string.settings_sound_subtitle),
                             checked = notifPrefs.soundEnabled,
                             highlighted = highlightSettingId == "notification_sound",
-                            index = notifIdx++, count = notifTotal,
                             onCheckedChange = { enabled ->
                                 viewModel.updateNotificationPreferences { it.copy(soundEnabled = enabled) }
                             },
@@ -293,7 +284,6 @@ fun NotificationSettingsScreen(
                             subtitle = stringResource(Res.string.settings_vibrate_subtitle),
                             checked = notifPrefs.vibrateEnabled,
                             highlighted = highlightSettingId == "notification_vibrate",
-                            index = notifIdx++, count = notifTotal,
                             onCheckedChange = { enabled ->
                                 viewModel.updateNotificationPreferences { it.copy(vibrateEnabled = enabled) }
                             },
@@ -304,7 +294,6 @@ fun NotificationSettingsScreen(
                             subtitle = stringResource(Res.string.settings_notification_lights_subtitle),
                             checked = notifPrefs.lightsEnabled,
                             highlighted = highlightSettingId == "notification_lights",
-                            index = notifIdx++, count = notifTotal,
                             onCheckedChange = { enabled ->
                                 viewModel.updateNotificationPreferences { it.copy(lightsEnabled = enabled) }
                             },
@@ -322,7 +311,6 @@ fun NotificationSettingsScreen(
                                 subtitle = stringResource(Res.string.settings_max_per_check_subtitle),
                                 trailingText = "${notifPrefs.maxPerCheck}",
                                 highlighted = highlightSettingId == "max_per_check",
-                                index = notifIdx++, count = notifTotal,
                                 onClick = {
                                     val options = listOf(5, 10, 15, 20, 30, 50, 100)
                                     activePicker = PickerState.List(
@@ -345,10 +333,10 @@ fun NotificationSettingsScreen(
                                 title = stringResource(Res.string.settings_libraries),
                                 subtitle = stringResource(Res.string.settings_libraries_subtitle, enabledLibraries, libraryCount),
                                 highlighted = highlightSettingId == "notification_libraries",
-                                index = notifIdx, count = notifTotal,
                                 onClick = { activeDialog = NotificationSettingsDialog.LibrariesPicker },
                             )
                         }
+                    }
                     }
                 }
             }

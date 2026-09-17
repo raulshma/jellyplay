@@ -4,6 +4,10 @@ import com.raulshma.jellyplay.core.concurrency.mapConcurrentCatching
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueSnapshot
+import com.raulshma.jellyplay.core.data.download.ActiveDownloadCount
+import com.raulshma.jellyplay.core.data.download.DownloadQueue
+import com.raulshma.jellyplay.core.data.download.SeriesEpisodeDownloads
+import com.raulshma.jellyplay.core.data.download.TrackDownloadStatusWindow
 import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.data.sync.OfflineSyncComparator
 import com.raulshma.jellyplay.core.data.util.DownloadDelegate
@@ -125,7 +129,19 @@ class DownloadRepositoryImpl(
     private val imagePreloader: OfflineImagePreloader,
     /** Clock seam for the baseline-seeding `lastSyncedAt` stamp. */
     private val timeSource: TimeSource,
-) : DownloadRepository {
+) : DownloadRepository,
+    // The promoted feature-facing read seams (DownloadQueue,
+    // TrackDownloadStatusWindow, ActiveDownloadCount, SeriesEpisodeDownloads)
+    // — the DownloadIntake precedent: their surfaces cross commonMain
+    // verbatim, so the engine implements them DIRECTLY instead of behind
+    // per-read verbatim-forward adapters (the deleted JvmDownloadQueue /
+    // JvmTrackDownloadStatusWindow / JvmActiveDownloadCount /
+    // JvmSeriesEpisodeDownloads). The differently-named members forward to
+    // this class's own repository methods one-to-one.
+    DownloadQueue,
+    TrackDownloadStatusWindow,
+    ActiveDownloadCount,
+    SeriesEpisodeDownloads {
 
     // Caps the number of episodes processed concurrently when queueing a series
     // download. Avoids launching 20+ parallel OkHttp calls + Coil decodes at once.
@@ -185,6 +201,52 @@ class DownloadRepositoryImpl(
 
     override fun getActiveDownloadCount(): Flow<Int> =
         downloadDao.getActiveDownloadCount()
+
+    // ── promoted read seams (see the supertype list above) ────────────────
+    // One-to-one forwards onto the repository methods; dataJvmModule binds
+    // each interface over this single. TrackDownloadStatusWindow.downloadsFor
+    // deliberately IS the single getDownloadsByMediaItemIdsFlow IN-query —
+    // not the N combined per-id flows the deleted JvmTrackDownloadStatusWindow
+    // adapter re-expressed (reverted divergence: same rows, one narrow query).
+
+    override val isSupported: Boolean = true
+
+    override fun allDownloads(): Flow<List<DownloadItem>> = getAllDownloads()
+
+    override fun activeDownloadProgress(): Flow<Map<String, DownloadProgress>> =
+        getActiveDownloadProgress()
+
+    override suspend fun allDownloadsSnapshot(): List<DownloadItem> = getAllDownloadsSnapshot()
+
+    override suspend fun pause(id: String): Result<Unit> = pauseDownload(id)
+
+    override suspend fun resume(id: String): Result<Unit> = resumeDownload(id)
+
+    override fun enqueue(id: String) = enqueueDownload(id)
+
+    override suspend fun cancel(id: String): Result<Unit> = cancelDownload(id)
+
+    override suspend fun retry(id: String): Result<Unit> = retryDownload(id)
+
+    override suspend fun delete(id: String): Result<Unit> = deleteDownload(id)
+
+    override suspend fun setPriority(id: String, priority: Int): Result<Unit> =
+        setDownloadPriority(id, priority)
+
+    override fun downloadsFor(ids: List<String>): Flow<List<DownloadItem>> =
+        getDownloadsByMediaItemIdsFlow(ids)
+
+    override suspend fun remove(downloadId: String) {
+        // Result ignored — the same fire-and-forget contract the deleted
+        // JvmTrackDownloadStatusWindow adapter carried (the hosts' remove
+        // paths have no error surface on a failed delete).
+        deleteDownload(downloadId)
+    }
+
+    override fun activeDownloadCount(): Flow<Int> = getActiveDownloadCount()
+
+    override suspend fun downloadedEpisodeIds(seriesId: String): Set<String> =
+        getDownloadedEpisodeIdsForSeries(seriesId)
 
     override fun observeCompletedDownloadedIds(): Flow<Set<String>> =
         downloadDao.getCompletedDownloadedItemIds().map(List<String>::toSet).distinctUntilChanged()

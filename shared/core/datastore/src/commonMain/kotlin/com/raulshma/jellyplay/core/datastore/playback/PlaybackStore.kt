@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
+import com.raulshma.jellyplay.core.datastore.sliceStateFlow
 import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
@@ -18,14 +19,8 @@ import com.raulshma.jellyplay.core.model.RefreshRateMode
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.platformEngineSupport
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.Serializable
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
 
 /**
  * Deep module owning the **media-delivery** preference domain: which engine runs,
@@ -77,18 +72,13 @@ class PlaybackStore constructor(
         val ANDROID_TV_WATCH_NEXT_ENABLED = booleanPreferencesKey("android_tv_watch_next_enabled")
     }
 
-    private val sharedPrefs: Flow<Preferences> = dataStore.data
-        .catch { _ -> androidx.datastore.preferences.core.emptyPreferences() }
-
     /**
      * The media-delivery preference slice, derived directly from the raw
      * DataStore (not mapped through the whole-`UserPreferences` aggregate), so
      * a write to an unrelated preference does not re-derive these fields.
      */
-    val playback: StateFlow<PlaybackSlice> = sharedPrefs
-        .map { read(it) }
-        .distinctUntilChanged()
-        .stateIn(scope, SharingStarted.Eagerly, PlaybackSlice())
+    val playback: StateFlow<PlaybackSlice> =
+        dataStore.sliceStateFlow(scope, seed = PlaybackSlice(), read = ::read)
 
     /**
      * Pure read of the media-delivery fields from a raw [Preferences] snapshot.

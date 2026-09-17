@@ -916,9 +916,9 @@ fun AppearanceSettingsScreen(
                     initiallyExpanded = highlightSettingId in SettingsScreenGroups.appearanceLibrary.itemIdSet,
                 ) {
                     // The declared library rows plus the confirm-library-reset
-                    // action row (a screen-local row with no search entry).
-                    val cardTotal = SettingsScreenGroups.appearanceLibrary.items.size + 1
-                    var cardIdx = 0
+                    // action row (a screen-local row with no search entry) —
+                    // the admission total beside SettingsScreenGroups.
+                    SettingsItemList(total = appearanceLibraryScreenRowTotal()) {
 
                     SettingToggleItem(
                         icon = Tabler.Outline.Folder,
@@ -926,7 +926,6 @@ fun AppearanceSettingsScreen(
                         subtitle = stringResource(Res.string.settings_show_unwatched_badge_subtitle),
                         checked = preferences.showUnwatchedBadge,
                         highlighted = highlightSettingId == "show_unwatched_badge",
-                        index = cardIdx++, count = cardTotal,
                         onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setShowUnwatchedBadge(it) } },
                     )
 
@@ -936,7 +935,6 @@ fun AppearanceSettingsScreen(
                         subtitle = stringResource(Res.string.settings_show_watched_checkmark_subtitle),
                         checked = preferences.showWatchedCheckmark,
                         highlighted = highlightSettingId == "show_watched_checkmark",
-                        index = cardIdx++, count = cardTotal,
                         onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setShowWatchedCheckmark(it) } },
                     )
 
@@ -946,7 +944,6 @@ fun AppearanceSettingsScreen(
                         subtitle = stringResource(Res.string.settings_hide_watched_items_subtitle),
                         checked = preferences.hideWatchedItems,
                         highlighted = highlightSettingId == "hide_watched_items",
-                        index = cardIdx++, count = cardTotal,
                         onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setHideWatchedItems(it) } },
                     )
 
@@ -956,7 +953,6 @@ fun AppearanceSettingsScreen(
                         subtitle = stringResource(Res.string.settings_hide_episode_thumbnails_subtitle),
                         checked = preferences.hideEpisodeThumbnails,
                         highlighted = highlightSettingId == "hide_episode_thumbnails",
-                        index = cardIdx++, count = cardTotal,
                         onCheckedChange = { viewModel.edit { scope -> scope.library.setHideEpisodeThumbnails(it) } },
                     )
 
@@ -966,7 +962,6 @@ fun AppearanceSettingsScreen(
                         subtitle = stringResource(Res.string.settings_compact_episode_list_subtitle),
                         checked = preferences.compactEpisodeList,
                         highlighted = highlightSettingId == "compact_episode_list",
-                        index = cardIdx++, count = cardTotal,
                         onCheckedChange = { viewModel.edit { scope -> scope.library.setCompactEpisodeList(it) } },
                     )
 
@@ -976,7 +971,6 @@ fun AppearanceSettingsScreen(
                         subtitle = stringResource(Res.string.settings_confirm_library_reset_subtitle),
                         checked = preferences.confirmLibraryReset,
                         highlighted = highlightSettingId == "confirm_library_reset",
-                        index = cardIdx++, count = cardTotal,
                         onCheckedChange = { viewModel.edit { scope -> scope.library.setConfirmLibraryReset(it) } },
                     )
 
@@ -986,7 +980,6 @@ fun AppearanceSettingsScreen(
                         subtitle = stringResource(Res.string.settings_skip_special_episodes_subtitle),
                         checked = preferences.skipSpecials,
                         highlighted = highlightSettingId == "skip_specials",
-                        index = cardIdx++, count = cardTotal,
                         onCheckedChange = { viewModel.edit { scope -> scope.library.setSkipSpecials(it) } },
                     )
 
@@ -996,7 +989,6 @@ fun AppearanceSettingsScreen(
                         subtitle = stringResource(Res.string.settings_haptic_feedback_subtitle),
                         checked = preferences.hapticsEnabled,
                         highlighted = highlightSettingId == "haptics_enabled",
-                        index = cardIdx++, count = cardTotal,
                         onCheckedChange = { viewModel.edit { scope -> scope.appearance.setHapticsEnabled(it) } },
                     )
 
@@ -1006,7 +998,6 @@ fun AppearanceSettingsScreen(
                         subtitle = stringResource(Res.string.settings_show_share_media_subtitle),
                         checked = preferences.showShareMediaOption,
                         highlighted = highlightSettingId == "show_share_media",
-                        index = cardIdx++, count = cardTotal,
                         onCheckedChange = { viewModel.edit { scope -> scope.experimental.setShowShareMediaOption(it) } },
                     )
 
@@ -1016,7 +1007,6 @@ fun AppearanceSettingsScreen(
                         subtitle = stringResource(Res.string.settings_hide_search_history_subtitle),
                         checked = preferences.hideSearchHistory,
                         highlighted = highlightSettingId == "hide_search_history",
-                        index = cardIdx++, count = cardTotal,
                         onCheckedChange = { viewModel.edit { scope -> scope.experimental.setHideSearchHistory(it) } },
                     )
 
@@ -1026,9 +1016,9 @@ fun AppearanceSettingsScreen(
                         subtitle = stringResource(Res.string.settings_show_external_ratings_subtitle),
                         checked = preferences.showExternalRatings,
                         highlighted = highlightSettingId == "show_external_ratings",
-                        index = cardIdx++, count = cardTotal,
                         onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setShowExternalRatings(it) } },
                     )
+                    }
                 }
             }
 

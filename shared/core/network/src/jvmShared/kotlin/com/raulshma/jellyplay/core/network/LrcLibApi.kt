@@ -2,9 +2,8 @@ package com.raulshma.jellyplay.core.network
 
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.model.LrcLibTrack
+import com.raulshma.jellyplay.core.network.api.HttpExecutor
 import com.raulshma.jellyplay.core.network.api.JellyfinApiEngine
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
@@ -15,9 +14,29 @@ import javax.inject.Singleton
 
 @Singleton
 class LrcLibApi @Inject constructor(
-    private val client: OkHttpClient,
+    client: OkHttpClient,
 ) {
     private val json = JellyfinApiEngine.sharedJson
+
+    /**
+     * The shared OkHttp execute chassis, shaped with lrclib's texts. Declared
+     * taxonomy delta of the chassis fold: the former off-taxonomy
+     * `IllegalStateException`s ("lrclib returned n" / "Empty response") are
+     * now typed [ApiException]s — HTTP-status failures through
+     * [com.raulshma.jellyplay.core.network.api.ApiException.fromHttpResponse]
+     * (same message text, so callers matching on the status keep working),
+     * the absent-body arm the IOException-backed retryable shape. Transport
+     * failures keep propagating raw (the `runCatchingRethrowingCancellation`
+     * callers see the same IOException-shaped failures as before) and there
+     * is no retry — lrclib never had a `Resilient*` wrapper.
+     */
+    private val http = HttpExecutor(
+        okHttpClient = client,
+        options = HttpExecutor.Options(
+            parseErrorMessage = { code, _ -> "lrclib returned $code" },
+            emptyBodyText = "Empty response",
+        ),
+    )
 
     /**
      * On-the-wire shape returned by lrclib.net. [instrumental] arrives as a
@@ -47,15 +66,8 @@ class LrcLibApi @Inject constructor(
         )
     }
 
-    private suspend fun executeAndReadBody(client: OkHttpClient, request: Request): String =
-        withContext(Dispatchers.IO) {
-            client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    throw IllegalStateException("lrclib returned ${response.code}")
-                }
-                response.body?.string() ?: throw IllegalStateException("Empty response")
-            }
-        }
+    private suspend fun executeAndReadBody(request: Request): String =
+        http.executeForBodyText(request)
 
     suspend fun getBestMatch(
         artistName: String,
@@ -75,7 +87,7 @@ class LrcLibApi @Inject constructor(
             .header("User-Agent", "JellyPlay")
             .get()
             .build()
-        json.decodeFromString<LrcLibTrackDto>(executeAndReadBody(client, request)).toDomain()
+        json.decodeFromString<LrcLibTrackDto>(executeAndReadBody(request)).toDomain()
     }
 
     suspend fun search(query: String): Result<List<LrcLibTrack>> = runCatchingRethrowingCancellation {
@@ -85,7 +97,7 @@ class LrcLibApi @Inject constructor(
             .header("User-Agent", "JellyPlay")
             .get()
             .build()
-        val body = executeAndReadBody(client, request)
+        val body = executeAndReadBody(request)
         json.decodeFromString(ListSerializer(LrcLibTrackDto.serializer()), body).map { it.toDomain() }
     }
 
@@ -95,7 +107,7 @@ class LrcLibApi @Inject constructor(
             .header("User-Agent", "JellyPlay")
             .get()
             .build()
-        json.decodeFromString<LrcLibTrackDto>(executeAndReadBody(client, request)).toDomain()
+        json.decodeFromString<LrcLibTrackDto>(executeAndReadBody(request)).toDomain()
     }
 
     companion object {

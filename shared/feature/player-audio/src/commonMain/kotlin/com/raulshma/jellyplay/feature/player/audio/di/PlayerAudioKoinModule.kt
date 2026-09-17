@@ -23,13 +23,19 @@ import org.koin.dsl.module
  *  - AudioSleepTimerManager (dataJvmModule aliases the interface onto the
  *    SleepTimerManager single; the wasm fragment binds the wall-clock impl),
  *    MediaRepository /
- *    UserDataMutator / DownloadIntake (shared data
+ *    UserDataMutator (shared data
  *    cluster) and the download window TrackDownloadStatusWindow (core:data's
  *    own seam since the download-actions consolidation — jvmShared adapter
  *    over the DownloadRepository single in dataJvmModule, no-op stub in
  *    dataWasmModule) plus PreferenceProjections / AudioStore /
  *    AudioEffectsStore (shared datastore) resolve from the shared-module
  *    graph;
+ *  - TrackDownloadActions (the track-download flip collaborator over the
+ *    intake + window) is defined HERE, factory-per-resolution: its scope is
+ *    the DatastoreQualifiers application scope — the MediaDownloadActions
+ *    precedent in dataJvmModule (Koin has no handle on a ViewModel's
+ *    viewModelScope, and a download start outliving the screen it was
+ *    tapped on is the wanted semantics anyway);
  *  - desktop: LIVE since the real-audio engine — apps/desktop's
  *    desktopPlayerModule binds all four playback/cast deps:
  *    [com.raulshma.jellyplay.core.data.playback.AudioQueueManager] +
@@ -41,6 +47,18 @@ import org.koin.dsl.module
  */
 val playerAudioModule: Module = module {
     includes(platformPlayerAudioModule())
+
+    // The track-download flip collaborator (audio player's download CTA):
+    // deps are the shared-cluster DownloadIntake + TrackDownloadStatusWindow
+    // singles; the scope follows the MediaDownloadActions precedent (see the
+    // module kdoc). Factory — one instance per resolving ViewModel.
+    factory {
+        com.raulshma.jellyplay.core.data.download.TrackDownloadActions(
+            scope = get(com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers.applicationScope),
+            intake = get(),
+            statusWindow = get(),
+        )
+    }
 
     viewModel {
         AudioPlayerViewModel(
@@ -55,7 +73,7 @@ val playerAudioModule: Module = module {
             playlistRepository = get(),
             userDataMutator = get(),
             downloads = get(),
-            downloadIntake = get(),
+            trackDownloadActions = get(),
             sleepTimerManager = get(),
         )
     }

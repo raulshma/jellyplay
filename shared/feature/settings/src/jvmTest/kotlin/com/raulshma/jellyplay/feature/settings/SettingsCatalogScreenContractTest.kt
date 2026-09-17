@@ -290,6 +290,9 @@ class SettingsCatalogScreenContractTest {
             "SettingsScreenGroups.playbackSyncPlay",
             "SettingsScreenGroups.playbackCasting",
             "SettingsScreenGroups.playbackDvr",
+            "playbackPlayerScreenRowTotal(",
+            "playbackAdvancedVideoScreenRowTotal(",
+            "playbackEngineScreenRowTotal(",
         ),
         "AppearanceSettingsScreen.kt" to listOf(
             "rememberHighlightScrollIndex(",
@@ -300,17 +303,28 @@ class SettingsCatalogScreenContractTest {
             "SettingsScreenGroups.appearancePerformance",
             "SettingsScreenGroups.appearanceEyeCare",
             "SettingsScreenGroups.appearanceNewsletter",
+            "appearanceLibraryScreenRowTotal(",
         ),
         "StorageSettingsScreen.kt" to listOf(
             "resolveHighlightScrollIndex(",
             "SettingsScreenGroups.storageCache",
             "SettingsScreenGroups.storageNetwork",
             "SettingsScreenGroups.storageDownloads",
+            "storageCacheScreenRowTotal(",
+            "storageDownloadsScreenRowTotal(",
         ),
         "LanguageSettingsScreen.kt" to listOf(
             "rememberHighlightScrollIndex(",
             "SettingsScreenGroups.languageGeneral",
             "SettingsScreenGroups.languageSubtitles",
+            "languageGeneralScreenRowTotal(",
+            "languageSubtitlesScreenRowTotal(",
+        ),
+        "NotificationSettingsScreen.kt" to listOf(
+            "notificationScreenRowTotal(",
+        ),
+        "SecuritySettingsScreen.kt" to listOf(
+            "securityScreenRowTotal(",
         ),
         "SettingsScreen.kt" to listOf(
             "SettingsScreenGroups.account",
@@ -322,6 +336,29 @@ class SettingsCatalogScreenContractTest {
         "AudioSettingsScreen.kt" to listOf(
             "audioScreenRowTotal",
             "SettingsScreenGroups.audioCache",
+        ),
+    )
+
+    /** The retired hand-incremented row counters / hand-run totals, per screen file. */
+    private val retiredRowCounters: Map<String, List<String>> = mapOf(
+        "StorageSettingsScreen.kt" to listOf(
+            "storageIdx", "networkIdx", "downloadIdx",
+        ),
+        "PlaybackSettingsScreen.kt" to listOf(
+            "vlcIdx", "vlcTotal", "exoIdx", "exoTotal",
+            "syncIdx", "syncTotal", "castIdx", "castTotal", "dvrIdx", "dvrTotal",
+        ),
+        "NotificationSettingsScreen.kt" to listOf(
+            "notifIdx", "notifTotal", "notifBaseTotal",
+        ),
+        "LanguageSettingsScreen.kt" to listOf(
+            "langIndex", "langRowCount", "subIdx", "subTotal",
+        ),
+        "AppearanceSettingsScreen.kt" to listOf(
+            "cardIdx", "cardTotal",
+        ),
+        "SecuritySettingsScreen.kt" to listOf(
+            "secIdx", "secTotal", "baseSecTotal",
         ),
     )
 
@@ -337,6 +374,20 @@ class SettingsCatalogScreenContractTest {
             val text = source(file)
             for (usage in required) {
                 assertTrue(usage in text, "$file must consume the catalog derivation via `$usage`")
+            }
+        }
+    }
+
+    @Test
+    fun `screens feed SettingsItemList from the admission totals, not hand counters`() {
+        // The row indexes are owned by SettingsItemList's auto-increment (the
+        // emitted sequence is 0 until the admission total) and the totals by
+        // the pure admission functions — a reappearing `var xIdx = 0` or a
+        // hand-run `val xTotal = …` arithmetic block is the drift this pins.
+        for ((file, counters) in retiredRowCounters) {
+            val text = source(file)
+            for (counter in counters) {
+                if (counter in text) fail("$file still hand-bumps $counter — feed SettingsItemList(total = …admissionTotal())")
             }
         }
     }
@@ -528,6 +579,165 @@ class SettingsCatalogScreenContractTest {
             nonAdvanced,
             audioScreenRowTotal(showAdvanced = false, preferences = AudioPreferences()),
         )
+    }
+
+    // ── The per-group row-admission totals (the audio shape, extended) ──
+
+    /**
+     * The index/total pair a rendered group emits: inside `SettingsItemList`
+     * the rows take the auto-index 0..total-1 and every row's `count` is the
+     * admission total, so each pinned total below IS the total the screen
+     * feeds and the sequence below IS the index sequence the rows display.
+     */
+    private fun emittedIndexSequence(total: Int): List<Int> = (0 until total).toList()
+
+    @Test
+    fun `storage row totals track the cache and downloads declarations`() {
+        // Cache: the screen-local cache-used info row + the declared
+        // non-advanced rows (clear_cache, clear_image_cache); the five
+        // advanced declarations only behind the advanced toggle.
+        assertEquals(
+            SettingsScreenGroups.storageCache.items.count { !it.isAdvanced } + 1,
+            storageCacheScreenRowTotal(showAdvanced = false),
+        )
+        assertEquals(
+            SettingsScreenGroups.storageCache.items.size + 1,
+            storageCacheScreenRowTotal(showAdvanced = true),
+        )
+        assertEquals(3, storageCacheScreenRowTotal(showAdvanced = false))
+        assertEquals(8, storageCacheScreenRowTotal(showAdvanced = true))
+        assertEquals(emittedIndexSequence(3), List(3) { it })
+
+        // Network: unconditionally the whole declaration (the screen feeds
+        // `SettingsScreenGroups.storageNetwork.items.size` directly — no
+        // conditional, so no admission function).
+        assertEquals(11, SettingsScreenGroups.storageNetwork.items.size, "the storage.network declaration changed — update this pin")
+
+        // Downloads: the three download_schedule_* window rows only when
+        // scheduling is on; the toggle itself always renders.
+        assertEquals(
+            SettingsScreenGroups.storageDownloads.items.size - 3,
+            storageDownloadsScreenRowTotal(downloadScheduleEnabled = false),
+        )
+        assertEquals(
+            SettingsScreenGroups.storageDownloads.items.size,
+            storageDownloadsScreenRowTotal(downloadScheduleEnabled = true),
+        )
+        assertEquals(7, storageDownloadsScreenRowTotal(downloadScheduleEnabled = false))
+        assertEquals(10, storageDownloadsScreenRowTotal(downloadScheduleEnabled = true))
+    }
+
+    @Test
+    fun `playback row totals track the player advanced-video and engine declarations`() {
+        // Player: the six unconditional rows (player_engine, default_speed,
+        // default_aspect, video_autoplay_next, autoplay_countdown,
+        // hold_speed_multiplier) survive every gate off; each flag reveals
+        // exactly its own rows.
+        val allGatesOff = playbackPlayerScreenRowTotal(
+            isTv = false,
+            showAdvanced = false,
+            supportsScreenOrientation = false,
+            supportsTouchGestures = false,
+        )
+        assertEquals(6, allGatesOff)
+        assertEquals(7, playbackPlayerScreenRowTotal(false, false, supportsScreenOrientation = true, supportsTouchGestures = false))
+        assertEquals(9, playbackPlayerScreenRowTotal(false, false, supportsScreenOrientation = false, supportsTouchGestures = true))
+        // Every non-advanced declaration renders with caps on (isTv off: the
+        // two TV rows ride isTv alone — shipped semantics, also without
+        // advanced mode).
+        assertEquals(
+            SettingsScreenGroups.playbackPlayer.items.count { !it.isAdvanced },
+            playbackPlayerScreenRowTotal(false, false, supportsScreenOrientation = true, supportsTouchGestures = true),
+        )
+        assertEquals(
+            SettingsScreenGroups.playbackPlayer.items.size - 2, // minus the two TV rows
+            playbackPlayerScreenRowTotal(false, true, supportsScreenOrientation = true, supportsTouchGestures = true),
+        )
+        assertEquals(33, playbackPlayerScreenRowTotal(true, true, supportsScreenOrientation = true, supportsTouchGestures = true))
+
+        // Advanced video: the dialogue-boost strength row rides its toggle.
+        assertEquals(
+            SettingsScreenGroups.playbackAdvancedVideo.items.size - 1,
+            playbackAdvancedVideoScreenRowTotal(dialogueBoostEnabled = false),
+        )
+        assertEquals(
+            SettingsScreenGroups.playbackAdvancedVideo.items.size,
+            playbackAdvancedVideoScreenRowTotal(dialogueBoostEnabled = true),
+        )
+
+        // Engine branches: declared prefix rows + the one reset row each.
+        assertEquals(12, playbackEngineScreenRowTotal("mpv_"))
+        assertEquals(9, playbackEngineScreenRowTotal("vlc_"))
+        assertEquals(8, playbackEngineScreenRowTotal("exo_"))
+        for (prefix in listOf("mpv_", "vlc_", "exo_")) {
+            assertEquals(
+                SettingsScreenGroups.playbackEngine.items.count { it.id.startsWith(prefix) } + 1,
+                playbackEngineScreenRowTotal(prefix),
+                "the $prefix branch's declared-row set changed — update this pin",
+            )
+        }
+
+        // Always-visible trailing groups: the sequence/invariant shape.
+        assertEquals(emittedIndexSequence(playbackEngineScreenRowTotal("vlc_")), (0 until 9).toList())
+    }
+
+    @Test
+    fun `notification row total tracks the declaration through every gate`() {
+        val allOn = notificationScreenRowTotal(
+            enabled = true,
+            showAdvanced = true,
+            quietHoursEnabled = true,
+            canOpenSystemNotificationSettings = true,
+        )
+        assertEquals(SettingsScreenGroups.notifications.items.size, allOn, "a declared notification id is admitted by no gate")
+        assertEquals(1, notificationScreenRowTotal(false, true, true, true)) // master toggle off: only itself
+        assertEquals(5, notificationScreenRowTotal(true, false, true, true)) // + frequency/sound/vibrate/lights
+        assertEquals(9, notificationScreenRowTotal(true, true, false, false)) // + quiet hours/dnd/max-per-check/libraries
+        assertEquals(11, notificationScreenRowTotal(true, true, true, false)) // + quiet start/end
+        assertEquals(12, allOn) // + the platform's system-notification-settings row
+    }
+
+    @Test
+    fun `language row totals track the trio and the subtitles conditionals`() {
+        // The leading trio: the app-language row only where the locale
+        // override applies.
+        assertEquals(2, languageGeneralScreenRowTotal(showsAppLocaleRow = false))
+        assertEquals(
+            SettingsScreenGroups.languageGeneral.items.size,
+            languageGeneralScreenRowTotal(showsAppLocaleRow = true),
+        )
+
+        // Subtitles: 4 always (tester/font-size/forced-only + the
+        // always-shown high-contrast row — declared advanced yet never
+        // gated); the style rows behind advanced; the HDR font-size row
+        // behind the HDR toggle.
+        assertEquals(4, languageSubtitlesScreenRowTotal(showAdvanced = false, hdrSubtitleStyleEnabled = true))
+        assertEquals(11, languageSubtitlesScreenRowTotal(showAdvanced = true, hdrSubtitleStyleEnabled = false))
+        assertEquals(
+            SettingsScreenGroups.languageSubtitles.items.size,
+            languageSubtitlesScreenRowTotal(showAdvanced = true, hdrSubtitleStyleEnabled = true),
+        )
+    }
+
+    @Test
+    fun `appearance library row total is the declaration plus the reset action row`() {
+        assertEquals(
+            SettingsScreenGroups.appearanceLibrary.items.size + 1,
+            appearanceLibraryScreenRowTotal(),
+        )
+        assertEquals(11, appearanceLibraryScreenRowTotal())
+    }
+
+    @Test
+    fun `security row total keeps the shipped count gates`() {
+        // The pin row always; biometric rides the platform+gate flag; the
+        // auto-lock timer rides advanced. pin_for_player_lock renders behind
+        // the pin toggle but has never been admitted into the count — the
+        // preserved quirk this pins.
+        assertEquals(1, securityScreenRowTotal(canShowBiometric = false, showAdvanced = false))
+        assertEquals(2, securityScreenRowTotal(canShowBiometric = true, showAdvanced = false))
+        assertEquals(2, securityScreenRowTotal(canShowBiometric = false, showAdvanced = true))
+        assertEquals(3, securityScreenRowTotal(canShowBiometric = true, showAdvanced = true))
     }
 
     // ── The search-result click action ──────────────────────────────────

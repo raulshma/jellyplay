@@ -37,7 +37,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
@@ -72,7 +71,6 @@ import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_copie
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_downloading_viewer
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_preparing_locations
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 import kotlin.math.abs
@@ -156,26 +154,21 @@ internal fun PagedReaderContent(
             ),
     ) {
         val pagerState = rememberPagerState(initialPage = content.currentPage) { content.pageCount }
-        LaunchedEffect(pagerState) {
-            snapshotFlow { pagerState.currentPage }
-                .drop(1)
-                .collect { viewModel.onPageChanged(it) }
-        }
+        // The page-turn protocol lives in the coordinator (PagedPagerCoordinator
+        // owns the ordering contract KDoc): settle/swipe reporting installs once,
+        // VM-driven paging rides turnTo's guard, rail/slider jumps ride jumpTo.
+        val coordinator = rememberPagedPagerCoordinator(
+            pagerState = pagerState,
+            animated = { prefs.global.animatedPageTurns },
+            onPageSettled = viewModel::onPageChanged,
+        )
+        LaunchedEffect(coordinator) { coordinator.attach(this) }
         // VM-driven paging (keyboard, slider, tap zones, outline/bookmark
-        // jumps) → scroll the pager; user swipes flow back through the
-        // snapshotFlow above (the VM's same-page guard makes the round trip
-        // idempotent). Programmatic turns animate or snap per the
-        // animatedPageTurns preference; user swipes always animate.
-        LaunchedEffect(pagerState, content.currentPage, animatedPageTurns) {
-            if (pagerState.currentPage != content.currentPage &&
-                pagerState.targetPage != content.currentPage
-            ) {
-                if (pageTurnScroll(animatedPageTurns) == PageTurnScroll.ANIMATED) {
-                    pagerState.animateScrollToPage(content.currentPage)
-                } else {
-                    pagerState.scrollToPage(content.currentPage)
-                }
-            }
+        // jumps): the uiState page is already the truth — the coordinator
+        // animates or snaps the pager to it, skipping pages the pager holds
+        // or already flies to (which makes the settle round trip idempotent).
+        LaunchedEffect(coordinator, content.currentPage, animatedPageTurns) {
+            coordinator.turnTo(content.currentPage)
         }
         HorizontalPager(
             state = pagerState,
@@ -210,13 +203,9 @@ internal fun PagedReaderContent(
                 currentIndex = pdfTickIndex,
                 onJump = { tick ->
                     val page = tick.page ?: return@ReaderTocRail
-                    scope.launch {
-                        if (pageTurnScroll(animatedPageTurns) == PageTurnScroll.ANIMATED) {
-                            pagerState.animateScrollToPage(page)
-                        } else {
-                            pagerState.scrollToPage(page)
-                        }
-                    }
+                    // Pager-first jump (the coordinator contract's jumpTo
+                    // half): the VM learns through the settle collector.
+                    scope.launch { coordinator.jumpTo(page) }
                 },
                 modifier = Modifier
                     .align(Alignment.CenterStart)
@@ -248,15 +237,9 @@ internal fun PagedReaderContent(
                 tocVisible = content.format == BookFormat.PDF,
                 onOpenToc = { sheets.showToc = true },
                 onSeekPage = { page ->
-                    // Slider seeks only scroll the pager — the VM follows
-                    // through the snapshotFlow (the original contract).
-                    scope.launch {
-                        if (pageTurnScroll(animatedPageTurns) == PageTurnScroll.ANIMATED) {
-                            pagerState.animateScrollToPage(page)
-                        } else {
-                            pagerState.scrollToPage(page)
-                        }
-                    }
+                    // Pager-first jump (the coordinator contract's jumpTo
+                    // half): the VM follows through the settle collector.
+                    scope.launch { coordinator.jumpTo(page) }
                 },
             )
         }
@@ -278,6 +261,8 @@ internal fun PagedReaderContent(
             PdfOutlineSheet(
                 nodes = pdfOutline,
                 onJump = { page ->
+                    // VM-first jump (the coordinator contract's turnTo half):
+                    // the uiState moves, the sync effect turns the pager.
                     sheets.showToc = false
                     viewModel.onPageChanged(page)
                 },

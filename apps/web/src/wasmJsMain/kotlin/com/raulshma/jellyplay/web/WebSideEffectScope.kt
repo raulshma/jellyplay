@@ -32,6 +32,15 @@ internal class WebSideEffectScope {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     /**
+     * The same page-lifetime scope, read-only — for owners that must run
+     * machine-owned coroutines on this exact discipline without being able to
+     * launch unguarded work (the Seerr pane's shared ConnectionProbe board
+     * runs its probe jobs here, so an in-flight test survives pane navigation
+     * exactly like the save/disconnect writes).
+     */
+    val coroutineScope: CoroutineScope get() = scope
+
+    /**
      * Fire-and-forget launch with silent degrade: a thrown failure is
      * contained inside the job (broken-store swallow, pane-disposal survival)
      * instead of surfacing. Deliberately NOT a general-purpose [launch] —

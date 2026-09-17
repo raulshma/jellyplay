@@ -35,14 +35,19 @@ import org.jetbrains.compose.resources.StringResource
  *  - **Status machine** — [Status]: Idle → Testing → Connected([D] details) /
  *    Error([Failure]). [Connected] is parameterized so each integration keeps
  *    its own detail type (*arr/subtitle: Unit, Seerr: server version).
- *  - **Single-flight: RESTART** — a [probe] request while the same key is
- *    already Testing CANCELS the in-flight probe and starts a new one (Seerr's
- *    former `launchTest` discipline, generalized; the refused alternative was
- *    rejected because it would have changed Seerr's rapid-retry UX). A refusal
- *    ([refused] pre-flight validation) supersedes an in-flight probe on the
- *    same key the same way. A superseded probe NEVER lands its outcome: writes
- *    are guarded by a job-identity check, so a probe that resumed after
- *    cancellation cannot clobber the superseding state.
+ *  - **Single-flight** — a declared policy arm ([SingleFlight]):
+ *    [SingleFlight.RESTART] (the default) makes a [probe] request while the
+ *    same key is already Testing CANCEL the in-flight probe and start a new
+ *    one (Seerr's former `launchTest` discipline, generalized; the refused
+ *    alternative was rejected because it would have changed Seerr's
+ *    rapid-retry UX). [SingleFlight.CALLER_GATED] leaves an in-flight probe
+ *    running — the caller's own UX gates concurrency (the web Seerr pane's
+ *    buttons-disabled-while-testing contract), so the machine neither cancels
+ *    nor restarts; the job-identity guard below still guarantees a
+ *    superseded/lost-the-registration probe NEVER lands its outcome. A
+ *    refusal ([refused] pre-flight validation) supersedes an in-flight probe
+ *    on the same key under BOTH arms — the fresh validation error must win
+ *    over any in-flight outcome.
  *  - **Cancellation never lands as Error** — the action runs under
  *    [runCatchingRethrowingCancellation]; a [CancellationException] propagates
  *    (Seerr's rethrow discipline, ported to all three integrations), leaving
@@ -85,6 +90,14 @@ class ConnectionProbe<R : Any, K : Any, D>(
      * hand. Null = the request is acceptable.
      */
     private val refused: ((R) -> FallbackText?)? = null,
+    /**
+     * The declared single-flight arm (see the class KDoc): [SingleFlight.RESTART]
+     * cancels an in-flight probe when a new one is accepted for the same key;
+     * [SingleFlight.CALLER_GATED] trusts the caller's UX to keep probes
+     * non-concurrent and leaves the in-flight job running. Default RESTART —
+     * every existing integration keeps its exact former behavior.
+     */
+    private val singleFlight: SingleFlight = SingleFlight.RESTART,
 ) {
 
     private val _status = MutableStateFlow<Map<K, Status<D>>>(emptyMap())
@@ -120,7 +133,14 @@ class ConnectionProbe<R : Any, K : Any, D>(
             _status.update { it + (key to Status.Error(Failure.Declared(refusal))) }
             return
         }
-        supersede(key)
+        // Single-flight arm: RESTART cancels the in-flight probe before the new
+        // one takes the registration; CALLER_GATED leaves it running (the
+        // caller's UX owns non-concurrency) — the identity guard inside the
+        // settling update still discards the old job's outcome once it has
+        // lost the registration, so the arm cannot double-land.
+        if (singleFlight == SingleFlight.RESTART) {
+            supersede(key)
+        }
         // LAZY + explicit start: the job MUST be registered before its body can
         // run. An eagerly-started launch on an immediate dispatcher (the
         // ViewModelScope reality) would run a suspension-free action inline,
@@ -277,6 +297,29 @@ class ConnectionProbe<R : Any, K : Any, D>(
             EnterCredentialsFirst -> Res.string.settings_probe_enter_credentials
             ProviderNotConfigured -> Res.string.settings_probe_provider_not_configured
         }
+    }
+
+    /**
+     * The declared single-flight policy arms. Declared at construction —
+     * never inferred from the caller's shape — so a consumer's concurrency
+     * contract is visible at the construction site.
+     */
+    enum class SingleFlight {
+        /**
+         * A probe while the same key is Testing cancels the in-flight probe
+         * and starts a new one; a superseded probe's late outcome never lands.
+         * The default (the Seerr ViewModel's former `launchTest` discipline).
+         */
+        RESTART,
+
+        /**
+         * The caller's UX owns probe concurrency (e.g. the web Seerr pane
+         * disables every control while a test runs), so the machine neither
+         * cancels nor restarts an in-flight probe. Safety net unchanged: only
+         * the job currently registered for the key may land an outcome, and
+         * refusals/resets still supersede under this arm.
+         */
+        CALLER_GATED,
     }
 
     /** What the [action] lambda returns: the machine owns the status fold. */

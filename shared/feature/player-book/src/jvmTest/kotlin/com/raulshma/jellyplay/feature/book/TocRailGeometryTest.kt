@@ -1,14 +1,16 @@
 package com.raulshma.jellyplay.feature.book
 
+import com.raulshma.jellyplay.core.ui.components.FisheyeRailMath
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 
 /**
- * Pins the TOC tick rail's extracted geometry core (see [TocRailGeometry]):
- * the pixel→tick-row mapping, the beyond-the-rail drag extrapolation with its
- * full-TOC clamps, and the gaussian fisheye lens. Pure math — no Compose, no
- * dispatcher.
+ * Pins the TOC tick rail's geometry core ([TocRailGeometry]) at its
+ * feature-specific arms: the unclamped raw-row contract the drag
+ * extrapolation consumes, the beyond-the-rail stepping with its full-TOC
+ * clamps, and the delegation to the shared lens. The gaussian fisheye math
+ * itself is pinned once in core:ui's `FisheyeRailMathTest`. Pure math — no
+ * Compose, no dispatcher.
  */
 class TocRailGeometryTest {
 
@@ -18,27 +20,16 @@ class TocRailGeometryTest {
     private val tocLastIndex = 19
 
     @Test
-    fun fisheye_is_flat_without_a_touch() {
-        for (row in 0..4) {
-            assertEquals(1f, geometry.fisheyeScaleAt(row, touchRow = null))
-        }
+    fun fisheye_delegates_to_the_shared_lens() {
+        assertEquals(FisheyeRailMath.fisheyeScaleAt(2, 2f), geometry.fisheyeScaleAt(2, 2f))
+        // Not dragging → no lens, through the adapter too.
+        assertEquals(1f, geometry.fisheyeScaleAt(1, touchRow = null))
     }
 
     @Test
-    fun fisheye_peaks_at_the_touched_row_and_tapers_with_distance() {
-        assertEquals(2.5f, geometry.fisheyeScaleAt(row = 2, touchRow = 2f))
-        val near = geometry.fisheyeScaleAt(row = 1, touchRow = 0f)
-        val far = geometry.fisheyeScaleAt(row = 4, touchRow = 0f)
-        assertTrue(near > 1f)
-        assertTrue(far > 1f && far < 1.02f)
-        // Fractional touch rows sit between the integer bell curves.
-        assertTrue(geometry.fisheyeScaleAt(row = 0, touchRow = 0.4f) < 2.5f)
-    }
-
-    @Test
-    fun raw_row_keeps_the_fraction_and_the_sign() {
-        assertEquals(0f, geometry.rawRowAt(0f))
-        assertEquals(1.5f, geometry.rawRowAt(15f))
+    fun raw_row_stays_unclamped_for_the_extrapolation() {
+        // The DELIBERATE delta from the alphabet rail: past-the-end raw rows
+        // survive — the drag extrapolation needs the out-of-range values.
         assertEquals(-0.5f, geometry.rawRowAt(-5f))
         assertEquals(5.5f, geometry.rawRowAt(55f))
     }

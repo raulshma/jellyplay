@@ -79,6 +79,20 @@ class AudioCrossfader(
         crossfadePlayer?.setPlaybackSpeed(value)
     }
 
+    /**
+     * Pauses the in-flight secondary player; a no-op outside a crossfade.
+     * Focus-suspension parity for the migration slice: with built-in focus
+     * handling off BOTH players, an OS loss mid-fade reaches the
+     * [PlaybackFocus] module, whose suspended-holder command lands on
+     * [AudioPlaybackManager.pause] — the primary only. Without this the
+     * secondary (still unpromoted, not yet reachable as `exoPlayer`) would
+     * keep playing out the fade and past the transition unfocused, where its
+     * own focus handling used to pause it with the primary.
+     */
+    fun pause() {
+        crossfadePlayer?.takeIf { it.isPlaying }?.pause()
+    }
+
     fun setVolume(pct: Float) {
         crossfadePlayer?.volume = pct
     }
@@ -137,7 +151,14 @@ class AudioCrossfader(
             .setRenderersFactory(renderersFactory)
             .setLoadControl(loadControl)
             .setMediaSourceFactory(mediaSourceFactory)
-            .setAudioAttributes(audioAttributes, true)
+            // ADR-0004 music OS-leg migration: no built-in focus handling here
+            // either. The secondary is a second ExoPlayer for the SAME music
+            // surface; if it requested focus it would steal the module's OS
+            // seat and focus-loss-pause the primary mid-fade (the GAIN request
+            // below at play() time). Focus belongs to PlaybackFocus alone; the
+            // seat persists across the primary→secondary promotion because the
+            // arbiter owns the AudioFocusRequest, not the players.
+            .setAudioAttributes(audioAttributes, false)
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(C.WAKE_MODE_LOCAL)
             .build().also { player ->

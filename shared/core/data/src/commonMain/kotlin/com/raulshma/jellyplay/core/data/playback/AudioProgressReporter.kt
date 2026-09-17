@@ -1,26 +1,26 @@
 package com.raulshma.jellyplay.core.data.playback
 
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
-import com.raulshma.jellyplay.core.model.PlaybackProgress
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
  * Periodic Jellyfin playback-progress reporting for a LOCAL session: every
- * [PROGRESS_REPORT_INTERVAL_MS] a [PlaybackProgress] row rides the current
- * play session id, paused positions dedupe, and stop reports rotate the
- * session id SYNCHRONOUSLY.
+ * 10 s a [PlaybackProgress] row rides the current play session id, paused
+ * positions dedupe, and stop reports rotate the session id SYNCHRONOUSLY.
+ *
+ * The reporting loop itself is [PeriodicProgressReportLoop], the core that
+ * player-video's reporter shares — the CADENCE and PAUSED DEDUP invariants
+ * (and their virtual-time pins) live THERE, once. What remains here is the
+ * local-session bookkeeping the loop core deliberately does not own:
  *
  * Promotion from androidMain (both managers now share this one class): the
  * reporting semantics were platform-neutral server bookkeeping whose only
  * Android-specific member was `exoPlayerProvider: () -> ExoPlayer?` —
  * replaced by two plain lambdas, [positionMsProvider] and [isPlayingProvider]
- * (null position = no live player this cycle; the 10 kHz tick math
- * `ms * 10_000` stays HERE, in exactly one place). Android adapts at
+ * (null position = no live player this cycle). Android adapts at
  * construction with ExoPlayer-backed lambdas; the desktop manager
  * constructs it with engine-backed ones and its former three mirror
  * functions (startProgressReporting / reportStopped / reportStoppedCurrent)
@@ -28,14 +28,10 @@ import kotlinx.coroutines.launch
  * multiplatform [Uuid] (also a v4 string — identical session-id shape).
  *
  * ## Invariants
- *  - CADENCE: the loop reports at [reportIntervalMs] (production default
- *    [PROGRESS_REPORT_INTERVAL_MS]; injectable only so host suites can pin
- *    cadence behaviour on virtual time — callers leave the default).
- *  - PAUSED DEDUP: while paused at an unmoving position exactly ONE paused
- *    row ever flushes ([lastPausedPositionTicks]); any position change while
- *    paused (seek) reports again; a playing row always resets the dedup.
  *  - REMOTE GATE: [start] is a no-op while [remoteSessionActive] returns
- *    true — the remote session owns server reporting then.
+ *    true — the remote session owns server reporting then. Wired as the
+ *    loop core's START GATE (a gated start still cancels any prior loop and
+ *    re-seeds the dedup before returning).
  *  - STOP ORDERING ([reportStopped]): the stop network call is LAUNCHED on
  *    [scope], NEVER awaited, while the play session id rotates
  *    SYNCHRONOUSLY before [reportStopped] returns — so the start-report
@@ -64,33 +60,18 @@ class AudioProgressReporter(
     private val playSessionIdSetter: (String) -> Unit,
     private val reportIntervalMs: Long = PROGRESS_REPORT_INTERVAL_MS,
 ) {
-    private var progressJob: Job? = null
-    private var lastPausedPositionTicks: Long = -1L
+    private val loop = PeriodicProgressReportLoop(
+        scope = scope,
+        playbackRepository = playbackRepository,
+        positionMsProvider = positionMsProvider,
+        isPlayingProvider = isPlayingProvider,
+        itemIdProvider = itemIdProvider,
+        sessionIdProvider = playSessionIdProvider,
+        reportIntervalMs = reportIntervalMs,
+        gateStart = remoteSessionActive,
+    )
 
-    fun start() {
-        progressJob?.cancel()
-        lastPausedPositionTicks = -1L
-        if (remoteSessionActive()) return
-        progressJob = scope.launch {
-            while (true) {
-                delay(reportIntervalMs)
-                val positionMs = positionMsProvider() ?: continue
-                val itemId = itemIdProvider() ?: continue
-                val positionTicks = positionMs * 10_000
-                val isPaused = !isPlayingProvider()
-                if (isPaused && positionTicks == lastPausedPositionTicks) continue
-                if (isPaused) lastPausedPositionTicks = positionTicks else lastPausedPositionTicks = -1L
-                playbackRepository.reportPlaybackProgress(
-                    PlaybackProgress(
-                        itemId = itemId,
-                        sessionId = playSessionIdProvider(),
-                        positionTicks = positionTicks,
-                        isPaused = isPaused,
-                    )
-                )
-            }
-        }
-    }
+    fun start() = loop.start()
 
     fun reportStopped(
         itemId: String? = null,
@@ -131,12 +112,10 @@ class AudioProgressReporter(
         playSessionIdSetter(Uuid.random().toString())
     }
 
-    fun cancel() {
-        progressJob?.cancel()
-    }
+    fun cancel() = loop.cancel()
 
     companion object {
         /** Production report cadence (Jellyfin's conventional 10 s interval). */
-        const val PROGRESS_REPORT_INTERVAL_MS = 10_000L
+        const val PROGRESS_REPORT_INTERVAL_MS = PeriodicProgressReportLoop.PROGRESS_REPORT_INTERVAL_MS
     }
 }

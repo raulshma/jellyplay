@@ -8,7 +8,8 @@ import com.raulshma.jellyplay.core.model.SystemInfo
  * settings feature only ever consumes three of its ~40 operations (the
  * settings root's active-devices row and the About screen's server info), so
  * commonMain cannot name the class whose constructor closure reaches the
- * whole JVM admin surface. QuickDownloadActions template: the interface
+ * whole JVM admin surface. Promoted-interface precedent (DownloadIntake/
+ * DownloadQueue): the interface
  * carries exactly the host-facing surface, the jvmShared actual delegates to
  * the process-wide `AdminRepository` single (same DI graph, android/desktop
  * behavior unchanged), and the wasmJs actual is an honest no-op.

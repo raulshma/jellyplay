@@ -33,9 +33,9 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.core.ui.components.FisheyeRailMath
 import kotlin.math.abs
 import kotlin.math.ceil
-import kotlin.math.exp
 import kotlin.math.floor
 
 /**
@@ -61,6 +61,14 @@ import kotlin.math.floor
  * numbers, deterministically testable; the composable keeps dp/px conversion,
  * drawing, and pointer wiring.
  *
+ * A thin adapter over core:ui's [FisheyeRailMath]: the fractional pixel→row
+ * mapping and the gaussian lens (its `FISHEYE_PEAK`/`FISHEYE_SIGMA_SQ`
+ * constants) live there once, shared with the library's alphabet jump rail.
+ * The extrapolation fold stays HERE on purpose: drag-scrubbing must consume
+ * raw rows PAST the rail's ends (a 5-tick stack reaching a 50-chapter TOC),
+ * while the alphabet rail clamps instead — the two rails diverge exactly at
+ * out-of-range rows, so that decision cannot live in the shared math.
+ *
  * @param windowSize visible tick rows — the rail is exactly
  *   `windowSize * rowPx` tall and every row derives from that height.
  * @param rowPx fixed per-tick row height in px.
@@ -73,8 +81,7 @@ internal class TocRailGeometry(
      * Fractional row position of [yPx] in tick-row units, UNclamped — the
      * values past either end are what the drag extrapolation consumes.
      */
-    fun rawRowAt(yPx: Float): Float =
-        if (rowPx <= 0f) 0f else yPx / rowPx
+    fun rawRowAt(yPx: Float): Float = FisheyeRailMath.rawRowAt(yPx, rowPx)
 
     /** Visible tick row under [yPx], clamped into the rail. */
     fun windowRowAt(yPx: Float): Float =
@@ -101,24 +108,11 @@ internal class TocRailGeometry(
 
     /**
      * Gaussian fisheye scale for the tick at [row] under the fractional
-     * finger row [touchRow] (null = not dragging → no lens). Pure — safe to
-     * call from a draw-phase `graphicsLayer` lambda so the lens glides with
-     * the finger without invalidating composition.
+     * finger row [touchRow] (null = not dragging → no lens). Delegates to
+     * [FisheyeRailMath] — pure, safe from a draw-phase `graphicsLayer` lambda.
      */
-    fun fisheyeScaleAt(row: Int, touchRow: Float?): Float {
-        if (touchRow == null) return 1f
-        val d = row - touchRow
-        val g = exp(-(d * d) / (2 * FISHEYE_SIGMA_SQ))
-        return 1f + (FISHEYE_PEAK - 1f) * g
-    }
-
-    companion object {
-        /** Peak scale of the tick directly under the finger (fisheye lens). */
-        private const val FISHEYE_PEAK = 2.5f
-
-        /** Gaussian sigma² for the fisheye falloff — smaller = tighter bell. */
-        private const val FISHEYE_SIGMA_SQ = 1.6f
-    }
+    fun fisheyeScaleAt(row: Int, touchRow: Float?): Float =
+        FisheyeRailMath.fisheyeScaleAt(row, touchRow)
 }
 
 /** Fixed per-tick row height — compact stack, tall enough to grab. */

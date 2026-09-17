@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.feature.player.audio
 
-import com.raulshma.jellyplay.core.data.download.DownloadIntake
+import com.raulshma.jellyplay.core.data.download.TrackDownloadActions
 import com.raulshma.jellyplay.core.data.download.TrackDownloadStatusWindow
 import com.raulshma.jellyplay.core.data.playback.AudioEffectsManager
 import com.raulshma.jellyplay.core.data.playback.AudioQueueManager
@@ -51,7 +51,7 @@ class AudioPlayerViewModelTest {
     private lateinit var playlistRepository: PlaylistRepository
     private lateinit var userDataMutator: com.raulshma.jellyplay.core.data.repository.UserDataMutator
     private lateinit var downloads: TrackDownloadStatusWindow
-    private lateinit var downloadIntake: DownloadIntake
+    private lateinit var trackDownloadActions: TrackDownloadActions
     private lateinit var sleepTimerManager: AudioSleepTimerManager
     private lateinit var cast: AudioPlayerCast
 
@@ -70,7 +70,7 @@ class AudioPlayerViewModelTest {
         playlistRepository = mockk(relaxed = true)
         userDataMutator = mockk(relaxed = true)
         downloads = mockk<TrackDownloadStatusWindow>(relaxed = true).apply { every { isSupported } returns true }
-        downloadIntake = mockk(relaxed = true)
+        trackDownloadActions = mockk(relaxed = true)
         sleepTimerManager = mockk<AudioSleepTimerManager>(relaxed = true)
         cast = mockk(relaxed = true)
 
@@ -92,7 +92,7 @@ class AudioPlayerViewModelTest {
             playlistRepository = playlistRepository,
             userDataMutator = userDataMutator,
             downloads = downloads,
-            downloadIntake = downloadIntake,
+            trackDownloadActions = trackDownloadActions,
             sleepTimerManager = sleepTimerManager,
             cast = cast,
         )

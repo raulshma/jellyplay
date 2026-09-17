@@ -19,10 +19,10 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -31,9 +31,14 @@ import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
 import com.raulshma.jellyplay.core.datastore.SeerrSecureCredentialsStore
 import com.raulshma.jellyplay.core.model.seerr.SeerrAuthMethod
+import com.raulshma.jellyplay.feature.settings.ConnectionProbe
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * Seerr credentials orchestration for the web shell — the web
@@ -46,24 +51,48 @@ import kotlinx.coroutines.launch
  * HONESTY). API-key mode is the only web-viable auth, and since the
  * key persists across reloads via [LocalStorageSecureKeyValueStorage].
  *
- * Call order mirrors `SeerrSettingsViewModel.testApiKeyConnection` exactly:
- * PERSIST FIRST (setServerUrl → setAuthMethod(API_KEY) → setApiKey; the web
- * pane additionally setEnabled(true) so saving is enough to arm the
- * requests feature), THEN call `seerrRepository.testApiKeyConnection()` —
- * the repository re-reads both stores on every call (hash-cached), so the
- * just-persisted values are what the test uses, no restart needed.
+ * STATE CORE: the probe status lives on the SHARED machine
+ * (`shared/feature/settings` [ConnectionProbe] — the same board behind
+ * `SeerrSettingsViewModel`, *arr settings, and the subtitle providers), not
+ * on a pane-local state machine. One key ([WebSeerrProbeRequest]s all map to
+ * [Unit] — a single connection), details = the server's version string. The
+ * machine owns the status algebra (Idle → Testing → Connected/Error), the
+ * refusal pre-flight (the former hand-rolled blank-credential guards are the
+ * machine's `refused` lambda, mapping to the localized
+ * `settings_probe_server_url_required` / `settings_probe_api_key_required`
+ * fallbacks — the English literals they used to duplicate), and the failure
+ * text policy (server messages render verbatim, null messages and crashes
+ * degrade to the localized `settings_connection_failed` /
+ * `settings_probe_unexpected_error` fallbacks).
  *
- * SIDE-EFFECT OWNERSHIP: same rule as [WebConnectController] — save and
- * disconnect run on this controller's own [sideEffectScope] (SupervisorJob +
- * Dispatchers.Default, page lifetime) so a pane navigation can never orphan
- * an in-flight DataStore/localStorage write. Storage failures degrade
- * silently to session-only (the localStorage adapters already degrade
- * internally; these catches cover the store plumbing itself).
+ * PINNED CALL ORDER (the contract [WebSeerrControllerTest] pins event by
+ * event): persist FIRST (setServerUrl → setAuthMethod(API_KEY) →
+ * setEnabled(true) → setApiKey — byte-identical to the former hand-rolled
+ * `persist`, and the API-key slice of
+ * `SeerrSettingsViewModel.testApiKeyConnection`), THEN
+ * `seerrRepository.testApiKeyConnection()` — the repository re-reads both
+ * stores on every call (hash-cached), so the just-persisted values are what
+ * the test uses, no restart needed. The order lives in exactly one place:
+ * the probe's [action][probeConnection]; the machine wraps everything
+ * around it.
  *
- * DELIBERATE DEVIATION from the desktop mirror: there is no test-in-flight
- * job-cancels-previous machinery ([SeerrSettingsViewModel.launchTest]) —
- * the pane disables its buttons while a test runs, which is sufficient for
- * a single-field pane and keeps the web shell's controller plain.
+ * SINGLE-FLIGHT, DECLARED: the probe is constructed with
+ * [ConnectionProbe.SingleFlight.CALLER_GATED] — the pane's buttons-disabled
+ * UX is the honest web call for a two-field pane, so the CALLER owns probe
+ * concurrency and the machine neither cancels nor restarts an in-flight
+ * test. That is the deliberate opposite arm of the ViewModel's
+ * `launchTest` RESTART discipline (rapid re-taps must not queue restarts
+ * into a pane whose Test button is disabled the whole time a test runs).
+ * The machine's safety net still holds: only the currently registered job
+ * may land an outcome, so even a caller bug cannot double-land.
+ *
+ * SIDE-EFFECT OWNERSHIP: same rule as [WebConnectController] — probe jobs,
+ * save and disconnect all run on this controller's own page-lifetime scope
+ * ([WebSideEffectScope], SupervisorJob + Dispatchers.Default) so a pane
+ * navigation can never orphan an in-flight test or an in-flight
+ * DataStore/localStorage write. Storage failures degrade silently to
+ * session-only (the localStorage adapters already degrade internally; these
+ * catches cover the store plumbing itself).
  */
 internal class WebSeerrController(
     private val seerrPreferencesStore: SeerrPreferencesStore,
@@ -72,20 +101,51 @@ internal class WebSeerrController(
 ) {
     // Post-click work that must OUTLIVE the pane (see SIDE-EFFECT OWNERSHIP).
     // Same lifetime discipline as WebConnectController.sideEffectScope — the
-    // shared shape lives in [WebSideEffectScope].
+    // shared shape lives in [WebSideEffectScope]. The probe board runs its
+    // jobs here too: an in-flight test survives pane navigation exactly like
+    // a save write does.
     private val sideEffectScope = WebSideEffectScope()
 
     /** Field-seeding snapshot read by [WebSeerrPane]'s hydration effect. */
     data class CredsState(val serverUrl: String, val apiKey: String)
 
-    /** Outcome of a connection test, for the pane's status line. */
-    sealed interface TestOutcome {
-        /** Success; [version] is the Overseerr/Jellyseerr version string (may be blank). */
-        data class Connected(val version: String) : TestOutcome
+    /** Connected details: the Overseerr/Jellyseerr version string (may be blank). */
+    data class ConnectionDetails(val version: String)
 
-        /** Failure; [message] is the repository/client error text. */
-        data class Failed(val message: String) : TestOutcome
+    /**
+     * The one probe request the web pane can issue: API-key credentials. The
+     * former hand-rolled blank guards are the machine's synchronous refusal
+     * pre-flight, in the same order the old guards ran (URL before key) and
+     * backed by the SAME localized texts the Seerr ViewModel's refusals use —
+     * no web-local probe-taxonomy strings.
+     */
+    private data class WebSeerrProbeRequest(val serverUrl: String, val apiKey: String) {
+        fun refusal(): ConnectionProbe.FallbackText? = when {
+            serverUrl.isBlank() -> ConnectionProbe.FallbackText.ServerUrlRequired
+            apiKey.isBlank() -> ConnectionProbe.FallbackText.ApiKeyRequired
+            else -> null
+        }
     }
+
+    /**
+     * The shared status board, reduced to the pane's single key (the
+     * `SeerrSettingsViewModel.connectionStatus` derivation). Status writes
+     * land on the page-lifetime scope; refusals settle synchronously inside
+     * [testConnection].
+     */
+    private val connectionProbe = ConnectionProbe<WebSeerrProbeRequest, Unit, ConnectionDetails>(
+        scope = sideEffectScope.coroutineScope,
+        keyOf = { _ -> Unit },
+        refused = { it.refusal() },
+        singleFlight = ConnectionProbe.SingleFlight.CALLER_GATED,
+        action = ::probeConnection,
+    )
+
+    /** The pane's status seal: Idle → Testing → Connected([ConnectionDetails]) / Error. */
+    val connectionStatus: StateFlow<ConnectionProbe.Status<ConnectionDetails>> =
+        connectionProbe.status
+            .map { it[Unit] ?: ConnectionProbe.Status.Idle }
+            .stateIn(sideEffectScope.coroutineScope, SharingStarted.Eagerly, ConnectionProbe.Status.Idle)
 
     /**
      * Reads the persisted server URL + API key for field seeding. Every read
@@ -107,7 +167,7 @@ internal class WebSeerrController(
     }
 
     /**
-     * Persists the credential pair on [sideEffectScope]; fire-and-forget.
+     * Persists the credential pair on the page-lifetime scope; fire-and-forget.
      * Failures degrade silently (session-only persistence).
      */
     fun saveLater(serverUrl: String, apiKey: String) {
@@ -115,35 +175,54 @@ internal class WebSeerrController(
     }
 
     /**
-     * Persist-then-test (order mirrors `SeerrSettingsViewModel.testApiKeyConnection`):
-     * the repository resolves URL + key from the stores at call time, so
-     * they must be written before `testApiKeyConnection` runs. Returns
-     * [TestOutcome.Connected] with the server's version string, or
-     * [TestOutcome.Failed] with the error message.
+     * Test-connection, the probe-machine way: fire-and-forget. Refusals
+     * (blank credentials) settle synchronously before this returns — no
+     * Testing frame, no repository call, no store write. An accepted request
+     * lands its outcome on [connectionStatus] (persist-then-test, see the
+     * class KDoc for the pinned order).
      */
-    suspend fun testConnection(serverUrl: String, apiKey: String): TestOutcome {
-        if (serverUrl.isBlank()) return TestOutcome.Failed("Server URL is required")
-        if (apiKey.isBlank()) return TestOutcome.Failed("API key is required")
-        persist(serverUrl, apiKey)
-        return try {
-            seerrRepository.testApiKeyConnection().fold(
-                onSuccess = { TestOutcome.Connected(it.version) },
-                onFailure = { error ->
-                    if (error is CancellationException) throw error
-                    TestOutcome.Failed(error.message ?: "Connection failed")
-                },
-            )
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            TestOutcome.Failed(e.message ?: "Unexpected error occurred")
-        }
+    fun testConnection(serverUrl: String, apiKey: String) {
+        connectionProbe.probe(WebSeerrProbeRequest(serverUrl, apiKey))
     }
 
     /**
-     * Clears Seerr configuration + credentials on [sideEffectScope] via the
-     * preference store's own [SeerrPreferencesStore.disconnect] — which also
-     * empties the secure store (`clearAll`) — mirroring
+     * Drops the probe status (back to Idle) and cancels any in-flight probe —
+     * the pane's field-edit clear (the former `statusLine = null`) and the
+     * Save/Disconnect line replacement.
+     */
+    fun resetProbeStatus() {
+        connectionProbe.reset(Unit)
+    }
+
+    /**
+     * The probe action: persist-then-test, the ONE home of the pinned order.
+     * The write sequence is byte-identical to the former hand-rolled
+     * [persist]; the repository fold maps verbatim server messages to
+     * [ConnectionProbe.Failure.Reported] and null messages to the localized
+     * ConnectionFailed fallback (the former `error.message ?: "Connection
+     * failed"` literal, now the machine's). A wrapped [CancellationException]
+     * still propagates (never lands as Error); a thrown non-cancellation
+     * crash degrades to the localized UnexpectedError fallback by the
+     * machine's declared policy — the alignment the Seerr ViewModel accepted
+     * in the same migration (the old web catch surfaced `e.message`).
+     */
+    private suspend fun probeConnection(
+        request: WebSeerrProbeRequest,
+    ): ConnectionProbe.Outcome<ConnectionDetails> {
+        persist(request.serverUrl, request.apiKey)
+        return seerrRepository.testApiKeyConnection().fold(
+            onSuccess = { ConnectionProbe.Outcome.Reachable(ConnectionDetails(it.version)) },
+            onFailure = { error ->
+                if (error is CancellationException) throw error
+                ConnectionProbe.unreachable(error.message)
+            },
+        )
+    }
+
+    /**
+     * Clears Seerr configuration + credentials on the page-lifetime scope via
+     * the preference store's own [SeerrPreferencesStore.disconnect] — which
+     * also empties the secure store (`clearAll`) — mirroring
      * `SeerrSettingsViewModel.disconnect`'s store-level reset. Fire-and-forget.
      */
     fun disconnectLater() {
@@ -156,7 +235,7 @@ internal class WebSeerrController(
         }
     }
 
-    /** The awaited write behind [saveLater]/[testConnection]; degrade on failure. */
+    /** The awaited write behind [saveLater]/[probeConnection]; degrade on failure. */
     private suspend fun persist(serverUrl: String, apiKey: String) {
         try {
             seerrPreferencesStore.setServerUrl(serverUrl)
@@ -180,6 +259,16 @@ internal class WebSeerrController(
  * deliberate: Compose does not expose OutlinedTextField labels in the AX
  * tree, so the lane anchors on these StaticTexts + field geometry.
  *
+ * STATUS LINE: derives from the controller's shared probe board — the
+ * spinner + disabled controls are [ConnectionProbe.Status.Testing], and the
+ * line itself is the board's verdict. The "Test failed: " prefix is the
+ * web-local presentation wrapper, kept byte-stable because the E2E lane
+ * anchors its honest-failure assertion on it; the text AFTER it resolves
+ * through the machine's taxonomy (a reported server message verbatim, a
+ * declared fallback localized via the settings module's settings_probe_*
+ * resources). "Saved"/"Disconnected" stay web-local (a local `note`, shown
+ * only while the board is Idle) and are NOT probe-taxonomy strings.
+ *
  * Layout level matches WebStatusPane (centered column, one surfaceVariant
  * card, explicit Back button through the shell's guarded pop path).
  */
@@ -191,10 +280,36 @@ internal fun WebSeerrPane(
 ) {
     var serverUrl by remember { mutableStateOf("") }
     var apiKey by remember { mutableStateOf("") }
-    var statusLine by remember { mutableStateOf<String?>(null) }
-    var statusIsError by remember { mutableStateOf(false) }
-    var testing by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
+    // Web-local note for the non-probe actions (Save/Disconnect). Anything
+    // the shared board has a verdict for renders from the board instead.
+    var note by remember { mutableStateOf<String?>(null) }
+    val probeStatus by controller.connectionStatus.collectAsState()
+    val testing = probeStatus is ConnectionProbe.Status.Testing
+
+    // The probe-board half of the status line: Connected (web-local label +
+    // the version detail) or Error ("Test failed: " + taxonomy-resolved
+    // text). Testing/Idle render no line.
+    val probeLine = when (val status = probeStatus) {
+        is ConnectionProbe.Status.Connected ->
+            // Web-local label: the settings module's localized "Connected"
+            // (settings_connected) is NOT part of the probe failure taxonomy
+            // this migration targets, and its generated Res object is
+            // internal to the settings module — unreachable from here. The
+            // word is deliberately NOT one of the localized fallback texts.
+            if (status.details.version.isNotBlank()) {
+                "Connected v${status.details.version}"
+            } else {
+                "Connected."
+            }
+        is ConnectionProbe.Status.Error ->
+            "Test failed: " + when (val failure = status.failure) {
+                is ConnectionProbe.Failure.Reported -> failure.message
+                is ConnectionProbe.Failure.Declared -> stringResource(failure.text.resource())
+            }
+        ConnectionProbe.Status.Idle, ConnectionProbe.Status.Testing -> null
+    }
+    val statusLine = probeLine ?: note
+    val statusIsError = probeStatus is ConnectionProbe.Status.Error
 
     // Seed the fields from the persisted stores once (reload rehydration —
     // the point of the localStorage-backed secure store).
@@ -245,7 +360,8 @@ internal fun WebSeerrPane(
                     value = serverUrl,
                     onValueChange = {
                         serverUrl = it
-                        statusLine = null
+                        controller.resetProbeStatus()
+                        note = null
                     },
                     label = { Text("Server URL") },
                     placeholder = { Text("http://localhost:5055") },
@@ -262,7 +378,8 @@ internal fun WebSeerrPane(
                     value = apiKey,
                     onValueChange = {
                         apiKey = it
-                        statusLine = null
+                        controller.resetProbeStatus()
+                        note = null
                     },
                     label = { Text("API Key") },
                     singleLine = true,
@@ -290,26 +407,8 @@ internal fun WebSeerrPane(
                     Button(
                         enabled = !testing,
                         onClick = {
-                            testing = true
-                            statusLine = null
-                            scope.launch {
-                                val outcome = controller.testConnection(serverUrl, apiKey)
-                                testing = false
-                                when (outcome) {
-                                    is WebSeerrController.TestOutcome.Connected -> {
-                                        statusLine = if (outcome.version.isNotBlank()) {
-                                            "Connected v${outcome.version}"
-                                        } else {
-                                            "Connected."
-                                        }
-                                        statusIsError = false
-                                    }
-                                    is WebSeerrController.TestOutcome.Failed -> {
-                                        statusLine = "Test failed: ${outcome.message}"
-                                        statusIsError = true
-                                    }
-                                }
-                            }
+                            note = null
+                            controller.testConnection(serverUrl, apiKey)
                         },
                     ) {
                         Text("Test connection")
@@ -318,8 +417,8 @@ internal fun WebSeerrPane(
                         enabled = !testing,
                         onClick = {
                             controller.saveLater(serverUrl, apiKey)
-                            statusLine = "Saved"
-                            statusIsError = false
+                            controller.resetProbeStatus()
+                            note = "Saved"
                         },
                     ) {
                         Text("Save")
@@ -330,8 +429,8 @@ internal fun WebSeerrPane(
                             controller.disconnectLater()
                             serverUrl = ""
                             apiKey = ""
-                            statusLine = "Disconnected"
-                            statusIsError = false
+                            controller.resetProbeStatus()
+                            note = "Disconnected"
                         },
                     ) {
                         Text("Disconnect")

@@ -15,13 +15,14 @@ import kotlinx.coroutines.flow.Flow
  * — is invisible to feature commonMain (its constructor closure is the JVM
  * download engine), which is exactly why this interface exists: the
  * wall-crossing seam is declared, implemented and bound by core:data on both
- * platforms rather than growing another feature-local template.
+ * platforms rather than growing another feature-local template. Since the
+ * promoted-interface pass the JVM actual is the repository itself —
+ * jvmShared `DownloadRepositoryImpl` implements this interface directly and
+ * dataJvmModule binds it over the repository single.
  *
- * The JVM actual — [JvmActiveDownloadCount] in jvmShared, bound in
- * DataKoinModule — maps the repository flow verbatim (android/desktop
- * behavior unchanged). The wasmJs actual — [WasmActiveDownloadCount] in
- * wasmJsMain, bound in dataWasmModule — is an honest zero: the browser has no
- * local download pipeline, so no transfer is ever in flight.
+ * The wasmJs actual — [WasmActiveDownloadCount] in wasmJsMain, bound in
+ * dataWasmModule — is an honest zero: the browser has no local download
+ * pipeline, so no transfer is ever in flight.
  */
 interface ActiveDownloadCount {
 

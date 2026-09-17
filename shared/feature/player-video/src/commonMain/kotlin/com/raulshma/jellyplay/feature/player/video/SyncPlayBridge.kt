@@ -77,20 +77,7 @@ internal class SyncPlayBridge(
     val ignoreWait: StateFlow<Boolean> get() = syncPlayManager.playbackCore.ignoreWait
 
     fun start() {
-        // Defensive clear before re-registering: the @Singleton
-        // SyncPlayPlaybackCore retains its callbacks until clearCallbacks()
-        // runs. If a previous bridge for this VM was never torn down (e.g. an
-        // early init failure path, or a future registration site that forgets
-        // reset()), the singleton would hold two refs — the stale one keeping
-        // a dead VM alive. Clearing first makes start() idempotent.
-        syncPlayManager.playbackCore.clearCallbacks()
-        syncPlayManager.playbackCore.setCallbacks(this)
-        if (syncPlayManager.isInSyncPlaySession) {
-            val group = syncPlayManager.currentGroup
-            _state.update { it.from(group) }
-            currentPlaylistItemId = group?.playingPlaylistItemId
-            syncPlayManager.playbackCore.setCurrentPlaylistItemId(currentPlaylistItemId)
-        }
+        attach()
         startEventListener()
     }
 
@@ -115,15 +102,36 @@ internal class SyncPlayBridge(
 
     fun reattachSession() {
         if (!syncPlayManager.isInSyncPlaySession) return
-        // Same defensive clear as start() — see the note there. reattach runs
+        // Same registration core as start() — see [attach]. reattach runs
         // after process death / mini-player reclaim where the prior bridge may
-        // not have cleared cleanly.
+        // not have cleared cleanly. Deliberately does NOT restart the event
+        // listener: the collector either still runs or the caller re-enters
+        // through start().
+        attach()
+    }
+
+    /**
+     * Shared registration core of [start]/[reattachSession] (they were
+     * byte-identical twins apart from the event-listener restart):
+     * defensive clearCallbacks → setCallbacks → repopulate the group-display
+     * state and the core's playlist id from the live group. Call order inside
+     * is load-bearing and preserved from the former inline twins.
+     */
+    private fun attach() {
+        // Defensive clear before re-registering: the @Singleton
+        // SyncPlayPlaybackCore retains its callbacks until clearCallbacks()
+        // runs. If a previous bridge for this VM was never torn down (e.g. an
+        // early init failure path, or a future registration site that forgets
+        // reset()), the singleton would hold two refs — the stale one keeping
+        // a dead VM alive. Clearing first makes attaching idempotent.
         syncPlayManager.playbackCore.clearCallbacks()
         syncPlayManager.playbackCore.setCallbacks(this)
-        val group = syncPlayManager.currentGroup
-        _state.update { it.from(group) }
-        currentPlaylistItemId = group?.playingPlaylistItemId
-        syncPlayManager.playbackCore.setCurrentPlaylistItemId(currentPlaylistItemId)
+        if (syncPlayManager.isInSyncPlaySession) {
+            val group = syncPlayManager.currentGroup
+            _state.update { it.from(group) }
+            currentPlaylistItemId = group?.playingPlaylistItemId
+            syncPlayManager.playbackCore.setCurrentPlaylistItemId(currentPlaylistItemId)
+        }
     }
 
     fun setIgnoreWait(ignore: Boolean) {
@@ -173,10 +181,42 @@ internal class SyncPlayBridge(
         scope.launch { syncPlayManager.syncPlayController.previousItem(playlistItemId) }
     }
 
-    fun onPlaybackStateChanged(state: Int) {
+    /**
+     * Playback-state seam, typed in the engine vocabulary: the encoding into
+     * the core's private `STATE_*` Int space (the only vocabulary the
+     * [SyncPlayPlaybackCore] accepts) lives here in [toCoreStateInt] — this
+     * bridge is the only module that owns both vocabularies, so callers (the
+     * ViewModel's engine collector) forward [EnginePlaybackState] directly.
+     */
+    fun onPlaybackStateChanged(state: EnginePlaybackState) {
         if (!isInSession) return
         getMediaEngine() ?: return
-        syncPlayManager.playbackCore.onPlaybackStateChanged(state)
+        syncPlayManager.playbackCore.onPlaybackStateChanged(state.toCoreStateInt())
+    }
+
+    /**
+     * Engine → SyncPlay wire encoding, mirroring the official client's
+     * playback commands the core acts on:
+     *
+     *  - [EnginePlaybackState.IDLE] → `1` (core `STATE_IDLE`: no-op, stops a
+     *    pending buffering report)
+     *  - [EnginePlaybackState.BUFFERING] → `2` (core `STATE_BUFFERING`)
+     *  - [EnginePlaybackState.READY] → `3` (core `STATE_READY`)
+     *  - [EnginePlaybackState.ENDED] → `4` — no arm in the core's `when`, so
+     *    an ENDED report falls through (only `lastKnownEnginePlaying`
+     *    refreshes); item advance is owned by the engine-event coordinator
+     *  - [EnginePlaybackState.ERROR] → `1` — reported as stopped, same no-op
+     *    arm as IDLE; error surfacing is owned by the engine-event coordinator
+     *
+     * The authoritative `STATE_*` constants stay private in the core on
+     * purpose; do not widen them to share.
+     */
+    private fun EnginePlaybackState.toCoreStateInt(): Int = when (this) {
+        EnginePlaybackState.IDLE -> 1
+        EnginePlaybackState.BUFFERING -> 2
+        EnginePlaybackState.READY -> 3
+        EnginePlaybackState.ENDED -> 4
+        EnginePlaybackState.ERROR -> 1
     }
 
     fun onIsPlayingChanged(isPlaying: Boolean) {

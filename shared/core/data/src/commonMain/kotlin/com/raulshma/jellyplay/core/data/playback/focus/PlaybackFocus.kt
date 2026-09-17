@@ -50,16 +50,19 @@ sealed interface FocusClaimState {
  * is now a pinnable decision table ([PlaybackFocusMatrix]) behind one small
  * interface; platform differences live in adapters (see docs/adr/0004).
  *
- * Slice-1 contract (TTS-over-music):
+ * Slice-1 contract (TTS-over-music), plus the migration slice:
  *  - `acquire(READ_ALOUD)` requests OS focus (Android adapter) and, on
  *    grant, commands the MUSIC surface to pause (its `pause()` also drops
- *    playWhenReady, so the focus-stack regain at release can never
- *    auto-resume music — resume stays manual) before returning GRANTED.
- *  - `acquire(MUSIC)` publishes `Held(MUSIC)` (newest user action wins); the
- *    reader observes [claimState] and pauses its own speech loop. No OS
- *    request is made for MUSIC at slice 1 — ExoPlayer's built-in focus
- *    handling remains music's OS leg until the migration slice.
- *  - OS focus losses on the OS-leg claimant suspend it ([Suspended]); a
+ *    playWhenReady — resume stays manual) before returning GRANTED.
+ *  - `acquire(MUSIC)` — since the migration slice — requests the OS seat
+ *    too, with the matrix's MUSIC attributes (`handleAudioFocus` is off on
+ *    both Android music players: the module owns the whole story now), and
+ *    publishes `Held(MUSIC)` (newest user action wins); the reader observes
+ *    [claimState] and pauses its own speech loop.
+ *  - OS focus losses on an OS-leg claimant suspend it ([Suspended]) AND
+ *    command the suspended holder's surface pause — the enforcement leg: a
+ *    displaced claimant pauses itself by observation, but the holder has no
+ *    observer and would otherwise keep producing audio unfocused. A
  *    suspended claimant re-acquires on the user's next resume.
  */
 interface PlaybackFocus {
@@ -99,12 +102,19 @@ object NoopPlaybackFocus : PlaybackFocus {
 }
 
 /**
- * A playback surface the matrix may command. Slice 1 has exactly one adapter
- * (music); the desktop twin arrives with slice 2 — two production adapters
- * make this a real seam. [pause] MUST be a no-op when the surface is idle,
- * and MUST leave the surface unable to auto-resume (the playWhenReady guard
- * — the module's manual-resume decision is enforced at this command, so the
- * OS focus stack cannot resurrect a paused victim when the claim releases).
+ * A playback surface the matrix may command — in the two cases where a
+ * command, not an observation, is the only enforcement there is: the VICTIM
+ * pause a new claim dispatches before taking the floor, and (since the
+ * migration slice) the SUSPENDED-HOLDER pause an OS loss dispatches on the
+ * holder itself (a holder has no observer that would pause it on its own).
+ * The music adapter exists on both platforms (`AudioPlaybackManagerSurface`
+ * and the desktop twin) — two production adapters make this a real seam.
+ * READ_ALOUD has deliberately none: its reader observes
+ * [PlaybackFocus.claimState]. [pause]
+ * MUST be a no-op when the surface is idle, and MUST leave the surface
+ * unable to auto-resume (the playWhenReady guard — the module's
+ * manual-resume decision is enforced at this command, so neither a release
+ * nor an ignored OS regain can resurrect a paused surface).
  */
 interface PlaybackSurface {
     val id: PlaybackSurfaceId
@@ -206,10 +216,12 @@ internal object PlaybackFocusMatrix {
      * OS-seat audio attributes per claimant (ADR-0004 slice-2 checklist: the
      * migration slice must not force music onto speech attributes or onto a
      * second OS request). READ_ALOUD keeps the slice-1 hardcoded pair
-     * (USAGE_MEDIA + CONTENT_TYPE_SPEECH) — zero behavior change; the MUSIC
-     * and VIDEO rows exist now so the exhaustive `when` forces a conscious
-     * decision the day those claimants migrate onto this module's OS leg,
-     * instead of silently inheriting speech attributes.
+     * (USAGE_MEDIA + CONTENT_TYPE_SPEECH) — zero behavior change. MUSIC and
+     * VIDEO rows existed ahead of their claims precisely so the exhaustive
+     * `when` forced a conscious decision: the migration slice claimed the
+     * MUSIC row (music's seat now carries CONTENT_TYPE_MUSIC — the OS
+     * routing/ducking policy reads it); VIDEO's row stays reserved until the
+     * video slice.
      */
     fun attributesOf(claim: PlaybackSurfaceId): FocusAudioAttributes = when (claim) {
         PlaybackSurfaceId.READ_ALOUD -> FocusAudioAttributes(FocusUsage.MEDIA, FocusContentType.SPEECH)

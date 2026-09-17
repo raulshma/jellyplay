@@ -31,10 +31,12 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
  * twin and a [DesktopAudioQueueManagerSurface] wrapped around the very
  * manager being driven — because the whole point of the desktop leg is the
  * composition, not any one class: MUSIC claims publish live claim-state
- * (osLegClaimants stays READ_ALOUD-only, so the arbiter grant is vacuous
- * while the Held publication is real), read-aloud's claim dispatches the
- * MUSIC victim pause back through the surface, and nothing ever
- * auto-resumes. Determinism model is the semantics suite's: the
+ * (since the ADR-0004 migration slice MUSIC joins READ_ALOUD in
+ * osLegClaimants, but desktop's binding arbitrates vacuously — its
+ * arbiter always grants and never fires an event — so no OS seat is
+ * actually held while the Held publication is real), read-aloud's claim
+ * dispatches the MUSIC victim pause back through the surface, and nothing
+ * ever auto-resumes. Determinism model is the semantics suite's: the
  * UnconfinedTestDispatcher scope makes every claim/release edge fire
  * INLINE within the engine isPlaying write that triggered it, so each
  * choreography is asserted by direct reads — no polls.

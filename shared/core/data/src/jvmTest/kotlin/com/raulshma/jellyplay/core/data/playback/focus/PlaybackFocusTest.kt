@@ -164,7 +164,16 @@ class PlaybackFocusTest {
         val held = assertIs<FocusClaimState.Held>(focus.claimState.value)
         assertEquals(PlaybackSurfaceId.MUSIC, held.holder)
         assertEquals(1, music.pauses, "only the ORIGINAL read-aloud claim paused music, not this one")
-        assertEquals(1, arbiter.requests.size, "MUSIC claims publish state only — no OS seat at slice 1")
+        // Migration slice: MUSIC now takes the OS seat too (handleAudioFocus
+        // is off on the players — the module owns the whole story), with its
+        // own attributes row. Request 1 = READ_ALOUD speech seat, request 2 =
+        // MUSIC (the READ_ALOUD seat was abandoned first — pinned below).
+        assertEquals(2, arbiter.requests.size)
+        assertEquals(
+            FocusAudioAttributes(FocusUsage.MEDIA, FocusContentType.MUSIC),
+            arbiter.requests.last().first,
+            "music's seat carries the MUSIC attributes row, never speech",
+        )
     }
 
     @Test
@@ -194,18 +203,24 @@ class PlaybackFocusTest {
     @Test
     fun `os transient loss suspends and a regain never auto-resumes`() {
         val arbiter = FakeArbiter()
-        val focus = focus(arbiter, FakeSurface(PlaybackSurfaceId.MUSIC))
+        val music = FakeSurface(PlaybackSurfaceId.MUSIC)
+        val focus = focus(arbiter, music)
         focus.acquire(PlaybackSurfaceId.READ_ALOUD)
+        // music.pauses == 1 here — the read-aloud CLAIM's victim pause. The
+        // suspension below must not add to it.
+        val pausesAfterClaim = music.pauses
 
         arbiter.loseTransient()
         val suspended = assertIs<FocusClaimState.Suspended>(focus.claimState.value)
         assertEquals(PlaybackSurfaceId.READ_ALOUD, suspended.holder)
         assertEquals(FocusLossReason.Transient, suspended.reason)
+        assertEquals(pausesAfterClaim, music.pauses, "a suspended READ_ALOUD is NEVER commanded — the reader observes the state and pauses its own loop")
 
         arbiter.regain()
         val still = focus.claimState.value
         assertIs<FocusClaimState.Suspended>(still)
         assertEquals(FocusLossReason.Transient, (still as FocusClaimState.Suspended).reason)
+        assertEquals(pausesAfterClaim, music.pauses)
     }
 
     @Test
@@ -237,6 +252,90 @@ class PlaybackFocusTest {
         focus.release(PlaybackSurfaceId.READ_ALOUD) // idempotent
         assertEquals(FocusClaimState.Idle, focus.claimState.value)
         assertEquals(1, arbiter.abandons)
+    }
+
+    // ------------------------------------------------------------------
+    // Music OS-leg migration (ADR-0004): the holder enforcement leg
+    // ------------------------------------------------------------------
+
+    @Test
+    fun `music takes the os seat with its own attributes`() {
+        val arbiter = FakeArbiter()
+        val focus = focus(arbiter, FakeSurface(PlaybackSurfaceId.MUSIC))
+
+        focus.acquire(PlaybackSurfaceId.MUSIC)
+
+        assertEquals(1, arbiter.requests.size, "music's OS leg lives in the module now — handleAudioFocus is off on the players")
+        assertEquals(
+            FocusAudioAttributes(FocusUsage.MEDIA, FocusContentType.MUSIC),
+            arbiter.requests.single().first,
+        )
+    }
+
+    @Test
+    fun `os loss on the music holder suspends it AND commands its surface pause`() {
+        val arbiter = FakeArbiter()
+        val music = FakeSurface(PlaybackSurfaceId.MUSIC)
+        val focus = focus(arbiter, music)
+        focus.acquire(PlaybackSurfaceId.MUSIC)
+
+        arbiter.loseTransient()
+
+        val suspended = assertIs<FocusClaimState.Suspended>(focus.claimState.value)
+        assertEquals(PlaybackSurfaceId.MUSIC, suspended.holder)
+        assertEquals(FocusLossReason.Transient, suspended.reason)
+        assertEquals(1, music.pauses, "the enforcement leg: a holder has no claimState observer — without the commanded pause it would keep playing unfocused")
+
+        arbiter.losePermanent()
+        // A second loss event after suspension is dropped (only a Held can
+        // suspend): no duplicate command.
+        assertEquals(1, music.pauses)
+    }
+
+    @Test
+    fun `permanent loss suspends the music holder and commands its pause too`() {
+        val arbiter = FakeArbiter()
+        val music = FakeSurface(PlaybackSurfaceId.MUSIC)
+        val focus = focus(arbiter, music)
+        focus.acquire(PlaybackSurfaceId.MUSIC)
+
+        arbiter.losePermanent()
+
+        val suspended = assertIs<FocusClaimState.Suspended>(focus.claimState.value)
+        assertEquals(FocusLossReason.Permanent, suspended.reason)
+        assertEquals(1, music.pauses)
+    }
+
+    @Test
+    fun `regain does not auto-resume the suspended music holder`() {
+        val arbiter = FakeArbiter()
+        val music = FakeSurface(PlaybackSurfaceId.MUSIC)
+        val focus = focus(arbiter, music)
+        focus.acquire(PlaybackSurfaceId.MUSIC)
+        arbiter.loseTransient()
+
+        arbiter.regain()
+
+        assertIs<FocusClaimState.Suspended>(focus.claimState.value)
+        assertEquals(1, music.pauses, "resume is manual — a regain commands nothing and restarts nothing")
+        assertEquals(1, arbiter.requests.size, "a regain never re-requests the seat either")
+    }
+
+    @Test
+    fun `user resume after a music suspension re-acquires the seat`() {
+        val arbiter = FakeArbiter()
+        val music = FakeSurface(PlaybackSurfaceId.MUSIC)
+        val focus = focus(arbiter, music)
+        focus.acquire(PlaybackSurfaceId.MUSIC)
+        arbiter.loseTransient()
+
+        val outcome = focus.acquire(PlaybackSurfaceId.MUSIC)
+
+        assertEquals(FocusOutcome.Granted, outcome)
+        assertIs<FocusClaimState.Held>(focus.claimState.value).let {
+            assertEquals(PlaybackSurfaceId.MUSIC, it.holder)
+        }
+        assertEquals(2, arbiter.requests.size, "the user's resume is the way back — it re-requests the OS seat")
     }
 
     @Test

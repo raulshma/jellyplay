@@ -1,10 +1,14 @@
 package com.raulshma.jellyplay.core.data.di
 
 import com.raulshma.jellyplay.core.data.download.ActiveDownloadCount
+import com.raulshma.jellyplay.core.data.download.DownloadQueue
+import com.raulshma.jellyplay.core.data.download.OfflineResync
 import com.raulshma.jellyplay.core.data.download.QuickDownloadActions
 import com.raulshma.jellyplay.core.data.download.SeriesEpisodeDownloads
 import com.raulshma.jellyplay.core.data.download.TrackDownloadStatusWindow
 import com.raulshma.jellyplay.core.data.download.WasmActiveDownloadCount
+import com.raulshma.jellyplay.core.data.download.WasmDownloadQueue
+import com.raulshma.jellyplay.core.data.download.WasmOfflineResync
 import com.raulshma.jellyplay.core.data.download.WasmQuickDownloadActions
 import com.raulshma.jellyplay.core.data.download.WasmSeriesEpisodeDownloads
 import com.raulshma.jellyplay.core.data.download.WasmTrackDownloadStatusWindow
@@ -86,12 +90,15 @@ import org.koin.dsl.module
  * graph available to the web modules; unresolved-consumer parity with the JVM
  * graph grows with each module.
  *
- * DOWNLOAD-ACTIONS SEAMS: the wall-crossing download seams the features
+ * DOWNLOAD-ACTIONS SEAMS: the feature-facing download reads the features
  * consume (QuickDownloadActions, TrackDownloadStatusWindow,
- * ActiveDownloadCount, SeriesEpisodeDownloads) are declared, implemented AND
+ * ActiveDownloadCount, SeriesEpisodeDownloads, DownloadQueue,
+ * OfflineResync) are declared in core:data commonMain, implemented AND
  * bound by core:data on both platforms — the honest web no-op stubs here
- * (WasmQuickDownloadActions & co., see their KDocs), the real jvmShared
- * adapters in dataJvmModule on android/desktop. The feature platform
+ * (WasmQuickDownloadActions & co., see their KDocs), the real JVM actuals
+ * bound in dataJvmModule directly over the engine singles
+ * (DownloadRepositoryImpl / OfflineSyncManager / MediaDownloadActions —
+ * no adapter files since the promoted-interface pass). The feature platform
  * fragments that used to bind these on web (search/library's
  * platformSearchModule/platformLibraryModule) were deleted with the seam
  * consolidation — features never grow their own wall-crossing template.
@@ -225,16 +232,23 @@ val dataWasmModule: Module = module {
     single { QueuePersistenceHelper(audioQueueDao = get()) }
 
     // ── download-actions seams (web no-op actuals) ───────────────────────
-    // The honest web stubs for the wall-crossing download seams — the same
+    // The honest web stubs for the feature-facing download reads — the same
     // bindings the deleted search/library platform fragments used to make on
-    // web, plus the window/count/series-episode reads the player, music and
-    // home features resolve. No download pipeline exists on web, so every
-    // actual is a no-op gated by isSupported = false (see each stub's KDoc).
+    // web, plus the window/count/series-episode/queue/resync reads the
+    // player, music, home and downloads features resolve. No download
+    // pipeline exists on web, so every actual is a no-op gated by
+    // isSupported = false (see each stub's KDoc). Since the promoted-
+    // interface pass the interfaces live in core:data commonMain and the JVM
+    // actuals are the engine singles themselves (dataJvmModule binds them
+    // over DownloadRepositoryImpl / OfflineSyncManager / MediaDownloadActions
+    // — no adapter files).
 
     single<QuickDownloadActions> { WasmQuickDownloadActions }
     single<TrackDownloadStatusWindow> { WasmTrackDownloadStatusWindow }
     single<ActiveDownloadCount> { WasmActiveDownloadCount }
     single<SeriesEpisodeDownloads> { WasmSeriesEpisodeDownloads }
+    single<DownloadQueue> { WasmDownloadQueue }
+    single<OfflineResync> { WasmOfflineResync }
 
     // ── requests slice (pre-) ───────────────────────────────────────────
 

@@ -3,14 +3,15 @@ package com.raulshma.jellyplay.core.data.download
 import com.raulshma.jellyplay.core.data.util.DownloadResult
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.MediaType
 
 /**
  * Feature-facing intake seam for offline downloads.
  *
  * Every caller that wants to start a download — a single movie/episode/audio
- * item from a detail screen, an album batch, a whole series from the
- * download sheet, or the periodic auto-download worker — goes through this
- * interface. It routes single-item downloads through [DownloadDelegate]-style
+ * item from a detail screen, a track row's id-only flip, an album batch, a
+ * whole series from the download sheet, or the periodic auto-download
+ * worker — goes through this interface. It routes single-item downloads through [DownloadDelegate]-style
  * artifact bundling (local poster/backdrop, trickplay, external subtitles,
  * intro/outro segments, rich offline metadata) so no call site can
  * re-implement the recipe and silently drop one of the artifacts. Series
@@ -81,6 +82,42 @@ interface DownloadIntake {
      * the host routes there; nothing is enqueued for them.
      */
     suspend fun startFromItem(item: MediaItem): DownloadRequestResult
+
+    /**
+     * Starts a download for a music track straight from its [itemId] alone —
+     * the track-flip leg behind [TrackDownloadActions] (the audio player's
+     * download CTA and the album screen's per-track/bulk starts). The item's
+     * detail is resolved internally and started at the user's default
+     * download quality — exactly the single-stream branch of [startFromItem]
+     * (the interface's one resolve→start path, reused here via a
+     * [DownloadRequestResult]; the item is synthesized as a music track
+     * because that branch reads nothing but the id and the type).
+     *
+     * The coarse [TrackFlipResult] is deliberate: a track row has no error
+     * surface, so an unresolvable detail or a start with no usable media
+     * source SKIPS silently instead of reporting a failure.
+     */
+    suspend fun flipTrack(itemId: String): TrackFlipResult =
+        when (startFromItem(MediaItem(id = itemId, name = itemId, mediaType = MediaType.AUDIO))) {
+            is DownloadRequestResult.Started -> TrackFlipResult.Started
+            else -> TrackFlipResult.Skipped
+        }
+}
+
+/**
+ * Outcome of [DownloadIntake.flipTrack] — the deliberately coarse track-flip
+ * result. There is no failure variant: a track row has no error surface, so
+ * everything that did not start folds into [TrackFlipResult.Skipped].
+ */
+sealed interface TrackFlipResult {
+    /** The transfer was enqueued. */
+    data object Started : TrackFlipResult
+
+    /**
+     * Nothing was enqueued — the detail did not resolve (fetch failure) or
+     * the resolved detail had no startable media source. Silent by design.
+     */
+    data object Skipped : TrackFlipResult
 }
 
 /**

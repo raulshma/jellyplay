@@ -5,24 +5,18 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
+import com.raulshma.jellyplay.core.datastore.sliceStateFlow
 import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.model.MeteredNetworkBehavior
 import com.raulshma.jellyplay.core.model.NetworkTimeoutPreset
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.serialization.Serializable
 
 /**
@@ -61,13 +55,8 @@ class NetworkOfflineStore constructor(
         val SELF_SIGNED_TRUST_HOSTS = stringSetPreferencesKey("self_signed_trust_hosts")
     }
 
-    private val sharedPrefs: Flow<Preferences> = dataStore.data
-        .catch { _ -> emptyPreferences() }
-
-    val networkOffline: StateFlow<NetworkOfflineSlice> = sharedPrefs
-        .map { read(it) }
-        .distinctUntilChanged()
-        .stateIn(scope, SharingStarted.Eagerly, NetworkOfflineSlice())
+    val networkOffline: StateFlow<NetworkOfflineSlice> =
+        dataStore.sliceStateFlow(scope, seed = NetworkOfflineSlice(), read = ::read)
 
     internal fun read(prefs: Preferences): NetworkOfflineSlice = NetworkOfflineSlice(
         manualOfflineEnabled = PreferenceCodec.readBool(prefs, Keys.MANUAL_OFFLINE_ENABLED, "manual_offline_enabled", false),

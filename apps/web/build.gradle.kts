@@ -46,6 +46,17 @@ kotlin {
                 implementation(libs.jb.compose.ui)
                 implementation(libs.jb.compose.foundation)
                 implementation(libs.jb.compose.material3)
+                // (WebSeerr probe re-home): the compose-resources RUNTIME is
+                // needed directly — the pane resolves the settings module's
+                // localized probe fallback texts at render time through the
+                // public ConnectionProbe.FallbackText.resource() +
+                // stringResource, and the runtime reaches this module's
+                // compile classpath only as a transitive implementation dep
+                // of the JB distribution otherwise (same leak shape as the
+                // ktor-client-js edge below). The settings module's generated
+                // Res object stays internal, so no generated-resource import
+                // crosses the module boundary — only the runtime.
+                implementation(libs.jb.compose.resources)
 
                 //  stack: model (shared value types),
                 // designsystem (JellyPlayTheme), ui (shared

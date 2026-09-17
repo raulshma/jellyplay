@@ -43,6 +43,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.SettingListItem
 import com.raulshma.jellyplay.core.ui.components.SettingToggleItem
+import com.raulshma.jellyplay.core.ui.components.SettingsItemList
 import com.raulshma.jellyplay.core.ui.components.SheetHeader
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -244,8 +245,9 @@ fun LanguageSettingsScreen(
                     // AppLocaleSetter seam is real (desktop's is a no-op), so the
                     // row vanishes there and the remaining rows re-index.
                     val showAppLocaleRow = settingsCapabilities.supportsAppLocaleOverride
-                    val langRowCount = if (showAppLocaleRow) 3 else 2
-                    var langIndex = 0
+                    // The row total derives from the declared leading trio via
+                    // the admission function beside SettingsScreenGroups.
+                    SettingsItemList(total = languageGeneralScreenRowTotal(showAppLocaleRow)) {
                     if (showAppLocaleRow) {
                         SettingListItem(
                             icon = Tabler.Outline.Language,
@@ -253,7 +255,6 @@ fun LanguageSettingsScreen(
                             subtitle = stringResource(Res.string.settings_display_language_subtitle),
                             trailingText = appLangLabel,
                             highlighted = highlightSettingId == "app_language",
-                            index = langIndex++, count = langRowCount,
                             onClick = {
                                 activePicker = PickerState.List(
                                     title = displayLanguageTitle,
@@ -271,7 +272,6 @@ fun LanguageSettingsScreen(
                         subtitle = stringResource(Res.string.settings_audio_language_subtitle),
                         trailingText = preferences.preferredAudioLanguage ?: stringResource(Res.string.settings_lang_default),
                         highlighted = highlightSettingId == "audio_language",
-                        index = langIndex++, count = langRowCount,
                         onClick = {
                             activePicker = PickerState.List(
                                 title = audioLangTitle,
@@ -290,7 +290,6 @@ fun LanguageSettingsScreen(
                         subtitle = stringResource(Res.string.settings_subtitle_language_subtitle),
                         trailingText = preferences.preferredSubtitleLanguage ?: stringResource(Res.string.settings_lang_default),
                         highlighted = highlightSettingId == "subtitle_language",
-                        index = langIndex++, count = langRowCount,
                         onClick = {
                             activePicker = PickerState.List(
                                 title = subtitleLangTitle,
@@ -303,6 +302,7 @@ fun LanguageSettingsScreen(
                             )
                         },
                     )
+                    }
                 }
             }
 
@@ -318,18 +318,19 @@ fun LanguageSettingsScreen(
                         style = preferences.subtitleStyle,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     )
-                    var subIdx = 0
-                    val subTotal = when {
-                        !showAdvanced -> 4
-                        preferences.hdrSubtitleStyleEnabled -> 12
-                        else -> 11
-                    }
+                    // Derived from the subtitles group declaration via the
+                    // admission total beside SettingsScreenGroups: 4 always
+                    // (the tester/font-size/forced-only trio plus high-contrast
+                    // subtitles), the style rows behind the advanced toggle and
+                    // the HDR font-size row behind the HDR-style toggle.
+                    SettingsItemList(
+                        total = languageSubtitlesScreenRowTotal(showAdvanced, preferences.hdrSubtitleStyleEnabled),
+                    ) {
                     SettingListItem(
                         icon = Tabler.Outline.Eye,
                         title = stringResource(Res.string.settings_open_subtitle_tester),
                         subtitle = stringResource(Res.string.settings_open_subtitle_tester_subtitle),
                         highlighted = highlightSettingId == "subtitle_tester",
-                        index = subIdx++, count = subTotal,
                         onClick = onOpenSubtitleTester,
                     )
                     val fontSizeTitle = stringResource(Res.string.settings_subtitle_font_size)
@@ -339,7 +340,6 @@ fun LanguageSettingsScreen(
                         subtitle = stringResource(Res.string.settings_font_size_subtitle),
                         trailingText = "${preferences.subtitleStyle.fontSize}sp",
                         highlighted = highlightSettingId == "subtitle_font_size",
-                        index = subIdx++, count = subTotal,
                         onClick = {
                             val sizes = listOf(14, 18, 22, 24, 28, 32, 36, 40)
                             activePicker = pickerChip(
@@ -362,7 +362,6 @@ fun LanguageSettingsScreen(
                         subtitle = if (preferences.subtitlesForcedOnly) stringResource(Res.string.settings_forced_subtitles_on) else stringResource(Res.string.settings_forced_subtitles_off),
                         checked = preferences.subtitlesForcedOnly,
                         highlighted = highlightSettingId == "subtitle_forced_only",
-                        index = subIdx++, count = subTotal,
                         onCheckedChange = { enabled ->
                             viewModel.edit { scope -> scope.subtitle.setSubtitlesForcedOnly(enabled) }
                         },
@@ -373,7 +372,6 @@ fun LanguageSettingsScreen(
                         subtitle = if (preferences.highContrastSubtitles) stringResource(Res.string.settings_high_contrast_on) else stringResource(Res.string.settings_high_contrast_off),
                         checked = preferences.highContrastSubtitles,
                         highlighted = highlightSettingId == "high_contrast_subtitles",
-                        index = subIdx++, count = subTotal,
                         onCheckedChange = { enabled ->
                             viewModel.edit { scope -> scope.subtitle.setHighContrastSubtitles(enabled) }
                         },
@@ -385,7 +383,6 @@ fun LanguageSettingsScreen(
                             subtitle = if (preferences.pgsSubtitleDirectPlay) stringResource(Res.string.settings_pgs_direct_play_on) else stringResource(Res.string.settings_pgs_direct_play_off),
                             checked = preferences.pgsSubtitleDirectPlay,
                             highlighted = highlightSettingId == "pgs_direct_play",
-                            index = subIdx++, count = subTotal,
                             onCheckedChange = { enabled ->
                                 viewModel.edit { scope -> scope.playback.setPgsSubtitleDirectPlay(enabled) }
                             },
@@ -396,7 +393,6 @@ fun LanguageSettingsScreen(
                             subtitle = if (preferences.hdrSubtitleStyleEnabled) stringResource(Res.string.settings_hdr_subtitle_on) else stringResource(Res.string.settings_hdr_subtitle_off),
                             checked = preferences.hdrSubtitleStyleEnabled,
                             highlighted = highlightSettingId == "hdr_subtitle_style",
-                            index = subIdx++, count = subTotal,
                             onCheckedChange = { enabled ->
                                 viewModel.edit { scope -> scope.subtitle.setHdrSubtitleStyleEnabled(enabled) }
                             },
@@ -408,7 +404,6 @@ fun LanguageSettingsScreen(
                                 subtitle = stringResource(Res.string.settings_hdr_font_size_subtitle),
                                 trailingText = "${preferences.hdrSubtitleStyle.fontSize}sp",
                                 highlighted = highlightSettingId == "hdr_subtitle_font_size",
-                                index = subIdx++, count = subTotal,
                                 onClick = {
                                     val current = preferences.hdrSubtitleStyle.fontSize
                                     val next = if (current >= 40) 16 else current + 2
@@ -426,7 +421,6 @@ fun LanguageSettingsScreen(
                             subtitle = stringResource(Res.string.settings_subtitle_text_color_subtitle),
                             trailingText = preferences.subtitleStyle.fontColor.name,
                             highlighted = highlightSettingId == "subtitle_color",
-                            index = subIdx++, count = subTotal,
                             onClick = {
                                 activePicker = PickerState.List(
                                     title = textColorTitle,
@@ -448,7 +442,6 @@ fun LanguageSettingsScreen(
                             subtitle = stringResource(Res.string.settings_subtitle_background_subtitle),
                             trailingText = preferences.subtitleStyle.backgroundColor.name,
                             highlighted = highlightSettingId == "subtitle_background",
-                            index = subIdx++, count = subTotal,
                             onClick = { activeDialog = LanguageSettingsDialog.SubtitleBgColorPicker },
                         )
                         val edgeStyleTitle = stringResource(Res.string.settings_subtitle_edge_style)
@@ -458,7 +451,6 @@ fun LanguageSettingsScreen(
                             subtitle = stringResource(Res.string.settings_subtitle_edge_style_subtitle),
                             trailingText = preferences.subtitleStyle.edgeType.name,
                             highlighted = highlightSettingId == "subtitle_edge_style",
-                            index = subIdx++, count = subTotal,
                             onClick = {
                                 activePicker = PickerState.List(
                                     title = edgeStyleTitle,
@@ -481,7 +473,6 @@ fun LanguageSettingsScreen(
                             subtitle = if (preferences.subtitleStyle.offsetMs == 0L) stringResource(Res.string.settings_subtitle_no_offset) else "${preferences.subtitleStyle.offsetMs}ms",
                             trailingText = "${preferences.subtitleStyle.offsetMs}ms",
                             highlighted = highlightSettingId == "subtitle_sync_offset",
-                            index = subIdx++, count = subTotal,
                             onClick = {
                                 activePicker = PickerState.Slider(
                                     title = syncOffsetTitle,
@@ -508,7 +499,6 @@ fun LanguageSettingsScreen(
                             subtitle = stringResource(Res.string.settings_subtitle_vertical_position_subtitle),
                             trailingText = "${(preferences.subtitleStyle.verticalPosition * 100).toInt()}%",
                             highlighted = highlightSettingId == "subtitle_vertical_position",
-                            index = subIdx, count = subTotal,
                             onClick = {
                                 activePicker = PickerState.Slider(
                                     title = verticalPositionTitle,
@@ -527,6 +517,7 @@ fun LanguageSettingsScreen(
                                 )
                             },
                         )
+                    }
                     }
                 }
             }
