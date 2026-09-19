@@ -288,7 +288,7 @@ jobs:
           ./gradlew :apps:desktop:packageDistributionForCurrentOS
           -PjellyplayVersion=${{ needs.determine-version.outputs.apk_version }}
           -PjellyplayVersionName=${{ needs.determine-version.outputs.alpha_display }}
-          ${{ matrix.platform == 'macos' && '-Dorg.gradle.jvmargs="-Xmx3g -XX:+UseParallelGC -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8" -Pkotlin.daemon.jvmargs="-Xmx2g -XX:+UseParallelGC"' || '' }}
+          ${{ matrix.platform == 'macos' && '-Dorg.gradle.jvmargs="-Xmx3g -XX:+UseParallelGC -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8" -Pkotlin.daemon.jvmargs="-Xmx3g -XX:+UseParallelGC"' || '' }}
           --stacktrace
 
       - name: Rename installers with alpha version
@@ -336,7 +336,19 @@ jobs:
           cache-read-only: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master' }}
 
       - name: Build web wasm bundle (production)
-        run: ./gradlew :apps:web:wasmJsBrowserDistribution --stacktrace
+        # compileProductionExecutableKotlinWasmJsOptimize runs binaryen
+        # natively inside the build. Three consecutive release runs
+        # (35424779995, 35425885803, 35427101486) lost the 16 GB runner to
+        # OS-level memory exhaustion 3-5 minutes into that task with NO JVM
+        # error — the JVM heaps were capped, so the culprit is the native
+        # optimizer competing with the repo-default 6g Gradle daemon, 3-4g
+        # Kotlin daemon ceiling and 12 workers on a 4-core box. Shrink both
+        # JVMs and cap workers here so the optimizer gets physical memory.
+        run: >
+          ./gradlew :apps:web:wasmJsBrowserDistribution --stacktrace
+          -Dorg.gradle.jvmargs="-Xmx2g -XX:+UseParallelGC -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8"
+          -Pkotlin.daemon.jvmargs="-Xmx3g -XX:+UseParallelGC"
+          --max-workers=4
 
       # Write <name>.gz sidecars for every *.wasm/*.js/*.css inside the
       # distribution BEFORE the zip step below (it takes the whole directory
