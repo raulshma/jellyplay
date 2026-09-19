@@ -15,8 +15,9 @@ name: KMP Alpha Release
 # the version script reads the channel from the namespace (the -alpha in
 # release-alpha), so the branch name alone pins the tag to v<x.y.z>-alpha.N.
 # Top-level dashed branches (v0.11.0-alpha) no longer trigger this lane —
-# release-alpha/* is the only push path to a desktop/web release. The
-# desktop packageVersion stays numeric
+# release-alpha/* is the only push path to a MID-CYCLE desktop/web release;
+# stable cuts in release.yml publish v<x.y.z>-alpha.N of their own base via
+# its KMP jobs. The desktop packageVersion stays numeric
 # (jpackage/msi constraint, apps/desktop/build.gradle.kts); the alpha marker
 # rides the display version (-PjellyplayVersionName → About screen) and the
 # release tag + asset names.

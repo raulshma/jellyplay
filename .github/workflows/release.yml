@@ -1,5 +1,12 @@
 name: Release
 
+# Stable cut = TWO GitHub releases from one push:
+#  * the stable Android APK release (tag v<x.y.z>, /releases/latest), and
+#  * a KMP pre-release (tag v<x.y.z>-alpha.N: desktop installers + web
+#    bundle) from the same commit — the KMP lane mirrors the
+#    release-alpha/** channel in kmp-release.yml, which stays available for
+#    mid-cycle alpha cuts without an Android release.
+
 on:
   push:
     branches:
@@ -18,6 +25,13 @@ concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
+# bash for every run: step: the desktop matrix below includes windows-latest,
+# where the default run shell is pwsh (the installer rename is bash: shopt,
+# find -print0, process substitution).
+defaults:
+  run:
+    shell: bash
+
 permissions:
   contents: write
 
@@ -27,6 +41,8 @@ jobs:
     outputs:
       tag: ${{ steps.version.outputs.tag }}
       apk_version: ${{ steps.version.outputs.apk_version }}
+      alpha_tag: ${{ steps.version.outputs.alpha_tag }}
+      alpha_display: ${{ steps.version.outputs.alpha_display }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v7
@@ -46,7 +62,13 @@ jobs:
 
           BASE_PREFIX="v${major}.${minor}"
 
-          latest_tag=$(git tag -l "${BASE_PREFIX}.*" | sort -V | tail -n 1)
+          # Stable bump reads STABLE tags only. Prerelease tags
+          # (v0.11.0-alpha.1 — published by this lane's KMP job and by
+          # kmp-release.yml) also match the v0.11.* glob, and their trailing
+          # alpha ordinal would corrupt the patch math: with only
+          # v0.11.0-alpha.1 existing, the next stable cut would land on
+          # v0.11.2 instead of v0.11.0.
+          latest_tag=$(git tag -l "${BASE_PREFIX}.*" | grep -v -e '-' | sort -V | tail -n 1)
 
           if [ -n "$latest_tag" ]; then
               latest_patch=${latest_tag##*.}
@@ -58,10 +80,26 @@ jobs:
               NEW_APK_VERSION="${major}.${minor}.${patch}"
           fi
 
+          # KMP alpha riding the stable cut: same numeric base as the new
+          # stable tag, ordinal continues any mid-cycle alphas of that base
+          # (the release-alpha/** lane in kmp-release.yml) — cutting v0.11.0
+          # stable after v0.11.0-alpha.1/.2 ships v0.11.0-alpha.3.
+          ALPHA_PREFIX="v${NEW_APK_VERSION}-alpha"
+          latest_alpha=$(git tag -l "${ALPHA_PREFIX}.*" | sort -V | tail -n 1)
+          if [ -n "$latest_alpha" ]; then
+              alpha_ordinal=$(( ${latest_alpha##*.} + 1 ))
+          else
+              alpha_ordinal=1
+          fi
+          ALPHA_TAG="${ALPHA_PREFIX}.${alpha_ordinal}"
+
           echo "Next tag computing to: $NEW_TAG"
           echo "Next APK version: $NEW_APK_VERSION"
+          echo "KMP alpha tag: $ALPHA_TAG"
           echo "tag=$NEW_TAG" >> $GITHUB_OUTPUT
           echo "apk_version=$NEW_APK_VERSION" >> $GITHUB_OUTPUT
+          echo "alpha_tag=$ALPHA_TAG" >> $GITHUB_OUTPUT
+          echo "alpha_display=${ALPHA_TAG#v}" >> $GITHUB_OUTPUT
 
   build:
     needs: determine-version
@@ -198,6 +236,120 @@ jobs:
           path: jellyplay-*.apk
           retention-days: 7
 
+  # KMP lane riding the stable cut — same packaging steps as the
+  # release-alpha/** lane (kmp-release.yml), kept as a verbatim mirror so
+  # the two files diff cleanly. Publishes as a SEPARATE pre-release tagged
+  # v<x.y.z>-alpha.N (kmp-alpha-release job below); the stable APK job's
+  # make_latest:true stays the only writer of /releases/latest.
+  desktop-package:
+    needs: determine-version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux
+          - os: windows-latest
+            platform: windows
+          - os: macos-latest
+            platform: macos
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master' }}
+
+      - name: Package desktop installers for current OS
+        # packageVersion (numeric, = the stable apk_version) feeds
+        # jpackage/msi; the display version (v0.11.0-alpha.1) lands in the
+        # About screen via desktop-build.properties
+        # (WriteDesktopBuildInfoTask).
+        run: >
+          ./gradlew :apps:desktop:packageDistributionForCurrentOS
+          -PjellyplayVersion=${{ needs.determine-version.outputs.apk_version }}
+          -PjellyplayVersionName=${{ needs.determine-version.outputs.alpha_display }}
+          --stacktrace
+
+      - name: Rename installers with alpha version
+        run: |
+          VERSION="${{ needs.determine-version.outputs.alpha_display }}"
+          shopt -s nullglob
+          found=()
+          while IFS= read -r -d '' f; do
+            ext="${f##*.}"
+            dest="jellyplay-desktop-${{ matrix.platform }}-v${VERSION}.${ext}"
+            mv "$f" "$dest"
+            found+=("$dest")
+          done < <(find apps/desktop/build/compose/binaries/main -type f \
+            \( -name '*.msi' -o -name '*.deb' -o -name '*.rpm' -o -name '*.dmg' \) -print0)
+          if [ ${#found[@]} -eq 0 ]; then
+            echo "::error::No installers produced for ${{ matrix.platform }}"
+            exit 1
+          fi
+          printf 'Packaged: %s\n' "${found[@]}"
+
+      - name: Upload installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-installers-${{ matrix.platform }}
+          path: jellyplay-desktop-*
+          retention-days: 7
+          if-no-files-found: error
+
+  web-bundle:
+    needs: determine-version
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master' }}
+
+      - name: Build web wasm bundle (production)
+        run: ./gradlew :apps:web:wasmJsBrowserDistribution --stacktrace
+
+      # Write <name>.gz sidecars for every *.wasm/*.js/*.css inside the
+      # distribution BEFORE the zip step below (it takes the whole directory
+      # verbatim), so self-hosters can serve them with nginx `gzip_static on;`
+      # / Caddy `file_server precompressed` instead of on-the-fly compression.
+      # The task dependsOn the distribution, so this is a cheap re-entry: the
+      # bundle itself is already up to date here.
+      - name: Precompress web bundle (gzip sidecars)
+        run: ./gradlew :apps:web:precompressWasmDist --stacktrace
+
+      - name: Zip web bundle with alpha version
+        run: |
+          VERSION="${{ needs.determine-version.outputs.alpha_display }}"
+          cd apps/web/build/dist/wasmJs/productionExecutable
+          zip -r "$RUNNER_TEMP/jellyplay-web-v${VERSION}.zip" .
+
+      - name: Upload web bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-bundle
+          path: ${{ runner.temp }}/jellyplay-web-*.zip
+          retention-days: 7
+          if-no-files-found: error
+
   release:
     needs: [determine-version, build]
     runs-on: ubuntu-latest
@@ -212,6 +364,9 @@ jobs:
         with:
           path: apks
           merge-multiple: true
+          # This run also carries desktop/web artifacts — pull the APK set
+          # only, not the installers.
+          pattern: 'apk-*'
 
       - name: Publish to GitHub Releases
         uses: softprops/action-gh-release@v3
@@ -221,3 +376,36 @@ jobs:
           files: apks/jellyplay-*.apk
           generate_release_notes: true
           make_latest: true
+
+  kmp-alpha-release:
+    needs: [determine-version, desktop-package, web-bundle]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download KMP artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+          pattern: 'desktop-installers-*'
+
+      - name: Download web bundle artifact
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+          pattern: 'web-bundle'
+
+      # The alpha contract (same as kmp-release.yml): marked pre-release and
+      # never "latest" — the Android updater's /releases/latest probe stays
+      # on the stable line published by the release job above.
+      - name: Publish KMP Alpha to GitHub Releases (pre-release)
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: "${{ needs.determine-version.outputs.alpha_tag }}"
+          name: "JellyPlay KMP Alpha ${{ needs.determine-version.outputs.alpha_tag }}"
+          files: |
+            release-assets/jellyplay-desktop-*
+            release-assets/jellyplay-web-*
+          generate_release_notes: true
+          prerelease: true
+          make_latest: false
