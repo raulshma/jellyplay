@@ -227,14 +227,33 @@ kotlin {
     }
 }
 
-// KGP 2.3.21 pins binaryen 125 for wasm production optimization; that wasm-opt
-// build segfaults (SIGSEGV, exit 139) on this bundle ~8 minutes into
-// compileProductionExecutableKotlinWasmJsOptimize (release run 35427847303).
-// Pin a newer binaryen — the same GitHub-release channel KGP's
-// kotlinWasmBinaryenSetup downloads from, older CLI surface untouched.
-// Version 125 still works for every other Kotlin project; only this bundle
-// trips it, so keep the pin scoped to this module's BinaryenPlugin instance
-// (BinaryenExec.register applies the plugin to the compilation's project).
+// KGP's default binaryen line for this module is `-O3 --gufa` repeated three
+// times. On this bundle that needs >10 GB of native RAM inside wasm-opt:
+// measured in a container, the full line is OOM-killed at a 10 GB cap, and on
+// the 16 GB CI runner it either wedged the box until the runner was evicted
+// (runs 35424779995/35425885803/35427101486) or died with SIGSEGV under
+// allocation pressure (runs 35427847303/35431664891, binaryen 125 and 128
+// alike — so it is memory, not a specific binaryen bug; same crash shape as
+// KT-80988). One -O3 round keeps the size win (40.6 MB -> 22.4 MB) with a
+// measured 5 GB peak. binaryen stays pinned at 128 (KGP default is 125):
+// same crash on both proves the version is not the variable.
+tasks.withType<org.jetbrains.kotlin.gradle.targets.wasm.binaryen.BinaryenExec>().configureEach {
+    binaryenArgs = mutableListOf(
+        "--enable-nontrapping-float-to-int",
+        "--enable-gc",
+        "--enable-reference-types",
+        "--enable-exception-handling",
+        "--enable-bulk-memory",
+        "--inline-functions-with-loops",
+        "--traps-never-happen",
+        "--fast-math",
+        "--closed-world",
+        "-O3",
+    )
+}
+
+// Pin binaryen 128 explicitly (KGP 2.3.21 would download 125) so the optimize
+// toolchain does not drift with the Kotlin pin.
 plugins.withType<org.jetbrains.kotlin.gradle.targets.wasm.binaryen.BinaryenPlugin> {
     extensions.configure<org.jetbrains.kotlin.gradle.targets.wasm.binaryen.BinaryenEnvSpec> {
         version.set("128")
