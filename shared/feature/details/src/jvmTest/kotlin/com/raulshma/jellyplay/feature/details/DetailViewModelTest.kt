@@ -1309,9 +1309,9 @@ class DetailViewModelTest {
 
         // LOCAL origin now resolves the smart-play target from downloaded
         // episodes, matching the online play button + Up Next behavior.
-        val target = viewModel.uiState.value.smartPlayTarget
-        assertNotNull(target)
-        assertEquals("e1", target!!.episode.id)
+        // The recompute dispatches to Dispatchers.Default, so poll instead of
+        // reading once (awaitSmartPlayTarget).
+        val target = awaitSmartPlayTarget { it.episode.id == "e1" }
         assertEquals(DetailOrigin.LOCAL_OFFLINE_MODE, viewModel.uiState.value.origin)
         // Remote-only discovery coroutines still never fire for a local origin.
         io.mockk.coVerify(exactly = 0) { mediaRepository.getSimilarItems(any(), any()) }

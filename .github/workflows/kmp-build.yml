@@ -265,7 +265,7 @@ jobs:
         # The legacy :feature:player:video androidTest set moved to
         # :app (AGP KMP library plugins expose no androidTest compilation —
         # syncplay relocation precedent); compile-gate it here.
-        run: ./gradlew :app:assemblePhoneDebugAndroidTest --stacktrace
+        run: ./gradlew :app:assemblePhoneDebugAndroidTest --stacktrace --max-workers=2 "-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8" "-Pkotlin.daemon.jvmargs=-Xmx5g -XX:+UseParallelGC"
 
       - name: Shell tests (Koin registration guard + packaging asset suites)
         # :apps:desktop:test hosts the Koin-registration ratchet
@@ -274,7 +274,7 @@ jobs:
         # the DesktopCrashHandlerTest and
         # PackagingIconAssetsTest suites, so it must run in CI, not just
         # locally.
-        run: ./gradlew :apps:desktop:test --stacktrace
+        run: ./gradlew :apps:desktop:test --stacktrace --max-workers=2 "-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8" "-Pkotlin.daemon.jvmargs=-Xmx5g -XX:+UseParallelGC"
 
   android-app:
     # The :app module previously ran in NO
@@ -316,11 +316,18 @@ jobs:
         # OfflineWatchSyncContractTest regression pin; the drain-policy
         # bodies run portable in :shared:core:data:jvmTest above; the former
         # instrumented-only sheet/scrim pairs now execute under Robolectric).
-        run: ./gradlew :app:testPhoneDebugUnitTest :app:testTvDebugUnitTest :shared:core:data:testAndroidHostTest :shared:core:ui:testAndroidHostTest --stacktrace
+        # Runner-sized heap/worker overrides (same medicine as the
+        # shared-targets lane above): gradle.properties is tuned for an
+        # 18-core dev box, and the stock 3g Kotlin daemon heap / 12 workers
+        # GC-thrash OOMs on 4-core 16GB runners once this lane compiles the
+        # full shared feature graph for both phone+tv unit-test variants
+        # (compileAndroidMain died with "GC overhead limit exceeded" in four
+        # feature modules before these were added).
+        run: ./gradlew :app:testPhoneDebugUnitTest :app:testTvDebugUnitTest :shared:core:data:testAndroidHostTest :shared:core:ui:testAndroidHostTest --stacktrace --max-workers=2 "-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8" "-Pkotlin.daemon.jvmargs=-Xmx5g -XX:+UseParallelGC"
 
       - name: Compose-resources APK guard
         # dependsOn assemblePhoneDebug — the guard opens the built APKs.
-        run: ./gradlew :app:verifyPhoneDebugComposeResources --stacktrace
+        run: ./gradlew :app:verifyPhoneDebugComposeResources --stacktrace --max-workers=2 "-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8" "-Pkotlin.daemon.jvmargs=-Xmx5g -XX:+UseParallelGC"
 
   desktop-package:
     #  release engineering: packaging dry-run per OS. Proves the
@@ -353,7 +360,12 @@ jobs:
         # -PjellyplayVersion mirrors the release-lane contract documented in
         # apps/desktop/build.gradle.kts (numeric x.y.z only; jpackage/msi
         # constraint).
-        run: ./gradlew :apps:desktop:packageDistributionForCurrentOS -PjellyplayVersion=0.1.0 --stacktrace
+        # Runner-sized heap/worker overrides (same medicine as the
+        # shared-targets lane): the stock gradle.properties Kotlin daemon heap
+        # GC-thrash OOM'd the windows runner mid compileKotlinJvm
+        # (:shared:feature:settings) while ubuntu/macos passed on margin —
+        # same latent risk on all three.
+        run: ./gradlew :apps:desktop:packageDistributionForCurrentOS -PjellyplayVersion=0.1.0 --stacktrace --max-workers=2 "-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8" "-Pkotlin.daemon.jvmargs=-Xmx5g -XX:+UseParallelGC"
 
       - name: Dump jpackage logs on failure
         # Compose's ExternalToolRunner only NAMES the runner-local *-out/-err
