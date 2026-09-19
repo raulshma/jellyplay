@@ -71,7 +71,9 @@ jobs:
           # alpha ordinal would corrupt the patch math: with only
           # v0.11.0-alpha.1 existing, the next stable cut would land on
           # v0.11.2 instead of v0.11.0.
-          latest_tag=$(git tag -l "${BASE_PREFIX}.*" | grep -v -e '-' | sort -V | tail -n 1)
+          # grep -v exits 1 when it selects zero lines — a fresh minor with
+          # only -alpha tags (v0.11.0-alpha.1) would otherwise trip pipefail.
+          latest_tag=$(git tag -l "${BASE_PREFIX}.*" | grep -v -e '-' | sort -V | tail -n 1 || true)
 
           if [ -n "$latest_tag" ]; then
               latest_patch=${latest_tag##*.}
