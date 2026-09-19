@@ -279,10 +279,16 @@ jobs:
         # jpackage/msi; the display version (v0.11.0-alpha.1) lands in the
         # About screen via desktop-build.properties
         # (WriteDesktopBuildInfoTask).
+        # macos-latest runners carry only 7 GB RAM; the repo-default -Xmx6g
+        # Gradle daemon + -Xmx3g Kotlin daemon oversubscribe it and the
+        # compiler dies with GC-overhead OOM (release run 35425885803). Cap
+        # both for this leg only — linux/windows runners have 16 GB and keep
+        # the repo defaults.
         run: >
           ./gradlew :apps:desktop:packageDistributionForCurrentOS
           -PjellyplayVersion=${{ needs.determine-version.outputs.apk_version }}
           -PjellyplayVersionName=${{ needs.determine-version.outputs.alpha_display }}
+          ${{ matrix.platform == 'macos' && '-Dorg.gradle.jvmargs="-Xmx3g -XX:+UseParallelGC -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8" -Pkotlin.daemon.jvmargs="-Xmx2g -XX:+UseParallelGC"' || '' }}
           --stacktrace
 
       - name: Rename installers with alpha version
