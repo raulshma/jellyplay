@@ -92,12 +92,10 @@ import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
-import com.raulshma.jellyplay.core.model.AudioNormalizationMode
-import com.raulshma.jellyplay.core.model.ChannelMixMode
-import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.SubtitleEdgeType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
+import com.raulshma.jellyplay.core.model.TrickplayInfo
 import com.raulshma.jellyplay.core.model.formatFixed
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.components.rememberDpadSeekState
@@ -159,9 +157,12 @@ import com.raulshma.jellyplay.feature.player.video.components.GestureOverlay
 import com.raulshma.jellyplay.feature.player.video.components.PinLockOverlay
 import com.raulshma.jellyplay.feature.player.video.components.SlideToUnlockOverlay
 import com.raulshma.jellyplay.feature.player.video.components.PlayerControls
+import com.raulshma.jellyplay.feature.player.video.components.PlayerEffectsControls
 import com.raulshma.jellyplay.feature.player.video.components.SpeedPickerSheet
+import com.raulshma.jellyplay.feature.player.video.components.SleepTimerControls
 import com.raulshma.jellyplay.feature.player.video.components.SleepTimerSheet
 import com.raulshma.jellyplay.feature.player.video.components.SubtitleStyleSheet
+import com.raulshma.jellyplay.feature.player.video.components.SyncPlayIndicator
 import com.raulshma.jellyplay.feature.player.video.components.VideoStatsOverlay
 import com.raulshma.jellyplay.feature.player.video.components.SyncPlayPlayerSheet
 
@@ -682,20 +683,21 @@ fun VideoPlayerScreen(
         )
     }
 
-    val doPlay: () -> Unit = remember(engine, isInSyncPlaySession, isCastConnected) {
+    // Play/pause delegate to the VM's routing funnel (A1): the same
+    // SyncPlay -> cast -> local order the PiP transport uses, so on-screen
+    // and PiP transport presses can never diverge. Only the screen-local
+    // `playbackIntended` flag stays here; no routing captures remain, so no
+    // remember keys are needed.
+    val doPlay: () -> Unit = remember {
         {
             playbackIntended = true
-            if (isInSyncPlaySession) viewModel.syncPlay.togglePlayPause()
-            else if (isCastConnected) viewModel.cast.castPlay()
-            else viewModel.resumePlayback()
+            viewModel.routedPlay(play = true)
         }
     }
-    val doPause: () -> Unit = remember(engine, isInSyncPlaySession, isCastConnected) {
+    val doPause: () -> Unit = remember {
         {
             playbackIntended = false
-            if (isInSyncPlaySession) viewModel.syncPlay.togglePlayPause()
-            else if (isCastConnected) viewModel.cast.castPause()
-            else engine?.pause()
+            viewModel.routedPlay(play = false)
         }
     }
     val doSeekTo: (Long) -> Unit = remember(engine, isInSyncPlaySession, isCastConnected) {
@@ -1561,9 +1563,17 @@ fun VideoPlayerScreen(
             // the rememberSaveable property delegates (currentSheet,
             // showControls, isSeeking, controlsHasFocus, isOverflowMenuOpen)
             // whose MutableState references are stable across recomposition —
-            // so they need no keys. The few that capture a value (onSeekEnd,
-            // onPassthroughClick) are keyed on exactly that value so they
-            // recreate only when it actually changes.
+            // so they need no keys. The few that capture a value (onSeekEnd)
+            // are keyed on exactly that value so they recreate only when it
+            // actually changes.
+            //
+            // The ~13 controls that do nothing but open a sheet collapse
+            // into the ONE remembered opener below (A6): PlayerControls
+            // takes it as its single openSheet param, so a new sheet entry
+            // is a PlayerSheet arm — not another remembered lambda here AND
+            // another no-arg param there (the skippability rationale above
+            // is why the opener must stay remembered, not inline).
+            val openSheet by remember { mutableStateOf({ sheet: PlayerSheet -> currentSheet = sheet }) }
             val onPlayPause by remember(doTogglePlayPause) { mutableStateOf({ doTogglePlayPause() }) }
             val onPreviousEpisode by remember { mutableStateOf({ viewModel.playPreviousEpisode() }) }
             val onNextEpisode by remember { mutableStateOf({ viewModel.playNextEpisode() }) }
@@ -1575,8 +1585,6 @@ fun VideoPlayerScreen(
             }
             val onSeekStart by remember { mutableStateOf({ isSeeking = true }) }
             val onSeekPositionChange by remember { mutableStateOf({ positionMs: Long -> seekPositionMs = positionMs }) }
-            val onSpeedClick by remember { mutableStateOf({ currentSheet = PlayerSheet.Speed }) }
-            val onAudioClick by remember { mutableStateOf({ currentSheet = PlayerSheet.Audio }) }
             // Primary subtitle button opens the hub on the Tracks tab. No
             // reset (deliberate — reopening on the same item keeps prior
             // search state) and no loads here: the router's LaunchedEffect
@@ -1598,32 +1606,48 @@ fun VideoPlayerScreen(
                 subtitleHubResetFirst = true
                 currentSheet = PlayerSheet.SubtitleHub
             }) }
-            val onChapterClick by remember { mutableStateOf({ currentSheet = PlayerSheet.Chapter }) }
-            val onInfoClick by remember { mutableStateOf({ currentSheet = PlayerSheet.PlaybackInfo }) }
-            val onAspectRatioClick by remember { mutableStateOf({ currentSheet = PlayerSheet.AspectRatio }) }
-            val onDialogueBoostClick by remember { mutableStateOf({ viewModel.toggleDialogueBoost() }) }
-            val onDialogueBoostStrengthChange by remember { mutableStateOf({ strength: EffectStrength -> viewModel.setDialogueBoostStrength(strength) }) }
-            val onNightModeClick by remember { mutableStateOf({ viewModel.effects.toggleNightMode() }) }
-            val onNightModeStrengthChange by remember { mutableStateOf({ strength: EffectStrength -> viewModel.effects.setNightModeStrength(strength) }) }
-            val onAVSyncClick by remember { mutableStateOf({ currentSheet = PlayerSheet.AVSync }) }
-            val onDecoderClick by remember { mutableStateOf({ currentSheet = PlayerSheet.Decoder }) }
-            // effectsState is a `by collectAsStateWithLifecycle()` delegate, so
-            // `effectsState.audioPassthrough` is read at invocation time — no key
-            // needed and the lambda never goes stale.
-            val onPassthroughClick by remember { mutableStateOf({ viewModel.effects.setAudioPassthrough(!effectsState.audioPassthrough) }) }
-            val onEpisodesClick by remember { mutableStateOf({ currentSheet = PlayerSheet.Episodes }) }
-            val onSyncPlayClick by remember { mutableStateOf({ currentSheet = PlayerSheet.SyncPlay }) }
+            // ONE effects bundle replaces the nine remembered effect lambdas
+            // and PlayerControls' eighteen flat effects params. Keys are
+            // exactly the bundle's value fields — the callbacks capture only
+            // viewModel and the effectsState delegate (read at invocation
+            // time, so those lambdas never go stale), so the bundle instance
+            // is equal across recompositions and PlayerControls keeps
+            // skipping until an effects value actually flips.
+            val effectsControls = remember(
+                uiState.dialogueBoostEnabled,
+                uiState.dialogueBoostStrength,
+                effectsState.nightModeEnabled,
+                effectsState.nightModeStrength,
+                effectsState.audioPassthrough,
+                effectsState.audioNormalizationMode,
+                effectsState.audioNormalizationEnabled,
+                effectsState.channelMixMode,
+                effectsState.channelMixEnabled,
+            ) {
+                PlayerEffectsControls(
+                    dialogueBoostEnabled = uiState.dialogueBoostEnabled,
+                    dialogueBoostStrength = uiState.dialogueBoostStrength,
+                    nightModeEnabled = effectsState.nightModeEnabled,
+                    nightModeStrength = effectsState.nightModeStrength,
+                    audioPassthrough = effectsState.audioPassthrough,
+                    audioNormalizationMode = effectsState.audioNormalizationMode,
+                    audioNormalizationEnabled = effectsState.audioNormalizationEnabled,
+                    channelMixMode = effectsState.channelMixMode,
+                    channelMixEnabled = effectsState.channelMixEnabled,
+                    onDialogueBoostClick = { viewModel.toggleDialogueBoost() },
+                    onDialogueBoostStrengthChange = { strength -> viewModel.setDialogueBoostStrength(strength) },
+                    onNightModeClick = { viewModel.effects.toggleNightMode() },
+                    onNightModeStrengthChange = { strength -> viewModel.effects.setNightModeStrength(strength) },
+                    onPassthroughClick = { viewModel.effects.setAudioPassthrough(!effectsState.audioPassthrough) },
+                    onAudioNormalizationClick = { viewModel.effects.toggleAudioNormalization() },
+                    onAudioNormalizationModeChange = { mode -> viewModel.effects.setAudioNormalizationMode(mode) },
+                    onChannelMixClick = { viewModel.effects.toggleChannelMix() },
+                    onChannelMixModeChange = { mode -> viewModel.effects.setChannelMixMode(mode) },
+                )
+            }
             val onPipClick by remember(onEnterPip) { mutableStateOf({ onEnterPip() }) }
             val onMuteClick by remember { mutableStateOf({ viewModel.toggleMute() }) }
             val onVideoStatsClick by remember { mutableStateOf({ viewModel.toggleVideoStats() }) }
-            val onQualityClick by remember { mutableStateOf({ currentSheet = PlayerSheet.Quality }) }
-            val onPlaybackModeClick by remember { mutableStateOf({ currentSheet = PlayerSheet.PlaybackMode }) }
-            val onAudioNormalizationClick by remember { mutableStateOf({ viewModel.effects.toggleAudioNormalization() }) }
-            val onAudioNormalizationModeChange by remember { mutableStateOf({ mode: AudioNormalizationMode -> viewModel.effects.setAudioNormalizationMode(mode) }) }
-            val onChannelMixClick by remember { mutableStateOf({ viewModel.effects.toggleChannelMix() }) }
-            val onChannelMixModeChange by remember { mutableStateOf({ mode: ChannelMixMode -> viewModel.effects.setChannelMixMode(mode) }) }
-            val onSleepTimerClick by remember { mutableStateOf({ currentSheet = PlayerSheet.SleepTimer }) }
-            val onVideoFilterClick by remember { mutableStateOf({ currentSheet = PlayerSheet.VideoFilter }) }
             // Capture the current video frame from the engine's surface
             // (platform seam: PixelCopy on Android's SurfaceView surfaces —
             // only PixelCopy, not View.drawToBitmap, can read them; mpv's
@@ -1690,11 +1714,7 @@ fun VideoPlayerScreen(
                 videoStatsFlow = viewModel.videoStats,
                 playbackSpeed = playbackSpeed,
                 chapters = uiState.chapters,
-                dialogueBoostEnabled = uiState.dialogueBoostEnabled,
-                dialogueBoostStrength = uiState.dialogueBoostStrength,
-                nightModeEnabled = effectsState.nightModeEnabled,
-                nightModeStrength = effectsState.nightModeStrength,
-                audioPassthrough = effectsState.audioPassthrough,
+                effectsControls = effectsControls,
                 segments = uiState.segmentState.segments,
                 playMethod = uiState.media.playMethod,
                 isDirectPlayForced = uiState.media.isDirectPlayForced,
@@ -1718,12 +1738,7 @@ fun VideoPlayerScreen(
                     userInteractionCount++
                     viewModel.onUserInteraction()
                 },
-                supportsSubtitleStyle = uiState.engineCapabilities.supportsSubtitleStyle,
-                supportsDialogueBoost = uiState.engineCapabilities.supportsDialogueBoost,
-                supportsNightMode = uiState.engineCapabilities.supportsNightMode,
-                supportsAudioDelay = uiState.engineCapabilities.supportsAudioDelay,
-                supportsSubtitleDelay = uiState.engineCapabilities.supportsSubtitleDelay,
-                supportsAudioPassthrough = uiState.engineCapabilities.supportsAudioPassthrough,
+                capabilities = uiState.engineCapabilities,
                 hasEpisodes = hasEpisodes,
                 episodeBrowserEnabled = episodeBrowserEnabled,
                 onPlayPause = onPlayPause,
@@ -1737,55 +1752,29 @@ fun VideoPlayerScreen(
                 tvTrickplayBitmap = if (isTv) tvTrickplayBitmap else null,
                 onToggleOrientation = toggleOrientation,
                 onBack = onBack,
-                onSpeedClick = onSpeedClick,
-                onAudioClick = onAudioClick,
+                openSheet = openSheet,
                 onSubtitleClick = onSubtitleClick,
                 onSubtitleHubClick = onSubtitleHubClick,
-                onChapterClick = onChapterClick,
-                onInfoClick = onInfoClick,
-                onAspectRatioClick = onAspectRatioClick,
-                onDialogueBoostClick = onDialogueBoostClick,
-                onDialogueBoostStrengthChange = onDialogueBoostStrengthChange,
-                onNightModeClick = onNightModeClick,
-                onNightModeStrengthChange = onNightModeStrengthChange,
-                onAVSyncClick = onAVSyncClick,
-                onDecoderClick = onDecoderClick,
-                onPassthroughClick = onPassthroughClick,
-                onEpisodesClick = onEpisodesClick,
-                onSyncPlayClick = onSyncPlayClick,
                 onPipClick = onPipClick,
                 onMuteClick = onMuteClick,
                 isMuted = uiState.isMuted,
-                isInSyncPlaySession = isInSyncPlaySession,
-                syncPlayGroupName = syncPlay.syncPlayGroupName,
-                syncPlayParticipantCount = syncPlay.syncPlayParticipantCount,
-                isSyncPlaySynced = syncPlay.isSyncPlaySynced,
-                isSyncPlaySyncing = syncPlay.isSyncPlaySyncing,
+                syncPlay = SyncPlayIndicator(
+                    inSession = isInSyncPlaySession,
+                    groupName = syncPlay.syncPlayGroupName,
+                    participantCount = syncPlay.syncPlayParticipantCount,
+                    isSynced = syncPlay.isSyncPlaySynced,
+                    isSyncing = syncPlay.isSyncPlaySyncing,
+                ),
                 showVideoStats = uiState.uiPrefs.showVideoStats,
                 onVideoStatsClick = onVideoStatsClick,
                 streamingQuality = uiState.uiPrefs.streamingQuality,
                 playbackMode = uiState.uiPrefs.playbackMode,
-                onQualityClick = onQualityClick,
-                onPlaybackModeClick = onPlaybackModeClick,
-                audioNormalizationMode = effectsState.audioNormalizationMode,
-                audioNormalizationEnabled = effectsState.audioNormalizationEnabled,
-                channelMixMode = effectsState.channelMixMode,
-                channelMixEnabled = effectsState.channelMixEnabled,
-                supportsAudioNormalization = uiState.engineCapabilities.supportsAudioNormalization,
-                supportsChannelMixing = uiState.engineCapabilities.supportsChannelMixing,
-                supportsLiveQualitySwitch = uiState.engineCapabilities.supportsLiveQualitySwitch,
-                onAudioNormalizationClick = onAudioNormalizationClick,
-                onAudioNormalizationModeChange = onAudioNormalizationModeChange,
-                onChannelMixClick = onChannelMixClick,
-                onChannelMixModeChange = onChannelMixModeChange,
-                sleepTimerActive = sleepTimer.sleepTimerActive,
-                sleepTimerEndOfEpisode = sleepTimer.sleepTimerEndOfEpisode,
-                sleepTimerRemainingFlow = viewModel.sleepTimer.remainingMs,
-                onSleepTimerClick = onSleepTimerClick,
-                supportsVideoFilters = uiState.engineCapabilities.supportsVideoFilters,
+                sleepTimer = SleepTimerControls(
+                    active = sleepTimer.sleepTimerActive,
+                    endOfEpisode = sleepTimer.sleepTimerEndOfEpisode,
+                    remainingFlow = viewModel.sleepTimer.remainingMs,
+                ),
                 videoFiltersActive = !uiState.videoFx.videoEffects.isNeutral,
-                onVideoFilterClick = onVideoFilterClick,
-                supportsScreenshot = uiState.engineCapabilities.supportsScreenshot,
                 onScreenshotClick = onScreenshotClick,
                 abRepeat = abRepeat,
                 onAbRepeatToggle = { viewModel.abRepeat.setEnabled(!abRepeat.enabled) },
@@ -1847,27 +1836,21 @@ fun VideoPlayerScreen(
     }
 
     LaunchedEffect(Unit) {
-        // Combine the position with the gating state into one snapshotFlow and
-        // suppress emits where neither the position nor the gating flags changed,
-        // avoiding re-deriving seeking-state on no-op emissions.
-        snapshotFlow {
-            Triple(
-                seekPositionMs,
-                isSeeking && uiState.uiPrefs.trickplayEnabled && uiState.uiPrefs.trickplayInfo != null,
-                uiState.uiPrefs.trickplayInfo,
-            )
-        }
-            .conflate()
-            .distinctUntilChanged()
-            .collect { (pos, shouldFetch, _) ->
-                if (shouldFetch) {
-                    val bitmap = viewModel.loadTrickplayThumbnail(pos) as? PlatformBitmap
-                    seekTrickplayBitmap = bitmap
-                    if (isTv) {
-                        tvTrickplayBitmap = bitmap
-                    }
+        // Seek-bar / D-pad scrub feed: the seek overlay bitmap plus the TV
+        // mirror (TV renders no gesture overlay, so the seek-bar thumbnail
+        // IS its scrub preview).
+        collectTrickplayThumbnails(
+            positionMs = { seekPositionMs },
+            gate = { isSeeking && uiState.uiPrefs.trickplayEnabled && uiState.uiPrefs.trickplayInfo != null },
+            trickplayInfo = { uiState.uiPrefs.trickplayInfo },
+            onFetch = { pos, _ ->
+                val bitmap = viewModel.loadTrickplayThumbnail(pos) as? PlatformBitmap
+                seekTrickplayBitmap = bitmap
+                if (isTv) {
+                    tvTrickplayBitmap = bitmap
                 }
-            }
+            },
+        )
     }
 
     LaunchedEffect(isSeeking) {
@@ -1878,25 +1861,23 @@ fun VideoPlayerScreen(
     }
 
     LaunchedEffect(Unit) {
-        snapshotFlow {
-            Triple(
-                gestureSeekPositionMs,
-                isGestureSeeking && uiState.uiPrefs.trickplayOnSeekGesture,
-                uiState.uiPrefs.trickplayInfo,
-            )
-        }
-            .conflate()
-            .distinctUntilChanged()
-            .collect { (pos, shouldFetch, trickplayInfo) ->
-                if (shouldFetch) {
-                    gestureTrickplayVisible = true
-                    gestureTrickplayBitmap = if (trickplayInfo != null) {
-                        viewModel.loadTrickplayThumbnail(pos) as? PlatformBitmap
-                    } else {
-                        null
-                    }
+        // Gesture-swipe feed: unlike the seek feed, its gate does NOT include
+        // trickplayInfo != null — a null info with the gesture active still
+        // flips the overlay visible (with a null bitmap) so the swipe preview
+        // placeholder shows; the onFetch body encodes that divergence.
+        collectTrickplayThumbnails(
+            positionMs = { gestureSeekPositionMs },
+            gate = { isGestureSeeking && uiState.uiPrefs.trickplayOnSeekGesture },
+            trickplayInfo = { uiState.uiPrefs.trickplayInfo },
+            onFetch = { pos, trickplayInfo ->
+                gestureTrickplayVisible = true
+                gestureTrickplayBitmap = if (trickplayInfo != null) {
+                    viewModel.loadTrickplayThumbnail(pos) as? PlatformBitmap
+                } else {
+                    null
                 }
-            }
+            },
+        )
     }
 
     LaunchedEffect(isGestureSeeking) {
@@ -1985,6 +1966,36 @@ fun VideoPlayerScreen(
             transcodeReasons = rememberFormattedTranscodeReasons(uiState.media.transcodeReasons),
         )
     }
+}
+
+/**
+ * The shared collector behind BOTH trickplay thumbnail feeds (A6): the
+ * seek-bar / D-pad scrub (seek overlay bitmap + the TV mirror, which renders
+ * no gesture overlay) and the gesture-swipe preview. The two former inline
+ * `LaunchedEffect(Unit)` collectors differed only in the position source, the
+ * gating flag and the target write — the combined
+ * `Triple(position, gate, info)` snapshot read, the `conflate()` +
+ * `distinctUntilChanged()` pipeline that suppresses no-op emissions (neither
+ * the position nor the gating flags changed), and the gate check live here
+ * exactly once. The state reads stay inside [snapshotFlow]'s block via the
+ * getter lambdas, so snapshot tracking is byte-identical to the inline form;
+ * each feed's clear-on-end LaunchedEffect stays at its call site (their
+ * clear semantics genuinely differ).
+ */
+private suspend fun collectTrickplayThumbnails(
+    positionMs: () -> Long,
+    gate: () -> Boolean,
+    trickplayInfo: () -> TrickplayInfo?,
+    onFetch: suspend (positionMs: Long, trickplayInfo: TrickplayInfo?) -> Unit,
+) {
+    snapshotFlow { Triple(positionMs(), gate(), trickplayInfo()) }
+        .conflate()
+        .distinctUntilChanged()
+        .collect { (pos, shouldFetch, info) ->
+            if (shouldFetch) {
+                onFetch(pos, info)
+            }
+        }
 }
 
 /**

@@ -54,6 +54,7 @@ val libraryModule: Module = module {
             userDataMutator = get(),
             imageUrlProvider = get(),
             quickDownloadActions = get(),
+            photoFolderPrefetcher = get(),
         )
     }
     viewModel {

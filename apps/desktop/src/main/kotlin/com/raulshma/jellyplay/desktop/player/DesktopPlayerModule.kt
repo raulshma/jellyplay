@@ -1,15 +1,18 @@
 package com.raulshma.jellyplay.desktop.player
 
 import com.raulshma.jellyplay.core.data.playback.AudioEffectsManager
+import com.raulshma.jellyplay.core.data.playback.AudioEffectsSession
+import com.raulshma.jellyplay.core.data.playback.AudioPlayerEngine
 import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
 import com.raulshma.jellyplay.core.data.playback.AudioQueueManager
+import com.raulshma.jellyplay.core.data.playback.AudioTrackResolver
 import com.raulshma.jellyplay.core.data.playback.DefaultAudioQueueFacade
+import com.raulshma.jellyplay.core.data.playback.DesktopAudioQueueManager
 import com.raulshma.jellyplay.core.data.playback.focus.DefaultPlaybackFocus
 import com.raulshma.jellyplay.core.data.playback.focus.FocusArbiter
 import com.raulshma.jellyplay.core.data.playback.focus.PlaybackFocus
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import com.raulshma.jellyplay.feature.player.audio.AudioPlayerCast
-import com.raulshma.jellyplay.feature.player.audio.AudioPlayerEngine
 import com.raulshma.jellyplay.feature.player.video.engine.PlayerEngineFactory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -28,8 +31,14 @@ import org.koin.dsl.module
  * - [DesktopAudioQueueManager] is the real desktop audio core: the Android
  *   media3 AudioPlaybackManager semantics mirrored over a DEDICATED
  *   audio-only MpvDesktopEngine (`vo=null`), exposed as BOTH the
- *   [AudioQueueManager] contract and the player-audio [AudioPlayerEngine]
- *   seam — the same one-single-two-contracts shape as Android's manager.
+ *   [AudioQueueManager] contract and the shared [AudioPlayerEngine]
+ *   contract — the same one-single-two-contracts shape as Android's
+ *   manager. The class itself lives in core:data jvmMain now (the audio
+ *   queue chassis relocation; its queue-state chassis folds into
+ *   core:data commonMain's `AudioQueueStateCore` over an `EngineDispatch`
+ *   port) — this module stays its Koin home because it binds the
+ *   desktop-only collaborators (the mpv engine factory, the effects
+ *   session).
  *   The audio engine lives entirely inside the queue manager (its
  *   `engineFactory` lambda); there is deliberately NO shared
  *   `single<MediaEngine>` on desktop — a process-wide windowless mpv context
@@ -116,6 +125,7 @@ val desktopPlayerModule: Module = module {
     single<AudioPlayerEngine> { get<DesktopAudioQueueManager>() }
     single { DesktopAudioEffectsManager() }
     single<AudioEffectsManager> { get<DesktopAudioEffectsManager>() }
+    single<AudioEffectsSession> { get<DesktopAudioEffectsManager>() }
     single<AudioPlayerCast> { DesktopAudioPlayerCast() }
 
     single<AudioQueueFacade> {

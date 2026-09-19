@@ -22,7 +22,6 @@ import com.raulshma.jellyplay.feature.details.DetailAudioPlayback
 import com.raulshma.jellyplay.feature.details.DetailThemeMusic
 import com.raulshma.jellyplay.feature.music.feedback.MusicMessageBus
 import com.raulshma.jellyplay.feature.player.audio.AudioPlayerCast
-import com.raulshma.jellyplay.feature.player.audio.AudioPlayerEngine
 import com.raulshma.jellyplay.floating.FloatingPlayerState
 import com.raulshma.jellyplay.shell.AppLockState
 import com.raulshma.jellyplay.shell.SessionCoordinator
@@ -195,12 +194,15 @@ val androidAppViewModelsModule: Module = module {
  * AudioPlaybackManager/CastManager/UserMessageBus/ThemeMusicPlayer targets
  * are Koin-owned by the core graphs now, so no EntryPoint bridge
  * remains. Desktop halves are the no-op defs in each shared module's jvmMain.
+ *
+ * AudioPlayerEngine is NOT bridged here anymore: the contract moved into
+ * core/data (beside AudioQueueManager/AudioEffectsManager) and the media3
+ * manager implements it directly — androidCoreDataModule holds the alias.
  */
 fun androidAppInteropAdaptersModule(application: Application): Module = module {
     single<MusicMessageBus> { AppMusicMessageBus(bus = get()) }
     single<DetailAudioPlayback> { AppDetailAudioPlayback(manager = get()) }
     single<DetailThemeMusic> { AppDetailThemeMusic(player = get()) }
-    single<AudioPlayerEngine> { AppAudioPlayerEngine(manager = get()) }
     single<AudioPlayerCast> { AppAudioPlayerCast(castManager = get(), application = application) }
     // Dev v0.10.7 quick-action flow: core/data's download-outcome seam
     // (MediaDownloadActions.downloadAndReport) bridged to the UserMessageBus
@@ -242,52 +244,6 @@ private class AppDetailThemeMusic(
 ) : DetailThemeMusic {
     override fun playThemeFor(itemId: String) = player.playThemeFor(itemId)
     override fun stop() = player.stop()
-}
-
-/**
- * Audio-player feature seam: the transport/metadata/lyrics half of
- * AudioPlaybackManager that is not on the shared AudioQueueManager /
- * AudioEffectsManager contracts — a pure delegate.
- */
-private class AppAudioPlayerEngine(
-    private val manager: AudioPlaybackManager,
-) : AudioPlayerEngine {
-    override val title get() = manager.title
-    override val artist get() = manager.artist
-    override val artistId get() = manager.artistId
-    override val album get() = manager.album
-    override val albumArtUrl get() = manager.albumArtUrl
-    override val isPlaying get() = manager.isPlaying
-    override val currentPosition get() = manager.currentPosition
-    override val duration get() = manager.duration
-    override val speed get() = manager.speed
-    override val playbackError get() = manager.playbackError
-    override val isLoadingItem get() = manager.isLoadingItem
-    override val crossfadeDurationMs get() = manager.crossfadeDurationMs
-    override val undoEvents get() = manager.undoEvents
-    override val abLoopStartMs get() = manager.abLoopStartMs
-    override val abLoopEndMs get() = manager.abLoopEndMs
-    override val lyrics get() = manager.lyrics
-    override val currentLyricIndex get() = manager.currentLyricIndex
-    override val lyricsSource get() = manager.lyricsSource
-    override val isFetchingLyrics get() = manager.isFetchingLyrics
-    override val lyricsOffsetMs get() = manager.lyricsOffsetMs
-    override fun play(itemId: String) = manager.play(itemId)
-    override fun seekTo(positionMs: Long) = manager.seekTo(positionMs)
-    override fun togglePlayPause() = manager.togglePlayPause()
-    override fun pause() = manager.pause()
-    override fun changePlaybackSpeed(value: Float) = manager.changePlaybackSpeed(value)
-    override fun setSkipPreviousThreshold(ms: Long) = manager.setSkipPreviousThreshold(ms)
-    override fun setCrossfadeDurationMs(ms: Long) = manager.setCrossfadeDurationMs(ms)
-    override fun setGaplessEnabled(enabled: Boolean) = manager.setGaplessEnabled(enabled)
-    override fun getImageUrl(itemId: String): String = manager.getImageUrl(itemId)
-    override fun searchLyrics(query: String, callback: (Result<List<com.raulshma.jellyplay.core.model.LrcLibTrack>>) -> Unit) =
-        manager.searchLyrics(query, callback)
-    override fun applyLyrics(lrcLibId: Long) = manager.applyLyrics(lrcLibId)
-    override fun setLyricsOffset(offsetMs: Long) = manager.setLyricsOffset(offsetMs)
-    override fun stopAndRelease() = manager.stopAndRelease()
-    override fun undoLastQueueOperation(): Boolean = manager.undoLastQueueOperation()
-    override fun cycleAbLoop() = manager.cycleAbLoop()
 }
 
 /**

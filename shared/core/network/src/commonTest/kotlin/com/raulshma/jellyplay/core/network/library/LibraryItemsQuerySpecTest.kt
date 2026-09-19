@@ -282,4 +282,33 @@ class LibraryItemsQuerySpecTest {
         assertEquals(2, spec.limit)
         assertEquals(listOf("Overview", "PrimaryImageAspectRatio"), spec.fields)
     }
+
+    // ── the resume rows (getContinueWatching / getContinueReading / NextUp) ──
+
+    @Test
+    fun `the resume spec narrows to books only when asked`() {
+        val video = buildResumeQuerySpec(limit = 16, isBooks = false)
+        assertEquals(16, video.limit)
+        assertNull(video.includeKinds, "the video resume row sends no kind constraint")
+        assertEquals(listOf("Overview", "PrimaryImageAspectRatio"), video.fields)
+        assertNull(video.parentId)
+        assertNull(video.sortBy)
+
+        val books = buildResumeQuerySpec(limit = 8, isBooks = true)
+        assertEquals(8, books.limit)
+        assertEquals(listOf("Book"), books.includeKinds, "books narrow server-side via includeItemTypes")
+        assertEquals(listOf("Overview", "PrimaryImageAspectRatio"), books.fields)
+    }
+
+    @Test
+    fun `the child-image cover probe targets photos newest-first with the aspect-ratio projection`() {
+        val spec = buildChildItemImagesQuerySpec(parentId = "folder-1", limit = 12)
+        assertEquals("folder-1", spec.parentId)
+        assertEquals(listOf("Photo"), spec.includeKinds)
+        assertEquals(12, spec.limit)
+        assertEquals(listOf("DateCreated"), spec.sortBy)
+        assertEquals(true, spec.sortOrderDescending)
+        // NOT the list projection — the cover fold reads no Overview.
+        assertEquals(listOf("PrimaryImageAspectRatio"), spec.fields)
+    }
 }

@@ -87,7 +87,7 @@ class SearchViewModelHistoryTest {
 
     @Test
     fun `onSearchResultsShown persists query when it has at least 2 chars`() = runTest(mainDispatcher) {
-        viewModel.onSearchResultsShown("matrix")
+        viewModel.onEvent(SearchUiEvent.SearchResultsShown("matrix"))
         advanceUntilIdle()
 
         coVerify(exactly = 1) { mediaSearchEngine.recordHistory("matrix", jellyfinHadResults = true) }
@@ -95,7 +95,7 @@ class SearchViewModelHistoryTest {
 
     @Test
     fun `onSearchResultsShown skips blank queries`() = runTest(mainDispatcher) {
-        viewModel.onSearchResultsShown("")
+        viewModel.onEvent(SearchUiEvent.SearchResultsShown(""))
         advanceUntilIdle()
 
         coVerify(exactly = 0) { mediaSearchEngine.recordHistory(any(), any()) }

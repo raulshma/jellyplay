@@ -1,10 +1,5 @@
-package com.raulshma.jellyplay.desktop.player
+package com.raulshma.jellyplay.core.data.playback
 
-import com.raulshma.jellyplay.core.data.playback.AudioLyricsManager
-import com.raulshma.jellyplay.core.data.playback.AudioQueueItem
-import com.raulshma.jellyplay.core.data.playback.QueuePersistenceHelper
-import com.raulshma.jellyplay.core.data.playback.QueueUndoEvent
-import com.raulshma.jellyplay.core.data.playback.SleepTimerManager
 import com.raulshma.jellyplay.core.database.entity.AudioQueueEntity
 import com.raulshma.jellyplay.core.database.entity.AudioQueueStateEntity
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
@@ -26,9 +21,14 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 /**
  * Queue-semantics suite pinning [DesktopAudioQueueManager] against the Android
  * media3 AudioPlaybackManager behavior table (the semantics source of truth,
- * legacy core:data `AudioPlaybackManager.kt`). Collaborators come from the
- * shared fixtures file (hand-rolled fakes — this module's test source set has
- * no mocking library): a scriptable [AudioTrackResolver], a recording
+ * androidMain `AudioPlaybackManager.kt`). The suite (with its fixtures)
+ * relocated beside the manager into core:data jvmTest — the chassis fold it
+ * pins runs through [AudioQueueStateCore] now, but every assertion below is
+ * byte-identical to the pre-fold suite (pure relocation guarantee).
+ * Collaborators come from the shared fixtures file (hand-rolled fakes —
+ * carried over from the app-side suite rather than rewritten onto this
+ * source set's mockk, so they stay comparable with the app-level copies):
+ * a scriptable [AudioTrackResolver], a recording
  * [com.raulshma.jellyplay.core.data.repository.PlaybackRepository], a
  * thread-safe in-memory Room DAO under the REAL QueuePersistenceHelper, and
  * [FakeMediaEngine] standing in for mpv.
@@ -64,7 +64,7 @@ class DesktopAudioQueueManagerTest {
         val repo = FakePlaybackRepository()
         val dao = InMemoryQueueDao()
         val undoEvents = CopyOnWriteEventLog()
-        val effects = DesktopAudioEffectsManager()
+        val effects = FakeEffectsSession()
 
         private val dispatcher = UnconfinedTestDispatcher()
         private val scheduler = dispatcher.scheduler

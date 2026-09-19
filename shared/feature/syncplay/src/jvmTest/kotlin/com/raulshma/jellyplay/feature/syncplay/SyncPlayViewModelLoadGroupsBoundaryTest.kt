@@ -30,7 +30,7 @@ import kotlin.test.assertTrue
  * Boundary invariants of [SyncPlayViewModel.loadGroups] NOT pinned by
  * [SyncPlayViewModelTest]:
  *
- * 1. Reloading groups while inside a group PRESERVES [SyncPlayUiState.currentGroup]
+ * 1. Reloading groups while inside a group PRESERVES [SyncPlayGroupsUiState.currentGroup]
  *    (the `if (state.isInGroup) state.currentGroup else null` guard) — a
  *    background poll must not blank the group header mid-session.
  * 2. Reloading while NOT in a group clears any stale currentGroup.

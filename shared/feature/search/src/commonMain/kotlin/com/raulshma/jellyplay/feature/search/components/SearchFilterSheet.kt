@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -57,7 +56,6 @@ import com.raulshma.jellyplay.core.model.formatFixed
 import com.raulshma.jellyplay.core.ui.model.mediaTypeDisplayNamePlural
 import com.raulshma.jellyplay.core.ui.components.GlassFilterChip
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
-import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.components.yearPresetSelection
 import com.raulshma.jellyplay.core.ui.components.yearRangePresets
 import com.raulshma.jellyplay.core.ui.components.YearPresetSelection
@@ -83,50 +81,15 @@ fun SearchFilterSheet(
     var selectedMinRating by remember { mutableFloatStateOf(currentFilters.minRating) }
 
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val isTv = LocalTvMode.current
 
     val isLight = LocalIsLightTheme.current
-    // Sheet container matches the app/screen background: colorScheme.surface
-    // (pure #000 in OLED) rather than the old light=Low / dark=High split.
-    val sheetContainerColor = MaterialTheme.colorScheme.surface
     val glassBg = if (isLight) Color.Black.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.12f)
     val contentColor = MaterialTheme.colorScheme.onSurface
     val contentColorMedium = MaterialTheme.colorScheme.onSurfaceVariant
 
-    val showOnTv = isTv
-    if (showOnTv) {
-        TvSafeSheet(onDismissRequest = onDismiss) {
-            SearchFilterSheetBody(
-                contentColor = contentColor,
-                contentColorMedium = contentColorMedium,
-                glassBg = glassBg,
-                selectedMediaTypes = selectedMediaTypes,
-                onSelectMediaTypes = { selectedMediaTypes = it },
-                selectedGenres = selectedGenres,
-                onSelectGenres = { selectedGenres = it },
-                selectedYears = selectedYears,
-                onSelectYears = { selectedYears = it },
-                selectedTags = selectedTags,
-                onSelectTags = { selectedTags = it },
-                selectedMinRating = selectedMinRating,
-                onSelectMinRating = { selectedMinRating = it },
-                genres = genres,
-                availableTags = availableTags,
-                currentSortBy = currentFilters.sortBy,
-                currentPlayedStatus = currentFilters.playedStatus,
-                onApply = onApply,
-            )
-        }
-        return
-    }
-
-    ModalBottomSheet(
+    TvSafeSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = sheetContainerColor,
-        tonalElevation = 0.dp,
-        shape = ShapeCache.smoothTop28,
-        dragHandle = { com.raulshma.jellyplay.core.ui.components.SheetDragHandle() },
     ) {
         SearchFilterSheetBody(
             contentColor = contentColor,

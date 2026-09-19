@@ -108,15 +108,11 @@ fun AudioPlayerScreen(
     val queueState = uiState.queue
     val playlistPicker by viewModel.playlistPicker.state.collectAsStateWithLifecycle()
 
-    var showQueue by remember { mutableStateOf(false) }
-    var showSpeedPicker by remember { mutableStateOf(false) }
-    var showEqualizer by remember { mutableStateOf(false) }
-    var showEffectsSheet by remember { mutableStateOf(false) }
-    var showLyrics by remember { mutableStateOf(false) }
-    var showLyricsSearch by remember { mutableStateOf(false) }
-    var showMenu by remember { mutableStateOf(false) }
-    var showSleepTimer by remember { mutableStateOf(false) }
-    var showDeleteConfirm by remember { mutableStateOf(false) }
+    // The ONE sheet admission fold (ReaderSheetStack precedent): every
+    // sheet/dialog flag lives here behind `sheets.open`, routed through the
+    // AudioPlayerSheet vocabulary. Lyrics and the menu are declared
+    // non-sheet arms inside (persisted preference / self-dismissing dropdown).
+    val sheets = remember { AudioPlayerSheetStack() }
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -185,15 +181,7 @@ fun AudioPlayerScreen(
     }
 
     JellyPlayBackHandler(enabled = true) {
-        if (showQueue || showSpeedPicker || showEqualizer || showLyricsSearch || showEffectsSheet || showSleepTimer || showDeleteConfirm) {
-            showQueue = false
-            showSpeedPicker = false
-            showEqualizer = false
-            showLyricsSearch = false
-            showEffectsSheet = false
-            showSleepTimer = false
-            showDeleteConfirm = false
-        } else {
+        if (!sheets.consumeBack()) {
             // Lyrics visibility is a persisted preference, not a transient
             // overlay — back navigates away without hiding them, so the choice
             // survives the next time the player is opened.
@@ -205,7 +193,7 @@ fun AudioPlayerScreen(
     // Seed the lyrics overlay from the persisted preference, then keep them in
     // sync: toggling in the UI writes back so the choice survives across opens.
     LaunchedEffect(preferences.audioLyricsVisible) {
-        showLyrics = preferences.audioLyricsVisible
+        sheets.showLyrics = preferences.audioLyricsVisible
     }
     val currentDownloadItem by viewModel.currentDownloadItem.collectAsStateWithLifecycle()
     val abLoopStart by viewModel.abLoopStartMs.collectAsStateWithLifecycle(initialValue = null)
@@ -239,7 +227,7 @@ fun AudioPlayerScreen(
     val horizontalSwipeOffset = remember { androidx.compose.animation.core.Animatable(0f) }
     val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
 
-    var dragDirection by remember { mutableStateOf<DragDirection?>(null) }
+    var dragDirection by remember { mutableStateOf<AudioDragDirection?>(null) }
     var totalDragX by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
     var totalDragY by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
 
@@ -283,37 +271,44 @@ fun AudioPlayerScreen(
                         },
                         onDragEnd = {
                             when (dragDirection) {
-                                DragDirection.VERTICAL -> {
-                                    if (swipeDismissOffset.value < -80f || totalDragY < -150f) {
+                                AudioDragDirection.VERTICAL -> when (
+                                    audioVerticalSwipeAction(swipeDismissOffset.value, totalDragY)
+                                ) {
+                                    AudioVerticalSwipeAction.OpenQueue -> {
                                         coroutineScope.launch {
                                             swipeDismissOffset.animateTo(0f, swipeSpringSpec)
                                         }
-                                        showQueue = true
-                                    } else if (swipeDismissOffset.value > 150f || totalDragY > 200f) {
+                                        sheets.show(AudioPlayerSheet.Queue)
+                                    }
+                                    AudioVerticalSwipeAction.Dismiss -> {
                                         // Instantly reset visual translation offset to ensure morph begins from stable bounds
                                         coroutineScope.launch {
                                             swipeDismissOffset.snapTo(0f)
                                             onBack()
                                         }
-                                    } else {
+                                    }
+                                    AudioVerticalSwipeAction.Settle -> {
                                         coroutineScope.launch {
                                             swipeDismissOffset.animateTo(0f, swipeSpringSpec)
                                         }
                                     }
                                 }
-                                DragDirection.HORIZONTAL -> {
-                                    val threshold = 180f
-                                    if (horizontalSwipeOffset.value < -threshold) { // Swipe Left -> Next
+                                AudioDragDirection.HORIZONTAL -> when (
+                                    audioHorizontalSwipeAction(horizontalSwipeOffset.value)
+                                ) {
+                                    AudioHorizontalSwipeAction.SkipNext -> { // Swipe Left -> Next
                                         coroutineScope.launch {
                                             viewModel.skipToNext()
                                             horizontalSwipeOffset.animateTo(0f, swipeSpringSpec)
                                         }
-                                    } else if (horizontalSwipeOffset.value > threshold) { // Swipe Right -> Prev
+                                    }
+                                    AudioHorizontalSwipeAction.SkipPrevious -> { // Swipe Right -> Prev
                                         coroutineScope.launch {
                                             viewModel.skipToPrevious()
                                             horizontalSwipeOffset.animateTo(0f, swipeSpringSpec)
                                         }
-                                    } else {
+                                    }
+                                    AudioHorizontalSwipeAction.Settle -> {
                                         coroutineScope.launch {
                                             horizontalSwipeOffset.animateTo(0f, swipeSpringSpec)
                                         }
@@ -335,23 +330,18 @@ fun AudioPlayerScreen(
                         totalDragY += dragAmount.y
 
                         if (dragDirection == null) {
-                            val threshold = 10f
-                            if (kotlin.math.abs(totalDragY) > kotlin.math.abs(totalDragX) && kotlin.math.abs(totalDragY) > threshold) {
-                                dragDirection = DragDirection.VERTICAL
-                            } else if (kotlin.math.abs(totalDragX) > kotlin.math.abs(totalDragY) && kotlin.math.abs(totalDragX) > threshold) {
-                                dragDirection = DragDirection.HORIZONTAL
-                            }
+                            dragDirection = audioDragDirection(totalDragX, totalDragY)
                         }
 
                         when (dragDirection) {
-                            DragDirection.VERTICAL -> {
+                            AudioDragDirection.VERTICAL -> {
                                 change.consume()
                                 coroutineScope.launch {
                                     val newOffset = (swipeDismissOffset.value + dragAmount.y).coerceAtLeast(-120f)
                                     swipeDismissOffset.snapTo(newOffset)
                                 }
                             }
-                            DragDirection.HORIZONTAL -> {
+                            AudioDragDirection.HORIZONTAL -> {
                                 change.consume()
                                 coroutineScope.launch {
                                     val newOffset = horizontalSwipeOffset.value + dragAmount.x
@@ -370,19 +360,19 @@ fun AudioPlayerScreen(
                     val width = size.width
                     detectTapGestures(
                         onDoubleTap = { offset ->
-                            when {
-                                offset.x < width * 0.35f -> {
+                            when (doubleTapSeekAction(offset.x, width.toFloat())) {
+                                DoubleTapSeekAction.SeekBack -> {
                                     val target = (viewModel.currentPositionState.value - DOUBLE_TAP_SEEK_MS)
                                         .coerceAtLeast(0L)
                                     viewModel.seekTo(target)
                                 }
-                                offset.x > width * 0.65f -> {
+                                DoubleTapSeekAction.SeekForward -> {
                                     val duration = uiState.duration
                                     val target = (viewModel.currentPositionState.value + DOUBLE_TAP_SEEK_MS)
                                         .coerceAtMost(duration)
                                     viewModel.seekTo(target)
                                 }
-                                else -> viewModel.togglePlayPause()
+                                DoubleTapSeekAction.TogglePlayPause -> viewModel.togglePlayPause()
                             }
                         },
                     )
@@ -402,32 +392,32 @@ fun AudioPlayerScreen(
                 PixelPlayerTopBar(
                     onBack = onBack,
                     hasLyrics = true,
-                    lyricsVisible = showLyrics,
+                    lyricsVisible = sheets.showLyrics,
                     onLyricsClick = {
-                        showLyrics = !showLyrics
-                        viewModel.setLyricsVisible(showLyrics)
+                        sheets.showLyrics = !sheets.showLyrics
+                        viewModel.setLyricsVisible(sheets.showLyrics)
                     },
-                    onQueueClick = { showQueue = true },
-                    onMenuToggle = { showMenu = it },
-                    showMenu = showMenu,
+                    onQueueClick = { sheets.show(AudioPlayerSheet.Queue) },
+                    onMenuToggle = { sheets.showMenu = it },
+                    showMenu = sheets.showMenu,
                     speed = uiState.speed,
                     dialogueBoostEnabled = effects.dialogueBoostEnabled,
                     dialogueBoostStrength = effects.dialogueBoostStrength,
                     nightModeEnabled = effects.nightModeEnabled,
                     nightModeStrength = effects.nightModeStrength,
-                    onSpeedClick = { showMenu = false; showSpeedPicker = true },
-                    onEqualizerClick = { showMenu = false; showEqualizer = true },
-                    onEffectsClick = { showMenu = false; showEffectsSheet = true },
-                    onDialogueBoostClick = { showMenu = false; viewModel.toggleDialogueBoost() },
+                    onSpeedClick = { sheets.showFromMenu(AudioPlayerSheet.SpeedPicker) },
+                    onEqualizerClick = { sheets.showFromMenu(AudioPlayerSheet.Equalizer) },
+                    onEffectsClick = { sheets.showFromMenu(AudioPlayerSheet.Effects) },
+                    onDialogueBoostClick = { sheets.showMenu = false; viewModel.toggleDialogueBoost() },
                     onDialogueBoostStrengthChange = { viewModel.setDialogueBoostStrength(it) },
-                    onNightModeClick = { showMenu = false; viewModel.toggleNightMode() },
+                    onNightModeClick = { sheets.showMenu = false; viewModel.toggleNightMode() },
                     onNightModeStrengthChange = { viewModel.setNightModeStrength(it) },
-                    onAmbientClick = { showMenu = false; onAmbientClick(uiState.albumArtUrl.ifBlank { null }, uiState.title, uiState.artist) },
-                    onAddToPlaylistClick = { showMenu = false; viewModel.openPlaylistPicker() },
+                    onAmbientClick = { sheets.showMenu = false; onAmbientClick(uiState.albumArtUrl.ifBlank { null }, uiState.title, uiState.artist) },
+                    onAddToPlaylistClick = { sheets.showMenu = false; viewModel.openPlaylistPicker() },
                     sleepTimerActive = sleepTimer.active,
                     sleepTimerEndOfEpisode = sleepTimer.endOfEpisode,
                     sleepTimerRemainingFlow = viewModel.sleepTimerRemainingMs,
-                    onSleepTimerClick = { showMenu = false; showSleepTimer = true },
+                    onSleepTimerClick = { sheets.showFromMenu(AudioPlayerSheet.SleepTimer) },
                     karaokeMode = lyricsState.karaokeMode,
                     onKaraokeToggle = { viewModel.setKaraokeModeEnabled(it) },
                     hasKaraokeLyrics = lyricsState.hasKaraokeLyrics,
@@ -453,12 +443,12 @@ fun AudioPlayerScreen(
                                 title = uiState.title,
                                 scale = artworkScale.value,
                                 isExpanded = true,
-                                lyricsVisible = showLyrics,
+                                lyricsVisible = sheets.showLyrics,
                                 lyrics = lyricsState.lyrics,
                                 currentLyricIndex = lyricsState.currentLyricIndex,
                                 isFetchingLyrics = lyricsState.isFetchingLyrics,
                                 lyricsSource = lyricsState.lyricsSource,
-                                onSearchClick = { showLyricsSearch = true },
+                                onSearchClick = { sheets.show(AudioPlayerSheet.LyricsSearch) },
                                 karaokeMode = lyricsState.karaokeMode,
                                 currentPositionMs = viewModel.currentPositionState,
                                 lyricsOffsetMs = lyricsState.lyricsOffsetMs,
@@ -514,7 +504,7 @@ fun AudioPlayerScreen(
                                 onToggleFavorite = { viewModel.toggleFavorite() },
                                 onDownloadClick = {
                                     if (currentDownloadItem?.status == com.raulshma.jellyplay.core.model.DownloadStatus.COMPLETED) {
-                                        showDeleteConfirm = true
+                                        sheets.show(AudioPlayerSheet.DeleteConfirm)
                                     } else {
                                         viewModel.downloadCurrentTrack()
                                     }
@@ -542,12 +532,12 @@ fun AudioPlayerScreen(
                         title = uiState.title,
                         scale = artworkScale.value,
                         isExpanded = false,
-                        lyricsVisible = showLyrics,
+                        lyricsVisible = sheets.showLyrics,
                         lyrics = lyricsState.lyrics,
                         currentLyricIndex = lyricsState.currentLyricIndex,
                         isFetchingLyrics = lyricsState.isFetchingLyrics,
                         lyricsSource = lyricsState.lyricsSource,
-                        onSearchClick = { showLyricsSearch = true },
+                        onSearchClick = { sheets.show(AudioPlayerSheet.LyricsSearch) },
                         karaokeMode = lyricsState.karaokeMode,
                         currentPositionMs = viewModel.currentPositionState,
                         lyricsOffsetMs = lyricsState.lyricsOffsetMs,
@@ -604,7 +594,7 @@ fun AudioPlayerScreen(
                             onToggleFavorite = { viewModel.toggleFavorite() },
                             onDownloadClick = {
                                 if (currentDownloadItem?.status == com.raulshma.jellyplay.core.model.DownloadStatus.COMPLETED) {
-                                    showDeleteConfirm = true
+                                    sheets.show(AudioPlayerSheet.DeleteConfirm)
                                 } else {
                                     viewModel.downloadCurrentTrack()
                                 }
@@ -735,28 +725,28 @@ fun AudioPlayerScreen(
     } // Close ArtworkThemeWrapper
 
     // ── Bottom sheets (unchanged functionality) ──
-    if (showQueue && queueState.queue.isNotEmpty()) {
+    if (sheets.showQueue && queueState.queue.isNotEmpty()) {
         QueueSheet(
             queue = queueState.queue,
             currentIndex = queueState.currentIndex,
             onSelect = { index ->
                 viewModel.playFromQueue(index)
-                showQueue = false
+                sheets.hide(AudioPlayerSheet.Queue)
             },
             onRemove = { index -> viewModel.removeFromQueue(index) },
-            onDismiss = { showQueue = false },
+            onDismiss = { sheets.hide(AudioPlayerSheet.Queue) },
         )
     }
 
-    if (showSpeedPicker) {
+    if (sheets.showSpeedPicker) {
         SpeedPickerSheet(
             currentSpeed = uiState.speed,
             onSelect = { viewModel.changePlaybackSpeed(it) },
-            onDismiss = { showSpeedPicker = false },
+            onDismiss = { sheets.hide(AudioPlayerSheet.SpeedPicker) },
         )
     }
 
-    if (showEqualizer) {
+    if (sheets.showEqualizer) {
         EqualizerSheet(
             enabled = effects.equalizerEnabled,
             bandLevels = effects.equalizerSettings.bandLevels,
@@ -765,11 +755,11 @@ fun AudioPlayerScreen(
             onBandChange = { index, level -> viewModel.setEqualizerBand(index, level) },
             onReset = { viewModel.resetEqualizer() },
             onPresetChange = { viewModel.setEqualizerPreset(it) },
-            onDismiss = { showEqualizer = false },
+            onDismiss = { sheets.hide(AudioPlayerSheet.Equalizer) },
         )
     }
 
-    if (showLyricsSearch) {
+    if (sheets.showLyricsSearch) {
         LyricsSearchSheet(
             artist = uiState.artist,
             title = uiState.title,
@@ -777,11 +767,11 @@ fun AudioPlayerScreen(
             isSearching = lyricsState.isSearching,
             onSearch = { viewModel.searchLyrics(it) },
             onApplyTrack = { viewModel.applyLyrics(it) },
-            onDismiss = { showLyricsSearch = false; viewModel.clearLyricsSearch() },
+            onDismiss = { sheets.hide(AudioPlayerSheet.LyricsSearch); viewModel.clearLyricsSearch() },
         )
     }
 
-    if (showSleepTimer) {
+    if (sheets.showSleepTimer) {
         val sleepTimerRemainingMs by viewModel.sleepTimerRemainingMs.collectAsStateWithLifecycle()
         AudioSleepTimerSheet(
             isActive = sleepTimer.active,
@@ -791,7 +781,7 @@ fun AudioPlayerScreen(
             onSelectDuration = { viewModel.startSleepTimer(it) },
             onSelectEndOfEpisode = { viewModel.startSleepTimerEndOfEpisode() },
             onCancel = { viewModel.cancelSleepTimer() },
-            onDismiss = { showSleepTimer = false },
+            onDismiss = { sheets.hide(AudioPlayerSheet.SleepTimer) },
         )
     }
 
@@ -853,11 +843,11 @@ fun AudioPlayerScreen(
         }
     }
 
-    if (showEffectsSheet) {
+    if (sheets.showEffectsSheet) {
         AudioEffectsSheet(
             state = effects,
-            onDismiss = { showEffectsSheet = false },
-            onOpenEqualizer = { showEffectsSheet = false; showEqualizer = true },
+            onDismiss = { sheets.hide(AudioPlayerSheet.Effects) },
+            onOpenEqualizer = { sheets.hide(AudioPlayerSheet.Effects); sheets.show(AudioPlayerSheet.Equalizer) },
             onToggleEqualizer = { viewModel.toggleEqualizer() },
             onToggleBassBoost = { viewModel.toggleBassBoost() },
             onBassBoostStrength = { viewModel.setBassBoostStrength(it) },
@@ -874,7 +864,7 @@ fun AudioPlayerScreen(
         )
     }
 
-    if (showDeleteConfirm) {
+    if (sheets.showDeleteConfirm) {
         ConfirmDialog(
             title = stringResource(Res.string.audio_download_delete_title),
             message = stringResource(Res.string.audio_download_delete_message),
@@ -882,15 +872,13 @@ fun AudioPlayerScreen(
             dismissText = stringResource(Res.string.audio_cancel),
             tone = ConfirmTone.DESTRUCTIVE,
             onConfirm = {
-                showDeleteConfirm = false
+                sheets.hide(AudioPlayerSheet.DeleteConfirm)
                 viewModel.downloadCurrentTrack()
             },
-            onDismiss = { showDeleteConfirm = false },
+            onDismiss = { sheets.hide(AudioPlayerSheet.DeleteConfirm) },
         )
     }
 }
-
-private enum class DragDirection { VERTICAL, HORIZONTAL }
 
 /**
  * Surfaces the next queued track beneath the controls and lets the user skip

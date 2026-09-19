@@ -196,6 +196,29 @@ internal fun buildItemsByStudioQuerySpec(
 )
 
 /**
+ * The resume-row query (getContinueWatching / getContinueReading — and the
+ * NextUp row, which rides the same limit + list-projection shape with no kind
+ * narrowing): the `/UserItems/Resume` request the twins used to hand-mirror.
+ * Books narrow server-side via `includeItemTypes` ("Book" — the SDK
+ * getResumeItems named arg); the video row sends no kind constraint.
+ *
+ * Deliberately NOT here: the `nextUpDateCutoff` CLOCK (a declared per-client
+ * divergence — `java.time` on the JVM, the JS clock + local offset via
+ * `WasmClock` on wasm) and the SDK's non-null enable* defaults
+ * (enableTotalRecordCount / enableImages / excludeActiveSessions), which are
+ * transport-level — the wasm client pins them explicitly, the JVM SDK sends
+ * them as non-null defaults.
+ */
+internal fun buildResumeQuerySpec(
+    limit: Int,
+    isBooks: Boolean,
+): LibraryItemsQuerySpec = LibraryItemsQuerySpec(
+    includeKinds = if (isBooks) listOf("Book") else null,
+    limit = limit,
+    fields = LIST_PROJECTION_FIELDS,
+)
+
+/**
  * [MediaType]s → includeItemTypes serial names, shared by every spec'd
  * endpoint that narrows by kind: UNKNOWN maps to null ("do not constrain by
  * type" — [MediaType.toWireItemKind]'s contract) and an all-null or empty

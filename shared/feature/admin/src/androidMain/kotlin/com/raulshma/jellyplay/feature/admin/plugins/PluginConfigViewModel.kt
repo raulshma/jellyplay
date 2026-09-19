@@ -2,7 +2,7 @@ package com.raulshma.jellyplay.feature.admin.plugins
 
 import android.content.Context
 import android.util.Log
-import com.raulshma.jellyplay.core.data.repository.AdminRepository
+import com.raulshma.jellyplay.core.data.repository.PluginAdminRepository
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.feature.admin.AdminLoad
 import com.raulshma.jellyplay.feature.admin.generated.resources.Res
@@ -24,7 +24,7 @@ data class PluginConfigState(
 
 class PluginConfigViewModel(
     private val context: Context,
-    private val adminRepository: AdminRepository,
+    private val pluginAdminRepository: PluginAdminRepository,
 ) : JellyPlayViewModel() {
 
     private val _state = composeState(PluginConfigState())
@@ -39,7 +39,7 @@ class PluginConfigViewModel(
     }
 
     /** The OkHttpClient used by [PluginConfigScreen] to auth same-origin WebView requests. */
-    val okHttpClient: OkHttpClient get() = adminRepository.pluginWebViewSession.okHttpClient
+    val okHttpClient: OkHttpClient get() = pluginAdminRepository.pluginWebViewSession.okHttpClient
 
     private fun loadConfig(pluginId: String) {
         launch {
@@ -49,7 +49,7 @@ class PluginConfigViewModel(
                     // Bridge preparation precedes the page fetch (its legacy
                     // position in the ladder).
                     prepareBridgeScript()
-                    adminRepository.getPluginConfigPage(pluginId)
+                    pluginAdminRepository.getPluginConfigPage(pluginId)
                 },
                 onSuccess = { page ->
                     if (page != null) {
@@ -77,7 +77,7 @@ class PluginConfigViewModel(
      * authenticates same-origin GETs via shouldInterceptRequest.
      */
     private suspend fun prepareBridgeScript() {
-        val session = adminRepository.pluginWebViewSession
+        val session = pluginAdminRepository.pluginWebViewSession
         val rawJs = withContext(kotlinx.coroutines.Dispatchers.IO) {
             runCatching {
                 context.assets.open("pluginBridge.js").bufferedReader().use { it.readText() }

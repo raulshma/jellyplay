@@ -16,10 +16,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -37,8 +35,10 @@ import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Bolt
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderCredentials
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind
-import com.raulshma.jellyplay.core.ui.components.CircleBgBackButton
+import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
+import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
+import com.raulshma.jellyplay.core.ui.tv.CenteredBringIntoView
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import org.jetbrains.compose.resources.stringResource
@@ -102,21 +102,14 @@ fun SubtitleProviderSettingsScreen(
         tag = "subtitle_provider_init",
     )
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(Res.string.settings_integrations_subtitles)) },
-                navigationIcon = { CircleBgBackButton(onClick = onBack) },
-            )
-        },
+    val backgroundColorState = rememberScreenBackgroundColorState()
+
+    JellyPlayScreenScaffold(
+        title = stringResource(Res.string.settings_integrations_subtitles),
+        onBack = onBack,
+        backgroundColorState = backgroundColorState,
     ) { innerPadding ->
-        // Center the focused item in the viewport when scrolling reaches the list
-        // edges, instead of parking it at the bottom, which is the default
-        // BringIntoViewSpec behaviour.
-        androidx.compose.runtime.CompositionLocalProvider(
-            androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides
-                com.raulshma.jellyplay.core.ui.tv.CenterBringIntoViewSpec
-        ) {
+        CenteredBringIntoView {
         LazyColumn(
             modifier = Modifier
                 .fillMaxWidth()

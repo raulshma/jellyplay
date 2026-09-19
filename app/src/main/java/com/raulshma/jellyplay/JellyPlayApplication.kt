@@ -5,16 +5,12 @@ import android.app.Application
 import android.content.Context
 import coil3.ImageLoader
 import coil3.SingletonImageLoader
-import coil3.disk.DiskCache
 import coil3.memory.MemoryCache
-import coil3.network.okhttp.OkHttpNetworkFetcherFactory
-import coil3.request.crossfade
-import coil3.serviceLoaderEnabled
-import coil3.size.Size
 import com.raulshma.jellyplay.core.data.di.CoreDataWorkerFactory
 import com.raulshma.jellyplay.core.data.di.androidCoreDataModule
 import com.raulshma.jellyplay.core.data.di.androidDataModule
 import com.raulshma.jellyplay.core.data.di.dataJvmModule
+import com.raulshma.jellyplay.core.data.image.jellyPlayImageLoader
 import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
 import com.raulshma.jellyplay.core.datastore.di.androidDatastoreModule
 import com.raulshma.jellyplay.core.datastore.di.datastoreCommonModule
@@ -35,48 +31,20 @@ import com.raulshma.jellyplay.di.androidAppModule
 import com.raulshma.jellyplay.di.androidAppViewModelsModule
 import com.raulshma.jellyplay.di.androidDownloadSeamsModule
 import com.raulshma.jellyplay.di.androidSettingsSeamsModule
-import com.raulshma.jellyplay.feature.search.di.searchModule
 import com.raulshma.jellyplay.feature.library.di.androidPhotoExportModule
-import com.raulshma.jellyplay.feature.library.di.libraryModule
-import com.raulshma.jellyplay.feature.music.di.musicModule
-import com.raulshma.jellyplay.feature.livetv.di.liveTvModule
-import com.raulshma.jellyplay.feature.downloads.di.downloadsModule
-import com.raulshma.jellyplay.feature.syncplay.di.syncPlayModule
-import com.raulshma.jellyplay.feature.settings.di.settingsModule
 import com.raulshma.jellyplay.feature.settings.di.androidSettingsPlatformModule
-import com.raulshma.jellyplay.feature.admin.di.adminModule
 import com.raulshma.jellyplay.feature.admin.di.androidAdminModule
 import com.raulshma.jellyplay.feature.subtitle.tester.di.androidSubtitleTesterModule
 import com.raulshma.jellyplay.feature.player.live.di.androidPlayerLiveModule
-import com.raulshma.jellyplay.feature.player.live.di.playerLiveModule
 import com.raulshma.jellyplay.feature.player.video.di.androidPlayerVideoModule
+import com.raulshma.jellyplay.feature.shell.sharedFeatureModules
 
 
-import com.raulshma.jellyplay.feature.editor.di.editorModule
-
-import com.raulshma.jellyplay.feature.calendar.di.calendarModule
-
-
-import com.raulshma.jellyplay.feature.requests.di.requestsModule
-
-import com.raulshma.jellyplay.feature.shortcuts.di.shortcutsModule
-
-
-import com.raulshma.jellyplay.feature.newsletter.di.newsletterModule
-
-import com.raulshma.jellyplay.feature.insights.di.insightsModule
 import com.raulshma.jellyplay.core.ui.di.coreUiMessageModule
-import com.raulshma.jellyplay.feature.home.di.homeModule
-import com.raulshma.jellyplay.feature.arrqueue.di.arrqueueModule
 import com.raulshma.jellyplay.feature.auth.di.androidAuthModule
-import com.raulshma.jellyplay.feature.auth.di.authModule
 
 import com.raulshma.jellyplay.feature.details.androidDetailsModule
-import com.raulshma.jellyplay.feature.details.detailsModule
-import com.raulshma.jellyplay.feature.player.audio.di.playerAudioModule
 import com.raulshma.jellyplay.feature.book.di.androidBookPlayerModule
-import com.raulshma.jellyplay.feature.book.di.playerBookModule
-import com.raulshma.jellyplay.feature.onboarding.di.onboardingModule
 
 
 import androidx.work.Configuration
@@ -268,104 +236,43 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                 // former WidgetModule @Binds pairs, and the shared-feature seam
                 // adapters the deleted HiltInteropModule used to bridge
                 // (MusicMessageBus / DetailAudioPlayback / DetailThemeMusic /
-                // AudioPlayerEngine / AudioPlayerCast — direct Koin resolution
-                // now, no EntryPoint).
+                // AudioPlayerCast — direct Koin resolution
+                // now, no EntryPoint; AudioPlayerEngine moved into core/data
+                // and androidCoreDataModule aliases it onto the manager).
                 androidAppModule(this@JellyPlayApplication),
                 androidAppInteropAdaptersModule(this@JellyPlayApplication),
                 // App-shell ViewModels (Main/PlayOn/WidgetConfig): resolved
                 // through the AndroidX ViewModelStore via KoinViewModelFactory,
                 // so activity-scoped instance-sharing semantics are unchanged.
                 androidAppViewModelsModule,
-                searchModule,
-                libraryModule,
-                musicModule,
-                liveTvModule,
-                downloadsModule,
-                syncPlayModule,
-                // V3 settings conveyor: the shared settings ViewModels plus the
-                // Android platform pick of their seams (SAF backup IO,
-                // LocaleManager, storage walkers, About/Licenses sources). The
-                // four seams (auto-download sync, notification reschedule, TV
-                // watch-next, audio cache clear) wrap the legacy schedulers,
+                // The shared commonMain feature Koin modules both JVM shells
+                // register, declared ONCE in shared/feature/shell
+                // (sharedFeatureModules — the webFeatureModules precedent);
+                // the per-module conveyor history rides that declaration.
+                // Registration order is inert in Koin (definitions are keyed);
+                // only Android's platform actuals below are order-sensitive,
+                // and they stay inline in THIS list.
+                *sharedFeatureModules.toTypedArray(),
+                // core:ui's UserMessageBus module — core, not feature, so it
+                // stays inline here rather than in sharedFeatureModules (the
+                // home/settings ViewModels post their feedback through it).
+                coreUiMessageModule,
+                // V3 settings conveyor (Android platform pick): the Android
+                // actuals of the shared settings ViewModels' seams (SAF backup
+                // IO, LocaleManager, storage walkers, About/Licenses sources).
+                // The four seams (auto-download sync, notification reschedule,
+                // TV watch-next, audio cache clear) wrap the legacy schedulers,
                 // resolved straight from the core Koin graph.
-                settingsModule,
                 androidSettingsPlatformModule(this@JellyPlayApplication),
                 androidSettingsSeamsModule(),
                 // MediaStore/FileProvider photo-export actual for the library
                 // feature's PhotoExport seam (androidDataModule pattern).
                 androidPhotoExportModule(this@JellyPlayApplication),
-                // V3 admin conveyor (eighth feature): the shared admin
-                // ViewModels plus the Android-only plugin-config WebView
-                // ViewModel (Context ctor param). AdminRepository and
-                // AdminStatisticsRepository resolve from dataJvmModule
-                // (Koin-owned since the admin flip).
-                adminModule,
+                // V3 admin conveyor (Android half): the Android-only
+                // plugin-config WebView ViewModel (Context ctor param);
+                // AdminRepository and AdminStatisticsRepository resolve from
+                // dataJvmModule (Koin-owned since the admin flip).
                 androidAdminModule(this@JellyPlayApplication),
-
-
-                // V3 editor conveyor (ninth feature): the shared metadata
-                // editor ViewModel. MetadataEditorRepository / AuthRepository /
-                // SubtitleProviderRepository are Koin-native; the
-                // StreamingSubtitleStore dep resolves from the core Koin graph
-                // (the legacy :core:data remainder).
-                editorModule,
-
-                // V3 calendar conveyor: all three ctor deps (ArrRepository,
-                // SeerrRepository, ExperimentalStore) are already Koin-native
-                // in the shared graph — the first conveyor module with zero
-                // Hilt-interop edges.
-                calendarModule,
-
-
-                // V3 requests conveyor (eleventh feature): all three ctor deps
-                // (SeerrRepository, ArrRepository, ExperimentalStore) were
-                // already Koin-owned, so — like calendar, and unlike the nine
-                // features above — this registration involves no Hilt interop
-                // at all.
-                requestsModule,
-
-                // V3 shortcuts conveyor: sole ctor dep AuthRepository is
-                // Koin-native — zero Hilt interop (calendar/requests class).
-                // Missed at the feature's landing; caught by a
-                // registration check (NoDefinitionFound on Route.Shortcuts).
-                shortcutsModule,
-
-
-                // V3 newsletter conveyor: imageUrlProvider/notificationStore/
-                // authRepository/mediaRepository were all already Koin-native —
-                // no interop definitions were needed for this feature.
-                newsletterModule,
-
-                // V3 insights conveyor: WatchHistoryRepository,
-                // PlaybackRepository and MediaRepository are all Koin-native
-                // (dataJvmModule).
-                insightsModule,
-
-
-                // V3 onboarding conveyor: all four wizard VM deps
-                // (PreferenceProjections, SeerrPreferencesStore,
-                // SeerrSecureCredentialsStore, PreferencesEditor) were already
-                // Koin-owned in the shared datastore graph — zero Hilt interop,
-                // calendar/requests class.
-                onboardingModule,
-
-                // V3 arrqueue conveyor: ArrRepository (dataJvmModule) and
-                // ExperimentalStore (datastoreCommonModule) were already
-                // Koin-owned — zero Hilt interop; message feedback flows
-                // through the shared UserMessageBus (the ArrQueueMessenger
-                // seam is retired — screens read LocalUserMessageBus
-                // directly).
-                arrqueueModule,
-
-                // Home conveyor (desktop landing screen):
-                // 26 of HomeViewModel's 30 ctor deps are Koin-native in the
-                // shared graph; the remaining four (PlaybackSyncScheduler,
-                // TvWatchNextScheduler from the core data graph, and
-                // ContinueWatchingBroadcaster + LibrarySyncHook from
-                // androidAppModule above) resolve from Koin too.
-                // SettingsSearchProvider resolves from settingsModule.
-                coreUiMessageModule,
-                homeModule,
 
                 // V3 subtitle-tester conveyor (final feature): the whole
                 // feature is Android-only (androidMain-heavy module — the
@@ -387,46 +294,29 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                 // (latent feature, subtitle-tester precedent).
                 androidPlayerVideoModule(this@JellyPlayApplication),
 
-                //  auth cutover (feature-conveyor transform): both VM
-                // ctor deps (AuthRepository, ServerDiscoveryRepository) were
-                // already Koin-owned in dataJvmModule — zero Hilt interop
-                // (calendar/requests/shortcuts class). The LocalNetworkStatus
-                // gate is Android-only here: it bridges the legacy :core:ui
-                // LocalNetworkAccess object with the application context
-                // (androidAdminModule pattern); desktop registers its own
-                // non-blaming pick from the shared module's jvmMain.
-                authModule,
+                //  auth cutover (Android platform half): the
+                // LocalNetworkStatus gate is Android-only here — it bridges
+                // the legacy :core:ui LocalNetworkAccess object with the
+                // application context (androidAdminModule pattern); desktop
+                // registers its own non-blaming pick from the shared module's
+                // jvmMain.
                 androidAuthModule(this@JellyPlayApplication),
-                // Details conveyor (cutover): the shared details
-                // ViewModels + helpers. Data-layer deps are all Koin-native
-                // (dataJvmModule/datastoreCommonModule); the two media3
+                // Details conveyor (Android platform half): the two media3
                 // playback seams (per-item audio play, ambient theme music)
                 // resolve through the androidAppInteropAdaptersModule adapters
                 // above; the storage probe is the StatFs androidMain actual
                 // below.
-                detailsModule,
                 androidDetailsModule(this@JellyPlayApplication),
-                // Audio player conveyor (legacy :feature:player:audio
-                // deleted): the shared player ViewModels. Queue/effects/transport
-                // deps resolve from the core Koin graph (AudioPlaybackManager
-                // implements both shared playback contracts), and the engine/
-                // cast seams are the androidAppInteropAdaptersModule adapters
-                // above over the same single + CastManager.
-                playerAudioModule,
-                // Book reader conveyor: the CBZ/PDF reader ViewModel over
-                // Route.BookReader (details Read button + offline downloads).
-                // Reader engine seams are the module's android platform module.
-                playerBookModule,
+                // Book reader conveyor (Android platform half): the reader
+                // engine seams are the module's android platform module.
                 androidBookPlayerModule(this@JellyPlayApplication),
 
-                // Player-live conveyor: the shared live-player
-                // ViewModel (Koin-native deps + the three platform seams
-                // below) replacing the legacy :feature:player:live module.
-                // The engine factory resolves the shared
+                // Player-live conveyor (Android platform half): the three
+                // platform seams replacing the legacy :feature:player:live
+                // module. The engine factory resolves the shared
                 // NetworkQualifiers.streamingHttpClient; the audio seam wraps
                 // the legacy PlayerAudioLifecycle; the transcode-reasons
                 // renderer delegates to the legacy core:ui formatter.
-                playerLiveModule,
                 androidPlayerLiveModule(this@JellyPlayApplication),
 
             )
@@ -575,36 +465,27 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
         val isLowRamDevice = am?.let { it.isLowRamDevice || it.memoryClass <= 256 } ?: false
         val memoryCachePercent = if (isLowRamDevice) 0.12 else 0.20
 
-        ImageLoader.Builder(this)
-            // The explicit OkHttp fetcher registered below always wins, so
-            // Coil's ServiceLoader discovery of its default fetcher is dead
-            // work — skip it, mirroring the desktop builder in Main.kt.
-            .serviceLoaderEnabled(false)
-            .components {
-                add(OkHttpNetworkFetcherFactory(callFactory = { imageClient }))
-            }
-            .memoryCache {
-                MemoryCache.Builder()
-                    .maxSizePercent(this@JellyPlayApplication, memoryCachePercent)
-                    .build()
-            }
-            .diskCache {
-                // Sized inside the builder lambda: Coil builds the DiskCache
-                // lazily on its FIRST access (the first networked image write),
-                // not at ImageLoader construction — by then the `networkOffline`
-                // pre-warm in onCreate has long since published the persisted
-                // slice, so `.value` reads the user-configured size instead of
-                // the default. A persisted size > 0 wins; anything else falls
-                // back to 256 MB.
-                val cacheMb = networkOfflineStore.networkOffline.value.maxCacheSizeMb
-                val cacheSize = if (cacheMb > 0) cacheMb * 1024L * 1024L else 256L * 1024 * 1024
-                DiskCache.Builder()
-                    .directory(cacheDir.resolve(ImageCache.DIR).absolutePath.toPath())
-                    .maxSizeBytes(cacheSize)
-                    .build()
-            }
-            .crossfade(true)
-            .build()
+        // Shared JVM builder policy (OkHttp fetcher with ServiceLoader
+        // structurally off, crossfade, and the lazily-sized ImageCache.DIR
+        // disk cache over NetworkOfflineStore.maxCacheSizeMb — the sizing
+        // subtlety documented in JellyPlayImageLoader's KDoc) lives in
+        // core:data's jvmShared; this shell supplies only its divergences:
+        // the RAM-tiered memory cache above and the image client below.
+        jellyPlayImageLoader(
+            platformContext = this,
+            imageClient = { imageClient },
+            diskCacheDirectory = {
+                cacheDir.resolve(ImageCache.DIR).absolutePath.toPath()
+            },
+            maxCacheSizeMb = { networkOfflineStore.networkOffline.value.maxCacheSizeMb },
+            configureMemoryCache = {
+                memoryCache {
+                    MemoryCache.Builder()
+                        .maxSizePercent(this@JellyPlayApplication, memoryCachePercent)
+                        .build()
+                }
+            },
+        )
     }
 
     override fun newImageLoader(context: Context): ImageLoader = imageLoader

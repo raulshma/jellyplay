@@ -17,6 +17,7 @@ import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.core.model.LiveTvRecording
 import com.raulshma.jellyplay.core.model.LogFile
+import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.MediaSource
@@ -92,6 +93,71 @@ internal fun BaseItemDto.toMediaItem() = MediaItem(
     playCount = userData?.playCount ?: 0,
     lastPlayedDate = userData?.lastPlayedDate?.toString(),
     unplayedItemCount = userData?.unplayedItemCount,
+)
+
+/**
+ * Maps a detail-projection [BaseItemDto] onto the domain [MediaDetail] —
+ * formerly the ~60-line inline body of `LibraryApiClientImpl.getMediaDetail`
+ * (the wasm twin's copy already lived in commonMain
+ * `LibraryWireMappers.toMediaDetail`; this is the SDK-typed jvmShared twin,
+ * same file as [toMediaItem]). `relatedItems` stays empty: similar items are
+ * fetched separately (getSimilarItems) and merged by the caller.
+ */
+internal fun BaseItemDto.toMediaDetail() = MediaDetail(
+    item = toMediaItem(),
+    sortName = forcedSortName,
+    customRating = customRating,
+    criticRating = criticRating?.toFloat(),
+    taglines = taglines ?: emptyList(),
+    productionLocations = productionLocations ?: emptyList(),
+    lockData = lockData ?: false,
+    lockedFields = lockedFields?.map { it.toString() } ?: emptyList(),
+    status = status?.toString(),
+    airDays = airDays?.map { it.toString() } ?: emptyList(),
+    airTime = airTime,
+    displayOrder = displayOrder,
+    preferredMetadataLanguage = preferredMetadataLanguage,
+    preferredMetadataCountryCode = preferredMetadataCountryCode,
+    dateCreated = dateCreated?.toString(),
+    people = (people?.map { person ->
+        PersonInfo(
+            id = person.id.toString(),
+            name = person.name ?: "",
+            role = person.role,
+            type = person.type?.serialName ?: "",
+            primaryImageTag = person.primaryImageTag,
+        )
+    } ?: emptyList()).distinctBy { it.id },
+    relatedItems = emptyList(),
+    chapters = chapters?.map { chapter ->
+        ChapterInfo(
+            name = chapter.name ?: "",
+            startPositionTicks = chapter.startPositionTicks ?: 0L,
+            imageDateModified = chapter.imageDateModified?.toString(),
+            imageTag = chapter.imageTag,
+        )
+    } ?: emptyList(),
+    mediaSources = mediaSources?.map { source ->
+        source.toMediaSource(
+            trickplayInfo = trickplay
+                ?.get(source.id.toString())
+                ?.values
+                ?.maxByOrNull { it.width ?: 0 }
+                ?.toTrickplayInfo(),
+        )
+    } ?: emptyList(),
+    externalUrls = externalUrls?.map { url ->
+        com.raulshma.jellyplay.core.model.ExternalUrl(
+            name = url.name ?: "",
+            url = url.url ?: "",
+        )
+    } ?: emptyList(),
+    providerIds = providerIds?.mapNotNull { (k, v) -> v?.let { k.lowercase() to it } }?.toMap() ?: emptyMap(),
+    // Books have no MediaSources — path is their only format carrier;
+    // progress is denested from UserData for detail-only surfaces.
+    path = path,
+    playbackPositionTicks = userData?.playbackPositionTicks ?: 0L,
+    isPlayed = userData?.played == true,
 )
 
 /**

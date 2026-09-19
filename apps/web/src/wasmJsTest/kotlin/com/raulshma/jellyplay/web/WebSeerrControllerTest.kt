@@ -10,11 +10,13 @@ import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
 import com.raulshma.jellyplay.core.datastore.SeerrSecureCredentialsStore
 import com.raulshma.jellyplay.core.datastore.SecureKeyValueStorage
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.arr.ArrServiceKind
 import com.raulshma.jellyplay.core.model.seerr.SeerrCurrentUser
 import com.raulshma.jellyplay.core.model.seerr.SeerrMovieDetails
 import com.raulshma.jellyplay.core.model.seerr.SeerrMediaRequest
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail
+import com.raulshma.jellyplay.core.model.seerr.SeerrServiceDetail
 import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrSettings
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestCount
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestItem
@@ -143,12 +145,9 @@ class WebSeerrControllerTest {
         ): Result<SeerrMediaRequest> = unused()
         override suspend fun getRadarrSettings(): Result<List<SeerrRadarrSettings>> = unused()
         override suspend fun getSonarrSettings(): Result<List<SeerrSonarrSettings>> = unused()
-        override suspend fun getRadarrServiceDetail(id: Int): Result<SeerrRadarrServiceDetail> = unused()
-        override suspend fun getSonarrServiceDetail(id: Int): Result<SeerrSonarrServiceDetail> = unused()
         override suspend fun getServiceRadarrServers(): Result<List<SeerrServiceServer>> = unused()
         override suspend fun getServiceSonarrServers(): Result<List<SeerrServiceServer>> = unused()
-        override suspend fun getServiceRadarrDetail(id: Int): Result<SeerrRadarrServiceDetail> = unused()
-        override suspend fun getServiceSonarrDetail(id: Int): Result<SeerrSonarrServiceDetail> = unused()
+        override suspend fun getServiceDetail(id: Int, kind: ArrServiceKind): Result<SeerrServiceDetail> = unused()
         override fun isConnected(): Flow<Boolean> = MutableStateFlow(false)
         override fun isEnabled(): Flow<Boolean> = MutableStateFlow(false)
         override fun isSearchEnabled(): Flow<Boolean> = MutableStateFlow(false)

@@ -117,7 +117,7 @@ fun ManageSeriesScreen(
     onBack: () -> Unit,
     viewModel: ManageSeriesViewModel = koinViewModel(),
 ) {
-    LaunchedEffect(seriesId) { viewModel.load(seriesId) }
+    LaunchedEffect(seriesId) { viewModel.onEvent(ManageSeriesUiEvent.Load(seriesId)) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val backgroundColorState = rememberScreenBackgroundColorState()
     val isTv = LocalTvMode.current
@@ -129,7 +129,7 @@ fun ManageSeriesScreen(
     LaunchedEffect(uiState.userMessage) {
         uiState.userMessage?.let { message ->
             snackbarHostState.showSnackbar(message)
-            viewModel.clearUserMessage()
+            viewModel.onEvent(ManageSeriesUiEvent.ClearUserMessage)
         }
     }
 
@@ -153,7 +153,7 @@ fun ManageSeriesScreen(
                 uiState.isLoading -> LoadingScreen()
                 uiState.error != null && uiState.series == null -> ErrorScreen(
                     message = uiState.error!!,
-                    onRetry = { viewModel.load(seriesId) },
+                    onRetry = { viewModel.onEvent(ManageSeriesUiEvent.Load(seriesId)) },
                 )
                 uiState.series == null -> ErrorScreen(
                     message = stringResource(Res.string.detail_manage_not_tracked),
@@ -162,15 +162,15 @@ fun ManageSeriesScreen(
                     state = uiState,
                     contentPad = contentPad,
                     bottomPad = innerPadding.calculateBottomPadding(),
-                    onRefreshSeries = viewModel::refreshSeries,
-                    onRefreshAndScan = viewModel::refreshAndScan,
-                    onSearchSeries = viewModel::searchSeries,
-                    onToggleSeasonExpanded = viewModel::toggleSeasonExpanded,
-                    onSearchSeason = viewModel::searchSeason,
-                    onToggleSeasonMonitor = viewModel::toggleSeasonMonitor,
-                    onToggleEpisodeMonitored = viewModel::toggleEpisodeMonitored,
-                    onSearchEpisode = viewModel::searchEpisode,
-                    onRequestDeleteEpisode = viewModel::requestDeleteEpisode,
+                    onRefreshSeries = { viewModel.onEvent(ManageSeriesUiEvent.RefreshSeries) },
+                    onRefreshAndScan = { viewModel.onEvent(ManageSeriesUiEvent.RefreshAndScan) },
+                    onSearchSeries = { viewModel.onEvent(ManageSeriesUiEvent.SearchSeries) },
+                    onToggleSeasonExpanded = { viewModel.onEvent(ManageSeriesUiEvent.ToggleSeasonExpanded(it)) },
+                    onSearchSeason = { viewModel.onEvent(ManageSeriesUiEvent.SearchSeason(it)) },
+                    onToggleSeasonMonitor = { viewModel.onEvent(ManageSeriesUiEvent.ToggleSeasonMonitor(it)) },
+                    onToggleEpisodeMonitored = { viewModel.onEvent(ManageSeriesUiEvent.ToggleEpisodeMonitored(it)) },
+                    onSearchEpisode = { viewModel.onEvent(ManageSeriesUiEvent.SearchEpisode(it)) },
+                    onRequestDeleteEpisode = { viewModel.onEvent(ManageSeriesUiEvent.RequestDeleteEpisode(it)) },
                 )
             }
         }
@@ -198,8 +198,8 @@ fun ManageSeriesScreen(
             dismissText = stringResource(Res.string.detail_cancel),
             icon = Tabler.Outline.Trash,
             tone = ConfirmTone.DESTRUCTIVE,
-            onConfirm = { viewModel.confirmDeleteEpisode() },
-            onDismiss = { viewModel.cancelDeleteEpisode() },
+            onConfirm = { viewModel.onEvent(ManageSeriesUiEvent.ConfirmDeleteEpisode) },
+            onDismiss = { viewModel.onEvent(ManageSeriesUiEvent.CancelDeleteEpisode) },
         )
     }
 }

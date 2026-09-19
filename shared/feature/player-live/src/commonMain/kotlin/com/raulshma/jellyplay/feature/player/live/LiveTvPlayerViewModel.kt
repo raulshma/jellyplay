@@ -522,17 +522,13 @@ class LiveTvPlayerViewModel(
             liveStreamOption = option,
         )
         if (resolved != null) {
-            // When the user asked for Direct Stream but the server still
-            // resolved a transcode, it's because the server's live-source
-            // probe failed (TranscodeReasons=DirectPlayError) even though
-            // the tuner is opened and readable. The tuner session is live,
-            // so ignore the server's verdict and build a direct-stream URL
-            // ourselves from the liveStreamId; if the player genuinely can't
-            // decode it, the existing onPlayerError -> transcode fallback
-            // catches that. AUTO/TRANSCODE accept whatever the server picks.
-            if (option == LiveStreamOption.DIRECT_STREAM &&
-                resolved.playMethod == PlayMethod.TRANSCODE
-            ) {
+            // DIRECT_STREAM probe-override policy (LiveStreamResolution,
+            // pinned by LiveStreamResolutionTest): when the user asked for
+            // Direct Stream but the server resolved a transcode, the
+            // live-source probe failed even though the tuner session is
+            // live — ignore the verdict and fall to the liveStreamId ladder
+            // below; AUTO/TRANSCODE options accept the server's pick.
+            if (shouldIgnoreServerTranscodeVerdict(option, resolved.playMethod)) {
                 Log.w(
                     TAG,
                     "Server resolved transcode for ${channel.name} despite " +
@@ -580,60 +576,38 @@ class LiveTvPlayerViewModel(
                 "requiresOpening=${source.requiresOpening}"
         )
 
-        val liveId = source.liveStreamId
-        val url = when {
-            source.supportsDirectStream || source.supportsDirectPlay ->
+        // Pure capability ladder + play-method fold (LiveStreamResolution,
+        // pinned by LiveStreamResolutionTest); this VM keeps only the repo
+        // URL call (injected as the builder) and the logging.
+        val resolution = resolveLiveStreamResolution(
+            source = source,
+            buildStreamUrl = { mediaSourceId, liveStreamId ->
                 playbackRepository.getStreamUrl(
                     itemId = channel.id,
-                    mediaSourceId = source.id,
+                    mediaSourceId = mediaSourceId,
                     startTimeTicks = 0L,
-                    liveStreamId = liveId,
+                    liveStreamId = liveStreamId,
                 )
-            source.supportsTranscoding && !source.transcodeUrl.isNullOrBlank() ->
-                playbackRepository.getStreamUrl(
-                    itemId = channel.id,
-                    mediaSourceId = source.id,
-                    startTimeTicks = 0L,
-                    liveStreamId = liveId,
-                )
-            // Live tuner sessions opened via autoOpenLiveStream=true can be
-            // read by hitting /Videos/{id}/stream?LiveStreamId=… even when
-            // the server's playability decision returned all-false flags
-            // (observed with some M3U/HLS-only tuners under FORCE_DIRECT_PLAY
-            // or when the device profile doesn't claim HLS support). The
-            // tuner is already open server-side, so the URL is valid.
-            !liveId.isNullOrBlank() -> {
-                Log.w(TAG, "All playability flags false for ${channel.name}; attempting direct stream via liveStreamId")
-                playbackRepository.getStreamUrl(
-                    itemId = channel.id,
-                    mediaSourceId = source.id,
-                    startTimeTicks = 0L,
-                    liveStreamId = liveId,
-                )
-            }
-            else -> {
+            },
+        )
+        val stream = when (resolution) {
+            is LiveStreamResolution.Resolved -> resolution
+            LiveStreamResolution.NoPlayableMethod -> {
                 Log.e(TAG, "No playable method offered for ${channel.name}")
                 return null
             }
         }
-        if (url.isBlank()) {
+        if (stream.via == LiveStreamResolution.Via.LIVE_STREAM_ID) {
+            Log.w(TAG, "All playability flags false for ${channel.name}; attempting direct stream via liveStreamId")
+        }
+        if (stream.url.isBlank()) {
             Log.e(TAG, "Resolved URL is blank for ${channel.name}")
             return null
         }
-
-        // The URL built above is always a direct `/Videos/{id}/stream` URL
-        // (via getStreamUrl), never a transcoding master.m3u8 — even when the
-        // server's flags say transcoding is the only option. So the play
-        // method reflects the URL we built, not the server's verdict; this
-        // also keeps the onPlayerError -> transcode fallback eligible.
-        val playMethod = when {
-            source.supportsDirectPlay -> PlayMethod.DIRECT_PLAY
-            else -> PlayMethod.DIRECT_STREAM
-        }
         return ResolvedPlayback(
             mediaSourceId = source.id,
-            streamUrl = url,
-            playMethod = playMethod,
+            streamUrl = stream.url,
+            playMethod = stream.playMethod,
             playSessionId = info.playSessionId,
             maxStreamingBitrate = null,
             container = source.container,

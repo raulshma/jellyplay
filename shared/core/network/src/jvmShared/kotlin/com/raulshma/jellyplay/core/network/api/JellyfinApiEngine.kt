@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.model.ActiveSession
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.network.RetryPolicy
+import com.raulshma.jellyplay.core.network.auth.AuthSessionStateStore
 import com.raulshma.jellyplay.core.network.failover.ServerAddressRouter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -43,7 +44,7 @@ class JellyfinApiEngine @Inject constructor(
     private val okHttpClientLazy: LazyProvider<OkHttpClient>,
     private val deviceProfileProvider: DeviceProfileProvider,
     private val addressRouter: ServerAddressRouter,
-) {
+) : AuthSessionStateStore {
     val jellyfin: Jellyfin get() = jellyfinLazy.get()
     val okHttpClient: OkHttpClient get() = okHttpClientLazy.get()
     private val _currentServer = MutableStateFlow<ServerInfo?>(null)
@@ -67,6 +68,13 @@ class JellyfinApiEngine @Inject constructor(
      */
     private val _session = MutableStateFlow<ActiveSession?>(null)
     val session: StateFlow<ActiveSession?> = _session.asStateFlow()
+
+    /**
+     * [AuthSessionStateStore] read for the shared auth spine (commonMain
+     * `AuthSessionCore`) — reads the ATOMIC session value, never a combine
+     * of the two separate flows.
+     */
+    override fun currentSession(): ActiveSession? = session.value
 
     val authMutex = Mutex()
 
@@ -134,7 +142,7 @@ class JellyfinApiEngine @Inject constructor(
      */
     internal fun currentUserId(): String? = session.value?.user?.id
 
-    fun updateServer(server: ServerInfo?) {
+    override fun updateServer(server: ServerInfo?) {
         _currentServer.value = server
         publishSession(server, _currentUser.value)
         if (server == null) addressRouter.clear() else addressRouter.configure(server)
@@ -155,7 +163,7 @@ class JellyfinApiEngine @Inject constructor(
      * (e.g. `updateUser(token-refreshed-user)` re-publishes the same
      * identity).
      */
-    fun updateSession(server: ServerInfo?, user: UserInfo?) {
+    override fun updateSession(server: ServerInfo?, user: UserInfo?) {
         _currentServer.value = server
         _currentUser.value = user
         publishSession(server, user)

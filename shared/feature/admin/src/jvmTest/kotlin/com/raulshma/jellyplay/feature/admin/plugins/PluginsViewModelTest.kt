@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.feature.admin.plugins
 
-import com.raulshma.jellyplay.core.data.repository.AdminRepository
+import com.raulshma.jellyplay.core.data.repository.PluginAdminRepository
 import com.raulshma.jellyplay.core.model.PluginInfo
 import com.raulshma.jellyplay.core.model.PluginPackage
 import com.raulshma.jellyplay.core.model.PluginRepository
@@ -45,7 +45,7 @@ class PluginsViewModelTest {
     // has no access to that module (search/music/livetv conveyor port pattern).
     private val mainDispatcher = StandardTestDispatcher()
 
-    private lateinit var adminRepository: AdminRepository
+    private lateinit var adminRepository: PluginAdminRepository
 
     private val tv = PluginInfo(id = "guid-tv", name = "TV Head", version = "1.0", status = PluginStatus.ACTIVE)
     private val meta = PluginInfo(id = "guid-meta", name = "Metashark", version = "2.0", status = PluginStatus.DISABLED)

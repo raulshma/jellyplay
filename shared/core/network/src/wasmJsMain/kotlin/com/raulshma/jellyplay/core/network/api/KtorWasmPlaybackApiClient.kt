@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.core.network.api
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.model.CreditTimestamps
 import com.raulshma.jellyplay.core.model.IntroTimestamps
+import com.raulshma.jellyplay.core.model.KNOWN_IMAGE_TYPES
 import com.raulshma.jellyplay.core.model.LiveStreamOption
 import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.MediaSegmentType
@@ -14,7 +15,6 @@ import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
 import com.raulshma.jellyplay.core.model.UtcTimeResponse
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.network.auth.AtomicSessionState
-import com.raulshma.jellyplay.core.network.library.KNOWN_IMAGE_TYPES
 import com.raulshma.jellyplay.core.network.library.toMediaSource
 import com.raulshma.jellyplay.core.network.playback.MediaSegmentQueryResultDtoWire
 import com.raulshma.jellyplay.core.network.playback.PlaybackInfoRequestDtoWire

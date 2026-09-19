@@ -4,6 +4,7 @@ import com.raulshma.jellyplay.core.data.download.QuickDownloadActions
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
+import com.raulshma.jellyplay.core.data.util.PhotoFolderPrefetcher
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import androidx.paging.LoadState
@@ -72,6 +73,9 @@ class FavoritesViewModelTest {
             userDataMutator = userDataMutator,
             imageUrlProvider = imageUrlProvider,
             quickDownloadActions = quickDownloadActions,
+            // Real prefetcher over the mocked repository: the photo-folder
+            // prefetch tests assert the repository seam, not the prefetcher.
+            photoFolderPrefetcher = PhotoFolderPrefetcher(mediaRepository),
         )
     }
 

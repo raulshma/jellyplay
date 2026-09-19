@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.desktop.player
 
 import com.raulshma.jellyplay.core.data.playback.AudioLyricsManager
+import com.raulshma.jellyplay.core.data.playback.DesktopAudioQueueManager
 import com.raulshma.jellyplay.core.data.playback.QueuePersistenceHelper
 import com.raulshma.jellyplay.core.data.playback.SleepTimerManager
 import com.raulshma.jellyplay.core.data.playback.focus.DefaultPlaybackFocus
@@ -72,7 +73,11 @@ class DesktopAudioQueueManagerFocusTest {
             playbackRepository = FakePlaybackRepository(),
             imageUrlProvider = FakeImages(),
             queuePersistenceHelper = QueuePersistenceHelper(InMemoryQueueDao()),
-            lyricsManager = AudioLyricsManager(FakeLyricsRepository()),
+            // play()'s lyrics fetch launches on the manager's scope; without
+            // initialize() the fetch would throw lateinit and leak into the
+            // next test's uncaught-exception gate (the RealEngine suites get
+            // this from manager.start(); the focus harness never starts).
+            lyricsManager = AudioLyricsManager(FakeLyricsRepository()).also { it.initialize(scope) },
             sleepTimerManager = SleepTimerManager(TestTimeSource()),
             scope = scope,
             engineFactory = { FakeMediaEngine().also { engines += it } },

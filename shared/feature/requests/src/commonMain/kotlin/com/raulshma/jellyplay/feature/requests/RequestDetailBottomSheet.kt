@@ -19,7 +19,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -53,7 +52,6 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrRequestItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestStatus
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
-import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.feature.requests.generated.resources.Res
 import com.raulshma.jellyplay.feature.requests.generated.resources.requests_action_approve
@@ -100,6 +98,13 @@ import kotlinx.coroutines.delay
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
 
+/**
+ * Request detail + admin actions sheet, hosted by [TvSafeSheet] (the
+ * canonical TV/phone adapter). Declared pixel delta vs the former
+ * hand-rolled phone branch: phone containerColor surfaceContainer →
+ * surface — the core adapter's documented rule that the sheet matches the
+ * app/screen background in every mode.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RequestDetailBottomSheet(
@@ -169,7 +174,6 @@ fun RequestDetailBottomSheet(
         formatRequestedDate(request.createdAt) ?: request.createdAt.take(10)
     }
 
-    val isTv = LocalTvMode.current
     val content: @Composable ColumnScope.() -> Unit = {
         Column(
             modifier = Modifier
@@ -477,21 +481,11 @@ fun RequestDetailBottomSheet(
             Spacer(Modifier.height(16.dp))
         }
     }
-    if (isTv) {
-        com.raulshma.jellyplay.core.ui.components.TvSafeSheet(
-            onDismissRequest = onDismiss,
-            content = content,
-        )
-    } else {
-        ModalBottomSheet(
-            onDismissRequest = onDismiss,
-            sheetState = sheetState,
-            shape = ShapeCache.smoothTop28,
-            containerColor = colorScheme.surfaceContainer,
-            dragHandle = { com.raulshma.jellyplay.core.ui.components.SheetDragHandle() },
-            content = content,
-        )
-    }
+    TvSafeSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        content = content,
+    )
 }
 
 @Composable

@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
 import com.raulshma.jellyplay.core.datastore.SeerrSecureCredentialsStore
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.TtlCache
+import com.raulshma.jellyplay.core.model.arr.ArrServiceKind
 import com.raulshma.jellyplay.core.model.seerr.*
 import com.raulshma.jellyplay.core.network.api.TmdbApiClient
 import com.raulshma.jellyplay.core.network.seerr.SeerrApiClient
@@ -301,16 +302,6 @@ class SeerrRepositoryImpl(
             seerrApiClient.getSonarrSettings(url, credentials)
         }
 
-    override suspend fun getRadarrServiceDetail(id: Int): Result<SeerrRadarrServiceDetail> =
-        withSeerrSession { url, credentials ->
-            seerrApiClient.getRadarrServiceDetail(url, credentials, id)
-        }
-
-    override suspend fun getSonarrServiceDetail(id: Int): Result<SeerrSonarrServiceDetail> =
-        withSeerrSession { url, credentials ->
-            seerrApiClient.getSonarrServiceDetail(url, credentials, id)
-        }
-
     override suspend fun getServiceRadarrServers(): Result<List<SeerrServiceServer>> =
         withSeerrSession { url, credentials ->
             seerrApiClient.getServiceRadarrServers(url, credentials)
@@ -321,14 +312,9 @@ class SeerrRepositoryImpl(
             seerrApiClient.getServiceSonarrServers(url, credentials)
         }
 
-    override suspend fun getServiceRadarrDetail(id: Int): Result<SeerrRadarrServiceDetail> =
+    override suspend fun getServiceDetail(id: Int, kind: ArrServiceKind): Result<SeerrServiceDetail> =
         withSeerrSession { url, credentials ->
-            seerrApiClient.getServiceRadarrDetail(url, credentials, id)
-        }
-
-    override suspend fun getServiceSonarrDetail(id: Int): Result<SeerrSonarrServiceDetail> =
-        withSeerrSession { url, credentials ->
-            seerrApiClient.getServiceSonarrDetail(url, credentials, id)
+            seerrApiClient.getServiceDetail(url, credentials, id, kind)
         }
 
     override fun isConnected(): Flow<Boolean> = seerrPreferencesStore.isConnected

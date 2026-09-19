@@ -36,6 +36,7 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrRequestListResponse
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse
 import com.raulshma.jellyplay.core.model.seerr.SeerrSeasonDetail
 import com.raulshma.jellyplay.core.model.seerr.SeerrServiceServer
+import com.raulshma.jellyplay.core.model.seerr.SeerrServiceDetail
 import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail
 import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrSettings
 import com.raulshma.jellyplay.core.model.seerr.SeerrStatusResponse
@@ -471,12 +472,9 @@ private class FakeSeerrRepository : SeerrRepository {
     override suspend fun getTmdbReviews(tmdbId: Int, mediaType: MediaType): Result<List<TmdbReview>> = unused()
     override suspend fun getRadarrSettings(): Result<List<SeerrRadarrSettings>> = unused()
     override suspend fun getSonarrSettings(): Result<List<SeerrSonarrSettings>> = unused()
-    override suspend fun getRadarrServiceDetail(id: Int): Result<SeerrRadarrServiceDetail> = unused()
-    override suspend fun getSonarrServiceDetail(id: Int): Result<SeerrSonarrServiceDetail> = unused()
     override suspend fun getServiceRadarrServers(): Result<List<SeerrServiceServer>> = unused()
     override suspend fun getServiceSonarrServers(): Result<List<SeerrServiceServer>> = unused()
-    override suspend fun getServiceRadarrDetail(id: Int): Result<SeerrRadarrServiceDetail> = unused()
-    override suspend fun getServiceSonarrDetail(id: Int): Result<SeerrSonarrServiceDetail> = unused()
+    override suspend fun getServiceDetail(id: Int, kind: ArrServiceKind): Result<SeerrServiceDetail> = unused()
     override suspend fun requestMedia(
         tmdbId: Int,
         mediaType: String,

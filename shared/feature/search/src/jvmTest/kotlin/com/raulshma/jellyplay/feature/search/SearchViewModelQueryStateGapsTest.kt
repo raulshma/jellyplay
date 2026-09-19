@@ -115,10 +115,10 @@ class SearchViewModelQueryStateGapsTest {
 
     @Test
     fun `search mirrors the query into the public query property`() {
-        viewModel.search("matrix")
+        viewModel.onEvent(SearchUiEvent.Search("matrix"))
         assertEquals("matrix", viewModel.query)
 
-        viewModel.search("  ")
+        viewModel.onEvent(SearchUiEvent.Search("  "))
         assertEquals("  ", viewModel.query)
     }
 
@@ -155,13 +155,13 @@ class SearchViewModelQueryStateGapsTest {
         assertEquals(listOf(first), viewModel.suggestions.value)
 
         // Typing hides the suggestions…
-        viewModel.search("matrix")
+        viewModel.onEvent(SearchUiEvent.Search("matrix"))
         advanceUntilIdle()
         assertTrue(viewModel.suggestions.value.isEmpty())
 
         // …and clearing back to blank fetches a FRESH selection (the latch
         // reset — the second stub answer proves the second fetch happened).
-        viewModel.search("")
+        viewModel.onEvent(SearchUiEvent.Search(""))
         advanceUntilIdle()
         assertEquals(listOf(second), viewModel.suggestions.value)
 
@@ -170,7 +170,7 @@ class SearchViewModelQueryStateGapsTest {
         // collector). search("") clears the list synchronously, and without a
         // new debounced emission nothing re-populates it.
         coVerify(exactly = 2) { mediaRepository.getSearchSuggestions(any()) }
-        viewModel.search("")
+        viewModel.onEvent(SearchUiEvent.Search(""))
         advanceUntilIdle()
         assertTrue(viewModel.suggestions.value.isEmpty())
         coVerify(exactly = 2) { mediaRepository.getSearchSuggestions(any()) }
@@ -197,12 +197,12 @@ class SearchViewModelQueryStateGapsTest {
             viewModel = createViewModel()
             val pagedJob = launch { viewModel.pagedResults.collect { } }
             try {
-                viewModel.search("matrix")
+                viewModel.onEvent(SearchUiEvent.Search("matrix"))
                 advanceTimeBy(299)
                 // Same value: StateFlow conflation upstream of distinctUntilChanged
                 // means no new debounced emission — the restart-due timer keeps
                 // waiting on the original emission.
-                viewModel.search("matrix")
+                viewModel.onEvent(SearchUiEvent.Search("matrix"))
                 advanceUntilIdle()
 
                 coVerify(exactly = 1) { seerrRepository.search(any(), any()) }
@@ -227,11 +227,11 @@ class SearchViewModelQueryStateGapsTest {
             viewModel = createViewModel()
             val pagedJob = launch { viewModel.pagedResults.collect { } }
             try {
-                viewModel.search("stale")
+                viewModel.onEvent(SearchUiEvent.Search("stale"))
                 advanceUntilIdle() // debounce fires; the stale scan suspends on the gate
                 assertTrue(viewModel.offlineResults.value.isEmpty())
 
-                viewModel.search("fresh")
+                viewModel.onEvent(SearchUiEvent.Search("fresh"))
                 advanceUntilIdle() // fresh scan completes; the stale job is cancelled
 
                 assertEquals(listOf(freshItem), viewModel.offlineResults.value)

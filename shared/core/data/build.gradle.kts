@@ -145,6 +145,13 @@ kotlin {
             // impls (AuthRepositoryImpl's folder-id cache, OfflineRepositoryImpl's
             // artwork + JSON-decode caches). Plain JVM artifact, safe on jvmShared.
             implementation(libs.androidx.collection)
+            // JellyPlayImageLoader (jvmShared image/): the shared Coil
+            // builder policy both JVM shells construct their loader through.
+            // Same coil pin the shells already use (api's coil-core arrives
+            // via this artifact; the Android app's 3.5.0 bom keeps winning
+            // version resolution there, as it already does for androidMain's
+            // coil edge above).
+            implementation(libs.coil.network.okhttp)
         }
         getByName("androidMain").dependencies {
             // AndroidOfflineModeManager registers itself against

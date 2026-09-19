@@ -15,14 +15,6 @@ import kotlin.test.assertTrue
  */
 class ResumeRowFilterTest {
 
-    private fun row(id: String, played: Boolean, mediaType: MediaType = MediaType.MOVIE) = MediaItem(
-        id = id,
-        name = id,
-        mediaType = mediaType,
-        isPlayed = played,
-        playbackPositionTicks = 30_000_000L,
-    )
-
     @Test
     fun `played rows are dropped even with a stale resume position`() {
         val rows = listOf(row("resumable", played = false), row("poisoned", played = true))
@@ -78,4 +70,71 @@ class ResumeRowFilterTest {
         assertEquals(listOf("b"), reading)
         assertTrue(watching.intersect(reading.toSet()).isEmpty())
     }
+
+    // ── The folded post-fetch chain ([toFilteredResumeRows]) ──────────────
+    // The full tail both client twins run after /UserItems/Resume: parental
+    // filter → id-distinct → the #157 rule's books-or-video half.
+
+    @Test
+    fun `the fold chains parental filter, distinct ids and the played-row rule`() {
+        val rows = listOf(
+            row("keep", played = false),
+            row("dup", played = false),
+            row("dup", played = false), // server-reported duplicate id
+            row("poisoned", played = true),
+            row("r-rated", played = false, officialRating = "R"),
+            row("pg", played = false, officialRating = "PG"),
+        )
+
+        assertEquals(
+            listOf("keep", "dup", "pg"),
+            rows.toFilteredResumeRows(maxParentalRating = 13, isBooks = false).map { it.id },
+        )
+    }
+
+    @Test
+    fun `the fold's books half keeps only unplayed books and a null max is unfiltered`() {
+        val rows = listOf(
+            row("book-open", played = false, mediaType = MediaType.BOOK),
+            row("book-done", played = true, mediaType = MediaType.BOOK),
+            row("movie", played = false),
+            row("r-rated-book", played = false, mediaType = MediaType.BOOK, officialRating = "R"),
+        )
+
+        // No max rating → the R-rated book survives alongside the open one.
+        assertEquals(
+            listOf("book-open", "r-rated-book"),
+            rows.toFilteredResumeRows(maxParentalRating = null, isBooks = true).map { it.id },
+        )
+        // With one, it drops like any other row.
+        assertEquals(
+            listOf("book-open"),
+            rows.toFilteredResumeRows(maxParentalRating = 13, isBooks = true).map { it.id },
+        )
+    }
+
+    @Test
+    fun `the fold keeps distinct-before-filter survivors in order`() {
+        val rows = listOf(
+            row("a", played = false),
+            row("a", played = true), // duplicate id: first survives even if the dup is played
+            row("b", played = false),
+        )
+
+        assertEquals(listOf("a", "b"), rows.toFilteredResumeRows(maxParentalRating = null, isBooks = false).map { it.id })
+    }
+
+    private fun row(
+        id: String,
+        played: Boolean,
+        mediaType: MediaType = MediaType.MOVIE,
+        officialRating: String? = null,
+    ) = MediaItem(
+        id = id,
+        name = id,
+        mediaType = mediaType,
+        isPlayed = played,
+        playbackPositionTicks = 30_000_000L,
+        officialRating = officialRating,
+    )
 }

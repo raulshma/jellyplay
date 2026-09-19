@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.admin.di
 
 import android.content.Context
+import com.raulshma.jellyplay.core.data.repository.PluginAdminRepository
 import com.raulshma.jellyplay.feature.admin.plugins.PluginConfigViewModel
 import org.koin.compose.viewmodel.dsl.viewModel
 import org.koin.core.module.Module
@@ -19,7 +20,7 @@ fun androidAdminModule(context: Context): Module = module {
     viewModel {
         PluginConfigViewModel(
             context = context,
-            adminRepository = get(),
+            pluginAdminRepository = get<PluginAdminRepository>(),
         )
     }
 }

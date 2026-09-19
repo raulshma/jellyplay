@@ -106,7 +106,7 @@ class ManageSeriesViewModelTest {
         val eps = listOf(ep(1, hasFile = true), ep(2, hasFile = false))
         coEvery { arrRepository.getSonarrEpisodes(123) } returns Result.success(eps)
 
-        viewModel.load("s1")
+        viewModel.onEvent(ManageSeriesUiEvent.Load("s1"))
         advanceUntilIdle()
 
         val state = viewModel.uiState.value
@@ -121,7 +121,7 @@ class ManageSeriesViewModelTest {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         stubSeriesDetail("s1", providerIds = emptyMap())
 
-        viewModel.load("s1")
+        viewModel.onEvent(ManageSeriesUiEvent.Load("s1"))
         advanceUntilIdle()
 
         val state = viewModel.uiState.value
@@ -135,7 +135,7 @@ class ManageSeriesViewModelTest {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         coEvery { mediaRepository.getMediaDetail("s1") } returns Result.failure(RuntimeException("boom"))
 
-        viewModel.load("s1")
+        viewModel.onEvent(ManageSeriesUiEvent.Load("s1"))
         advanceUntilIdle()
 
         val state = viewModel.uiState.value
@@ -149,7 +149,7 @@ class ManageSeriesViewModelTest {
         stubSeriesDetail("s1")
         coEvery { arrRepository.resolveSonarrSeries(123) } returns Result.failure(RuntimeException("no sonarr"))
 
-        viewModel.load("s1")
+        viewModel.onEvent(ManageSeriesUiEvent.Load("s1"))
         advanceUntilIdle()
 
         val state = viewModel.uiState.value
@@ -163,7 +163,7 @@ class ManageSeriesViewModelTest {
         stubSeriesDetail("s1")
         coEvery { arrRepository.getSonarrEpisodes(123) } returns Result.failure(RuntimeException("eps boom"))
 
-        viewModel.load("s1")
+        viewModel.onEvent(ManageSeriesUiEvent.Load("s1"))
         advanceUntilIdle()
 
         val state = viewModel.uiState.value
@@ -177,8 +177,8 @@ class ManageSeriesViewModelTest {
         stubSeriesDetail("s1")
         coEvery { arrRepository.getSonarrEpisodes(123) } returns Result.success(listOf(ep(1)))
 
-        viewModel.load("s1")
-        viewModel.load("s1") // deduped while first is in flight
+        viewModel.onEvent(ManageSeriesUiEvent.Load("s1"))
+        viewModel.onEvent(ManageSeriesUiEvent.Load("s1")) // deduped while first is in flight
         advanceUntilIdle()
 
         coVerify(exactly = 1) { mediaRepository.getMediaDetail("s1") }
@@ -198,7 +198,7 @@ class ManageSeriesViewModelTest {
         )
         coEvery { arrRepository.getSonarrEpisodes(123) } returns Result.success(eps)
 
-        viewModel.load("s1")
+        viewModel.onEvent(ManageSeriesUiEvent.Load("s1"))
         advanceUntilIdle()
 
         // Season keys sorted 1, 2, 0 (specials last).
@@ -217,7 +217,7 @@ class ManageSeriesViewModelTest {
             )
             coEvery { arrRepository.getSonarrEpisodes(123) } returns Result.success(eps)
 
-            viewModel.load("s1")
+            viewModel.onEvent(ManageSeriesUiEvent.Load("s1"))
             advanceUntilIdle()
 
             assertEquals(setOf(2), viewModel.uiState.value.expandedSeasons)
@@ -235,7 +235,7 @@ class ManageSeriesViewModelTest {
             )
             coEvery { arrRepository.getSonarrEpisodes(123) } returns Result.success(eps)
 
-            viewModel.load("s1")
+            viewModel.onEvent(ManageSeriesUiEvent.Load("s1"))
             advanceUntilIdle()
 
             assertEquals(setOf(1), viewModel.uiState.value.expandedSeasons)
@@ -254,10 +254,10 @@ class ManageSeriesViewModelTest {
         )
         coEvery { arrRepository.monitorSonarrEpisodes(123, listOf(1), true) } returns Result.success(Unit)
 
-        viewModel.load("s1")
+        viewModel.onEvent(ManageSeriesUiEvent.Load("s1"))
         advanceUntilIdle()
 
-        viewModel.toggleEpisodeMonitored(eps.first())
+        viewModel.onEvent(ManageSeriesUiEvent.ToggleEpisodeMonitored(eps.first()))
         advanceUntilIdle()
 
         assertTrue(viewModel.uiState.value.episodesBySeason[1]!!.first().monitored)
@@ -272,10 +272,10 @@ class ManageSeriesViewModelTest {
         coEvery { arrRepository.getSonarrEpisodes(123) } returns Result.success(eps)
         coEvery { arrRepository.monitorSonarrEpisodes(123, listOf(1), true) } returns Result.failure(RuntimeException("boom"))
 
-        viewModel.load("s1")
+        viewModel.onEvent(ManageSeriesUiEvent.Load("s1"))
         advanceUntilIdle()
 
-        viewModel.toggleEpisodeMonitored(eps.first())
+        viewModel.onEvent(ManageSeriesUiEvent.ToggleEpisodeMonitored(eps.first()))
         advanceUntilIdle()
 
         // Reverted back to the original monitored=false.
@@ -293,10 +293,10 @@ class ManageSeriesViewModelTest {
         coEvery { arrRepository.getSonarrEpisodes(123) } returns Result.success(eps)
         coEvery { arrRepository.searchSonarrEpisodes(123, listOf(1)) } returns Result.success(Unit)
 
-        viewModel.load("s1")
+        viewModel.onEvent(ManageSeriesUiEvent.Load("s1"))
         advanceUntilIdle()
 
-        viewModel.searchEpisode(eps.first())
+        viewModel.onEvent(ManageSeriesUiEvent.SearchEpisode(eps.first()))
         advanceUntilIdle()
 
         val state = viewModel.uiState.value
@@ -313,10 +313,10 @@ class ManageSeriesViewModelTest {
         coEvery { arrRepository.getSonarrEpisodes(123) } returns Result.success(eps)
         coEvery { arrRepository.searchSonarrEpisodes(123, listOf(1)) } returns Result.failure(RuntimeException("nope"))
 
-        viewModel.load("s1")
+        viewModel.onEvent(ManageSeriesUiEvent.Load("s1"))
         advanceUntilIdle()
 
-        viewModel.searchEpisode(eps.first())
+        viewModel.onEvent(ManageSeriesUiEvent.SearchEpisode(eps.first()))
         advanceUntilIdle()
 
         assertEquals("nope", viewModel.uiState.value.userMessage)
@@ -331,10 +331,10 @@ class ManageSeriesViewModelTest {
         val eps = listOf(ep(1, hasFile = true, episodeFileId = 99))
         coEvery { arrRepository.getSonarrEpisodes(123) } returns Result.success(eps)
 
-        viewModel.load("s1")
+        viewModel.onEvent(ManageSeriesUiEvent.Load("s1"))
         advanceUntilIdle()
 
-        viewModel.requestDeleteEpisode(eps.first())
+        viewModel.onEvent(ManageSeriesUiEvent.RequestDeleteEpisode(eps.first()))
         advanceUntilIdle()
 
         assertEquals(1, viewModel.uiState.value.pendingDeleteEpisode?.id)
@@ -347,11 +347,11 @@ class ManageSeriesViewModelTest {
         val eps = listOf(ep(1, hasFile = true, episodeFileId = 99))
         coEvery { arrRepository.getSonarrEpisodes(123) } returns Result.success(eps)
 
-        viewModel.load("s1")
+        viewModel.onEvent(ManageSeriesUiEvent.Load("s1"))
         advanceUntilIdle()
 
-        viewModel.requestDeleteEpisode(eps.first())
-        viewModel.cancelDeleteEpisode()
+        viewModel.onEvent(ManageSeriesUiEvent.RequestDeleteEpisode(eps.first()))
+        viewModel.onEvent(ManageSeriesUiEvent.CancelDeleteEpisode)
         advanceUntilIdle()
 
         assertNull(viewModel.uiState.value.pendingDeleteEpisode)
@@ -365,11 +365,11 @@ class ManageSeriesViewModelTest {
         coEvery { arrRepository.getSonarrEpisodes(123) } returns Result.success(eps)
         coEvery { arrRepository.deleteSonarrEpisodeFile(123, 99) } returns Result.success(Unit)
 
-        viewModel.load("s1")
+        viewModel.onEvent(ManageSeriesUiEvent.Load("s1"))
         advanceUntilIdle()
 
-        viewModel.requestDeleteEpisode(eps.first())
-        viewModel.confirmDeleteEpisode()
+        viewModel.onEvent(ManageSeriesUiEvent.RequestDeleteEpisode(eps.first()))
+        viewModel.onEvent(ManageSeriesUiEvent.ConfirmDeleteEpisode)
         advanceUntilIdle()
 
         assertNull(viewModel.uiState.value.pendingDeleteEpisode)
@@ -386,11 +386,11 @@ class ManageSeriesViewModelTest {
         coEvery { arrRepository.getSonarrEpisodes(123) } returns Result.success(eps)
         coEvery { arrRepository.deleteSonarrEpisodeFile(123, 99) } returns Result.failure(RuntimeException("denied"))
 
-        viewModel.load("s1")
+        viewModel.onEvent(ManageSeriesUiEvent.Load("s1"))
         advanceUntilIdle()
 
-        viewModel.requestDeleteEpisode(eps.first())
-        viewModel.confirmDeleteEpisode()
+        viewModel.onEvent(ManageSeriesUiEvent.RequestDeleteEpisode(eps.first()))
+        viewModel.onEvent(ManageSeriesUiEvent.ConfirmDeleteEpisode)
         advanceUntilIdle()
 
         assertEquals("denied", viewModel.uiState.value.userMessage)
@@ -406,10 +406,10 @@ class ManageSeriesViewModelTest {
         coEvery { arrRepository.getSonarrEpisodes(123) } returns Result.success(eps)
         coEvery { arrRepository.monitorSonarrEpisodes(123, listOf(1, 2), true) } returns Result.success(Unit)
 
-        viewModel.load("s1")
+        viewModel.onEvent(ManageSeriesUiEvent.Load("s1"))
         advanceUntilIdle()
 
-        viewModel.toggleSeasonMonitor(1)
+        viewModel.onEvent(ManageSeriesUiEvent.ToggleSeasonMonitor(1))
         advanceUntilIdle()
 
         coVerify(exactly = 1) { arrRepository.monitorSonarrEpisodes(123, listOf(1, 2), true) }
@@ -423,10 +423,10 @@ class ManageSeriesViewModelTest {
         coEvery { arrRepository.getSonarrEpisodes(123) } returns Result.success(eps)
         coEvery { arrRepository.monitorSonarrEpisodes(123, listOf(1, 2), false) } returns Result.success(Unit)
 
-        viewModel.load("s1")
+        viewModel.onEvent(ManageSeriesUiEvent.Load("s1"))
         advanceUntilIdle()
 
-        viewModel.toggleSeasonMonitor(1)
+        viewModel.onEvent(ManageSeriesUiEvent.ToggleSeasonMonitor(1))
         advanceUntilIdle()
 
         coVerify(exactly = 1) { arrRepository.monitorSonarrEpisodes(123, listOf(1, 2), false) }
@@ -438,10 +438,10 @@ class ManageSeriesViewModelTest {
         stubSeriesDetail("s1")
         coEvery { arrRepository.getSonarrEpisodes(123) } returns Result.success(emptyList())
 
-        viewModel.load("s1")
+        viewModel.onEvent(ManageSeriesUiEvent.Load("s1"))
         advanceUntilIdle()
 
-        viewModel.toggleSeasonMonitor(1)
+        viewModel.onEvent(ManageSeriesUiEvent.ToggleSeasonMonitor(1))
         advanceUntilIdle()
 
         coVerify(exactly = 0) { arrRepository.monitorSonarrEpisodes(any(), any(), any()) }
@@ -454,10 +454,10 @@ class ManageSeriesViewModelTest {
         coEvery { arrRepository.getSonarrEpisodes(123) } returns Result.success(listOf(ep(1)))
         coEvery { arrRepository.searchMonitoredSonarrSeason(123, 1) } returns Result.success(Unit)
 
-        viewModel.load("s1")
+        viewModel.onEvent(ManageSeriesUiEvent.Load("s1"))
         advanceUntilIdle()
 
-        viewModel.searchSeason(1)
+        viewModel.onEvent(ManageSeriesUiEvent.SearchSeason(1))
         advanceUntilIdle()
 
         assertNull(viewModel.uiState.value.actionTarget)
@@ -474,10 +474,10 @@ class ManageSeriesViewModelTest {
         coEvery { arrRepository.getSonarrEpisodes(123) } returns Result.success(listOf(ep(1)))
         coEvery { arrRepository.refreshSonarrSeries(123) } returns Result.success(Unit)
 
-        viewModel.load("s1")
+        viewModel.onEvent(ManageSeriesUiEvent.Load("s1"))
         advanceUntilIdle()
 
-        viewModel.refreshSeries()
+        viewModel.onEvent(ManageSeriesUiEvent.RefreshSeries)
         advanceUntilIdle()
 
         assertNull(viewModel.uiState.value.actionTarget)
@@ -492,10 +492,10 @@ class ManageSeriesViewModelTest {
         coEvery { arrRepository.refreshSonarrSeries(123) } returns Result.success(Unit)
         coEvery { arrRepository.rescanSonarrSeries(123) } returns Result.success(Unit)
 
-        viewModel.load("s1")
+        viewModel.onEvent(ManageSeriesUiEvent.Load("s1"))
         advanceUntilIdle()
 
-        viewModel.refreshAndScan()
+        viewModel.onEvent(ManageSeriesUiEvent.RefreshAndScan)
         advanceUntilIdle()
 
         coVerify(exactly = 1) { arrRepository.refreshSonarrSeries(123) }
@@ -510,10 +510,10 @@ class ManageSeriesViewModelTest {
         coEvery { arrRepository.getSonarrEpisodes(123) } returns Result.success(listOf(ep(1)))
         coEvery { arrRepository.searchSonarrSeries(123) } returns Result.success(Unit)
 
-        viewModel.load("s1")
+        viewModel.onEvent(ManageSeriesUiEvent.Load("s1"))
         advanceUntilIdle()
 
-        viewModel.searchSeries()
+        viewModel.onEvent(ManageSeriesUiEvent.SearchSeries)
         advanceUntilIdle()
 
         assertNotNull(viewModel.uiState.value.userMessage)
@@ -523,10 +523,10 @@ class ManageSeriesViewModelTest {
     @Test
     fun `series actions before load complete are no-ops`() = runTest(mainDispatcher) {
         // Without load(), tvdbId is null — every action short-circuits.
-        viewModel.refreshSeries()
-        viewModel.refreshAndScan()
-        viewModel.searchSeries()
-        viewModel.toggleSeasonMonitor(1)
+        viewModel.onEvent(ManageSeriesUiEvent.RefreshSeries)
+        viewModel.onEvent(ManageSeriesUiEvent.RefreshAndScan)
+        viewModel.onEvent(ManageSeriesUiEvent.SearchSeries)
+        viewModel.onEvent(ManageSeriesUiEvent.ToggleSeasonMonitor(1))
         advanceUntilIdle()
 
         coVerify(exactly = 0) { arrRepository.refreshSonarrSeries(any()) }
@@ -539,7 +539,7 @@ class ManageSeriesViewModelTest {
     fun `refresh before load is no-op`() = runTest(mainDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
 
-        viewModel.refresh()
+        viewModel.onEvent(ManageSeriesUiEvent.Refresh)
         advanceUntilIdle()
 
         coVerify(exactly = 0) { arrRepository.getSonarrEpisodes(any()) }
@@ -549,23 +549,23 @@ class ManageSeriesViewModelTest {
 
     @Test
     fun `toggleSeasonExpanded adds then removes season`() = runTest(mainDispatcher) {
-        viewModel.toggleSeasonExpanded(2)
+        viewModel.onEvent(ManageSeriesUiEvent.ToggleSeasonExpanded(2))
         assertTrue(viewModel.uiState.value.expandedSeasons.contains(2))
 
-        viewModel.toggleSeasonExpanded(2)
+        viewModel.onEvent(ManageSeriesUiEvent.ToggleSeasonExpanded(2))
         assertFalse(viewModel.uiState.value.expandedSeasons.contains(2))
     }
 
     @Test
     fun `clearUserMessage nulls the message`() {
-        viewModel.toggleSeasonExpanded(1) // ensure state is live
-        viewModel.clearUserMessage()
+        viewModel.onEvent(ManageSeriesUiEvent.ToggleSeasonExpanded(1)) // ensure state is live
+        viewModel.onEvent(ManageSeriesUiEvent.ClearUserMessage)
         assertNull(viewModel.uiState.value.userMessage)
     }
 
     @Test
     fun `clearError nulls the error`() {
-        viewModel.clearError()
+        viewModel.onEvent(ManageSeriesUiEvent.ClearError)
         assertNull(viewModel.uiState.value.error)
     }
 
@@ -582,7 +582,7 @@ class ManageSeriesViewModelTest {
         )
         coEvery { arrRepository.getSonarrEpisodes(123) } returns Result.success(eps)
 
-        viewModel.load("s1")
+        viewModel.onEvent(ManageSeriesUiEvent.Load("s1"))
         advanceUntilIdle()
 
         val stats = viewModel.uiState.value.seasonStats(1)
@@ -602,7 +602,7 @@ class ManageSeriesViewModelTest {
         )
         coEvery { arrRepository.getSonarrEpisodes(123) } returns Result.success(eps)
 
-        viewModel.load("s1")
+        viewModel.onEvent(ManageSeriesUiEvent.Load("s1"))
         advanceUntilIdle()
 
         assertEquals(3_500L, viewModel.uiState.value.totalStorageBytes)

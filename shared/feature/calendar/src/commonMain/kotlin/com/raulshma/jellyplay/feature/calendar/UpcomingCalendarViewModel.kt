@@ -166,13 +166,17 @@ class UpcomingCalendarViewModel(
             return
         }
         launch {
-            _state.value = _state.value.copy(isLoading = true, error = null)
-            val month = _state.value.visibleMonth
-            arrRepository.refreshCalendar(
-                month.onDay(1),
-                month.lastDay,
+            CalendarLoad.load(
+                start = { _state.value = _state.value.copy(isLoading = true, error = null) },
+                fetch = {
+                    val month = _state.value.visibleMonth
+                    arrRepository.refreshCalendar(month.onDay(1), month.lastDay)
+                },
+                // The success arm is deliberately empty (see CalendarLoad):
+                // items land through the month collector, not this payload.
+                onSuccess = { },
+                onFailure = { _state.value = _state.value.copy(error = it.message) },
             )
-                .onFailure { _state.value = _state.value.copy(error = it.message) }
             _state.value = _state.value.copy(isLoading = false)
         }
     }

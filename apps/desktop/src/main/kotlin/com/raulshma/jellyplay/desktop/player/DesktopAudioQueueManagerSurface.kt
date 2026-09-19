@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.desktop.player
 
+import com.raulshma.jellyplay.core.data.playback.DesktopAudioQueueManager
 import com.raulshma.jellyplay.core.data.playback.focus.PlaybackSurface
 import com.raulshma.jellyplay.core.data.playback.focus.PlaybackSurfaceId
 

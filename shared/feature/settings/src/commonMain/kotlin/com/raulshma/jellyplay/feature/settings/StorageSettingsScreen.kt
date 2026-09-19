@@ -44,6 +44,7 @@ import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.SettingListItem
 import com.raulshma.jellyplay.core.ui.components.SettingToggleItem
 import com.raulshma.jellyplay.core.ui.components.SettingsItemList
+import com.raulshma.jellyplay.core.ui.tv.CenteredBringIntoView
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import androidx.compose.ui.focus.FocusRequester
@@ -167,6 +168,13 @@ fun StorageSettingsScreen(
 ) {
     val preferences by viewModel.preferences.collectAsStateWithLifecycle()
     val showAdvanced by viewModel.showAdvancedSettings.collectAsStateWithLifecycle()
+    // The declared row admissions both the SettingsItemList totals and the
+    // emission `if`s below read — one gate per id, declared beside the group
+    // items (SettingsSearchItemGroup.rowAdmitted).
+    val rowFlags = RowAdmissionFlags(
+        showAdvanced = showAdvanced,
+        parentsOn = rowParentsOn("download_schedule" to preferences.downloadScheduleEnabled),
+    )
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
     val backgroundColorState = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState()
@@ -177,17 +185,7 @@ fun StorageSettingsScreen(
     val scrollState = rememberLazyListState()
     val scrollIndex = resolveHighlightScrollIndex(highlightSettingId, storageScreenGroups)
 
-    // Phase 1 (coarse): scroll the containing group into the LazyColumn's composition window so the
-    // target item is actually composed — items in off-screen groups (later sections) are otherwise
-    // never mounted and their bringIntoViewRequester has no target. Phase 2 (centering) is then
-    // performed by the highlighted item itself via CenterBringIntoViewSpec.
-    LaunchedEffect(scrollIndex) {
-        if (scrollIndex >= 0) {
-            try {
-                scrollState.animateScrollToItem(scrollIndex)
-            } catch (_: Exception) {}
-        }
-    }
+    HighlightScrollEffect(scrollState, scrollIndex)
 
     val focusRequester = remember { FocusRequester() }
     TvGrabInitialFocus(
@@ -207,12 +205,7 @@ fun StorageSettingsScreen(
             )
         },
     ) { innerPadding ->
-        // Center a highlighted (search-navigated) setting in the viewport instead of parking it
-        // at the bottom edge, which is the default BringIntoViewSpec behaviour.
-        androidx.compose.runtime.CompositionLocalProvider(
-            androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides
-                com.raulshma.jellyplay.core.ui.tv.CenterBringIntoViewSpec
-        ) {
+        CenteredBringIntoView {
         LazyColumn(
             state = scrollState,
             modifier = Modifier
@@ -624,7 +617,7 @@ fun StorageSettingsScreen(
                         onCheckedChange = { viewModel.edit { scope -> scope.downloads.setDownloadScheduleEnabled(it) } }
                     )
 
-                    if (preferences.downloadScheduleEnabled) {
+                    if (SettingsScreenGroups.storageDownloads.rowAdmitted("download_schedule_start", rowFlags)) {
                         val scheduleStartTitle = stringResource(Res.string.settings_schedule_start)
                         SettingListItem(
                             icon = Tabler.Outline.Sun,

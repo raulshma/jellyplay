@@ -106,7 +106,7 @@ class AudioPlaybackManager(
      * callers omit it and the media3 player is built as before.
      */
     playerFactory: (() -> ExoPlayer)? = null,
-) : AudioEffectsManager by effectsProcessor, AudioQueueManager {
+) : AudioEffectsManager by effectsProcessor, AudioQueueManager, AudioPlayerEngine {
     private val scope = playbackScope ?: CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val testPlayerFactory = playerFactory
 
@@ -182,13 +182,13 @@ class AudioPlaybackManager(
     val gaplessEnabled: StateFlow<Boolean> = _gaplessEnabled.asStateFlow()
 
     private val _crossfadeDurationMs = MutableStateFlow(0L)
-    val crossfadeDurationMs: StateFlow<Long> = _crossfadeDurationMs.asStateFlow()
+    override val crossfadeDurationMs: StateFlow<Long> = _crossfadeDurationMs.asStateFlow()
 
     private val _isCrossfading = MutableStateFlow(false)
     val isCrossfading: StateFlow<Boolean> = _isCrossfading.asStateFlow()
 
     private val _playbackError = MutableStateFlow<String?>(null)
-    val playbackError: StateFlow<String?> = _playbackError.asStateFlow()
+    override val playbackError: StateFlow<String?> = _playbackError.asStateFlow()
 
     /**
      * Bounded history of pre-mutation queue snapshots enabling undo of
@@ -199,7 +199,7 @@ class AudioPlaybackManager(
 
     private val _undoEvents = MutableSharedFlow<QueueUndoEvent>(extraBufferCapacity = 4)
     /** One-shot stream of destructive queue ops the UI can offer to undo. */
-    val undoEvents: SharedFlow<QueueUndoEvent> = _undoEvents.asSharedFlow()
+    override val undoEvents: SharedFlow<QueueUndoEvent> = _undoEvents.asSharedFlow()
 
     /**
      * A→B loop markers. When both are non-null, playback
@@ -209,16 +209,16 @@ class AudioPlaybackManager(
      * into the next song.
      */
     private val _abLoopStartMs = MutableStateFlow<Long?>(null)
-    val abLoopStartMs: StateFlow<Long?> = _abLoopStartMs.asStateFlow()
+    override val abLoopStartMs: StateFlow<Long?> = _abLoopStartMs.asStateFlow()
     private val _abLoopEndMs = MutableStateFlow<Long?>(null)
-    val abLoopEndMs: StateFlow<Long?> = _abLoopEndMs.asStateFlow()
+    override val abLoopEndMs: StateFlow<Long?> = _abLoopEndMs.asStateFlow()
 
     val estimatedBandwidthKbps: StateFlow<Double> = bandwidthInterceptor.estimatedBandwidthKbps
 
     private val _currentAudioBitrateTier = MutableStateFlow(com.raulshma.jellyplay.core.model.AudioBitrateTier.DEFAULT)
     val currentAudioBitrateTier: StateFlow<com.raulshma.jellyplay.core.model.AudioBitrateTier> = _currentAudioBitrateTier.asStateFlow()
     private val _isLoadingItem = MutableStateFlow(false)
-    val isLoadingItem: StateFlow<Boolean> = _isLoadingItem.asStateFlow()
+    override val isLoadingItem: StateFlow<Boolean> = _isLoadingItem.asStateFlow()
 
     private val crossfader = AudioCrossfader(
         scope = scope,
@@ -261,27 +261,27 @@ class AudioPlaybackManager(
      */
     private val nowPlayingTracker = NowPlayingTracker()
 
-    val title: StateFlow<String> get() = nowPlayingTracker.title
+    override val title: StateFlow<String> get() = nowPlayingTracker.title
 
-    val artist: StateFlow<String> get() = nowPlayingTracker.artist
+    override val artist: StateFlow<String> get() = nowPlayingTracker.artist
 
-    val artistId: StateFlow<String?> get() = nowPlayingTracker.artistId
+    override val artistId: StateFlow<String?> get() = nowPlayingTracker.artistId
 
-    val album: StateFlow<String> get() = nowPlayingTracker.album
+    override val album: StateFlow<String> get() = nowPlayingTracker.album
 
-    val albumArtUrl: StateFlow<String> get() = nowPlayingTracker.albumArtUrl
+    override val albumArtUrl: StateFlow<String> get() = nowPlayingTracker.albumArtUrl
 
     private val _isPlaying = MutableStateFlow(false)
-    val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
+    override val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
 
     private val _currentPosition = MutableStateFlow(0L)
-    val currentPosition: StateFlow<Long> = _currentPosition.asStateFlow()
+    override val currentPosition: StateFlow<Long> = _currentPosition.asStateFlow()
 
     private val _duration = MutableStateFlow(0L)
-    val duration: StateFlow<Long> = _duration.asStateFlow()
+    override val duration: StateFlow<Long> = _duration.asStateFlow()
 
     private val _speed = MutableStateFlow(1.0f)
-    val speed: StateFlow<Float> = _speed.asStateFlow()
+    override val speed: StateFlow<Float> = _speed.asStateFlow()
 
     private val _shuffleMode = MutableStateFlow(false)
     override val shuffleMode: StateFlow<Boolean> = _shuffleMode.asStateFlow()
@@ -300,13 +300,13 @@ class AudioPlaybackManager(
 
     override val currentPlayingItemId: StateFlow<String?> get() = nowPlayingTracker.currentPlayingItemId
 
-    val lyrics: StateFlow<List<LyricsLine>> get() = lyricsManager.lyrics
-    val currentLyricIndex: StateFlow<Int> get() = lyricsManager.currentLyricIndex
-    val lyricsSource: StateFlow<LyricsSource> get() = lyricsManager.lyricsSource
-    val isFetchingLyrics: StateFlow<Boolean> get() = lyricsManager.isFetchingLyrics
-    val lyricsOffsetMs: StateFlow<Long> get() = lyricsManager.lyricsOffsetMs
+    override val lyrics: StateFlow<List<LyricsLine>> get() = lyricsManager.lyrics
+    override val currentLyricIndex: StateFlow<Int> get() = lyricsManager.currentLyricIndex
+    override val lyricsSource: StateFlow<LyricsSource> get() = lyricsManager.lyricsSource
+    override val isFetchingLyrics: StateFlow<Boolean> get() = lyricsManager.isFetchingLyrics
+    override val lyricsOffsetMs: StateFlow<Long> get() = lyricsManager.lyricsOffsetMs
 
-    fun setLyricsOffset(offsetMs: Long) = lyricsManager.setLyricsOffset(offsetMs)
+    override fun setLyricsOffset(offsetMs: Long) = lyricsManager.setLyricsOffset(offsetMs)
 
     // AudioEffectsManager rides class delegation onto effectsProcessor (the
     // ~40 former one-line forwarders are gone): a context-free effect now
@@ -443,7 +443,7 @@ class AudioPlaybackManager(
         }
     }
 
-    fun setGaplessEnabled(enabled: Boolean) {
+    override fun setGaplessEnabled(enabled: Boolean) {
         _gaplessEnabled.value = enabled
         if (enabled) {
             _crossfadeDurationMs.value = 0L
@@ -451,7 +451,7 @@ class AudioPlaybackManager(
         }
     }
 
-    fun setCrossfadeDurationMs(ms: Long) {
+    override fun setCrossfadeDurationMs(ms: Long) {
         _crossfadeDurationMs.value = ms
         if (ms > 0) {
             _gaplessEnabled.value = false
@@ -611,7 +611,7 @@ class AudioPlaybackManager(
             }
         }
 
-    fun play(itemId: String) {
+    override fun play(itemId: String) {
         assertMainThread("play")
 
         // "Play On" routing (mirrors jellyfin-web's playbackManager.play(): when a
@@ -950,7 +950,7 @@ class AudioPlaybackManager(
         player.seekTo(prev, 0L)
     }
 
-    fun seekTo(positionMs: Long) {
+    override fun seekTo(positionMs: Long) {
         assertMainThread("seekTo")
         // Optimistically publish the target position so the seek-bar indicator
         // snaps to the user's touch immediately. Without this the bar only moves
@@ -1009,7 +1009,7 @@ class AudioPlaybackManager(
      * clear. The state machine is [AudioQueuePolicy.cycleAbLoop] (shared
      * verbatim with the desktop adapter); the marker writes are the manager's.
      */
-    fun cycleAbLoop() {
+    override fun cycleAbLoop() {
         assertMainThread("cycleAbLoop")
         val next = AudioQueuePolicy.cycleAbLoop(
             positionMs = exoPlayer?.currentPosition ?: _currentPosition.value,
@@ -1042,7 +1042,7 @@ class AudioPlaybackManager(
      * captured position; it is a no-op while a queue load is in flight to
      * avoid racing with [playQueue].
      */
-    fun undoLastQueueOperation(): Boolean {
+    override fun undoLastQueueOperation(): Boolean {
         assertMainThread("undoLastQueueOperation")
         val snapshot = queueUndoStack.pop() ?: return false
         applyQueueSnapshot(snapshot)
@@ -1075,13 +1075,13 @@ class AudioPlaybackManager(
         player.seekTo(target)
     }
 
-    fun togglePlayPause() {
+    override fun togglePlayPause() {
         assertMainThread("togglePlayPause")
         val player = exoPlayer ?: return
         if (player.isPlaying) player.pause() else player.play()
     }
 
-    fun changePlaybackSpeed(value: Float) {
+    override fun changePlaybackSpeed(value: Float) {
         assertMainThread("changePlaybackSpeed")
         _speed.value = value
         val pitchMultiplier = if (effectsProcessor.pitchSemitones.value == 0f) 1.0f else {
@@ -1187,7 +1187,7 @@ class AudioPlaybackManager(
      * unpromoted secondary has nothing else to stop it mid-fade (see
      * [AudioCrossfader.pause]).
      */
-    fun pause() {
+    override fun pause() {
         assertMainThread("pause")
         exoPlayer?.takeIf { it.isPlaying }?.pause()
         crossfader.pause()
@@ -1270,7 +1270,7 @@ class AudioPlaybackManager(
         }
     }
 
-    fun setSkipPreviousThreshold(ms: Long) {
+    override fun setSkipPreviousThreshold(ms: Long) {
         skipPreviousThresholdMs = ms
     }
 
@@ -1291,7 +1291,7 @@ class AudioPlaybackManager(
         effectsProcessor.setReplayGainPreAmpDb(db, normalizationGain, _shuffleMode.value)
     }
 
-    fun getImageUrl(itemId: String): String =
+    override fun getImageUrl(itemId: String): String =
         imageUrlProvider.getImageUrl(itemId)
 
     override fun setPitchSemitones(semitones: Float) {
@@ -1493,11 +1493,11 @@ class AudioPlaybackManager(
         lyricsManager.fetchLyrics(itemId, artistName, trackName, durationSec)
     }
 
-    fun searchLyrics(query: String, callback: (Result<List<LrcLibTrack>>) -> Unit) {
+    override fun searchLyrics(query: String, callback: (Result<List<LrcLibTrack>>) -> Unit) {
         lyricsManager.searchLyrics(query, callback)
     }
 
-    fun applyLyrics(lrcLibId: Long) {
+    override fun applyLyrics(lrcLibId: Long) {
         lyricsManager.applyLyrics(lrcLibId, currentItemId)
     }
 
@@ -1571,7 +1571,7 @@ class AudioPlaybackManager(
         ).launch()
     }
 
-    fun stopAndRelease() {
+    override fun stopAndRelease() {
         audioPrefetchEngine.stop()
         crossfader.cancel()
 

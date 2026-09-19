@@ -5,13 +5,8 @@ import com.raulshma.jellyplay.core.model.ItemCounts
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.ManagedUser
 import com.raulshma.jellyplay.core.model.ManagedUserPolicy
-import com.raulshma.jellyplay.core.model.PluginConfigPage
-import com.raulshma.jellyplay.core.model.PluginInfo
-import com.raulshma.jellyplay.core.model.PluginRepository
 import com.raulshma.jellyplay.core.model.ScheduledTaskInfo
-import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.SystemInfo
-import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.network.api.JellyfinApiEngine
 import com.raulshma.jellyplay.core.network.realtime.ActivityLogRealtimeChannel
@@ -20,11 +15,9 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
-import okhttp3.OkHttpClient
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
@@ -299,79 +292,6 @@ class AdminRepositoryImplTest {
         coVerify(exactly = 1) { apiClient.shutdownServer() }
         coVerify(exactly = 1) { apiClient.stopSession("s1") }
         coVerify(exactly = 1) { apiClient.sendMessageToSession("s1", "Header", "Body") }
-    }
-
-    @Test
-    fun `plugin operations delegate to the client`() = runTest {
-        val plugin = PluginInfo(id = "p1", name = "Webhooks", version = "1.0")
-        coEvery { apiClient.getInstalledPlugins() } returns Result.success(listOf(plugin))
-        coEvery { apiClient.enablePlugin("p1", "1.0") } returns Result.success(Unit)
-        coEvery { apiClient.disablePlugin("p1", "1.0") } returns Result.success(Unit)
-        coEvery { apiClient.uninstallPlugin("p1") } returns Result.success(Unit)
-        coEvery { apiClient.getPackageInstallations() } returns Result.success(emptyList())
-        coEvery { apiClient.getRepositories() } returns Result.success(emptyList())
-        val repos = listOf(PluginRepository(name = "Official", url = "https://repo", isEnabled = true))
-        coEvery { apiClient.setRepositories(repos) } returns Result.success(Unit)
-
-        repository.getInstalledPlugins()
-        repository.setPluginEnabled("p1", "1.0", enabled = true)
-        repository.setPluginEnabled("p1", "1.0", enabled = false)
-        repository.uninstallPlugin("p1")
-        repository.getPackageInstallations()
-        repository.getRepositories()
-        repository.setRepositories(repos)
-
-        coVerify(exactly = 1) { apiClient.getInstalledPlugins() }
-        coVerify(exactly = 1) { apiClient.enablePlugin("p1", "1.0") }
-        coVerify(exactly = 1) { apiClient.disablePlugin("p1", "1.0") }
-        coVerify(exactly = 1) { apiClient.uninstallPlugin("p1") }
-        coVerify(exactly = 1) { apiClient.getPackageInstallations() }
-        coVerify(exactly = 1) { apiClient.getRepositories() }
-        coVerify(exactly = 1) { apiClient.setRepositories(repos) }
-    }
-
-    @Test
-    fun `getPluginConfigPage resolves page name to HTML`() = runTest {
-        coEvery { apiClient.getConfigurationPages() } returns Result.success(
-            listOf(PluginConfigPage(name = "Webhooks", pluginId = "p1")),
-        )
-        coEvery { apiClient.getDashboardConfigurationPage("Webhooks") } returns Result.success("<html/>")
-
-        val page = repository.getPluginConfigPage("p1").getOrNull()!!
-
-        assertEquals("Webhooks", page.name)
-        assertEquals("<html/>", page.html)
-    }
-
-    @Test
-    fun `getPluginConfigPage returns null when plugin has no page`() = runTest {
-        coEvery { apiClient.getConfigurationPages() } returns Result.success(emptyList())
-
-        assertEquals(null, repository.getPluginConfigPage("p1").getOrNull())
-    }
-
-    @Test
-    fun `getPluginConfigPage fails when the pages lookup fails`() = runTest {
-        coEvery { apiClient.getConfigurationPages() } returns Result.failure(Exception("403"))
-
-        assertTrue(repository.getPluginConfigPage("p1").isFailure)
-    }
-
-    @Test
-    fun `pluginWebViewSession carries engine session state and HTTP client`() {
-        val okHttp = OkHttpClient()
-        every { engine.currentServer } returns MutableStateFlow(ServerInfo(id = "s1", name = "Srv", address = "https://srv"))
-        every { engine.currentUser } returns MutableStateFlow(
-            UserInfo(id = "u1", name = "me", serverAddress = "https://srv", accessToken = "tok", serverId = "s1"),
-        )
-        every { engine.okHttpClient } returns okHttp
-
-        val session = repository.pluginWebViewSession
-
-        assertEquals("https://srv", session.serverAddress)
-        assertEquals("u1", session.userId)
-        assertEquals("tok", session.accessToken)
-        assertSame(okHttp, session.okHttpClient)
     }
 
     @Test

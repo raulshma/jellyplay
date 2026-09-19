@@ -1,8 +1,14 @@
 package com.raulshma.jellyplay.feature.book.epub
 
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
+import androidx.compose.ui.Modifier
 import com.raulshma.jellyplay.core.datastore.reader.ReaderTheme
+import com.raulshma.jellyplay.feature.book.ReaderPrefsSnapshot
+import com.raulshma.jellyplay.feature.book.epubCssStack
+import com.raulshma.jellyplay.feature.book.epubLineHeight
+import com.raulshma.jellyplay.feature.book.epubMarginsPx
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okio.Path
@@ -35,7 +41,30 @@ internal data class EpubAppearance(
     val marginsPx: Int? = null,
     val justify: Boolean? = null,
     val scrolled: Boolean = false,
-)
+) {
+    companion object {
+        /**
+         * The ONE snapshot → bundle fold: theme/font size from the snapshot's
+         * EFFECTIVE appearance (per-book override ?: global), every typography
+         * axis from the global slice — through the ReaderAppearance.kt
+         * mappings (family → CSS stack, leading pct → multiplier, margin pct →
+         * the proportional px band).
+         */
+        fun from(snapshot: ReaderPrefsSnapshot): EpubAppearance {
+            val effective = snapshot.effective
+            val global = snapshot.global
+            return EpubAppearance(
+                theme = effective.theme,
+                fontSizePx = effective.fontSizePx,
+                fontFamilyCss = global.fontFamily.epubCssStack(),
+                lineHeight = epubLineHeight(global.lineHeightPct),
+                marginsPx = epubMarginsPx(global.marginPct),
+                justify = global.justify,
+                scrolled = global.scrollMode,
+            )
+        }
+    }
+}
 
 /** Content tap zone as reported by reader.js (`x < width/3` etc.). */
 internal enum class EpubTapZone { LEFT, RIGHT, CENTER }
@@ -166,9 +195,21 @@ internal interface EpubReaderHandle {
 
 /**
  * The platform EPUB host seam. Each actual both owns the platform WebView
- * (rendering it into the composition) and returns the command handle; the book
- * file is base64-inlined into the self-contained reader page, so no file://
- * access is granted to the WebView.
+ * (rendering it into the composition at [modifier]) and returns the command
+ * handle; the book file is base64-inlined into the self-contained reader
+ * page, so no file:// access is granted to the WebView. [modifier] positions
+ * the view: overlay layouts pass the full-screen default, the desktop
+ * in-flow layout (see `epubChromeOverlaysContent`) constrains it to the
+ * content region between the chrome bars — the windowed CEF browser paints
+ * above every Compose overlay, so the bars cannot float over it there.
+ *
+ * [overlayActive] reports "a sheet or dialog holds the screen" (the sheet
+ * stack's `open` fold). Windowed CEF composites above the M3 sheet/dialog
+ * windows too — a raised sheet showed the book through its own middle band —
+ * so the desktop actual hides the browser's native surface while the flag is
+ * set and restores it on dismiss (the sheet then renders over the blank
+ * content region). Overlay platforms' lightweight views composite normally
+ * and ignore the flag.
  */
 @Composable
 internal expect fun rememberEpubReaderHost(
@@ -176,6 +217,8 @@ internal expect fun rememberEpubReaderHost(
     resumePercent: Double,
     appearance: EpubAppearance,
     onEvent: EpubEventListener,
+    overlayActive: Boolean = false,
+    modifier: Modifier = Modifier.fillMaxSize(),
 ): EpubReaderHandle
 
 /** ReaderTheme → the `setTheme` argument `reader.js` understands. */

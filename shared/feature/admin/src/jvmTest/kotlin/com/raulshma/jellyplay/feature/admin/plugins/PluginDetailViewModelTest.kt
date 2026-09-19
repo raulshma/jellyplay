@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.feature.admin.plugins
 
-import com.raulshma.jellyplay.core.data.repository.AdminRepository
+import com.raulshma.jellyplay.core.data.repository.PluginAdminRepository
 import com.raulshma.jellyplay.core.data.repository.PluginConfigPageContent
 import com.raulshma.jellyplay.core.model.PluginInfo
 import com.raulshma.jellyplay.core.model.PluginPackage
@@ -48,7 +48,7 @@ class PluginDetailViewModelTest {
     // has no access to that module (search/music/livetv conveyor port pattern).
     private val mainDispatcher = StandardTestDispatcher()
 
-    private lateinit var adminRepository: AdminRepository
+    private lateinit var adminRepository: PluginAdminRepository
 
     @BeforeTest
     fun setUp() {

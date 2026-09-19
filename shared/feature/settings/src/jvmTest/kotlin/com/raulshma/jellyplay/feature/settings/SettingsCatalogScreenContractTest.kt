@@ -293,6 +293,8 @@ class SettingsCatalogScreenContractTest {
             "playbackPlayerScreenRowTotal(",
             "playbackAdvancedVideoScreenRowTotal(",
             "playbackEngineScreenRowTotal(",
+            "RowAdmissionFlags(",
+            "rowAdmitted(",
         ),
         "AppearanceSettingsScreen.kt" to listOf(
             "rememberHighlightScrollIndex(",
@@ -312,6 +314,8 @@ class SettingsCatalogScreenContractTest {
             "SettingsScreenGroups.storageDownloads",
             "storageCacheScreenRowTotal(",
             "storageDownloadsScreenRowTotal(",
+            "RowAdmissionFlags(",
+            "rowAdmitted(",
         ),
         "LanguageSettingsScreen.kt" to listOf(
             "rememberHighlightScrollIndex(",
@@ -336,6 +340,8 @@ class SettingsCatalogScreenContractTest {
         "AudioSettingsScreen.kt" to listOf(
             "audioScreenRowTotal",
             "SettingsScreenGroups.audioCache",
+            "audioRowAdmissionFlags(",
+            "rowAdmitted(",
         ),
     )
 
@@ -388,6 +394,47 @@ class SettingsCatalogScreenContractTest {
             val text = source(file)
             for (counter in counters) {
                 if (counter in text) fail("$file still hand-bumps $counter — feed SettingsItemList(total = …admissionTotal())")
+            }
+        }
+    }
+
+    // ── 4b. Emission reads the DECLARED admission (one gate, once) ──────
+
+    /**
+     * The retired inline emission gates, per screen file (block form — the
+     * value ternaries on the same preferences legitimately stay): each used
+     * to re-declare a gate the row-total count already encoded — both sides
+     * now read the per-id [RowAdmission] declared beside the group item, via
+     * `SettingsSearchItemGroup.rowAdmitted`.
+     */
+    private val retiredInlineRowGates: Map<String, List<String>> = mapOf(
+        "PlaybackSettingsScreen.kt" to listOf(
+            "if (settingsCapabilities.supportsTouchGestures)",
+            "if (settingsCapabilities.supportsScreenOrientation)",
+            "if (isTv) {",
+            "if (preferences.dialogueBoostEnabled) {",
+        ),
+        "AudioSettingsScreen.kt" to listOf(
+            "if (preferences.audioNormalizationMode == AudioNormalizationMode.TRACK",
+            "if (preferences.equalizerEnabled) {",
+            "if (preferences.dialogueBoostEnabled) {",
+            "if (preferences.nightModeEnabled) {",
+            "if (preferences.bassBoostEnabled) {",
+            "if (preferences.virtualizerEnabled) {",
+            "if (preferences.volumeBoostEnabled) {",
+            "if (preferences.channelMixEnabled) {",
+        ),
+        "StorageSettingsScreen.kt" to listOf(
+            "if (preferences.downloadScheduleEnabled) {",
+        ),
+    )
+
+    @Test
+    fun `emission sites read the declared row admissions, not inline gate checks`() {
+        for ((file, gates) in retiredInlineRowGates) {
+            val text = source(file)
+            for (gate in gates) {
+                if (gate in text) fail("$file still hand-gates rows via `$gate` — read the group's declared RowAdmission via rowAdmitted()")
             }
         }
     }
@@ -738,6 +785,88 @@ class SettingsCatalogScreenContractTest {
         assertEquals(2, securityScreenRowTotal(canShowBiometric = true, showAdvanced = false))
         assertEquals(2, securityScreenRowTotal(canShowBiometric = false, showAdvanced = true))
         assertEquals(3, securityScreenRowTotal(canShowBiometric = true, showAdvanced = true))
+    }
+
+    // ── The declared row admissions (one gate for count AND emission) ────
+
+    @Test
+    fun `platform-gated rows drop on the desktop seam and admit on the capability`() {
+        // jvmTest runs the desktop actual — no screen orientation, no touch
+        // gestures — and the declared Platform admissions must agree with the
+        // desktop-filtered catalog drops (pinned in
+        // SettingsSearchCatalogPlatformFilterTest).
+        assertFalse(settingsCapabilities.supportsScreenOrientation)
+        assertFalse(settingsCapabilities.supportsTouchGestures)
+        val desktop = RowAdmissionFlags()
+        listOf("orientation", "seek_duration", "gestures", "gesture_indicator_side").forEach { id ->
+            assertFalse(SettingsScreenGroups.playbackPlayer.rowAdmitted(id, desktop), "$id must drop without its capability")
+        }
+        val touch = RowAdmissionFlags(supportsTouchGestures = true)
+        listOf("seek_duration", "gestures", "gesture_indicator_side").forEach {
+            assertTrue(SettingsScreenGroups.playbackPlayer.rowAdmitted(it, touch), "$it must admit on the capability")
+        }
+        assertTrue(
+            SettingsScreenGroups.playbackPlayer.rowAdmitted("orientation", RowAdmissionFlags(supportsScreenOrientation = true)),
+        )
+    }
+
+    @Test
+    fun `tv rows admit on the tv form factor alone - the shipped count semantics`() {
+        // The two TV rows are declared isAdvanced, yet the total has always
+        // admitted them on isTv alone (their emission sits inside the advanced
+        // block, which carries the advanced half of the gate).
+        val tv = RowAdmissionFlags(isTv = true)
+        assertTrue(SettingsScreenGroups.playbackPlayer.rowAdmitted("android_tv_watch_next", tv))
+        assertTrue(SettingsScreenGroups.playbackPlayer.rowAdmitted("tv_zoom_mode", tv))
+        assertFalse(SettingsScreenGroups.playbackPlayer.rowAdmitted("android_tv_watch_next", RowAdmissionFlags()))
+        assertFalse(SettingsScreenGroups.playbackPlayer.rowAdmitted("tv_zoom_mode", RowAdmissionFlags(showAdvanced = true)))
+    }
+
+    @Test
+    fun `when-on rows admit on their declared parent toggle`() {
+        // Every declared admission key is a declared group id (no stale
+        // gate entries), and every audio key is an isAdvanced row — its
+        // declared gate REPLACES the isAdvanced base in the count, so a
+        // non-advanced key would silently widen admission.
+        mapOf(
+            SettingsScreenGroups.playbackPlayer to PlaybackPlayerRowAdmissions,
+            SettingsScreenGroups.playbackAdvancedVideo to PlaybackAdvancedVideoRowAdmissions,
+            SettingsScreenGroups.audio to AudioRowAdmissions,
+            SettingsScreenGroups.storageDownloads to StorageDownloadsRowAdmissions,
+        ).forEach { (group, admissions) ->
+            assertEquals(
+                emptySet(),
+                admissions.keys - group.itemIdSet,
+                "${group.id} declares admissions for undeclared ids",
+            )
+        }
+        assertEquals(
+            emptyList(),
+            AudioRowAdmissions.keys.filterNot { id -> SettingsScreenGroups.audio.items.first { it.id == id }.isAdvanced },
+            "audio admissions must sit on isAdvanced rows (the gate replaces the advanced base)",
+        )
+
+        // The playback advanced-video strength row and the storage schedule
+        // windows ride their parent toggle alone…
+        val boostOn = RowAdmissionFlags(parentsOn = setOf("dialogue_boost"))
+        assertTrue(SettingsScreenGroups.playbackAdvancedVideo.rowAdmitted("dialogue_boost_strength", boostOn))
+        assertFalse(SettingsScreenGroups.playbackAdvancedVideo.rowAdmitted("dialogue_boost_strength", RowAdmissionFlags()))
+        val scheduleOn = RowAdmissionFlags(parentsOn = setOf("download_schedule"))
+        listOf("download_schedule_start", "download_schedule_end", "download_schedule_wifi_only").forEach {
+            assertTrue(SettingsScreenGroups.storageDownloads.rowAdmitted(it, scheduleOn), "$it admits on the schedule toggle")
+            assertFalse(SettingsScreenGroups.storageDownloads.rowAdmitted(it, RowAdmissionFlags()), "$it drops when scheduling is off")
+        }
+        assertTrue(SettingsScreenGroups.storageDownloads.rowAdmitted("download_schedule", RowAdmissionFlags()))
+
+        // …while the audio strength rows additionally ride the advanced
+        // toggle (All(Advanced, WhenOn(parent)) — the advanced half is the
+        // structural block the screen's advanced section carries).
+        val parentsOnly = RowAdmissionFlags(parentsOn = setOf("night_mode", "equalizer"))
+        assertFalse(SettingsScreenGroups.audio.rowAdmitted("night_mode_strength", parentsOnly))
+        assertFalse(SettingsScreenGroups.audio.rowAdmitted("equalizer_preset", parentsOnly))
+        val advanced = RowAdmissionFlags(showAdvanced = true, parentsOn = setOf("night_mode", "equalizer"))
+        assertTrue(SettingsScreenGroups.audio.rowAdmitted("night_mode_strength", advanced))
+        assertTrue(SettingsScreenGroups.audio.rowAdmitted("equalizer_preset", advanced))
     }
 
     // ── The search-result click action ──────────────────────────────────

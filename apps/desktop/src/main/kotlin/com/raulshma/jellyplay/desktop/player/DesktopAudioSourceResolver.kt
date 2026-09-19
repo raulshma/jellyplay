@@ -1,45 +1,14 @@
 package com.raulshma.jellyplay.desktop.player
 
+import com.raulshma.jellyplay.core.data.playback.AudioTrackResolver
 import com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolver
+import com.raulshma.jellyplay.core.data.playback.ResolvedAudioTrack
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.streaming.AdaptiveBitrateSelector
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
-
-/**
- * One resolved, playable audio track — the desktop twin of what the Android
- * audio path carries inside a media3 `MediaItem` (URI + metadata).
- *
- * [uri] is EITHER an absolute filesystem path ([isLocalFile] = true — see the
- * V2b mpv note: single-slash `file:/C:/…` URIs are mis-parsed by mpv, so the
- * raw path is handed over instead of the `Uri.fromFile` string Android uses)
- * or the Jellyfin stream URL ([isLocalFile] = false).
- */
-data class ResolvedAudioTrack(
-    val itemId: String,
-    val uri: String,
-    val isLocalFile: Boolean,
-    val title: String,
-    val artist: String,
-    val artistId: String?,
-    val album: String?,
-    val mediaSourceId: String?,
-    val durationMs: Long,
-    val normalizationGain: Float?,
-    /** Server-reported resume position (10 kHz ticks), if any. */
-    val resumePositionTicks: Long?,
-)
-
-/**
- * Per-item stream resolution seam for [DesktopAudioQueueManager]. Kept a
- * fun-interface so the queue manager's unit tests can substitute local WAV
- * fixtures without standing up the repository cluster.
- */
-fun interface AudioTrackResolver {
-    suspend fun resolve(itemId: String, startPositionMs: Long): ResolvedAudioTrack?
-}
 
 /**
  * Desktop per-item playback source resolution — a case-for-case port of the

@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.data.seerr
 
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.arr.ArrServiceKind
 import com.raulshma.jellyplay.core.model.seerr.SeerrMediaRequest
 import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail
 import com.raulshma.jellyplay.core.model.seerr.SeerrSeason
@@ -42,15 +43,17 @@ class SeerrRequestDelegate(
         if (mediaType == "movie") {
             val radarrServers = seerrRepository.getServiceRadarrServers().getOrNull()?.let { servers ->
                 servers.map { server ->
-                    async { seerrRepository.getServiceRadarrDetail(server.id).getOrNull() }
-                }.awaitAll().filterNotNull()
+                    // The kind fold returns the sealed parent; the filter
+                    // narrows back to the typed list this result carries.
+                    async { seerrRepository.getServiceDetail(server.id, ArrServiceKind.RADARR).getOrNull() }
+                }.awaitAll().filterIsInstance<SeerrRadarrServiceDetail>()
             } ?: emptyList()
             SeerrServiceDetailsResult(radarrServers = radarrServers)
         } else {
             val sonarrServers = seerrRepository.getServiceSonarrServers().getOrNull()?.let { servers ->
                 servers.map { server ->
-                    async { seerrRepository.getServiceSonarrDetail(server.id).getOrNull() }
-                }.awaitAll().filterNotNull()
+                    async { seerrRepository.getServiceDetail(server.id, ArrServiceKind.SONARR).getOrNull() }
+                }.awaitAll().filterIsInstance<SeerrSonarrServiceDetail>()
             } ?: emptyList()
             SeerrServiceDetailsResult(sonarrServers = sonarrServers)
         }

@@ -25,8 +25,11 @@ import kotlinx.coroutines.flow.asStateFlow
  * engine uses `authMutex`; the wasm auth client does too) — this class only
  * owns the publish collapsing, mirroring `JellyfinApiEngine.publishSession`:
  * a missing side collapses the session to null.
+ *
+ * Implements [AuthSessionStateStore] so the shared auth spine
+ * ([AuthSessionCore]) drives this holder directly on wasm.
  */
-class AtomicSessionState {
+class AtomicSessionState : AuthSessionStateStore {
 
     private val _currentServer = MutableStateFlow<ServerInfo?>(null)
     val currentServer: StateFlow<ServerInfo?> = _currentServer.asStateFlow()
@@ -39,8 +42,11 @@ class AtomicSessionState {
     /** The combined session; `null` means no fully established identity. */
     val session: StateFlow<ActiveSession?> = _session.asStateFlow()
 
+    /** [AuthSessionStateStore] read for the shared auth spine ([AuthSessionCore]). */
+    override fun currentSession(): ActiveSession? = session.value
+
     /** Single-side server update, pairing with the current user. */
-    fun updateServer(server: ServerInfo?) {
+    override fun updateServer(server: ServerInfo?) {
         _currentServer.value = server
         publishSession(server, _currentUser.value)
     }
@@ -55,7 +61,7 @@ class AtomicSessionState {
      * Atomically adopts BOTH sides in one step — the only shape login /
      * switchUser / disconnect may publish from their critical sections.
      */
-    fun updateSession(server: ServerInfo?, user: UserInfo?) {
+    override fun updateSession(server: ServerInfo?, user: UserInfo?) {
         _currentServer.value = server
         _currentUser.value = user
         publishSession(server, user)

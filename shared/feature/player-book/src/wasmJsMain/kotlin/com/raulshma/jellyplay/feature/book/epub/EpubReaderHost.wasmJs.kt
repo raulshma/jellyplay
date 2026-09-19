@@ -5,6 +5,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
 import okio.Path
 
 /**
@@ -40,6 +41,10 @@ internal actual fun rememberEpubReaderHost(
     resumePercent: Double,
     appearance: EpubAppearance,
     onEvent: EpubEventListener,
+    // No view is emitted on web (honest ERROR host) — kept for seam parity.
+    // overlayActive rides the same parity (the desktop windowed-CEF toggle).
+    overlayActive: Boolean,
+    modifier: Modifier,
 ): EpubReaderHandle {
     val handle = remember { WasmEpubReaderHandle() }
     LaunchedEffect(handle) {

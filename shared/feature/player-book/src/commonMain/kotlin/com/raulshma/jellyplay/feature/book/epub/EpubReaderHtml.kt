@@ -48,10 +48,12 @@ internal object EpubReaderHtml {
     /**
      * Minified bundles may embed `</script>` inside string literals, which
      * would end the inline tag early; `<\/script>` is a no-op escape for JS
-     * strings/regexes/templates, so it is safe to substitute blindly.
+     * strings/regexes/templates, so it is safe to substitute blindly. Pure
+     * (and internal) so jvmTest can pin the escape — see EpubReaderHtmlTest.
      */
-    private suspend fun script(resource: String): String {
-        val js = Res.readBytes(resource).decodeToString().replace("</script", "<\\/script")
-        return "<script>$js</script>"
-    }
+    internal fun inlineScript(js: String): String =
+        "<script>${js.replace("</script", "<\\/script")}</script>"
+
+    private suspend fun script(resource: String): String =
+        inlineScript(Res.readBytes(resource).decodeToString())
 }

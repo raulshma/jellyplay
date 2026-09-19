@@ -1317,6 +1317,20 @@ internal interface SessionLifecycleHooks {
 }
 
 /**
+ * The merged ViewModel seam: ONE interface covering both halves the
+ * ViewModel implements for the session stack — [SessionLoadOutputs] (the
+ * load pipeline's uiState-shaped outputs) and [SessionLifecycleHooks] (the
+ * initialize/release lifecycle slices). The VM used to implement the two as
+ * separate object literals with identical statelessness; it now implements
+ * this single host and passes the one object to both consumers
+ * ([SessionLoadPipeline.outputs], [PlaybackSession.hooks]). The halves stay
+ * separate interfaces so their test fakes (SessionLoadPipelineTest's
+ * recording outputs, the session suites' recording hooks) keep implementing
+ * just the half they exercise.
+ */
+internal interface SessionHost : SessionLoadOutputs, SessionLifecycleHooks
+
+/**
  * Event surface a [PlaybackSession] exposes to the ViewModel: the VM stays
  * the single forwarder, mapping each event into its existing sinks (the
  * close-player channel, the uiState error fields, the user-message bus, the

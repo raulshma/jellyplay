@@ -330,17 +330,17 @@ class OnboardingViewModelTest {
     fun `seerr preference setters fan out to the prefs store`() = runTest(mainDispatcher) {
         val vm = newViewModel()
 
-        vm.setSeerrServerUrl("http://seerr.local")
-        vm.setSeerrAuthMethod(SeerrAuthMethod.JELLYFIN)
-        vm.setSeerrUsername("user")
-        vm.setSeerrEmail("user@example.com")
-        vm.setSeerrEnabled(true)
-        vm.setSeerrSearchEnabled(true)
-        vm.setSeerrRecommendationsEnabled(true)
-        vm.setSeerrDiscoverEnabled(true)
-        vm.setSeerrStreamingRegion("DE")
-        vm.setSeerrDiscoverRegion("FR")
-        vm.seerrDisconnect()
+        vm.seerrEditActions.setServerUrl("http://seerr.local")
+        vm.seerrEditActions.setAuthMethod(SeerrAuthMethod.JELLYFIN)
+        vm.seerrEditActions.setUsername("user")
+        vm.seerrEditActions.setEmail("user@example.com")
+        vm.seerrEditActions.setEnabled(true)
+        vm.seerrEditActions.setSearchEnabled(true)
+        vm.seerrEditActions.setRecommendationsEnabled(true)
+        vm.seerrEditActions.setDiscoverEnabled(true)
+        vm.seerrEditActions.setStreamingRegion("DE")
+        vm.seerrEditActions.setDiscoverRegion("FR")
+        vm.seerrEditActions.disconnect()
         advanceUntilIdle()
 
         coVerify(exactly = 1) { seerrPreferencesStore.setServerUrl("http://seerr.local") }
@@ -360,8 +360,8 @@ class OnboardingViewModelTest {
     fun `seerr credentials route to the secure credentials store`() = runTest(mainDispatcher) {
         val vm = newViewModel()
 
-        vm.setSeerrApiKey("api-key")
-        vm.setSeerrPassword("pw")
+        vm.seerrEditActions.setApiKey("api-key")
+        vm.seerrEditActions.setPassword("pw")
         advanceUntilIdle()
 
         verify(exactly = 1) { seerrSecureCredentialsStore.setApiKey("api-key") }

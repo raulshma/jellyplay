@@ -932,17 +932,6 @@ internal fun SearchSheet(
     }
 }
 
-/** The shared "this sheet has nothing to show" line. */
-@Composable
-private fun SheetEmptyText(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 24.dp),
-    )
-}
-
 internal val SEARCH_DEBOUNCE_MS = 400L
 
 /** Sleep-timer minute presets (reader-scaled; the audio player's run 15..90). */

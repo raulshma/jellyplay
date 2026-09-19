@@ -5,7 +5,7 @@ import com.raulshma.jellyplay.core.model.PluginInfo
 import com.raulshma.jellyplay.core.model.PluginInstallationInfo
 import com.raulshma.jellyplay.core.model.PluginPackage
 import com.raulshma.jellyplay.core.model.PluginRepository
-import com.raulshma.jellyplay.core.data.repository.AdminRepository
+import com.raulshma.jellyplay.core.data.repository.PluginAdminRepository
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.feature.admin.AdminLoad
 import kotlinx.coroutines.delay
@@ -72,7 +72,7 @@ enum class PluginStatusFilter(val displayName: String) {
 }
 
 class PluginsViewModel(
-    private val adminRepository: AdminRepository,
+    private val pluginAdminRepository: PluginAdminRepository,
 ) : JellyPlayViewModel() {
 
     private val _state = composeState(PluginsState())
@@ -122,7 +122,7 @@ class PluginsViewModel(
     private suspend fun loadInstalledPluginsLadder(start: () -> Unit) {
         AdminLoad.load(
             start = start,
-            fetch = { adminRepository.getInstalledPlugins() },
+            fetch = { pluginAdminRepository.getInstalledPlugins() },
             onSuccess = ::applyInstalledPlugins,
             onFailure = ::logInstalledPluginsFailure,
         )
@@ -145,7 +145,7 @@ class PluginsViewModel(
     private fun fetchCatalog() {
         launch {
             _state.value = _state.value.copy(isCatalogLoading = true)
-            adminRepository.getAvailablePackages().onSuccess { packages ->
+            pluginAdminRepository.getAvailablePackages().onSuccess { packages ->
                 _state.value = _state.value.copy(
                     availablePackages = packages.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name }),
                     isCatalogLoading = false,
@@ -168,7 +168,7 @@ class PluginsViewModel(
     private fun fetchRepositories() {
         launch {
             _state.value = _state.value.copy(isReposLoading = true)
-            adminRepository.getRepositories().onSuccess { repos ->
+            pluginAdminRepository.getRepositories().onSuccess { repos ->
                 _state.value = _state.value.copy(
                     repositories = repos,
                     isReposLoading = false,
@@ -193,7 +193,7 @@ class PluginsViewModel(
 
     fun enablePlugin(plugin: PluginInfo) {
         launch {
-            adminRepository.setPluginEnabled(plugin.id, plugin.version, enabled = true)
+            pluginAdminRepository.setPluginEnabled(plugin.id, plugin.version, enabled = true)
             delay(500)
             fetchInstalledPlugins()
         }
@@ -201,7 +201,7 @@ class PluginsViewModel(
 
     fun disablePlugin(plugin: PluginInfo) {
         launch {
-            adminRepository.setPluginEnabled(plugin.id, plugin.version, enabled = false)
+            pluginAdminRepository.setPluginEnabled(plugin.id, plugin.version, enabled = false)
             delay(500)
             fetchInstalledPlugins()
         }
@@ -209,7 +209,7 @@ class PluginsViewModel(
 
     fun uninstallPlugin(pluginId: String) {
         launch {
-            adminRepository.uninstallPlugin(pluginId)
+            pluginAdminRepository.uninstallPlugin(pluginId)
             delay(500)
             fetchInstalledPlugins()
         }
@@ -222,7 +222,7 @@ class PluginsViewModel(
         repositoryUrl: String? = null,
     ) {
         launch {
-            adminRepository.installPackage(
+            pluginAdminRepository.installPackage(
                 name = name,
                 assemblyGuid = assemblyGuid,
                 version = version,
@@ -240,7 +240,7 @@ class PluginsViewModel(
 
     fun cancelInstallation(packageId: String) {
         launch {
-            adminRepository.cancelPackageInstallation(packageId)
+            pluginAdminRepository.cancelPackageInstallation(packageId)
             delay(500)
             fetchActiveInstallations()
         }
@@ -248,7 +248,7 @@ class PluginsViewModel(
 
     private fun fetchActiveInstallations() {
         launch {
-            adminRepository.getPackageInstallations().onSuccess { installations ->
+            pluginAdminRepository.getPackageInstallations().onSuccess { installations ->
                 _state.value = _state.value.copy(activeInstallations = installations)
                 hasActiveInstalls.value = installations.isNotEmpty()
                 if (installations.isEmpty()) {
@@ -277,7 +277,7 @@ class PluginsViewModel(
         launch {
             val current = _state.value.repositories.toMutableList()
             current.add(PluginRepository(name = name, url = url, isEnabled = true))
-            adminRepository.setRepositories(current).onSuccess {
+            pluginAdminRepository.setRepositories(current).onSuccess {
                 _state.value = _state.value.copy(repositories = current)
             }.onFailure { e ->
                 Log.e("Plugins", "Failed to add repository", e)
@@ -291,7 +291,7 @@ class PluginsViewModel(
             val current = _state.value.repositories.toMutableList()
             if (index in current.indices) {
                 current.removeAt(index)
-                adminRepository.setRepositories(current).onSuccess {
+                pluginAdminRepository.setRepositories(current).onSuccess {
                     _state.value = _state.value.copy(repositories = current)
                 }.onFailure { e ->
                     Log.e("Plugins", "Failed to remove repository", e)
@@ -306,7 +306,7 @@ class PluginsViewModel(
             val current = _state.value.repositories.toMutableList()
             if (index in current.indices) {
                 current[index] = current[index].copy(isEnabled = enabled)
-                adminRepository.setRepositories(current).onSuccess {
+                pluginAdminRepository.setRepositories(current).onSuccess {
                     _state.value = _state.value.copy(repositories = current)
                 }.onFailure { e ->
                     Log.e("Plugins", "Failed to toggle repository", e)

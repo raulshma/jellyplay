@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.desktop.player
 
+import com.raulshma.jellyplay.core.data.playback.AudioEffectsSession
 import com.raulshma.jellyplay.core.data.playback.AudioEffectsStateCore
 import com.raulshma.jellyplay.feature.player.video.engine.AudioEffectsConfig
 
@@ -10,10 +11,17 @@ import com.raulshma.jellyplay.feature.player.video.engine.AudioEffectsConfig
  * copy defined) lives in the shared [AudioEffectsStateCore] (core:data
  * commonMain); this class extends it and overrides the single coarse
  * change hook: every state mutation re-folds [snapshotConfig] and the audio
- * core ([DesktopAudioQueueManager]) pushes it onto the engine's mpv `af`
- * chain (on load via the [onEffectsChanged] callback wired there, live on
- * every change). The filter mapping lives in [DesktopAudioEffectChain]
- * (Android effect → mpv filter parity table there).
+ * core (`DesktopAudioQueueManager`, core:data jvmMain) pushes it onto the
+ * engine's mpv `af` chain (on load via the [onEffectsChanged] callback
+ * wired there, live on every change). The filter mapping lives in
+ * [DesktopAudioEffectChain] (Android effect → mpv filter parity table
+ * there).
+ *
+ * Also implements [AudioEffectsSession] — the narrow port the relocated
+ * queue manager (core:data jvmMain) ctor-injects instead of this concrete
+ * app-side type. The three port members are the historical surface,
+ * widened from `internal` to `override` (public) for the cross-module
+ * seam; same signatures, same bodies.
  *
  * Why the core still flips the flows (rather than freezing them): the audio
  * player's effects controller persists the manager's `StateFlow.value`
@@ -31,9 +39,10 @@ import com.raulshma.jellyplay.feature.player.video.engine.AudioEffectsConfig
  * ReplayGain context turned out to be a mirror of the Android call-site
  * context and folded into the core as `setReplayGainContext`.
  */
-class DesktopAudioEffectsManager : AudioEffectsStateCore(rejectOutOfRangeEqualizerBands = true) {
+class DesktopAudioEffectsManager : AudioEffectsStateCore(rejectOutOfRangeEqualizerBands = true),
+    AudioEffectsSession {
 
-    internal var onEffectsChanged: (() -> Unit)? = null
+    override var onEffectsChanged: (() -> Unit)? = null
 
     override fun onEffectsStateChanged() {
         onEffectsChanged?.invoke()
@@ -48,7 +57,7 @@ class DesktopAudioEffectsManager : AudioEffectsStateCore(rejectOutOfRangeEqualiz
      * manager pushes this onto the engine via `updateConfig` — on engine
      * creation and after every mutation (the [onEffectsChanged] hook).
      */
-    internal fun snapshotConfig(): AudioEffectsConfig = AudioEffectsConfig(
+    override fun snapshotConfig(): AudioEffectsConfig = AudioEffectsConfig(
         dialogueBoostEnabled = dialogueBoostEnabled.value,
         dialogueBoostStrength = dialogueBoostStrengthState,
         nightModeEnabled = nightModeEnabled.value,
@@ -77,6 +86,6 @@ class DesktopAudioEffectsManager : AudioEffectsStateCore(rejectOutOfRangeEqualiz
      * play + advance). Stores into the core and notifies so the snapshot
      * re-folds.
      */
-    internal fun applyReplayGainForTrack(trackGainDb: Float?, isShuffled: Boolean) =
+    override fun applyReplayGainForTrack(trackGainDb: Float?, isShuffled: Boolean) =
         setReplayGainContext(trackGainDb, isShuffled)
 }

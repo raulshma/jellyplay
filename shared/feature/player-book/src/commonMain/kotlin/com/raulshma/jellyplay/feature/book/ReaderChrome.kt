@@ -80,7 +80,10 @@ import org.jetbrains.compose.resources.stringResource
  * the bookmarks sheet entry, and (reflowable only) the annotations sheet
  * entry plus the sleep-timer entry (moon icon, primary-tinted while a timer
  * runs — it stops read-aloud/auto-scroll, both reflowable concerns). The
- * settings gear stays the rightmost action on every format.
+ * settings gear stays the rightmost action on every format. The reflowable
+ * entries' ONE format gate is the `ReadyContent.Reflowable` branch below, so
+ * [onOpenAnnotations]/[onOpenSleepTimer] default to no-ops and the paged
+ * reader passes nothing — format knowledge lives here, not at call sites.
  */
 @Composable
 internal fun ReaderTopBar(
@@ -88,7 +91,7 @@ internal fun ReaderTopBar(
     bookmarked: Boolean,
     onToggleBookmark: () -> Unit,
     onOpenBookmarks: () -> Unit,
-    onOpenAnnotations: () -> Unit,
+    onOpenAnnotations: () -> Unit = {},
     onOpenSettings: () -> Unit,
     onBack: () -> Unit,
     sleepTimerActive: Boolean = false,
@@ -393,6 +396,9 @@ private fun ReaderTransportRow(
  * [locationPagesMinutesRemaining] — chapter-scoped (the relocated event's
  * chapter pages) and book-scoped (the whole-book location list) (null rows
  * simply drop — before locations exist there is nothing to report).
+ * [showBrightness] false drops the brightness row: the desktop in-flow layout
+ * cannot dim the windowed CEF browser with the Compose overlay the veil
+ * uses, so the slider would be a dead control there.
  */
 @Composable
 internal fun ReflowableBottomBar(
@@ -402,6 +408,7 @@ internal fun ReflowableBottomBar(
     minutesLeftInBook: Int?,
     brightnessPct: Int,
     onBrightnessChange: (Int) -> Unit,
+    showBrightness: Boolean = true,
     onOpenToc: () -> Unit = {},
     speechAvailable: Boolean = false,
     speechActive: Boolean = false,
@@ -440,7 +447,9 @@ internal fun ReflowableBottomBar(
                     color = MaterialTheme.colorScheme.primary,
                 )
             }
-            BrightnessSliderRow(brightnessPct = brightnessPct, onBrightnessChange = onBrightnessChange)
+            if (showBrightness) {
+                BrightnessSliderRow(brightnessPct = brightnessPct, onBrightnessChange = onBrightnessChange)
+            }
             Text(
                 text = stringResource(
                     Res.string.book_reader_percent,
@@ -504,6 +513,17 @@ internal fun SheetTitle(text: String) {
         text = text,
         style = MaterialTheme.typography.titleMedium,
         modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
+    )
+}
+
+/** The shared "this sheet has nothing to show" line (TOC / marks / search / speech). */
+@Composable
+internal fun SheetEmptyText(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 24.dp),
     )
 }
 

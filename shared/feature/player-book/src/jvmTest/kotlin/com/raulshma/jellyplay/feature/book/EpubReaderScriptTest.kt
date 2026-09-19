@@ -1,5 +1,8 @@
 package com.raulshma.jellyplay.feature.book
 
+import com.raulshma.jellyplay.core.datastore.reader.PerBookAppearance
+import com.raulshma.jellyplay.core.datastore.reader.ReaderFontFamily
+import com.raulshma.jellyplay.core.datastore.reader.ReaderSlice
 import com.raulshma.jellyplay.core.datastore.reader.ReaderTheme
 import com.raulshma.jellyplay.feature.book.epub.EpubAnnotationColor
 import com.raulshma.jellyplay.feature.book.epub.EpubAnnotationSpec
@@ -29,6 +32,7 @@ import com.raulshma.jellyplay.feature.book.epub.sendBookChunks
 import com.raulshma.jellyplay.feature.book.epub.toJsonArg
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlinx.coroutines.test.runTest
 
 /**
@@ -72,6 +76,70 @@ class EpubReaderScriptTest {
             "{\"theme\":\"light\",\"fontSize\":20,\"flow\":\"paginated\"}",
             appearance.toJsonArg(),
         )
+    }
+
+    @Test
+    fun `appearance factory folds the snapshot globals with their mappings`() {
+        val snapshot = ReaderPrefsSnapshot(
+            global = ReaderSlice(
+                readerTheme = ReaderTheme.DARK,
+                readerFontSizePx = 17,
+                fontFamily = ReaderFontFamily.SERIF,
+                lineHeightPct = 160,
+                marginPct = 50,
+                justify = true,
+                scrollMode = true,
+            ),
+        )
+        assertEquals(
+            EpubAppearance(
+                theme = ReaderTheme.DARK,
+                fontSizePx = 17,
+                fontFamilyCss = "Georgia, 'Times New Roman', serif",
+                lineHeight = 1.6,
+                marginsPx = 32,
+                justify = true,
+                scrolled = true,
+            ),
+            EpubAppearance.from(snapshot),
+        )
+    }
+
+    @Test
+    fun `appearance factory lets the per-book override win over the globals`() {
+        val snapshot = ReaderPrefsSnapshot(
+            global = ReaderSlice(readerTheme = ReaderTheme.DARK, readerFontSizePx = 17),
+            perBook = PerBookAppearance(theme = ReaderTheme.SEPIA, fontSizePx = 21),
+        )
+        val appearance = EpubAppearance.from(snapshot)
+        assertEquals(ReaderTheme.SEPIA, appearance.theme)
+        assertEquals(21, appearance.fontSizePx)
+    }
+
+    @Test
+    fun `appearance factory inherits the global axis the override omits`() {
+        val snapshot = ReaderPrefsSnapshot(
+            global = ReaderSlice(readerTheme = ReaderTheme.LIGHT, readerFontSizePx = 20),
+            perBook = PerBookAppearance(theme = ReaderTheme.SEPIA),
+        )
+        val appearance = EpubAppearance.from(snapshot)
+        assertEquals(ReaderTheme.SEPIA, appearance.theme)
+        assertEquals(20, appearance.fontSizePx)
+    }
+
+    @Test
+    fun `appearance factory maps system font to a null css stack and clamps the percents`() {
+        val snapshot = ReaderPrefsSnapshot(
+            global = ReaderSlice(
+                fontFamily = ReaderFontFamily.SYSTEM,
+                lineHeightPct = 250,
+                marginPct = 150,
+            ),
+        )
+        val appearance = EpubAppearance.from(snapshot)
+        assertNull(appearance.fontFamilyCss)
+        assertEquals(2.0, appearance.lineHeight)
+        assertEquals(64, appearance.marginsPx)
     }
 
     @Test
@@ -338,6 +406,31 @@ class EpubReaderScriptTest {
         kotlin.test.assertTrue(source.contains("? x : width / 2"), "broken x must fall back to the center")
         kotlin.test.assertTrue(!source.contains("zoneFromX"), "zone judgment must not live in JS")
         kotlin.test.assertTrue(source.contains("'swipe', dir:"), "swipes must report physical direction")
+    }
+
+    @Test
+    fun `reader js displays immediately on book ready and generates locations asynchronously`() {
+        val source = java.io.File("src/commonMain/composeResources/files/epubjs/reader.js").readText()
+        kotlin.test.assertTrue(
+            source.contains("generateLocations();"),
+            "locations must generate asynchronously",
+        )
+        kotlin.test.assertTrue(
+            source.contains("book.locations.pause = 1;"),
+            "location generation pause must be lowered to avoid artificial delays",
+        )
+        kotlin.test.assertTrue(
+            source.contains("contents.window.addEventListener('wheel'"),
+            "mouse wheel inside content iframe must set userNavigated",
+        )
+        kotlin.test.assertTrue(
+            source.contains("contents.window.addEventListener('scroll'"),
+            "scroll inside content iframe must set userNavigated",
+        )
+        kotlin.test.assertTrue(
+            source.contains("initialRelocatedFired = true"),
+            "initial relocation must be tracked so subsequent moves set userNavigated",
+        )
     }
 }
 

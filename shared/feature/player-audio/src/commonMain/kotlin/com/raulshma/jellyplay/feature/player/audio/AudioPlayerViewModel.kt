@@ -4,6 +4,7 @@ import androidx.compose.runtime.LongState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import com.raulshma.jellyplay.core.data.playback.AudioEffectsManager
+import com.raulshma.jellyplay.core.data.playback.AudioPlayerEngine
 import com.raulshma.jellyplay.core.data.playback.AudioQueueManager
 import com.raulshma.jellyplay.core.data.playback.AudioSleepTimerManager
 import com.raulshma.jellyplay.core.data.download.TrackDownloadActions
@@ -34,10 +35,10 @@ import kotlinx.coroutines.flow.update
  * Koin-owned (conveyor move from `:feature:player:audio` — the
  * HiltViewModel/@Inject annotations were stripped; see di/PlayerAudioKoin
  * Module.kt). The former concrete [com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager]
- * ctor dep is split across the two shared playback contracts
- * ([AudioQueueManager], [AudioEffectsManager] — the legacy Hilt single
- * implements both) plus the module-local [AudioPlayerEngine] /
- * [AudioPlayerCast] seams over the Hilt-owned Android impls. The track
+ * ctor dep is split across the shared playback contracts
+ * ([AudioQueueManager], [AudioEffectsManager], [AudioPlayerEngine] — the
+ * legacy manager implements all three; the engine contract lives in core/data
+ * beside them) plus the module-local [AudioPlayerCast] seam. The track
  * download flip is the shared core:data [TrackDownloadActions] (Koin-bound
  * in di/PlayerAudioKoinModule.kt) — the former inline construction with its
  * own DownloadIntake/MediaRepository pair folded away when the resolve→start

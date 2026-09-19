@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
 import com.raulshma.jellyplay.core.model.OnboardingPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrAuthMethod
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import kotlinx.coroutines.launch
 
 /**
  * Onboarding-wizard preferences, projected centrally off the owning store
@@ -61,55 +62,55 @@ class OnboardingViewModel(
 
     fun hashPin(pin: String): String = editor.hashPin(pin)
 
-    fun setSeerrServerUrl(url: String) {
-        launch { seerrPreferencesStore.setServerUrl(url) }
-    }
+    /**
+     * Edit facade for the Seerr step: everything the step writes, over the
+     * same two stores the former per-field VM forwarders used. Passed to the
+     * step as a single parameter so the screen doesn't wire 13 lambdas.
+     */
+    val seerrEditActions =
+        SeerrEditActions(scope, seerrPreferencesStore, seerrSecureCredentialsStore)
+}
 
-    fun setSeerrApiKey(key: String) {
-        launch { seerrSecureCredentialsStore.setApiKey(key) }
-    }
+/**
+ * Every Seerr write the onboarding wizard's Seerr step performs, folded into
+ * one facade (the `SettingsNavActions` idiom: a plain class of function
+ * members constructed once by the owning ViewModel and handed to the screen
+ * as a single parameter, instead of one `onSet*` lambda per field).
+ *
+ * Each write is fire-and-forget on the constructing ViewModel's scope and is
+ * routed to the store that owns the field: plain preferences go to
+ * [SeerrPreferencesStore]; the API key and password go to
+ * [SeerrSecureCredentialsStore].
+ */
+class SeerrEditActions(
+    private val scope: kotlinx.coroutines.CoroutineScope,
+    private val preferencesStore: SeerrPreferencesStore,
+    private val credentialsStore: SeerrSecureCredentialsStore,
+) {
+    fun setServerUrl(url: String) = scope.launch { preferencesStore.setServerUrl(url) }
 
-    fun setSeerrAuthMethod(method: SeerrAuthMethod) {
-        launch { seerrPreferencesStore.setAuthMethod(method) }
-    }
+    fun setApiKey(key: String) = scope.launch { credentialsStore.setApiKey(key) }
 
-    fun setSeerrUsername(username: String) {
-        launch { seerrPreferencesStore.setUsername(username) }
-    }
+    fun setAuthMethod(method: SeerrAuthMethod) = scope.launch { preferencesStore.setAuthMethod(method) }
 
-    fun setSeerrEmail(email: String) {
-        launch { seerrPreferencesStore.setEmail(email) }
-    }
+    fun setUsername(username: String) = scope.launch { preferencesStore.setUsername(username) }
 
-    fun setSeerrPassword(password: String) {
-        launch { seerrSecureCredentialsStore.setPassword(password) }
-    }
+    fun setEmail(email: String) = scope.launch { preferencesStore.setEmail(email) }
 
-    fun setSeerrEnabled(enabled: Boolean) {
-        launch { seerrPreferencesStore.setEnabled(enabled) }
-    }
+    fun setPassword(password: String) = scope.launch { credentialsStore.setPassword(password) }
 
-    fun setSeerrSearchEnabled(enabled: Boolean) {
-        launch { seerrPreferencesStore.setSearchEnabled(enabled) }
-    }
+    fun setEnabled(enabled: Boolean) = scope.launch { preferencesStore.setEnabled(enabled) }
 
-    fun setSeerrRecommendationsEnabled(enabled: Boolean) {
-        launch { seerrPreferencesStore.setRecommendationsEnabled(enabled) }
-    }
+    fun setSearchEnabled(enabled: Boolean) = scope.launch { preferencesStore.setSearchEnabled(enabled) }
 
-    fun setSeerrDiscoverEnabled(enabled: Boolean) {
-        launch { seerrPreferencesStore.setDiscoverEnabled(enabled) }
-    }
+    fun setRecommendationsEnabled(enabled: Boolean) =
+        scope.launch { preferencesStore.setRecommendationsEnabled(enabled) }
 
-    fun setSeerrStreamingRegion(region: String) {
-        launch { seerrPreferencesStore.setStreamingRegion(region) }
-    }
+    fun setDiscoverEnabled(enabled: Boolean) = scope.launch { preferencesStore.setDiscoverEnabled(enabled) }
 
-    fun setSeerrDiscoverRegion(region: String) {
-        launch { seerrPreferencesStore.setDiscoverRegion(region) }
-    }
+    fun setStreamingRegion(region: String) = scope.launch { preferencesStore.setStreamingRegion(region) }
 
-    fun seerrDisconnect() {
-        launch { seerrPreferencesStore.disconnect() }
-    }
+    fun setDiscoverRegion(region: String) = scope.launch { preferencesStore.setDiscoverRegion(region) }
+
+    fun disconnect() = scope.launch { preferencesStore.disconnect() }
 }

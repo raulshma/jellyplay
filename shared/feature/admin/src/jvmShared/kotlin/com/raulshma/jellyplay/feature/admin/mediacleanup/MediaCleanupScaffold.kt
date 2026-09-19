@@ -33,7 +33,6 @@ import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.PrimaryTabRow
@@ -70,7 +69,6 @@ import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
-import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
@@ -525,7 +523,6 @@ private fun MediaCleanupDeleteConfirmationSheet(
     onDismiss: () -> Unit,
     isDeleting: Boolean,
 ) {
-    val isTv = LocalTvMode.current
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     val content: @Composable ColumnScope.() -> Unit = {
@@ -597,15 +594,9 @@ private fun MediaCleanupDeleteConfirmationSheet(
             }
         }
     }
-    if (isTv) {
-        TvSafeSheet(onDismissRequest = onDismiss, content = content)
-    } else {
-        ModalBottomSheet(
-            onDismissRequest = onDismiss,
-            sheetState = sheetState,
-            shape = ShapeCache.smoothTop28,
-            containerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.95f),
-            content = content,
-        )
-    }
+    TvSafeSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        content = content,
+    )
 }

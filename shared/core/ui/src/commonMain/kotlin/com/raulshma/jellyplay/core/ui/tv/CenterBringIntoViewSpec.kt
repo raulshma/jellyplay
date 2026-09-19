@@ -1,6 +1,9 @@
 package com.raulshma.jellyplay.core.ui.tv
 
 import androidx.compose.foundation.gestures.BringIntoViewSpec
+import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 
 /**
  * Scrolls the focused/bring-into-view target so it lands in the vertical center of the scrollable
@@ -16,5 +19,14 @@ import androidx.compose.foundation.gestures.BringIntoViewSpec
 object CenterBringIntoViewSpec : BringIntoViewSpec {
     override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float {
         return offset - (containerSize - size) / 2f
+    }
+}
+
+/** Provides [CenterBringIntoViewSpec] to [content]. */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+fun CenteredBringIntoView(content: @Composable () -> Unit) {
+    CompositionLocalProvider(LocalBringIntoViewSpec provides CenterBringIntoViewSpec) {
+        content()
     }
 }

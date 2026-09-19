@@ -1,6 +1,5 @@
-package com.raulshma.jellyplay.feature.player.audio
+package com.raulshma.jellyplay.core.data.playback
 
-import com.raulshma.jellyplay.core.data.playback.QueueUndoEvent
 import com.raulshma.jellyplay.core.model.LrcLibTrack
 import com.raulshma.jellyplay.core.model.LyricsLine
 import com.raulshma.jellyplay.core.model.LyricsSource
@@ -8,24 +7,24 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 
 /**
- * Module-local seam over the parts of the legacy
+ * The parts of the legacy
  * [com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager] that the
  * audio player needs but that are NOT on the two shared playback contracts
- * ([com.raulshma.jellyplay.core.data.playback.AudioQueueManager] for queue
- * mutation/state and [com.raulshma.jellyplay.core.data.playback.AudioEffectsManager]
+ * ([AudioQueueManager] for queue mutation/state and [AudioEffectsManager]
  * for the DSP surface): track metadata + transport + lyrics search/offset +
  * undo/A→B loop + crossfade/gapless setters.
  *
- * One-framework-per-type: the concrete manager is the media3 class
- * that stays the Android Koin single (androidCoreDataModule since then,
- * which also aliases AudioQueueManager/AudioEffectsManager onto it); this
- * seam binds Android-side through the app's `androidAppInteropAdaptersModule`
- * (`AppAudioPlayerEngine(manager = get())`, a pure delegate — the former
- * `HiltInteropModule.HiltAudioPlayerEngine` bridge died with),
- * while desktop binds it to
- * DesktopAudioQueueManager (the same one-object-two-contracts shape over an
- * audio-only mpv engine) in apps/desktop's desktopPlayerModule —  real
- * audio, Route.AudioPlayer unguarded.
+ * Lives here (core/data commonMain, beside the playback cores) so the
+ * concrete managers implement it DIRECTLY — no app-side 36-member delegate.
+ * One-framework-per-type: Android's media3
+ * [com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager] stays the
+ * Koin single (androidCoreDataModule, which aliases
+ * AudioQueueManager/AudioEffectsManager/AudioPlayerEngine onto it), while
+ * desktop's `DesktopAudioQueueManager` (this module's jvmMain, beside the
+ * chassis core it delegates to; Koin home still apps/desktop's
+ * desktopPlayerModule for the desktop-only collaborators) implements it —
+ * the same one-object-two-contracts shape over an audio-only mpv engine —
+ * real audio, Route.AudioPlayer unguarded.
  */
 interface AudioPlayerEngine {
     val title: StateFlow<String>

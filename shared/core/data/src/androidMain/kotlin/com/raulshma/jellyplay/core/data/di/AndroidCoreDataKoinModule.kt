@@ -18,6 +18,7 @@ import com.raulshma.jellyplay.core.data.playback.focus.FocusArbiter
 import com.raulshma.jellyplay.core.data.playback.focus.PlaybackFocus
 import com.raulshma.jellyplay.core.data.playback.AudioPrefetchEngine
 import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
+import com.raulshma.jellyplay.core.data.playback.AudioPlayerEngine
 import com.raulshma.jellyplay.core.data.playback.AudioQueueManager
 import com.raulshma.jellyplay.core.data.playback.AudioStreamCache
 import com.raulshma.jellyplay.core.data.playback.DefaultAudioQueueFacade
@@ -109,9 +110,13 @@ fun androidCoreDataModule(context: Context): Module = module {
         )
     }
     // Former bindAudioQueueManager / AudioEffectsManager @Binds-style aliases:
-    // the media3 manager implements both shared contracts — same single.
+    // the media3 manager implements the shared playback contracts — same
+    // single. AudioPlayerEngine (the transport/metadata/lyrics half) moved
+    // from player-audio into core/data commonMain, so the manager implements
+    // it DIRECTLY — the app-side 36-member delegate died with the move.
     single<AudioQueueManager> { get<AudioPlaybackManager>() }
     single<AudioEffectsManager> { get<AudioPlaybackManager>() }
+    single<AudioPlayerEngine> { get<AudioPlaybackManager>() }
 
     single {
         AudioStreamCache(

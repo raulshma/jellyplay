@@ -1,4 +1,4 @@
-package com.raulshma.jellyplay.core.network.library
+package com.raulshma.jellyplay.core.model
 
 /**
  * Pure item-image URL builder for the wasm library client — a verbatim port
@@ -21,6 +21,12 @@ package com.raulshma.jellyplay.core.network.library
  * browser pass VERIFIED these bearer-less URLs decode end-to-end — no
  * credential-bearing variant is needed (the earlier open question is
  * closed; see the harness notes in apps/web and tools/e2e/web-verify).
+ *
+ * Lives in core:model (promoted from core:network's library package):
+ * pure URL math with no transport dependency, consumed by feature modules
+ * (home's user switcher, settings' avatar row) that deliberately keep
+ * core:network off their dependency graphs — it used to leak to them
+ * through core:data's api() edge.
  */
 
 /** The SDK `ImageType` serial names (`ImageType.fromNameOrNull` table). */

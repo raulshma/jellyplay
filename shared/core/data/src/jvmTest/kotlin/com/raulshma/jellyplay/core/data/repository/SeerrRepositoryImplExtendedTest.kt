@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.core.data.repository
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
 import com.raulshma.jellyplay.core.datastore.SeerrSecureCredentialsStore
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.arr.ArrServiceKind
 import com.raulshma.jellyplay.core.model.seerr.SeerrAuthMethod
 import com.raulshma.jellyplay.core.model.seerr.SeerrCredentials
 import com.raulshma.jellyplay.core.model.seerr.SeerrCurrentUser
@@ -405,23 +406,23 @@ class SeerrRepositoryImplExtendedTest {
     }
 
     @Test
-    fun `getServiceRadarrDetail delegates`() = runTest {
-        coEvery { seerrApiClient.getServiceRadarrDetail(any(), any(), 1) } returns
+    fun `getServiceDetail delegates radarr kind`() = runTest {
+        coEvery { seerrApiClient.getServiceDetail(any(), any(), 1, ArrServiceKind.RADARR) } returns
             Result.success(mockk(relaxed = true))
 
-        repository.getServiceRadarrDetail(1)
+        repository.getServiceDetail(1, ArrServiceKind.RADARR)
 
-        coVerify { seerrApiClient.getServiceRadarrDetail(any(), any(), 1) }
+        coVerify { seerrApiClient.getServiceDetail(any(), any(), 1, ArrServiceKind.RADARR) }
     }
 
     @Test
-    fun `getServiceSonarrDetail delegates`() = runTest {
-        coEvery { seerrApiClient.getServiceSonarrDetail(any(), any(), 2) } returns
+    fun `getServiceDetail delegates sonarr kind`() = runTest {
+        coEvery { seerrApiClient.getServiceDetail(any(), any(), 2, ArrServiceKind.SONARR) } returns
             Result.success(mockk(relaxed = true))
 
-        repository.getServiceSonarrDetail(2)
+        repository.getServiceDetail(2, ArrServiceKind.SONARR)
 
-        coVerify { seerrApiClient.getServiceSonarrDetail(any(), any(), 2) }
+        coVerify { seerrApiClient.getServiceDetail(any(), any(), 2, ArrServiceKind.SONARR) }
     }
 
     @Test

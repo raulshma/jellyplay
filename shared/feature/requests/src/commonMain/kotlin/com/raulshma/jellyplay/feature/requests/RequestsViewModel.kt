@@ -19,6 +19,7 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrRequestFilter
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestSort
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import com.raulshma.jellyplay.core.ui.viewmodel.PageAppender
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.debounce
@@ -153,36 +154,41 @@ class RequestsViewModel(
         launch {
             val s = _state.value
             if (s.isLoading) return@launch
-            _state.value = s.copy(isLoading = true, error = null)
-
             val requestedBy = if (s.showMyRequestsOnly) currentUser.value?.id else null
-            val skip = if (refresh) 0 else (s.currentPage - 1) * s.pageSize
+            val skip = if (refresh) 0 else PageAppender.skipForPage(s.currentPage, s.pageSize)
 
-            seerrRepository.getRequests(
-                take = s.pageSize,
-                skip = skip,
-                filter = s.filter.value,
-                sort = s.sort.value,
-                sortDirection = s.sortDirection,
-                requestedBy = requestedBy,
-                mediaType = s.mediaType,
-                search = s.searchQuery.takeIf { it.isNotBlank() },
-            ).onSuccess { response ->
-                _state.value = _state.value.copy(
-                    requests = response.results,
-                    totalResults = response.pageInfo.results,
-                    totalPages = response.pageInfo.pages,
-                    isLoading = false,
-                )
-                enrichRequests(response.results)
-                // Direct *arr download progress (no-op when flag off or unconfigured).
-                enrichDownloadProgress(response.results)
-            }.onFailure {
-                _state.value = _state.value.copy(
-                    isLoading = false,
-                    error = it.message,
-                )
-            }
+            RequestsLoad.load(
+                start = { _state.value = s.copy(isLoading = true, error = null) },
+                fetch = {
+                    seerrRepository.getRequests(
+                        take = s.pageSize,
+                        skip = skip,
+                        filter = s.filter.value,
+                        sort = s.sort.value,
+                        sortDirection = s.sortDirection,
+                        requestedBy = requestedBy,
+                        mediaType = s.mediaType,
+                        search = s.searchQuery.takeIf { it.isNotBlank() },
+                    )
+                },
+                onSuccess = { response ->
+                    _state.value = _state.value.copy(
+                        requests = response.results,
+                        totalResults = response.pageInfo.results,
+                        totalPages = response.pageInfo.pages,
+                        isLoading = false,
+                    )
+                    enrichRequests(response.results)
+                    // Direct *arr download progress (no-op when flag off or unconfigured).
+                    enrichDownloadProgress(response.results)
+                },
+                onFailure = {
+                    _state.value = _state.value.copy(
+                        isLoading = false,
+                        error = it.message,
+                    )
+                },
+            )
         }
     }
 
@@ -418,12 +424,22 @@ class RequestsViewModel(
         }
     }
 
+    /**
+     * Advances to the next page through the [PageAppender] guard: the tap is
+     * suppressed entirely while a load is in flight (declared delta — it
+     * used to bump the page field while the suppressed fetch left the rows a
+     * page behind, silently desyncing the pager) and once the pager is
+     * terminal at [RequestsUiState.totalPages].
+     */
     fun nextPage() {
         val s = _state.value
-        if (s.currentPage < s.totalPages) {
-            _state.value = s.copy(currentPage = s.currentPage + 1)
-            loadRequests()
-        }
+        val page = PageAppender.nextPageOrNull(
+            currentPage = s.currentPage,
+            inFlight = s.isLoading,
+            hasMore = s.currentPage < s.totalPages,
+        ) ?: return
+        _state.value = s.copy(currentPage = page)
+        loadRequests()
     }
 
     fun prevPage() {

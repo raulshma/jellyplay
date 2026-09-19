@@ -16,23 +16,17 @@ class PhotoViewerViewModel(
     private val photoExport: PhotoExport,
 ) : JellyPlayViewModel() {
 
-    private val _photo = composeState<MediaItem?>(null)
-    val photo: androidx.compose.runtime.State<MediaItem?> get() = _photo.asState()
-
-    private val _photoDetail = composeState<MediaDetail?>(null)
-    val photoDetail: androidx.compose.runtime.State<MediaDetail?> get() = _photoDetail.asState()
-
-    private val _siblings = composeState<List<MediaItem>>(emptyList())
-    val siblings: androidx.compose.runtime.State<List<MediaItem>> get() = _siblings.asState()
-
-    private val _currentIndex = composeState(0)
-    val currentIndex: androidx.compose.runtime.State<Int> get() = _currentIndex.asState()
-
-    private val _isLoading = composeState(true)
-    val isLoading: androidx.compose.runtime.State<Boolean> get() = _isLoading.asState()
-
-    private val _error = composeState<String?>(null)
-    val error: androidx.compose.runtime.State<String?> get() = _error.asState()
+    /**
+     * The viewer's single content snapshot: the current photo + its detail
+     * (content), the album strip (siblings), the strip cursor (index), and the
+     * load/error pair (loadState) — ONE value behind ONE compose state instead
+     * of six hand-synced flows, so a navigation can never publish a torn
+     * combination. Slideshow/export/adjustment concerns deliberately stay OUT
+     * of the snapshot (their own states below): the adjustment sliders are hot
+     * and must not copy the whole content state per tick.
+     */
+    private val _state = composeState(PhotoViewerState())
+    val state: androidx.compose.runtime.State<PhotoViewerState> get() = _state.asState()
 
     private val _isSlideshowActive = composeState(false)
     val isSlideshowActive: androidx.compose.runtime.State<Boolean> get() = _isSlideshowActive.asState()
@@ -69,20 +63,18 @@ class PhotoViewerViewModel(
 
     fun load(itemId: String, parentId: String?) {
         launch {
-            _isLoading.value = true
-            _error.value = null
+            _state.value = _state.value.copy(isLoading = true, error = null)
 
             val detailResult = mediaRepository.getMediaDetail(itemId)
             val detail = detailResult.getOrNull()
             val item = detail?.item
             if (item == null) {
-                _error.value = detailResult.exceptionOrNull()?.message ?: "Failed to load photo"
-                _isLoading.value = false
+                _state.value = _state.value.copy(
+                    error = detailResult.exceptionOrNull()?.message ?: "Failed to load photo",
+                    isLoading = false,
+                )
                 return@launch
             }
-
-            _photo.value = item
-            _photoDetail.value = detail
 
             if (parentId != null) {
                 val siblingsResult = mediaRepository.getMediaItems(
@@ -93,37 +85,45 @@ class PhotoViewerViewModel(
                     limit = 200,
                 )
                 val items = siblingsResult.getOrNull()?.items ?: emptyList()
-                _siblings.value = items
-                _currentIndex.value = items.indexOfFirst { it.id == itemId }.coerceAtLeast(0)
+                _state.value = _state.value.copy(
+                    photo = item,
+                    photoDetail = detail,
+                    siblings = items,
+                    currentIndex = items.indexOfFirst { it.id == itemId }.coerceAtLeast(0),
+                    isLoading = false,
+                )
             } else {
-                _siblings.value = listOf(item)
-                _currentIndex.value = 0
+                _state.value = _state.value.copy(
+                    photo = item,
+                    photoDetail = detail,
+                    siblings = listOf(item),
+                    currentIndex = 0,
+                    isLoading = false,
+                )
             }
-
-            _isLoading.value = false
         }
     }
 
     fun navigateTo(index: Int) {
-        val items = _siblings.value
+        val items = _state.value.siblings
         if (index in items.indices) {
-            _currentIndex.value = index
-            val item = items[index]
-            _photo.value = item
-            loadDetailForCurrentPhoto(item.id)
+            _state.value = _state.value.copy(currentIndex = index, photo = items[index])
+            loadDetailForCurrentPhoto(items[index].id)
         }
     }
 
     private fun loadDetailForCurrentPhoto(itemId: String) {
         launch {
             val detailResult = mediaRepository.getMediaDetail(itemId)
-            detailResult.getOrNull()?.let { _photoDetail.value = it }
+            detailResult.getOrNull()?.let { detail ->
+                _state.value = _state.value.copy(photoDetail = detail)
+            }
         }
     }
 
-    fun hasNext(): Boolean = _currentIndex.value < _siblings.value.lastIndex
+    fun hasNext(): Boolean = _state.value.currentIndex < _state.value.siblings.lastIndex
 
-    fun hasPrevious(): Boolean = _currentIndex.value > 0
+    fun hasPrevious(): Boolean = _state.value.currentIndex > 0
 
     fun getImageUrl(itemId: String, maxWidth: Int? = null): String =
         imageUrlProvider.getImageUrl(itemId, maxWidth = maxWidth)
@@ -145,7 +145,7 @@ class PhotoViewerViewModel(
             while (isActive) {
                 delay(_slideshowIntervalMs.value)
                 if (hasNext()) {
-                    navigateTo(_currentIndex.value + 1)
+                    navigateTo(_state.value.currentIndex + 1)
                 } else {
                     navigateTo(0)
                 }
@@ -190,7 +190,7 @@ class PhotoViewerViewModel(
     }
 
     fun savePhotoToGallery() {
-        val photo = _photo.value ?: return
+        val photo = _state.value.photo ?: return
         if (_isSaving.value) return
 
         launch {
@@ -219,12 +219,12 @@ class PhotoViewerViewModel(
     }
 
     fun getFullImageUrl(): String? {
-        val photo = _photo.value ?: return null
+        val photo = _state.value.photo ?: return null
         return getImageUrl(photo.id, maxWidth = null)
     }
 
     fun sharePhoto(onError: (String) -> Unit) {
-        val photo = _photo.value ?: return
+        val photo = _state.value.photo ?: return
         launch {
             try {
                 // Platform share (FileProvider + ACTION_SEND on Android) — see
@@ -249,3 +249,18 @@ sealed class SaveResult {
     data object Success : SaveResult()
     data class Error(val message: String) : SaveResult()
 }
+
+/**
+ * The viewer's content snapshot value type: the current photo + its detail
+ * (content), the album strip (siblings), the strip cursor (index), and the
+ * load/error pair (loadState). One value so a navigation can never publish a
+ * torn combination (photo from one sibling list, index from another).
+ */
+data class PhotoViewerState(
+    val photo: MediaItem? = null,
+    val photoDetail: MediaDetail? = null,
+    val siblings: List<MediaItem> = emptyList(),
+    val currentIndex: Int = 0,
+    val isLoading: Boolean = false,
+    val error: String? = null,
+)

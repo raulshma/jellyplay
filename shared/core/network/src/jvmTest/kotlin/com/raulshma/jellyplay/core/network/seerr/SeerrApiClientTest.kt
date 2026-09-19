@@ -1,6 +1,9 @@
 package com.raulshma.jellyplay.core.network.seerr
 
+import com.raulshma.jellyplay.core.model.arr.ArrServiceKind
 import com.raulshma.jellyplay.core.model.seerr.SeerrCredentials
+import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail
+import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail
 import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
@@ -64,7 +67,7 @@ class SeerrApiClientTest {
     }
 
     @Test
-    fun `getServiceRadarrDetail parses nested server defaults from service endpoint`() = runBlocking {
+    fun `getServiceDetail radarr kind parses nested server defaults from service endpoint`() = runBlocking {
         val jsonResponse = """
             {
                 "server": {
@@ -93,10 +96,12 @@ class SeerrApiClientTest {
         mockWebServer.enqueue(MockResponse().setBody(jsonResponse).setResponseCode(200))
 
         val baseUrl = mockWebServer.url("/").toString()
-        val result = apiClient.getServiceRadarrDetail(baseUrl, SeerrCredentials.ApiKey("apikey"), 1)
+        val result = apiClient.getServiceDetail(baseUrl, SeerrCredentials.ApiKey("apikey"), 1, ArrServiceKind.RADARR)
 
         assertTrue(result.isSuccess)
-        val detail = result.getOrThrow()
+        // The fold's core promise: the RADARR kind decodes to the concrete
+        // Radarr payload under the sealed parent.
+        val detail = result.getOrThrow() as SeerrRadarrServiceDetail
         assertEquals("/data/movies", detail.server?.activeDirectory)
         assertEquals(7, detail.server?.activeProfileId)
         assertEquals(true, detail.server?.isDefault)
@@ -106,7 +111,7 @@ class SeerrApiClientTest {
     }
 
     @Test
-    fun `getServiceSonarrDetail parses nested server defaults from service endpoint`() = runBlocking {
+    fun `getServiceDetail sonarr kind parses nested server defaults from service endpoint`() = runBlocking {
         val jsonResponse = """
             {
                 "server": {
@@ -139,10 +144,10 @@ class SeerrApiClientTest {
         mockWebServer.enqueue(MockResponse().setBody(jsonResponse).setResponseCode(200))
 
         val baseUrl = mockWebServer.url("/").toString()
-        val result = apiClient.getServiceSonarrDetail(baseUrl, SeerrCredentials.ApiKey("apikey"), 1)
+        val result = apiClient.getServiceDetail(baseUrl, SeerrCredentials.ApiKey("apikey"), 1, ArrServiceKind.SONARR)
 
         assertTrue(result.isSuccess)
-        val detail = result.getOrThrow()
+        val detail = result.getOrThrow() as SeerrSonarrServiceDetail
         assertEquals("/data/tv", detail.server?.activeDirectory)
         assertEquals("/data/anime", detail.server?.activeAnimeDirectory)
         assertEquals(2, detail.rootFolders.size)

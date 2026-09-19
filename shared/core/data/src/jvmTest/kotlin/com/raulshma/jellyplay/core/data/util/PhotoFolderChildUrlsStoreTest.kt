@@ -1,12 +1,10 @@
-package com.raulshma.jellyplay.feature.home
+package com.raulshma.jellyplay.core.data.util
 
-import com.raulshma.jellyplay.core.data.util.PhotoFolderPrefetcher
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -14,41 +12,25 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import kotlin.test.AfterTest
-import kotlin.test.assertEquals
-import kotlin.test.BeforeTest
 import kotlin.test.Test
-import kotlinx.coroutines.test.resetMain
-import kotlinx.coroutines.test.setMain
-import kotlinx.coroutines.Dispatchers
+import kotlin.test.assertEquals
 
 /**
  * Direct [PhotoFolderChildUrlsStore] tests: the prefetch/merge/cap policy
- * previously testable only through the whole HomeViewModel (Robolectric) is
- * now pinned without any Android lifecycle stack. Plain JUnit +
- * [MainDispatcherRule] + MockK, mirroring HomeRefresherTest's scope hand-off
- * pattern.
+ * is pinned without any host view model or Android lifecycle stack. Plain
+ * JUnit + MockK, mirroring [PhotoFolderPrefetcherTest]; the store's scope
+ * is the runTest scheduler so `advanceUntilIdle` drives the launched
+ * prefetch jobs (the home suite's scope hand-off pattern, without its
+ * Main-dispatcher stack).
  */
-@OptIn(ExperimentalCoroutinesApi::class)
 class PhotoFolderChildUrlsStoreTest {
 
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (search/music/livetv conveyor port pattern).
-    private val mainDispatcher = StandardTestDispatcher()
-
-    private lateinit var prefetcher: PhotoFolderPrefetcher
+    private val prefetcher: PhotoFolderPrefetcher = mockk(relaxed = true)
     private var storeScope: CoroutineScope? = null
-
-    @BeforeTest
-    fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
-        prefetcher = mockk(relaxed = true)
-    }
 
     @AfterTest
     fun stopStore() {
         storeScope?.cancel()
-
-        Dispatchers.resetMain()
     }
 
     private fun TestScope.buildStore(): PhotoFolderChildUrlsStore {
@@ -58,7 +40,7 @@ class PhotoFolderChildUrlsStoreTest {
     }
 
     @Test
-    fun prefetch_callsPrefetcher_andUpdatesState() = runTest {
+    fun `prefetch calls the prefetcher and updates state`() = runTest {
         val items = listOf(folder("p1"))
         coEvery { prefetcher.prefetch(items, any()) } returns mapOf("p1" to listOf("url1", "url2"))
         val store = buildStore()
@@ -70,7 +52,7 @@ class PhotoFolderChildUrlsStoreTest {
     }
 
     @Test
-    fun prefetch_passesAlreadyCachedKeysAsAlreadyFetched() = runTest {
+    fun `prefetch passes already-cached keys as alreadyFetched`() = runTest {
         val first = listOf(folder("p1"), folder("p2"))
         coEvery { prefetcher.prefetch(first, any()) } returns mapOf(
             "p1" to listOf("url1"),
@@ -95,7 +77,7 @@ class PhotoFolderChildUrlsStoreTest {
     }
 
     @Test
-    fun prefetch_mergesNewResults_intoExistingEntries() = runTest {
+    fun `prefetch merges new results into existing entries`() = runTest {
         coEvery { prefetcher.prefetch(listOf(folder("p1")), any()) } returns mapOf("p1" to listOf("url1"))
         coEvery { prefetcher.prefetch(listOf(folder("p2")), any()) } returns mapOf("p2" to listOf("url2"))
         val store = buildStore()
@@ -112,7 +94,7 @@ class PhotoFolderChildUrlsStoreTest {
     }
 
     @Test
-    fun prefetch_evictsOldestEntries_beyondCacheCap() = runTest {
+    fun `prefetch evicts oldest entries beyond the cache cap`() = runTest {
         val store = buildStore()
         // Fill beyond the cap: ids f1..f55, one prefetch each, insertion order
         // = eviction order (oldest dropped first).
@@ -124,7 +106,7 @@ class PhotoFolderChildUrlsStoreTest {
         }
 
         val cached = store.childUrls.value
-        assertEquals(50, cached.size)
+        assertEquals(PhotoFolderChildUrlsStore.PHOTO_FOLDER_CACHE_CAP, cached.size)
         // The five oldest ids were evicted; the newest survive in order.
         assertEquals(listOf("f6", "f55"), listOf(cached.keys.first(), cached.keys.last()))
     }

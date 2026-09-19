@@ -6,7 +6,7 @@ import com.raulshma.jellyplay.core.model.PluginInfo
 import com.raulshma.jellyplay.core.model.PluginPackage
 import com.raulshma.jellyplay.core.model.PluginStatus
 import com.raulshma.jellyplay.core.model.PluginVersionInfo
-import com.raulshma.jellyplay.core.data.repository.AdminRepository
+import com.raulshma.jellyplay.core.data.repository.PluginAdminRepository
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.feature.admin.AdminLoad
 import kotlinx.coroutines.delay
@@ -28,7 +28,7 @@ data class PluginDetailState(
 )
 
 class PluginDetailViewModel(
-    private val adminRepository: AdminRepository,
+    private val pluginAdminRepository: PluginAdminRepository,
 ) : JellyPlayViewModel() {
 
     private val _state = composeState(PluginDetailState())
@@ -48,7 +48,7 @@ class PluginDetailViewModel(
                 // The start also drops any optimistic enable flip from a
                 // previous toggle (jellyfin-web's isEnabledOverride reset).
                 start = { _state.value = _state.value.copy(isLoading = true, error = null, isEnabledOverride = null) },
-                fetch = { adminRepository.getInstalledPlugins() },
+                fetch = { pluginAdminRepository.getInstalledPlugins() },
                 onSuccess = { plugins ->
                     val plugin = plugins.find { it.id == pluginId }
                     if (plugin != null) {
@@ -80,7 +80,7 @@ class PluginDetailViewModel(
     private fun loadPackageInfoAsync(name: String, assemblyGuid: String) {
         launch {
             _state.value = _state.value.copy(isLoadingVersions = true)
-            adminRepository.getPackageInfo(name, assemblyGuid).onSuccess { pkg ->
+            pluginAdminRepository.getPackageInfo(name, assemblyGuid).onSuccess { pkg ->
                 _state.value = _state.value.copy(
                     pluginPackage = pkg,
                     isLoadingVersions = false,
@@ -94,7 +94,7 @@ class PluginDetailViewModel(
 
     private fun checkConfigPage(pluginId: String) {
         launch {
-            adminRepository.getPluginConfigPage(pluginId).onSuccess { page ->
+            pluginAdminRepository.getPluginConfigPage(pluginId).onSuccess { page ->
                 if (page != null) {
                     _state.value = _state.value.copy(
                         hasConfigPage = true,
@@ -114,9 +114,9 @@ class PluginDetailViewModel(
         _state.value = _state.value.copy(isToggling = true, isEnabledOverride = !isEnabled)
         launch {
             val result = if (isEnabled) {
-                adminRepository.setPluginEnabled(plugin.id, plugin.version, enabled = false)
+                pluginAdminRepository.setPluginEnabled(plugin.id, plugin.version, enabled = false)
             } else {
-                adminRepository.setPluginEnabled(plugin.id, plugin.version, enabled = true)
+                pluginAdminRepository.setPluginEnabled(plugin.id, plugin.version, enabled = true)
             }
             result.onSuccess {
                 delay(500)
@@ -133,7 +133,7 @@ class PluginDetailViewModel(
         val plugin = _state.value.plugin ?: return
         _state.value = _state.value.copy(isUninstalling = true)
         launch {
-            adminRepository.uninstallPlugin(plugin.id).onSuccess {
+            pluginAdminRepository.uninstallPlugin(plugin.id).onSuccess {
                 delay(500)
                 onComplete()
             }.onFailure { e ->
@@ -150,7 +150,7 @@ class PluginDetailViewModel(
         val pkg = _state.value.pluginPackage ?: return
         _state.value = _state.value.copy(installingVersion = version.version)
         launch {
-            adminRepository.installPackage(
+            pluginAdminRepository.installPackage(
                 name = pkg.name,
                 assemblyGuid = pkg.guid,
                 version = version.version,

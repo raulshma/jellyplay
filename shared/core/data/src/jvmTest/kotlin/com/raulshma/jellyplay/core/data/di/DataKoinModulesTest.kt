@@ -24,6 +24,7 @@ import com.raulshma.jellyplay.core.data.repository.OfflineFirstItemResolver
 import com.raulshma.jellyplay.core.data.repository.OfflinePlaybackFacade
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.data.repository.PluginAdminRepository
 import com.raulshma.jellyplay.core.data.repository.PlayedStateSync
 import com.raulshma.jellyplay.core.data.repository.RealtimeConnection
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
@@ -228,6 +229,7 @@ class DataKoinModulesTest {
             // desktopDataModule).
             assertResolves<AdminRepository>(koin)
             assertResolves<AdminStatisticsRepository>(koin)
+            assertResolves<PluginAdminRepository>(koin)
 
             // ── AppUpdate split ──────────────────────────────────
             // The update repository resolves on desktop (About's update-check

@@ -28,17 +28,37 @@ internal class SettingsSearchItemGroup(
     val id: String,
     /** The declared items, in catalog order. */
     val items: List<SettingsSearchItem>,
+    /**
+     * The per-id declared row admissions — the ONE declaration of every gate
+     * a gated row's count AND its emission `if` read (the string-keyed
+     * `when` arms / inline capability checks this replaces).
+     */
+    val admissions: Map<String, RowAdmission> = emptyMap(),
 ) {
     /** The declared ids, in catalog order — the derivation source for scroll lists. */
     val itemIds: List<String> = items.map { it.id }
 
     /** [itemIds] as a set — the derivation source for expand checks. */
     val itemIdSet: Set<String> = itemIds.toSet()
+
+    /** The declared admission of one row id — null where no gate is declared. */
+    fun admissionOf(id: String): RowAdmission? = admissions[id]
+
+    /**
+     * The emission-side predicate: the row's declared admission under
+     * [flags], true where no gate is declared (the screen's structural
+     * blocks — advanced sections, parent-toggle blocks — carry their own
+     * gates around the call sites).
+     */
+    fun rowAdmitted(id: String, flags: RowAdmissionFlags): Boolean =
+        admissions[id]?.admitted(flags) ?: true
 }
 
 /** Decorates a declaration list as the named screen group its screen renders. */
-internal fun List<SettingsSearchItem>.asSearchGroup(id: String): SettingsSearchItemGroup =
-    SettingsSearchItemGroup(id, this)
+internal fun List<SettingsSearchItem>.asSearchGroup(
+    id: String,
+    admissions: Map<String, RowAdmission> = emptyMap(),
+): SettingsSearchItemGroup = SettingsSearchItemGroup(id, this, admissions)
 
 /**
  * The aggregation decoration: every per-screen `*SearchItems` declaration
@@ -79,8 +99,11 @@ internal object SettingsScreenGroups {
     val appearanceNewsletter = AppearanceNewsletterSearchItems.asSearchGroup("appearance.newsletter")
 
     // ── PlaybackSettingsScreen ──────────────────────────────────────────
-    val playbackPlayer = PlaybackSettingsSearchItems.asSearchGroup("playback.player")
-    val playbackAdvancedVideo = PlaybackAdvancedVideoSearchItems.asSearchGroup("playback.advancedVideo")
+    val playbackPlayer = PlaybackSettingsSearchItems.asSearchGroup("playback.player", PlaybackPlayerRowAdmissions)
+    val playbackAdvancedVideo = PlaybackAdvancedVideoSearchItems.asSearchGroup(
+        "playback.advancedVideo",
+        PlaybackAdvancedVideoRowAdmissions,
+    )
 
     /**
      * One screen group fed by three adjacent engine declaration lists —
@@ -107,7 +130,7 @@ internal object SettingsScreenGroups {
         .asSearchGroup("playback.mediaSegments")
 
     // ── AudioSettingsScreen ─────────────────────────────────────────────
-    val audio = AudioSettingsSearchItems.asSearchGroup("audio")
+    val audio = AudioSettingsSearchItems.asSearchGroup("audio", AudioRowAdmissions)
 
     /**
      * The nested audio-cache group — the whole group only exists where
@@ -137,7 +160,7 @@ internal object SettingsScreenGroups {
     // ── StorageSettingsScreen ───────────────────────────────────────────
     val storageCache = StorageCacheSearchItems.asSearchGroup("storage.cache")
     val storageNetwork = StorageNetworkSearchItems.asSearchGroup("storage.network")
-    val storageDownloads = StorageDownloadsSearchItems.asSearchGroup("storage.downloads")
+    val storageDownloads = StorageDownloadsSearchItems.asSearchGroup("storage.downloads", StorageDownloadsRowAdmissions)
 
     val security = SecuritySettingsSearchItems.asSearchGroup("security")
     val backup = BackupSettingsSearchItems.asSearchGroup("backup")

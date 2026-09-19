@@ -62,11 +62,6 @@ fun BookReaderScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val direction by viewModel.readingDirection.collectAsStateWithLifecycle()
-    val prefs by viewModel.prefs.collectAsStateWithLifecycle()
-    // EFFECTIVE theme/font: the per-book override when one exists, else the
-    // global — the only values the reader renders with.
-    val theme = prefs.effective.theme
-    val fontSizePx = prefs.effective.fontSizePx
 
     val windowOps = rememberReaderWindowOps()
     DisposableEffect(Unit) {
@@ -106,8 +101,6 @@ fun BookReaderScreen(
                     state = state,
                     content = content,
                     direction = direction,
-                    theme = theme,
-                    fontSizePx = fontSizePx,
                     viewModel = viewModel,
                     onBack = onBack,
                 )

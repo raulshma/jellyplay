@@ -67,6 +67,8 @@ import com.raulshma.jellyplay.core.data.repository.OfflineImagePreloader
 import com.raulshma.jellyplay.core.data.repository.OfflinePlaybackFacade
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepositoryImpl
+import com.raulshma.jellyplay.core.data.repository.PluginAdminRepository
+import com.raulshma.jellyplay.core.data.repository.PluginAdminRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
@@ -837,6 +839,17 @@ val dataJvmModule: Module = module {
         )
     }
     single<AdminRepository> { get<AdminRepositoryImpl>() }
+    // Admin facade split (the LiveTvRepositoryImpl pattern): the plugin
+    // family's own single over the PluginApiClient family client + the
+    // engine (the WebView bridge session) — single-family plugin consumers
+    // inject this seam, not the admin union.
+    single {
+        PluginAdminRepositoryImpl(
+            pluginApiClient = get(),
+            engine = get(),
+        )
+    }
+    single<PluginAdminRepository> { get<PluginAdminRepositoryImpl>() }
 
     single {
         AdminStatisticsRepositoryImpl(

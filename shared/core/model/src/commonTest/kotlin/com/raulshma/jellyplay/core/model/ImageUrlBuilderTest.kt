@@ -1,4 +1,4 @@
-package com.raulshma.jellyplay.core.network.library
+package com.raulshma.jellyplay.core.model
 
 import kotlin.test.Test
 import kotlin.test.assertEquals

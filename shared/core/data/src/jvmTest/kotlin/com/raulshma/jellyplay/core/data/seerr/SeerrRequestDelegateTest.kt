@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.data.seerr
 
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.arr.ArrServiceKind
 import com.raulshma.jellyplay.core.model.seerr.SeerrMediaRequest
 import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail
 import com.raulshma.jellyplay.core.model.seerr.SeerrSeason
@@ -76,8 +77,8 @@ class SeerrRequestDelegateTest {
         coEvery { repository.getServiceRadarrServers() } returns Result.success(servers)
         val detail1 = SeerrRadarrServiceDetail(id = 1, name = "R1")
         val detail2 = SeerrRadarrServiceDetail(id = 2, name = "R2")
-        coEvery { repository.getServiceRadarrDetail(1) } returns Result.success(detail1)
-        coEvery { repository.getServiceRadarrDetail(2) } returns Result.success(detail2)
+        coEvery { repository.getServiceDetail(1, ArrServiceKind.RADARR) } returns Result.success(detail1)
+        coEvery { repository.getServiceDetail(2, ArrServiceKind.RADARR) } returns Result.success(detail2)
 
         val result = delegate.fetchServiceDetails("movie")
 
@@ -109,9 +110,9 @@ class SeerrRequestDelegateTest {
     fun `fetchServiceDetails movie filters out failed detail fetches`() = runTest {
         coEvery { repository.getServiceRadarrServers() } returns
             Result.success(listOf(SeerrServiceServer(id = 1), SeerrServiceServer(id = 2)))
-        coEvery { repository.getServiceRadarrDetail(1) } returns
+        coEvery { repository.getServiceDetail(1, ArrServiceKind.RADARR) } returns
             Result.success(SeerrRadarrServiceDetail(id = 1, name = "ok"))
-        coEvery { repository.getServiceRadarrDetail(2) } returns Result.failure(RuntimeException("bad"))
+        coEvery { repository.getServiceDetail(2, ArrServiceKind.RADARR) } returns Result.failure(RuntimeException("bad"))
 
         val result = delegate.fetchServiceDetails("movie")
 
@@ -124,7 +125,7 @@ class SeerrRequestDelegateTest {
         val servers = listOf(SeerrServiceServer(id = 10))
         coEvery { repository.getServiceSonarrServers() } returns Result.success(servers)
         val detail = SeerrSonarrServiceDetail(id = 10, name = "S10")
-        coEvery { repository.getServiceSonarrDetail(10) } returns Result.success(detail)
+        coEvery { repository.getServiceDetail(10, ArrServiceKind.SONARR) } returns Result.success(detail)
 
         val result = delegate.fetchServiceDetails("tv")
 

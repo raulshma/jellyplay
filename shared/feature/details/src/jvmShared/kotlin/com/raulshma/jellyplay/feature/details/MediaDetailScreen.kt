@@ -203,37 +203,44 @@ fun MediaDetailScreen(
     /** Full download-details bottom-sheet visibility (DownloadInfoCard tap). */
     var showDownloadDetailsSheet by remember { mutableStateOf(false) }
 
-    // Series/season mark-played cascades recurse into every episode and clear all
-    // resume positions, so they're gated behind a confirm
-    // Direction is tracked alongside so the dialog shows the right verb/message
-    // for a watched vs unwatched flip.
-    val markSeriesConfirm = rememberConfirmState()
-    var markSeriesToWatched by remember { mutableStateOf(true) }
-    val markSeasonConfirm = rememberConfirmState()
-    var markSeasonToWatched by remember { mutableStateOf(true) }
+    // Series/season mark-played cascades recurse into every episode and clear
+    // all resume positions, so they're gated behind a confirm. ONE machine:
+    // the shared [ConfirmState] holds the deferred call, and the ONE pending
+    // [MarkPlayedConfirmRequest] carries what the dialog must say (scope ×
+    // direction) — the former four hand-synced vars (series/season confirm ×
+    // their toWatched mirrors) folded into a single value.
+    val markPlayedConfirm = rememberConfirmState()
+    var markPlayedRequest by remember { mutableStateOf<MarkPlayedConfirmRequest?>(null) }
 
     // The four mark-played callbacks (item/season × watched/unwatched) fold
     // into one remembered dispatcher: [DetailPlayPolicies.dispatchMarkPlayedAction]
     // owns the confirm-vs-direct table over (mediaType × season action) and this
-    // lambda only routes to the matching confirm channel + ViewModel call.
+    // lambda only arms the single request value + ViewModel call.
     // mediaType is read fresh at invocation (not captured) so the gate always
     // sees the loaded item's type.
-    val dispatchMarkPlayedAction = remember(viewModel, markSeriesConfirm, markSeasonConfirm) {
+    val dispatchMarkPlayedAction = remember(viewModel, markPlayedConfirm) {
         { isSeasonAction: Boolean, toWatched: Boolean, seasonId: String? ->
-            val confirm: () -> Unit = {
-                if (isSeasonAction) {
-                    markSeasonToWatched = toWatched
-                    markSeasonConfirm.request {
-                        if (toWatched) viewModel.markSeasonPlayed(requireNotNull(seasonId))
-                        else viewModel.markSeasonUnplayed(requireNotNull(seasonId))
-                    }
+            val request = MarkPlayedConfirmRequest(
+                scope = if (isSeasonAction) {
+                    MarkPlayedConfirmRequest.Scope.Season(requireNotNull(seasonId))
                 } else {
-                    markSeriesToWatched = toWatched
-                    markSeriesConfirm.request {
-                        if (toWatched) viewModel.markPlayed()
-                        else viewModel.markUnplayed()
+                    MarkPlayedConfirmRequest.Scope.Item
+                },
+                toWatched = toWatched,
+                confirm = markPlayedConfirm,
+            )
+            val confirm: () -> Unit = {
+                markPlayedConfirm.request {
+                    when (val scope = request.scope) {
+                        MarkPlayedConfirmRequest.Scope.Item ->
+                            if (toWatched) viewModel.markPlayed()
+                            else viewModel.markUnplayed()
+                        is MarkPlayedConfirmRequest.Scope.Season ->
+                            if (toWatched) viewModel.markSeasonPlayed(scope.seasonId)
+                            else viewModel.markSeasonUnplayed(scope.seasonId)
                     }
                 }
+                markPlayedRequest = request
             }
             // Direct dispatch: reachable only for item-level marks on
             // movies/episodes (the season row of the gate always confirms, so
@@ -885,35 +892,30 @@ fun MediaDetailScreen(
                 .padding(bottom = 80.dp),
         )
 
-        // Series mark-played confirm : watched vs unwatched differ only in verb.
-        if (markSeriesConfirm.isVisible) {
+        // Mark-played confirm (series-wide or one season): watched vs
+        // unwatched and series vs season differ only in verb/message, both
+        // derived from the ONE pending request.
+        val request = markPlayedRequest
+        if (request != null && request.confirm.isVisible) {
+            val isSeason = request.scope is MarkPlayedConfirmRequest.Scope.Season
+            val toWatched = request.toWatched
             val title = stringResource(
-                if (markSeriesToWatched) Res.string.detail_mark_series_watched_confirm_title
-                else Res.string.detail_mark_series_unwatched_confirm_title,
+                when {
+                    isSeason && toWatched -> Res.string.detail_mark_season_watched_confirm_title
+                    isSeason -> Res.string.detail_mark_season_unwatched_confirm_title
+                    toWatched -> Res.string.detail_mark_series_watched_confirm_title
+                    else -> Res.string.detail_mark_series_unwatched_confirm_title
+                },
             )
             val message = stringResource(
-                if (markSeriesToWatched) Res.string.detail_mark_series_watched_confirm_message
-                else Res.string.detail_mark_series_unwatched_confirm_message,
+                when {
+                    isSeason && toWatched -> Res.string.detail_mark_season_watched_confirm_message
+                    isSeason -> Res.string.detail_mark_season_unwatched_confirm_message
+                    toWatched -> Res.string.detail_mark_series_watched_confirm_message
+                    else -> Res.string.detail_mark_series_unwatched_confirm_message
+                },
             )
-            markSeriesConfirm.ConfirmDialog(
-                title = title,
-                message = message,
-                confirmText = stringResource(CoreUiRes.string.core_confirm),
-                dismissText = stringResource(CoreUiRes.string.core_cancel),
-            )
-        }
-
-        // Season mark-played confirm.
-        if (markSeasonConfirm.isVisible) {
-            val title = stringResource(
-                if (markSeasonToWatched) Res.string.detail_mark_season_watched_confirm_title
-                else Res.string.detail_mark_season_unwatched_confirm_title,
-            )
-            val message = stringResource(
-                if (markSeasonToWatched) Res.string.detail_mark_season_watched_confirm_message
-                else Res.string.detail_mark_season_unwatched_confirm_message,
-            )
-            markSeasonConfirm.ConfirmDialog(
+            request.confirm.ConfirmDialog(
                 title = title,
                 message = message,
                 confirmText = stringResource(CoreUiRes.string.core_confirm),
@@ -1066,3 +1068,24 @@ private data class PendingEpisodeDelete(
     val episodeId: String,
     val name: String,
 )
+
+/**
+ * ONE pending mark-played confirm: the [Scope] + direction pair the dialog's
+ * verb/message derive from, plus the shared [ConfirmState] holding the
+ * deferred ViewModel call. Replaces the two hand-synced confirm machines and
+ * their `toWatched` mirrors; [ConfirmState.isVisible] stays the dialog-open
+ * flag and settles on both dismiss and confirm, leaving a stale request value
+ * that is benign until the next request overwrites it (same semantics the
+ * `toWatched` mirrors had).
+ */
+private data class MarkPlayedConfirmRequest(
+    val scope: Scope,
+    val toWatched: Boolean,
+    val confirm: ConfirmState,
+) {
+    /** What the confirm addresses: the item itself (a series) or one season. */
+    sealed interface Scope {
+        data object Item : Scope
+        data class Season(val seasonId: String) : Scope
+    }
+}

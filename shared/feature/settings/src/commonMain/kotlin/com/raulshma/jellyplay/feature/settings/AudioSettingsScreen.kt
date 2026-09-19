@@ -30,6 +30,7 @@ import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.SettingListItem
 import com.raulshma.jellyplay.core.ui.components.SettingToggleItem
 import com.raulshma.jellyplay.core.ui.components.SettingsItemList
+import com.raulshma.jellyplay.core.ui.tv.CenteredBringIntoView
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
@@ -136,16 +137,43 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_volu
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_volume_normalization
 
 /**
+ * The audio screen's [RowAdmissionFlags] — the parent-toggle states the audio
+ * group's declared [RowAdmission.WhenOn] gates resolve against (both
+ * [audioScreenRowTotal] and the screen's emission `if`s read them; the
+ * `volume_normalization` parent counts as on in the TRACK/ALBUM modes).
+ * Pure (and internal) so the contract test can pin it.
+ */
+internal fun audioRowAdmissionFlags(showAdvanced: Boolean, preferences: AudioPreferences): RowAdmissionFlags =
+    RowAdmissionFlags(
+        showAdvanced = showAdvanced,
+        parentsOn = rowParentsOn(
+            "volume_normalization" to (
+                preferences.audioNormalizationMode == AudioNormalizationMode.TRACK ||
+                    preferences.audioNormalizationMode == AudioNormalizationMode.ALBUM
+                ),
+            "equalizer" to preferences.equalizerEnabled,
+            "dialogue_boost" to preferences.dialogueBoostEnabled,
+            "night_mode" to preferences.nightModeEnabled,
+            "bass_boost" to preferences.bassBoostEnabled,
+            "virtualizer" to preferences.virtualizerEnabled,
+            "volume_boost" to preferences.volumeBoostEnabled,
+            "channel_mixing" to preferences.channelMixEnabled,
+        ),
+    )
+
+/**
  * The audio group's `SettingsItemList(total = …)` row count, derived from the
  * [SettingsScreenGroups.audio] declaration (the Playback screen's landed
  * shape): non-advanced rows always render; an advanced row renders only
  * behind the advanced toggle — and the effect-dependent strength rows (plus
  * the replaygain pre-amp and the equalizer preset) only while their parent
- * effect is enabled. The dialogue-boost pair renders inside this screen's
- * equalizer block too, but its declaration lives with the playback
- * advanced-video group (both screens render the shared audio-effects rows),
- * so it is counted from that group's declaration: the toggle rides
- * `equalizerEnabled`, the strength row the dialogue-boost toggle itself.
+ * effect is enabled, each via its declared [RowAdmission] (the same predicate
+ * the screen's emission `if`s read). The dialogue-boost pair renders inside
+ * this screen's equalizer block too, but its declaration lives with the
+ * playback advanced-video group (both screens render the shared
+ * audio-effects rows), so it is counted from that group: the toggle rides
+ * the equalizer block (read through the preset row's declared gate), the
+ * strength row its own declared dialogue-boost gate.
  *
  * Pure (and internal) so the contract test can pin each conditional against
  * the declaration.
@@ -153,23 +181,18 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_volu
 internal fun audioScreenRowTotal(
     showAdvanced: Boolean,
     preferences: AudioPreferences,
-): Int = SettingsScreenGroups.audio.items.count { item ->
-    !item.isAdvanced || (showAdvanced && when (item.id) {
-        "replaygain_preamp" -> preferences.audioNormalizationMode == AudioNormalizationMode.TRACK ||
-            preferences.audioNormalizationMode == AudioNormalizationMode.ALBUM
-        "equalizer_preset" -> preferences.equalizerEnabled
-        "night_mode_strength" -> preferences.nightModeEnabled
-        "bass_boost_strength" -> preferences.bassBoostEnabled
-        "virtualizer_strength" -> preferences.virtualizerEnabled
-        "volume_boost_gain" -> preferences.volumeBoostEnabled
-        "channel_mix_mode" -> preferences.channelMixEnabled
-        else -> true
-    })
-} + SettingsScreenGroups.playbackAdvancedVideo.items.count { item ->
-    when (item.id) {
-        "dialogue_boost" -> showAdvanced && preferences.equalizerEnabled
-        "dialogue_boost_strength" -> showAdvanced && preferences.dialogueBoostEnabled
-        else -> false
+): Int {
+    val flags = audioRowAdmissionFlags(showAdvanced, preferences)
+    return SettingsScreenGroups.audio.items.count { item ->
+        SettingsScreenGroups.audio.admissionOf(item.id)?.admitted(flags)
+            ?: (!item.isAdvanced || showAdvanced)
+    } + SettingsScreenGroups.playbackAdvancedVideo.items.count { item ->
+        when (item.id) {
+            "dialogue_boost" -> SettingsScreenGroups.audio.rowAdmitted("equalizer_preset", flags)
+            "dialogue_boost_strength" -> showAdvanced &&
+                SettingsScreenGroups.playbackAdvancedVideo.rowAdmitted(item.id, flags)
+            else -> false
+        }
     }
 }
 
@@ -184,6 +207,10 @@ fun AudioSettingsScreen(
     val showAdvanced by viewModel.showAdvancedSettings.collectAsStateWithLifecycle()
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
+    // The declared row admissions both the row total and the emission `if`s
+    // below read — one gate per id, declared beside the group items
+    // (SettingsSearchItemGroup.rowAdmitted).
+    val rowFlags = audioRowAdmissionFlags(showAdvanced, preferences)
     // The one remaining dialog slot (beside the activePicker): the co-located
     // EqualizerEditorSheet. The former sealed AudioSettingsDialog identity tag
     // carried a single real variant.
@@ -209,12 +236,7 @@ fun AudioSettingsScreen(
             )
         },
     ) { innerPadding ->
-        // Center a highlighted (search-navigated) setting in the viewport instead of parking it
-        // at the bottom edge, which is the default BringIntoViewSpec behaviour.
-        androidx.compose.runtime.CompositionLocalProvider(
-            androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides
-                com.raulshma.jellyplay.core.ui.tv.CenterBringIntoViewSpec
-        ) {
+        CenteredBringIntoView {
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
@@ -442,9 +464,7 @@ fun AudioSettingsScreen(
                                 )
                             },
                         )
-                        if (preferences.audioNormalizationMode == AudioNormalizationMode.TRACK ||
-                            preferences.audioNormalizationMode == AudioNormalizationMode.ALBUM
-                        ) {
+                        if (SettingsScreenGroups.audio.rowAdmitted("replaygain_preamp", rowFlags)) {
                             val replayGainPreAmpTitle = stringResource(Res.string.settings_replaygain_preamp)
                             SettingListItem(
                                 icon = Tabler.Outline.Adjustments,
@@ -475,7 +495,7 @@ fun AudioSettingsScreen(
                             onCheckedChange = { viewModel.edit { scope -> scope.audioEffects.setEqualizerEnabled(it) } },
                             onClick = { showEqualizerEditor = true },
                         )
-                        if (preferences.equalizerEnabled) {
+                        if (SettingsScreenGroups.audio.rowAdmitted("equalizer_preset", rowFlags)) {
                             val equalizerPresetTitle = stringResource(Res.string.settings_equalizer_preset)
                             SettingListItem(
                                 icon = Tabler.Outline.Adjustments,
@@ -502,7 +522,7 @@ fun AudioSettingsScreen(
                                 onCheckedChange = { viewModel.edit { scope -> scope.audioEffects.setDialogueBoostEnabled(it) } },
                             )
                         }
-                        if (preferences.dialogueBoostEnabled) {
+                        if (SettingsScreenGroups.playbackAdvancedVideo.rowAdmitted("dialogue_boost_strength", rowFlags)) {
                             val dialogueBoostStrengthTitle = stringResource(Res.string.settings_dialogue_boost_strength)
                             SettingListItem(
                                 icon = Tabler.Outline.Music,
@@ -529,7 +549,7 @@ fun AudioSettingsScreen(
                             highlighted = highlightSettingId == "night_mode",
                             onCheckedChange = { viewModel.edit { scope -> scope.audioEffects.setNightModeEnabled(it) } },
                         )
-                        if (preferences.nightModeEnabled) {
+                        if (SettingsScreenGroups.audio.rowAdmitted("night_mode_strength", rowFlags)) {
                                 val nightModeStrengthTitle = stringResource(Res.string.settings_night_mode_strength)
                                 SettingListItem(
                                     icon = Tabler.Outline.Moon,
@@ -557,7 +577,7 @@ fun AudioSettingsScreen(
                             highlighted = highlightSettingId == "bass_boost",
                             onCheckedChange = { viewModel.edit { scope -> scope.audioEffects.setBassBoostEnabled(it) } },
                         )
-                        if (preferences.bassBoostEnabled) {
+                        if (SettingsScreenGroups.audio.rowAdmitted("bass_boost_strength", rowFlags)) {
                                 val bassBoostStrengthTitle = stringResource(Res.string.settings_bass_boost_strength)
                                 SettingListItem(
                                     icon = Tabler.Outline.WaveSine,
@@ -586,7 +606,7 @@ fun AudioSettingsScreen(
                             highlighted = highlightSettingId == "virtualizer",
                             onCheckedChange = { viewModel.edit { scope -> scope.audioEffects.setVirtualizerEnabled(it) } },
                         )
-                        if (preferences.virtualizerEnabled) {
+                        if (SettingsScreenGroups.audio.rowAdmitted("virtualizer_strength", rowFlags)) {
                                 val virtualizerStrengthTitle = stringResource(Res.string.settings_virtualizer_strength)
                                 SettingListItem(
                                     icon = Tabler.Outline.Speakerphone,
@@ -615,8 +635,8 @@ fun AudioSettingsScreen(
                             highlighted = highlightSettingId == "volume_boost",
                             onCheckedChange = { viewModel.edit { scope -> scope.audioEffects.setVolumeBoostEnabled(it) } },
                         )
-                        if (preferences.volumeBoostEnabled) {
-                            val volumeBoostGainTitle = stringResource(Res.string.settings_volume_boost_gain)
+                        if (SettingsScreenGroups.audio.rowAdmitted("volume_boost_gain", rowFlags)) {
+                                val volumeBoostGainTitle = stringResource(Res.string.settings_volume_boost_gain)
                             SettingListItem(
                                 icon = Tabler.Outline.Speakerphone,
                                 title = stringResource(Res.string.settings_volume_boost_gain),
@@ -670,7 +690,7 @@ fun AudioSettingsScreen(
                             highlighted = highlightSettingId == "channel_mixing",
                             onCheckedChange = { viewModel.edit { scope -> scope.audio.setChannelMixEnabled(it) } },
                         )
-                        if (preferences.channelMixEnabled) {
+                        if (SettingsScreenGroups.audio.rowAdmitted("channel_mix_mode", rowFlags)) {
                                 val channelMixModeTitle = stringResource(Res.string.settings_channel_mix_mode)
                                 SettingListItem(
                                     icon = Tabler.Outline.Speakerphone,

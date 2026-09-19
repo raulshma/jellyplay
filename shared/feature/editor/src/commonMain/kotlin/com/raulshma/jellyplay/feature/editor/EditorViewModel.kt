@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlin.io.encoding.Base64
@@ -76,66 +77,180 @@ internal class EditorViewModel(
         }
     }
 
-    fun loadEditorData(itemId: String) {
-        launch {
-            _uiState.update { it.copy(isLoading = true, error = null) }
-            try {
-                val isAdmin = isAdminFlow.value?.isAdmin == true
-                val detail: MediaDetail
-                val editorInfo: MetadataEditorInfo?
-                val imageInfos: List<ImageInfo>
-                val providers: List<ImageProviderInfo>
-                coroutineScope {
-                    val detailDeferred = async { editorRepository.getMediaDetail(itemId) }
-                    // Editor metadata / image providers are admin-only endpoints.
-                    // Skip them for non-admins instead of firing guaranteed-to-fail
-                    // 403s (the server still enforces; this is defense-in-depth).
-                    val editorInfoDeferred = async {
-                        if (isAdmin) editorRepository.getMetadataEditorInfo(itemId).getOrNull() else null
-                    }
-                    val imageInfoDeferred = async {
-                        if (isAdmin) editorRepository.getItemImageInfo(itemId).getOrNull() else null
-                    }
-                    val providersDeferred = async {
-                        if (isAdmin) editorRepository.getRemoteImageProviders(itemId).getOrNull() else null
-                    }
-
-                    detail = detailDeferred.await().getOrThrow()
-                    editorInfo = editorInfoDeferred.await()
-                    imageInfos = imageInfoDeferred.await() ?: emptyList()
-                    providers = providersDeferred.await() ?: emptyList()
-                }
-
-                val form = EditableItemMetadataForm.fromDetail(detail)
-
-                _uiState.update { state ->
-                    state.copy(
-                        isLoading = false,
-                        mediaDetail = detail,
-                        editorInfo = editorInfo,
-                        imageInfos = imageInfos,
-                        imageProviders = providers,
-                        metadata = state.metadata.loaded(form),
-                    )
-                }
-            } catch (e: Exception) {
-                _uiState.update { it.copy(isLoading = false, error = e.message) }
-            }
+    /**
+     * The single command funnel (the HomeViewModel `onEvent` precedent):
+     * every user intent arrives as an [EditorUiEvent] and is routed once
+     * here. The `handle*` arms are the private handlers behind the kept tab
+     * delegates below; the remaining events route to the former command funs,
+     * now private (their names are unchanged for the internal reload
+     * callers).
+     */
+    fun onEvent(event: EditorUiEvent) {
+        when (event) {
+            EditorUiEvent.ClearError -> clearError()
+            is EditorUiEvent.LoadEditorData -> loadEditorData(event.itemId)
+            EditorUiEvent.SaveMetadata -> saveMetadata()
+            is EditorUiEvent.UpdateField -> updateField(event.update)
+            is EditorUiEvent.UploadImage -> uploadImage(event.imageBytes, event.imageType)
+            is EditorUiEvent.UploadImageFromFile -> handleUploadImageFromFile(event.file, event.imageType)
+            is EditorUiEvent.UploadImageFromUrl -> handleUploadImageFromUrl(event.url, event.imageType)
+            is EditorUiEvent.DeleteImage -> handleDeleteImage(event.imageType, event.imageIndex)
+            is EditorUiEvent.LoadRemoteImages -> handleLoadRemoteImages(event.imageType, event.provider, event.startIndex)
+            is EditorUiEvent.UploadSubtitle -> uploadSubtitle(
+                event.fileBytes,
+                event.fileName,
+                event.language,
+                event.isForced,
+                event.isHearingImpaired,
+            )
+            is EditorUiEvent.UploadSubtitleFromFile -> handleUploadSubtitleFromFile(
+                event.file,
+                event.fileName,
+                event.language,
+                event.isForced,
+                event.isHearingImpaired,
+            )
+            is EditorUiEvent.DeleteSubtitle -> handleDeleteSubtitle(event.index)
+            is EditorUiEvent.SearchRemoteSubtitles -> handleSearchRemoteSubtitles(event.language)
+            is EditorUiEvent.DownloadRemoteSubtitle -> handleDownloadRemoteSubtitle(event.subtitleId)
+            EditorUiEvent.LoadConfiguredSubtitleProviders -> handleLoadConfiguredSubtitleProviders()
+            is EditorUiEvent.SearchAllSubtitleProviders -> handleSearchAllSubtitleProviders(event.language)
+            is EditorUiEvent.DownloadProviderSubtitle -> handleDownloadProviderSubtitle(event.result)
+            is EditorUiEvent.RefreshMetadata -> refreshMetadata(event.mode, event.replaceAllMetadata, event.replaceAllImages)
         }
+    }
+
+    // region Kept tab delegates -------------------------------------------------
+    // ImagesTab.kt and SubtitlesTab.kt are owned by another builder and still
+    // call these names; each is a one-line forward into the funnel and dies
+    // when those files adopt onEvent.
+    // ----------------------------------------------------------------------------
+
+    fun uploadImageFromFile(file: EditorPickedFile, imageType: String) =
+        onEvent(EditorUiEvent.UploadImageFromFile(file, imageType))
+
+    fun uploadImageFromUrl(url: String, imageType: String) =
+        onEvent(EditorUiEvent.UploadImageFromUrl(url, imageType))
+
+    fun deleteImage(imageType: String, imageIndex: Int? = null) =
+        onEvent(EditorUiEvent.DeleteImage(imageType, imageIndex))
+
+    fun loadRemoteImages(imageType: String? = null, provider: String? = null, startIndex: Int? = null) =
+        onEvent(EditorUiEvent.LoadRemoteImages(imageType, provider, startIndex))
+
+    fun loadConfiguredSubtitleProviders() =
+        onEvent(EditorUiEvent.LoadConfiguredSubtitleProviders)
+
+    fun uploadSubtitleFromFile(
+        file: EditorPickedFile,
+        fileName: String,
+        language: String?,
+        isForced: Boolean,
+        isHearingImpaired: Boolean,
+    ) = onEvent(
+        EditorUiEvent.UploadSubtitleFromFile(file, fileName, language, isForced, isHearingImpaired),
+    )
+
+    fun deleteSubtitle(index: Int) =
+        onEvent(EditorUiEvent.DeleteSubtitle(index))
+
+    fun searchRemoteSubtitles(language: String) =
+        onEvent(EditorUiEvent.SearchRemoteSubtitles(language))
+
+    fun downloadRemoteSubtitle(subtitleId: String) =
+        onEvent(EditorUiEvent.DownloadRemoteSubtitle(subtitleId))
+
+    fun searchAllSubtitleProviders(language: String) =
+        onEvent(EditorUiEvent.SearchAllSubtitleProviders(language))
+
+    fun downloadProviderSubtitle(result: SubtitleSearchResult) =
+        onEvent(EditorUiEvent.DownloadProviderSubtitle(result))
+
+    // endregion
+
+    private fun loadEditorData(itemId: String) {
+        launch {
+            EditorLoad.load(
+                start = { _uiState.update { it.copy(isLoading = true, error = null) } },
+                fetch = { fetchEditorData(itemId) },
+                onSuccess = { loaded ->
+                    _uiState.update { state ->
+                        state.copy(
+                            isLoading = false,
+                            mediaDetail = loaded.detail,
+                            editorInfo = loaded.editorInfo,
+                            imageInfos = loaded.imageInfos,
+                            imageProviders = loaded.imageProviders,
+                            metadata = state.metadata.loaded(loaded.form),
+                        )
+                    }
+                },
+                onFailure = { e -> _uiState.update { it.copy(isLoading = false, error = e.message) } },
+            )
+        }
+    }
+
+    /**
+     * The load ladder's one fetch: the detail (required) plus the three
+     * admin-gated side fetches, resolved concurrently into a single
+     * [Result]. Catches [Exception] — not [Throwable] — so a fatal `Error`
+     * still propagates; [CancellationException] rethrows so a cancelled
+     * load reports as cancelled, not as a load failure.
+     */
+    private suspend fun fetchEditorData(itemId: String): Result<EditorLoadedData> = try {
+        val isAdmin = isAdminFlow.value?.isAdmin == true
+        val detail: MediaDetail
+        val editorInfo: MetadataEditorInfo?
+        val imageInfos: List<ImageInfo>
+        val providers: List<ImageProviderInfo>
+        coroutineScope {
+            val detailDeferred = async { editorRepository.getMediaDetail(itemId) }
+            // Editor metadata / image providers are admin-only endpoints.
+            // Skip them for non-admins instead of firing guaranteed-to-fail
+            // 403s (the server still enforces; this is defense-in-depth).
+            val editorInfoDeferred = async {
+                if (isAdmin) editorRepository.getMetadataEditorInfo(itemId).getOrNull() else null
+            }
+            val imageInfoDeferred = async {
+                if (isAdmin) editorRepository.getItemImageInfo(itemId).getOrNull() else null
+            }
+            val providersDeferred = async {
+                if (isAdmin) editorRepository.getRemoteImageProviders(itemId).getOrNull() else null
+            }
+
+            detail = detailDeferred.await().getOrThrow()
+            editorInfo = editorInfoDeferred.await()
+            imageInfos = imageInfoDeferred.await() ?: emptyList()
+            providers = providersDeferred.await() ?: emptyList()
+        }
+
+        Result.success(
+            EditorLoadedData(
+                detail = detail,
+                editorInfo = editorInfo,
+                imageInfos = imageInfos,
+                imageProviders = providers,
+                form = EditableItemMetadataForm.fromDetail(detail),
+            ),
+        )
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        Result.failure(e)
     }
 
     /** Edits the metadata form (typed — the lambda sees only the form, never
      *  the whole UiState; [EditorUiState.isDirty] derives from the session). */
-    fun updateField(update: (EditableItemMetadataForm) -> EditableItemMetadataForm) {
+    private fun updateField(update: (EditableItemMetadataForm) -> EditableItemMetadataForm) {
         _uiState.update { state -> state.copy(metadata = state.metadata.edit(update)) }
     }
 
     /** Clears the transient [EditorUiState.error] shown by the screen's error banner. */
-    fun clearError() {
+    private fun clearError() {
         _uiState.update { it.copy(error = null) }
     }
 
-    fun saveMetadata() {
+    private fun saveMetadata() {
         launch {
             // Clear any stale error from a prior failed save so the red banner
             // doesn't linger while this retry is in flight.
@@ -150,13 +265,15 @@ internal class EditorViewModel(
                 ).getOrThrow()
 
                 _uiState.update { it.copy(isSaving = false, metadata = it.metadata.saved()) }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _uiState.update { it.copy(isSaving = false, error = e.message) }
             }
         }
     }
 
-    fun uploadImage(imageBytes: ByteArray, imageType: String) {
+    private fun uploadImage(imageBytes: ByteArray, imageType: String) {
         launch {
             val itemId = _uiState.value.mediaDetail?.item?.id ?: return@launch
             editorRepository.setItemImage(itemId, imageType, imageBytes)
@@ -172,7 +289,7 @@ internal class EditorViewModel(
      * java.io.File on desktop); failures surface through
      * [EditorUiState.error] exactly as the legacy contentResolver idiom did.
      */
-    fun uploadImageFromFile(file: EditorPickedFile, imageType: String) {
+    private fun handleUploadImageFromFile(file: EditorPickedFile, imageType: String) {
         launch {
             val itemId = _uiState.value.mediaDetail?.item?.id ?: return@launch
             runCatching { file.readBytes() }
@@ -181,7 +298,7 @@ internal class EditorViewModel(
         }
     }
 
-    fun uploadImageFromUrl(url: String, imageType: String) {
+    private fun handleUploadImageFromUrl(url: String, imageType: String) {
         launch {
             val itemId = _uiState.value.mediaDetail?.item?.id ?: return@launch
             editorRepository.downloadRemoteImage(itemId, imageType, url)
@@ -190,7 +307,7 @@ internal class EditorViewModel(
         }
     }
 
-    fun deleteImage(imageType: String, imageIndex: Int? = null) {
+    private fun handleDeleteImage(imageType: String, imageIndex: Int?) {
         launch {
             val itemId = _uiState.value.mediaDetail?.item?.id ?: return@launch
             editorRepository.deleteItemImage(itemId, imageType, imageIndex)
@@ -199,7 +316,7 @@ internal class EditorViewModel(
         }
     }
 
-    fun loadRemoteImages(imageType: String? = null, provider: String? = null, startIndex: Int? = null) {
+    private fun handleLoadRemoteImages(imageType: String?, provider: String?, startIndex: Int?) {
         launch {
             val itemId = _uiState.value.mediaDetail?.item?.id ?: return@launch
             editorRepository.getRemoteImages(itemId, imageType, provider, startIndex, 50)
@@ -208,7 +325,7 @@ internal class EditorViewModel(
         }
     }
 
-    fun uploadSubtitle(fileBytes: ByteArray, fileName: String, language: String?, isForced: Boolean, isHearingImpaired: Boolean) {
+    private fun uploadSubtitle(fileBytes: ByteArray, fileName: String, language: String?, isForced: Boolean, isHearingImpaired: Boolean) {
         launch {
             val itemId = _uiState.value.mediaDetail?.item?.id ?: return@launch
             val base64Data = Base64.Default.encode(fileBytes)
@@ -226,7 +343,7 @@ internal class EditorViewModel(
      * java.io.File on desktop); failures surface through
      * [EditorUiState.error] exactly as the legacy contentResolver idiom did.
      */
-    fun uploadSubtitleFromFile(
+    private fun handleUploadSubtitleFromFile(
         file: EditorPickedFile,
         fileName: String,
         language: String?,
@@ -241,7 +358,7 @@ internal class EditorViewModel(
         }
     }
 
-    fun deleteSubtitle(index: Int) {
+    private fun handleDeleteSubtitle(index: Int) {
         launch {
             val itemId = _uiState.value.mediaDetail?.item?.id ?: return@launch
             // Capture the stream being deleted so legacy local copies (saved
@@ -262,7 +379,7 @@ internal class EditorViewModel(
             ?.filter { it.type == StreamType.SUBTITLE }
             ?: emptyList()
 
-    fun searchRemoteSubtitles(language: String) {
+    private fun handleSearchRemoteSubtitles(language: String) {
         launch {
             val itemId = _uiState.value.mediaDetail?.item?.id ?: return@launch
             editorRepository.searchRemoteSubtitles(itemId, language)
@@ -271,7 +388,7 @@ internal class EditorViewModel(
         }
     }
 
-    fun downloadRemoteSubtitle(subtitleId: String) {
+    private fun handleDownloadRemoteSubtitle(subtitleId: String) {
         launch {
             val itemId = _uiState.value.mediaDetail?.item?.id ?: return@launch
             editorRepository.downloadRemoteSubtitle(itemId, subtitleId)
@@ -286,7 +403,7 @@ internal class EditorViewModel(
     // matching the editor's metadata-management semantics.
 
     /** Loads the user's configured subtitle providers into UiState (chip visibility). */
-    fun loadConfiguredSubtitleProviders() {
+    private fun handleLoadConfiguredSubtitleProviders() {
         launch {
             val configured = subtitleProviderRepository.configuredProviders().first()
             _uiState.update { it.copy(configuredSubtitleProviders = configured) }
@@ -298,7 +415,7 @@ internal class EditorViewModel(
      * results are merged centrally in the repository; per-provider errors
      * surface as chips.
      */
-    fun searchAllSubtitleProviders(language: String) {
+    private fun handleSearchAllSubtitleProviders(language: String) {
         val detail = _uiState.value.mediaDetail ?: return
         val itemId = detail.item.id
         launch {
@@ -334,13 +451,13 @@ internal class EditorViewModel(
     /**
      * Downloads an external-provider subtitle and uploads it to the Jellyfin
      * server so it persists as a media stream. Jellyfin rows route through the
-     * existing [downloadRemoteSubtitle] server-side path.
+     * server-side [handleDownloadRemoteSubtitle] path.
      */
-    fun downloadProviderSubtitle(result: SubtitleSearchResult) {
+    private fun handleDownloadProviderSubtitle(result: SubtitleSearchResult) {
         val itemId = _uiState.value.mediaDetail?.item?.id ?: return
         when (result.provider) {
             SubtitleProviderKind.JELLYFIN -> {
-                result.jellyfinInfo?.let { downloadRemoteSubtitle(it.id) }
+                result.jellyfinInfo?.let { handleDownloadRemoteSubtitle(it.id) }
             }
             else -> launch {
                 _uiState.update { it.copy(isDownloadingProviderSubtitle = true) }
@@ -398,7 +515,7 @@ internal class EditorViewModel(
 
     // endregion
 
-    fun refreshMetadata(
+    private fun refreshMetadata(
         mode: String = "FullRefresh",
         replaceAllMetadata: Boolean = false,
         replaceAllImages: Boolean = false,
@@ -435,3 +552,12 @@ internal class EditorViewModel(
             .onSuccess { infos -> _uiState.update { it.copy(imageInfos = infos) } }
     }
 }
+
+/** The single fetch's payload for the load ladder behind `loadEditorData`. */
+private class EditorLoadedData(
+    val detail: MediaDetail,
+    val editorInfo: MetadataEditorInfo?,
+    val imageInfos: List<ImageInfo>,
+    val imageProviders: List<ImageProviderInfo>,
+    val form: EditableItemMetadataForm,
+)

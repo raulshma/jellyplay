@@ -9,10 +9,11 @@ import java.io.File
 /**
  * Ratchet against reintroducing the god-state wiring pattern.
  *
- * 1. The nine migrated controllers (`SleepTimerController`,
+ * 1. The eleven migrated controllers (`SleepTimerController`,
  *    `TrackSelectionHelper`, `SubtitleManager`, `VideoEffectsController`,
  *    `AbRepeatController`, `SyncPlayBridge`, `PlaybackSession`,
- *    `EpisodeNavigator`, `SubtitlePreviewController`) must not
+ *    `EpisodeNavigator`, `SubtitlePreviewController`,
+ *    `SubtitleStyleController`, `MediaContentProjector`) must not
  *    reference [VideoPlayerUiState] at all — their interface is their state
  *    class plus commands, never the state bag or a state transformer.
  * 2. The count of god-state wirings (`getUiState =` / `updateUiState =` /
@@ -34,6 +35,8 @@ class ControllerOwnershipTest {
         "PlaybackSession.kt",
         "EpisodeNavigator.kt",
         "SubtitlePreviewController.kt",
+        "SubtitleStyleController.kt",
+        "MediaContentProjector.kt",
     )
 
     /** The maximum allowed god-state wirings in src/main (see class KDoc). */
@@ -41,8 +44,9 @@ class ControllerOwnershipTest {
 
     private fun mainSources(): List<File> {
         // KMP move: the module's main sources now live under
-        // src/commonMain/kotlin + src/androidMain/kotlin (the monolith
-        // ViewModel + session stack are androidMain), not src/main/java.
+        // src/commonMain/kotlin + src/androidMain/kotlin (the ViewModel and
+        // the session stack are commonMain; androidMain keeps only the
+        // engine adapters + platform seams), not src/main/java.
         var dir: File? = File(System.getProperty("user.dir")).absoluteFile
         var moduleRoot: File? = null
         while (dir != null && moduleRoot == null) {

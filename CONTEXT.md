@@ -1938,7 +1938,7 @@ hand-listed (since 2026-09-09): the test parses every `include(...)` in
 `build.gradle.kts` dirs (pruning build output), unioning both — a new
 module is guarded the moment it exists, and a canary assertion checks
 discovery ⊇ the retired 40-path hand list (the single widening found,
-`baselineprofile`, contained no `runCatching`; baseline 22 unchanged).
+`baselineprofile`, contained no `runCatching`; baseline unchanged).
 Two known deliberate baseline entries are named in the
 test's KDoc (HomeDiscoveryStore's best-effort migration swallow,
 PluginConfigViewModel's asset read); `AddToTargetActions
@@ -1949,13 +1949,25 @@ inside suspend LAMBDAS; a review pass converted the two found
 that way (AdminDashboardViewModel's and LogsViewModel's `AdminLoad` fetch
 variants — recorded in the test KDoc too). Lower the baseline when another site
 converts, never raise it; prefer extracting a legitimate parse out of
-the suspend body over raising it. Known debt on record: the ratchet runs
-at 31 bare sites vs the 22 baseline, all pre-existing (player-book
-PDF/TOC files, `MetadataApiClientImpl`, `AuthRepositoryImpl`,
-`MultiConnectionDownloadStrategy`, `HeatmapShare`, `LiveTvPlayerViewModel`,
-`UnifiedMediaDetailProviderImpl`, `OkHttpSuspend`, `DesktopFlowHarness`,
-plus the two recorded deliberate entries) — convert per the rule,
-lowering the baseline as you go.
+the suspend body over raising it. The ratchet runs at exactly the two
+KDoc'd deliberate entries (baseline 2). The heuristic's one blind spot
+(suspend lambdas) holds two benign occupants, both pure in-memory
+parses the house rule allows: `AdminStatisticsRepositoryImpl`'s and
+`MediaCleanupScanCore`'s JSON decodes inside a Flow `.map` (a third
+blind-spot body — `DesktopEpubReaderHost`'s non-suspend `File.delete()`
+swallow, nested inside a rethrowing wrapper — cannot mask cancellation
+and isn't counted). The doctrine covers the `catch (e: Exception)` twin
+too, which masks cancellation exactly like bare `runCatching` and is
+invisible to the ratchet: the `CancellationException`-rethrow arm leads
+the general arm in `EditorViewModel` (load + save),
+`DownloadSidecarCore` (trickplay, subtitle pass outer + per-stream,
+segments), and `MediaCleanupScanCore` (`runScan`, audit-log prune);
+`SearchViewModel`'s filter persist/clear writes ride
+`runCatchingRethrowingCancellation` outright. The ratchet's own scanner
+ignores bodyless `suspend fun` declarations (interface members — the
+next function's body must not graft onto their window) and hits carry
+true source lines through the comment-stripping collapse (a
+per-character line map — the test KDoc records both).
 **`Semaphore.mapConcurrent` / `mapConcurrentCatching`**
 (`MapConcurrent.kt`, same module) is the one bounded-parallel-map surface:
 order-preserving `items.map { async { withPermit { … } } }.awaitAll()` written
@@ -2904,9 +2916,47 @@ doc). Shape notes:
   Adding a reader event is parser-branch + sealed variant + one `when`
   arm. **`BookDeliveryTracker`** owns the boot-transfer gates
   (pageGeneration/deliveredGeneration/bookBase64: encode, send, payload
-  release, appearance push) as pure decisions; the hosts keep only their
-  genuinely divergent halves (WebView bridge vs CEF poll, live vs latched
-  page-load fact — declared divergences in KDoc).
+  release, appearance push) as pure decisions. The five-block effect
+  ladder that CONSUMES those gates — receipt wiring, encode, chunked
+  send, payload release, appearance push — is shared too: commonMain
+  **`BookTransferEffects`** (epub/, a composable over the Compose-free
+  `encodeBookIfDue`/`sendBookIfDue` steps + the
+  `EpubEventListener.failBoot()` extension) owns it once, keyed exactly
+  as the tracker decides, with `rememberUpdatedState` lambda params so
+  stale captures cannot re-send. The hosts keep only their genuinely
+  divergent halves (WebView bridge vs CEF poll, live vs latched
+  page-load fact, and the failure source — declared divergences in
+  KDoc). Android's encode + HTML build previously had NO failure arm
+  (an IOException there was an uncaught composition-effect crash);
+  both hosts now fold encode/build failures into `failBoot()` →
+  `EpubEvent.Status(ERROR)` on the RAW seam → the existing error veil
+  (retryable, nothing latched). Pinned by `BookTransferEffectsTest`
+  (encode-failure path, cancellation rethrow, full ladder over a fake
+  eval receiver, reload re-run). **`EpubProtocolMirrorTest`** is the
+  JS↔Kotlin semantic mirror pin: source-scans reader.js against the
+  Kotlin sides — `locations.generate(N)` == `EPUB_LOCATION_PAGE_CHARS`,
+  every posted `type:'…'` string ⊆ `EpubEventParser`'s dispatch keys,
+  the `window.jellyPlayReader` handler set ≡ the emitted builders (the
+  one declared exemption: `loadBook`, the small-book test entry the
+  hosts never ride), and the annotation swatch palette hex map ≡
+  `ReaderSelection`'s swatch arms. The desktop host gates its
+  WebView on **`KcefStatus`** (IDLE/STARTING/READY/FAILED/RESTART_REQUIRED):
+  a dead viewer fails the boot into the error veil via the RAW event seam
+  (never the receipt-wrapped one — a receipt for an undelivered generation
+  would bar the retry's encode), init retries on the next reader open, and
+  the page-identity probe re-polls on a bounded retry (the desktop evaluate
+  path swallows null results without invoking the callback, so one shot can
+  strand the boot); `DesktopViewerBootTest` pins the probe vocabulary and
+  the retry admission. The desktop chrome is in-flow, not floating
+  (`epubChromeOverlaysContent`: windowed CEF paints above every Compose
+  overlay, so top/bottom bars, the boot strip, the error screen, the
+  selection bar and the tick rail lay out around the browser; sheets and
+  dialogs hide it — `syncBrowserSurfaceVisibility` plus the 0px size
+  collapse while a sheet is open — so the shared sheets show cleanly) —
+  the brightness row is dropped there (a dim
+  veil cannot cover the native view) and the root requests Compose focus on
+  entry (clicks land in CEF, which never yields it, or keyboard paging
+  would be dead).
 - **`ReflowableReaderSession`** (`ReaderControllers.kt`) is the reflowable
   session module: the late-bound host handle, the three screen-side
   controllers (`ReaderAnnotationSync` / `ReaderAutoScroll` /
@@ -3002,6 +3052,32 @@ overlap). See docs/adr/0004-playback-focus.md.
   `DesktopAudioQueueManager` are thin policy callers; the desktop KDoc
   parity table points at this module as the pin.
   `AudioQueuePolicyTest` pins it.
+- **`AudioQueueStateCore`** (commonMain `playback/`, beside the policy)
+  owns the queue-state chassis the audio-manager twins mirrored (~1,100
+  lines under comment-enforced parity): the 11 state flows,
+  `QueueUndoStack` + undo events, `AudioQueuePolicy` selection,
+  `QueueSnapshot` publication, and the transition choreography (tracker
+  publish → stop(prev) report → lyrics → start(next) report → prepare)
+  over the narrow `EngineDispatch` port (`isLive`/`prepare`/`play`/
+  `pause`/`stop`/`seekTo`/`setPlaybackSpeed`) plus `AudioEffectsSession`
+  (jvmMain port severing the app-side effects type) and the
+  `AudioTrackResolver` seam both platforms see. The 35-member
+  `AudioPlayerEngine` queue-surface interface lives beside the manager
+  (core:data `playback/`; `AudioPlaybackManager` implements it directly
+  — the former app-module delegate and its Koin alias are deleted).
+  `DesktopAudioQueueManager` lives here too (jvmMain, relocated from
+  apps/desktop — JVM-target-only, `java.awt`'s EventQueue guard has no
+  Android bootclasspath twin), its queue mutations all riding its
+  private dispatch object; lifecycle, observers, effects pushes and
+  release stay direct engine touches (the manager KDoc's declared
+  carve-outs). PlaybackFocus edges and observer ordering are
+  byte-identical. DECLARED DIVERGENCE: Android's
+  `AudioPlaybackManager` stays on its own choreography — its mutation
+  sites interleave playlist-owning media3 writes, `queueLoadingJob`
+  guards, crossfader and Play-On routing; routing them through the port
+  is a redesign (see Deferred designs). Pinned by
+  `AudioQueueStateCoreTest` (22 tests over a recording dispatch) + the
+  `DesktopAudioQueueManagerTest` suite (jvmTest, beside it).
 - **`PeriodicProgressReportLoop`** (commonMain `playback/`, beside the
   reporters) is the ONE periodic progress loop, shared by both local
   players: `AudioProgressReporter` (local audio) and player-video's
@@ -3420,6 +3496,21 @@ Recorded with evidence so future reviews don't re-suggest them.
   (SyncPlay indicator/button), not transport routing; and the PiP transport
   is deliberately engine-direct (it bypasses the MediaSession by design). A
   router module would relocate ~25 lines without concentrating anything.
+- **`build-logic` convention plugin (script-plugin form)**: type-safe
+  accessors do not generate for source-set manipulation performed from a
+  precompiled script plugin's transitive classpath (`KotlinSourceSet
+  with name 'jvmMain' not found` persisted through every withPlugin-guard
+  variant) — empirically rejected and fully reverted. A class-based
+  convention plugin in a `build-logic-convention` module (buildSrc-style,
+  registering source sets through the `KotlinSourceSetContainer` API
+  directly) is the recorded viable shape; do not re-attempt the
+  script-plugin form.
+- **ADR-0001 shell-policy relocation (web-gaining-session-state
+  trigger)**: web holds session STATE (`WasmAuthRepository`
+  restore/logout) but none of the controller's policy surface (no admin
+  section, no homeMode, no revoke fork), and the shell module's wasmJs
+  target already compiles the four policy files — there is nothing to
+  re-place. Recorded so the next review doesn't re-litigate.
 
 ## Deferred designs
 
@@ -3445,6 +3536,12 @@ re-derives the designs nor lands them casually.
   fixing means a processor-state read-through or dropping the immediate
   apply, a behaviour-timing change deserving a listen-pass) and the fold
   itself (the consumer rewrites onto snapshots).
+- **Audio-queue chassis Android adoption**: routing
+  `AudioPlaybackManager`'s mutations through the `AudioQueueStateCore` /
+  `EngineDispatch` port (see the audio cores section) — its mutation
+  sites interleave playlist-owning media3 writes, `queueLoadingJob`
+  guards, crossfader and Play-On routing, so adoption is a redesign,
+  not a fold. Tests first.
 - **Settings category-merge module** (`SettingsCategoryMerge`): one
   `merge(category, incoming, current)` interface in core/datastore with
   legacy v0/v1 and factory-reset as adapters, folding
@@ -3524,18 +3621,14 @@ re-derives the designs nor lands them casually.
   owning ONE gate predicate, the fetch, and per-lane clear/linger (seek
   clears immediate, gesture lingers 1 s). Deferred: overlay-timing
   regressions are visual-only; needs device eyes.
-- **`SubtitleStyleController`** (player-video): the subtitle style/delay
-  write path is ~7 pockets inside the 2704-line `VideoPlayerViewModel`,
-  protecting the load-bearing invariant "the in-memory offsetMs is the
-  per-item resolved delay and must never persist into the global store"
-  by KDoc discipline across three write paths. Design: a
-  `SubtitlePreviewController`-style controller (style flow,
-  `setStyle`/`setDelay`/`installFont`/`resolveForItem`, constructor
-  lambdas so the god-count ratchet stays at 3). Deferred: the engineFlow
-  collector seeds `uiState.subtitleStyle` with the resolved style on
-  every engine bind and the write must stay ordered before the first
-  `updateConfigWithUiState` — land in two steps, mirror write VM-side
-  first.
+- **`SubtitleStyleController`** (player-video, landed 2026-09-18): the
+  recorded design shipped (two-step: mirror write VM-side first, then
+  the move) — the subtitle style/delay/dialogue-boost write
+  choreography sits behind constructor lambdas beside the other player
+  controllers; `SubtitleStyleControllerTest` pins the
+  offsetMs-never-persists invariant (the in-memory offsetMs is the
+  per-item resolved delay and must never persist into the global store)
+  and the debounce; god-count ratchet stays 3.
 - **Settings/Library/Playback/Appearance section hosts**: `SettingsScreen`'s
   root composable holds ~1150 lines, `LibraryScreen` ~1270-line body,
   `PlaybackSettingsScreen` ~1565 (the largest undocumented one),
@@ -3543,12 +3636,17 @@ re-derives the designs nor lands them casually.
   `SETTINGS_ENTRANCE_SECTIONS`, one private composable per section.
   Deferred: composition-shape only, zero behaviour — do settings +
   library together, never bundled with behaviour changes.
-- **`PageAppender`**: three append-page ladders with drifted re-entrancy
-  vocabularies (Requests guards on `isLoading`, StatsDetail on
-  `!isLoadingMore && hasMoreItems`; the Logs defect is FIXED — see the
-  admin section). Design: one small appender owning the in-flight guard,
-  `hasMore`, and index math. Deferred: each site's interleaving
-  semantics deserve their own pinned interleaved-completion tests.
+- **`PageAppender`** (core:ui, landed 2026-09-18): the drifted
+  append-page vocabularies (Requests guarded on `isLoading`, StatsDetail
+  on `!isLoadingMore && hasMoreItems`; the Logs defect is FIXED — see
+  the admin section) ride one stateless appender beside
+  `JellyPlayViewModel` owning the in-flight guard, `hasMore`, and
+  page-index/skip math — deliberately STATELESS (sites keep the
+  ui-state flag the screen renders). Adopted by `RequestsViewModel`
+  (skip math + guard) and admin's `UserStatisticsDetailViewModel`;
+  pinned by `PageAppenderTest` plus per-site interleaved-completion
+  tests (the suppressed tap bumps nothing, a completed load owns the
+  state, terminal at totalPages).
 - **SelectionActionBar unification**: three per-screen bars
   (arrqueue/downloads/requests) share anatomy but have drifted visually
   (corner radius, container color, icon-vs-text buttons, approve/decline
@@ -3625,9 +3723,7 @@ re-derives the designs nor lands them casually.
   retry IS method-level there. Pinned by `HttpExecutorTest` + the
   per-impl retry suites (`TmdbApiClientImplTest`,
   `RadarrApiClientImplTest`).
-- **Small folds (opportunistic only)**: `SearchScreen`'s paged-item
-  access re-derives the bounds-check + peek three times — fold onto
-  core/ui's `safeItemKey` with the next SearchScreen touch. The three
+- **Small folds (opportunistic only)**: the three
   `*SecureCredentialsStore` classes (Arr/Seerr/SubtitleProvider) are
   three get/put/clear + memo copies over `SecureKeyValueStorage` with an
   inconsistent memo policy — fold onto a keyed-credentials core only if
@@ -3647,19 +3743,21 @@ re-derives the designs nor lands them casually.
   silently rides the (nonexistent) local-player transport and no-ops.
   Decide deliberately: delete the constant or register the strategy.
 - **God-ViewModel cohort funnels**: Library / Search / Editor /
-  ManageSeries / AudioPlayer ViewModels still grow per-command public
-  surfaces (AudioPlayer: 57 public funs, no ratchet). The `HomeViewModel`
-  sealed-intent precedent applies cleanly to each; queue after the
-  current pass, member-count ratchets first (cheap, stops growth).
+  ManageSeries ViewModels ride sealed-intent funnels (`LibraryUiEvent` /
+  `SearchUiEvent` / `EditorUiEvent` / `ManageSeriesUiEvent`, the
+  `HomeViewModel` `onEvent` precedent) — AudioPlayer still grows
+  per-command public surfaces (81 members, no intent fold yet). The
+  member-count ratchets are in place (one `*OwnershipTest` per VM,
+  baseline = current counts, never-raise) — growth is machine-blocked
+  while the AudioPlayer fold waits.
 - **Reader long tail** (speculative): the typography pref axis still
-  bounces ~9 files (store slice → `EpubAppearance` → JSON → reader.js
-  `pending`; an `EpubAppearance.from(snapshot)` factory beside
-  `toJsonArg`/`pushAppearanceScripts` is the concentration move),
-  `ReaderPreferences` keeps a 20+ setter wall around its genuinely deep
-  write-through core, the annotation swatch palette is duplicated
-  Kotlin↔reader.js with no mirror pin, and `MiniJson` (~140 lines)
-  remains vendored in the feature module. Fold opportunistically on the
-  next touch of each file.
+  bounces the store slice → `EpubAppearance` → JSON → reader.js
+  `pending` chain (the `EpubAppearance.from(snapshot)` snapshot→typed
+  factory landed), `ReaderPreferences` keeps a 20+ setter wall around
+  its genuinely deep write-through core, and `MiniJson` (~140 lines)
+  remains vendored in the feature module. The annotation swatch palette
+  mirror is pinned (`EpubProtocolMirrorTest`). Fold opportunistically on
+  the next touch of each file.
 - **VM-owned reader session**: invert `attachReaderSession` — the VM
   constructs `ReflowableReaderSession` (its constructor is pure
   lambdas), the screen renders its state, and the nullable

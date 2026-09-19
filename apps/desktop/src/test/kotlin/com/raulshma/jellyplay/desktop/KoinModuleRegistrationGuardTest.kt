@@ -16,44 +16,48 @@ import kotlin.test.fail
  * `Route.Shortcuts` navigation would NoDefinitionFound-crash on first open).
  * Neither broke any compile step.
  *
- * This guard auto-derives the expected list instead of hardcoding it: every
- * top-level `val <name>: Module = module {` declared in a shared feature's
- * commonMain MUST be registered in BOTH startKoin blocks (Android
- * JellyPlayApplication.kt and desktop Main.kt), and every `<identifier>`
- * Module` referenced in either block must resolve to a shared feature or
- * shared core definition (rename/typo guard). New features are picked up
- * automatically; forgetting the one-line registration fails this test with
- * the exact fix.
+ * Since the sharedFeatureModules fold, the ONE declaration both JVM shells
+ * consume is `shared/feature/shell`'s `val sharedFeatureModules = listOf(…)`
+ * (the webFeatureModules precedent, hoisted out of the shells): Android's
+ * JellyPlayApplication.kt spreads it inside its own startKoin, desktop's
+ * Main.kt consumes it through DesktopKoinModules' `desktopKoinModules(…)`
+ * list. This guard auto-derives the expected set from that declaration with
+ * set-equality in BOTH directions against the feature modules discovered
+ * under `shared/feature/<module>/src/{commonMain,jvmShared}`:
+ *  - a feature module the declaration FORGETS fails (the arrqueue/shortcuts
+ *    lesson — compile gates are blind to Koin registration);
+ *  - a declared module that no longer resolves fails (rename/typo);
+ *  - a shell re-growing a hand-copied inline feature list fails — the
+ *    feature modules may ONLY flow through the declaration's spread;
+ *  - every non-platform `<identifier>Module` in a registration list must
+ *    resolve to a shared feature or shared core definition.
  *
  * apps/web/Main.kt is covered per-site: the web shell registers only the
- * slice of the feature graph that has a wasmJs target — requestsModule first,
- * more as features land web targets. Its web check DERIVES the expected set
- * from that file's own `val webFeatureModules = listOf(...)` declaration —
- * the same list the startKoin block consumes via a spread, so there is no
- * hand-kept test-side copy to drift — with set-equality in BOTH directions
- * between the declaration and the feature modules the file actually names:
- * a feature module registered/imported on web but absent from the
- * declaration fails (conscious Main.kt edit required), a declared module
- * that no longer resolves fails (rename/typo), and the startKoin block must
- * consume the declaration rather than a divergent hand-copied list. Desktop
- * forward check + floor stay untouched.
+ * slice of the feature graph that has a wasmJs target. Its web check derives
+ * the expected set from that file's own `val webFeatureModules = listOf(…)`
+ * declaration — the same two-direction shape, kept local because web's slice
+ * is deliberately narrower than the JVM shells'.
  *
  * Source-scanning on plain text (no PSI) — deliberately cheap, but executable.
  */
 class KoinModuleRegistrationGuardTest {
 
-    /** The two startKoin registration files this ratchet covers (forward + reverse checks). */
-    private val registrationFiles = listOf(
-        "Android app" to "app/src/main/java/com/raulshma/jellyplay/JellyPlayApplication.kt",
-        "Desktop app" to "apps/desktop/src/main/kotlin/com/raulshma/jellyplay/desktop/Main.kt",
-    )
+    /** The single shared feature-module declaration both JVM shells spread. */
+    private val sharedDeclarationName = "sharedFeatureModules"
+    private val sharedDeclarationFile =
+        "shared/feature/shell/src/jvmShared/kotlin/com/raulshma/jellyplay/feature/shell/SharedFeatureModules.kt"
 
-    /**
-     * Registration files whose forward check derives from the file's own
-     * `val <name> = listOf(...)` feature-module declaration instead of the
-     * full feature graph. The reverse (typo/rename) check still applies to
-     * them in full.
-     */
+    /** The two startKoin registration sites (spread + reverse checks). */
+    private val androidRegistrationFile =
+        "app/src/main/java/com/raulshma/jellyplay/JellyPlayApplication.kt"
+    private val desktopRegistrationFile =
+        "apps/desktop/src/main/kotlin/com/raulshma/jellyplay/desktop/Main.kt"
+
+    /** The desktop module list Main.kt's startKoin consumes (the fold target). */
+    private val desktopModuleListFile =
+        "apps/desktop/src/main/kotlin/com/raulshma/jellyplay/desktop/DesktopKoinModules.kt"
+    private val desktopModuleListName = "desktopKoinModules"
+
     private val forwardAllowlistedRegistrationFiles = listOf(
         "Web app" to "apps/web/src/wasmJsMain/kotlin/com/raulshma/jellyplay/web/Main.kt",
     )
@@ -77,52 +81,138 @@ class KoinModuleRegistrationGuardTest {
     private val koinOwnModules = setOf("defaultModule", "loggerModule")
 
     /**
-     * Ratchet floor: the count of commonMain feature modules, re-measured at
-     * each housekeeping pass. 21 as of the re-count (23 features;
-     * subtitle-tester contributes none — androidMain-only — and player-video's
-     * defs live in its platform modules androidPlayerVideoModule/
-     * desktopPlayerVideoModule, so its commonMain declares no Module val).
-     * Bump when features land. A discovery-rot regression (regex stops
-     * matching, dirs move) would otherwise make the forward check vacuously
-     * green on an empty list.
+     * Ratchet floor: the count of commonMain/jvmShared feature modules,
+     * re-measured at each housekeeping pass. 22 as of the
+     * sharedFeatureModules fold (23 features; subtitle-tester contributes
+     * none — androidMain-only — and player-video's defs live in its platform
+     * modules androidPlayerVideoModule/desktopPlayerVideoModule, so its
+     * commonMain declares no Module val). Bump when features land. A
+     * discovery-rot regression (regex stops matching, dirs move) would
+     * otherwise make the forward check vacuously green on an empty list.
      */
-    private val minFeatureModuleCount = 21
+    private val minFeatureModuleCount = 22
 
+    /**
+     * The shared declaration ratchet, derived (set-equality, both
+     * directions) against the discovered feature graph:
+     *  - every declared module MUST resolve to a discovered shared feature
+     *    module (the arrqueue/shortcuts rename/typo lesson);
+     *  - every discovered feature module MUST be declared — a new feature's
+     *    Module is only registered through this list, never inline.
+     */
     @Test
-    fun everyCommonMainFeatureModule_isRegisteredInBothStartKoinBlocks() {
+    fun sharedFeatureModulesDeclaration_matchesDiscoveredFeatureModulesExactly() {
         val root = repoRoot()
         val features = discoverFeatureModules(root)
         assertTrue(
             features.size >= minFeatureModuleCount,
-            "discovered only ${features.size} commonMain feature modules " +
+            "discovered only ${features.size} commonMain/jvmShared feature modules " +
                 "(${features.keys.sorted()}), expected >= $minFeatureModuleCount — " +
                 "discovery is broken (moved dirs? new declaration style?), fix the scan in " +
                 javaClass.simpleName,
         )
 
-        val missing = buildList {
-            for ((site, path) in registrationFiles) {
-                val block = startKoinModulesBlock(root.resolve(path))
-                for ((name, declaring) in features) {
-                    if (!Regex("\\b$name\\b").containsMatchIn(block)) {
-                        add(
-                            "'$name' (declared at ${relative(root, declaring)}) is NOT registered " +
-                                "in $site's $path",
-                        )
+        val declaration = root.resolve(sharedDeclarationFile)
+        assertTrue(declaration.isFile, "missing $sharedDeclarationFile — repo layout changed?")
+        val declared = declaredFeatureModuleList(
+            stripComments(declaration.readText()),
+            sharedDeclarationName,
+        ).toSet()
+        assertTrue(
+            declared.isNotEmpty(),
+            "`$sharedDeclarationName` declaration is empty — the JVM shells register no " +
+                "feature modules anymore? Restore the list.",
+        )
+
+        val stale = declared.filter { it !in features.keys }
+        assertTrue(
+            stale.isEmpty(),
+            "`$sharedDeclarationName` names module(s) no longer declared in any shared " +
+                "feature commonMain/jvmShared: $stale — rename or removal? Update " +
+                "$sharedDeclarationName in ${declaration.name}.",
+        )
+
+        val undeclared = features.keys - declared
+        if (undeclared.isNotEmpty()) {
+            fail(
+                "shared feature Koin modules missing from `$sharedDeclarationName` — " +
+                    "compile gates are BLIND to this; koinViewModel would throw " +
+                    "NoDefinitionFound at runtime on first navigation:\n" +
+                    undeclared.sorted().joinToString("\n") { name ->
+                        "  - '$name' (declared at ${relative(root, features.getValue(name))})"
+                    } +
+                    "\nFix: add one line `<module>,` (plus its import) to " +
+                    "`$sharedDeclarationName` in $sharedDeclarationFile — both JVM shells " +
+                    "register feature modules ONLY through that declaration's spread.",
+            )
+        }
+    }
+
+    /**
+     * Both JVM shells must consume the declaration BY SPREAD, and neither
+     * may name a feature module directly (a hand-copied inline list is the
+     * drift the fold removed): Android spreads it inside its own startKoin
+     * modules(...) block; desktop's startKoin consumes
+     * `desktopKoinModules(…)`, whose list is the only place the spread may
+     * live.
+     */
+    @Test
+    fun bothJvmShells_consumeTheSharedDeclarationBySpread() {
+        val root = repoRoot()
+        val features = discoverFeatureModules(root)
+
+        // Android: the spread sits inside JellyPlayApplication's own
+        // modules(...) block.
+        val androidFile = root.resolve(androidRegistrationFile)
+        val androidText = stripComments(androidFile.readText())
+        val androidBlock = startKoinModulesBlock(androidFile)
+        assertTrue(
+            androidBlock.contains("*$sharedDeclarationName"),
+            "Android's startKoin must register its feature modules via " +
+                "`*$sharedDeclarationName` (the shared declaration), not a hand-copied " +
+                "module list.",
+        )
+
+        // Desktop: Main.kt's startKoin consumes desktopKoinModules(...), and
+        // THAT list carries the spread.
+        val desktopFile = root.resolve(desktopRegistrationFile)
+        val desktopBlock = startKoinModulesBlock(desktopFile)
+        assertTrue(
+            desktopBlock.contains(desktopModuleListName),
+            "Desktop Main.kt's startKoin must consume `$desktopModuleListName(paths)` — " +
+                "the extracted module list (DesktopKoinModules.kt).",
+        )
+        val desktopListFile = root.resolve(desktopModuleListFile)
+        val desktopListText = stripComments(desktopListFile.readText())
+        val desktopListBlock = functionListBlock(desktopListFile, desktopModuleListListMarker)
+        assertTrue(
+            desktopListBlock.contains("*$sharedDeclarationName"),
+            "Desktop's `$desktopModuleListName` list must spread " +
+                "`*$sharedDeclarationName` (the shared declaration), not a hand-copied " +
+                "module list.",
+        )
+
+        // No JVM registration site may name a discovered feature module
+        // directly — feature modules flow ONLY through the declaration.
+        val namedInline = buildList {
+            for ((site, text) in listOf(
+                "Android app" to androidText,
+                "Desktop Main.kt" to desktopBlock,
+                "Desktop DesktopKoinModules.kt" to desktopListText,
+            )) {
+                for (name in features.keys) {
+                    if (Regex("\\b$name\\b").containsMatchIn(text)) {
+                        add("'$name' named directly in $site")
                     }
                 }
             }
         }
-        if (missing.isNotEmpty()) {
-            fail(
-                "Shared feature Koin modules missing from a startKoin registration — " +
-                    "compile gates are BLIND to this; koinViewModel would throw " +
-                    "NoDefinitionFound at runtime on first navigation:\n" +
-                    missing.joinToString("\n") { "  - $it" } +
-                    "\nFix: add one line `<module>,` (plus its import) inside the modules(...) " +
-                    "block of that file's startKoin.",
-            )
-        }
+        assertTrue(
+            namedInline.isEmpty(),
+            "feature module(s) named OUTSIDE the shared declaration — the JVM shells " +
+                "must register features only via `*$sharedDeclarationName`:\n" +
+                namedInline.joinToString("\n") { "  - $it" },
+        )
     }
 
     /**
@@ -179,7 +269,7 @@ class KoinModuleRegistrationGuardTest {
                         "  - '$it' registered/imported in $path but NOT in " +
                             "$webFeatureModulesDeclaration (feature module — add it to the " +
                             "declaration in the same commit)"
-                } +
+                    } +
                     "\nFix: keep ${file.name}'s modules(...) consuming " +
                     "`*$webFeatureModulesDeclaration` and grow the declaration itself.",
             )
@@ -187,27 +277,37 @@ class KoinModuleRegistrationGuardTest {
     }
 
     @Test
-    fun everyNonPlatformModuleInStartKoinBlocks_isDefinedInSharedSources() {
+    fun everyNonPlatformModuleInRegistrationLists_isDefinedInSharedSources() {
         val root = repoRoot()
         val features = discoverFeatureModules(root)
         val core = discoverCoreModules(root)
         val known = features.keys + core.keys + koinOwnModules
 
+        val scanned = listOf(
+            "Android app" to startKoinModulesBlock(root.resolve(androidRegistrationFile)),
+            "Desktop app" to startKoinModulesBlock(root.resolve(desktopRegistrationFile)),
+            "Desktop module list" to functionListBlock(
+                root.resolve(desktopModuleListFile),
+                desktopModuleListListMarker,
+            ),
+        ) + forwardAllowlistedRegistrationFiles.map { (site, path) ->
+            site to startKoinModulesBlock(root.resolve(path))
+        }
+
         val unknown = buildList {
-            for ((site, path) in registrationFiles + forwardAllowlistedRegistrationFiles) {
-                val block = startKoinModulesBlock(root.resolve(path))
+            for ((site, block) in scanned) {
                 for (identifier in Regex("\\b[A-Za-z]\\w*Module\\b").findAll(block).map { it.value }) {
                     val skipped = platformPrefixes.any { identifier.startsWith(it) }
                     if (!skipped && identifier !in known) {
-                        add("$identifier in $site's $path")
+                        add("$identifier in $site")
                     }
                 }
             }
         }
         if (unknown.isNotEmpty()) {
             fail(
-                "startKoin references module(s) that exist neither in a shared feature's " +
-                    "commonMain (${features.keys.sorted()}) nor in shared/core " +
+                "a Koin registration list references module(s) that exist neither in a shared " +
+                    "feature's commonMain (${features.keys.sorted()}) nor in shared/core " +
                     "(${core.keys.sorted()}) — typo or stale rename?:\n" +
                 unknown.joinToString("\n") { "  - $it" } +
                     "\nFix: correct the identifier to a discovered module name, or define it as " +
@@ -279,7 +379,37 @@ class KoinModuleRegistrationGuardTest {
             }
         }
 
-    // ------------------------------------------------------- startKoin block
+    // ------------------------------------------------------- block extraction
+
+    /** The `fun desktopKoinModules(...)` marker whose listOf(...) body is scanned. */
+    private val desktopModuleListListMarker = "fun $desktopModuleListName"
+
+    /**
+     * The text inside the `listOf( … )` of the function introduced by
+     * [marker], with comments stripped. Mirrors [startKoinModulesBlock]'s
+     * balance scan for the desktop module list extracted out of Main.kt.
+     */
+    private fun functionListBlock(file: File, marker: String): String {
+        assertTrue(file.isFile, "registration file ${file.path} does not exist")
+        val text = stripComments(file.readText())
+        val fnStart = text.indexOf(marker)
+        assertTrue(fnStart >= 0, "${file.path}: no `$marker` declaration")
+        val listOfStart = text.indexOf("listOf(", fnStart)
+        assertTrue(listOfStart >= 0, "${file.path}: no listOf(...) in `$marker`")
+
+        val openParen = listOfStart + "listOf".length
+        var depth = 0
+        for (i in openParen until text.length) {
+            when (text[i]) {
+                '(' -> depth++
+                ')' -> {
+                    depth--
+                    if (depth == 0) return text.substring(openParen + 1, i)
+                }
+            }
+        }
+        fail("${file.path}: unbalanced parentheses in `$marker` listOf(...)")
+    }
 
     /**
      * The text inside `modules( … )` of the file's startKoin block, with
@@ -311,7 +441,7 @@ class KoinModuleRegistrationGuardTest {
 
     /**
      * Parses `val <name> = listOf(<module>, …)` out of already-stripped
-     * source text — the declaration a forward-allowlisted site's startKoin
+     * source text — the declaration a forward-derives site's startKoin
      * consumes, and the single place this test derives that site's expected
      * feature-module set from.
      */

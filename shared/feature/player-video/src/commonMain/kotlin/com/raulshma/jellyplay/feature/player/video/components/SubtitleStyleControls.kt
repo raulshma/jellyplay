@@ -56,6 +56,8 @@ import com.raulshma.jellyplay.core.ui.tv.components.TvOrTouchSlider
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import com.raulshma.jellyplay.feature.player.video.subtitleColorToHsv
+import com.raulshma.jellyplay.feature.player.video.subtitleHsvToColor
 import com.raulshma.jellyplay.feature.player.video.generated.resources.Res
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_apply
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_ass_basic_notice
@@ -820,14 +822,14 @@ private fun FreeFormColorPickerDialog(
 ) {
     val hsv = remember {
         floatArrayOf(0f, 1f, 1f).apply {
-            colorToHsv(initialColor.toArgb()).copyInto(this)
+            subtitleColorToHsv(initialColor.toArgb()).copyInto(this)
         }
     }
     var hue by remember { mutableFloatStateOf(hsv[0]) }
     var saturation by remember { mutableFloatStateOf(hsv[1]) }
     var value by remember { mutableFloatStateOf(hsv[2]) }
     val previewColor = remember(hue, saturation, value) {
-        Color(hsvToColor(floatArrayOf(hue, saturation, value)))
+        Color(subtitleHsvToColor(floatArrayOf(hue, saturation, value)))
     }
 
     AlertDialog(
@@ -876,44 +878,4 @@ private fun FreeFormColorPickerDialog(
             TextButton(onClick = onDismiss) { Text(stringResource(Res.string.player_video_cancel)) }
         },
     )
-}
-
-// KMP seam: android.graphics.Color's HSV pair, replaced by pure-
-// Kotlin twins so the free-form color picker stays commonMain. Identical
-// math: hue [0..360), saturation/value [0..1], alpha fixed at 255 (the old
-// HSVToColor(hsv) single-arg overload's default).
-private fun colorToHsv(color: Int): FloatArray {
-    val r = (color shr 16 and 0xFF) / 255f
-    val g = (color shr 8 and 0xFF) / 255f
-    val b = (color and 0xFF) / 255f
-    val max = maxOf(r, g, b)
-    val min = minOf(r, g, b)
-    val delta = max - min
-    val h = when {
-        delta == 0f -> 0f
-        max == r -> 60f * (((g - b) / delta) % 6f)
-        max == g -> 60f * (((b - r) / delta) + 2f)
-        else -> 60f * (((r - g) / delta) + 4f)
-    }
-    val hue = if (h < 0f) h + 360f else h
-    val saturation = if (max == 0f) 0f else delta / max
-    return floatArrayOf(hue, saturation, max)
-}
-
-private fun hsvToColor(hsv: FloatArray): Int {
-    val c = hsv[2] * hsv[1]
-    val x = c * (1f - kotlin.math.abs((hsv[0] / 60f) % 2f - 1f))
-    val m = hsv[2] - c
-    val (r, g, b) = when {
-        hsv[0] < 60f -> Triple(c, x, 0f)
-        hsv[0] < 120f -> Triple(x, c, 0f)
-        hsv[0] < 180f -> Triple(0f, c, x)
-        hsv[0] < 240f -> Triple(0f, x, c)
-        hsv[0] < 300f -> Triple(x, 0f, c)
-        else -> Triple(c, 0f, x)
-    }
-    return (0xFF shl 24) or
-        (((r + m) * 255f).toInt().coerceIn(0, 255) shl 16) or
-        (((g + m) * 255f).toInt().coerceIn(0, 255) shl 8) or
-        ((b + m) * 255f).toInt().coerceIn(0, 255)
 }

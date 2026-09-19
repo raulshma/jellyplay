@@ -107,8 +107,9 @@ import androidx.lifecycle.viewModelScope
  * `while(true)` loop's `delay` doesn't drive virtual time unbounded. The
  * concern-owned extractions from this VM each have their own JVM suite —
  * [HomeRefresherTest] (refresh policy), `ScrollPositionStoreTest`,
- * `PhotoFolderChildUrlsStoreTest`, `HomeSearchStateHolderTest`,
- * `SeriesDeleteStateHolderTest` (all in this package) and
+ * `HomeSearchStateHolderTest`,
+ * `SeriesDeleteStateHolderTest` (all in this package),
+ * `PhotoFolderChildUrlsStoreTest` and
  * `SyncStatusStateHolderTest` in :core:data — so this suite keeps only
  * VM-level UiState/collector policy and the pass-through seams.
  */

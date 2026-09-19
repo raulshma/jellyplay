@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.data.repository.AdminStatisticsRepository
 import com.raulshma.jellyplay.core.model.PlaybackReportingStatus
 import com.raulshma.jellyplay.core.model.UserDetailPage
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import com.raulshma.jellyplay.core.ui.viewmodel.PageAppender
 import com.raulshma.jellyplay.feature.admin.AdminLoad
 import kotlinx.coroutines.flow.first
 
@@ -79,10 +80,14 @@ class UserStatisticsDetailViewModel(
         }
     }
 
+    /** Appends the next page via the [PageAppender] guard (in-flight + terminal). */
     fun loadMore() {
         val current = _state.value
-        if (!current.isLoadingMore && current.detail.hasMoreItems) {
-            loadPage(current.currentPage + 1)
-        }
+        val page = PageAppender.nextPageOrNull(
+            currentPage = current.currentPage,
+            inFlight = current.isLoadingMore,
+            hasMore = current.detail.hasMoreItems,
+        ) ?: return
+        loadPage(page)
     }
 }

@@ -53,7 +53,6 @@ class CastManager(
         // where the pure state fan-out reads them); these public aliases keep
         // the manager's historical surface for existing consumers.
         const val STRATEGY_GOOGLE = CastStrategyNames.GOOGLE
-        const val STRATEGY_LIBVLC = CastStrategyNames.LIBVLC
         const val STRATEGY_DLNA = CastStrategyNames.DLNA
         const val STRATEGY_JELLYFIN = CastStrategyNames.JELLYFIN
     }
@@ -106,8 +105,8 @@ class CastManager(
 
     /**
      * Single transport dispatch point. DLNA and Jellyfin own their transport;
-     * every other active strategy (Google Cast, the libvlc fallback, ad-hoc
-     * registrations) rides the manager-owned CastPlayer via
+     * every other active strategy (Google Cast, ad-hoc registrations) rides
+     * the manager-owned CastPlayer via
      * [localCastPlayerTransport] — exactly what the old when-chain else-arms
      * did.
      */

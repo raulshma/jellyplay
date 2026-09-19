@@ -18,7 +18,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.layout.onSizeChanged
@@ -42,7 +41,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
-import com.raulshma.jellyplay.core.ui.tv.CenterBringIntoViewSpec
+import com.raulshma.jellyplay.core.ui.tv.CenteredBringIntoView
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
@@ -299,17 +298,7 @@ fun AppearanceSettingsScreen(
         appearanceAdjustForAdvanced(showAdvanced),
     )
 
-    // Phase 1 (coarse): scroll the containing group into the LazyColumn's composition window so the
-    // target item is actually composed — items in off-screen groups (later sections) are otherwise
-    // never mounted and their bringIntoViewRequester has no target. Phase 2 (centering) is then
-    // performed by the highlighted item itself via CenterBringIntoViewSpec.
-    LaunchedEffect(scrollIndex) {
-        if (scrollIndex >= 0) {
-            try {
-                scrollState.animateScrollToItem(scrollIndex)
-            } catch (_: Exception) {}
-        }
-    }
+    HighlightScrollEffect(scrollState, scrollIndex)
 
     var showResetDialog by remember { mutableStateOf(false) }
     var showBlueLightStrengthSheet by remember { mutableStateOf(false) }
@@ -336,11 +325,7 @@ fun AppearanceSettingsScreen(
             }
         },
     ) { innerPadding ->
-        // Center a highlighted (search-navigated) setting in the viewport instead of parking it
-        // at the bottom edge, which is the default BringIntoViewSpec behaviour.
-        androidx.compose.runtime.CompositionLocalProvider(
-            androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides CenterBringIntoViewSpec
-        ) {
+        CenteredBringIntoView {
         LazyColumn(
             state = scrollState,
             modifier = Modifier

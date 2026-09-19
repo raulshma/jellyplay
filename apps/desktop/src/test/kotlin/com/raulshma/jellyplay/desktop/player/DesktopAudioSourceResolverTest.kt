@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.desktop.player
 
+import com.raulshma.jellyplay.core.data.playback.ResolvedAudioTrack
 import com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolver
 import com.raulshma.jellyplay.core.data.playback.ResolvedPlaybackSource
 import com.raulshma.jellyplay.core.data.repository.MediaRepository

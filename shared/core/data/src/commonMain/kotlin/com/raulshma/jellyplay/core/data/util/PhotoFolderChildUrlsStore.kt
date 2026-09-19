@@ -1,6 +1,5 @@
-package com.raulshma.jellyplay.feature.home
+package com.raulshma.jellyplay.core.data.util
 
-import com.raulshma.jellyplay.core.data.util.PhotoFolderPrefetcher
 import com.raulshma.jellyplay.core.model.MediaItem
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -9,23 +8,27 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 /**
- * Owns the photo-folder child-URL cache for the home screen: the
- * folder-id → child-image-URLs map the photo rows read to open a folder's
- * children without a per-card round-trip. Exclusive state — the only map in
- * the home feature — so it lives behind this small interface instead of the
- * VM. The VM does not re-expose the whole map: each photo-folder card
- * collects its own slice through `photoFolderChildUrlsFor(itemId)` (map
- * lookup + `distinctUntilChanged`), so a prefetch merge — which produces a
- * new Map reference — invalidates only the one card whose urls changed, not
- * the entire home body.
+ * Owns the photo-folder child-URL cache: the folder-id → child-image-URLs
+ * map the photo rows read to open a folder's children without a per-card
+ * round-trip. Exclusive state — nothing else needs the whole map — so it
+ * lives behind this small class instead of the host view model. The host
+ * does not re-expose the whole map: each photo-folder card collects its own
+ * slice through a per-item fold over [childUrls] (map lookup +
+ * `distinctUntilChanged`), so a prefetch merge — which produces a new Map
+ * reference — invalidates only the one card whose urls changed, not the
+ * entire host body.
  *
  * `prefetch` is incremental: ids already cached are skipped via the
  * `alreadyFetched` hand-off, new results are merged, and the map is evicted
- * oldest-first beyond [PHOTO_FOLDER_CACHE_CAP] so a long-lived VM cannot
- * accumulate stale entries across library changes.
+ * oldest-first beyond [PHOTO_FOLDER_CACHE_CAP] so a long-lived view model
+ * cannot accumulate stale entries across library changes.
+ *
+ * Promoted from the home feature (where library's FavoritesViewModel and
+ * LibraryViewModel had grown cap-less inline copies of the same
+ * merge/prefetch shape — Favorites not even via [PhotoFolderPrefetcher]).
  */
-internal class PhotoFolderChildUrlsStore(
-    /** The VM's scope: prefetch jobs must die with the VM. */
+class PhotoFolderChildUrlsStore(
+    /** The host view model's scope: prefetch jobs must die with it. */
     private val scope: CoroutineScope,
     private val prefetcher: PhotoFolderPrefetcher,
 ) {
@@ -34,10 +37,10 @@ internal class PhotoFolderChildUrlsStore(
         /**
          * Cap on cached photo-folder child-URL entries. Photo folders are a
          * fixed, small set per server, but the map is append-only and a
-         * long-lived VM could accumulate stale entries across library changes.
-         * Evict oldest entries beyond this cap.
+         * long-lived view model could accumulate stale entries across library
+         * changes. Evict oldest entries beyond this cap.
          */
-        private const val PHOTO_FOLDER_CACHE_CAP = 50
+        const val PHOTO_FOLDER_CACHE_CAP = 50
     }
 
     private val _childUrls = MutableStateFlow<Map<String, List<String>>>(emptyMap())
@@ -57,7 +60,7 @@ internal class PhotoFolderChildUrlsStore(
             val results = prefetcher.prefetch(items, alreadyFetched = current.keys)
             if (results.isNotEmpty()) {
                 // Merge then evict the oldest entries beyond the cap so the
-                // map stays bounded for the VM's lifetime.
+                // map stays bounded for the host's lifetime.
                 val merged = _childUrls.value + results
                 _childUrls.value =
                     if (merged.size <= PHOTO_FOLDER_CACHE_CAP) merged

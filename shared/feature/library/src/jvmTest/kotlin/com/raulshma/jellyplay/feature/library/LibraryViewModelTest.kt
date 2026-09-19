@@ -162,14 +162,14 @@ class LibraryViewModelTest {
     @Test
     fun `configureSection scopes selectedFolder to parentId and pre-applies Date Added sort`() = runTest {
         val vm = createViewModel()
-        vm.configureSection(
+        vm.onEvent(LibraryUiEvent.ConfigureSection(
             LibrarySectionContext(
                 title = "Latest Movies",
                 parentId = "lib-movies",
                 collectionType = "movies",
                 sortBy = SortOption.DATE_ADDED.apiValue,
             )
-        )
+        ))
 
         val state = vm.state()
         assertEquals("lib-movies", state.folder?.id)
@@ -180,13 +180,13 @@ class LibraryViewModelTest {
     @Test
     fun `configureSection with null parentId leaves global scope and still applies sort`() = runTest {
         val vm = createViewModel()
-        vm.configureSection(
+        vm.onEvent(LibraryUiEvent.ConfigureSection(
             LibrarySectionContext(
                 title = "Recently Added",
                 parentId = null,
                 sortBy = SortOption.DATE_ADDED.apiValue,
             )
-        )
+        ))
 
         val state = vm.state()
         assertNull(state.folder)
@@ -199,14 +199,14 @@ class LibraryViewModelTest {
         // library tab (top-level series), sorted by latest — NOT scope to flat
         // episodes. mediaTypes stays empty so pagedItems queries TOP_LEVEL items.
         val vm = createViewModel()
-        vm.configureSection(
+        vm.onEvent(LibraryUiEvent.ConfigureSection(
             LibrarySectionContext(
                 title = "Latest Shows",
                 parentId = "lib-tv",
                 collectionType = "tvshows",
                 sortBy = SortOption.DATE_ADDED.apiValue,
             )
-        )
+        ))
 
         val state = vm.state()
         assertEquals(emptyList<MediaType>(), state.filters.mediaTypes)
@@ -216,14 +216,14 @@ class LibraryViewModelTest {
     @Test
     fun `configureSection for movies mirrors the default library view with no mediaType scoping`() = runTest {
         val vm = createViewModel()
-        vm.configureSection(
+        vm.onEvent(LibraryUiEvent.ConfigureSection(
             LibrarySectionContext(
                 title = "Latest Movies",
                 parentId = "lib-movies",
                 collectionType = "movies",
                 sortBy = SortOption.DATE_ADDED.apiValue,
             )
-        )
+        ))
 
         assertEquals(emptyList<MediaType>(), vm.state().filters.mediaTypes)
     }
@@ -231,14 +231,14 @@ class LibraryViewModelTest {
     @Test
     fun `configureSection for untyped collectionType leaves mediaTypes empty`() = runTest {
         val vm = createViewModel()
-        vm.configureSection(
+        vm.onEvent(LibraryUiEvent.ConfigureSection(
             LibrarySectionContext(
                 title = "Latest Misc",
                 parentId = "lib-misc",
                 collectionType = "unknown",
                 sortBy = SortOption.DATE_ADDED.apiValue,
             )
-        )
+        ))
 
         assertEquals(emptyList<MediaType>(), vm.state().filters.mediaTypes)
     }
@@ -248,7 +248,7 @@ class LibraryViewModelTest {
         // Explicit ctx.mediaTypes still win (e.g. a future home row that targets
         // a specific leaf type).
         val vm = createViewModel()
-        vm.configureSection(
+        vm.onEvent(LibraryUiEvent.ConfigureSection(
             LibrarySectionContext(
                 title = "Latest Shows",
                 parentId = "lib-tv",
@@ -256,7 +256,7 @@ class LibraryViewModelTest {
                 sortBy = SortOption.DATE_ADDED.apiValue,
                 mediaTypes = listOf(MediaType.MOVIE),
             )
-        )
+        ))
 
         assertEquals(listOf(MediaType.MOVIE), vm.state().filters.mediaTypes)
     }
@@ -267,19 +267,19 @@ class LibraryViewModelTest {
         // deep-link. After a "See All" visit, clearing section mode must restore
         // the default browsing view (no synthetic folder, no leftover filters).
         val vm = createViewModel()
-        vm.configureSection(
+        vm.onEvent(LibraryUiEvent.ConfigureSection(
             LibrarySectionContext(
                 title = "Latest Shows",
                 parentId = "lib-tv",
                 collectionType = "tvshows",
                 sortBy = SortOption.DATE_ADDED.apiValue,
             )
-        )
+        ))
         assertNotNull(vm.state().sectionContext)
         assertEquals("Latest Shows", vm.state().title)
         assertNotNull(vm.state().folder)
 
-        vm.clearSectionMode()
+        vm.onEvent(LibraryUiEvent.ClearSectionMode)
 
         val state = vm.state()
         assertNull(state.sectionContext)
@@ -292,7 +292,7 @@ class LibraryViewModelTest {
     fun `clearSectionMode is a no-op when not in section mode`() = runTest {
         val vm = createViewModel()
         // Not in section mode — clearing should be a safe no-op.
-        vm.clearSectionMode()
+        vm.onEvent(LibraryUiEvent.ClearSectionMode)
         val state = vm.state()
         assertNull(state.sectionContext)
         assertEquals(LibraryFilters(), state.filters)
@@ -304,8 +304,8 @@ class LibraryViewModelTest {
         coEvery { libraryStore.setDefaultLibrarySortOrder(any(), any()) } returns Unit
 
         val vm = createViewModel()
-        vm.configureSection(LibrarySectionContext(title = "Section", parentId = "lib-1"))
-        vm.updateFilters(LibraryFilters(sortBy = SortOption.RATING))
+        vm.onEvent(LibraryUiEvent.ConfigureSection(LibrarySectionContext(title = "Section", parentId = "lib-1")))
+        vm.onEvent(LibraryUiEvent.UpdateFilters(LibraryFilters(sortBy = SortOption.RATING)))
         // The persistence call runs in a viewModelScope.launch; advance the test
         // scheduler so it would complete before we verify it did NOT fire.
         advanceUntilIdle()
@@ -321,7 +321,7 @@ class LibraryViewModelTest {
         coEvery { libraryStore.setLibraryGroupBy(any()) } returns Unit
 
         val vm = createViewModel()
-        vm.setGroupBy(GroupBy.GENRE)
+        vm.onEvent(LibraryUiEvent.SetGroupBy(GroupBy.GENRE))
         // The persistence call runs in a viewModelScope.launch; advance the test
         // scheduler so it completes before we verify.
         advanceUntilIdle()
@@ -343,7 +343,7 @@ class LibraryViewModelTest {
         )
 
         val vm = createViewModel()
-        vm.selectFolder(LibraryFolder(id = "lib-1", name = "Movies"))
+        vm.onEvent(LibraryUiEvent.SelectFolder(LibraryFolder(id = "lib-1", name = "Movies")))
 
         val filters = vm.state().filters
         assertEquals(listOf(MediaType.MOVIE), filters.mediaTypes)
@@ -361,7 +361,7 @@ class LibraryViewModelTest {
             LibrarySlice(libraryViewMode = LibraryViewMode.GRID),
         )
         val vm = createViewModel()
-        vm.selectFolder(LibraryFolder(id = "lib-music", name = "Music", collectionType = "music"))
+        vm.onEvent(LibraryUiEvent.SelectFolder(LibraryFolder(id = "lib-music", name = "Music", collectionType = "music")))
         assertEquals(LibraryViewMode.LIST, vm.state().viewMode)
     }
 
@@ -371,13 +371,13 @@ class LibraryViewModelTest {
 
         val vm = createViewModel()
         advanceUntilIdle()
-        vm.setPosterSize(1.2f)
+        vm.onEvent(LibraryUiEvent.SetPosterSize(1.2f))
         advanceUntilIdle()
 
         assertEquals(1.2f, vm.state().posterSize)
         coVerify(exactly = 0) { libraryStore.setLibraryPosterSize(any()) }
 
-        vm.persistPosterSize()
+        vm.onEvent(LibraryUiEvent.PersistPosterSize)
         advanceUntilIdle()
 
         coVerify(exactly = 1) { libraryStore.setLibraryPosterSize(1.2f) }
@@ -399,14 +399,14 @@ class LibraryViewModelTest {
         coEvery { libraryStore.setLibraryGroupBy(any()) } returns Unit
 
         val vm = createViewModel()
-        vm.selectFolder(LibraryFolder(id = "lib-1", name = "TV"))
-        vm.updateFilters(LibraryFilters(mediaTypes = listOf(MediaType.MOVIE), sortBy = SortOption.RATING))
-        vm.setPosterSize(1.3f)
-        vm.setGroupBy(GroupBy.GENRE)
-        vm.setViewMode(LibraryViewMode.LIST)
+        vm.onEvent(LibraryUiEvent.SelectFolder(LibraryFolder(id = "lib-1", name = "TV")))
+        vm.onEvent(LibraryUiEvent.UpdateFilters(LibraryFilters(mediaTypes = listOf(MediaType.MOVIE), sortBy = SortOption.RATING)))
+        vm.onEvent(LibraryUiEvent.SetPosterSize(1.3f))
+        vm.onEvent(LibraryUiEvent.SetGroupBy(GroupBy.GENRE))
+        vm.onEvent(LibraryUiEvent.SetViewMode(LibraryViewMode.LIST))
         advanceUntilIdle()
 
-        vm.resetToDefault()
+        vm.onEvent(LibraryUiEvent.ConfirmResetAll(dontShowAgain = false))
         advanceUntilIdle()
 
         val state = vm.state()
@@ -430,17 +430,17 @@ class LibraryViewModelTest {
         coEvery { libraryStore.setLibraryGroupBy(any()) } returns Unit
 
         val vm = createViewModel()
-        vm.configureSection(
+        vm.onEvent(LibraryUiEvent.ConfigureSection(
             LibrarySectionContext(
                 title = "Latest Shows",
                 parentId = "lib-tv",
                 collectionType = "tvshows",
                 sortBy = SortOption.DATE_ADDED.apiValue,
             )
-        )
+        ))
         advanceUntilIdle()
 
-        vm.resetToDefault()
+        vm.onEvent(LibraryUiEvent.ConfirmResetAll(dontShowAgain = false))
         advanceUntilIdle()
 
         coVerify(exactly = 0) { libraryStore.setLibraryFilters(any(), any()) }
@@ -460,16 +460,16 @@ class LibraryViewModelTest {
         coEvery { libraryStore.setLibraryViewMode(any(), any()) } returns Unit
 
         val vm = createViewModel()
-        vm.configureSection(
+        vm.onEvent(LibraryUiEvent.ConfigureSection(
             LibrarySectionContext(
                 title = "Latest Shows",
                 parentId = "lib-tv",
                 collectionType = "tvshows",
                 sortBy = SortOption.DATE_ADDED.apiValue,
             )
-        )
+        ))
         // Mutate view mode while inside the section.
-        vm.setViewMode(LibraryViewMode.LIST)
+        vm.onEvent(LibraryUiEvent.SetViewMode(LibraryViewMode.LIST))
         advanceUntilIdle()
 
         // The global default write is fine; the per-folder write for the
@@ -477,7 +477,7 @@ class LibraryViewModelTest {
         coVerify(exactly = 0) { libraryStore.setLibraryViewMode("lib-tv", any()) }
 
         // Leaving the section restores the default browsing view.
-        vm.clearSectionMode()
+        vm.onEvent(LibraryUiEvent.ClearSectionMode)
         assertNull(vm.state().sectionContext)
     }
 
@@ -487,7 +487,7 @@ class LibraryViewModelTest {
         val vm = createViewModel()
         val item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE)
 
-        vm.markItemPlayed(item, played = true)
+        vm.onEvent(LibraryUiEvent.MarkItemPlayed(item, played = true))
         advanceUntilIdle()
 
         coVerify {
@@ -602,7 +602,7 @@ class LibraryViewModelTest {
         } answers { flowOf(PagingData.from(emptyList<MediaItem>(), idleStates)) }
 
         val vm = createViewModel()
-        vm.selectFolder(LibraryFolder(id = "lib-tv", name = "TV"))
+        vm.onEvent(LibraryUiEvent.SelectFolder(LibraryFolder(id = "lib-tv", name = "TV")))
         val firstPage = backgroundScope.async { vm.pagedItems.first() }
         advanceUntilIdle()
 
@@ -642,7 +642,7 @@ class LibraryViewModelTest {
         val vm = createViewModel(userMessageBus = bus)
 
         var routedTo: Pair<String, Boolean>? = null
-        vm.downloadItem(item) { itemId, openSheet -> routedTo = itemId to openSheet }
+        vm.onEvent(LibraryUiEvent.DownloadItem(item) { itemId, openSheet -> routedTo = itemId to openSheet })
         advanceUntilIdle()
 
         assertEquals(1, received.size)
@@ -664,7 +664,7 @@ class LibraryViewModelTest {
         val vm = createViewModel()
 
         var routedTo: Pair<String, Boolean>? = null
-        vm.downloadItem(series) { itemId, openSheet -> routedTo = itemId to openSheet }
+        vm.onEvent(LibraryUiEvent.DownloadItem(series) { itemId, openSheet -> routedTo = itemId to openSheet })
         advanceUntilIdle()
 
         assertEquals("s1" to true, routedTo)
@@ -678,7 +678,7 @@ class LibraryViewModelTest {
         val vm = createViewModel()
 
         var routedTo: Pair<String, Boolean>? = null
-        vm.downloadItem(album) { itemId, openSheet -> routedTo = itemId to openSheet }
+        vm.onEvent(LibraryUiEvent.DownloadItem(album) { itemId, openSheet -> routedTo = itemId to openSheet })
         advanceUntilIdle()
 
         assertEquals("al-1" to false, routedTo)
@@ -694,7 +694,7 @@ class LibraryViewModelTest {
         val vm = createViewModel(userMessageBus = bus)
 
         var routedTo: Pair<String, Boolean>? = null
-        vm.downloadItem(item) { itemId, openSheet -> routedTo = itemId to openSheet }
+        vm.onEvent(LibraryUiEvent.DownloadItem(item) { itemId, openSheet -> routedTo = itemId to openSheet })
         advanceUntilIdle()
 
         assertEquals(1, received.size)
@@ -707,7 +707,7 @@ class LibraryViewModelTest {
         val vm = createViewModel()
         val item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE)
 
-        vm.removeItemDownload(item)
+        vm.onEvent(LibraryUiEvent.RemoveItemDownload(item))
 
         verify(exactly = 1) { quickDownloadActions.removeDownload(item) }
     }
@@ -719,7 +719,7 @@ class LibraryViewModelTest {
         val vm = createViewModel()
         advanceUntilIdle() // let loadResetConfirmPref apply the persisted true
 
-        vm.onResetClick()
+        vm.onEvent(LibraryUiEvent.ResetClicked)
 
         assertTrue(vm.resetDialogVisible.value)
         // Nothing was reset yet — the dialog is a gate, not the action.
@@ -730,12 +730,12 @@ class LibraryViewModelTest {
     fun `dismissResetDialog hides the dialog without resetting anything`() = runTest {
         coEvery { libraryStore.setLibraryFilters(any(), any()) } returns Unit
         val vm = createViewModel()
-        vm.selectFolder(LibraryFolder(id = "lib-1", name = "TV"))
-        vm.updateFilters(LibraryFilters(mediaTypes = listOf(MediaType.MOVIE)))
-        vm.onResetClick()
+        vm.onEvent(LibraryUiEvent.SelectFolder(LibraryFolder(id = "lib-1", name = "TV")))
+        vm.onEvent(LibraryUiEvent.UpdateFilters(LibraryFilters(mediaTypes = listOf(MediaType.MOVIE))))
+        vm.onEvent(LibraryUiEvent.ResetClicked)
         assertTrue(vm.resetDialogVisible.value)
 
-        vm.dismissResetDialog()
+        vm.onEvent(LibraryUiEvent.DismissResetDialog)
 
         assertFalse(vm.resetDialogVisible.value)
         // Filters untouched by the dismissal.
@@ -750,10 +750,10 @@ class LibraryViewModelTest {
         coEvery { libraryStore.setLibraryPosterSize(any()) } returns Unit
         coEvery { libraryStore.setLibraryGroupBy(any()) } returns Unit
         val vm = createViewModel()
-        vm.selectFolder(LibraryFolder(id = "lib-1", name = "TV"))
-        vm.updateFilters(LibraryFilters(mediaTypes = listOf(MediaType.MOVIE)))
+        vm.onEvent(LibraryUiEvent.SelectFolder(LibraryFolder(id = "lib-1", name = "TV")))
+        vm.onEvent(LibraryUiEvent.UpdateFilters(LibraryFilters(mediaTypes = listOf(MediaType.MOVIE))))
 
-        vm.confirmResetAll(dontShowAgain = true)
+        vm.onEvent(LibraryUiEvent.ConfirmResetAll(dontShowAgain = true))
         advanceUntilIdle()
 
         assertFalse(vm.resetDialogVisible.value)
@@ -765,7 +765,7 @@ class LibraryViewModelTest {
         val prefsFlow = libraryStore.library as MutableStateFlow<LibrarySlice>
         prefsFlow.value = prefsFlow.value.copy(confirmLibraryReset = false)
         advanceUntilIdle()
-        vm.onResetClick()
+        vm.onEvent(LibraryUiEvent.ResetClicked)
         assertFalse(vm.resetDialogVisible.value)
     }
 
@@ -774,12 +774,12 @@ class LibraryViewModelTest {
         coEvery { libraryStore.setConfirmLibraryReset(any()) } returns Unit
         val vm = createViewModel()
 
-        vm.confirmResetAll(dontShowAgain = false)
+        vm.onEvent(LibraryUiEvent.ConfirmResetAll(dontShowAgain = false))
         advanceUntilIdle()
 
         coVerify(exactly = 0) { libraryStore.setConfirmLibraryReset(any()) }
         // The dialog is gone but the gate stays armed.
-        vm.onResetClick()
+        vm.onEvent(LibraryUiEvent.ResetClicked)
         assertTrue(vm.resetDialogVisible.value)
     }
 
@@ -794,11 +794,11 @@ class LibraryViewModelTest {
         )
 
         val vm = createViewModel()
-        vm.selectFolder(LibraryFolder(id = "lib-1", name = "TV"))
-        vm.updateFilters(LibraryFilters(mediaTypes = listOf(MediaType.MOVIE)))
+        vm.onEvent(LibraryUiEvent.SelectFolder(LibraryFolder(id = "lib-1", name = "TV")))
+        vm.onEvent(LibraryUiEvent.UpdateFilters(LibraryFilters(mediaTypes = listOf(MediaType.MOVIE))))
         advanceUntilIdle()
 
-        vm.onResetClick()
+        vm.onEvent(LibraryUiEvent.ResetClicked)
         advanceUntilIdle()
 
         assertFalse(vm.resetDialogVisible.value)
@@ -813,11 +813,11 @@ class LibraryViewModelTest {
         coEvery { libraryStore.setLibraryFilters(any(), any()) } returns Unit
         coEvery { libraryStore.setDefaultLibrarySortOrder(any(), any()) } returns Unit
         val vm = createViewModel()
-        vm.selectFolder(LibraryFolder(id = "lib-1", name = "TV"))
-        vm.updateFilters(LibraryFilters(sortBy = SortOption.RATING))
+        vm.onEvent(LibraryUiEvent.SelectFolder(LibraryFolder(id = "lib-1", name = "TV")))
+        vm.onEvent(LibraryUiEvent.UpdateFilters(LibraryFilters(sortBy = SortOption.RATING)))
         advanceUntilIdle()
 
-        vm.shuffleLibrary()
+        vm.onEvent(LibraryUiEvent.ShuffleLibrary)
         advanceUntilIdle()
 
         assertEquals(SortOption.RANDOM, vm.state().filters.sortBy)
@@ -834,11 +834,11 @@ class LibraryViewModelTest {
     fun `clearFilters restores default filters`() = runTest {
         coEvery { libraryStore.setLibraryFilters(any(), any()) } returns Unit
         val vm = createViewModel()
-        vm.updateFilters(
+        vm.onEvent(LibraryUiEvent.UpdateFilters(
             LibraryFilters(mediaTypes = listOf(MediaType.MOVIE), sortBy = SortOption.RATING),
-        )
+        ))
 
-        vm.clearFilters()
+        vm.onEvent(LibraryUiEvent.ClearFilters)
 
         assertEquals(LibraryFilters(), vm.state().filters)
     }
@@ -848,11 +848,29 @@ class LibraryViewModelTest {
         val vm = createViewModel()
         assertFalse(vm.showFilters.value)
 
-        vm.toggleShowFilters()
+        vm.onEvent(LibraryUiEvent.ToggleFilters)
         assertTrue(vm.showFilters.value)
 
-        vm.toggleShowFilters()
+        vm.onEvent(LibraryUiEvent.ToggleFilters)
         assertFalse(vm.showFilters.value)
+    }
+
+    @Test
+    fun `onEvent funnel routes the pure-forwarding intents`() = runTest {
+        coEvery { libraryStore.setLibraryPosterSize(any()) } returns Unit
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        vm.onEvent(LibraryUiEvent.ToggleFilters)
+        assertTrue(vm.showFilters.value)
+
+        vm.onEvent(LibraryUiEvent.SetPosterSize(1.25f))
+        assertEquals(1.25f, vm.state().posterSize)
+        coVerify(exactly = 0) { libraryStore.setLibraryPosterSize(any()) }
+
+        vm.onEvent(LibraryUiEvent.PersistPosterSize)
+        advanceUntilIdle()
+        coVerify(exactly = 1) { libraryStore.setLibraryPosterSize(1.25f) }
     }
 
     // ── Folder loading failure semantics ─────────────────────────────────────
@@ -894,7 +912,7 @@ class LibraryViewModelTest {
         assertEquals(1, vm.folders.value.size)
         assertNull(vm.error.value)
 
-        vm.refresh()
+        vm.onEvent(LibraryUiEvent.Refresh)
         advanceUntilIdle()
 
         // Folders survive, no error even though the refresh failed.
@@ -913,7 +931,7 @@ class LibraryViewModelTest {
         advanceUntilIdle()
         assertEquals("boom", vm.error.value)
 
-        vm.refresh()
+        vm.onEvent(LibraryUiEvent.Refresh)
         advanceUntilIdle()
 
         assertNull(vm.error.value)
@@ -927,7 +945,7 @@ class LibraryViewModelTest {
         val vm = createViewModel()
         advanceUntilIdle()
 
-        vm.refresh()
+        vm.onEvent(LibraryUiEvent.Refresh)
         advanceUntilIdle()
 
         // Initial load is cached; the manual pull-to-refresh is not.
@@ -946,7 +964,7 @@ class LibraryViewModelTest {
         )
 
         val vm = createViewModel()
-        vm.selectFolder(LibraryFolder(id = "lib-1", name = "Movies"))
+        vm.onEvent(LibraryUiEvent.SelectFolder(LibraryFolder(id = "lib-1", name = "Movies")))
 
         assertEquals(LibraryFilters(), vm.state().filters)
     }
@@ -958,7 +976,7 @@ class LibraryViewModelTest {
         )
 
         val vm = createViewModel()
-        vm.selectFolder(LibraryFolder(id = "lib-1", name = "Movies"))
+        vm.onEvent(LibraryUiEvent.SelectFolder(LibraryFolder(id = "lib-1", name = "Movies")))
 
         assertEquals(SortOption.YEAR_DESC, vm.state().filters.sortBy)
     }
@@ -970,7 +988,7 @@ class LibraryViewModelTest {
         )
 
         val vm = createViewModel()
-        vm.selectFolder(LibraryFolder(id = "lib-1", name = "Movies"))
+        vm.onEvent(LibraryUiEvent.SelectFolder(LibraryFolder(id = "lib-1", name = "Movies")))
 
         assertEquals(SortOption.DATE_ADDED, vm.state().filters.sortBy)
     }
@@ -987,7 +1005,7 @@ class LibraryViewModelTest {
         advanceUntilIdle() // initial derived mode = GRID
         assertEquals(LibraryViewMode.GRID, vm.state().viewMode)
 
-        vm.setViewMode(LibraryViewMode.LIST)
+        vm.onEvent(LibraryUiEvent.SetViewMode(LibraryViewMode.LIST))
         advanceUntilIdle()
         assertEquals(LibraryViewMode.LIST, vm.state().viewMode)
 
@@ -999,9 +1017,9 @@ class LibraryViewModelTest {
 
         // A folder/section change clears the guard so the new folder loads
         // its own derived mode again (music defaults to LIST).
-        vm.selectFolder(
+        vm.onEvent(LibraryUiEvent.SelectFolder(
             LibraryFolder(id = "lib-music", name = "Music", collectionType = "music"),
-        )
+        ))
         advanceUntilIdle()
         assertEquals(LibraryViewMode.LIST, vm.state().viewMode)
     }
@@ -1012,8 +1030,8 @@ class LibraryViewModelTest {
         coEvery { libraryStore.setLibraryViewMode(any(), any()) } returns Unit
 
         val vm = createViewModel()
-        vm.selectFolder(LibraryFolder(id = "lib-1", name = "TV"))
-        vm.setViewMode(LibraryViewMode.LIST)
+        vm.onEvent(LibraryUiEvent.SelectFolder(LibraryFolder(id = "lib-1", name = "TV")))
+        vm.onEvent(LibraryUiEvent.SetViewMode(LibraryViewMode.LIST))
         advanceUntilIdle()
 
         coVerify(exactly = 1) { libraryStore.setLibraryViewMode(LibraryViewMode.LIST) }
@@ -1033,7 +1051,7 @@ class LibraryViewModelTest {
         )
 
         val vm = createViewModel()
-        vm.prefetchPhotoFolderChildUrls(listOf(folder1, folder2, movie))
+        vm.onEvent(LibraryUiEvent.PrefetchPhotoFolderChildUrls(listOf(folder1, folder2, movie)))
         advanceUntilIdle()
 
         assertEquals(mapOf("pf-1" to listOf("u1", "u2")), vm.photoFolderChildUrls.value)
@@ -1041,7 +1059,7 @@ class LibraryViewModelTest {
         // Recomposition re-fires with the same items: the already-fetched
         // folder is in alreadyFetched this time, and an empty result never
         // clobbers the merged state.
-        vm.prefetchPhotoFolderChildUrls(listOf(folder1, folder2, movie))
+        vm.onEvent(LibraryUiEvent.PrefetchPhotoFolderChildUrls(listOf(folder1, folder2, movie)))
         advanceUntilIdle()
         coVerify {
             photoFolderPrefetcher.prefetch(listOf(folder1, folder2, movie), alreadyFetched = emptySet())
@@ -1057,12 +1075,12 @@ class LibraryViewModelTest {
         coEvery { photoFolderPrefetcher.prefetch(any(), any()) } returns
             mapOf("pf-1" to listOf("u1"), "pf-2" to listOf("u2", "u3"))
         val vm = createViewModel()
-        vm.prefetchPhotoFolderChildUrls(
+        vm.onEvent(LibraryUiEvent.PrefetchPhotoFolderChildUrls(
             listOf(
                 MediaItem(id = "pf-1", name = "F1", mediaType = MediaType.PHOTO_FOLDER),
                 MediaItem(id = "pf-2", name = "F2", mediaType = MediaType.PHOTO_FOLDER),
             ),
-        )
+        ))
         advanceUntilIdle()
 
         assertEquals(listOf("u1"), vm.photoFolderChildUrlsFor("pf-1").first())

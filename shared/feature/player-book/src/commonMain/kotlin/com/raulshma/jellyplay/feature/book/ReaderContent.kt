@@ -11,7 +11,10 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -21,15 +24,19 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -38,6 +45,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
@@ -53,23 +62,29 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.ArrowLeft
 import com.composables.icons.tabler.outline.PhotoOff
 import com.raulshma.jellyplay.core.data.repository.ReaderAnnotation
 import com.raulshma.jellyplay.core.data.repository.ReaderAnnotationColor
 import com.raulshma.jellyplay.core.data.repository.ReaderAnnotationStyle
 import com.raulshma.jellyplay.core.datastore.reader.ReadingDirection
-import com.raulshma.jellyplay.core.datastore.reader.ReaderTheme
 import com.raulshma.jellyplay.core.model.BookFormat
+import com.raulshma.jellyplay.core.model.PlatformKind
+import com.raulshma.jellyplay.core.model.currentPlatform
 import com.raulshma.jellyplay.feature.book.epub.EpubAnnotationColor
 import com.raulshma.jellyplay.feature.book.epub.EpubAnnotationSpec
 import com.raulshma.jellyplay.feature.book.epub.EpubAnnotationStyle
 import com.raulshma.jellyplay.feature.book.epub.EpubAppearance
+import com.raulshma.jellyplay.feature.book.epub.EpubReaderHandle
 import com.raulshma.jellyplay.feature.book.epub.EpubReaderStatus
 import com.raulshma.jellyplay.feature.book.epub.rememberEpubReaderHost
 import com.raulshma.jellyplay.feature.book.generated.resources.Res
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_copied
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_downloading_viewer
+import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_error_cannot_open
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_preparing_locations
+import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_title_fallback
+import okio.Path
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
@@ -218,7 +233,8 @@ internal fun PagedReaderContent(
             bookmarked = bookmarked,
             onToggleBookmark = viewModel::toggleBookmarkAtCurrentPosition,
             onOpenBookmarks = { sheets.showBookmarks = true },
-            onOpenAnnotations = {},
+            // No annotations/sleep entries here: ReaderTopBar gates both on
+            // ReadyContent.Reflowable (the single format gate).
             onOpenSettings = { sheets.showSettings = true },
             onBack = onBack,
             modifier = Modifier.align(Alignment.TopCenter),
@@ -291,13 +307,188 @@ internal sealed interface NoteDialogTarget {
 }
 
 /**
+ * Whether the reflowable chrome floats OVER the content (top/bottom bars,
+ * veils, rails as overlays) on [platform]. Desktop renders EPUB through
+ * windowed CEF — a heavyweight surface that paints above every Compose
+ * overlay — so its chrome lives in the layout around the browser instead
+ * (top bar / content / bottom bar in a Column). Every other platform's
+ * WebView is lightweight and overlays compose fine. Pure — pinned by
+ * DesktopViewerBootTest.
+ */
+internal fun epubChromeOverlaysContent(platform: PlatformKind): Boolean =
+    platform != PlatformKind.DESKTOP
+
+/**
+ * The reflowable host call + its two one-line dispatches (late-bound attach
+ * and the scroll-mode flip), shared by the overlay and desktop in-flow
+ * layouts so the boot choreography exists once. [holder] publishes the bound
+ * handle for the chrome that cannot use the returned value directly (the
+ * desktop layout emits the browser inside its content region but drives it
+ * from the surrounding bars); it is cleared when this binding leaves the
+ * composition, so commands after an error teardown no-op instead of reaching
+ * a dead view. [overlayActive] rides through to the host seam (the desktop
+ * windowed-CEF occlusion toggle — see rememberEpubReaderHost); only the
+ * desktop layout passes it.
+ */
+@Composable
+private fun ReflowableHostBinding(
+    session: ReflowableReaderSession,
+    holder: MutableState<EpubReaderHandle?>,
+    bookFile: Path,
+    resumePercent: Double,
+    appearance: EpubAppearance,
+    scrollMode: Boolean,
+    overlayActive: Boolean = false,
+    modifier: Modifier = Modifier.fillMaxSize(),
+): EpubReaderHandle {
+    val host = rememberEpubReaderHost(
+        bookFile = bookFile,
+        resumePercent = resumePercent,
+        appearance = appearance,
+        onEvent = session.onEvent,
+        overlayActive = overlayActive,
+        modifier = modifier,
+    )
+    // The late-bound binding: the session (and, through its port, the VM's
+    // speech loop) reaches the host from here. Unbound again on dispose so
+    // every session-side command degrades to a no-op — the old channel's
+    // dropped-command semantics for a detached screen.
+    DisposableEffect(host) {
+        session.attachHost(host)
+        holder.value = host
+        onDispose {
+            session.attachHost(null)
+            if (holder.value === host) holder.value = null
+        }
+    }
+    // Scroll-mode flip: reader.js's setFlow rebuilds the rendition and
+    // re-displays the same position. Keyed on boot status too — a flip made
+    // while the WebView was still loading is dropped by the platform (a
+    // script before page-finished is a no-op), so it must re-fire on READY
+    // to land; reader.js no-ops when the flow already matches `pending`.
+    LaunchedEffect(scrollMode, session.status) {
+        session.onFlowChanged(scrollMode)
+    }
+    return host
+}
+
+/**
+ * The desktop in-flow boot strip: the overlay veils cannot cover the
+ * windowed browser, so boot feedback lives in the layout between the top bar
+ * and the content region — the viewer-download percent while the CEF bundle
+ * downloads, an indeterminate strip while the book itself boots, nothing
+ * once READY (or ERROR, which owns the content region).
+ */
+@Composable
+private fun DesktopBootStrip(
+    downloadProgress: Float?,
+    status: EpubReaderStatus,
+) {
+    val text: String
+    val progress: Float?
+    when {
+        downloadProgress != null -> {
+            text = stringResource(
+                Res.string.book_reader_downloading_viewer,
+                (downloadProgress * 100).roundToInt().coerceIn(0, 100),
+            )
+            progress = downloadProgress
+        }
+        status != EpubReaderStatus.READY && status != EpubReaderStatus.ERROR -> {
+            text = stringResource(Res.string.book_reader_preparing_locations)
+            progress = null
+        }
+        else -> return
+    }
+    Surface(color = Color.Black.copy(alpha = 0.6f)) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
+        ) {
+            Text(
+                text = text,
+                style = MaterialTheme.typography.labelMedium,
+                color = Color.White.copy(alpha = 0.7f),
+            )
+            if (progress != null) {
+                LinearProgressIndicator(
+                    progress = { progress },
+                    modifier = Modifier.weight(1f),
+                )
+            } else {
+                LinearProgressIndicator(modifier = Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+/**
+ * The desktop in-flow error screen: no browser is composed behind it (its
+ * surface would cover the message), so this is the whole content — a back
+ * row plus the centered reason. Closing and reopening the book retries the
+ * boot from a fresh session.
+ */
+@Composable
+private fun DesktopReaderError(
+    title: String,
+    onBack: () -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+        Surface(color = Color.Black.copy(alpha = 0.6f)) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                IconButton(onClick = onBack) {
+                    Icon(
+                        imageVector = Tabler.Outline.ArrowLeft,
+                        contentDescription = null,
+                        tint = Color.White,
+                    )
+                }
+                Text(
+                    text = title.ifBlank {
+                        stringResource(Res.string.book_reader_title_fallback)
+                    },
+                    style = MaterialTheme.typography.titleMedium,
+                    color = Color.White,
+                    maxLines = 1,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+        Box(
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = stringResource(Res.string.book_reader_error_cannot_open),
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color.White.copy(alpha = 0.7f),
+            )
+        }
+    }
+}
+
+/**
  * The reflowable reader's RENDER shell over its Compose-free
  * [ReflowableReaderSession] (ReaderControllers.kt): this composable collects
- * the VM/session state, calls the platform host factory, binds the returned
- * handle into the session, and dispatches one-line effects (flow flip,
- * annotation sync, exact resume, speech-end highlight drop) plus the sheet
- * callbacks into session methods — every decision lives in the session. See
- * the file header for the input-handling split ([readerKeys] + JS taps).
+ * the VM/session state, binds the platform host ([ReflowableHostBinding])
+ * into the session, and dispatches one-line effects (annotation sync, exact
+ * resume, speech-end highlight drop) plus the sheet callbacks into session
+ * methods — every decision lives in the session. See the file header for the
+ * input-handling split ([readerKeys] + JS taps).
+ *
+ * Two layouts over one state (see [epubChromeOverlaysContent]): the overlay
+ * tree floats the chrome over the content edge, while the desktop tree lays
+ * the same bars around the browser (top bar / content / bottom bar) with an
+ * in-flow boot strip and error screen — windowed CEF paints above every
+ * Compose overlay, so floating chrome would hide behind it there. The sheets
+ * stay shared below both trees; on desktop the binding forwards
+ * `sheets.open` as the host's overlayActive, which hides the browser's
+ * surface while a sheet is up (the sheet windows composite UNDER windowed
+ * CEF — without the hide, the book painted through the sheet's middle band).
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -305,8 +496,6 @@ internal fun ReflowableReaderContent(
     state: BookReaderUiState.Ready,
     content: ReadyContent.Reflowable,
     direction: ReadingDirection,
-    theme: ReaderTheme,
-    fontSizePx: Int,
     viewModel: BookReaderViewModel,
     onBack: () -> Unit,
 ) {
@@ -319,15 +508,10 @@ internal fun ReflowableReaderContent(
     val selection by viewModel.selection.collectAsStateWithLifecycle()
     val epubLocation by viewModel.currentEpubLocation.collectAsStateWithLifecycle()
 
-    // Global typography + behavior slices (the theme/font params above are
-    // the EFFECTIVE values — per-book override ?: global) ride ONE preference
-    // snapshot instead of one collect per knob.
+    // Global typography + behavior slices ride ONE preference snapshot
+    // instead of one collect per knob.
     val prefs by viewModel.prefs.collectAsStateWithLifecycle()
     val global = prefs.global
-    val fontFamily = global.fontFamily
-    val lineHeightPct = global.lineHeightPct
-    val marginPct = global.marginPct
-    val justifyText = global.justify
     val scrollMode = global.scrollMode
     val perBookActive = prefs.perBookActive
     val brightnessPct = global.brightnessPct
@@ -388,52 +572,32 @@ internal fun ReflowableReaderContent(
     LaunchedEffect(session) { viewModel.attachReaderSession(session) }
     // The full appearance bundle: rides the chunked load protocol on boot
     // AND re-fires the hosts' change push whenever any axis moves (their
-    // LaunchedEffect keys on the data class). Mappings: family → CSS stack
-    // (SYSTEM = null → the pushed clear), leading → pct/100, margins → the
-    // proportional px band (see ReaderAppearance.kt).
-    val appearance = EpubAppearance(
-        theme = theme,
-        fontSizePx = fontSizePx,
-        fontFamilyCss = fontFamily.epubCssStack(),
-        lineHeight = epubLineHeight(lineHeightPct),
-        marginsPx = epubMarginsPx(marginPct),
-        justify = justifyText,
-        scrolled = scrollMode,
-    )
-    val host = rememberEpubReaderHost(
-        bookFile = content.bookFile,
-        resumePercent = content.resumePercent,
-        appearance = appearance,
-        onEvent = session.onEvent,
-    )
-    // The late-bound binding: the session (and, through its port, the VM's
-    // speech loop) reaches the host from here. Unbound again on dispose so
-    // every session-side command degrades to a no-op — the old channel's
-    // dropped-command semantics for a detached screen.
-    DisposableEffect(host) {
-        session.attachHost(host)
-        onDispose { session.attachHost(null) }
-    }
-    // Scroll-mode flip: reader.js's setFlow rebuilds the rendition and
-    // re-displays the same position. Keyed on boot status too — a flip made
-    // while the WebView was still loading is dropped by the platform (a
-    // script before page-finished is a no-op), so it must re-fire on READY
-    // to land; reader.js no-ops when the flow already matches `pending`.
-    LaunchedEffect(scrollMode, session.status) {
-        session.onFlowChanged(scrollMode)
-    }
-
+    // LaunchedEffect keys on the data class). The snapshot → bundle fold is
+    // EpubAppearance.from: theme/font from the EFFECTIVE appearance
+    // (override ?: global), typography axes from the global slice.
+    val appearance = EpubAppearance.from(prefs)
     // Session end (stop/finish/engine loss) drops the painted highlight.
     LaunchedEffect(speechState.active) {
         session.onSpeechActiveChanged(speechState.active)
     }
-    // `host`'s composable call above emits the platform WebView directly into
-    // the parent Box (this composable declares no root container), so the
-    // interaction Box below composes on top of it. The Box carries
-    // KEYBOARD-ONLY input (readerKeys): a pointerInput overlay would swallow
-    // the web touches text selection needs — touch navigation rides the
-    // JS-reported tap events instead.
-    val downloadProgress by host.viewerDownloadProgress
+
+    // Overlay vs in-flow chrome (see epubChromeOverlaysContent): the overlay
+    // tree composes the long-standing floating layout; the desktop tree lays
+    // the same chrome around the browser because windowed CEF paints above
+    // every Compose overlay. The bound handle travels through `hostHolder` so
+    // bars outside the browser's region (and the shared sheets below) drive
+    // it; the binding clears the holder on dispose, so an error teardown
+    // no-ops instead of commanding a dead view.
+    val overlayChrome = epubChromeOverlaysContent(currentPlatform)
+    val hostHolder = remember { mutableStateOf<EpubReaderHandle?>(null) }
+
+    // The EPUB TOC tick rail's ticks: hoisted — the overlay branch floats the
+    // rail over the content edge while the in-flow branch docks it beside the
+    // browser, but both render the same window.
+    val tocTicks = remember(session.tocItems) { epubTocTicks(session.tocItems) }
+    val tocTickIndex = remember(tocTicks, epubLocation?.chapterHref) {
+        epubCurrentTocIndex(session.tocItems, epubLocation?.chapterHref)
+    }
 
     // Exact resume (ADR 0003 point 4): the latch + jump decision are the
     // session's (see [ReflowableReaderSession.resumeJump]); this shell just
@@ -464,13 +628,197 @@ internal fun ReflowableReaderContent(
         onTimeout = viewModel::toggleControls,
     )
 
+    if (!overlayChrome && session.status == EpubReaderStatus.ERROR) {
+        // No browser is composed behind the error (its surface would cover
+        // the message) — back out to retry from a fresh session.
+        DesktopReaderError(title = state.title, onBack = onBack)
+    } else if (!overlayChrome) {
+        // Desktop in-flow layout: top bar / browser / bottom bar participate
+        // in the layout, so nothing hides behind the windowed browser.
+        // Auto-hide still collapses the bars (AnimatedVisibility reclaims the
+        // space — true fullscreen while reading).
+        // Keyboard shortcuts need Compose focus, and clicks land in CEF (which
+        // never yields it) — request it once so arrows/Enter work immediately.
+        val desktopFocus = remember { FocusRequester() }
+        LaunchedEffect(Unit) { desktopFocus.requestFocus() }
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black)
+                .focusRequester(desktopFocus)
+                .readerKeys(
+                    direction = direction,
+                    onForward = { hostHolder.value?.next() },
+                    onBackward = { hostHolder.value?.prev() },
+                    onBack = onBack,
+                    // The sheet owner closes its settings sheet on a chrome
+                    // toggle — the fold toggleControls used to carry as VM state.
+                    onToggleControls = {
+                        sheets.showSettings = false
+                        viewModel.toggleControls()
+                    },
+                    volumeKeyPaging = volumeKeyPaging,
+                ),
+        ) {
+            AnimatedVisibility(
+                visible = state.showControls,
+                enter = fadeIn(),
+                exit = fadeOut(),
+            ) {
+                ReaderTopBar(
+                    state = state,
+                    bookmarked = bookmarked,
+                    onToggleBookmark = viewModel::toggleBookmarkAtCurrentPosition,
+                    onOpenBookmarks = { sheets.showBookmarks = true },
+                    onOpenAnnotations = { sheets.showAnnotations = true },
+                    onOpenSettings = { sheets.showSettings = true },
+                    onBack = onBack,
+                    sleepTimerActive = sleepTimerState.running,
+                    onOpenSleepTimer = { sheets.showSleepTimer = true },
+                )
+            }
+            // Boot feedback lives here — the overlay veils cannot cover the
+            // browser, so they stay on the overlay branch only.
+            DesktopBootStrip(
+                downloadProgress = hostHolder.value?.viewerDownloadProgress?.value,
+                status = session.status,
+            )
+            Row(
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+            ) {
+                if (tocRailVisible) {
+                    ReaderTocRail(
+                        ticks = tocTicks,
+                        currentIndex = tocTickIndex,
+                        onJump = { tick -> tick.href?.let { href -> hostHolder.value?.goTo(href) } },
+                        modifier = Modifier
+                            .align(Alignment.CenterVertically)
+                            .padding(start = 4.dp),
+                    )
+                }
+                Box(modifier = Modifier.weight(1f).fillMaxSize().background(Color.Black)) {
+                    // Windowed CEF paints above every Compose/sheet window on
+                    // desktop, so a raised sheet shows the book through its own
+                    // middle band wherever the browser still occupies pixels.
+                    // The host's visibility toggle is the first belt; the
+                    // second (load-bearing here) collapses the browser's layout
+                    // to 0 px while a sheet holds the screen. The browser stays
+                    // composed (no reload, handle stays valid) — only its
+                    // native surface shrinks away, leaving the black content
+                    // region for the sheet's own window to render over.
+                    val sheetOpen = sheets.open
+                    ReflowableHostBinding(
+                        session = session,
+                        holder = hostHolder,
+                        bookFile = content.bookFile,
+                        resumePercent = content.resumePercent,
+                        appearance = appearance,
+                        scrollMode = scrollMode,
+                        // The sheet/dialog windows composite UNDER windowed CEF
+                        // on desktop — the host hides the browser's surface
+                        // while one holds the screen so the sheet shows.
+                        overlayActive = sheetOpen,
+                        modifier = if (sheetOpen) Modifier.size(0.dp) else Modifier.fillMaxSize(),
+                    )
+                }
+            }
+            selection?.let { sel ->
+                SelectionActionBar(
+                    existing = existingAnnotation,
+                    style = pendingStyle,
+                    color = pendingColor,
+                    onColorTap = { color ->
+                        pendingColor = color
+                        if (existingAnnotation != null) {
+                            viewModel.updateAnnotation(existingAnnotation.id, color = color)
+                        } else {
+                            viewModel.addSelectionAnnotation(pendingStyle, color)
+                        }
+                        hostHolder.value?.clearSelection()
+                    },
+                    onToggleStyle = {
+                        pendingStyle = if (pendingStyle == ReaderAnnotationStyle.UNDERLINE) {
+                            ReaderAnnotationStyle.HIGHLIGHT
+                        } else {
+                            ReaderAnnotationStyle.UNDERLINE
+                        }
+                        if (existingAnnotation != null) {
+                            viewModel.updateAnnotation(existingAnnotation.id, style = pendingStyle)
+                        }
+                    },
+                    onEditNote = {
+                        sheets.noteTarget = if (existingAnnotation != null) {
+                            NoteDialogTarget.Existing(existingAnnotation)
+                        } else {
+                            NoteDialogTarget.Selection
+                        }
+                    },
+                    onDelete = {
+                        existingAnnotation?.let { viewModel.deleteAnnotation(it.id) }
+                        hostHolder.value?.clearSelection()
+                    },
+                    onCopy = { clipboard.setText(AnnotatedString(sel.text)) },
+                )
+            }
+            SnackbarHost(
+                hostState = snackbarHostState,
+                modifier = Modifier.align(Alignment.CenterHorizontally).padding(vertical = 8.dp),
+            )
+            // The bottom chrome hides while the selection bar is up — two
+            // bottom-anchored bars would fight for the same edge.
+            AnimatedVisibility(
+                visible = state.showControls && selection == null,
+                enter = fadeIn(),
+                exit = fadeOut(),
+            ) {
+                ReflowableBottomBar(
+                    // Same single-percent-carrier read as the overlay branch.
+                    percent = epubLocation?.percent ?: content.resumePercent,
+                    remainingPages = epubLocation?.remainingPages,
+                    minutesLeftInChapter = epubLocation?.remainingPages
+                        ?.let { locationPagesMinutesRemaining(it, readingSpeedWpm) },
+                    minutesLeftInBook = epubLocation?.remainingLocations
+                        ?.let { locationPagesMinutesRemaining(it, readingSpeedWpm) },
+                    brightnessPct = brightnessPct,
+                    onBrightnessChange = viewModel.preferences::setBrightnessPct,
+                    // No dim veil can cover windowed CEF — the slider would
+                    // be a dead control here (see ReflowableBottomBar).
+                    showBrightness = false,
+                    onOpenToc = { sheets.showToc = true },
+                    speechAvailable = speechAvailable,
+                    speechActive = speechState.active,
+                    speechPaused = speechState.paused,
+                    onSpeechToggle = viewModel::toggleReadAloud,
+                    onSpeechSkipBack = viewModel::skipSpeechBack,
+                    onSpeechSkipForward = viewModel::skipSpeechForward,
+                    onSpeechStop = viewModel::stopReadAloud,
+                    autoScrollVisible = scrollMode,
+                    autoScrollActive = session.autoScroll.active,
+                    onAutoScrollToggle = session.autoScroll::toggle,
+                )
+            }
+        }
+    } else {
+        // The browser fills the screen behind this chrome (the binding emits
+        // its view here, ahead of the Box — the long-standing order).
+        // KEYBOARD-ONLY input on the Box: a pointerInput overlay would swallow
+        // the web touches text selection needs — touch navigation rides the
+        // JS-reported tap events instead.
+        val overlayHost = ReflowableHostBinding(
+            session = session,
+            holder = hostHolder,
+            bookFile = content.bookFile,
+            resumePercent = content.resumePercent,
+            appearance = appearance,
+            scrollMode = scrollMode,
+        )
     Box(
         modifier = Modifier
             .fillMaxSize()
             .readerKeys(
                 direction = direction,
-                onForward = { host.next() },
-                onBackward = { host.prev() },
+                onForward = { overlayHost.next() },
+                onBackward = { overlayHost.prev() },
                 onBack = onBack,
                 // The sheet owner closes its settings sheet on a chrome
                 // toggle — the fold toggleControls used to carry as VM state.
@@ -481,6 +829,7 @@ internal fun ReflowableReaderContent(
                 volumeKeyPaging = volumeKeyPaging,
             ),
     ) {
+        val downloadProgress by overlayHost.viewerDownloadProgress
         // Above the WebView, under the veils/chrome/sheets — the controls
         // stay full-brightness and the veil never intercepts web touches.
         BrightnessDimOverlay(brightnessPct)
@@ -502,8 +851,19 @@ internal fun ReflowableReaderContent(
                 )
             }
         } ?: run {
-            if (session.status != EpubReaderStatus.READY && session.status != EpubReaderStatus.ERROR) {
-                ReaderVeil {
+            // ERROR fails the boot veil into a message: without this arm a
+            // viewer/encode failure (desktop KCEF init, corrupt payload)
+            // lands on a blank reader behind the chrome.
+            when (session.status) {
+                EpubReaderStatus.ERROR -> ReaderVeil {
+                    Text(
+                        text = stringResource(Res.string.book_reader_error_cannot_open),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.White.copy(alpha = 0.7f),
+                    )
+                }
+                EpubReaderStatus.READY -> Unit
+                else -> ReaderVeil {
                     LoadingIndicator(modifier = Modifier.size(48.dp))
                     Text(
                         text = stringResource(Res.string.book_reader_preparing_locations),
@@ -532,15 +892,11 @@ internal fun ReflowableReaderContent(
         // rides the relocated event's spine href (the chapter label alone
         // collides on duplicate titles); hidden until both the toc event and
         // the first relocation have landed.
-        val tocTicks = remember(session.tocItems) { epubTocTicks(session.tocItems) }
-        val tocTickIndex = remember(tocTicks, epubLocation?.chapterHref) {
-            epubCurrentTocIndex(session.tocItems, epubLocation?.chapterHref)
-        }
         if (tocRailVisible) {
             ReaderTocRail(
                 ticks = tocTicks,
                 currentIndex = tocTickIndex,
-                onJump = { tick -> tick.href?.let { href -> host.goTo(href) } },
+                onJump = { tick -> tick.href?.let { href -> overlayHost.goTo(href) } },
                 modifier = Modifier
                     .align(Alignment.CenterStart)
                     .padding(start = 4.dp),
@@ -593,7 +949,7 @@ internal fun ReflowableReaderContent(
                         } else {
                             viewModel.addSelectionAnnotation(pendingStyle, color)
                         }
-                        host.clearSelection()
+                        overlayHost.clearSelection()
                     },
                     onToggleStyle = {
                         pendingStyle = if (pendingStyle == ReaderAnnotationStyle.UNDERLINE) {
@@ -614,7 +970,7 @@ internal fun ReflowableReaderContent(
                     },
                     onDelete = {
                         existingAnnotation?.let { viewModel.deleteAnnotation(it.id) }
-                        host.clearSelection()
+                        overlayHost.clearSelection()
                     },
                     onCopy = { clipboard.setText(AnnotatedString(sel.text)) },
                 )
@@ -625,7 +981,16 @@ internal fun ReflowableReaderContent(
             hostState = snackbarHostState,
             modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 96.dp),
         )
+    }
+    }
 
+    // Shared sheets (both layouts). Windowed CEF on desktop composites above
+    // the sheet/dialog windows, so the binding passes `sheets.open` as the
+    // host's overlayActive — the browser's surface hides while one of these
+    // is up, and the sheet renders over the blank content region. The holder
+    // is set once the binding composes; the desktop error screen composes no
+    // binding, so the sheets stay home there.
+    hostHolder.value?.let { sheetsHost ->
         if (sheets.showSettings) {
             ReflowableSettingsSheet(
                 prefs = prefs,
@@ -661,7 +1026,7 @@ internal fun ReflowableReaderContent(
         if (sheets.showToc) {
             EpubTocSheet(
                 tocItems = session.tocItems,
-                onJump = { href -> sheets.showToc = false; host.goTo(href) },
+                onJump = { href -> sheets.showToc = false; sheetsHost.goTo(href) },
                 onOpenSearch = { sheets.showToc = false; sheets.showSearch = true; session.resetSearch() },
                 onDismissRequest = { sheets.showToc = false },
             )
@@ -675,7 +1040,7 @@ internal fun ReflowableReaderContent(
                     // Jumpability is the codec's rule (CFI-carrying rows
                     // only): null-CFI rows have no in-reader fallback (the
                     // host has no display-by-percent after boot).
-                    if (ReaderBookmarkCodec.isJumpable(bookmark)) host.goToCfi(bookmark.cfi!!)
+                    if (ReaderBookmarkCodec.isJumpable(bookmark)) sheetsHost.goToCfi(bookmark.cfi!!)
                 },
                 onDelete = { bookmark -> viewModel.deleteBookmark(bookmark.id) },
                 onDismissRequest = { sheets.showBookmarks = false },
@@ -684,7 +1049,7 @@ internal fun ReflowableReaderContent(
         if (sheets.showAnnotations) {
             AnnotationsSheet(
                 annotations = annotations,
-                onJump = { annotation -> sheets.showAnnotations = false; host.goToCfi(annotation.cfi) },
+                onJump = { annotation -> sheets.showAnnotations = false; sheetsHost.goToCfi(annotation.cfi) },
                 onEditNote = { annotation -> sheets.noteTarget = NoteDialogTarget.Existing(annotation) },
                 onRecolor = { annotation, color -> viewModel.updateAnnotation(annotation.id, color = color) },
                 onDelete = { annotation -> viewModel.deleteAnnotation(annotation.id) },
@@ -714,7 +1079,7 @@ internal fun ReflowableReaderContent(
                     when (target) {
                         is NoteDialogTarget.Selection -> {
                             viewModel.addSelectionAnnotation(pendingStyle, pendingColor, note)
-                            host.clearSelection()
+                            sheetsHost.clearSelection()
                         }
                         is NoteDialogTarget.Existing ->
                             viewModel.updateAnnotation(target.annotation.id, note = note)

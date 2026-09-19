@@ -44,3 +44,20 @@ fun List<MediaItem>.resumableOnly(): List<MediaItem> =
  */
 fun List<MediaItem>.readingResumableOnly(): List<MediaItem> =
     filter { !it.isPlayed && it.mediaType == MediaType.BOOK }
+
+/**
+ * The resume rows' full post-fetch chain, folded once for both client twins
+ * (`LibraryApiClientImpl`, `KtorWasmLibraryApiClient` — each used to hand-copy
+ * this tail per endpoint): parental filter → id-distinct → the #157
+ * played-row rule's books-or-video half. [isBooks] selects
+ * [readingResumableOnly] over [resumableOnly] exactly as the two
+ * getContinueReading implementations do behind their server-side Book
+ * narrowing.
+ */
+internal fun List<MediaItem>.toFilteredResumeRows(
+    maxParentalRating: Int?,
+    isBooks: Boolean,
+): List<MediaItem> {
+    val filtered = filterByParentalRating(maxParentalRating).distinctBy { it.id }
+    return if (isBooks) filtered.readingResumableOnly() else filtered.resumableOnly()
+}

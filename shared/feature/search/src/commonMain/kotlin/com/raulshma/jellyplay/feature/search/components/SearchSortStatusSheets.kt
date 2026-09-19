@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -23,12 +22,10 @@ import com.raulshma.jellyplay.feature.search.generated.resources.search_filter_s
 import com.raulshma.jellyplay.feature.search.generated.resources.search_sort_by
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.PlayedStatus
 import com.raulshma.jellyplay.core.model.SortOption
 import com.raulshma.jellyplay.core.ui.components.GlassFilterChip
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
-import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 
 /**
  * Single-select sort picker for the search screen. Mirrors the Library
@@ -109,10 +106,9 @@ fun PlayedStatus.playedStatusLabel(): String = when (this) {
 }
 
 /**
- * Shared sheet chrome for the sort/status pickers — mirrors the
- * [SearchFilterSheet]'s TV/phone split (TvSafeSheet on Android TV,
- * ModalBottomSheet elsewhere) so the two pickers stay visually consistent with
- * the rest of the search filter UX.
+ * Shared sheet chrome for the sort/status pickers — renders through
+ * [TvSafeSheet] (the canonical TV/phone adapter) so the two pickers stay
+ * visually consistent with the rest of the search filter UX.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -121,26 +117,10 @@ private fun SearchSelectionSheet(
     onDismiss: () -> Unit,
     content: @Composable () -> Unit,
 ) {
-    val isTv = LocalTvMode.current
-    // Sheet container matches the app/screen background: colorScheme.surface
-    // (pure #000 in OLED) rather than the old light=Low / dark=High split.
-    val sheetContainerColor = MaterialTheme.colorScheme.surface
-
-    if (isTv) {
-        TvSafeSheet(onDismissRequest = onDismiss) {
-            SheetBody(title = title, content = content)
-        }
-        return
-    }
-
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    ModalBottomSheet(
+    TvSafeSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = sheetContainerColor,
-        tonalElevation = 0.dp,
-        shape = ShapeCache.smoothTop28,
-        dragHandle = { com.raulshma.jellyplay.core.ui.components.SheetDragHandle() },
     ) {
         SheetBody(title = title, content = content)
     }

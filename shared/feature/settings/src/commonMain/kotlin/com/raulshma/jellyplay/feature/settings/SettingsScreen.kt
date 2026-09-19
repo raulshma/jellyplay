@@ -81,8 +81,8 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
 import coil3.compose.AsyncImage
 import androidx.compose.ui.layout.ContentScale
-import com.raulshma.jellyplay.core.network.library.buildUserImageUrl
 import com.raulshma.jellyplay.core.model.UserInfo
+import com.raulshma.jellyplay.core.model.buildUserImageUrl
 import com.raulshma.jellyplay.core.ui.components.TopBarStyle
 import com.raulshma.jellyplay.core.ui.components.SettingListItem
 import com.raulshma.jellyplay.core.ui.components.SettingToggleItem

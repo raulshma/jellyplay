@@ -16,10 +16,13 @@ import org.koin.dsl.module
  *    shared playback contracts the legacy Hilt AudioPlaybackManager single
  *    implements; androidCoreDataModule aliases them onto that manager since
  *    the former app Hilt-interop bridge died with the conveyor move);
- *  - the module-local AudioPlayerEngine / AudioPlayerCast seams are bridged
- *    the same way (app-side `androidAppInteropAdaptersModule` delegate
- *    adapters over the Koin-owned AudioPlaybackManager / CastManager —
- *    details DetailAudioPlayback precedent);
+ *  - [com.raulshma.jellyplay.core.data.playback.AudioPlayerEngine] is the
+ *    third shared playback contract (the transport/metadata/lyrics half;
+ *    the Android manager implements it directly and androidCoreDataModule
+ *    aliases it onto that single, same as the queue/effects pair) and the
+ *    module-local AudioPlayerCast seam is bridged app-side
+ *    (`androidAppInteropAdaptersModule` adapter over the Koin-owned
+ *    CastManager — details DetailAudioPlayback precedent);
  *  - AudioSleepTimerManager (dataJvmModule aliases the interface onto the
  *    SleepTimerManager single; the wasm fragment binds the wall-clock impl),
  *    MediaRepository /

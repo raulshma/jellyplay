@@ -78,7 +78,7 @@ internal fun EditorScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     LaunchedEffect(itemId) {
-        viewModel.loadEditorData(itemId)
+        viewModel.onEvent(EditorUiEvent.LoadEditorData(itemId))
     }
 
     // Unsaved-changes guard: when the editor is dirty, intercept system back
@@ -105,7 +105,7 @@ internal fun EditorScreen(
                 ConfirmAction(
                     text = stringResource(Res.string.editor_save),
                     tone = ConfirmTone.PRIMARY,
-                    onClick = { viewModel.saveMetadata() },
+                    onClick = { viewModel.onEvent(EditorUiEvent.SaveMetadata) },
                 )
             } else {
                 null
@@ -132,7 +132,7 @@ internal fun EditorScreen(
         actions = {
             val saveFocusState = rememberTvFocusState()
             FilledTonalButton(
-                onClick = { viewModel.saveMetadata() },
+                onClick = { viewModel.onEvent(EditorUiEvent.SaveMetadata) },
                 enabled = uiState.isAdmin && uiState.isDirty && !uiState.isSaving,
                 modifier = Modifier
                     .padding(end = 8.dp)
@@ -174,7 +174,7 @@ internal fun EditorScreen(
             uiState.error?.let { errorMessage ->
                 EditorErrorBanner(
                     message = errorMessage,
-                    onDismiss = { viewModel.clearError() },
+                    onDismiss = { viewModel.onEvent(EditorUiEvent.ClearError) },
                 )
             }
 

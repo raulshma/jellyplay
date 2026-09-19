@@ -1,16 +1,5 @@
-package com.raulshma.jellyplay.desktop.player
+package com.raulshma.jellyplay.core.data.playback
 
-import com.raulshma.jellyplay.core.data.playback.AudioLyricsManager
-import com.raulshma.jellyplay.core.data.playback.AudioProgressReporter
-import com.raulshma.jellyplay.core.data.playback.AudioQueueItem
-import com.raulshma.jellyplay.core.data.playback.AudioQueueManager
-import com.raulshma.jellyplay.core.data.playback.AudioQueuePolicy
-import com.raulshma.jellyplay.core.data.playback.NowPlayingTracker
-import com.raulshma.jellyplay.core.data.playback.QueuePersistenceHelper
-import com.raulshma.jellyplay.core.data.playback.QueueSnapshot
-import com.raulshma.jellyplay.core.data.playback.QueueUndoEvent
-import com.raulshma.jellyplay.core.data.playback.QueueUndoStack
-import com.raulshma.jellyplay.core.data.playback.SleepTimerManager
 import com.raulshma.jellyplay.core.data.playback.focus.FocusOutcome
 import com.raulshma.jellyplay.core.data.playback.focus.NoopPlaybackFocus
 import com.raulshma.jellyplay.core.data.playback.focus.PlaybackFocus
@@ -21,80 +10,85 @@ import com.raulshma.jellyplay.core.model.LrcLibTrack
 import com.raulshma.jellyplay.core.model.LyricsLine
 import com.raulshma.jellyplay.core.model.LyricsSource
 import com.raulshma.jellyplay.core.model.PlaybackStartInfo
-import com.raulshma.jellyplay.feature.player.audio.AudioPlayerEngine
 import com.raulshma.jellyplay.feature.player.video.engine.EngineConfig
 import com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState
 import com.raulshma.jellyplay.feature.player.video.engine.EnginePositionTicker
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import com.raulshma.jellyplay.feature.player.video.engine.PlaybackRequest
 import java.awt.EventQueue
-import java.util.UUID
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 /**
- * Desktop audio playback core: real queue + transport over a
- * dedicated audio-only [MpvDesktopEngine] (`vo=null` — audio tracks never open
- * a video output).
+ * Desktop audio playback core: real queue + transport over a dedicated
+ * audio-only mpv engine (`vo=null` — audio tracks never open a video
+ * output; the factory is ctor-injected so this module never references the
+ * app-side `MpvDesktopEngine`).
  *
- * The Android media3 `AudioPlaybackManager` (legacy `:core:data`) is the
- * SEMANTICS SOURCE OF TRUTH; every observable behavior was mirrored
- * case-by-case and every divergence is declared in the class KDoc below.
- * The manager implements BOTH shared contracts the audio player consumes —
+ * Lives in core:data jvmMain (relocated from apps/desktop — the recorded
+ * "audio queue chassis" first stage): everything it touches was already a
+ * core:data collaborator except the engine factory, the effects stack and
+ * the AWT main-thread guard, all of which are ctor seams. jvmMain (not
+ * jvmShared) because `java.awt.EventQueue` must never reach the Android
+ * bootclasspath.
+ *
+ * The Android media3 `AudioPlaybackManager` (androidMain) is the SEMANTICS
+ * SOURCE OF TRUTH; every observable behavior was mirrored case-by-case and
+ * every divergence is declared in the class KDoc below. The manager
+ * implements BOTH shared contracts the audio player consumes —
  * [AudioQueueManager] (queue mutations + the five state flows) and
  * [AudioPlayerEngine] (metadata/transport/lyrics/undo/A-B loop) — the same
- * single-object pattern Android uses (its manager implements
- * AudioQueueManager + AudioEffectsManager and the engine seam delegates to
- * it).
+ * single-object pattern Android uses.
  *
- * The pure QUEUE POLICY behind the table below — advance/wrap, retreat, the
- * 3 s skip-previous restart threshold, the move-remap, the A→B loop
- * transitions and the position-tick decisions — is no longer mirrored
- * case-by-case: it lives once in the shared (commonMain)
- * [AudioQueuePolicy] (`:core:data`), which BOTH adapters call. This table's
- * "Android (media3)" column for those rows is that module's semantics,
- * pinned by `AudioQueuePolicyTest` (jvmTest); the managers own only the
- * effects (engine writes, flow publishes, undo pushes). The same
- * extraction moved the shared stopAndRelease tail into
- * [AudioProgressReporter.stopAndCancel].
+ * The QUEUE-STATE CHASSIS — the eleven playback state flows, the
+ * [QueueUndoStack] wiring, the advance/retreat/wrap/shuffle/restart
+ * selection and the item-transition choreography — is no longer inlined
+ * here: it lives once in the shared (commonMain) [AudioQueueStateCore],
+ * which this manager drives over a narrow [EngineDispatch] port (the
+ * private [engineDispatch] object below — the manager's ONLY engine-command
+ * route; lifecycle, observers, effects pushes and release stay direct).
+ * Android deliberately does not adopt the core yet — see the core's KDoc
+ * for the declared divergence. The pure QUEUE POLICY underneath both —
+ * advance/wrap, retreat, the 3 s skip-previous restart threshold, the
+ * move-remap, the A→B loop transitions and the position-tick decisions —
+ * lives in [AudioQueuePolicy], and the stop-report tail in
+ * [AudioProgressReporter.stopAndCancel], as before.
  *
  * The six now-playing metadata flows (item id, title, artist, artist id,
  * album, album art url) are written ONLY through the shared
- * [NowPlayingTracker] — constructed here and re-exposed by reference (same
- * [StateFlow] instances, the exact Android `AudioPlaybackManager` pattern),
- * so every consumer of the manager's properties is unchanged. The three
- * former hand-publish sites map onto the tracker's publish shapes:
- * [NowPlayingTracker.publishDetail] (play's resolve path),
- * [NowPlayingTracker.publishQueueItem] ([transitionTo]), and
+ * [NowPlayingTracker] — owned by the chassis core and re-exposed by
+ * reference (same [StateFlow] instances, the exact Android
+ * `AudioPlaybackManager` pattern), so every consumer of the manager's
+ * properties is unchanged. The three publish sites map onto the tracker's
+ * publish shapes: [NowPlayingTracker.publishDetail] (play's resolve path),
+ * [NowPlayingTracker.publishQueueItem] (the core's transition), and
  * [NowPlayingTracker.clear] ([stopAndRelease]).
  *
  * ## Semantics table (shared AudioQueuePolicy / Android → here)
  *
  * | Behavior | Android (media3) | Desktop |
  * |---|---|---|
- * | playQueue(items, start) | clears undo stack, sets queue+index, `play(items[start])`; out-of-bounds start leaves the queue set and returns | identical |
+ * | playQueue(items, start) | clears undo stack, sets queue+index, `play(items[start])`; out-of-bounds start leaves the queue set and returns | identical (core: [AudioQueueStateCore.playQueue] → its play hook) |
  * | addToQueue/addToQueueAll | appends to queue + player playlist; index unchanged | identical (player playlist concept absent — the queue list IS the truth; next-item resolution happens at advance time) |
- * | removeFromQueue | bounds + undo snapshot; removing current → index coerced + player transitions to the shifted-in item; removing above current → index -1 | identical; removing current reloads the shifted-in item via [transitionTo] (or stops the engine when the queue empties) |
- * | clearQueue | undo snapshot, queue=[], index=-1, player playlist cleared (goes idle, metadata kept) | identical (engine.stop(); metadata kept) |
+ * | removeFromQueue | bounds + undo snapshot; removing current → index coerced + player transitions to the shifted-in item; removing above current → index -1 | identical; removing current reloads the shifted-in item via the core's transition (or parks the engine when the queue empties) |
+ * | clearQueue | undo snapshot, queue=[], index=-1, player playlist cleared (goes idle, metadata kept) | identical (engine stop; metadata kept) |
  * | moveQueueItem | [AudioQueuePolicy.planMove] — undo snapshot; index remap (from→to / ±1 crossing); player item moved (no transition) | identical (same [AudioQueuePolicy.planMove] call; pure state — the playing item never changes) |
- * | skipToNext | [AudioQueuePolicy.nextIndex] — index+1, or wrap to 0 under repeat ≥ 1, else no-op; NO undo snapshot on the no-op path | identical (same call — this was the third of desktop's three former inline copies of the rule, now one) |
- * | skipToPrevious | player exists else no-op; [AudioQueuePolicy.skipsPreviousRestart] (position > 3 s → seek 0 only); else [AudioQueuePolicy.previousIndex] (index-1 or wrap to last under repeat ≥ 1); undo snapshot only on the index move | identical |
- * | playFromQueue | sets index, seeks player to (index, 0), plays if paused | identical (same-index clicks seek to 0 without a reload; cross-index clicks load via [transitionTo]) |
+ * | skipToNext | [AudioQueuePolicy.nextIndex] — index+1, or wrap to 0 under repeat ≥ 1, else no-op; NO undo snapshot on the no-op path | identical (same call, in the core) |
+ * | skipToPrevious | player exists else no-op; [AudioQueuePolicy.skipsPreviousRestart] (position > 3 s → seek 0 only); else [AudioQueuePolicy.previousIndex] (index-1 or wrap to last under repeat ≥ 1); undo snapshot only on the index move | identical (core, over [EngineDispatch.isLive]) |
+ * | playFromQueue | sets index, seeks player to (index, 0), plays if paused | identical (same-index clicks seek to 0 without a reload; cross-index clicks load via the core's transition) |
  * | toggleShuffle ON | current item moves to head, rest reshuffled, index=0, player playlist rebuilt at current position | identical list/index behavior; NO engine reload needed (the current item keeps playing — the playlist rebuild is playlist plumbing, not an observable playback change). Like Android (`val player = exoPlayer ?: return` right after the flag flip), the REORDER is gated on a live engine: toggling shuffle before anything ever played flips only [shuffleMode] |
  * | toggleShuffle OFF | original order restored, index jumps to the current item's original slot, playlist rebuilt at current position | identical (state-only, same reasoning + same engine gate) |
  * | setShuffleMode(b) | no-op when unchanged, else toggleShuffle | identical |
  * | cycleRepeatMode / setRepeatMode | (mode+1)%3 / coerce 0..2, player.repeatMode mapped (0=OFF, 1=ALL, 2=ONE) | identical values; the repeat behavior is applied at track end (below) instead of via a player property |
- * | Auto-advance at track end | ExoPlayer advances mid-queue under OFF; wraps under ALL; replays under ONE; `onMediaItemTransition` reconciles index/metadata and reports stop(prev)+start(next) | engine ENDED → [AudioQueuePolicy.nextIndex] advance/wrap (or engine replay under ONE); [transitionTo] performs the same reconciliation and reporting |
+ * | Auto-advance at track end | ExoPlayer advances mid-queue under OFF; wraps under ALL; replays under ONE; `onMediaItemTransition` reconciles index/metadata and reports stop(prev)+start(next) | engine ENDED → core [AudioQueueStateCore.onEngineEnded]: [AudioQueuePolicy.nextIndex] advance/wrap (or engine replay under ONE); the core's transition performs the same reconciliation and reporting |
  * | A→B loop markers | [AudioQueuePolicy] transitions: cycle nothing→A→B→clear; set-A clears an at/before B; set-B needs strictly-later pos | identical ([AudioQueuePolicy.cycleAbLoop]; the ticker's enforcement is the shared [AudioQueuePolicy.positionTickPlan]) |
- * | End of queue under RepeatNone | STATE_ENDED: isPlaying=false, index stays, sleep-timer end-of-episode hook fires; metadata kept | identical |
+ * | End of queue under RepeatNone | STATE_ENDED: isPlaying=false, index stays, sleep-timer end-of-episode hook fires; metadata kept | identical (core [AudioQueueStateCore] exhaustion hook → the sleep timer) |
  * | play(itemId) | same-item + (READY/BUFFERING) → no-op; reports stop(prev); clears A-B loop; appends to queue when not the current item; resume from server ticks; reports start; fetches lyrics; starts position ticker + 10 s progress reporter | identical (see divergences: no Play-On routing, pre-warm is next-item-only, no crossfade/gapless — investigated) |
  * | Queue persistence | Room (QueuePersistenceHelper): full-list replace on change, state incl. index/position/repeat/shuffle/speed sampled | identical — the same shared helper over the same Room DAO works on desktop JVM |
  * | Focus claim edge (ADR-0004) | `Player.Listener.onIsPlayingChanged`: isPlaying=true → `acquire(MUSIC)` (Denied → `pause()`), false → `release(MUSIC)` | identical — the engine isPlaying observer below is this manager's ONE play-edge chokepoint (see [onPlayingEdge]) |
@@ -126,12 +120,13 @@ import kotlinx.coroutines.launch
  *    resolves per advance, PLUS a single next-item prefetch ([schedulePrefetchForNext])
  *    scheduled ~2 s behind a successful load: it only fills a one-entry
  *    id-keyed cache that [loadItem] consumes when it loads THAT item at
- *    position 0, and every queue mutation (and explicit `play`) clears it.
- *    A mutation racing an in-flight prefetch therefore degrades to a wasted
- *    fetch, never a wrong load — which is why the Android bail-out guards
- *    stay retired here.
+ *    position 0, and every queue mutation (and explicit `play`) clears it
+ *    (the chassis core's shape-invalidation hook). A mutation racing
+ *    an in-flight prefetch therefore degrades to a wasted fetch, never a
+ *    wrong load — which is why the Android bail-out guards stay retired
+ *    here.
  *  - **No Play-On routing in play()** — Android delegates to a connected
- *    remote session; desktop has no cast stack (the [DesktopAudioPlayerCast]
+ *    remote session; desktop has no cast stack (its `DesktopAudioPlayerCast`
  *    seam is a never-connected no-op).
  *  - **Track-error recovery** — a failed per-item resolution during
  *    auto-advance stops with a playbackError (Android's prebuilt-media-item
@@ -150,18 +145,20 @@ import kotlinx.coroutines.launch
  *    playing (Android parity). mpv's keep-open EOF parking does NOT set that
  *    property, so an auto-advance after a natural track end resumes playback
  *    exactly like ExoPlayer's post-STATE_ENDED transition. The real-engine
- *    test below pins this end-to-end.
+ *    test pins this end-to-end.
  *  - **Main-thread guard** — Android asserts `Looper.myLooper() == main` on
  *    every mutation; the desktop twin asserts the AWT EDT (the app's
  *     Dispatchers.Main). Injectable so tests can disable it.
- *  - **Audio effects are REAL via the engine's mpv `af` chain** —
- *    the shared AudioEffectsManager desktop impl ([DesktopAudioEffectsManager])
- *    keeps the full state machine and computes the final per-track ReplayGain
- *    here; every mutation is folded into `EngineConfig.audioEffects` and
- *    pushed onto the engine ([MpvDesktopEngine] applies the
- *    [DesktopAudioEffectChain] mapping live). Filter parity per effect is
- *    documented in that chain builder; the visualizer taps remain the one
- *    absent surface (no in-sink PCM tap on mpv).
+ *  - **Audio effects are REAL via the engine's mpv `af` chain** — the
+ *    shared AudioEffectsStateCore state machine lives in the app-side
+ *    `DesktopAudioEffectsManager`, wired through the narrow
+ *    [AudioEffectsSession] port: every mutation is folded into
+ *    `EngineConfig.audioEffects` and pushed onto the engine (mpv applies
+ *    the `af` chain live), and per-track ReplayGain context flows through
+ *    [AudioEffectsSession.applyReplayGainForTrack] at the same two sites
+ *    Android applies it (explicit play + advance). Filter parity per
+ *    effect is documented in the app-side chain builder; the visualizer
+ *    taps remain the one absent surface (no in-sink PCM tap on mpv).
  *  - **No media session / now-playing notification / bandwidth sampling** —
  *    Android-only surfaces; the desktop position ticker keeps the A-B loop +
  *    lyrics index duties only.
@@ -181,9 +178,14 @@ class DesktopAudioQueueManager(
     private val lyricsManager: AudioLyricsManager,
     private val sleepTimerManager: SleepTimerManager,
     private val scope: CoroutineScope,
-    private val engineFactory: () -> MediaEngine = {
-        MpvDesktopEngine(extraOptions = mapOf("vo" to "null"))
-    },
+    /**
+     * Constructs the DEDICATED audio-only engine on first play (production:
+     * `MpvDesktopEngine(extraOptions = mapOf("vo" to "null"))` from
+     * desktopPlayerModule; tests substitute fakes). Required — no default —
+     * since the relocation: the mpv engine type lives app-side and this
+     * module cannot reference it.
+     */
+    private val engineFactory: () -> MediaEngine,
     /** Android's always-on Looper check, desktop twin = AWT EDT. Tests disable. */
     private val mainThreadGuard: Boolean = true,
     /**
@@ -193,28 +195,30 @@ class DesktopAudioQueueManager(
      */
     private val progressReportIntervalMs: Long = AudioProgressReporter.PROGRESS_REPORT_INTERVAL_MS,
     /**
-     * The desktop effects state machine ([DesktopAudioEffectsManager]). When
-     * wired, every mutation is pushed onto the engine as
-     * `EngineConfig.audioEffects` (live mpv `af` application) and per-track
-     * ReplayGain context flows through [DesktopAudioEffectsManager.applyReplayGainForTrack]
-     * at the same two sites Android applies it (explicit play + advance).
-     * Nullable so plain queue-semantics tests can omit the stack.
+     * The desktop effects state machine behind the narrow
+     * [AudioEffectsSession] port (the app-side `DesktopAudioEffectsManager`
+     * in production). When wired, every mutation is pushed onto the engine
+     * as `EngineConfig.audioEffects` (live mpv `af` application) and
+     * per-track ReplayGain context flows through
+     * [AudioEffectsSession.applyReplayGainForTrack] at the same two sites
+     * Android applies it (explicit play + advance). Nullable so plain
+     * queue-semantics tests can omit the stack.
      */
-    internal val effectsManager: DesktopAudioEffectsManager? = null,
+    internal val effectsManager: AudioEffectsSession? = null,
     /**
      * The cross-player exclusivity owner (PlaybackFocus, ADR-0004 slice 2) —
      * the twin of the Android manager's ctor seam. Music claims the floor on
      * the is-playing edge (the ONE chokepoint every desktop play path
      * crosses — the engine observer below; see [onPlayingEdge]) and pauses
-     * when the matrix commands it (read-aloud took the floor;
-     * [DesktopAudioQueueManagerSurface] forwards that pause back here).
+     * when the matrix commands it (read-aloud took the floor; the app-side
+     * `DesktopAudioQueueManagerSurface` forwards that pause back here).
      * MUSIC claims publish state at slices 1-2 and, since the ADR-0004
      * migration slice landed in core:data (osLegClaimants is now
      * READ_ALOUD + MUSIC), they also request the OS seat — which on desktop
-     * still degrades to vacuous arbitration (this module's binding is the
-     * [DesktopFocusArbiter], whose grant is vacuously true and whose
-     * listener is never invoked, so no OS seat is actually held and the
-     * behavior here is unchanged) while the claim-state PUBLICATION is
+     * still degrades to vacuous arbitration (the app-side binding is the
+     * in-process `DesktopFocusArbiter`, whose grant is vacuously true and
+     * whose listener is never invoked, so no OS seat is actually held and
+     * the behavior here is unchanged) while the claim-state PUBLICATION is
      * live: a desktop reader observing claimState sees Held(MUSIC) for
      * real. Defaulted Noop so plain constructions (tests) keep
      * single-player semantics.
@@ -236,72 +240,141 @@ class DesktopAudioQueueManager(
 
     // Next-item prefetch (see the "Queue pre-warm is next-item-only"
     // divergence note). One job + one cached entry; cleared by every queue
-    // mutation and by explicit play().
+    // mutation (the chassis core's shape-invalidation hook) and by explicit
+    // play().
     internal var prefetchDelayMs: Long = PREFETCH_DELAY_MS
     private var prefetchJob: Job? = null
     private var prefetchedTrack: Pair<String, ResolvedAudioTrack>? = null
 
-    // ── AudioQueueManager state (defaults identical to Android) ────────────
+    // ── Engine plumbing ────────────────────────────────────────────────────
+
+    private var engine: MediaEngine? = null
+    private var engineObserverJobs: List<Job> = emptyList()
 
     /**
-     * Sole writer of the now-playing metadata below; the manager re-exposes
-     * its flows by reference so consumers are unchanged. See
-     * [NowPlayingTracker] for the per-publish field coverage contract.
+     * The manager's engine-command port — [AudioQueueStateCore]'s ONLY way
+     * to touch the engine, and after the chassis fold this manager's only
+     * command route too (lifecycle, observers, effects pushes and release
+     * stay direct engine touches). Every member keeps the historical
+     * engine-null tolerance of the inlined calls it replaced.
      */
-    private val nowPlayingTracker = NowPlayingTracker()
+    private val engineDispatch = object : EngineDispatch {
+        override val isLive: Boolean get() = engine != null
 
-    private val _queue = MutableStateFlow<List<AudioQueueItem>>(emptyList())
-    override val queue: StateFlow<List<AudioQueueItem>> = _queue.asStateFlow()
+        override fun prepare(item: AudioQueueItem, startPositionMs: Long) {
+            val target = engine ?: return
+            loadItem(target, item, startPositionMs)
+        }
 
-    private val _currentIndex = MutableStateFlow(-1)
-    override val currentIndex: StateFlow<Int> = _currentIndex.asStateFlow()
+        override fun play() {
+            engine?.play()
+        }
 
-    override val currentPlayingItemId: StateFlow<String?> get() = nowPlayingTracker.currentPlayingItemId
+        override fun pause() {
+            engine?.takeIf { it.isPlaying.value }?.pause()
+        }
 
-    private val _shuffleMode = MutableStateFlow(false)
-    override val shuffleMode: StateFlow<Boolean> = _shuffleMode.asStateFlow()
+        override fun stop() {
+            engine?.stop()
+        }
 
-    private val _repeatMode = MutableStateFlow(0)
-    override val repeatMode: StateFlow<Int> = _repeatMode.asStateFlow()
+        override fun seekTo(positionMs: Long) {
+            engine?.seekTo(positionMs)
+        }
 
-    // ── AudioPlayerEngine state (defaults identical to Android) ────────────
-    // The now-playing metadata six re-expose [nowPlayingTracker]'s flows BY
+        override fun setPlaybackSpeed(speed: Float) {
+            engine?.setPlaybackSpeed(speed)
+        }
+    }
+
+    /**
+     * Server progress reporting — the shared (commonMain)
+     * [AudioProgressReporter] with engine-backed provider lambdas. Owns the
+     * 10 s cadence, the paused-position dedup and the stop-report ordering
+     * (launched never awaited; session id rotated synchronously). The
+     * session cells it reads/rotates live in the chassis core.
+     */
+    private val progressReporter = AudioProgressReporter(
+        scope = scope,
+        playbackRepository = playbackRepository,
+        // Desktop has no remote/cast session (declared divergence: the cast
+        // seam is a never-connected no-op) — the remote gate never trips.
+        remoteSessionActive = { false },
+        positionMsProvider = { engine?.currentPositionMs },
+        isPlayingProvider = { engine?.isPlaying?.value == true },
+        itemIdProvider = { state.currentItemId },
+        playSessionIdProvider = { state.playSessionId },
+        playSessionIdSetter = { state.playSessionId = it },
+        reportIntervalMs = progressReportIntervalMs,
+    )
+
+    // ── The queue-state chassis (commonMain AudioQueueStateCore) ───────────
+    // Owns the eleven playback state flows (re-exposed below by reference),
+    // the undo stack + events, the advance/shuffle selection and the
+    // transition choreography; this manager supplies the engine port, the
+    // reporter and the desktop-only reactions (prefetch invalidation,
+    // sleep-timer end-of-episode, ReplayGain context re-apply on shuffle,
+    // and the full user-play path).
+
+    internal val state: AudioQueueStateCore = AudioQueueStateCore(
+        scope = scope,
+        playbackRepository = playbackRepository,
+        lyricsManager = lyricsManager,
+        progressReporter = progressReporter,
+        dispatch = engineDispatch,
+        enginePositionMs = { engine?.currentPositionMs },
+        onQueueShapeInvalidated = { clearPrefetch() },
+        onQueueExhausted = { sleepTimerManager.triggerEndOfEpisode() },
+        onShuffleModeChanged = {
+            state.currentItemOrNull()?.let { current ->
+                effectsManager?.applyReplayGainForTrack(current.normalizationGain, state.shuffleMode.value)
+            }
+        },
+        onPlayRequested = { play(it) },
+    )
+
+    // ── AudioQueueManager state (re-exposed chassis flows, by reference) ───
+
+    override val queue: StateFlow<List<AudioQueueItem>> get() = state.queue
+
+    override val currentIndex: StateFlow<Int> get() = state.currentIndex
+
+    override val currentPlayingItemId: StateFlow<String?> get() = state.nowPlayingTracker.currentPlayingItemId
+
+    override val shuffleMode: StateFlow<Boolean> get() = state.shuffleMode
+
+    override val repeatMode: StateFlow<Int> get() = state.repeatMode
+
+    // ── AudioPlayerEngine state ────────────────────────────────────────────
+    // The now-playing metadata six re-expose the chassis tracker's flows BY
     // REFERENCE (same StateFlow instances — the Android manager's pattern);
     // the manager never writes them directly.
 
-    override val title: StateFlow<String> get() = nowPlayingTracker.title
+    override val title: StateFlow<String> get() = state.nowPlayingTracker.title
 
-    override val artist: StateFlow<String> get() = nowPlayingTracker.artist
+    override val artist: StateFlow<String> get() = state.nowPlayingTracker.artist
 
-    override val artistId: StateFlow<String?> get() = nowPlayingTracker.artistId
+    override val artistId: StateFlow<String?> get() = state.nowPlayingTracker.artistId
 
-    override val album: StateFlow<String> get() = nowPlayingTracker.album
+    override val album: StateFlow<String> get() = state.nowPlayingTracker.album
 
-    override val albumArtUrl: StateFlow<String> get() = nowPlayingTracker.albumArtUrl
+    override val albumArtUrl: StateFlow<String> get() = state.nowPlayingTracker.albumArtUrl
 
-    private val _isPlaying = MutableStateFlow(false)
-    override val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
+    override val isPlaying: StateFlow<Boolean> get() = state.isPlaying
 
-    private val _currentPosition = MutableStateFlow(0L)
-    override val currentPosition: StateFlow<Long> = _currentPosition.asStateFlow()
+    override val currentPosition: StateFlow<Long> get() = state.currentPosition
 
-    private val _duration = MutableStateFlow(0L)
-    override val duration: StateFlow<Long> = _duration.asStateFlow()
+    override val duration: StateFlow<Long> get() = state.duration
 
-    private val _speed = MutableStateFlow(1.0f)
-    override val speed: StateFlow<Float> = _speed.asStateFlow()
+    override val speed: StateFlow<Float> get() = state.speed
 
-    private val _playbackError = MutableStateFlow<String?>(null)
-    override val playbackError: StateFlow<String?> = _playbackError.asStateFlow()
+    override val playbackError: StateFlow<String?> get() = state.playbackError
 
-    private val _isLoadingItem = MutableStateFlow(false)
-    override val isLoadingItem: StateFlow<Boolean> = _isLoadingItem.asStateFlow()
+    override val isLoadingItem: StateFlow<Boolean> get() = state.isLoadingItem
 
-    private val _crossfadeDurationMs = MutableStateFlow(0L)
-    override val crossfadeDurationMs: StateFlow<Long> = _crossfadeDurationMs.asStateFlow()
+    override val crossfadeDurationMs: StateFlow<Long> get() = state.crossfadeDurationMs
 
-    private val _undoEvents = MutableSharedFlow<QueueUndoEvent>(extraBufferCapacity = 4)
-    override val undoEvents: SharedFlow<QueueUndoEvent> = _undoEvents.asSharedFlow()
+    override val undoEvents: SharedFlow<QueueUndoEvent> get() = state.undoEvents
 
     private val _abLoopStartMs = MutableStateFlow<Long?>(null)
     override val abLoopStartMs: StateFlow<Long?> = _abLoopStartMs.asStateFlow()
@@ -315,48 +388,11 @@ class DesktopAudioQueueManager(
     override val isFetchingLyrics: StateFlow<Boolean> get() = lyricsManager.isFetchingLyrics
     override val lyricsOffsetMs: StateFlow<Long> get() = lyricsManager.lyricsOffsetMs
 
-    // ── Playback plumbing ──────────────────────────────────────────────────
-
-    private var engine: MediaEngine? = null
-    private var engineObserverJobs: List<Job> = emptyList()
-
-    /**
-     * Jellyfin play session id — rotated SYNCHRONOUSLY by
-     * [AudioProgressReporter.reportStopped] (and once more by
-     * [stopAndRelease]), exactly like Android.
-     */
-    private var playSessionId: String = UUID.randomUUID().toString()
-    private var currentItemId: String? = null
-    private var _isLoadingItemFlag = false
-    private var positionJob: Job? = null
-
-    /**
-     * Server progress reporting — the shared (commonMain)
-     * [AudioProgressReporter] with engine-backed provider lambdas. Owns the
-     * 10 s cadence, the paused-position dedup and the stop-report ordering
-     * (launched never awaited; session id rotated synchronously). The former
-     * three desktop mirror functions were deleted in its favour.
-     */
-    private val progressReporter = AudioProgressReporter(
-        scope = scope,
-        playbackRepository = playbackRepository,
-        // Desktop has no remote/cast session (declared divergence: the cast
-        // seam is a never-connected no-op) — the remote gate never trips.
-        remoteSessionActive = { false },
-        positionMsProvider = { engine?.currentPositionMs },
-        isPlayingProvider = { engine?.isPlaying?.value == true },
-        itemIdProvider = { currentItemId },
-        playSessionIdProvider = { playSessionId },
-        playSessionIdSetter = { playSessionId = it },
-        reportIntervalMs = progressReportIntervalMs,
-    )
+    // ── Playback plumbing that stays manager-side ──────────────────────────
 
     private var gaplessEnabled = true
-    private var skipPreviousThresholdMsInternal = AudioQueuePolicy.SKIP_PREVIOUS_RESTART_THRESHOLD_MS
-
-    private val queueUndoStack = QueueUndoStack()
-
-    private var unshuffledQueue: List<AudioQueueItem> = emptyList()
+    private var _isLoadingItemFlag = false
+    private var positionJob: Job? = null
 
     /** App-lifetime kickoff, the desktop twin of Android's `manager.start()`. */
     fun start() {
@@ -364,25 +400,25 @@ class DesktopAudioQueueManager(
         scope.launch {
             val items = queuePersistenceHelper.loadQueue()
             if (items.isNotEmpty()) {
-                _queue.value = items
+                state._queue.value = items
             }
             val savedState = queuePersistenceHelper.loadState()
-            savedState?.let { state ->
-                _currentIndex.value = state.currentIndex
-                _currentPosition.value = state.currentPositionMs
-                _repeatMode.value = state.repeatMode.coerceIn(0, 2)
-                _shuffleMode.value = state.shuffleEnabled
-                _speed.value = state.playbackSpeed
+            savedState?.let { s ->
+                state._currentIndex.value = s.currentIndex
+                state._currentPosition.value = s.currentPositionMs
+                state._repeatMode.value = s.repeatMode.coerceIn(0, 2)
+                state._shuffleMode.value = s.shuffleEnabled
+                state._speed.value = s.playbackSpeed
             }
             queuePersistenceHelper.observeQueue(
                 scope = scope,
-                queue = _queue,
-                currentIndex = _currentIndex,
-                currentPositionMs = _currentPosition,
-                isPlaying = _isPlaying,
-                repeatMode = _repeatMode,
-                shuffleEnabled = _shuffleMode,
-                playbackSpeed = _speed,
+                queue = state._queue,
+                currentIndex = state._currentIndex,
+                currentPositionMs = state._currentPosition,
+                isPlaying = state._isPlaying,
+                repeatMode = state._repeatMode,
+                shuffleEnabled = state._shuffleMode,
+                playbackSpeed = state._speed,
             )
         }
     }
@@ -412,7 +448,7 @@ class DesktopAudioQueueManager(
             engineObserverJobs = listOf(
                 scope.launch {
                     created.isPlaying.collect { playing ->
-                        _isPlaying.value = playing
+                        state.onEnginePlayingChanged(playing)
                         onPlayingEdge(playing)
                     }
                 },
@@ -420,12 +456,12 @@ class DesktopAudioQueueManager(
                     created.errorFlow.collect { error ->
                         // Android: onPlayerError surfaces the message into the
                         // same playbackError flow the UI shows for load errors.
-                        _playbackError.value = error.message
+                        state.onEngineError(error.message)
                     }
                 },
                 scope.launch {
-                    created.playbackState.collect { state ->
-                        if (state == EnginePlaybackState.ENDED) onEngineEnded()
+                    created.playbackState.collect { s ->
+                        if (s == EnginePlaybackState.ENDED) state.onEngineEnded()
                     }
                 },
             )
@@ -442,9 +478,9 @@ class DesktopAudioQueueManager(
      * ("the caller MUST NOT produce audio"): `pause()` mirrors the user's
      * own pause and the resulting isPlaying=false edge releases the attempt
      * on the observer's next pass. Desktop today never produces a denial
-     * (the [DesktopFocusArbiter] twin grants vacuously and nothing
-     * suspends), but the branch is mirrored verbatim so the seam holds the
-     * day an authority behind it grows teeth.
+     * (the in-process twin grants vacuously and nothing suspends), but the
+     * branch is mirrored verbatim so the seam holds the day an authority
+     * behind it grows teeth.
      */
     private fun onPlayingEdge(playing: Boolean) {
         if (playing) {
@@ -456,83 +492,16 @@ class DesktopAudioQueueManager(
         }
     }
 
-    /**
-     * Track end. Android: under repeat ≥ 1 the player never reaches ENDED
-     * (ALL wraps, ONE replays); mid-queue advances are ordinary transitions.
-     * Desktop: the same outcomes, driven from the single-item engine's ENDED.
-     * The advance/wrap decision is the shared [AudioQueuePolicy.nextIndex]
-     * (one call — this was the first of desktop's three former inline copies
-     * of the rule).
-     */
-    private fun onEngineEnded() {
-        val q = _queue.value
-        if (_repeatMode.value == AudioQueuePolicy.REPEAT_ONE) {
-            // RepeatOne: replay the same item — engine.play() from ENDED
-            // seeks back to 0 and unpauses (the V2b keep-open replay path).
-            engine?.play()
-            return
-        }
-        val next = AudioQueuePolicy.nextIndex(_currentIndex.value, q.size, _repeatMode.value)
-        if (next != null) {
-            transitionTo(next, startPositionMs = 0L)
-        } else {
-            // End of queue under RepeatNone — Android's STATE_ENDED path:
-            // isPlaying off, index stays on the ended item, metadata kept.
-            _isPlaying.value = false
-            sleepTimerManager.triggerEndOfEpisode()
-        }
-    }
-
-    /**
-     * The `onTrackTransitioned` mirror: reconcile index + metadata from the
-     * queue item, report stop(prev) + start(next) to the server, fetch
-     * lyrics, then load the item into the engine.
-     *
-     * With no live engine this only updates the index — the exact Android
-     * shape, where a null player means the seek never happens, so no player
-     * transition (and therefore no metadata reconciliation) fires either.
-     */
-    private fun transitionTo(index: Int, startPositionMs: Long = 0L) {
-        val item = _queue.value.getOrNull(index) ?: return
-        _currentIndex.value = index
-        val target = engine ?: return
-
-        val prevItemId = currentItemId
-        val prevSessionId = playSessionId
-        val prevPosTicks =
-            if (_currentPosition.value > 0) _currentPosition.value * 10_000
-            else _duration.value * 10_000
-
-        currentItemId = item.id
-        // Queue-item publish shape: five fields from the queue item, artistId
-        // deliberately untouched (AudioQueueItem carries none — the tracker's
-        // recorded divergence; the pre-adoption site behaved identically).
-        nowPlayingTracker.publishQueueItem(item)
-
-        scope.launch {
-            progressReporter.reportStopped(prevItemId, prevSessionId, prevPosTicks)
-            fetchLyrics(item)
-            playbackRepository.reportPlaybackStart(
-                PlaybackStartInfo(
-                    itemId = item.id,
-                    sessionId = playSessionId,
-                    mediaSourceId = item.mediaSourceId,
-                )
-            )
-        }
-        loadItem(target, item, startPositionMs)
-    }
-
-    /** Resolves the item and loads it into the engine. */
+    /** Resolves the item and loads it into the engine (the prepare port body). */
     private fun loadItem(target: MediaEngine, item: AudioQueueItem, startPositionMs: Long) {
         scope.launch {
             val track = consumePrefetched(item.id, startPositionMs)
                 ?: trackResolver.resolve(item.id, startPositionMs)
             if (track != null) {
-                _playbackError.value = null
+                state._playbackError.value = null
                 // Android: applyReplayGain(item.normalizationGain, shuffle)
                 // before the player transition (AudioPlaybackManager advance).
-                effectsManager?.applyReplayGainForTrack(item.normalizationGain, _shuffleMode.value)
+                effectsManager?.applyReplayGainForTrack(item.normalizationGain, state.shuffleMode.value)
                 target.load(
                     PlaybackRequest(
                         uri = track.uri,
@@ -546,8 +515,8 @@ class DesktopAudioQueueManager(
             } else {
                 // Android: an unresolvable item never enters the prebuilt
                 // playlist; the desktop discovers it here instead.
-                _playbackError.value = "Failed to load track"
-                _isPlaying.value = false
+                state._playbackError.value = "Failed to load track"
+                state._isPlaying.value = false
             }
         }
     }
@@ -571,17 +540,17 @@ class DesktopAudioQueueManager(
 
     /**
      * Schedules a background resolve of the item auto-advance would play
-     * next (the shared [AudioQueuePolicy.nextIndex] — the second of desktop's
-     * three former inline copies of the rule). Resolve-only: the cached
-     * entry is consumed by [loadItem] exclusively for a position-0 load of
-     * that id, so a queue mutation between prefetch and consumption degrades
-     * to a wasted fetch — never a wrong load.
+     * next (the shared [AudioQueuePolicy.nextIndex] — the same rule the
+     * chassis core consults for the actual advances). Resolve-only: the
+     * cached entry is consumed by [loadItem] exclusively for a position-0
+     * load of that id, so a queue mutation between prefetch and consumption
+     * degrades to a wasted fetch — never a wrong load.
      */
     private fun schedulePrefetchForNext() {
         clearPrefetch()
-        val q = _queue.value
+        val q = state._queue.value
         if (q.isEmpty()) return
-        val next = AudioQueuePolicy.nextIndex(_currentIndex.value, q.size, _repeatMode.value) ?: return
+        val next = AudioQueuePolicy.nextIndex(state._currentIndex.value, q.size, state._repeatMode.value) ?: return
         val nextItem = q.getOrNull(next) ?: return
         prefetchJob = scope.launch {
             delay(prefetchDelayMs)
@@ -605,10 +574,13 @@ class DesktopAudioQueueManager(
         // Divergence (declared): no Play-On/remote-session routing — the
         // desktop cast seam is never connected.
 
-        if (currentItemId == itemId) {
+        if (state.currentItemId == itemId) {
             if (_isLoadingItemFlag) return
-            val state = engine?.playbackState?.value
-            if (state != null && state != EnginePlaybackState.ENDED && state != EnginePlaybackState.IDLE) {
+            val engineState = engine?.playbackState?.value
+            if (engineState != null &&
+                engineState != EnginePlaybackState.ENDED &&
+                engineState != EnginePlaybackState.IDLE
+            ) {
                 return
             }
         }
@@ -620,19 +592,19 @@ class DesktopAudioQueueManager(
         clearAbLoop()        // An explicit play() changes the playback context — any next-item
         // prefetch scheduled for the previous context is stale.
         clearPrefetch()
-        currentItemId = itemId
+        state.currentItemId = itemId
         _isLoadingItemFlag = true
-        _isLoadingItem.value = true
+        state._isLoadingItem.value = true
 
         val player = getOrCreateEngine()
 
         scope.launch {
             val track = trackResolver.resolve(itemId, 0L)
             if (track != null) {
-                _playbackError.value = null
+                state._playbackError.value = null
                 // Detail publish shape: the ONE site that knows the artist id
                 // and the server image url (Android play()'s detail path).
-                nowPlayingTracker.publishDetail(
+                state.nowPlayingTracker.publishDetail(
                     itemId = itemId,
                     title = track.title,
                     artist = track.artist,
@@ -644,8 +616,8 @@ class DesktopAudioQueueManager(
                 val resumeTicks = track.resumePositionTicks ?: 0L
                 val startPositionMs = if (resumeTicks > 0) resumeTicks / 10_000 else 0L
 
-                val q = _queue.value
-                val currentIdx = _currentIndex.value
+                val q = state._queue.value
+                val currentIdx = state.currentIndex.value
                 val isInQueue = currentIdx >= 0 && q.getOrNull(currentIdx)?.id == itemId
                 if (!isInQueue) {
                     val queueItem = AudioQueueItem(
@@ -658,17 +630,16 @@ class DesktopAudioQueueManager(
                         durationMs = track.durationMs,
                         normalizationGain = track.normalizationGain,
                     )
-                    _queue.value = _queue.value + queueItem
-                    _currentIndex.value = _queue.value.lastIndex
+                    state.appendPlayedItem(queueItem)
                 }
 
-                val clickedItem = _queue.value.getOrNull(_currentIndex.value)
+                val clickedItem = state._queue.value.getOrNull(state.currentIndex.value)
                 if (clickedItem != null) {
                     // Android play(): effectsProcessor.applyReplayGain(
                     // detail.item.normalizationGain, _shuffleMode.value).
                     effectsManager?.applyReplayGainForTrack(
                         clickedItem.normalizationGain ?: track.normalizationGain,
-                        _shuffleMode.value,
+                        state.shuffleMode.value,
                     )
                     player.load(
                         PlaybackRequest(
@@ -683,13 +654,13 @@ class DesktopAudioQueueManager(
                     playbackRepository.reportPlaybackStart(
                         PlaybackStartInfo(
                             itemId = itemId,
-                            sessionId = playSessionId,
+                            sessionId = state.playSessionId,
                             mediaSourceId = track.mediaSourceId,
                             startPositionTicks = if (startPositionMs > 0) startPositionMs * 10_000 else null,
                         )
                     )
 
-                    fetchLyrics(
+                    state.fetchLyrics(
                         item = clickedItem,
                         durationSecOverride = track.durationMs.takeIf { it > 0 }?.let { it / 1000.0 },
                     )
@@ -700,240 +671,112 @@ class DesktopAudioQueueManager(
                     progressReporter.start()
                 }
             } else {
-                _playbackError.value = "Failed to load track"
+                state._playbackError.value = "Failed to load track"
             }
             _isLoadingItemFlag = false
-            _isLoadingItem.value = false
+            state._isLoadingItem.value = false
         }
     }
 
-    // ── AudioQueueManager: mutations (Android mirrors) ─────────────────────
+    // ── AudioQueueManager: mutations (chassis-core delegation) ─────────────
 
     override fun playQueue(items: List<AudioQueueItem>, startIndex: Int) {
         assertMainThread("playQueue")
-        // A fresh queue invalidates any undo history from the previous queue.
-        queueUndoStack.clear()
-        clearPrefetch()
-        _queue.value = items
-        _currentIndex.value = startIndex
-        val item = items.getOrNull(startIndex) ?: return
-        play(item.id)
+        state.playQueue(items, startIndex)
     }
 
     override fun addToQueue(item: AudioQueueItem) {
         assertMainThread("addToQueue")
-        clearPrefetch()
-        _queue.value = _queue.value + item
-        // The engine append is playlist plumbing on Android; on desktop the
-        // queue list is the single truth, so there is nothing else to do.
+        state.addToQueue(item)
     }
 
     override fun addToQueueAll(items: List<AudioQueueItem>) {
         assertMainThread("addToQueueAll")
-        if (items.isEmpty()) return
-        clearPrefetch()
-        _queue.value = _queue.value + items
+        state.addToQueueAll(items)
     }
 
     override fun removeFromQueue(index: Int) {
         assertMainThread("removeFromQueue")
-        val q = _queue.value
-        if (index < 0 || index >= q.size) return
-        val removed = q[index]
-        pushUndoSnapshot(QueueUndoEvent.ItemRemoved(removed))
-        clearPrefetch()
-        val wasPlaying = index == _currentIndex.value
-        _queue.value = q.toMutableList().apply { removeAt(index) }
-        if (wasPlaying) {
-            if (_queue.value.isNotEmpty()) {
-                _currentIndex.value = _currentIndex.value.coerceAtMost(_queue.value.lastIndex)
-                // Android: removeMediaItem(current) makes the shifted-in item
-                // play (player transition reconciles); the desktop loads it.
-                transitionTo(_currentIndex.value, startPositionMs = 0L)
-            } else {
-                _currentIndex.value = -1
-                // Android: playlist emptied → player idle, metadata kept.
-                engine?.stop()
-                _isPlaying.value = false
-            }
-        } else if (index < _currentIndex.value) {
-            _currentIndex.value -= 1
-        }
+        state.removeFromQueue(index)
     }
 
     override fun clearQueue() {
         assertMainThread("clearQueue")
-        if (_queue.value.isEmpty()) return
-        clearPrefetch()
-        pushUndoSnapshot(QueueUndoEvent.QueueCleared)
-        _queue.value = emptyList()
-        _currentIndex.value = -1
-        // Android: clearMediaItems parks the player idle; metadata is kept.
-        engine?.stop()
-        _isPlaying.value = false
+        state.clearQueue()
     }
 
     override fun moveQueueItem(fromIndex: Int, toIndex: Int) {
         assertMainThread("moveQueueItem")
-        // Pure policy (commonMain): bounds/no-op rejection, the reorder and
-        // the cursor remap in one decision, shared verbatim with the Android
-        // adapter.
-        val plan = AudioQueuePolicy.planMove(_queue.value, _currentIndex.value, fromIndex, toIndex) ?: return
-        pushUndoSnapshot(QueueUndoEvent.ItemMoved(plan.movedItem))
-        clearPrefetch()
-        _queue.value = plan.queue
-        _currentIndex.value = plan.currentIndex
-        // Android's moveMediaItem never changes what is playing — pure state.
+        state.moveQueueItem(fromIndex, toIndex)
     }
 
     override fun skipToNext() {
         assertMainThread("skipToNext")
-        val q = _queue.value
-        if (q.isEmpty()) return
-        // Third former inline copy of the shared advance/wrap rule — now the
-        // one [AudioQueuePolicy.nextIndex] call (null = blocked: no undo
-        // snapshot, no transition).
-        val next = AudioQueuePolicy.nextIndex(_currentIndex.value, q.size, _repeatMode.value) ?: return
-        pushUndoSnapshot(QueueUndoEvent.SkippedToNext)
-        _currentIndex.value = next
-        // Android: seekTo(next, 0) → transition reconciles + plays.
-        transitionTo(next, startPositionMs = 0L)
+        state.skipToNext()
     }
 
     override fun skipToPrevious() {
         assertMainThread("skipToPrevious")
-        val q = _queue.value
-        if (q.isEmpty()) return
-        val player = engine ?: return
-        // Shared restart threshold (strictly >): seek the CURRENT item to
-        // zero, no cursor move, no undo snapshot.
-        if (AudioQueuePolicy.skipsPreviousRestart(player.currentPositionMs, skipPreviousThresholdMsInternal)) {
-            seekTo(0L)
-            return
-        }
-        val prev = AudioQueuePolicy.previousIndex(_currentIndex.value, q.size, _repeatMode.value) ?: return
-        pushUndoSnapshot(QueueUndoEvent.SkippedToPrevious)
-        _currentIndex.value = prev
-        transitionTo(prev, startPositionMs = 0L)
+        state.skipToPrevious()
     }
 
     override fun toggleShuffle() {
         assertMainThread("toggleShuffle")
-        val wasShuffled = _shuffleMode.value
-        _shuffleMode.value = !wasShuffled
-        // The ReplayGain ALBUM rule reads the shuffle flag — re-apply the
-        // current track's context so the mode's zeroing tracks the new order
-        // (Android's manager passes isShuffled fresh into applyReplayGain at
-        // every apply site; the desktop seam stores the context, so the
-        // toggle itself refreshes it).
-        _queue.value.getOrNull(_currentIndex.value)?.let { current ->
-            effectsManager?.applyReplayGainForTrack(current.normalizationGain, _shuffleMode.value)
-        }
-        // Android parity: `val player = exoPlayer ?: return` right after the
-        // flag flip — without a live player only the FLAG changes; the queue
-        // order and index are untouched until an engine exists.
-        val player = engine ?: return
-        clearPrefetch()
-
-        if (_shuffleMode.value) {
-            val q = _queue.value
-            val curIdx = _currentIndex.value
-            unshuffledQueue = q
-            if (q.size <= 1) return
-            val current = q.getOrNull(curIdx)
-            val others = q.filterIndexed { i, _ -> i != curIdx }.toMutableList()
-            others.shuffle()
-            _queue.value = if (current != null) listOf(current) + others else others
-            _currentIndex.value = 0
-            // Android rebuilds the player playlist at the current position;
-            // the desktop keeps the same item playing — state-only.
-        } else {
-            val currentId = currentPlayingItemId.value
-            val original = unshuffledQueue
-            if (original.isNotEmpty()) {
-                _queue.value = original
-                val restoreIndex = original.indexOfFirst { it.id == currentId }.coerceAtLeast(0)
-                // Known micro-divergence from Android: when the CURRENT item
-                // was appended while shuffled (currentId absent from the
-                // original order), legacy rebuilds the player playlist and
-                // audibly switches to row 0 of the restored order, while this
-                // impl keeps the appended item playing under a cursor that
-                // points at index 0. Index/data parity holds either way.
-                _currentIndex.value = restoreIndex
-                unshuffledQueue = emptyList()
-            }
-        }
+        state.toggleShuffle()
     }
 
     override fun cycleRepeatMode() {
         assertMainThread("cycleRepeatMode")
-        setRepeatMode((_repeatMode.value + 1) % 3)
+        state.cycleRepeatMode()
     }
 
     override fun setRepeatMode(mode: Int) {
         assertMainThread("setRepeatMode")
-        _repeatMode.value = mode.coerceIn(0, 2)
-        // Repeat mode decides which row auto-advance plays next.
-        clearPrefetch()
+        state.setRepeatMode(mode)
     }
 
     override fun setShuffleMode(enabled: Boolean) {
         assertMainThread("setShuffleMode")
-        if (_shuffleMode.value == enabled) return
-        toggleShuffle()
+        state.setShuffleMode(enabled)
     }
 
     override fun playFromQueue(index: Int) {
         assertMainThread("playFromQueue")
-        val q = _queue.value
-        if (index < 0 || index >= q.size) return
-        if (index == _currentIndex.value && engine != null) {
-            // Android: seekTo(current, 0) restarts the same item, no reload.
-            seekTo(0L)
-            engine?.play()
-            return
-        }
-        _currentIndex.value = index
-        transitionTo(index, startPositionMs = 0L)
+        state.playFromQueue(index)
     }
 
     // ── AudioPlayerEngine: transport / metadata ────────────────────────────
 
     override fun seekTo(positionMs: Long) {
         assertMainThread("seekTo")
-        // Optimistic publish — same rationale as Android (the poll loop would
-        // otherwise echo the position back up to 250 ms later).
-        val clamped = positionMs.coerceAtLeast(0L)
-        _currentPosition.value = clamped
-        engine?.seekTo(clamped)
+        state.seekTo(positionMs)
     }
 
     override fun togglePlayPause() {
         assertMainThread("togglePlayPause")
-        val player = engine ?: return
-        if (player.isPlaying.value) player.pause() else player.play()
+        if (!engineDispatch.isLive) return
+        if (engine?.isPlaying?.value == true) engineDispatch.pause() else engineDispatch.play()
     }
 
     override fun pause() {
         assertMainThread("pause")
-        engine?.takeIf { it.isPlaying.value }?.pause()
+        engineDispatch.pause()
     }
 
     override fun changePlaybackSpeed(value: Float) {
         assertMainThread("changePlaybackSpeed")
-        _speed.value = value
-        engine?.setPlaybackSpeed(value)
+        state.changePlaybackSpeed(value)
         // No crossfader to inform (divergence declared above).
     }
 
     override fun setSkipPreviousThreshold(ms: Long) {
-        skipPreviousThresholdMsInternal = ms
+        state.skipPreviousThresholdMs = ms
     }
 
     override fun setCrossfadeDurationMs(ms: Long) {
         // State mirror of Android's flag interplay; no audible crossfade on
         // desktop (declared divergence).
-        _crossfadeDurationMs.value = ms
+        state._crossfadeDurationMs.value = ms
         if (ms > 0) {
             gaplessEnabled = false
         } else {
@@ -944,7 +787,7 @@ class DesktopAudioQueueManager(
     override fun setGaplessEnabled(enabled: Boolean) {
         gaplessEnabled = enabled
         if (enabled) {
-            _crossfadeDurationMs.value = 0L
+            state._crossfadeDurationMs.value = 0L
         }
     }
 
@@ -953,65 +796,23 @@ class DesktopAudioQueueManager(
 
     // ── Lyrics passthrough (shared AudioLyricsManager — real on desktop) ───
 
-    private fun fetchLyrics(
-        item: AudioQueueItem,
-        durationSecOverride: Double? = null,
-    ) {
-        lyricsManager.fetchLyrics(
-            itemId = item.id,
-            artistName = item.artist.takeIf { it.isNotBlank() },
-            trackName = item.name,
-            durationSec = durationSecOverride
-                ?: item.durationMs.takeIf { it > 0 }?.let { it / 1000.0 },
-        )
-    }
-
     override fun searchLyrics(query: String, callback: (Result<List<LrcLibTrack>>) -> Unit) {
         lyricsManager.searchLyrics(query, callback)
     }
 
     override fun applyLyrics(lrcLibId: Long) {
-        lyricsManager.applyLyrics(lrcLibId, currentItemId)
+        lyricsManager.applyLyrics(lrcLibId, state.currentItemId)
     }
 
     override fun setLyricsOffset(offsetMs: Long) {
         lyricsManager.setLyricsOffset(offsetMs)
     }
 
-    // ── Undo (Android mirror) ──────────────────────────────────────────────
-
-    private fun pushUndoSnapshot(event: QueueUndoEvent) {
-        queueUndoStack.push(
-            QueueSnapshot(
-                queue = _queue.value,
-                currentIndex = _currentIndex.value,
-                positionMs = engine?.currentPositionMs ?: _currentPosition.value,
-            ),
-        )
-        _undoEvents.tryEmit(event)
-    }
+    // ── Undo (chassis core; only the assert stays here) ────────────────────
 
     override fun undoLastQueueOperation(): Boolean {
         assertMainThread("undoLastQueueOperation")
-        val snapshot = queueUndoStack.pop() ?: return false
-        applyQueueSnapshot(snapshot)
-        return true
-    }
-
-    private fun applyQueueSnapshot(snapshot: QueueSnapshot) {
-        clearPrefetch()
-        _queue.value = snapshot.queue
-        _currentIndex.value = snapshot.currentIndex
-        // Android: `if (player == null || snapshot.queue.isEmpty()) return` —
-        // without a live engine there is NO seek/reconcile pass at all (the IO
-        // media-item rebuild never runs either), so the flows land on the
-        // snapshot verbatim rather than coercing a snapshotless cursor onto 0.
-        if (engine == null || snapshot.queue.isEmpty()) return
-        // Android: setMediaItems(snapshot.queue, index, positionMs) — the
-        // player jumps to the snapshot's item AT the snapshot's position, and
-        // the resulting transition reconciles metadata + server reporting.
-        val index = snapshot.currentIndex.coerceIn(0, snapshot.queue.lastIndex)
-        transitionTo(index, startPositionMs = snapshot.positionMs)
+        return state.undoLastQueueOperation()
     }
 
     // ── A→B loop (Android mirror; only cycleAbLoop is on the seam) ────────
@@ -1030,7 +831,7 @@ class DesktopAudioQueueManager(
     override fun cycleAbLoop() {
         assertMainThread("cycleAbLoop")
         val next = AudioQueuePolicy.cycleAbLoop(
-            positionMs = engine?.currentPositionMs ?: _currentPosition.value,
+            positionMs = engine?.currentPositionMs ?: state.currentPosition.value,
             markers = AudioQueuePolicy.AbLoopMarkers(_abLoopStartMs.value, _abLoopEndMs.value),
         )
         _abLoopStartMs.value = next.startMs
@@ -1070,21 +871,21 @@ class DesktopAudioQueueManager(
             )
             plan.seekToMs?.let { e.seekTo(it) }
             plan.publishPositionMs?.let {
-                _currentPosition.value = it
+                state._currentPosition.value = it
                 lastPosition = it
             }
             plan.publishDurationMs?.let {
-                _duration.value = it
+                state._duration.value = it
                 lastDuration = it
             }
             if (plan.updateLyricIndex) {
-                lyricsManager.updateCurrentLyricIndex(_currentPosition.value)
+                lyricsManager.updateCurrentLyricIndex(state.currentPosition.value)
             }
         }
         positionJob = EnginePositionTicker(
             scope = scope,
             pollingIntervalMs = MutableStateFlow(positionPollIntervalMs),
-            isPlayingFlow = _isPlaying,
+            isPlayingFlow = state.isPlaying,
             isCurrentlyPlaying = { engine?.isPlaying?.value == true },
             isReady = { engine != null },
             onActive = { tickBody() },
@@ -1093,7 +894,7 @@ class DesktopAudioQueueManager(
         // position/duration on its FIRST iteration — before any delay —
         // while the shared ticker delays before its first tick. Seed the
         // display flows once here (the body's own gates make this a no-op
-        // when no engine is live yet), so [transitionTo]'s stop-report
+        // when no engine is live yet), so the transition stop-report
         // fallback — `_duration.value * 10_000` — and the UI's first frame
         // see the loaded item's values immediately, as before. Synchronous
         // on purpose: a launched tick could race the very fallback it feeds.
@@ -1127,14 +928,11 @@ class DesktopAudioQueueManager(
         engine?.release()
         engine = null
 
-        currentItemId = null
-        // Clear publish shape: five display fields to defaults; artistId
-        // deliberately survives (the tracker's recorded divergence — see the
-        // declared-divergences note in the class KDoc).
-        nowPlayingTracker.clear()
-        _isPlaying.value = false
-        _currentPosition.value = 0L
-        _duration.value = 0L
+        // Display resets + the session's item claim + the tracker clear
+        // (artistId deliberately survives — the tracker's recorded
+        // divergence, see the declared-divergences note above), in the
+        // chassis core.
+        state.onEngineReleased()
         lyricsManager.reset()
     }
 }

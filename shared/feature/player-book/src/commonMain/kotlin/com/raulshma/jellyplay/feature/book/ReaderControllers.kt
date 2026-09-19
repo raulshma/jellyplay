@@ -125,7 +125,13 @@ internal class ReflowableReaderSession(
     val onEvent: EpubEventListener = EpubEventListener { event ->
         when (event) {
             is EpubEvent.Percent -> forward(event)
-            is EpubEvent.Status -> status = event.status
+            is EpubEvent.Status -> {
+                // Never regress to LOCATIONS_READY once already READY — locations
+                // generate asynchronously in the background while the user reads.
+                if (status != EpubReaderStatus.READY || event.status != EpubReaderStatus.LOCATIONS_READY) {
+                    status = event.status
+                }
+            }
             is EpubEvent.Direction -> forward(event)
             is EpubEvent.Toc -> {
                 tocItems = event.items

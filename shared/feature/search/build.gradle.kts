@@ -67,6 +67,10 @@ kotlin {
             implementation(project(":shared:core:data"))
             // SearchFiltersStore (persisted search filter blob).
             implementation(project(":shared:core:datastore"))
+            // runCatchingRethrowingCancellation for the best-effort filter
+            // persist/clear writes (bare runCatching would swallow the
+            // caller's cancellation).
+            implementation(project(":shared:core:concurrency"))
             implementation(project(":shared:core:ui"))
             // JetBrains CMP distribution (see catalog note): Android targets
             // redirect to the androidx artifacts.

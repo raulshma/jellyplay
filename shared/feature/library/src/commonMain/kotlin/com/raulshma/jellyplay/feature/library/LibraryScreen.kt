@@ -194,6 +194,53 @@ import com.raulshma.jellyplay.feature.library.generated.resources.library_smart_
 import com.raulshma.jellyplay.feature.library.generated.resources.library_title
 import kotlinx.coroutines.launch
 
+/**
+ * Which auxiliary sheet the Library screen has open, if any: one of the
+ * per-filter selection sheets (carrying its [FilterSheetKind]), the
+ * poster-size slider sheet, or the group-by sheet. One nullable state behind
+ * the former mixed vocabulary (a nullable `FilterSheetKind` + two booleans +
+ * a hand-derived `isAnySheetOpen`).
+ */
+sealed interface LibrarySheet {
+    /** One of the per-filter immediate-apply selection sheets. */
+    data class Filter(val kind: FilterSheetKind) : LibrarySheet
+
+    /** The poster-size slider sheet. */
+    data object PosterSize : LibrarySheet
+
+    /** The group-by chip sheet. */
+    data object GroupBy : LibrarySheet
+}
+
+/** One arm of the Library screen's ordered back ladder. */
+sealed interface LibraryBackAction {
+    data object DismissResetDialog : LibraryBackAction
+    data object CloseFilters : LibraryBackAction
+    data object CloseSheet : LibraryBackAction
+    data object ClearFilters : LibraryBackAction
+}
+
+/**
+ * The Library screen's exhaustive back fold: reset dialog → full filter sheet
+ * → open [LibrarySheet] → clear filters. `clearFilters` is the DECLARED
+ * trailing arm of the fold (not an ad-hoc last rung of a back stack), so a new
+ * sheet type joins [LibrarySheet] and this fold only. Null when back should
+ * leave the screen.
+ */
+fun libraryBackAction(
+    resetDialogVisible: Boolean,
+    showFilters: Boolean,
+    openSheet: LibrarySheet?,
+    inSectionMode: Boolean,
+    hasActiveFilters: Boolean,
+): LibraryBackAction? = when {
+    resetDialogVisible -> LibraryBackAction.DismissResetDialog
+    showFilters -> LibraryBackAction.CloseFilters
+    openSheet != null -> LibraryBackAction.CloseSheet
+    !inSectionMode && hasActiveFilters -> LibraryBackAction.ClearFilters
+    else -> null
+}
+
 @OptIn(
     ExperimentalMaterial3Api::class,
     ExperimentalMaterial3ExpressiveApi::class,
@@ -253,9 +300,9 @@ internal fun LibraryScreen(
     // filters/sort would leak into the tab (issue #113).
     LaunchedEffect(sectionContext) {
         if (sectionContext != null) {
-            viewModel.configureSection(sectionContext)
+            viewModel.onEvent(LibraryUiEvent.ConfigureSection(sectionContext))
         } else {
-            viewModel.clearSectionMode()
+            viewModel.onEvent(LibraryUiEvent.ClearSectionMode)
         }
     }
 
@@ -271,7 +318,7 @@ internal fun LibraryScreen(
     LaunchedEffect(appendState) {
         val snapshot = pagedItems.itemSnapshotList
         if (snapshot.items.any { it.mediaType == MediaType.PHOTO_FOLDER }) {
-            viewModel.prefetchPhotoFolderChildUrls(snapshot.items)
+            viewModel.onEvent(LibraryUiEvent.PrefetchPhotoFolderChildUrls(snapshot.items))
         }
     }
     val networkStatus by com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus.current.collectAsStateWithLifecycle()
@@ -293,11 +340,11 @@ internal fun LibraryScreen(
     // nav-arg parameter — the two used to drift. The nav-arg still drives the
     // configureSection/clearSectionMode LaunchedEffect above.
     val inSectionMode = browser.isSection
-    // Which (if any) per-filter sheet is open. Null = none. Hoisted here so the
-    // chips toggle it and the matching sheet renders at the screen root.
-    var openFilterSheet by remember { mutableStateOf<FilterSheetKind?>(null) }
-    var showPosterSizeSheet by remember { mutableStateOf(false) }
-    var showGroupBySheet by remember { mutableStateOf(false) }
+    // Which (if any) auxiliary sheet is open (filter/poster-size/group-by).
+    // Null = none. Hoisted here so the chips toggle it and the matching sheet
+    // renders at the screen root; the back ladder folds over it via
+    // [libraryBackAction].
+    var openSheet by remember { mutableStateOf<LibrarySheet?>(null) }
     // The canonical fold on [LibraryFilters] — the same one the search screen
     // reads. Previously this hand-rolled copy omitted years/tags/minRating/
     // sort/resumable, so the badge and BackHandler guard under-reported the
@@ -305,17 +352,15 @@ internal fun LibraryScreen(
     val hasActiveFilters by remember {
         derivedStateOf { browser.filters.hasActiveFilters() }
     }
-    val isAnySheetOpen = openFilterSheet != null || showPosterSizeSheet || showGroupBySheet
-    val backHandlerEnabled = showFilters || isAnySheetOpen || resetDialogVisible || (!inSectionMode && hasActiveFilters)
+    val backHandlerEnabled = showFilters || openSheet != null || resetDialogVisible || (!inSectionMode && hasActiveFilters)
 
     JellyPlayBackHandler(enabled = backHandlerEnabled) {
-        when {
-            resetDialogVisible -> viewModel.dismissResetDialog()
-            showFilters -> viewModel.toggleShowFilters() // closes when open
-            openFilterSheet != null -> openFilterSheet = null
-            showPosterSizeSheet -> showPosterSizeSheet = false
-            showGroupBySheet -> showGroupBySheet = false
-            !inSectionMode && hasActiveFilters -> viewModel.clearFilters()
+        when (libraryBackAction(resetDialogVisible, showFilters, openSheet, inSectionMode, hasActiveFilters)) {
+            LibraryBackAction.DismissResetDialog -> viewModel.onEvent(LibraryUiEvent.DismissResetDialog)
+            LibraryBackAction.CloseFilters -> viewModel.onEvent(LibraryUiEvent.ToggleFilters) // closes when open
+            LibraryBackAction.CloseSheet -> openSheet = null
+            LibraryBackAction.ClearFilters -> viewModel.onEvent(LibraryUiEvent.ClearFilters)
+            null -> {}
         }
     }
 
@@ -374,12 +419,16 @@ internal fun LibraryScreen(
             QuickActionAdapter(
                 onPlay = { item -> onItemClick(item.id, item.mediaType, item.parentId, item.name) },
                 onOpenDetail = { item -> onItemClick(item.id, item.mediaType, item.parentId, item.name) },
-                onMarkPlayed = viewModel::markItemPlayed,
+                onMarkPlayed = { item, played ->
+                    viewModel.onEvent(LibraryUiEvent.MarkItemPlayed(item, played))
+                },
                 // Single-stream items start inline at the default quality;
                 // series (and other non-inline types) open the detail screen —
                 // for a series with the download sheet pre-presented.
-                onDownload = { item -> viewModel.downloadItem(item, onOpenDetail = onOpenDownloadDetail) },
-                onRemoveDownload = viewModel::removeItemDownload,
+                onDownload = { item ->
+                    viewModel.onEvent(LibraryUiEvent.DownloadItem(item, onOpenDetail = onOpenDownloadDetail))
+                },
+                onRemoveDownload = { item -> viewModel.onEvent(LibraryUiEvent.RemoveItemDownload(item)) },
             )
         },
     )
@@ -447,7 +496,7 @@ internal fun LibraryScreen(
         if (error != null && pagedItems.itemCount == 0) {
             ErrorScreen(
                 message = error!!,
-                onRetry = { viewModel.refresh() },
+                onRetry = { viewModel.onEvent(LibraryUiEvent.Refresh) },
             )
         } else {
             Column(modifier = Modifier.fillMaxSize()) {
@@ -514,7 +563,7 @@ internal fun LibraryScreen(
                                 // Reset-all pill — matches the screen's chip/action
                                 // language (glass chip, press scale, TV focus glow).
                                 com.raulshma.jellyplay.core.ui.components.ExpressiveChipContainer(
-                                    onClick = { viewModel.onResetClick() },
+                                    onClick = { viewModel.onEvent(LibraryUiEvent.ResetClicked) },
                                     containerColor = if (LocalIsLightTheme.current) {
                                         Color.Black.copy(alpha = 0.06f)
                                     } else {
@@ -573,7 +622,7 @@ internal fun LibraryScreen(
                                     GlassPill(
                                         label = stringResource(Res.string.library_all),
                                         selected = browser.folder == null,
-                                        onClick = { viewModel.selectFolder(null) },
+                                        onClick = { viewModel.onEvent(LibraryUiEvent.SelectFolder(null)) },
                                         modifier = Modifier.focusRequester(firstFolderPillFocus),
                                     )
                                 }
@@ -584,7 +633,7 @@ internal fun LibraryScreen(
                                         GlassPill(
                                             label = folder.name,
                                             selected = browser.folder?.id == folder.id,
-                                            onClick = { viewModel.selectFolder(folder) },
+                                            onClick = { viewModel.onEvent(LibraryUiEvent.SelectFolder(folder)) },
                                         )
                                     }
                                 }
@@ -606,11 +655,13 @@ internal fun LibraryScreen(
                         filters = if (offlineAutoFilter) filters.copy(isDownloaded = true) else filters,
                         genres = genres,
                         availableTags = tags,
-                        onOpenSheet = { openFilterSheet = it },
+                        onOpenSheet = { openSheet = LibrarySheet.Filter(it) },
                         onToggleDownloaded = {
                             if (!offlineAutoFilter) {
-                                viewModel.updateFilters(
-                                    filters.copy(isDownloaded = !(filters.isDownloaded == true))
+                                viewModel.onEvent(
+                                    LibraryUiEvent.UpdateFilters(
+                                        filters.copy(isDownloaded = !(filters.isDownloaded == true))
+                                    )
                                 )
                             }
                         },
@@ -638,10 +689,10 @@ internal fun LibraryScreen(
                             // Cycle GRID → THUMB → LIST → MASONRY → GRID so each
                             // tap advances to the next layout mode (same order as
                             // the former floating-toolbar toggle).
-                            viewModel.setViewMode(viewMode.next)
+                            viewModel.onEvent(LibraryUiEvent.SetViewMode(viewMode.next))
                         },
-                        onSizeClick = { showPosterSizeSheet = true },
-                        onGroupClick = { showGroupBySheet = true },
+                        onSizeClick = { openSheet = LibrarySheet.PosterSize },
+                        onGroupClick = { openSheet = LibrarySheet.GroupBy },
                         firstChipFocus = firstActionChipFocus,
                         modifier = Modifier
                             // Up returns to the filter chip row; Down falls through
@@ -675,8 +726,10 @@ internal fun LibraryScreen(
                                 GlassDismissTag(
                                     label = mediaType.name,
                                     onDismiss = {
-                                        viewModel.updateFilters(
-                                            filters.copy(mediaTypes = filters.mediaTypes - mediaType)
+                                        viewModel.onEvent(
+                                            LibraryUiEvent.UpdateFilters(
+                                                filters.copy(mediaTypes = filters.mediaTypes - mediaType)
+                                            )
                                         )
                                     },
                                 )
@@ -685,8 +738,10 @@ internal fun LibraryScreen(
                                 GlassDismissTag(
                                     label = filters.playedStatus.displayName,
                                     onDismiss = {
-                                        viewModel.updateFilters(
-                                            filters.copy(playedStatus = PlayedStatus.ALL)
+                                        viewModel.onEvent(
+                                            LibraryUiEvent.UpdateFilters(
+                                                filters.copy(playedStatus = PlayedStatus.ALL)
+                                            )
                                         )
                                     },
                                 )
@@ -695,7 +750,9 @@ internal fun LibraryScreen(
                                 GlassDismissTag(
                                     label = stringResource(Res.string.library_filter_downloaded),
                                     onDismiss = {
-                                        viewModel.updateFilters(filters.copy(isDownloaded = null))
+                                        viewModel.onEvent(
+                                            LibraryUiEvent.UpdateFilters(filters.copy(isDownloaded = null))
+                                        )
                                     },
                                 )
                             }
@@ -703,8 +760,10 @@ internal fun LibraryScreen(
                                 GlassDismissTag(
                                     label = genre,
                                     onDismiss = {
-                                        viewModel.updateFilters(
-                                            filters.copy(genres = filters.genres - genre)
+                                        viewModel.onEvent(
+                                            LibraryUiEvent.UpdateFilters(
+                                                filters.copy(genres = filters.genres - genre)
+                                            )
                                         )
                                     },
                                 )
@@ -737,8 +796,8 @@ internal fun LibraryScreen(
                                     .clickable(
                                         interactionSource = clearAllInteractionSource,
                                         indication = null,
-                                        onClick = { viewModel.clearFilters() }
-                                    )
+                                    onClick = { viewModel.onEvent(LibraryUiEvent.ClearFilters) }
+                                )
                                     .padding(horizontal = 10.dp, vertical = 5.dp),
                             ) {
                                 Text(
@@ -785,7 +844,7 @@ internal fun LibraryScreen(
                 PullToRefreshBox(
                     isRefreshing = pagedItems.loadState.refresh is LoadState.Loading && pagedItems.itemCount > 0,
                     onRefresh = {
-                        viewModel.refresh()
+                        viewModel.onEvent(LibraryUiEvent.Refresh)
                     },
                     enabled = !isTv,
                     modifier = Modifier
@@ -828,7 +887,7 @@ internal fun LibraryScreen(
                                         null
                                     },
                                     onAction = if (hasActiveFilters) {
-                                        { viewModel.clearFilters() }
+                                        { viewModel.onEvent(LibraryUiEvent.ClearFilters) }
                                     } else {
                                         null
                                     },
@@ -1228,7 +1287,7 @@ internal fun LibraryScreen(
                                 colors = FloatingToolbarDefaults.standardFloatingToolbarColors(),
                                 floatingActionButton = {
                                     FloatingToolbarDefaults.VibrantFloatingActionButton(
-                                        onClick = { viewModel.toggleShowFilters() },
+                                        onClick = { viewModel.onEvent(LibraryUiEvent.ToggleFilters) },
                                         modifier = Modifier.focusIndicator(),
                                     ) {
                                         Icon(
@@ -1272,7 +1331,7 @@ internal fun LibraryScreen(
                                     )
                                 }
                                 IconButton(
-                                    onClick = { viewModel.shuffleLibrary() },
+                                    onClick = { viewModel.onEvent(LibraryUiEvent.ShuffleLibrary) },
                                     shapes = IconButtonDefaults.shapes(),
                                     modifier = Modifier.focusIndicator(),
                                 ) {
@@ -1336,8 +1395,10 @@ internal fun LibraryScreen(
 
     if (resetDialogVisible) {
         LibraryResetConfirmDialog(
-            onConfirm = { dontShowAgain -> viewModel.confirmResetAll(dontShowAgain) },
-            onDismiss = { viewModel.dismissResetDialog() },
+            onConfirm = { dontShowAgain ->
+                viewModel.onEvent(LibraryUiEvent.ConfirmResetAll(dontShowAgain))
+            },
+            onDismiss = { viewModel.onEvent(LibraryUiEvent.DismissResetDialog) },
         )
     }
 
@@ -1350,106 +1411,131 @@ internal fun LibraryScreen(
             genres = genres,
             availableTags = tags,
             onApply = { newFilters ->
-                viewModel.updateFilters(newFilters)
-                viewModel.toggleShowFilters()
+                viewModel.onEvent(LibraryUiEvent.UpdateFilters(newFilters))
+                viewModel.onEvent(LibraryUiEvent.ToggleFilters)
             },
-            onDismiss = { viewModel.toggleShowFilters() },
+            onDismiss = { viewModel.onEvent(LibraryUiEvent.ToggleFilters) },
         )
     }
 
-    // Per-filter sheets (immediate-apply).
-    when (openFilterSheet) {
-        FilterSheetKind.SORT -> SortFilterSheet(
-            current = filters.sortBy,
-            onApply = { viewModel.updateFilters(filters.copy(sortBy = it)) },
-            onDismiss = { openFilterSheet = null },
-        )
-        FilterSheetKind.TYPE -> MediaTypeFilterSheet(
-            current = filters.mediaTypes,
-            onToggle = { type ->
-                viewModel.updateFilters(filters.copy(mediaTypes = filters.mediaTypes.toggled(type)))
-            },
-            onDismiss = { openFilterSheet = null },
-        )
-        FilterSheetKind.STATUS -> StatusFilterSheet(
-            current = filters.playedStatus,
-            onApply = { viewModel.updateFilters(filters.copy(playedStatus = it)) },
-            onDismiss = { openFilterSheet = null },
-            isResumable = filters.isResumable == true,
-            onToggleResumable = {
-                viewModel.updateFilters(
-                    filters.copy(isResumable = !(filters.isResumable == true))
-                )
-            },
-        )
-        FilterSheetKind.GENRES -> GenreFilterSheet(
-            current = filters.genres,
-            genres = genres,
-            onToggle = { genre ->
-                viewModel.updateFilters(filters.copy(genres = filters.genres.toggled(genre)))
-            },
-            onDismiss = { openFilterSheet = null },
-        )
-        FilterSheetKind.TAGS -> TagFilterSheet(
-            current = filters.tags,
-            tags = tags,
-            onToggle = { tag ->
-                viewModel.updateFilters(filters.copy(tags = filters.tags.toggled(tag)))
-            },
-            onDismiss = { openFilterSheet = null },
-        )
-        FilterSheetKind.YEARS -> YearRangeFilterSheet(
-            current = filters.years.toSet(),
-            onApply = { viewModel.updateFilters(filters.copy(years = it.toList())) },
-            onDismiss = { openFilterSheet = null },
-        )
-        FilterSheetKind.ALL -> {
-            openFilterSheet = null
-            viewModel.toggleShowFilters()
-        }
-        null -> {}
-    }
-
-    if (showPosterSizeSheet) {
-        com.raulshma.jellyplay.feature.library.components.FilterSelectionSheet(
-            title = stringResource(Res.string.library_poster_size),
-            onDismiss = { showPosterSizeSheet = false },
-        ) {
-            androidx.compose.foundation.layout.Column {
-                // TvOrTouchSlider gives the slider D-pad stepping on TV (same control the
-                // year-range sheet uses); the raw M3 Slider wasn't TV-operable.
-                com.raulshma.jellyplay.core.ui.tv.components.TvOrTouchSlider(
-                    value = posterSize,
-                    onValueChange = { viewModel.setPosterSize(it) },
-                    valueRange = 0.7f..1.4f,
-                    isTv = isTv,
-                    onValueChangeFinished = { viewModel.persistPosterSize() },
-                )
+    // Per-filter sheets (immediate-apply) + the poster-size / group-by sheets,
+    // all behind the one [LibrarySheet] state.
+    when (val sheet = openSheet) {
+        is LibrarySheet.Filter -> when (sheet.kind) {
+            FilterSheetKind.SORT -> SortFilterSheet(
+                current = filters.sortBy,
+                onApply = {
+                    viewModel.onEvent(LibraryUiEvent.UpdateFilters(filters.copy(sortBy = it)))
+                },
+                onDismiss = { openSheet = null },
+            )
+            FilterSheetKind.TYPE -> MediaTypeFilterSheet(
+                current = filters.mediaTypes,
+                onToggle = { type ->
+                    viewModel.onEvent(
+                        LibraryUiEvent.UpdateFilters(
+                            filters.copy(mediaTypes = filters.mediaTypes.toggled(type))
+                        )
+                    )
+                },
+                onDismiss = { openSheet = null },
+            )
+            FilterSheetKind.STATUS -> StatusFilterSheet(
+                current = filters.playedStatus,
+                onApply = {
+                    viewModel.onEvent(
+                        LibraryUiEvent.UpdateFilters(filters.copy(playedStatus = it))
+                    )
+                },
+                onDismiss = { openSheet = null },
+                isResumable = filters.isResumable == true,
+                onToggleResumable = {
+                    viewModel.onEvent(
+                        LibraryUiEvent.UpdateFilters(
+                            filters.copy(isResumable = !(filters.isResumable == true))
+                        )
+                    )
+                },
+            )
+            FilterSheetKind.GENRES -> GenreFilterSheet(
+                current = filters.genres,
+                genres = genres,
+                onToggle = { genre ->
+                    viewModel.onEvent(
+                        LibraryUiEvent.UpdateFilters(
+                            filters.copy(genres = filters.genres.toggled(genre))
+                        )
+                    )
+                },
+                onDismiss = { openSheet = null },
+            )
+            FilterSheetKind.TAGS -> TagFilterSheet(
+                current = filters.tags,
+                tags = tags,
+                onToggle = { tag ->
+                    viewModel.onEvent(
+                        LibraryUiEvent.UpdateFilters(
+                            filters.copy(tags = filters.tags.toggled(tag))
+                        )
+                    )
+                },
+                onDismiss = { openSheet = null },
+            )
+            FilterSheetKind.YEARS -> YearRangeFilterSheet(
+                current = filters.years.toSet(),
+                onApply = {
+                    viewModel.onEvent(
+                        LibraryUiEvent.UpdateFilters(filters.copy(years = it.toList()))
+                    )
+                },
+                onDismiss = { openSheet = null },
+            )
+            FilterSheetKind.ALL -> {
+                openSheet = null
+                viewModel.onEvent(LibraryUiEvent.ToggleFilters)
             }
         }
-    }
-
-    if (showGroupBySheet) {
-        com.raulshma.jellyplay.feature.library.components.FilterSelectionSheet(
-            title = stringResource(Res.string.library_group_by),
-            onDismiss = { showGroupBySheet = false },
-        ) {
-            androidx.compose.foundation.layout.FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+        LibrarySheet.PosterSize -> {
+            com.raulshma.jellyplay.feature.library.components.FilterSelectionSheet(
+                title = stringResource(Res.string.library_poster_size),
+                onDismiss = { openSheet = null },
             ) {
-                GroupBy.entries.forEach { option ->
-                    com.raulshma.jellyplay.core.ui.components.GlassFilterChip(
-                        label = groupByLabel(option),
-                        selected = option == groupBy,
-                        onClick = {
-                            viewModel.setGroupBy(option)
-                            showGroupBySheet = false
-                        },
+                androidx.compose.foundation.layout.Column {
+                    // TvOrTouchSlider gives the slider D-pad stepping on TV (same control the
+                    // year-range sheet uses); the raw M3 Slider wasn't TV-operable.
+                    com.raulshma.jellyplay.core.ui.tv.components.TvOrTouchSlider(
+                        value = posterSize,
+                        onValueChange = { viewModel.onEvent(LibraryUiEvent.SetPosterSize(it)) },
+                        valueRange = 0.7f..1.4f,
+                        isTv = isTv,
+                        onValueChangeFinished = { viewModel.onEvent(LibraryUiEvent.PersistPosterSize) },
                     )
                 }
             }
         }
+        LibrarySheet.GroupBy -> {
+            com.raulshma.jellyplay.feature.library.components.FilterSelectionSheet(
+                title = stringResource(Res.string.library_group_by),
+                onDismiss = { openSheet = null },
+            ) {
+                androidx.compose.foundation.layout.FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    GroupBy.entries.forEach { option ->
+                        com.raulshma.jellyplay.core.ui.components.GlassFilterChip(
+                            label = groupByLabel(option),
+                            selected = option == groupBy,
+                            onClick = {
+                                viewModel.onEvent(LibraryUiEvent.SetGroupBy(option))
+                                openSheet = null
+                            },
+                        )
+                    }
+                }
+            }
+        }
+        null -> {}
     }
 }
 

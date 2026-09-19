@@ -30,7 +30,10 @@ import com.raulshma.jellyplay.feature.details.generated.resources.detail_manage_
  * State is a single [MutableStateFlow]<[ManageSeriesUiState]> for atomic
  * snapshots (mirrors the DetailUiState single-state model). One-shot feedback
  * flows through [ManageSeriesUiState.userMessage]; the screen shows it then
- * calls [clearUserMessage].
+ * sends [ManageSeriesUiEvent.ClearUserMessage]. Every user intent arrives as
+ * a [ManageSeriesUiEvent] through the single [onEvent] funnel (the home
+ * feature's `HomeViewModel` precedent) — the per-action handlers are private,
+ * so there is no per-screen command method to keep in sync.
  */
 class ManageSeriesViewModel internal constructor(
     private val strings: DetailStrings,
@@ -45,8 +48,29 @@ class ManageSeriesViewModel internal constructor(
     private var loadedSeriesId: String? = null
     private var loadJob: kotlinx.coroutines.Job? = null
 
+    /** The single command funnel — routes each intent to its private handler. */
+    fun onEvent(event: ManageSeriesUiEvent) {
+        when (event) {
+            is ManageSeriesUiEvent.Load -> load(event.seriesId)
+            is ManageSeriesUiEvent.Refresh -> refresh()
+            is ManageSeriesUiEvent.ToggleEpisodeMonitored -> toggleEpisodeMonitored(event.episode)
+            is ManageSeriesUiEvent.SearchEpisode -> searchEpisode(event.episode)
+            is ManageSeriesUiEvent.RequestDeleteEpisode -> requestDeleteEpisode(event.episode)
+            is ManageSeriesUiEvent.CancelDeleteEpisode -> cancelDeleteEpisode()
+            is ManageSeriesUiEvent.ConfirmDeleteEpisode -> confirmDeleteEpisode()
+            is ManageSeriesUiEvent.SearchSeason -> searchSeason(event.seasonNumber)
+            is ManageSeriesUiEvent.ToggleSeasonMonitor -> toggleSeasonMonitor(event.seasonNumber)
+            is ManageSeriesUiEvent.RefreshSeries -> refreshSeries()
+            is ManageSeriesUiEvent.RefreshAndScan -> refreshAndScan()
+            is ManageSeriesUiEvent.SearchSeries -> searchSeries()
+            is ManageSeriesUiEvent.ToggleSeasonExpanded -> toggleSeasonExpanded(event.seasonNumber)
+            is ManageSeriesUiEvent.ClearUserMessage -> clearUserMessage()
+            is ManageSeriesUiEvent.ClearError -> clearError()
+        }
+    }
+
     /** Loads the series detail (for the tvdb id) then the Sonarr episodes. */
-    fun load(seriesId: String) {
+    private fun load(seriesId: String) {
         // Dedupe a reload for the same series while one is already in flight.
         if (loadedSeriesId == seriesId && loadJob?.isActive == true) return
         loadedSeriesId = seriesId
@@ -90,7 +114,7 @@ class ManageSeriesViewModel internal constructor(
     }
 
     /** Re-fetches episodes from Sonarr and recomputes the season grouping. */
-    fun refresh() {
+    private fun refresh() {
         val tvdb = tvdbId ?: return
         launch {
             val result = arrRepository.getSonarrEpisodes(tvdb)
@@ -132,7 +156,7 @@ class ManageSeriesViewModel internal constructor(
         }
     }
 
-    fun toggleEpisodeMonitored(episode: ArrSeriesEpisode) {
+    private fun toggleEpisodeMonitored(episode: ArrSeriesEpisode) {
         val tvdb = tvdbId ?: return
         val newMonitored = !episode.monitored
         // Optimistic update.
@@ -148,7 +172,7 @@ class ManageSeriesViewModel internal constructor(
         }
     }
 
-    fun searchEpisode(episode: ArrSeriesEpisode) {
+    private fun searchEpisode(episode: ArrSeriesEpisode) {
         val tvdb = tvdbId ?: return
         _uiState.update { it.copy(actionTarget = ActionTarget.Episode(episode.id)) }
         launch {
@@ -167,16 +191,16 @@ class ManageSeriesViewModel internal constructor(
     }
 
     /** Stages the episode in the [PendingConfirmation] hold write. */
-    fun requestDeleteEpisode(episode: ArrSeriesEpisode) {
+    private fun requestDeleteEpisode(episode: ArrSeriesEpisode) {
         _uiState.update { it.copy(pendingDelete = it.pendingDelete.hold(episode)) }
     }
 
     /** The dismiss write — refused while a delete is in flight ([ManageSeriesUiState.isDeleting]). */
-    fun cancelDeleteEpisode() {
+    private fun cancelDeleteEpisode() {
         _uiState.update { it.copy(pendingDelete = it.pendingDelete.dismiss(it.isDeleting)) }
     }
 
-    fun confirmDeleteEpisode() {
+    private fun confirmDeleteEpisode() {
         val tvdb = tvdbId ?: return
         val state = _uiState.value
         val pending = state.pendingDelete.confirm(inFlight = state.isDeleting) ?: return
@@ -201,7 +225,7 @@ class ManageSeriesViewModel internal constructor(
         }
     }
 
-    fun searchSeason(seasonNumber: Int) {
+    private fun searchSeason(seasonNumber: Int) {
         val tvdb = tvdbId ?: return
         _uiState.update { it.copy(actionTarget = ActionTarget.Season(seasonNumber)) }
         launch {
@@ -219,7 +243,7 @@ class ManageSeriesViewModel internal constructor(
         }
     }
 
-    fun toggleSeasonMonitor(seasonNumber: Int) {
+    private fun toggleSeasonMonitor(seasonNumber: Int) {
         val tvdb = tvdbId ?: return
         val seasonEps = _uiState.value.episodesBySeason[seasonNumber].orEmpty()
         if (seasonEps.isEmpty()) return
@@ -241,7 +265,7 @@ class ManageSeriesViewModel internal constructor(
         }
     }
 
-    fun refreshSeries() {
+    private fun refreshSeries() {
         val tvdb = tvdbId ?: return
         _uiState.update { it.copy(actionTarget = ActionTarget.Series(SeriesAction.REFRESH)) }
         launch {
@@ -255,7 +279,7 @@ class ManageSeriesViewModel internal constructor(
         }
     }
 
-    fun refreshAndScan() {
+    private fun refreshAndScan() {
         val tvdb = tvdbId ?: return
         _uiState.update { it.copy(actionTarget = ActionTarget.Series(SeriesAction.REFRESH_AND_SCAN)) }
         launch {
@@ -271,7 +295,7 @@ class ManageSeriesViewModel internal constructor(
         }
     }
 
-    fun searchSeries() {
+    private fun searchSeries() {
         val tvdb = tvdbId ?: return
         _uiState.update { it.copy(actionTarget = ActionTarget.Series(SeriesAction.SEARCH)) }
         launch {
@@ -285,7 +309,7 @@ class ManageSeriesViewModel internal constructor(
         }
     }
 
-    fun toggleSeasonExpanded(seasonNumber: Int) {
+    private fun toggleSeasonExpanded(seasonNumber: Int) {
         _uiState.update { state ->
             val expanded = if (seasonNumber in state.expandedSeasons) {
                 state.expandedSeasons - seasonNumber
@@ -296,11 +320,11 @@ class ManageSeriesViewModel internal constructor(
         }
     }
 
-    fun clearUserMessage() {
+    private fun clearUserMessage() {
         _uiState.update { it.copy(userMessage = null) }
     }
 
-    fun clearError() {
+    private fun clearError() {
         _uiState.update { it.copy(error = null) }
     }
 

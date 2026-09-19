@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.network.seerr
 
+import com.raulshma.jellyplay.core.model.arr.ArrServiceKind
 import com.raulshma.jellyplay.core.model.seerr.*
 
 interface SeerrApiClient {
@@ -138,17 +139,17 @@ interface SeerrApiClient {
         credentials: SeerrCredentials,
     ): Result<List<SeerrServiceServer>>
 
-    suspend fun getServiceRadarrDetail(
+    /**
+     * One `/service/{radarr,sonarr}/{id}` detail fetch — the kind-paired
+     * members folded onto [ArrServiceKind]; the payload decodes to the
+     * concrete [SeerrServiceDetail] subclass for [kind].
+     */
+    suspend fun getServiceDetail(
         baseUrl: String,
         credentials: SeerrCredentials,
         id: Int,
-    ): Result<SeerrRadarrServiceDetail>
-
-    suspend fun getServiceSonarrDetail(
-        baseUrl: String,
-        credentials: SeerrCredentials,
-        id: Int,
-    ): Result<SeerrSonarrServiceDetail>
+        kind: ArrServiceKind,
+    ): Result<SeerrServiceDetail>
 
     suspend fun getTrending(
         baseUrl: String,

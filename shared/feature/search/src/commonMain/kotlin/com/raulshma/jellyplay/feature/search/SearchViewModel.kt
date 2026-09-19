@@ -4,6 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.download.QuickDownloadActions
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
@@ -17,12 +18,9 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrRequestSnapshot
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.MediaItem
-import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.LibraryFilters
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
-import com.raulshma.jellyplay.core.model.PlayedStatus
 import com.raulshma.jellyplay.core.model.SearchResult
-import com.raulshma.jellyplay.core.model.SortOption
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.seerr.buildPosterUrl
 import com.raulshma.jellyplay.core.ui.viewmodel.DeferredUserDataRefresher
@@ -195,7 +193,9 @@ internal class SearchViewModel(
      */
     private fun persistFilters(filters: LibraryFilters) {
         launch {
-            runCatching { searchFiltersStore.setSearchFilters(FilterCodec.encodeToString(filters)) }
+            runCatchingRethrowingCancellation {
+                searchFiltersStore.setSearchFilters(FilterCodec.encodeToString(filters))
+            }
         }
     }
 
@@ -276,61 +276,87 @@ internal class SearchViewModel(
         }
     }
 
-    fun deleteHistoryItem(id: Long) {
-        launch { mediaSearchEngine.deleteHistoryItem(id) }
-    }
-
-    fun clearHistory() {
-        launch { mediaSearchEngine.clearHistory() }
-    }
-
-    fun search(newQuery: String) {
-        _query.value = newQuery
-        queryFlow.set(newQuery)
-        _suggestions.set(emptyList())
-        if (newQuery.isBlank()) {
-            _seerrResults.set(emptyList())
-            _seerrSearchError.set(false)
-            _offlineResults.set(emptyList())
+    /**
+     * The single command funnel (the HomeViewModel `onEvent` precedent): every
+     * user intent arrives as a [SearchUiEvent] and is routed once. Pure
+     * forwarding events write their holder/state directly in the `when`; there
+     * is no per-action command method to keep in sync with the screen.
+     */
+    fun onEvent(event: SearchUiEvent) {
+        when (event) {
+            is SearchUiEvent.Search -> {
+                _query.value = event.query
+                queryFlow.set(event.query)
+                _suggestions.set(emptyList())
+                if (event.query.isBlank()) {
+                    _seerrResults.set(emptyList())
+                    _seerrSearchError.set(false)
+                    _offlineResults.set(emptyList())
+                }
+            }
+            is SearchUiEvent.UpdateFilters -> {
+                _filters.set(event.filters)
+                persistFilters(event.filters)
+            }
+            is SearchUiEvent.ToggleMediaType -> {
+                _filters.update { it.withMediaTypeToggled(event.mediaType) }
+                persistFilters(_filters.value)
+            }
+            is SearchUiEvent.SetSortBy -> {
+                // Single-select sort — the same LibraryFilters.withSortBy
+                // policy the library's Sort sheet uses; persisted to survive
+                // navigation/restart.
+                _filters.update { it.withSortBy(event.sortBy) }
+                persistFilters(_filters.value)
+            }
+            is SearchUiEvent.SetPlayedStatus -> {
+                // Single-select played-status (mirrors Library's Status filter).
+                _filters.update { it.withPlayedStatus(event.status) }
+                persistFilters(_filters.value)
+            }
+            is SearchUiEvent.ToggleFilters -> _showFilters.set(!_showFilters.value)
+            is SearchUiEvent.ClearFilters -> {
+                _filters.update { it.cleared() }
+                launch {
+                    runCatchingRethrowingCancellation { searchFiltersStore.clearSearchFilters() }
+                }
+            }
+            is SearchUiEvent.DeleteSearchHistoryItem -> launch {
+                mediaSearchEngine.deleteHistoryItem(event.id)
+            }
+            is SearchUiEvent.ClearSearchHistory -> launch { mediaSearchEngine.clearHistory() }
+            is SearchUiEvent.SearchResultsShown -> if (event.query.isNotBlank()) {
+                launch { mediaSearchEngine.recordHistory(event.query, jellyfinHadResults = true) }
+            }
+            is SearchUiEvent.RetrySeerrSearch -> {
+                val currentQuery = query
+                if (currentQuery.isNotBlank()) {
+                    seerrSearchJob?.cancel()
+                    seerrSearchJob = launch {
+                        _seerrSearchError.set(false)
+                        searchSeerr(currentQuery)
+                    }
+                }
+            }
+            is SearchUiEvent.MarkItemPlayed -> launch {
+                // Intentionally silent (the mutator's default): the paged
+                // results are left untouched so the user keeps their scroll
+                // position.
+                userDataMutator.setPlayed(event.item.id, event.played)
+            }
+            is SearchUiEvent.DownloadItem -> launch {
+                quickDownloadActions.downloadAndReport(event.item, event.onOpenDetail)
+            }
+            is SearchUiEvent.RemoveItemDownload -> quickDownloadActions.removeDownload(event.item)
+            is SearchUiEvent.RequestSeerrMedia ->
+                seerrRequestState.requestMedia(
+                    event.item, event.seasons, event.serverId, event.profileId, event.rootFolder, event.tags,
+                )
+            is SearchUiEvent.OpenSeerrRequestDialog -> seerrRequestState.openRequestDialog(event.item)
+            is SearchUiEvent.DismissSeerrRequestDialog -> seerrRequestState.dismissRequestDialog()
+            is SearchUiEvent.PrefetchSeerrDetails ->
+                seerrRequestState.prefetchDetails(event.tmdbId, event.mediaType, event.onDone)
         }
-    }
-
-    fun updateFilters(newFilters: LibraryFilters) {
-        _filters.set(newFilters)
-        persistFilters(newFilters)
-    }
-
-    fun toggleMediaType(mediaType: MediaType) {
-        _filters.update { it.withMediaTypeToggled(mediaType) }
-        persistFilters(_filters.value)
-    }
-
-    /**
-     * Single-select sort setter — writes through the [LibraryFilters] algebra
-     * (the same [LibraryFilters.withSortBy] policy the library's Sort sheet
-     * uses). Persists the new sort option so it survives navigation/restart.
-     */
-    fun setSortBy(sortBy: SortOption) {
-        _filters.update { it.withSortBy(sortBy) }
-        persistFilters(_filters.value)
-    }
-
-    /**
-     * Single-select played-status setter (mirrors Library's Status filter).
-     * Persists the new status so it survives navigation/restart.
-     */
-    fun setPlayedStatus(status: PlayedStatus) {
-        _filters.update { it.withPlayedStatus(status) }
-        persistFilters(_filters.value)
-    }
-
-    fun toggleShowFilters() {
-        _showFilters.set(!_showFilters.value)
-    }
-
-    fun clearFilters() {
-        _filters.update { it.cleared() }
-        launch { runCatching { searchFiltersStore.clearSearchFilters() } }
     }
 
     private fun loadGenres() {
@@ -347,32 +373,8 @@ internal class SearchViewModel(
         }
     }
 
-    /**
-     * Called by the UI once the paged search confirms a non-empty result set for
-     * [query] (refresh finished with ≥1 item). This defers persisting the query
-     * to "Recent Searches" until we know it actually matched something, so a
-     * typo with zero hits never pollutes history. The result-gate itself
-     * (≥2 chars, hide-history preference, active user) lives in
-     * [MediaSearchEngine.recordHistory].
-     */
-    fun onSearchResultsShown(query: String) {
-        if (query.isBlank()) return
-        launch { mediaSearchEngine.recordHistory(query, jellyfinHadResults = true) }
-    }
-
     fun getImageUrl(itemId: String): String =
         imageUrlProvider.getImageUrl(itemId)
-
-    /**
-     * Marks a result item played/unplayed. Intentionally silent (the mutator's
-     * default): the paged results are left untouched so the user keeps their
-     * scroll position — the badge updates on the next natural data refresh.
-     */
-    fun markItemPlayed(item: MediaItem, played: Boolean) {
-        launch {
-            userDataMutator.setPlayed(item.id, played)
-        }
-    }
 
     /** Ids whose quick actions flip to "Remove download" — see [QuickDownloadActions.downloadedIds]. */
     // Whether this platform has a download pipeline — screens gate the
@@ -380,21 +382,6 @@ internal class SearchViewModel(
     val downloadSupported = quickDownloadActions.isSupported
 
     val downloadedIds = quickDownloadActions.downloadedIds
-
-    /**
-     * Long-press Download from a search result card (#147): inline start for
-     * single-stream items; series selection and richer flows open the detail
-     * screen plainly — this host's navigation cannot pre-present the series
-     * sheet (unlike the library grid).
-     */
-    fun downloadItem(item: MediaItem, onOpenDetail: (itemId: String) -> Unit) {
-        launch { quickDownloadActions.downloadAndReport(item, onOpenDetail) }
-    }
-
-    /** Long-press Remove download — deletes the local copy only. */
-    fun removeItemDownload(item: MediaItem) {
-        quickDownloadActions.removeDownload(item)
-    }
 
     fun getSeerrPosterUrl(posterPath: String?): String? =
         posterPath?.let { buildPosterUrl(it) }
@@ -426,40 +413,8 @@ internal class SearchViewModel(
         }
     }
 
-    fun retrySeerrSearch() {
-        val currentQuery = query
-        if (currentQuery.isBlank()) return
-        seerrSearchJob?.cancel()
-        seerrSearchJob = launch {
-            _seerrSearchError.set(false)
-            searchSeerr(currentQuery)
-        }
-    }
-
     private val seerrRequestState = SeerrRequestStateHolder(scope, seerrRequestDelegate)
 
     /** Seerr request lifecycle state (the holder's single snapshot interface). */
     val seerrSnapshot: StateFlow<SeerrRequestSnapshot> = seerrRequestState.snapshotIn(scope)
-
-    fun requestSeerrMedia(
-        item: SeerrSearchItem,
-        seasons: List<Int>? = null,
-        serverId: Int? = null,
-        profileId: Int? = null,
-        rootFolder: String? = null,
-        tags: List<Int>? = null,
-    ) = seerrRequestState.requestMedia(item, seasons, serverId, profileId, rootFolder, tags)
-
-    /**
-     * Opens the Seerr request dialog for [item]: the item plus the open
-     * cascade (service details, TV seasons for tv) are owned by the holder —
-     * the screen's dialog renders from the snapshot's `dialogItem`.
-     */
-    fun openSeerrRequestDialog(item: SeerrSearchItem) = seerrRequestState.openRequestDialog(item)
-
-    /** Closes the dialog and clears the last request result (holder-owned ordering). */
-    fun dismissSeerrRequestDialog() = seerrRequestState.dismissRequestDialog()
-
-    fun prefetchSeerrDetails(tmdbId: Int, mediaType: String, onDone: () -> Unit) =
-        seerrRequestState.prefetchDetails(tmdbId, mediaType, onDone)
 }

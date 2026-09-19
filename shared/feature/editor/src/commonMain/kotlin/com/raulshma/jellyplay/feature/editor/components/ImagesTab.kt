@@ -11,8 +11,6 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -37,7 +35,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
@@ -126,6 +123,43 @@ private fun imageTypeLabelRes(type: String): StringResource = when (type) {
     "Menu" -> Res.string.editor_image_type_menu
     "Thumb" -> Res.string.editor_image_type_thumb
     else -> Res.string.editor_image_type_primary
+}
+
+/**
+ * The pick → stage → confirm choreography the two editor upload sheets
+ * (Images, Subtitles) share: the platform file-picker adapter
+ * ([EditorFilePicker]), the staged [EditorPickedFile], a blank-name
+ * fallback, and the upload gate. Pure state holder — pinned by
+ * PickedFileStageTest; the sheets keep it in `remember { }` and compose
+ * [canConfirm] with their own field gates (Subtitles ANDs a non-blank
+ * language). Images' previewUrl preview stays a sheet-local read of [file].
+ */
+internal class PickedFileStage(
+    private val nameFallback: String = "",
+) {
+    /** Platform picker adapter; assigned by the sheet right after `remember`. */
+    var picker: EditorFilePicker? = null
+
+    /** The staged pick; null until the first successful pick. */
+    var file: EditorPickedFile? by mutableStateOf(null)
+        private set
+
+    /** Upload gate: a file is staged. */
+    val canConfirm: Boolean get() = file != null
+
+    /** Staged file name, or [nameFallback] when the platform returned it blank. */
+    val nameOrDefault: String
+        get() = file?.fileName?.takeIf { it.isNotBlank() } ?: nameFallback
+
+    /** The pick write — replaces any previously staged file. */
+    fun stage(picked: EditorPickedFile) {
+        file = picked
+    }
+
+    /** Launch-on-tap; a no-op while the platform has no picker adapter. */
+    fun launchPick() {
+        picker?.launch()
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
@@ -346,183 +380,95 @@ private fun ImageUploadSheet(
     var selectedTab by remember { mutableStateOf(0) }
     var imageUrl by remember { mutableStateOf("") }
     var selectedImageType by remember { mutableStateOf("Primary") }
-    var selectedFile by remember { mutableStateOf<EditorPickedFile?>(null) }
+    val stage = remember { PickedFileStage() }
+    stage.picker = rememberImageFilePicker(stage::stage)
 
-    val filePicker: EditorFilePicker? = rememberImageFilePicker { file ->
-        selectedFile = file
-    }
-
-    val isTv = com.raulshma.jellyplay.core.ui.tv.LocalTvMode.current
-    if (isTv) {
-        com.raulshma.jellyplay.core.ui.components.TvSafeSheet(
-            onDismissRequest = onDismiss,
+    TvSafeSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+    ) {
+        // TV sheet hides system bars, so no inset clearance is needed; the
+        // phone host applies navigationBars/IME padding once (TvSafeSheet).
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .padding(bottom = if (LocalTvMode.current) 32.dp else 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Column(
-                // TV sheet hides system bars, so no inset clearance is needed here
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-                    .padding(bottom = 32.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Text(stringResource(Res.string.editor_images_upload_title), style = MaterialTheme.typography.headlineSmall)
+            Text(stringResource(Res.string.editor_images_upload_title), style = MaterialTheme.typography.headlineSmall)
 
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(selected = selectedTab == 0, onClick = { selectedTab = 0 }, label = { Text(stringResource(Res.string.editor_images_source_file)) })
-                    FilterChip(selected = selectedTab == 1, onClick = { selectedTab = 1 }, label = { Text(stringResource(Res.string.editor_images_source_url)) })
-                }
-
-                ImageTypeSelector(
-                    selected = selectedImageType,
-                    onSelected = { selectedImageType = it },
-                )
-
-                if (selectedTab == 0) {
-                    selectedFile?.previewUrl?.let { previewUrl ->
-                        MediaImage(
-                            url = previewUrl,
-                            contentDescription = stringResource(Res.string.editor_images_preview),
-                            size = CoilSize(512, 512),
-                            placeholderIcon = Tabler.Outline.Photo,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(200.dp)
-                                .clip(ShapeCache.smooth12),
-                            contentScale = ContentScale.Fit,
-                        )
-                    }
-                    FilledTonalButton(
-                        onClick = { filePicker?.launch() },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text(if (selectedFile != null) stringResource(Res.string.editor_images_change_file) else stringResource(Res.string.editor_images_select_image))
-                    }
-                    Button(
-                        onClick = {
-                            selectedFile?.let { file ->
-                                onUploadFile(file, selectedImageType)
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = selectedFile != null,
-                    ) { Text(stringResource(Res.string.editor_images_upload)) }
-                } else {
-                    OutlinedTextField(
-                        value = imageUrl,
-                        onValueChange = { imageUrl = it },
-                        label = { Text(stringResource(Res.string.editor_images_image_url)) },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                    )
-                    if (imageUrl.isNotBlank()) {
-                        MediaImage(
-                            url = imageUrl,
-                            contentDescription = stringResource(Res.string.editor_images_preview),
-                            size = CoilSize(512, 512),
-                            placeholderIcon = Tabler.Outline.Photo,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(200.dp)
-                                .clip(ShapeCache.smooth12),
-                            contentScale = ContentScale.Fit,
-                        )
-                    }
-                    Button(
-                        onClick = { onUploadUrl(imageUrl, selectedImageType) },
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = imageUrl.isNotBlank(),
-                    ) { Text(stringResource(Res.string.editor_images_download_from_url)) }
-                }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(selected = selectedTab == 0, onClick = { selectedTab = 0 }, label = { Text(stringResource(Res.string.editor_images_source_file)) })
+                FilterChip(selected = selectedTab == 1, onClick = { selectedTab = 1 }, label = { Text(stringResource(Res.string.editor_images_source_url)) })
             }
-        }
-    } else {
-        ModalBottomSheet(
-            onDismissRequest = onDismiss,
-            sheetState = sheetState,
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-                    .navigationBarsPadding()
-                    .imePadding()
-                    .padding(bottom = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Text(stringResource(Res.string.editor_images_upload_title), style = MaterialTheme.typography.headlineSmall)
 
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(selected = selectedTab == 0, onClick = { selectedTab = 0 }, label = { Text(stringResource(Res.string.editor_images_source_file)) })
-                    FilterChip(selected = selectedTab == 1, onClick = { selectedTab = 1 }, label = { Text(stringResource(Res.string.editor_images_source_url)) })
-                }
+            ImageTypeSelector(
+                selected = selectedImageType,
+                onSelected = { selectedImageType = it },
+            )
 
-                ImageTypeSelector(
-                    selected = selectedImageType,
-                    onSelected = { selectedImageType = it },
-                )
-
-                if (selectedTab == 0) {
-                    selectedFile?.previewUrl?.let { previewUrl ->
-                        MediaImage(
-                            url = previewUrl,
-                            contentDescription = stringResource(Res.string.editor_images_preview),
-                            size = CoilSize(512, 512),
-                            placeholderIcon = Tabler.Outline.Photo,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(200.dp)
-                                .clip(ShapeCache.smooth12),
-                            contentScale = ContentScale.Fit,
-                        )
-                    }
-                    FilledTonalButton(
-                        onClick = { filePicker?.launch() },
+            if (selectedTab == 0) {
+                stage.file?.previewUrl?.let { previewUrl ->
+                    MediaImage(
+                        url = previewUrl,
+                        contentDescription = stringResource(Res.string.editor_images_preview),
+                        size = CoilSize(512, 512),
+                        placeholderIcon = Tabler.Outline.Photo,
                         modifier = Modifier
                             .fillMaxWidth()
-                            // e2e: click-reach target (harness-gated no-op).
-                            .harnessClickTarget("editor-images-select-file"),
-                    ) {
-                        Text(if (selectedFile != null) stringResource(Res.string.editor_images_change_file) else stringResource(Res.string.editor_images_select_image))
-                    }
-                    Button(
-                        onClick = {
-                            selectedFile?.let { file ->
-                                onUploadFile(file, selectedImageType)
-                            }
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            // e2e: click-reach target (harness-gated no-op).
-                            .harnessClickTarget("editor-images-upload-confirm", enabled = selectedFile != null),
-                        enabled = selectedFile != null,
-                    ) { Text(stringResource(Res.string.editor_images_upload)) }
-                } else {
-                    OutlinedTextField(
-                        value = imageUrl,
-                        onValueChange = { imageUrl = it },
-                        label = { Text(stringResource(Res.string.editor_images_image_url)) },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
+                            .height(200.dp)
+                            .clip(ShapeCache.smooth12),
+                        contentScale = ContentScale.Fit,
                     )
-                    if (imageUrl.isNotBlank()) {
-                        MediaImage(
-                            url = imageUrl,
-                            contentDescription = stringResource(Res.string.editor_images_preview),
-                            size = CoilSize(512, 512),
-                            placeholderIcon = Tabler.Outline.Photo,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(200.dp)
-                                .clip(ShapeCache.smooth12),
-                            contentScale = ContentScale.Fit,
-                        )
-                    }
-                    Button(
-                        onClick = { onUploadUrl(imageUrl, selectedImageType) },
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = imageUrl.isNotBlank(),
-                    ) { Text(stringResource(Res.string.editor_images_download_from_url)) }
                 }
+                FilledTonalButton(
+                    onClick = { stage.launchPick() },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        // e2e: click-reach target (harness-gated no-op).
+                        .harnessClickTarget("editor-images-select-file"),
+                ) {
+                    Text(if (stage.file != null) stringResource(Res.string.editor_images_change_file) else stringResource(Res.string.editor_images_select_image))
+                }
+                Button(
+                    onClick = {
+                        stage.file?.let { file ->
+                            onUploadFile(file, selectedImageType)
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        // e2e: click-reach target (harness-gated no-op).
+                        .harnessClickTarget("editor-images-upload-confirm", enabled = stage.canConfirm),
+                    enabled = stage.canConfirm,
+                ) { Text(stringResource(Res.string.editor_images_upload)) }
+            } else {
+                OutlinedTextField(
+                    value = imageUrl,
+                    onValueChange = { imageUrl = it },
+                    label = { Text(stringResource(Res.string.editor_images_image_url)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                )
+                if (imageUrl.isNotBlank()) {
+                    MediaImage(
+                        url = imageUrl,
+                        contentDescription = stringResource(Res.string.editor_images_preview),
+                        size = CoilSize(512, 512),
+                        placeholderIcon = Tabler.Outline.Photo,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(200.dp)
+                            .clip(ShapeCache.smooth12),
+                        contentScale = ContentScale.Fit,
+                    )
+                }
+                Button(
+                    onClick = { onUploadUrl(imageUrl, selectedImageType) },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = imageUrl.isNotBlank(),
+                ) { Text(stringResource(Res.string.editor_images_download_from_url)) }
             }
         }
     }
@@ -543,264 +489,131 @@ private fun ImageBrowseSheet(
 
     val allProvidersLabel = stringResource(Res.string.editor_images_all_providers)
 
-    val isTv = com.raulshma.jellyplay.core.ui.tv.LocalTvMode.current
-    if (isTv) {
-        com.raulshma.jellyplay.core.ui.components.TvSafeSheet(
-            onDismissRequest = onDismiss,
+    TvSafeSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+    ) {
+        // TV sheet hides system bars, so no inset clearance is needed; the
+        // phone host applies navigationBars/IME padding once (TvSafeSheet).
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .padding(bottom = if (LocalTvMode.current) 32.dp else 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Column(
-                // TV sheet hides system bars, so no inset clearance is needed here
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-                    .padding(bottom = 32.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Text(stringResource(Res.string.editor_images_browse_title), style = MaterialTheme.typography.headlineSmall)
+            Text(stringResource(Res.string.editor_images_browse_title), style = MaterialTheme.typography.headlineSmall)
 
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ImageTypeSelector(
-                        selected = selectedType ?: "",
-                        onSelected = {
-                            selectedType = it.ifBlank { null }
-                            currentPage = 0
-                            onLoadImages(it.ifBlank { null }, selectedProvider, 0)
-                        },
-                        allowBlank = true,
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ImageTypeSelector(
+                    selected = selectedType ?: "",
+                    onSelected = {
+                        selectedType = it.ifBlank { null }
+                        currentPage = 0
+                        onLoadImages(it.ifBlank { null }, selectedProvider, 0)
+                    },
+                    allowBlank = true,
+                )
+            }
+
+            val providers = state.imageProviders
+            if (providers.size > 1) {
+                var providerExpanded by remember { mutableStateOf(false) }
+                ExposedDropdownMenuBox(
+                    expanded = providerExpanded,
+                    onExpandedChange = { providerExpanded = it },
+                ) {
+                    OutlinedTextField(
+                        value = selectedProvider ?: allProvidersLabel,
+                        onValueChange = {},
+                        readOnly = true,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .menuAnchor(MenuAnchorType.PrimaryNotEditable),
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = providerExpanded) },
                     )
-                }
-
-                val providers = state.imageProviders
-                if (providers.size > 1) {
-                    var providerExpanded by remember { mutableStateOf(false) }
-                    ExposedDropdownMenuBox(
+                    ExposedDropdownMenu(
                         expanded = providerExpanded,
-                        onExpandedChange = { providerExpanded = it },
+                        onDismissRequest = { providerExpanded = false },
                     ) {
-                        OutlinedTextField(
-                            value = selectedProvider ?: allProvidersLabel,
-                            onValueChange = {},
-                            readOnly = true,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .menuAnchor(MenuAnchorType.PrimaryNotEditable),
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = providerExpanded) },
+                        DropdownMenuItem(
+                            text = { Text(stringResource(Res.string.editor_images_all_providers)) },
+                            onClick = {
+                                selectedProvider = null
+                                currentPage = 0
+                                onLoadImages(selectedType, null, 0)
+                                providerExpanded = false
+                            },
                         )
-                        ExposedDropdownMenu(
-                            expanded = providerExpanded,
-                            onDismissRequest = { providerExpanded = false },
-                        ) {
+                        providers.forEach { provider ->
                             DropdownMenuItem(
-                                text = { Text(stringResource(Res.string.editor_images_all_providers)) },
+                                text = { Text(provider.name) },
                                 onClick = {
-                                    selectedProvider = null
+                                    selectedProvider = provider.name
                                     currentPage = 0
-                                    onLoadImages(selectedType, null, 0)
+                                    onLoadImages(selectedType, provider.name, 0)
                                     providerExpanded = false
                                 },
                             )
-                            providers.forEach { provider ->
-                                DropdownMenuItem(
-                                    text = { Text(provider.name) },
-                                    onClick = {
-                                        selectedProvider = provider.name
-                                        currentPage = 0
-                                        onLoadImages(selectedType, provider.name, 0)
-                                        providerExpanded = false
-                                    },
-                                )
-                            }
-                        }
-                    }
-                }
-
-                val remoteImages = state.remoteImages?.images ?: emptyList()
-                if (remoteImages.isEmpty()) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(200.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(stringResource(Res.string.editor_images_no_images_found), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                } else {
-                    LazyVerticalGrid(
-                        columns = GridCells.Adaptive(140.dp),
-                        modifier = Modifier.height(400.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        items(remoteImages, key = { it.url }) { remoteImage ->
-                            RemoteImageCard(
-                                remoteImage = remoteImage,
-                                onDownload = {
-                                    val type = selectedType ?: "Primary"
-                                    onDownload(remoteImage.url, type)
-                                },
-                            )
-                        }
-                    }
-
-                    val total = state.remoteImages?.totalRecordCount ?: 0
-                    if (total > 50) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                stringResource(Res.string.editor_images_pagination_format, currentPage * 50 + 1, minOf((currentPage + 1) * 50, total), total),
-                                style = MaterialTheme.typography.labelMedium,
-                            )
-                            Row {
-                                TextButton(
-                                    onClick = {
-                                        currentPage = (currentPage - 1).coerceAtLeast(0)
-                                        onLoadImages(selectedType, selectedProvider, currentPage * 50)
-                                    },
-                                    enabled = currentPage > 0,
-                                ) { Text(stringResource(Res.string.editor_images_previous)) }
-                                TextButton(
-                                    onClick = {
-                                        currentPage++
-                                        onLoadImages(selectedType, selectedProvider, currentPage * 50)
-                                    },
-                                    enabled = (currentPage + 1) * 50 < total,
-                                ) { Text(stringResource(Res.string.editor_images_next)) }
-                            }
                         }
                     }
                 }
             }
-        }
-    } else {
-        ModalBottomSheet(
-            onDismissRequest = onDismiss,
-            sheetState = sheetState,
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-                    .navigationBarsPadding()
-                    .imePadding()
-                    .padding(bottom = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Text(stringResource(Res.string.editor_images_browse_title), style = MaterialTheme.typography.headlineSmall)
 
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ImageTypeSelector(
-                        selected = selectedType ?: "",
-                        onSelected = {
-                            selectedType = it.ifBlank { null }
-                            currentPage = 0
-                            onLoadImages(it.ifBlank { null }, selectedProvider, 0)
-                        },
-                        allowBlank = true,
-                    )
+            val remoteImages = state.remoteImages?.images ?: emptyList()
+            if (remoteImages.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(200.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(stringResource(Res.string.editor_images_no_images_found), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-
-                val providers = state.imageProviders
-                if (providers.size > 1) {
-                    var providerExpanded by remember { mutableStateOf(false) }
-                    ExposedDropdownMenuBox(
-                        expanded = providerExpanded,
-                        onExpandedChange = { providerExpanded = it },
-                    ) {
-                        OutlinedTextField(
-                            value = selectedProvider ?: allProvidersLabel,
-                            onValueChange = {},
-                            readOnly = true,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .menuAnchor(MenuAnchorType.PrimaryNotEditable),
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = providerExpanded) },
+            } else {
+                LazyVerticalGrid(
+                    columns = GridCells.Adaptive(140.dp),
+                    modifier = Modifier.height(400.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    items(remoteImages, key = { it.url }) { remoteImage ->
+                        RemoteImageCard(
+                            remoteImage = remoteImage,
+                            onDownload = {
+                                val type = selectedType ?: "Primary"
+                                onDownload(remoteImage.url, type)
+                            },
                         )
-                        ExposedDropdownMenu(
-                            expanded = providerExpanded,
-                            onDismissRequest = { providerExpanded = false },
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text(stringResource(Res.string.editor_images_all_providers)) },
-                                onClick = {
-                                    selectedProvider = null
-                                    currentPage = 0
-                                    onLoadImages(selectedType, null, 0)
-                                    providerExpanded = false
-                                },
-                            )
-                            providers.forEach { provider ->
-                                DropdownMenuItem(
-                                    text = { Text(provider.name) },
-                                    onClick = {
-                                        selectedProvider = provider.name
-                                        currentPage = 0
-                                        onLoadImages(selectedType, provider.name, 0)
-                                        providerExpanded = false
-                                    },
-                                )
-                            }
-                        }
                     }
                 }
 
-                val remoteImages = state.remoteImages?.images ?: emptyList()
-                if (remoteImages.isEmpty()) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(200.dp),
-                        contentAlignment = Alignment.Center,
+                val total = state.remoteImages?.totalRecordCount ?: 0
+                if (total > 50) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text(stringResource(Res.string.editor_images_no_images_found), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                } else {
-                    LazyVerticalGrid(
-                        columns = GridCells.Adaptive(140.dp),
-                        modifier = Modifier.height(400.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        items(remoteImages, key = { it.url }) { remoteImage ->
-                            RemoteImageCard(
-                                remoteImage = remoteImage,
-                                onDownload = {
-                                    val type = selectedType ?: "Primary"
-                                    onDownload(remoteImage.url, type)
+                        Text(
+                            stringResource(Res.string.editor_images_pagination_format, currentPage * 50 + 1, minOf((currentPage + 1) * 50, total), total),
+                            style = MaterialTheme.typography.labelMedium,
+                        )
+                        Row {
+                            TextButton(
+                                onClick = {
+                                    currentPage = (currentPage - 1).coerceAtLeast(0)
+                                    onLoadImages(selectedType, selectedProvider, currentPage * 50)
                                 },
-                            )
-                        }
-                    }
-
-                    val total = state.remoteImages?.totalRecordCount ?: 0
-                    if (total > 50) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                stringResource(Res.string.editor_images_pagination_format, currentPage * 50 + 1, minOf((currentPage + 1) * 50, total), total),
-                                style = MaterialTheme.typography.labelMedium,
-                            )
-                            Row {
-                                TextButton(
-                                    onClick = {
-                                        currentPage = (currentPage - 1).coerceAtLeast(0)
-                                        onLoadImages(selectedType, selectedProvider, currentPage * 50)
-                                    },
-                                    enabled = currentPage > 0,
-                                ) { Text(stringResource(Res.string.editor_images_previous)) }
-                                TextButton(
-                                    onClick = {
-                                        currentPage++
-                                        onLoadImages(selectedType, selectedProvider, currentPage * 50)
-                                    },
-                                    enabled = (currentPage + 1) * 50 < total,
-                                ) { Text(stringResource(Res.string.editor_images_next)) }
-                            }
+                                enabled = currentPage > 0,
+                            ) { Text(stringResource(Res.string.editor_images_previous)) }
+                            TextButton(
+                                onClick = {
+                                    currentPage++
+                                    onLoadImages(selectedType, selectedProvider, currentPage * 50)
+                                },
+                                enabled = (currentPage + 1) * 50 < total,
+                            ) { Text(stringResource(Res.string.editor_images_next)) }
                         }
                     }
                 }

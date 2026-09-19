@@ -12,7 +12,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -58,6 +57,7 @@ import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.SettingToggleItem
 import com.raulshma.jellyplay.core.ui.model.localizedDescription
 import com.raulshma.jellyplay.core.ui.model.localizedDisplayName
+import com.raulshma.jellyplay.core.ui.tv.CenteredBringIntoView
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
@@ -409,6 +409,14 @@ fun PlaybackSettingsScreen(
     val showAdvanced by viewModel.showAdvancedSettings.collectAsStateWithLifecycle()
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
+    // The declared row admissions both the SettingsItemList totals and the
+    // emission `if`s below read — one gate per id, declared beside the group
+    // items (SettingsSearchItemGroup.rowAdmitted).
+    val rowFlags = RowAdmissionFlags(
+        isTv = isTv,
+        showAdvanced = showAdvanced,
+        parentsOn = rowParentsOn("dialogue_boost" to preferences.dialogueBoostEnabled),
+    )
     var activePicker by remember { mutableStateOf<PickerState<*>?>(null) }
     var showResetDialog by remember { mutableStateOf(false) }
     val backgroundColorState = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState()
@@ -427,17 +435,7 @@ fun PlaybackSettingsScreen(
         playbackAdjustForAdvanced(showAdvanced),
     )
 
-    // Phase 1 (coarse): scroll the containing group into the LazyColumn's composition window so the
-    // target item is actually composed — items in off-screen groups (later sections) are otherwise
-    // never mounted and their bringIntoViewRequester has no target. Phase 2 (centering) is then
-    // performed by the highlighted item itself via CenterBringIntoViewSpec.
-    LaunchedEffect(scrollIndex) {
-        if (scrollIndex >= 0) {
-            try {
-                scrollState.animateScrollToItem(scrollIndex)
-            } catch (_: Exception) {}
-        }
-    }
+    HighlightScrollEffect(scrollState, scrollIndex)
 
     JellyPlayScreenScaffold(
         title = stringResource(Res.string.settings_playback_title),
@@ -460,12 +458,7 @@ fun PlaybackSettingsScreen(
             }
         },
     ) { innerPadding ->
-        // Center a highlighted (search-navigated) setting in the viewport instead of parking it
-        // at the bottom edge, which is the default BringIntoViewSpec behaviour.
-        androidx.compose.runtime.CompositionLocalProvider(
-            androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides
-                com.raulshma.jellyplay.core.ui.tv.CenterBringIntoViewSpec
-        ) {
+        CenteredBringIntoView {
         LazyColumn(
             state = scrollState,
             modifier = Modifier
@@ -513,7 +506,7 @@ fun PlaybackSettingsScreen(
                             )
                         },
                     )
-                    if (settingsCapabilities.supportsTouchGestures) {
+                    if (SettingsScreenGroups.playbackPlayer.rowAdmitted("seek_duration", rowFlags)) {
                         val doubleTapSeekTitle = stringResource(Res.string.settings_double_tap_seek_duration)
                         SettingListItem(
                             icon = Tabler.Outline.PlayerTrackNext,
@@ -533,7 +526,7 @@ fun PlaybackSettingsScreen(
                             },
                         )
                     }
-                    if (settingsCapabilities.supportsScreenOrientation) {
+                    if (SettingsScreenGroups.playbackPlayer.rowAdmitted("orientation", rowFlags)) {
                         val orientationTitle = stringResource(Res.string.settings_orientation)
                         SettingListItem(
                             icon = Tabler.Outline.DeviceMobileRotated,
@@ -553,7 +546,7 @@ fun PlaybackSettingsScreen(
                             },
                         )
                     }
-                    if (settingsCapabilities.supportsTouchGestures) {
+                    if (SettingsScreenGroups.playbackPlayer.rowAdmitted("gestures", rowFlags)) {
                         SettingToggleItem(
                             icon = Tabler.Outline.HandMove,
                             title = stringResource(Res.string.settings_gestures),
@@ -752,7 +745,7 @@ fun PlaybackSettingsScreen(
                             highlighted = highlightSettingId == "cinema_mode",
                             onCheckedChange = { viewModel.edit { scope -> scope.videoPlayer.setCinemaModeEnabled(it) } },
                         )
-                        if (isTv) {
+                        if (SettingsScreenGroups.playbackPlayer.rowAdmitted("android_tv_watch_next", rowFlags)) {
                             SettingToggleItem(
                                 icon = Tabler.Outline.DeviceTv,
                                 title = stringResource(Res.string.settings_watch_next_row),
@@ -984,7 +977,7 @@ fun PlaybackSettingsScreen(
                         highlighted = highlightSettingId == "dialogue_boost",
                         onCheckedChange = { viewModel.edit { scope -> scope.audioEffects.setDialogueBoostEnabled(it) } },
                     )
-                    if (preferences.dialogueBoostEnabled) {
+                    if (SettingsScreenGroups.playbackAdvancedVideo.rowAdmitted("dialogue_boost_strength", rowFlags)) {
                         val dialogueBoostStrengthTitle = stringResource(Res.string.settings_dialogue_boost_strength)
                         SettingListItem(
                             icon = Tabler.Outline.Music,

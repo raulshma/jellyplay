@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.core.network.api
 
-import com.raulshma.jellyplay.core.model.ChapterInfo
 import com.raulshma.jellyplay.core.model.CollectionSummary
 import com.raulshma.jellyplay.core.model.CacheIdentity
 import com.raulshma.jellyplay.core.model.Genre
@@ -14,12 +13,12 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.lruMapOf
 import com.raulshma.jellyplay.core.model.isAudioType
-import com.raulshma.jellyplay.core.model.PersonInfo
 import com.raulshma.jellyplay.core.model.Playlist
 import com.raulshma.jellyplay.core.model.PlaylistItem
 import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.Studio
 import com.raulshma.jellyplay.core.network.LyricsApi
+import com.raulshma.jellyplay.core.network.library.ChildItemImageRow
 import com.raulshma.jellyplay.core.network.library.DETAIL_PROJECTION_FIELDS
 import com.raulshma.jellyplay.core.network.library.EmptyLibraryFallback
 import com.raulshma.jellyplay.core.network.library.FavoriteFlagCache
@@ -28,14 +27,16 @@ import com.raulshma.jellyplay.core.network.library.HomeSectionsFetcher
 import com.raulshma.jellyplay.core.network.library.SEARCH_SUGGESTIONS_FIELDS
 import com.raulshma.jellyplay.core.network.library.SEARCH_SUGGESTIONS_ITEM_TYPES
 import com.raulshma.jellyplay.core.network.library.SEARCH_SUGGESTIONS_SORT_BY
+import com.raulshma.jellyplay.core.network.library.buildChildItemImagesQuerySpec
 import com.raulshma.jellyplay.core.network.library.buildFavoritesQuerySpec
 import com.raulshma.jellyplay.core.network.library.buildItemsByGenreQuerySpec
 import com.raulshma.jellyplay.core.network.library.buildItemsByStudioQuerySpec
 import com.raulshma.jellyplay.core.network.library.buildMediaItemsQuerySpec
+import com.raulshma.jellyplay.core.network.library.buildResumeQuerySpec
 import com.raulshma.jellyplay.core.network.library.buildSearchHintsQuerySpec
 import com.raulshma.jellyplay.core.network.library.emptyFallbackTotalCount
-import com.raulshma.jellyplay.core.network.library.readingResumableOnly
-import com.raulshma.jellyplay.core.network.library.resumableOnly
+import com.raulshma.jellyplay.core.network.library.toChildItemImageUrls
+import com.raulshma.jellyplay.core.network.library.toFilteredResumeRows
 import org.jellyfin.sdk.model.api.BaseItemKind
 import org.jellyfin.sdk.model.api.CreatePlaylistDto
 import org.jellyfin.sdk.model.api.ImageType
@@ -170,47 +171,50 @@ class LibraryApiClientImpl @Inject constructor(
         enableRewatching: Boolean,
         maxDays: Int,
     ): Result<List<MediaItem>> = engine.apiResultWithRetry {
+        // The limit/projection shape is the shared resume spec (NextUp rides
+        // it with no kind narrowing); the cutoff CLOCK stays here — the
+        // declared per-client divergence vs wasm's WasmClock.
+        val spec = buildResumeQuerySpec(limit, isBooks = false)
         val cutoff = if (maxDays > 0) {
             java.time.LocalDateTime.now().minusDays(maxDays.toLong())
         } else {
             null
         }
         val response = engine.requireApi().tvShowsApi.getNextUp(
-            limit = limit,
+            limit = spec.limit,
             enableRewatching = enableRewatching,
             nextUpDateCutoff = cutoff,
-            fields = LIST_ITEM_FIELDS,
+            fields = spec.fields.toItemFieldsList(),
         ).content
         (response?.items ?: emptyList()).toFilteredMediaItems(engine.currentMaxParentalRating)
     }
 
     override suspend fun getContinueWatching(limit: Int): Result<List<MediaItem>> = engine.apiResultWithRetry {
+        val spec = buildResumeQuerySpec(limit, isBooks = false)
         val response = engine.requireApi().itemsApi.getResumeItems(
-            limit = limit,
-            fields = LIST_ITEM_FIELDS,
+            limit = spec.limit,
+            fields = spec.fields.toItemFieldsList(),
         ).content
+        // #157: the fold drops played rows the resume endpoint still reports —
+        // see resumableOnly() for the full rationale.
         (response?.items ?: emptyList())
-            .toFilteredMediaItems(engine.currentMaxParentalRating)
-            .distinctBy { it.id }
-            // #157: drop played rows the resume endpoint still reports —
-            // see resumableOnly() for the full rationale.
-            .resumableOnly()
+            .map { it.toMediaItem() }
+            .toFilteredResumeRows(engine.currentMaxParentalRating, isBooks = false)
     }
 
     override suspend fun getContinueReading(limit: Int): Result<List<MediaItem>> = engine.apiResultWithRetry {
+        // Server-side narrowing to books (spec.includeKinds); the fold's
+        // books half stays as belt-and-braces (old servers may ignore
+        // includeItemTypes).
+        val spec = buildResumeQuerySpec(limit, isBooks = true)
         val response = engine.requireApi().itemsApi.getResumeItems(
-            limit = limit,
-            fields = LIST_ITEM_FIELDS,
-            // Server-side narrowing to books; the client filter below stays as
-            // belt-and-braces (old servers may ignore includeItemTypes).
-            includeItemTypes = listOf(BaseItemKind.BOOK),
+            limit = spec.limit,
+            fields = spec.fields.toItemFieldsList(),
+            includeItemTypes = spec.includeKinds.toBaseItemKinds(),
         ).content
         (response?.items ?: emptyList())
-            .toFilteredMediaItems(engine.currentMaxParentalRating)
-            .distinctBy { it.id }
-            // Same #157 played-row rule as getContinueWatching, books half —
-            // see readingResumableOnly().
-            .readingResumableOnly()
+            .map { it.toMediaItem() }
+            .toFilteredResumeRows(engine.currentMaxParentalRating, isBooks = true)
     }
 
     override suspend fun getLibraryFolders(): Result<List<LibraryFolder>> = engine.apiResultWithRetry {
@@ -322,67 +326,10 @@ class LibraryApiClientImpl @Inject constructor(
             ).content.items?.firstOrNull()
             projected ?: client.userLibraryApi.getItem(itemId = uuid).content
         }
-        val people = (item.people?.map { person ->
-            PersonInfo(
-                id = person.id.toString(),
-                name = person.name ?: "",
-                role = person.role,
-                type = person.type?.serialName ?: "",
-                primaryImageTag = person.primaryImageTag,
-            )
-        } ?: emptyList()).distinctBy { it.id }
-        val chapters = item.chapters?.map { chapter ->
-            ChapterInfo(
-                name = chapter.name ?: "",
-                startPositionTicks = chapter.startPositionTicks ?: 0L,
-                imageDateModified = chapter.imageDateModified?.toString(),
-                imageTag = chapter.imageTag,
-            )
-        } ?: emptyList()
-        val mediaSources = item.mediaSources?.map { source ->
-            source.toMediaSource(
-                trickplayInfo = item.trickplay
-                    ?.get(source.id.toString())
-                    ?.values
-                    ?.maxByOrNull { it.width ?: 0 }
-                    ?.toTrickplayInfo(),
-            )
-        } ?: emptyList()
-        val externalUrls = item.externalUrls?.map { url ->
-            com.raulshma.jellyplay.core.model.ExternalUrl(
-                name = url.name ?: "",
-                url = url.url ?: "",
-            )
-        } ?: emptyList()
-        val providerIds = item.providerIds?.mapNotNull { (k, v) -> v?.let { k.lowercase() to it } }?.toMap() ?: emptyMap()
-        MediaDetail(
-            item = item.toMediaItem(),
-            sortName = item.forcedSortName,
-            customRating = item.customRating,
-            criticRating = item.criticRating?.toFloat(),
-            taglines = item.taglines ?: emptyList(),
-            productionLocations = item.productionLocations ?: emptyList(),
-            lockData = item.lockData ?: false,
-            lockedFields = item.lockedFields?.map { it.toString() } ?: emptyList(),
-            status = item.status?.toString(),
-            airDays = item.airDays?.map { it.toString() } ?: emptyList(),
-            airTime = item.airTime,
-            displayOrder = item.displayOrder,
-            preferredMetadataLanguage = item.preferredMetadataLanguage,
-            preferredMetadataCountryCode = item.preferredMetadataCountryCode,
-            dateCreated = item.dateCreated?.toString(),
-            people = people,
-            relatedItems = emptyList(),
-            chapters = chapters,
-            mediaSources = mediaSources,
-            externalUrls = externalUrls,
-            providerIds = providerIds,
-            // Books have no MediaSources — path is their only format carrier;
-            // progress is denested from UserData for detail-only surfaces.
-            path = item.path,
-            playbackPositionTicks = item.userData?.playbackPositionTicks ?: 0L,
-            isPlayed = item.userData?.played == true,
-        )
+        // The DTO → MediaDetail mapping lives in JellyfinDtoMappers (beside
+        // toMediaItem), the SDK-typed twin of commonMain's LibraryWireMappers
+        // .toMediaDetail.
+        item.toMediaDetail()
     }
 
     override suspend fun getIntros(itemId: String): Result<List<MediaItem>> = engine.apiResultWithRetry {
@@ -944,20 +891,25 @@ class LibraryApiClientImpl @Inject constructor(
 
     override suspend fun getChildItemImageUrls(parentId: String, limit: Int): List<String> {
         return try {
+            // Request shape + Primary-tag fold live in commonMain
+            // (ChildItemImageUrls.kt); this side keeps only the SDK transport
+            // and the image-URL seam.
+            val spec = buildChildItemImagesQuerySpec(parentId, limit)
             val api = engine.requireApi()
             val response = api.itemsApi.getItems(
-                parentId = parentId.toUUID(),
-                includeItemTypes = listOf(BaseItemKind.PHOTO),
-                limit = limit,
-                sortBy = listOf(ItemSortBy.DATE_CREATED),
-                sortOrder = listOf(org.jellyfin.sdk.model.api.SortOrder.DESCENDING),
-                fields = listOf(ItemFields.PRIMARY_IMAGE_ASPECT_RATIO),
+                parentId = spec.parentId?.toUUID(),
+                includeItemTypes = spec.includeKinds.toBaseItemKinds(),
+                limit = spec.limit,
+                sortBy = spec.sortBy.toItemSortBys(),
+                sortOrder = spec.sortOrderDescending.toSortOrderList(),
+                fields = spec.fields.toItemFieldsList(),
             ).content
-            response.items.mapNotNull { item ->
-                if (item.imageTags?.containsKey(ImageType.PRIMARY) == true) {
-                    getImageUrl(item.id.toString(), "Primary", 200)
-                } else null
-            }
+            response.items.map { item ->
+                ChildItemImageRow(
+                    id = item.id.toString(),
+                    hasPrimaryImage = item.imageTags?.containsKey(ImageType.PRIMARY) == true,
+                )
+            }.toChildItemImageUrls { itemId -> getImageUrl(itemId, "Primary", 200) }
         } catch (_: Exception) {
             emptyList()
         }

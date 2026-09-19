@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.network.seerr
 
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
+import com.raulshma.jellyplay.core.model.arr.ArrServiceKind
 import com.raulshma.jellyplay.core.model.seerr.*
 import com.raulshma.jellyplay.core.network.api.HttpExecutor
 import kotlinx.coroutines.Dispatchers
@@ -242,11 +243,20 @@ class SeerrApiClientImpl @Inject constructor(
     override suspend fun getServiceSonarrServers(baseUrl: String, credentials: SeerrCredentials): Result<List<SeerrServiceServer>> =
         getAndParse(baseUrl, credentials, "/service/sonarr")
 
-    override suspend fun getServiceRadarrDetail(baseUrl: String, credentials: SeerrCredentials, id: Int): Result<SeerrRadarrServiceDetail> =
-        getAndParse(baseUrl, credentials, "/service/radarr/$id")
-
-    override suspend fun getServiceSonarrDetail(baseUrl: String, credentials: SeerrCredentials, id: Int): Result<SeerrSonarrServiceDetail> =
-        getAndParse(baseUrl, credentials, "/service/sonarr/$id")
+    override suspend fun getServiceDetail(
+        baseUrl: String,
+        credentials: SeerrCredentials,
+        id: Int,
+        kind: ArrServiceKind,
+    ): Result<SeerrServiceDetail> =
+        // The two endpoints differ only in path; each kind decodes to its own
+        // concrete payload (Result.map upcasts the subtype to the sealed parent).
+        when (kind) {
+            ArrServiceKind.RADARR ->
+                getAndParse<SeerrRadarrServiceDetail>(baseUrl, credentials, "/service/radarr/$id")
+            ArrServiceKind.SONARR ->
+                getAndParse<SeerrSonarrServiceDetail>(baseUrl, credentials, "/service/sonarr/$id")
+        }.map { it }
 
     override suspend fun getTrending(baseUrl: String, credentials: SeerrCredentials, page: Int): Result<SeerrSearchResponse> =
         getAndParse(baseUrl, credentials, "/discover/trending?page=$page")

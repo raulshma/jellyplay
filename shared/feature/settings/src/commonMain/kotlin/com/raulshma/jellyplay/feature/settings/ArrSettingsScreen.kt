@@ -21,14 +21,12 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -51,9 +49,11 @@ import com.composables.icons.tabler.outline.Trash
 import com.raulshma.jellyplay.core.model.arr.ArrDiscoveryError
 import com.raulshma.jellyplay.core.model.arr.ArrServerConfig
 import com.raulshma.jellyplay.core.model.arr.ArrServiceKind
-import com.raulshma.jellyplay.core.ui.components.CircleBgBackButton
+import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ImeAlertDialog
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
+import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
+import com.raulshma.jellyplay.core.ui.tv.CenteredBringIntoView
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import org.jetbrains.compose.resources.stringResource
@@ -117,32 +117,23 @@ fun ArrSettingsScreen(
         tag = "arr_init",
     )
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(Res.string.settings_integrations_arr)) },
-                navigationIcon = {
-                    CircleBgBackButton(onClick = onBack)
-                },
-                actions = {
-                    IconButton(
-                        onClick = { viewModel.refreshServers() },
-                        enabled = !isRefreshing,
-                        modifier = Modifier.focusIndicator(CircleShape),
-                    ) {
-                        Icon(Tabler.Outline.Refresh, contentDescription = stringResource(Res.string.settings_refresh_cd))
-                    }
-                },
-            )
+    val backgroundColorState = rememberScreenBackgroundColorState()
+
+    JellyPlayScreenScaffold(
+        title = stringResource(Res.string.settings_integrations_arr),
+        onBack = onBack,
+        backgroundColorState = backgroundColorState,
+        actions = {
+            IconButton(
+                onClick = { viewModel.refreshServers() },
+                enabled = !isRefreshing,
+                modifier = Modifier.focusIndicator(CircleShape),
+            ) {
+                Icon(Tabler.Outline.Refresh, contentDescription = stringResource(Res.string.settings_refresh_cd))
+            }
         },
     ) { padding ->
-        // Center the focused item in the viewport when scrolling reaches the list
-        // edges, instead of parking it at the bottom, which is the default
-        // BringIntoViewSpec behaviour.
-        androidx.compose.runtime.CompositionLocalProvider(
-            androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides
-                com.raulshma.jellyplay.core.ui.tv.CenterBringIntoViewSpec
-        ) {
+        CenteredBringIntoView {
         LazyColumn(
             modifier = Modifier
                 .fillMaxWidth()

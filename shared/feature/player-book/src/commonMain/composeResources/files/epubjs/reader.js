@@ -26,7 +26,10 @@
     var book = null;
     var rendition = null;
     var locationsReady = false;
+    var locationsGenerating = false;
     var readyShown = false;
+    var userNavigated = false;
+    var initialRelocatedFired = false;
 
     /*
      * The scripts are inlined in <head> (see EpubReaderHtml), so #viewer does
@@ -41,6 +44,8 @@
             viewerEl = document.getElementById('viewer');
             if (viewerEl) {
                 viewerEl.addEventListener('touchstart', function () { stopAutoScroll(); }, { passive: true, capture: true });
+                viewerEl.addEventListener('wheel', function () { userNavigated = true; stopAutoScroll(); }, { passive: true, capture: true });
+                viewerEl.addEventListener('scroll', function () { userNavigated = true; }, { passive: true, capture: true });
             }
         }
         return viewerEl;
@@ -359,6 +364,19 @@
             // Contents emitter unavailable — keyboard paging still works.
         }
         try {
+            if (contents.window) {
+                contents.window.addEventListener('wheel', function () {
+                    userNavigated = true;
+                    stopAutoScroll();
+                }, { passive: true, capture: true });
+                contents.window.addEventListener('scroll', function () {
+                    userNavigated = true;
+                }, { passive: true, capture: true });
+            }
+        } catch (ignored) {
+            // Contents window unavailable — viewerEl listeners still work.
+        }
+        try {
             contents.document.addEventListener('selectionchange', function () {
                 var selection = contents.window && contents.window.getSelection
                     ? contents.window.getSelection()
@@ -522,6 +540,7 @@
     }
 
     function onSelected(cfiRange, contents) {
+        userNavigated = true;
         hasSelection = true;
         var text = '';
         try {
@@ -533,6 +552,13 @@
     }
 
     function onRelocated(loc) {
+        if (readyShown) {
+            if (initialRelocatedFired) {
+                userNavigated = true;
+            } else {
+                initialRelocatedFired = true;
+            }
+        }
         sweepStaleSelection();
         reportPercent();
         var label = '';
@@ -587,7 +613,38 @@
         wireRendition();
     }
 
+    function generateLocations() {
+        if (!book || locationsGenerating || locationsReady) return;
+        locationsGenerating = true;
+        if (book.locations) {
+            book.locations.pause = 1;
+        }
+        book.locations.generate(1024).then(function () {
+            locationsGenerating = false;
+            locationsReady = true;
+            status('locationsReady');
+            if (!userNavigated && pending.resume > 0 && book.locations.length() > 0) {
+                var preciseTarget = book.locations.cfiFromPercentage(pending.resume);
+                pending.resume = 0;
+                if (preciseTarget && preciseTarget !== -1) {
+                    rendition.display(preciseTarget).then(function () {
+                        reportPercent();
+                    }).catch(function () {});
+                }
+            }
+            reportPercent();
+        }).catch(function () {
+            locationsGenerating = false;
+            locationsReady = false;
+        });
+    }
+
     function openBook(arrayBuffer) {
+        userNavigated = false;
+        initialRelocatedFired = false;
+        locationsReady = false;
+        locationsGenerating = false;
+        readyShown = false;
         book = ePub(arrayBuffer);
 
         book.ready.then(function () {
@@ -598,6 +655,35 @@
                 // Metadata missing — keep the ltr default.
             }
             post({ type: 'direction', value: direction });
+
+            var initialTarget;
+            if (pending.resume > 0 && book.spine && book.spine.items && book.spine.items.length > 0) {
+                var idx = Math.min(Math.floor(pending.resume * book.spine.items.length), book.spine.items.length - 1);
+                var sec = book.spine.get(idx);
+                if (sec && sec.href) {
+                    initialTarget = sec.href;
+                }
+            }
+
+            rendition.display(initialTarget).then(function () {
+                readyShown = true;
+                status('ready');
+                reportPercent();
+                generateLocations();
+            }).catch(function () {
+                if (initialTarget !== undefined) {
+                    rendition.display().then(function () {
+                        readyShown = true;
+                        status('ready');
+                        reportPercent();
+                        generateLocations();
+                    }).catch(function () {
+                        status('error');
+                    });
+                } else {
+                    status('error');
+                }
+            });
         });
         book.ready.catch(function () {
             status('error');
@@ -620,46 +706,6 @@
         createRendition();
         applyAppearance();
         status('locations');
-        /*
-         * locations.generate walks the spine synchronously: called before the
-         * container finishes unpacking (book.opened unresolved), the spine is
-         * still empty, so generate "finishes" instantly with zero locations
-         * and total = -1. A percentage resume then computes cfiFromLocation →
-         * -1, whose display() rejects ("No Section Found") into the error
-         * veil — a black screen right after "preparing reading locations".
-         * Gating on opened makes the boot deterministic: real spine, real
-         * locations (this is the slow, seconds-long pass), a resolvable
-         * resume target.
-         */
-        book.opened.then(function () {
-            book.locations.generate(1024).then(function () {
-                locationsReady = true;
-                status('locationsReady');
-                var target;
-                // Empty locations (book epub.js cannot anchor) must fall back
-                // to the first page — cfiFromPercentage would return -1.
-                if (pending.resume > 0 && book.locations.length() > 0) {
-                    target = book.locations.cfiFromPercentage(pending.resume);
-                }
-                rendition.display(target).then(function () {
-                    readyShown = true;
-                    status('ready');
-                    reportPercent();
-                }).catch(function () {
-                    status('error');
-                });
-            }).catch(function () {
-                // Locations failed — display without percent precision rather
-                // than leaving the reader stuck on the veil.
-                locationsReady = false;
-                rendition.display().then(function () {
-                    readyShown = true;
-                    status('ready');
-                }).catch(function () {
-                    status('error');
-                });
-            });
-        });
     }
 
     function applyLoadPrefs(appearanceJson) {
@@ -979,6 +1025,7 @@
         },
 
         setFlow: function (mode) {
+            userNavigated = true;
             var flow = mode === 'scrolled' ? 'scrolled' : 'paginated';
             if (flow === pending.flow) return;
             pending.flow = flow;
@@ -1012,14 +1059,17 @@
         },
 
         next: function () {
+            userNavigated = true;
             if (rendition) rendition.next();
         },
 
         prev: function () {
+            userNavigated = true;
             if (rendition) rendition.prev();
         },
 
         goTo: function (href) {
+            userNavigated = true;
             if (rendition && href) {
                 var raw = String(href);
                 var fragment = raw.indexOf('#') >= 0 ? raw.substring(raw.indexOf('#')) : '';
@@ -1028,6 +1078,7 @@
         },
 
         goToCfi: function (cfi) {
+            userNavigated = true;
             if (!rendition || !cfi) return;
             var target = String(cfi);
             try {
@@ -1203,6 +1254,7 @@
                 stopAutoScroll();
                 return;
             }
+            userNavigated = true;
             if (pending.flow !== 'scrolled') return; // only meaningful scrolled
             autoScrollPxPerSec = Math.max(1, Number(pxPerSec) || 60);
             if (autoScrollRaf === null) {

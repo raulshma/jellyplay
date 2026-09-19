@@ -52,7 +52,10 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaQuickActionScope
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
+import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
+import com.raulshma.jellyplay.core.ui.adaptive.gridCellSize
+import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.LocalMediaQuickActionController
 import com.raulshma.jellyplay.core.ui.components.PosterCard
@@ -177,21 +180,28 @@ internal fun FavoritesScreen(
                 }
                 else -> {
                     val gridState = rememberLazyGridState()
+                    // Shared adaptive metrics (LibraryScreen/GroupedLibraryContent/
+                    // PhotoAlbumScreen precedent) instead of the hand-rolled
+                    // isTv constants — declared visual change: favorites cells
+                    // now match the library grid's sizing and spacing on the
+                    // same device class. Horizontal inset comes from the
+                    // enclosing Column's shared content padding, so the grid
+                    // only pads vertically; the bottom keeps the scaffold
+                    // inset plus the shared bottom padding (the former
+                    // hardcoded 80.dp).
                     TvFocusableGrid(
                         itemCount = pagingItems.itemCount,
                         key = { index -> pagingItems[index]?.id ?: index },
-                        columns = GridCells.Adaptive(minSize = if (isTv) 180.dp else 150.dp),
+                        columns = GridCells.Adaptive(adaptiveInfo.gridCellSize(isTv)),
                         contentType = { "mediaItem" },
                         state = gridState,
                         onFocusedIndexChange = { index -> pagingItems[index]?.let { quickActionIntake.tvFocusedItem = it } },
                         contentPadding = PaddingValues(
-                            start = if (isTv) 16.dp else 12.dp,
-                            end = if (isTv) 16.dp else 12.dp,
                             top = 8.dp,
-                            bottom = innerPadding.calculateBottomPadding() + 80.dp,
+                            bottom = innerPadding.calculateBottomPadding() + adaptiveInfo.bottomPadding(isTv),
                         ),
-                        horizontalArrangement = Arrangement.spacedBy(if (isTv) 16.dp else 12.dp),
-                        verticalArrangement = Arrangement.spacedBy(if (isTv) 20.dp else 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(adaptiveInfo.itemSpacing(isTv)),
+                        verticalArrangement = Arrangement.spacedBy(adaptiveInfo.itemSpacing(isTv)),
                         modifier = Modifier.fillMaxSize(),
                         extraContent = {
                             if (pagingItems.loadState.append is LoadState.Loading) {

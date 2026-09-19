@@ -152,6 +152,20 @@ you open an EPUB, JellyPlay downloads that runtime (~200 MB) and caches it
 under the app data dir; later EPUBs open instantly. Comic and PDF reading
 does not need it.
 
+If that viewer setup fails (no network mid-download, blocked install), the
+reader shows its "cannot open" error instead of loading forever — closing
+and reopening the book retries the setup.
+
+Desktop EPUB chrome lays out around the page (top bar / content / bottom
+bar) instead of floating over it: the Chromium view paints above
+app-drawn overlays, so floating controls would hide behind it. Sheets and
+dialogs are no exception — while one is open the Chromium view is hidden
+so the sheet shows cleanly, and it comes back on dismiss. Everything
+else works the same — auto-hide collapses the bars for fullscreen reading,
+the chapter rail docks beside the page. The
+brightness slider is hidden there (there is no dim layer that can cover
+the native view — use the system brightness).
+
 ## Limitations
 
 - **No web reading yet** — JellyPlay's detail screens (and therefore the

@@ -294,6 +294,21 @@ class ReflowableReaderSessionTest {
     }
 
     @Test
+    fun `locationsReady arriving after READY does not regress session status`() {
+        val h = Harness()
+        h.bind()
+        h.reachReady()
+        assertEquals(EpubReaderStatus.READY, h.session.status)
+
+        h.session.onEvent.onEvent(EpubEvent.Status(EpubReaderStatus.LOCATIONS_READY))
+        assertEquals(EpubReaderStatus.READY, h.session.status)
+
+        // But a real error or reload-triggered loading still transitions
+        h.session.onEvent.onEvent(EpubEvent.Status(EpubReaderStatus.ERROR))
+        assertEquals(EpubReaderStatus.ERROR, h.session.status)
+    }
+
+    @Test
     fun `host-reported auto-scroll stops reset the active flag`() {
         val h = Harness()
         h.bind()

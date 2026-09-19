@@ -98,12 +98,12 @@ class EditorViewModelUploadTest {
             readBytes = { bytes },
         )
 
-        viewModel.loadEditorData(itemId)
+        viewModel.onEvent(EditorUiEvent.LoadEditorData(itemId))
         advanceUntilIdle()
 
         // Should complete without throwing (the prior NotImplementedError crash)
         // and surface no error after a successful upload.
-        viewModel.uploadImageFromFile(picked, "Primary")
+        viewModel.onEvent(EditorUiEvent.UploadImageFromFile(picked, "Primary"))
         advanceUntilIdle()
 
         coVerify(exactly = 1) { editorRepository.setItemImage(itemId, "Primary", bytes) }
@@ -122,10 +122,10 @@ class EditorViewModelUploadTest {
             readBytes = { throw java.io.IOException("Cannot open input stream for selected image") },
         )
 
-        viewModel.loadEditorData(itemId)
+        viewModel.onEvent(EditorUiEvent.LoadEditorData(itemId))
         advanceUntilIdle()
 
-        viewModel.uploadImageFromFile(picked, "Primary")
+        viewModel.onEvent(EditorUiEvent.UploadImageFromFile(picked, "Primary"))
         advanceUntilIdle()
 
         val state = viewModel.uiState.value
@@ -140,10 +140,10 @@ class EditorViewModelUploadTest {
     fun `uploadImage from bytes does not surface an error on success`() = runTest {
         // Exercises the existing ByteArray-based image upload and the fixed
         // failure handler (previously a no-op that copied error onto itself).
-        viewModel.loadEditorData(itemId)
+        viewModel.onEvent(EditorUiEvent.LoadEditorData(itemId))
         advanceUntilIdle()
 
-        viewModel.uploadImage(byteArrayOf(1, 2, 3), "Primary")
+        viewModel.onEvent(EditorUiEvent.UploadImage(byteArrayOf(1, 2, 3), "Primary"))
         advanceUntilIdle()
 
         // No error should be present after a successful upload.

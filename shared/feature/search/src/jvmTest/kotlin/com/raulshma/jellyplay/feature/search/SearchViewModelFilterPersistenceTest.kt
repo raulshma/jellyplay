@@ -174,7 +174,7 @@ class SearchViewModelFilterPersistenceTest {
         val persisted = slot<String>()
         coEvery { searchFiltersStore.setSearchFilters(capture(persisted)) } returns Unit
 
-        viewModel.setSortBy(SortOption.RATING)
+        viewModel.onEvent(SearchUiEvent.SetSortBy(SortOption.RATING))
         advanceUntilIdle()
 
         assertEquals(SortOption.RATING, viewModel.filters.value.sortBy)
@@ -187,7 +187,7 @@ class SearchViewModelFilterPersistenceTest {
         val persisted = slot<String>()
         coEvery { searchFiltersStore.setSearchFilters(capture(persisted)) } returns Unit
 
-        viewModel.setPlayedStatus(PlayedStatus.PLAYED)
+        viewModel.onEvent(SearchUiEvent.SetPlayedStatus(PlayedStatus.PLAYED))
         advanceUntilIdle()
 
         assertEquals(PlayedStatus.PLAYED, viewModel.filters.value.playedStatus)
@@ -202,7 +202,7 @@ class SearchViewModelFilterPersistenceTest {
         val persisted = slot<String>()
         coEvery { searchFiltersStore.setSearchFilters(capture(persisted)) } returns Unit
 
-        viewModel.toggleMediaType(MediaType.MOVIE)
+        viewModel.onEvent(SearchUiEvent.ToggleMediaType(MediaType.MOVIE))
         advanceUntilIdle()
 
         assertEquals(
@@ -217,7 +217,7 @@ class SearchViewModelFilterPersistenceTest {
         val persisted = slot<String>()
         coEvery { searchFiltersStore.setSearchFilters(capture(persisted)) } returns Unit
 
-        viewModel.updateFilters(filters)
+        viewModel.onEvent(SearchUiEvent.UpdateFilters(filters))
         advanceUntilIdle()
 
         assertEquals(filters, FilterCodec.decodeFromString<LibraryFilters>(persisted.captured))
@@ -225,10 +225,10 @@ class SearchViewModelFilterPersistenceTest {
 
     @Test
     fun `clearFilters resets state and clears the stored blob`() = runTest(mainDispatcher) {
-        viewModel.updateFilters(LibraryFilters(genres = listOf("Action")))
+        viewModel.onEvent(SearchUiEvent.UpdateFilters(LibraryFilters(genres = listOf("Action"))))
         advanceUntilIdle()
 
-        viewModel.clearFilters()
+        viewModel.onEvent(SearchUiEvent.ClearFilters)
         advanceUntilIdle()
 
         assertEquals(LibraryFilters(), viewModel.filters.value)
@@ -239,7 +239,7 @@ class SearchViewModelFilterPersistenceTest {
     fun `a persist write failure is swallowed and the in-memory filter wins`() = runTest(mainDispatcher) {
         coEvery { searchFiltersStore.setSearchFilters(any()) } throws RuntimeException("disk full")
 
-        viewModel.toggleMediaType(MediaType.SERIES)
+        viewModel.onEvent(SearchUiEvent.ToggleMediaType(MediaType.SERIES))
         advanceUntilIdle()
 
         // In-memory session survives the DataStore hiccup; no crash.
@@ -254,7 +254,7 @@ class SearchViewModelFilterPersistenceTest {
             id = "m1", name = "Movie", mediaType = MediaType.MOVIE,
         )
 
-        viewModel.markItemPlayed(item, played = true)
+        viewModel.onEvent(SearchUiEvent.MarkItemPlayed(item, played = true))
         advanceUntilIdle()
 
         coVerify(exactly = 1) { userDataMutator.setPlayed("m1", true) }
@@ -270,7 +270,7 @@ class SearchViewModelFilterPersistenceTest {
             secondArg<(String) -> Unit>().invoke("series-9")
         }
 
-        viewModel.downloadItem(item) { routedTo = it }
+        viewModel.onEvent(SearchUiEvent.DownloadItem(item) { routedTo = it })
         advanceUntilIdle()
 
         coVerify(exactly = 1) { quickDownloadActions.downloadAndReport(item, any()) }
@@ -283,7 +283,7 @@ class SearchViewModelFilterPersistenceTest {
             id = "m2", name = "Movie", mediaType = MediaType.MOVIE,
         )
 
-        viewModel.removeItemDownload(item)
+        viewModel.onEvent(SearchUiEvent.RemoveItemDownload(item))
 
         io.mockk.verify(exactly = 1) { quickDownloadActions.removeDownload(item) }
     }

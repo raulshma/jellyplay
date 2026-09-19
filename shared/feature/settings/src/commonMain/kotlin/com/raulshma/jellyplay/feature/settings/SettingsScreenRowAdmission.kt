@@ -14,7 +14,73 @@ package com.raulshma.jellyplay.feature.settings
  * `SettingsCatalogScreenContractTest` can pin each gate against the
  * declaration; the screens consume them (consumption is itself pinned by the
  * test's `requiredDerivationUsage`).
+ *
+ * A gated row's admission is declared ONCE, per id, beside the group item
+ * declaration ([SettingsSearchItemGroup.admissions] — decision Q11a:
+ * `SettingsSearchItem` in core/ui is not widened): the totals below and the
+ * screens' emission `if`s (via `SettingsSearchItemGroup.rowAdmitted`) both
+ * read that one [RowAdmission] value.
  */
+
+/**
+ * One gated row's admission predicate — the single declaration both the
+ * row-total counts and the emission `if`s evaluate. Exactly today's gate
+ * shapes, nothing speculative.
+ */
+internal sealed interface RowAdmission {
+    /** Evaluates this gate against [RowAdmissionFlags]. */
+    fun admitted(flags: RowAdmissionFlags): Boolean
+
+    /** A [settingsCapabilities] platform-visibility gate (hidden = structurally absent). */
+    data class Platform(val capability: RowAdmissionCapability) : RowAdmission {
+        override fun admitted(flags: RowAdmissionFlags): Boolean = when (capability) {
+            RowAdmissionCapability.ScreenOrientation -> flags.supportsScreenOrientation
+            RowAdmissionCapability.TouchGestures -> flags.supportsTouchGestures
+        }
+    }
+
+    /** The TV form-factor gate (`LocalTvMode`). */
+    data object Tv : RowAdmission {
+        override fun admitted(flags: RowAdmissionFlags): Boolean = flags.isTv
+    }
+
+    /** The advanced-toggle gate. */
+    data object Advanced : RowAdmission {
+        override fun admitted(flags: RowAdmissionFlags): Boolean = flags.showAdvanced
+    }
+
+    /** A parent toggle's on-state gate — [parentId] is the parent row's id. */
+    data class WhenOn(val parentId: String) : RowAdmission {
+        override fun admitted(flags: RowAdmissionFlags): Boolean = parentId in flags.parentsOn
+    }
+
+    /** Every gate must hold (an advanced strength row behind its parent toggle). */
+    data class All(val gates: List<RowAdmission>) : RowAdmission {
+        constructor(vararg gates: RowAdmission) : this(gates.toList())
+        override fun admitted(flags: RowAdmissionFlags): Boolean = gates.all { it.admitted(flags) }
+    }
+}
+
+/** The [RowAdmission.Platform] capability vocabulary — one entry per gating flag. */
+internal enum class RowAdmissionCapability { ScreenOrientation, TouchGestures }
+
+/**
+ * The inputs a [RowAdmission] evaluates against. The capability flags default
+ * to this binary's seam so screen call sites stay small; the contract test
+ * injects both sides.
+ */
+internal class RowAdmissionFlags(
+    val isTv: Boolean = false,
+    val showAdvanced: Boolean = false,
+    val supportsScreenOrientation: Boolean = settingsCapabilities.supportsScreenOrientation,
+    val supportsTouchGestures: Boolean = settingsCapabilities.supportsTouchGestures,
+    /** Parent row ids whose toggle is currently on — [RowAdmission.WhenOn] resolution. */
+    val parentsOn: Set<String> = emptySet(),
+)
+
+/** [RowAdmissionFlags.parentsOn] from parent-id → on-state pairs. */
+internal fun rowParentsOn(vararg toggles: Pair<String, Boolean>): Set<String> =
+    toggles.toMap().filterValues { it }.keys
 
 // ── StorageSettingsScreen ───────────────────────────────────────────────
 
@@ -31,13 +97,15 @@ internal fun storageCacheScreenRowTotal(showAdvanced: Boolean): Int =
 /**
  * The storage screen's "Downloads" group: the three declared
  * `download_schedule_*` window rows only render when scheduling is on (the
- * `download_schedule` toggle itself always does).
+ * `download_schedule` toggle itself always does) — the declared
+ * [RowAdmission.WhenOn] gate the screen's emission `if` reads too.
  */
 internal fun storageDownloadsScreenRowTotal(downloadScheduleEnabled: Boolean): Int =
     SettingsScreenGroups.storageDownloads.items.count { item ->
-        item.id == "download_schedule" ||
-            !item.id.startsWith("download_schedule_") ||
-            downloadScheduleEnabled
+        SettingsScreenGroups.storageDownloads.rowAdmitted(
+            item.id,
+            RowAdmissionFlags(parentsOn = rowParentsOn("download_schedule" to downloadScheduleEnabled)),
+        )
     }
 
 // ── PlaybackSettingsScreen ──────────────────────────────────────────────
@@ -45,31 +113,40 @@ internal fun storageDownloadsScreenRowTotal(downloadScheduleEnabled: Boolean): I
 /**
  * The playback screen's player group: the platform-gated rows drop where the
  * capability is missing, the TV rows need the TV form factor, and isAdvanced
- * rows only render behind the advanced toggle. The capability flags default
- * to this binary's seam so call sites stay two-argument; the contract test
- * injects both sides.
+ * rows only render behind the advanced toggle — each via the row's declared
+ * [RowAdmission], the same predicate the screen's emission `if`s read. The
+ * capability flags default to this binary's seam so call sites stay
+ * two-argument; the contract test injects both sides.
  */
 internal fun playbackPlayerScreenRowTotal(
     isTv: Boolean,
     showAdvanced: Boolean,
     supportsScreenOrientation: Boolean = settingsCapabilities.supportsScreenOrientation,
     supportsTouchGestures: Boolean = settingsCapabilities.supportsTouchGestures,
-): Int = SettingsScreenGroups.playbackPlayer.items.count { item ->
-    when (item.id) {
-        "orientation" -> supportsScreenOrientation
-        "seek_duration", "gestures", "gesture_indicator_side" -> supportsTouchGestures
-        "android_tv_watch_next", "tv_zoom_mode" -> isTv
-        else -> showAdvanced || !item.isAdvanced
+): Int {
+    val flags = RowAdmissionFlags(
+        isTv = isTv,
+        showAdvanced = showAdvanced,
+        supportsScreenOrientation = supportsScreenOrientation,
+        supportsTouchGestures = supportsTouchGestures,
+    )
+    return SettingsScreenGroups.playbackPlayer.items.count { item ->
+        SettingsScreenGroups.playbackPlayer.admissionOf(item.id)?.admitted(flags)
+            ?: (showAdvanced || !item.isAdvanced)
     }
 }
 
 /**
  * The playback screen's advanced-video group: the dialogue-boost strength row
- * only renders while the dialogue-boost toggle is on.
+ * only renders while the dialogue-boost toggle is on (its declared
+ * [RowAdmission.WhenOn] gate).
  */
 internal fun playbackAdvancedVideoScreenRowTotal(dialogueBoostEnabled: Boolean): Int =
     SettingsScreenGroups.playbackAdvancedVideo.items.count { item ->
-        item.id != "dialogue_boost_strength" || dialogueBoostEnabled
+        SettingsScreenGroups.playbackAdvancedVideo.rowAdmitted(
+            item.id,
+            RowAdmissionFlags(parentsOn = rowParentsOn("dialogue_boost" to dialogueBoostEnabled)),
+        )
     }
 
 /**
