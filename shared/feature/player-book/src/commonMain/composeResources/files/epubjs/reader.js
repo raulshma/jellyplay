@@ -158,10 +158,29 @@
         post({ type: 'percent', value: percent });
     }
 
+    /*
+     * TOC labels are author-controlled markup (NCX navLabel is XML, nav docs
+     * are HTML). Regex tag-stripping is bypassable (`<scr<script>ipt>` or an
+     * unterminated `<script` survive `/<[^>]*>/g`), so parse the label as a
+     * real document instead and take its text — textContent cannot contain
+     * markup, and DOMParser never executes or loads anything it parses.
+     */
+    function plainLabel(value) {
+        var raw = String(value || '');
+        try {
+            var doc = new DOMParser().parseFromString(raw, 'text/html');
+            return String(doc.body ? doc.body.textContent : '').trim();
+        } catch (ignored) {
+            // No DOMParser (not expected in any shipping host): removing both
+            // angle brackets wholesale still cannot leave a tag behind.
+            return raw.replace(/[<>]/g, '').trim();
+        }
+    }
+
     function flattenToc(items) {
         var out = [];
         (items || []).forEach(function (item) {
-            var label = String(item.label || '').replace(/<[^>]*>/g, '').trim();
+            var label = plainLabel(item.label);
             out.push({ label: label, href: String(item.href || '') });
             if (item.subitems && item.subitems.length) {
                 out = out.concat(flattenToc(item.subitems));
