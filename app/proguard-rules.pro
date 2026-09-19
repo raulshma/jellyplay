@@ -67,6 +67,12 @@
 
 -dontwarn com.google.android.gms.internal.**
 
+# pdfbox-android (book reader TOC) references com.gemalto.jp2.JP2Decoder
+# (JPEG-2000 decoding, JPXFilter) but does not pull the optional library in —
+# JPEG-2000 images inside PDFs then render via the fallback path. Warn-only:
+# R8 otherwise fails the release build with a missing-class error.
+-dontwarn com.gemalto.jp2.**
+
 -dontwarn okio.**
 -dontwarn org.conscrypt.**
 
